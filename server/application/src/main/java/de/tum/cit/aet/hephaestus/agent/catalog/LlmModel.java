@@ -75,9 +75,11 @@ public class LlmModel {
     @Column(name = "max_output_tokens")
     private Integer maxOutputTokens;
 
-    @ColumnDefault("false")
-    @Column(name = "supports_reasoning", nullable = false)
-    private boolean supportsReasoning = false;
+    /** The reasoning effort requested of the model; null sends none, and the provider's default applies. */
+    @Nullable
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reasoning_effort", length = ReasoningEffort.MAX_LENGTH)
+    private ReasoningEffort reasoningEffort;
 
     @ColumnDefault("'GRANTED'")
     @Enumerated(EnumType.STRING)

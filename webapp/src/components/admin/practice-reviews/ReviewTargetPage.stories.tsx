@@ -1,10 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen } from "storybook/test";
 
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
-import { REVIEW_PREVIEW_SIZE, type ReviewSectionState } from "./ReviewOutputSections";
-import { ReviewTargetPage } from "./ReviewTargetPage";
 import {
 	gitlabMergeRequest,
 	outlineDocument,
@@ -14,7 +12,9 @@ import {
 	type ReviewWork,
 	slackConversation,
 	workspacePractices,
-} from "./story-mock-data";
+} from "./fixtures";
+import { REVIEW_PREVIEW_SIZE, type ReviewSectionState } from "./ReviewOutputSections";
+import { ReviewTargetPage } from "./ReviewTargetPage";
 
 /**
  * The page shows one work's review output, so a story names the work and takes the rows the
@@ -38,7 +38,9 @@ const empty = <T,>(): ReviewSectionState<T> => ({ status: "ready", items: [], to
 
 /** The practice one of this work's observations names, and the one the card is read on. */
 const THIN_CONTROLLERS = workspacePractices.find((p) => p.slug === "thin-controllers");
-if (!THIN_CONTROLLERS) throw new Error("The practice fixtures no longer cover thin-controllers");
+if (!THIN_CONTROLLERS) {
+	throw new Error("The practice fixtures no longer cover thin-controllers");
+}
 
 const argsFor = (work: ReviewWork) => ({
 	artifactKind: work.reviewedWork.kind,
@@ -48,7 +50,6 @@ const argsFor = (work: ReviewWork) => ({
 });
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Reviewed work",
 	component: ReviewTargetPage,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 768, 1440] } },
 	tags: ["autodocs"],
@@ -71,7 +72,7 @@ export const PullRequest: Story = {
 		// named as its rows name it.
 		await canvas.findByRole("heading", { name: reviewArtifact.title, level: 2 });
 		await expect(
-			await canvas.findByRole("link", { name: /ls1intum\/Hephaestus · #1423/ }),
+			await canvas.findByRole("link", { name: /ls1intum\/Hephaestus · #1423/u }),
 		).toHaveAttribute("href", reviewArtifact.reviewedWork.url);
 		await expectNoPageOverflow();
 	},
@@ -85,7 +86,7 @@ export const PullRequest: Story = {
 export const PracticeOpensItsDefinition: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
 	play: async ({ canvas, userEvent }) => {
-		const link = await canvas.findByRole("link", { name: /Thin controllers/ });
+		const link = await canvas.findByRole("link", { name: /Thin controllers/u });
 		await expect(link).toHaveAttribute("href", "/w/demo/admin/practices/thin-controllers");
 		// The card is a portal, so it is looked for on the whole screen rather than in the canvas.
 		await userEvent.hover(link);
@@ -99,7 +100,7 @@ export const MergeRequest: Story = {
 	args: argsFor(gitlabMergeRequest),
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findByRole("link", { name: /platform\/billing-service · !88/ });
+		await canvas.findByRole("link", { name: /platform\/billing-service · !88/u });
 	},
 };
 
@@ -107,7 +108,7 @@ export const Conversation: Story = {
 	args: argsFor(slackConversation),
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findByRole("link", { name: /#engineering/ });
+		await canvas.findByRole("link", { name: /#engineering/u });
 	},
 };
 
@@ -116,7 +117,7 @@ export const Document: Story = {
 	args: argsFor(outlineDocument),
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findByRole("link", { name: /Runbook: restoring a workspace from backup/ });
+		await canvas.findByRole("link", { name: /Runbook: restoring a workspace from backup/u });
 	},
 };
 
@@ -155,7 +156,7 @@ export const ObservationsFailed: Story = {
 	},
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findByRole("link", { name: /ls1intum\/Hephaestus · #1423/ });
+		await canvas.findByRole("link", { name: /ls1intum\/Hephaestus · #1423/u });
 		await canvas.findByText("Couldn't load observations");
 		await expect(
 			canvas.queryByText("Nothing has been reviewed on this work"),

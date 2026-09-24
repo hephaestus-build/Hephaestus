@@ -154,7 +154,7 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
 
         // Announcement posted as non-empty Block Kit (the one-click opt-out) with the plain-language fallback +
         // forward-only boundary stamped + state advanced.
-        ArgumentCaptor<List<com.slack.api.model.block.LayoutBlock>> blocksCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<com.slack.api.model.block.LayoutBlock>> blocksCaptor = ArgumentCaptor.captor();
         verify(slackMessageService)
                 .sendForWorkspace(
                         eq(WS), eq(CHANNEL), blocksCaptor.capture(), eq(SlackConsentBlocks.activationFallbackText()));

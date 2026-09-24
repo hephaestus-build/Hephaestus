@@ -65,7 +65,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         mentorRegistry = new MentorProxyCredentialRegistry();
-        filter = new JobTokenAuthenticationFilter(agentJobRepository, jwtVerifier, mentorRegistry, objectMapper);
+        filter = new JobTokenAuthenticationFilter(
+                agentJobRepository, jwtVerifier, mentorRegistry, objectMapper, "worker-1");
         SecurityContextHolder.clearContext();
     }
 
@@ -199,8 +200,9 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
             verify(filterChain).doFilter(any(), any());
             assertThat(authCapture.get()).isInstanceOf(JobTokenAuthentication.class);
-            ProxyRouting routing = (ProxyRouting) ((JobTokenAuthentication) authCapture.get()).getPrincipal();
+            ProxyRouting routing = ((JobTokenAuthentication) authCapture.get()).getPrincipal();
             assertThat(routing.principalDescription()).isEqualTo("job:" + job.getId());
+            assertThat(Objects.requireNonNull(routing.attempt()).workerId()).isEqualTo("worker-1");
             assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         }
 
@@ -274,6 +276,69 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             assertThat(authenticate(JOB_JWT).getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
         }
 
+        @ParameterizedTest
+        @ValueSource(strings = {"worker-2", ""})
+        void shouldRejectJobWhenGatewayDoesNotOwnIt(String owner) throws Exception {
+            AgentJob job = createRunningJob();
+            job.setWorkerId(owner.isEmpty() ? null : owner);
+            when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of("llm_proxy")));
+            when(agentJobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+
+            assertThat(authenticate(JOB_JWT).getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+            verify(filterChain, never()).doFilter(any(), any());
+        }
+
+        @Test
+        void shouldReturn409ForResultUploadOnAnotherWorker() throws Exception {
+            AgentJob job = createRunningJob();
+            job.setWorkerId("worker-2");
+            when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of("llm_proxy")));
+            when(agentJobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+
+            var request = new MockHttpServletRequest("POST", "/internal/llm/runtime/" + job.getId() + "/result");
+            request.setRemoteAddr("10.0.0.2");
+            request.addHeader("Authorization", "Bearer " + JOB_JWT);
+            var response = new MockHttpServletResponse();
+
+            filter.doFilterInternal(request, response, filterChain);
+
+            assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_CONFLICT);
+            verify(filterChain, never()).doFilter(any(), any());
+        }
+
+        @Test
+        void shouldRejectCancelledResultUploadWithoutRevealingOwnership() throws Exception {
+            AgentJob job = createRunningJob();
+            job.setStatus(AgentJobStatus.CANCELLED);
+            job.setWorkerId("worker-2");
+            when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of("llm_proxy")));
+            when(agentJobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+
+            var request = new MockHttpServletRequest("POST", "/internal/llm/runtime/" + job.getId() + "/result");
+            request.setRemoteAddr("10.0.0.2");
+            request.addHeader("Authorization", "Bearer " + JOB_JWT);
+            var response = new MockHttpServletResponse();
+
+            filter.doFilterInternal(request, response, filterChain);
+
+            assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+        }
+
+        @Test
+        void shouldRejectResultUploadForAnotherJob() throws Exception {
+            AgentJob job = createRunningJob();
+            when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of("llm_proxy")));
+
+            var request = new MockHttpServletRequest("POST", "/internal/llm/runtime/" + UUID.randomUUID() + "/result");
+            request.setRemoteAddr("10.0.0.2");
+            request.addHeader("Authorization", "Bearer " + JOB_JWT);
+            var response = new MockHttpServletResponse();
+
+            filter.doFilterInternal(request, response, filterChain);
+
+            assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+        }
+
         private MockHttpServletResponse authenticate(String token) throws Exception {
             var request = new MockHttpServletRequest();
             request.setRemoteAddr("10.0.0.2");
@@ -291,6 +356,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             workspace.setId(7L);
             job.setWorkspace(workspace);
             job.setStatus(AgentJobStatus.RUNNING);
+            job.setWorkerId("worker-1");
             when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of("llm_proxy")));
             when(agentJobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
 
@@ -340,8 +406,9 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
 
         private void assertAuthenticatedAsJob(Authentication installed, AgentJob job) {
             assertThat(installed).isInstanceOf(JobTokenAuthentication.class);
-            ProxyRouting routing = (ProxyRouting) ((JobTokenAuthentication) installed).getPrincipal();
+            ProxyRouting routing = ((JobTokenAuthentication) installed).getPrincipal();
             assertThat(routing.principalDescription()).isEqualTo("job:" + job.getId());
+            assertThat(Objects.requireNonNull(routing.attempt()).workerId()).isEqualTo("worker-1");
             assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         }
 
@@ -439,7 +506,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             Authentication authentication = authCapture.get();
             org.junit.jupiter.api.Assertions.assertNotNull(authentication);
             org.junit.jupiter.api.Assertions.assertInstanceOf(JobTokenAuthentication.class, authentication);
-            ProxyRouting routing = (ProxyRouting) ((JobTokenAuthentication) authentication).getPrincipal();
+            ProxyRouting routing = ((JobTokenAuthentication) authentication).getPrincipal();
             assertThat(routing.apiProtocol()).isEqualTo("openai-completions");
         }
 
@@ -524,7 +591,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             Authentication authentication = authCapture.get();
             org.junit.jupiter.api.Assertions.assertNotNull(authentication);
             org.junit.jupiter.api.Assertions.assertInstanceOf(JobTokenAuthentication.class, authentication);
-            return (ProxyRouting) ((JobTokenAuthentication) authentication).getPrincipal();
+            return ((JobTokenAuthentication) authentication).getPrincipal();
         }
     }
 
@@ -542,7 +609,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
                 null,
                 null,
                 null,
-                false,
+                null,
                 null,
                 null,
                 null,
@@ -556,6 +623,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         workspace.setId(7L);
         job.setWorkspace(workspace);
         job.setStatus(AgentJobStatus.RUNNING);
+        job.setWorkerId("worker-1");
         return job;
     }
 

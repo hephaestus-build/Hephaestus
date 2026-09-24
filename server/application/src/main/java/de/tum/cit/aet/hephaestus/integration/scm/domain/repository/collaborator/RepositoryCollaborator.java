@@ -12,6 +12,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MapsId;
 import jakarta.persistence.Table;
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.Locale;
 import lombok.AllArgsConstructor;
@@ -93,6 +94,9 @@ public class RepositoryCollaborator {
     @AllArgsConstructor
     @EqualsAndHashCode
     public static class Id implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         @Column(name = "repository_id", nullable = false)
         private Long repositoryId;

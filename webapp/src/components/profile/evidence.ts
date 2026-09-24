@@ -7,6 +7,8 @@ export interface EvidenceLocation {
 	endLine: number;
 	sourceKind: string;
 	side?: "OLD" | "NEW";
+	/** The commit a quote from the repository's history was verified against. */
+	revision?: string;
 	snippet?: string;
 	redacted: boolean;
 	/**
@@ -24,6 +26,7 @@ export function toEvidenceLocations(evidence: ObservationDetail["evidence"]): Ev
 				endLine: citation.endLine,
 				sourceKind: citation.sourceKind,
 				side: citation.side,
+				revision: citation.revision,
 				snippet: citation.quote,
 				redacted: citation.quoteRedacted,
 			})),
@@ -63,6 +66,7 @@ function foldDiffSides(locations: EvidenceLocation[]): EvidenceLocation[] {
 			startLine: kept.startLine,
 			endLine: kept.endLine,
 			sourceKind: kept.sourceKind,
+			revision: kept.revision,
 			redacted: false,
 			change: { before, after },
 		};
@@ -147,7 +151,9 @@ export function toEvidenceCheck(evidence: ObservationDetail["evidence"]): Eviden
 
 /** The sources a warrant names, in the registry's words; nothing consulted is no pair at all. */
 function consultedCheck(consulted: string[]): EvidenceCheck[] {
-	if (consulted.length === 0) return [];
+	if (consulted.length === 0) {
+		return [];
+	}
 	return [{ term: "Read", detail: joinWithAnd(consulted.map(sourceLabel)) }];
 }
 
@@ -155,13 +161,17 @@ const sourceLabel = (sourceKind: string) => evidenceSourceDef(sourceKind).label;
 
 /** "A", "A and B", "A, B and C" — a list read as a sentence rather than as a set of chips. */
 function joinWithAnd(items: string[]): string {
-	if (items.length < 2) return items.join("");
+	if (items.length < 2) {
+		return items.join("");
+	}
 	return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
 export function splitPath(path: string): { directory: string; fileName: string } {
 	const lastSlash = path.lastIndexOf("/");
-	if (lastSlash < 0) return { directory: "", fileName: path };
+	if (lastSlash === -1) {
+		return { directory: "", fileName: path };
+	}
 	return { directory: path.slice(0, lastSlash + 1), fileName: path.slice(lastSlash + 1) };
 }
 export function evidenceLineRangeLabel(location: EvidenceLocation): string {

@@ -30,7 +30,7 @@ import org.springframework.stereotype.Service;
  * member is never nudged.
  *
  * <p>This service owns only the CTA blocks and their DM delivery. The persistent Home tab — the privacy
- * disclosure and the research-participation consent toggle — is rendered by {@link SlackAppHomeService} via
+ * disclosure and the link to account consent settings — is rendered by {@link SlackAppHomeService} via
  * {@code views.publish}, which reuses {@link #linkCtaBlocks()} to lead an unlinked member with the same CTA.
  */
 @Service

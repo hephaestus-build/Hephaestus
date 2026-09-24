@@ -85,9 +85,9 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
         UUID getFeedbackId();
     }
 
-    /** Current resolution for each requested recurrence locus. The caller passes at least one key. */
+    /** Current resolution for each requested observation. The caller passes at least one observation ID. */
     @Query(value = """
-        SELECT DISTINCT ON (o.recurrence_key) o.recurrence_key AS "recurrenceKey", r.action AS "resolution"
+        SELECT DISTINCT ON (o.id) o.id AS "observationId", r.action AS "resolution"
         FROM feedback fb
         JOIN feedback_observation fo ON fo.feedback_id = fb.id
         JOIN observation o ON o.id = fo.observation_id
@@ -97,17 +97,17 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
             WHERE response.feedback_id = fb.id AND response.reactor_user_id = :reactorUserId
             ORDER BY response.created_at DESC, response.id DESC LIMIT 1
         ) r ON r.action IS NOT NULL
-        WHERE o.recurrence_key IN (:recurrenceKeys)
+        WHERE o.id IN (:observationIds)
           AND fb.workspace_id = :workspaceId
-        ORDER BY o.recurrence_key, r.created_at DESC, r.id DESC
+        ORDER BY o.id, r.created_at DESC, r.id DESC
         """, nativeQuery = true)
-    List<LocusResolutionProjection> findCurrentResolutionByRecurrenceKeys(
-            @Param("recurrenceKeys") Collection<String> recurrenceKeys,
+    List<ObservationResolutionProjection> findCurrentResolutionByObservationIds(
+            @Param("observationIds") Collection<UUID> observationIds,
             @Param("reactorUserId") Long reactorUserId,
             @Param("workspaceId") Long workspaceId);
 
-    interface LocusResolutionProjection {
-        String getRecurrenceKey();
+    interface ObservationResolutionProjection {
+        UUID getObservationId();
 
         String getResolution();
     }

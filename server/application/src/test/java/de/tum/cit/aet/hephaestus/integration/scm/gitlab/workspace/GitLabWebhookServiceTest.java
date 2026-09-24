@@ -10,6 +10,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties.Http;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties.Publish;
@@ -43,6 +47,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
@@ -50,6 +55,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -293,6 +299,53 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
             assertThat(result.registered()).isTrue();
             assertThat(result.webhookId()).isEqualTo(100L);
+        }
+
+        @Test
+        void shouldReportRegistrationStatusWithoutLoggingTheProviderBody() {
+            when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
+            when(webhookClient.lookupGroup(1L, "my-org")).thenReturn(new GroupInfo(42L, "My Org", "my-org"));
+            when(webhookClient.listGroupWebhooks(1L, 42L)).thenReturn(List.of());
+            when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
+                    .thenThrow(WebClientResponseException.create(
+                            500,
+                            "Server Error",
+                            HttpHeaders.EMPTY,
+                            "private-response-body with private-webhook-secret".getBytes(StandardCharsets.UTF_8),
+                            StandardCharsets.UTF_8));
+            Logger logger = (Logger) LoggerFactory.getLogger(GitLabWebhookService.class);
+            ListAppender<ILoggingEvent> appender = new ListAppender<>();
+            appender.start();
+            logger.addAppender(appender);
+            try {
+                WebhookSetupResult result = webhookService.registerWebhook(workspace);
+                assertThat(result.registered()).isFalse();
+                assertThat(result.failureReason()).isEqualTo("GitLab API error: 500");
+                var failures = appender.list.stream()
+                        .filter(event -> event.getLevel() == Level.WARN)
+                        .toList();
+                assertThat(failures).hasSize(1);
+                ILoggingEvent event = failures.getFirst();
+                assertThat(event.getKeyValuePairs()).isNotNull();
+                var fields = event.getKeyValuePairs().stream()
+                        .collect(Collectors.toMap(pair -> pair.key, pair -> pair.value));
+                assertThat(fields)
+                        .containsExactlyInAnyOrderEntriesOf(Map.of(
+                                "event.name",
+                                "integration.webhook.registration.failed",
+                                "integration.kind",
+                                IntegrationKind.GITLAB,
+                                "workspace.id",
+                                1L,
+                                "http.response.status_code",
+                                500));
+                assertThat(event.getFormattedMessage()).isEqualTo("GitLab webhook registration failed");
+                assertThat(event.getArgumentArray()).isNullOrEmpty();
+                assertThat(event.getThrowableProxy()).isNull();
+            } finally {
+                logger.detachAppender(appender);
+                appender.stop();
+            }
         }
 
         @Test

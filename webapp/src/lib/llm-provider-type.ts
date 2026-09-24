@@ -27,7 +27,7 @@ export const API_PROTOCOLS = {
 	OPENAI_RESPONSES: "openai-responses",
 } as const;
 
-export function defaultProtocolFor(useResponsesApi = false): string {
+export function defaultProtocolFor(useResponsesApi = true): string {
 	return useResponsesApi ? API_PROTOCOLS.OPENAI_RESPONSES : API_PROTOCOLS.OPENAI_COMPLETIONS;
 }
 
@@ -41,12 +41,15 @@ export function authModeDefaultFor(preset: ProviderPreset): LlmAuthMode {
 
 export function baseUrlDefaultFor(preset: ProviderPreset): string {
 	switch (preset) {
-		case "OPENAI":
+		case "OPENAI": {
 			return "https://api.openai.com/v1";
-		case "AZURE_OPENAI_V1":
+		}
+		case "AZURE_OPENAI_V1": {
 			return "https://RESOURCE.openai.azure.com/openai/v1";
-		case "OTHER":
+		}
+		case "OTHER": {
 			return "";
+		}
 	}
 }
 
@@ -58,7 +61,9 @@ export interface OpenAiConnectionIdentity {
 /** Azure is not inferred back from a stored connection; the preset only seeds the create form. */
 export function presetForConnection(connection: OpenAiConnectionIdentity): ProviderPreset {
 	try {
-		if (new URL(connection.baseUrl).hostname.toLowerCase() === "api.openai.com") return "OPENAI";
+		if (new URL(connection.baseUrl).hostname.toLowerCase() === "api.openai.com") {
+			return "OPENAI";
+		}
 	} catch {
 		// An unparseable stored URL stays editable as a generic endpoint.
 	}

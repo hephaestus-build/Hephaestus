@@ -1,0 +1,27 @@
+---
+title: Product feedback boundaries
+---
+
+# Product feedback boundaries
+
+Product feedback collects identified submissions for instance administrators. It is separate from
+practice feedback and never leaves the instance. What administrators and members see is in the
+[operator guidance](/admin/product-feedback) and the [user guide](/user/product-feedback); erasure
+ownership is in the [personal-data map](/admin/dsms/personal-data-map). The code is
+`server/application/src/main/java/de/tum/cit/aet/hephaestus/productfeedback/`; `Survey`,
+`SurveyParticipation` and `SurveyQuestions` carry the model's rules in their Javadoc.
+
+## Boundaries
+
+- Workspace endpoints require membership and derive the account from authentication; availability
+  and workspace targeting are checked on every write. Instance administrator endpoints own
+  authoring, lifecycle, results, export and the inbox.
+- Drafts live in the root route's feedback controls (`__root.tsx`) and are dropped on reload,
+  workspace switch and sign-out; the invitation cache is `use-product-feedback.ts`. The generated
+  client is the only HTTP boundary. A response or decline is handled once per account, not once
+  per workspace.
+- Feedback is rate-limited by the unique constraint on `(account_id, submission_minute)`.
+- A survey's purpose is fixed at publication. `RESEARCH` surveys snapshot the organisation they
+  were published for and are offered only while `ResearchParticipationQuery` (implemented by
+  `ConsentService`) names the same organisation and reports a current grant for the account; the
+  check runs on listing and on every member write, so a withdrawal takes effect at once.

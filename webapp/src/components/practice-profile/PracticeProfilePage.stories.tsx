@@ -2,12 +2,13 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import type { PracticeGroup } from "@/api/types.gen";
-import type { DetailStackEntry } from "@/components/core/detail-drawer/detail-stack";
-import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
+import type { DetailStackEntry } from "@/components/layout/detail-drawer/detail-stack";
+import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { DEFAULT_PRACTICE_GROUP_SORT } from "@/components/practice-vocabulary/practice-group-list-order";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
 import { useFeedbackRatings } from "@/stories/feedback-ratings";
+import { expectSettledVisible } from "@/stories/overlay";
 import {
 	ALL_FEEDBACK_CARDS,
 	OPEN_FEEDBACK_CARDS,
@@ -19,9 +20,8 @@ import {
 	practicesByGroup,
 	practiceStandings,
 } from "@/stories/practice-profile-story-mock-data";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { expectSettledVisible } from "@/test/overlay";
-import { expectNoPageOverflow } from "@/test/reflow";
 
 import { AllPracticesLevel } from "./AllPracticesLevel";
 import { composeOverview, EMPTY_OVERVIEW } from "./compose-overview";
@@ -38,7 +38,6 @@ const composed = composeOverview(OVERVIEW_FIXTURE);
 const empty = composeOverview(EMPTY_OVERVIEW);
 
 const meta = {
-	title: "Practice profile/Page",
 	component: PracticeProfilePage,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
@@ -63,13 +62,14 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const popups = () =>
-	Array.from(document.querySelectorAll<HTMLElement>('[data-slot="drawer-popup"]'));
+const popups = () => [...document.querySelectorAll<HTMLElement>('[data-slot="drawer-popup"]')];
 
 /** The level at `depth`, so a play that has fewer open than it expects says which. */
 const popupAt = (depth: number): HTMLElement => {
 	const popup = popups()[depth];
-	if (!popup) throw new Error(`Expected at least ${depth + 1} open drawer level(s).`);
+	if (!popup) {
+		throw new Error(`Expected at least ${depth + 1} open drawer level(s).`);
+	}
 	return popup;
 };
 
@@ -112,7 +112,9 @@ function PageWithDrawer(args: PracticeProfilePageProps) {
 								const card = OPEN_FEEDBACK_CARDS.find(
 									(candidate) => candidate.practiceSlug === slug,
 								);
-								if (card) openPractice(card.groupSlug, slug);
+								if (card) {
+									openPractice(card.groupSlug, slug);
+								}
 							}}
 						/>
 						<DetailDrawerStack
@@ -182,7 +184,7 @@ export const Default: Story = {
 			"Resolved 3",
 			"All 9",
 		]);
-		await expect(canvas.getByRole("tab", { name: /^Newest/ })).toHaveAttribute(
+		await expect(canvas.getByRole("tab", { name: /^Newest/u })).toHaveAttribute(
 			"aria-selected",
 			"true",
 		);
@@ -190,10 +192,12 @@ export const Default: Story = {
 		await expect(canvas.getByText("Newest first")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "See all practices" })).toBeVisible();
 		// The paragraph names two things and counts the rest, which unfolds in place.
-		await expect(canvas.getByRole("button", { name: /^Show the/ })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: /^Show the/u })).toBeVisible();
 		// A card's practice pill opens the level on its observations; "Learn more" on its About tab.
 		const [card] = canvas.getAllByRole("article");
-		if (!card) throw new Error("The Newest tab shows a card");
+		if (!card) {
+			throw new Error("The Newest tab shows a card");
+		}
 		await userEvent.click(
 			within(card).getByRole("button", { name: "Scope the change to one concern" }),
 		);
@@ -231,24 +235,26 @@ export const FeedbackTabs: Story = {
 		const articles = () => canvas.getAllByRole("article");
 		const first = () => {
 			const [card] = articles();
-			if (!card) throw new Error("The tab lists at least one card");
+			if (!card) {
+				throw new Error("The tab lists at least one card");
+			}
 			return card;
 		};
-		await userEvent.click(canvas.getByRole("tab", { name: /^Resolved/ }));
+		await userEvent.click(canvas.getByRole("tab", { name: /^Resolved/u }));
 		await expect(args.onFeedbackTabChange).toHaveBeenLastCalledWith("resolved");
 		await expect(articles()).toHaveLength(3);
 		await expect(within(first()).getByText("Resolved")).toBeVisible();
 		await expect(articles()[0]).toHaveTextContent("Descriptions named the what, rarely the why");
 
-		await userEvent.click(canvas.getByRole("tab", { name: /^All/ }));
+		await userEvent.click(canvas.getByRole("tab", { name: /^All/u }));
 		await expect(articles()).toHaveLength(9);
 		// Newest first across both: the open and the resolved card from the latest run lead.
 		await expect(articles()[0]).toHaveTextContent("Created 9 September, 2:10 pm");
 
-		await userEvent.click(canvas.getByRole("tab", { name: /^Open/ }));
+		await userEvent.click(canvas.getByRole("tab", { name: /^Open/u }));
 		await expect(articles()).toHaveLength(6);
 
-		await userEvent.click(canvas.getByRole("tab", { name: /^Newest/ }));
+		await userEvent.click(canvas.getByRole("tab", { name: /^Newest/u }));
 		await expect(articles()).toHaveLength(2);
 		await expect(articles()[0]).toHaveTextContent("Merge requests bundle a fix with a refactor");
 		await expect(within(first()).getByText("New")).toBeVisible();
@@ -281,11 +287,11 @@ export const AllPracticesOpened: Story = {
 
 		// Back from the group lands on the table, not on the page.
 		await userEvent.click(screen.getByRole("button", { name: "Back" }));
-		await waitFor(() => expect(popups()).toHaveLength(1));
+		await waitFor(async () => expect(popups()).toHaveLength(1));
 		await expect(screen.getByRole("table", { name: "All practices" })).toBeVisible();
 
 		await userEvent.keyboard("{Escape}");
-		await waitFor(() => expect(popups()).toHaveLength(0));
+		await waitFor(async () => expect(popups()).toHaveLength(0));
 	},
 };
 
@@ -298,20 +304,22 @@ export const PracticeOpenedFromCard: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
 	play: async ({ args, canvas }) => {
 		const [pill] = canvas.getAllByRole("button", { name: "Scope the change to one concern" });
-		if (!pill) throw new Error("The first card names its practice");
+		if (!pill) {
+			throw new Error("The first card names its practice");
+		}
 		await userEvent.click(pill);
 		await expect(args.onOpenPractice).toHaveBeenCalledWith("scope-one-reviewable-change");
 		await expectSettledVisible(await screen.findByText("Practice scope-one-reviewable-change"));
 		await expect(popups()).toHaveLength(2);
 
 		await userEvent.click(within(popupAt(1)).getByRole("button", { name: "Back" }));
-		await waitFor(() => expect(popups()).toHaveLength(1));
+		await waitFor(async () => expect(popups()).toHaveLength(1));
 		await expect(
 			within(popupAt(0)).getByRole("heading", { name: "Packaging work for review" }),
 		).toBeVisible();
 
 		await userEvent.click(within(popupAt(0)).getByRole("button", { name: "Close" }));
-		await waitFor(() => expect(popups()).toHaveLength(0));
+		await waitFor(async () => expect(popups()).toHaveLength(0));
 	},
 };
 
@@ -323,7 +331,9 @@ export const FeedbackRated: Story = {
 	render: (args) => <RatedPage {...args} />,
 	play: async ({ canvas }) => {
 		const [first, second] = canvas.getAllByRole("article");
-		if (!first || !second) throw new Error("The page opens with two pieces of feedback");
+		if (!first || !second) {
+			throw new Error("The page opens with two pieces of feedback");
+		}
 		const helpful = within(first).getByRole("button", { name: "Helpful" });
 		const notHelpful = within(first).getByRole("button", { name: "Not helpful" });
 		await userEvent.click(helpful);
@@ -354,7 +364,9 @@ export const NotHelpfulCommentSent: Story = {
 	render: (args) => <RatedPage {...args} />,
 	play: async ({ canvas }) => {
 		const [first] = canvas.getAllByRole("article");
-		if (!first) throw new Error("The page opens with two pieces of feedback");
+		if (!first) {
+			throw new Error("The page opens with two pieces of feedback");
+		}
 		const notHelpful = within(first).getByRole("button", { name: "Not helpful" });
 		await userEvent.click(notHelpful);
 		await userEvent.click(within(first).getByRole("button", { name: "Not accurate" }));

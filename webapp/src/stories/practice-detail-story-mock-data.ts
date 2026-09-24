@@ -11,7 +11,7 @@ import type {
 	PracticeGroupReviewRun,
 	PracticeStanding,
 } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
+import { daysBefore } from "@/stories/story-clock";
 
 import { packagingGroup, pullRequest } from "./practice-profile-story-mock-data";
 
@@ -101,6 +101,7 @@ export const detailObservation: ObservationDetail = {
 	practiceSlug: focusedChanges.slug,
 	practiceName: focusedChanges.name,
 	summary: "The refactor and the fix arrived together",
+	assessmentStatus: "ASSESSED",
 	presence: "PRESENT",
 	assessment: "BAD",
 	severity: "MAJOR",
@@ -160,6 +161,7 @@ export const detailRun: PracticeGroupReviewRun = {
 			practiceSlug: "describe-what-and-why",
 			practiceName: "Describe what changed and why",
 			summary: "The description names the motivation",
+			assessmentStatus: "ASSESSED",
 			presence: "PRESENT",
 			assessment: "GOOD",
 			observedAt: daysBefore(2),
@@ -185,6 +187,7 @@ export const detailRuns: PracticeGroupReviewRun[] = [
 				practiceSlug: focusedChanges.slug,
 				practiceName: focusedChanges.name,
 				summary: "A dependency bump was carried alongside a behaviour change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MINOR",
@@ -209,6 +212,7 @@ export const detailRuns: PracticeGroupReviewRun[] = [
 				practiceSlug: focusedChanges.slug,
 				practiceName: focusedChanges.name,
 				summary: "One concern, one pull request: the export and nothing else",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				observedAt: daysBefore(11),
@@ -236,8 +240,9 @@ export const searchedAndFoundNothing: ObservationDetail = {
 	...onThatPullRequest,
 	id: "00000000-0000-0000-0000-000000000131",
 	summary: "No test covers the new caching branch",
+	assessmentStatus: "ASSESSED",
 	presence: "ABSENT",
-	assessment: "BAD",
+	assessment: "GOOD",
 	severity: "MAJOR",
 	evidenceRationale:
 		"The branch is new in this change: `loadFromCache` is called in `DocumentLoader`, and no test file in the diff names it at all.",
@@ -258,7 +263,7 @@ export const nothingToJudge: ObservationDetail = {
 	...onThatPullRequest,
 	id: "00000000-0000-0000-0000-000000000141",
 	summary: "This change performs no network request",
-	presence: "NOT_APPLICABLE",
+	assessmentStatus: "NOT_APPLICABLE",
 	evidence: {
 		detector: "practice-observer",
 		citations: [],
@@ -275,7 +280,7 @@ export const couldNotSettleIt: ObservationDetail = {
 	...onThatPullRequest,
 	id: "00000000-0000-0000-0000-000000000151",
 	summary: "The evidence does not settle whether the rename was asked for",
-	presence: "INCONCLUSIVE",
+	assessmentStatus: "UNDETERMINED",
 	evidenceRationale:
 		"The description mentions a review thread the review was not given, so the two changes may have been requested together.",
 	evidence: {
@@ -296,6 +301,7 @@ export const nextStepWithoutDelivery: ObservationDetail = {
 	...onThatPullRequest,
 	id: "00000000-0000-0000-0000-000000000161",
 	summary: "The rename and the caching change share one commit",
+	assessmentStatus: "ASSESSED",
 	presence: "PRESENT",
 	assessment: "BAD",
 	severity: "MINOR",

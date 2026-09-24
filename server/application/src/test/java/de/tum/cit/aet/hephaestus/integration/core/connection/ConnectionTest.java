@@ -20,8 +20,8 @@ class ConnectionTest extends BaseUnitTest {
 
     @Test
     void shouldClearQuarantineWhenCredentialsAreReplaced() {
-        CredentialBundleConverter oldConverter = new CredentialBundleConverter(OLD_KEY, "dev");
-        CredentialBundleConverter rotatingConverter = new CredentialBundleConverter(NEW_KEY, 2, OLD_KEY, 1, "dev");
+        CredentialBundleConverter oldConverter = new CredentialBundleConverter(OLD_KEY, false);
+        CredentialBundleConverter rotatingConverter = new CredentialBundleConverter(NEW_KEY, 2, OLD_KEY, 1, false);
         Connection connection = connection();
         connection.setCredentials(TOKEN, oldConverter);
         connection.markCredentialRotationFailed(Instant.parse("2026-09-03T12:00:00Z"));
@@ -37,10 +37,10 @@ class ConnectionTest extends BaseUnitTest {
         Connection connection = connection();
         assertThat(connection.hasCredentials()).isFalse();
 
-        connection.setCredentials(TOKEN, new CredentialBundleConverter(OLD_KEY, "dev"));
+        connection.setCredentials(TOKEN, new CredentialBundleConverter(OLD_KEY, false));
 
         assertThat(connection.hasCredentials()).isTrue();
-        assertThatThrownBy(() -> connection.credentials(new CredentialBundleConverter(NEW_KEY, "dev")))
+        assertThatThrownBy(() -> connection.credentials(new CredentialBundleConverter(NEW_KEY, false)))
                 .isInstanceOf(EncryptionException.class);
     }
 

@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
 	type DetailStackEntry,
 	detailStackSchema,
-} from "@/components/core/detail-drawer/detail-stack";
+} from "@/components/layout/detail-drawer/detail-stack";
 import {
 	DEFAULT_PRACTICE_GROUP_SORT,
 	type PracticeGroupSort,

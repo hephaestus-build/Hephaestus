@@ -2,9 +2,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ObservationDetail, PracticeGroupReviewRun } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
 import { formatDay, formatShortDay } from "@/lib/dates";
+import { daysBefore } from "@/stories/story-clock";
 
+import type { ObservationControls } from "./review-runs";
 import { ReviewRunTimeline } from "./ReviewRunTimeline";
 
 const baseObservation = {
@@ -16,6 +17,7 @@ const baseObservation = {
 	practiceSlug: "records-decisions",
 	practiceName: "Record significant decisions and the reasoning",
 	summary: "The workspace trade-off is documented",
+	assessmentStatus: "ASSESSED",
 	presence: "PRESENT",
 	assessment: "GOOD",
 	observedAt: daysBefore(2),
@@ -83,8 +85,8 @@ describe("ReviewRunTimeline", () => {
 		};
 		render(<ReviewRunTimeline runs={[run, earlier]} initiallyOpen="newest" />);
 
-		const newest = screen.getByRole("button", { name: new RegExp(baseObservation.summary) });
-		const older = screen.getByRole("button", { name: /An earlier run said the same/ });
+		const newest = screen.getByRole("button", { name: new RegExp(baseObservation.summary, "u") });
+		const older = screen.getByRole("button", { name: /An earlier run said the same/u });
 		expect(newest.getAttribute("aria-expanded")).toBe("true");
 		expect(older.getAttribute("aria-expanded")).toBe("false");
 		expect(screen.getAllByText("Why it was noted")).toHaveLength(1);
@@ -103,7 +105,7 @@ describe("ReviewRunTimeline", () => {
 	});
 
 	it("sends the whole response when one part of it changes", () => {
-		const onRespond = vi.fn();
+		const onRespond = vi.fn<NonNullable<ObservationControls["onRespond"]>>();
 		render(<ReviewRunTimeline runs={runs} observations={{ onRespond }} />);
 
 		// The observation arrives marked addressed, so pressing it again withdraws that answer and
@@ -118,7 +120,7 @@ describe("ReviewRunTimeline", () => {
 	});
 
 	it("sends a new answer and its comment without disturbing the usefulness", () => {
-		const onRespond = vi.fn();
+		const onRespond = vi.fn<NonNullable<ObservationControls["onRespond"]>>();
 		render(<ReviewRunTimeline runs={runs} observations={{ onRespond }} />);
 
 		fireEvent.click(screen.getByRole("button", { name: "Not applicable" }));

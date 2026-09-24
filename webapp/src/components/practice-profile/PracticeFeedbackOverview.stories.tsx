@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, within } from "storybook/test";
 
+import { expectSettledVisible } from "@/stories/overlay";
 import {
 	groups,
 	OVERVIEW_FIXTURE,
 	SHARED_TRANSITION_OVERVIEW,
 } from "@/stories/practice-profile-story-mock-data";
-import { expectSettledVisible } from "@/test/overlay";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { composeOverview } from "./compose-overview";
 import { PracticeFeedbackOverview } from "./PracticeFeedbackOverview";
@@ -16,7 +16,6 @@ import { PracticeFeedbackOverview } from "./PracticeFeedbackOverview";
 const composed = composeOverview(OVERVIEW_FIXTURE);
 
 const meta = {
-	title: "Practice profile/Feedback overview",
 	component: PracticeFeedbackOverview,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
@@ -50,12 +49,14 @@ export const Default: Story = {
 		// clean, each piece a link. What does not fit in three rows is only counted.
 		const resolvedPill = canvas.getByRole("button", { name: "Describe what changed and why" });
 		const resolvedRow = resolvedPill.closest("li");
-		if (!resolvedRow) throw new Error("Every held row is a list item");
+		if (!resolvedRow) {
+			throw new Error("Every held row is a list item");
+		}
 		// Each reference carries its own "(opens in a new tab)", so the words are matched around them.
 		await expect(resolvedRow).toHaveTextContent(
-			/Resolved by the work after #22.*, #21.* and #20.* came back clean/,
+			/Resolved by the work after #22.*, #21.* and #20.* came back clean/u,
 		);
-		await expect(within(resolvedRow).getByRole("link", { name: /^#21/ })).toHaveAttribute(
+		await expect(within(resolvedRow).getByRole("link", { name: /^#21/u })).toHaveAttribute(
 			"href",
 			"https://github.com/HephaestusTest/practice-validation/pull/21",
 		);
@@ -66,8 +67,10 @@ export const Default: Story = {
 		// "What changed" names the new feedback and the one slip, in the registry's words, and every
 		// practice it names is the grey pill, a button that opens the practice's level.
 		const changed = canvas.getByText("What changed").parentElement;
-		if (!changed) throw new Error("The block's label sits in the block");
-		await expect(within(changed).getByText(/moved to Needs attention after/)).toBeVisible();
+		if (!changed) {
+			throw new Error("The block's label sits in the block");
+		}
+		await expect(within(changed).getByText(/moved to Needs attention after/u)).toBeVisible();
 		const changedPill = within(changed).getByRole("button", {
 			name: "Scope the change to one concern",
 		});
@@ -90,16 +93,18 @@ export const Default: Story = {
 export const SharedMoves: Story = {
 	args: { overview: composeOverview(SHARED_TRANSITION_OVERVIEW) },
 	play: async ({ canvas, args, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /^Show the/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /^Show the/u }));
 
 		// One sentence for the three practices whose trend turned the same way, each still its own
 		// pill, and the predicate agreeing with all three.
 		const trends = canvas.getByText("Trends turned.").parentElement;
-		if (!trends) throw new Error("The paragraph's title sits in the paragraph");
+		if (!trends) {
+			throw new Error("The paragraph's title sits in the paragraph");
+		}
 		// The work reference carries its own "(opens in a new tab)", so the words are matched
 		// around it.
 		await expect(trends).toHaveTextContent(
-			/Scope the change to one concern, Write commit subjects a reviewer can follow and Keep the diff reviewable in one sitting now show More positive recently over #22/,
+			/Scope the change to one concern, Write commit subjects a reviewer can follow and Keep the diff reviewable in one sitting now show More positive recently over #22/u,
 		);
 		for (const name of [
 			"Scope the change to one concern",
@@ -116,10 +121,12 @@ export const SharedMoves: Story = {
 		// opens it.
 		const groupName = canvas.getByRole("button", { name: "Communicating in the open" });
 		const visual = groupName.parentElement;
-		if (!visual) throw new Error("The group's name sits inside its icon and colour");
+		if (!visual) {
+			throw new Error("The group's name sits inside its icon and colour");
+		}
 		await expect(visual).toHaveClass("text-violet-700");
 		await expect(visual.querySelector(".lucide-message-circle")).not.toBeNull();
-		await expect(canvas.getByText(/is now Mixed feedback after/)).toBeVisible();
+		await expect(canvas.getByText(/is now Mixed feedback after/u)).toBeVisible();
 		await userEvent.click(groupName);
 		await expect(args.onOpenGroup).toHaveBeenLastCalledWith("communication");
 	},
@@ -131,7 +138,7 @@ export const SharedMoves: Story = {
 export const RestUnfolded: Story = {
 	play: async ({ canvas, userEvent }) => {
 		// The trigger counts what it holds: the spelled number and the plural.
-		const toggle = canvas.getByRole("button", { name: /^Show the \w+ changes$/ });
+		const toggle = canvas.getByRole("button", { name: /^Show the \w+ changes$/u });
 		await expect(toggle).toHaveAttribute("aria-expanded", "false");
 		await expect(canvas.queryByText("Moved up.")).toBeNull();
 		await userEvent.click(toggle);
@@ -190,7 +197,7 @@ export const OnlyReviewedWork: Story = {
 		await expect(canvas.getByText("pull requests")).toBeVisible();
 		await expect(canvas.queryByText("What is holding up well")).toBeNull();
 		await expect(canvas.queryByText("What changed")).toBeNull();
-		await expect(canvas.queryByRole("button", { name: /^Show the/ })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: /^Show the/u })).toBeNull();
 	},
 };
 
@@ -198,9 +205,11 @@ export const OnlyReviewedWork: Story = {
 export const HeldTickExplained: Story = {
 	play: async ({ canvas, userEvent }) => {
 		const [tick] = canvas.getAllByRole("button", { name: "Strength:" });
-		if (!tick) throw new Error("Every held row carries its tick");
+		if (!tick) {
+			throw new Error("Every held row carries its tick");
+		}
 		await userEvent.hover(tick);
-		await expectSettledVisible(await screen.findByText(/the author is told so/));
+		await expectSettledVisible(await screen.findByText(/the author is told so/u));
 	},
 };
 

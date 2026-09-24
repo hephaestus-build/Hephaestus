@@ -64,16 +64,62 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
         }
 
         @Test
-        void reportsAnAdmittedPracticeWithNoFindingsAsReviewedRatherThanSilent() {
+        void shouldReportAnExplicitlyEvaluatedPracticeWithoutObservationsAsReviewed() {
+            var review = new ReviewOutcome(
+                    ReviewRunState.COMPLETED,
+                    false,
+                    AT,
+                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)),
+                    Map.of("slug", PracticeCoverageOutcome.EVALUATED));
             var entry = only(
                     practice(PracticeAutonomy.AUTOMATIC, READY),
                     List.of(triggered(READY, RUN)),
-                    Map.of(RUN, completed(Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)))),
+                    Map.of(RUN, review),
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.REVIEWED);
             assertThat(entry.explanation()).contains("nothing to report");
             assertThat(entry.observationCount()).isZero();
+        }
+
+        @Test
+        @DisplayName("a review still under way is not an all-clear, however ready the practice was")
+        void doesNotReportAnAllClearWhileTheReviewIsStillRunning() {
+            var running = new ReviewOutcome(
+                    ReviewRunState.IN_PROGRESS,
+                    false,
+                    AT,
+                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)),
+                    Map.of());
+
+            var entry = only(
+                    practice(PracticeAutonomy.AUTOMATIC, READY),
+                    List.of(triggered(READY, RUN)),
+                    Map.of(RUN, running),
+                    Map.of());
+
+            // Readiness is written before the sandbox starts, so it says nothing about what was assessed.
+            assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.RUNNING);
+        }
+
+        @Test
+        @DisplayName("a review that died is not an all-clear either")
+        void doesNotReportAnAllClearForAReviewThatFailed() {
+            var failed = new ReviewOutcome(
+                    ReviewRunState.FAILED,
+                    false,
+                    AT,
+                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)),
+                    Map.of());
+
+            var entry = only(
+                    practice(PracticeAutonomy.AUTOMATIC, READY),
+                    List.of(triggered(READY, RUN)),
+                    Map.of(RUN, failed),
+                    Map.of());
+
+            assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.FAILED);
+            assertThat(entry.explanation()).contains("did not finish");
         }
 
         @Test
@@ -170,6 +216,19 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.NOT_REACHED);
             assertThat(entry.explanation()).contains("ended before reaching");
+        }
+
+        @Test
+        void shouldNotReportAnAllClearWhenACompletedReviewHasNoCoverageRecord() {
+            var entry = only(
+                    practice(PracticeAutonomy.AUTOMATIC, READY),
+                    List.of(triggered(READY, RUN)),
+                    Map.of(RUN, completed(Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)))),
+                    Map.of());
+
+            assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.NOT_REACHED);
+            assertThat(entry.explanation()).isEqualTo("The review did not record whether it reached this practice.");
+            assertThat(entry.observationCount()).isZero();
         }
 
         @Test

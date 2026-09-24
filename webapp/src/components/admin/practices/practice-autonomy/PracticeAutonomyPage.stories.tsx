@@ -1,11 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, within } from "storybook/test";
 import { withWidePage } from "@/stories/decorators";
+import { expectSettledVisible } from "@/stories/overlay";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { expectSettledVisible } from "@/test/overlay";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { type AutonomyFixture, buildAutonomyFixture, scaleFixture } from "./fixtures";
 import { PracticeAutonomyPage } from "./PracticeAutonomyPage";
-import { type AutonomyFixture, buildAutonomyFixture, scaleFixture } from "./story-mock-data";
 
 const from = ({ settings, rollup, practices }: AutonomyFixture) => ({
 	settings,
@@ -111,7 +111,6 @@ const idle = {
 };
 
 const meta = {
-	title: "Workspace admin/Practices/Review/How much",
 	component: PracticeAutonomyPage,
 	parameters: {
 		layout: "padded",
@@ -172,8 +171,8 @@ export const WorkspaceDefaultUnset: Story = {
 		).toBeVisible();
 		// The workspace makes one decision, not two: how far a review goes is the only axis, and
 		// Review before sending means a person decides whether the composed feedback is released.
-		await expect(canvas.queryByText(/feedback may go/i)).not.toBeInTheDocument();
-		await expect(canvas.queryByText(/mentor conversation/i)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/feedback may go/iu)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/mentor conversation/iu)).not.toBeInTheDocument();
 		await expectNoPageOverflow();
 	},
 };
@@ -208,10 +207,12 @@ export const GroupOverride: Story = {
 		await expect(args.onSetGroupAutonomy).toHaveBeenCalledWith("testing", "AUTOMATIC");
 
 		const unassigned = canvas.getByText("Unassigned").closest('[data-slot="accordion-item"]');
-		if (!(unassigned instanceof HTMLElement)) throw new Error("No-group group not rendered");
+		if (!(unassigned instanceof HTMLElement)) {
+			throw new Error("No-group group not rendered");
+		}
 		await expect(within(unassigned).getByText("Follows the workspace default")).toBeVisible();
 		await expect(
-			within(unassigned).queryByRole("radiogroup", { name: /How far reviews go in/ }),
+			within(unassigned).queryByRole("radiogroup", { name: /How far reviews go in/u }),
 		).not.toBeInTheDocument();
 	},
 };
@@ -230,9 +231,11 @@ export const WorkspaceAutomaticCanBeCancelled: Story = {
 
 export const PracticeAutomaticRequiresConfirmation: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Pull request hygiene/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /Pull request hygiene/u }));
 		const row = canvas.getByText("States the motivation").closest("li");
-		if (!(row instanceof HTMLElement)) throw new Error("Practice row not rendered");
+		if (!(row instanceof HTMLElement)) {
+			throw new Error("Practice row not rendered");
+		}
 		await userEvent.click(within(row).getByRole("radio", { name: "Send automatically" }));
 		const dialog = within(await screen.findByRole("alertdialog"));
 		await expect(args.onSetPracticeAutonomy).not.toHaveBeenCalled();
@@ -246,9 +249,11 @@ export const PracticeAutomaticRequiresConfirmation: Story = {
 
 export const PracticeOverrideWithReset: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Pull request hygiene/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /Pull request hygiene/u }));
 		const row = canvas.getByText("Links the issue it closes").closest("li");
-		if (!(row instanceof HTMLElement)) throw new Error("Practice row not rendered");
+		if (!(row instanceof HTMLElement)) {
+			throw new Error("Practice row not rendered");
+		}
 
 		// `getByText` matches an element's own text nodes, so this is the paragraph and not the button
 		// inside it; the button is asserted by role below.
@@ -260,11 +265,13 @@ export const PracticeOverrideWithReset: Story = {
 		).toBeVisible();
 
 		const sibling = canvas.getByText("States the motivation").closest("li");
-		if (!(sibling instanceof HTMLElement)) throw new Error("Sibling row not rendered");
-		await expect(within(sibling).getByText(/^Follows/)).toBeVisible();
+		if (!(sibling instanceof HTMLElement)) {
+			throw new Error("Sibling row not rendered");
+		}
+		await expect(within(sibling).getByText(/^Follows/u)).toBeVisible();
 
 		await userEvent.click(
-			within(row).getByRole("button", { name: /Use the default for Links the issue it closes/ }),
+			within(row).getByRole("button", { name: /Use the default for Links the issue it closes/u }),
 		);
 		await expect(args.onClearPracticeAutonomy).toHaveBeenCalledWith(
 			"pull-request-hygiene-links-the-issue-it-closes",
@@ -280,23 +287,27 @@ export const PracticeOverrideWithReset: Story = {
 export const PracticeContext: Story = {
 	args: from(oneDescribedAndOneBare),
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Documentation/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /Documentation/u }));
 
 		const described = canvas.getByText("Explains the trade-off it chose").closest("li");
-		if (!(described instanceof HTMLElement)) throw new Error("Practice row not rendered");
+		if (!(described instanceof HTMLElement)) {
+			throw new Error("Practice row not rendered");
+		}
 		await expect(within(described).getByText("Document")).toBeVisible();
 		await expect(
-			within(described).queryByText(/reads as arbitrary six months later/),
+			within(described).queryByText(/reads as arbitrary six months later/u),
 		).not.toBeInTheDocument();
 
 		// The card is portalled, so it is found on the screen and not in the row.
 		await userEvent.hover(
 			within(described).getByRole("link", { name: "Explains the trade-off it chose" }),
 		);
-		await expectSettledVisible(await screen.findByText(/reads as arbitrary six months later/));
+		await expectSettledVisible(await screen.findByText(/reads as arbitrary six months later/u));
 
 		const bare = canvas.getByText("Written by hand, and says nothing more").closest("li");
-		if (!(bare instanceof HTMLElement)) throw new Error("Bare row not rendered");
+		if (!(bare instanceof HTMLElement)) {
+			throw new Error("Bare row not rendered");
+		}
 		await expect(within(bare).getByText("Pull or merge request")).toBeVisible();
 		// A practice with neither field renders its link bare rather than wrapped in a card that
 		// would open on hover with nothing in it. Asserted on the element, not by hovering and
@@ -317,17 +328,19 @@ export const PracticeDetailOnKeyboardFocus: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
 	args: from(oneDescribedPractice),
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Documentation/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /Documentation/u }));
 		const link = canvas.getByRole("link", { name: "Explains the trade-off it chose" });
 
-		await expect(screen.queryByText(/reads as arbitrary six months later/)).not.toBeInTheDocument();
+		await expect(
+			screen.queryByText(/reads as arbitrary six months later/u),
+		).not.toBeInTheDocument();
 		// `link.focus()` would not do: the card opens on focus-*visible*, so focus has to arrive by
 		// keyboard. Bounded, so a DOM change ahead of the link fails the story instead of hanging it.
-		for (let step = 0; step < 12 && document.activeElement !== link; step++) {
+		for (let step = 0; step < 12 && document.activeElement !== link; step += 1) {
 			await userEvent.tab();
 		}
 		await expect(link).toHaveFocus();
-		await expectSettledVisible(await screen.findByText(/reads as arbitrary six months later/));
+		await expectSettledVisible(await screen.findByText(/reads as arbitrary six months later/u));
 	},
 };
 
@@ -336,7 +349,7 @@ export const OverridesOnly: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Links the issue it closes")).toBeVisible();
 		await expect(canvas.queryByText("States the motivation")).not.toBeInTheDocument();
-		await expect(canvas.getByRole("button", { name: /^Testing/ })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: /^Testing/u })).toBeVisible();
 		await expect(canvas.getByText("No practices here were set by hand.")).toBeVisible();
 		await expect(canvas.queryByText("Handles the error state")).not.toBeInTheDocument();
 	},
@@ -352,9 +365,9 @@ export const OverridesOnlyEmpty: Story = {
 export const BulkSet: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
 	play: async ({ args, canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Pull request hygiene/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /Pull request hygiene/u }));
 		await userEvent.click(
-			canvas.getByRole("button", { name: /Select all 2 practices in Pull request hygiene/ }),
+			canvas.getByRole("button", { name: /Select all 2 practices in Pull request hygiene/u }),
 		);
 		await expect(canvas.getByText("2 practices selected")).toBeVisible();
 
@@ -373,9 +386,9 @@ export const BulkSet: Story = {
 
 export const BulkAutomaticRequiresConfirmation: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Pull request hygiene/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /Pull request hygiene/u }));
 		await userEvent.click(
-			canvas.getByRole("button", { name: /Select all 2 practices in Pull request hygiene/ }),
+			canvas.getByRole("button", { name: /Select all 2 practices in Pull request hygiene/u }),
 		);
 		await userEvent.click(canvas.getByRole("button", { name: "Change the selected" }));
 		await userEvent.click(
@@ -401,7 +414,7 @@ export const BulkAutomaticRequiresConfirmation: Story = {
 export const BulkClearToInherited: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
 	play: async ({ args, canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Pull request hygiene/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /Pull request hygiene/u }));
 		await userEvent.click(
 			canvas.getByRole("checkbox", { name: "Select Links the issue it closes" }),
 		);
@@ -429,11 +442,11 @@ export const AtScale: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByText(
-				/^100 practices: 6 off, 89 review before sending and 5 send automatically\. \d+ practices and \d+ groups set by hand\.$/,
+				/^100 practices: 6 off, 89 review before sending and 5 send automatically\. \d+ practices and \d+ groups set by hand\.$/u,
 			),
 		).toBeVisible();
 		await expect(canvas.getAllByRole("radiogroup")).toHaveLength(26);
-		await expect(canvas.queryByRole("checkbox", { name: /^Select / })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("checkbox", { name: /^Select /u })).not.toBeInTheDocument();
 		await expectNoPageOverflow();
 	},
 };
@@ -452,10 +465,10 @@ export const DecisionsShareOneColumn: Story = {
 		// ignored the viewport would pass this story for the wrong reason.
 		await expect(window.innerWidth).toBeGreaterThanOrEqual(640);
 
-		await userEvent.click(canvas.getByRole("button", { name: /^Pull request hygiene/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /^Pull request hygiene/u }));
 
 		const lefts = canvas
-			.getAllByRole("radiogroup", { name: /^How far reviews go (in|on) / })
+			.getAllByRole("radiogroup", { name: /^How far reviews go (?:in|on) /u })
 			.map((group) => Math.round(group.getBoundingClientRect().left));
 
 		await expect(lefts.length).toBeGreaterThan(25);
@@ -467,8 +480,8 @@ export const DecisionsShareOneColumn: Story = {
 export const AtScaleOverridesOnly: Story = {
 	args: { overridesOnly: true, ...from(atScale) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByRole("checkbox", { name: /^Select / })).toHaveLength(3);
-		await expect(canvas.getByText(/^Observability: keeps the change/)).toBeVisible();
+		await expect(canvas.getAllByRole("checkbox", { name: /^Select /u })).toHaveLength(3);
+		await expect(canvas.getByText(/^Observability: keeps the change/u)).toBeVisible();
 		await expectNoPageOverflow();
 	},
 };
@@ -476,11 +489,11 @@ export const AtScaleOverridesOnly: Story = {
 export const NotReviewable: Story = {
 	args: from(oneUnreviewablePractice),
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Observability/ }));
+		await userEvent.click(canvas.getByRole("button", { name: /Observability/u }));
 		await expect(
-			canvas.getByText("This practice can't be reviewed automatically, so it stays off."),
+			canvas.getByText("This practice can’t be reviewed automatically, so it stays off."),
 		).toBeVisible();
-		await expect(canvas.getByRole("checkbox", { name: /^Select / })).toHaveAttribute(
+		await expect(canvas.getByRole("checkbox", { name: /^Select /u })).toHaveAttribute(
 			"aria-disabled",
 			"true",
 		);

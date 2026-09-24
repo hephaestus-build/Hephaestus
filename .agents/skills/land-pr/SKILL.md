@@ -8,7 +8,7 @@ allowed-tools:
   - Bash(gh *)
   - Bash(git *)
   - Bash(vp *)
-  - Bash(./mvnw *)
+  - Bash(./gradlew *)
   - Read
   - Grep
   - Glob
@@ -58,7 +58,7 @@ vp run db:draft-changelog    # entities changed (needs Docker); writes and wires
 vp run db:generate-erd-docs  # after pruning a changelog
 ```
 
-`generate:api:specs` packages the reactor and boots the executable JAR on ports
+`generate:api:specs` packages the server and boots the executable JAR on ports
 it allocates itself, so nothing needs freeing; root `AGENTS.md` § Command caveats covers the
 `HEPHAESTUS_APPLICATION_JAR` shortcut for a JAR you already built.
 

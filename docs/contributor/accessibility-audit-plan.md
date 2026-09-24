@@ -28,7 +28,7 @@ from those pages remain in scope.
 | Public and legal | `/`, `/about`, `/imprint`, `/privacy`, not found |
 | Authentication | `/login`, workspace login, callback and error |
 | Workspace creation | provider selection, GitHub, GitLab, validation and errors |
-| Workspace home | dashboard, teams, achievements and user profiles |
+| Workspace home | dashboard, teams and user profiles |
 | Developer feedback | reviews, trace, observations, feedback delivery and targets |
 | Mentor | thread list, greeting, transcript, composer and copilot |
 | Personal settings | settings, integrations and destructive actions |

@@ -7,7 +7,7 @@
  * import from here.
  */
 export const FOCUS_RING =
-	"outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
+	"outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 /** The same ring drawn inside the element, for a full-width row whose outside edge is clipped. */
 export const FOCUS_RING_INSET = `${FOCUS_RING} focus-visible:ring-inset`;

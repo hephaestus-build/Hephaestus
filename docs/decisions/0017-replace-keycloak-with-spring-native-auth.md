@@ -1,6 +1,6 @@
 # ADR 0017: Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs)
 
-**Status:** Accepted
+**Status:** Accepted (amended — Stage B-2 login model; read-only user views; data model corrected against the schema)
 **Date:** 2026-05-28
 **Authors:** Felix T.J. Dietrich
 **Supersedes (Stage A):** [ADR 0016](0016-unified-identity-keycloak-as-truth.md)
@@ -33,7 +33,7 @@ ADR 0016 (Stage A) already added `User.keycloak_subject` and explicitly anticipa
 
 ## Considered options
 
-1. **Replace Keycloak with Spring Security 7 native auth (this ADR).** `oauth2Login` federates upstream, custom `AuthSuccessHandler` mints a short-lived ES256 cookie-JWT via Spring's `NimbusJwtEncoder` + DB-backed `JWKSource`. Workspace-scoped IdPs ride `Connection` rows of new `kind=OIDC_LOGIN_*`. Revocation via the `issued_jwt` table (per-request, negative-cached check). No Keycloak.
+1. **Replace Keycloak with Spring Security 7 native auth (this ADR).** `oauth2Login` federates upstream, custom `AuthSuccessHandler` mints an ES256 cookie-JWT via Spring's `NimbusJwtEncoder` + DB-backed `JWKSource`. Workspace-scoped IdPs ride `Connection` rows of new `kind=OIDC_LOGIN_*`. Revocation via the `issued_jwt` table (per-request, negative-cached check). No Keycloak.
 
 2. **Replace Keycloak with Spring Authorization Server.** Hephaestus becomes its own OAuth 2.1 / OIDC server. SAS handles `/oauth2/authorize`, `/token`, `/jwks`, federation to upstream. Cleaner long-term *if* we ever need third-party OAuth clients — but SAS docs explicitly treat the "BFF for own SPA" case as a legacy edge ([SAS issue #297](https://github.com/spring-projects/spring-authorization-server/issues/297)). SAS adds ~6 endpoints we don't need and forces a custom cookie wrapper around `/token` anyway. Net code we own is ~the same; attack surface is larger.
 
@@ -115,3 +115,44 @@ These are settled, evidence-backed decisions — not open follow-ups. Each was p
 - [Descope — nOAuth (2023)](https://www.descope.com/blog/post/noauth) — account-takeover via mutable email claim; the threat model this ADR's `(provider, subject)` lookup discipline blocks.
 The scope list, dependency pins and PR composition this decision was executed against are recorded in
 the pull request that implemented it, not in a separate plan.
+
+## Update — 2026-09-11
+
+Impersonation is removed (the migration guide lists what an operator drops); the impersonation
+passages above are decision history. Instance administrators read a workspace member's private
+practice pages and conversations through
+[read-only user views](../contributor/instance-admin.md#read-only-user-views) instead.
+
+The viewed user is the synced SCM user behind a workspace membership, who may have no account at
+all, so Spring Security's
+[`SwitchUserFilter`](https://docs.spring.io/spring-security/reference/api/java/org/springframework/security/web/authentication/switchuser/SwitchUserFilter.html)
+was rejected: it replaces the authentication with a principal the viewed user may not have. A `GET`
+surface keyed on the user reuses the instance-admin authority, the recent sign-in gate and the audit
+writer every other privileged action passes through, and cannot act for the viewed user by
+construction. The `USER_VIEW` audit row carries what the `act` claim existed to carry: who read, and
+whom.
+
+## Update — 2026-09-17
+
+Corrects § Decision "Data-model split", "JWT format" and "GDPR" against the schema in
+`server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.sql`.
+
+- The class is `integration.scm.domain.user.User` (table `user`), not `ExternalActor`;
+  `identity_link.external_actor_id` points at it without a foreign key, and `docs/auth-glossary.md`
+  uses "external actor" for it in prose.
+- `workspace_membership` is keyed `PRIMARY KEY (user_id, workspace_id)` with
+  `fk_workspace_membership_user → user(id)`, and `workspace.WorkspaceMembership` maps a
+  `@ManyToOne User`; `WorkspaceContextFilter` resolves the account's SCM users through
+  `workspace.CurrentAccountUsers` to reach a membership. The `account_id` re-key is
+  [ADR 0019](0019-workspace-membership-keyed-on-account.md), Proposed.
+- The join key is `identity_link (provider_id, subject)`, unique together with the team
+  (`uq_identity_link_provider_subject_team`; the `IdentityLink` row of `docs/auth-glossary.md`
+  spells the index), and `provider_id` references `identity_provider`
+  (`integration.core.connection.IdentityProvider`), not `git_provider`.
+- There is no `oauth_authorized_client` table. `core.auth.AccountHardDeleteSweeper` deletes
+  `identity_link`, `account_feature`, `issued_jwt` and `account_export` explicitly and keeps the
+  `account` row as a `DELETED` tombstone; it does not touch `workspace_membership`, which is not
+  keyed on the account.
+- The issuer is `hephaestus.auth.issuer` (`${HEPHAESTUS_AUTH_ISSUER:http://localhost:8080}` in
+  `application.yml`), not a fixed `https://hephaestus.aet.cit.tum.de`;
+  `core.auth.web.WellKnownController` serves the public keys at `/.well-known/jwks.json`.

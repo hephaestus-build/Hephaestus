@@ -7,15 +7,22 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMes
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.BaseGitLabProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiffNoteWebhookProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
+import java.time.Instant;
+import java.util.HashSet;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +45,8 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
     private final GitLabWebhookContextResolver contextResolver;
     private final PullRequestRepository pullRequestRepository;
     private final UserRepository userRepository;
+    private final GitLabUserService userService;
+    private final GitLabReviewReconciler reviewReconciler;
     private final ApplicationEventPublisher eventPublisher;
 
     GitLabNoteMessageHandler(
@@ -47,6 +56,8 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
             GitLabWebhookContextResolver contextResolver,
             PullRequestRepository pullRequestRepository,
             UserRepository userRepository,
+            GitLabUserService userService,
+            GitLabReviewReconciler reviewReconciler,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate,
             ApplicationEventPublisher eventPublisher) {
@@ -60,6 +71,8 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
         this.diffNoteProcessor = diffNoteProcessor;
         this.mergeRequestProcessor = mergeRequestProcessor;
         this.contextResolver = contextResolver;
+        this.userService = userService;
+        this.reviewReconciler = reviewReconciler;
         this.pullRequestRepository = pullRequestRepository;
         this.userRepository = userRepository;
         this.eventPublisher = eventPublisher;
@@ -77,9 +90,19 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
             return;
         }
 
-        // Skip system-generated notes (e.g., "closed this issue", "merged MR !2")
+        // A system note is not a comment, but the three that record a review decision on a merge
+        // request are the only place GitLab says who approved, withdrew an approval or requested
+        // changes, and when; the sync reads the same notes, so the record agrees either way.
         if (event.isSystemNote()) {
-            log.debug("Skipped system note: noteId={}", event.objectAttributes().id());
+            if ("MergeRequest".equals(event.noteableType())
+                    && GitLabReviewReconciler.isReviewDecision(
+                            event.objectAttributes().note())) {
+                recordReviewDecision(event);
+            } else {
+                log.debug(
+                        "Skipped system note: noteId={}",
+                        event.objectAttributes().id());
+            }
             return;
         }
 
@@ -176,6 +199,44 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
      * {@code merge_request.detailed_merge_status}. When this transitions to
      * {@code "requested_changes"}, we create a CHANGES_REQUESTED review for the note author.
      */
+    private void recordReviewDecision(GitLabNoteEventDTO event) {
+        var note = Objects.requireNonNull(event.objectAttributes());
+        var mr = event.mergeRequest();
+        var project = event.project();
+        String projectPath = project == null ? null : project.pathWithNamespace();
+        if (mr == null || mr.iid() == null || projectPath == null || projectPath.isBlank() || note.id() == null) {
+            return;
+        }
+        ProcessingContext context =
+                contextResolver.resolve(projectPath, event.actionType().getValue(), "note");
+        Repository repository = context == null ? null : context.repository();
+        Long providerId = context == null ? null : context.providerId();
+        if (repository == null || providerId == null) {
+            return;
+        }
+        Instant at = BaseGitLabProcessor.parseGitLabTimestamp(note.createdAt());
+        User author = userService.findOrCreateUser(event.user(), providerId);
+        PullRequest pullRequest = pullRequestRepository
+                .findByRepositoryIdAndNumber(repository.getId(), mr.iid())
+                .orElse(null);
+        if (at == null || author == null || pullRequest == null) {
+            log.debug(
+                    "Skipped review-decision note: reason=unresolved, noteId={}, mrIid={}, authorPresent={}, mrPresent={}",
+                    note.id(),
+                    mr.iid(),
+                    author != null,
+                    pullRequest != null);
+            return;
+        }
+        // The same GID the GraphQL sync gives the note, so a later sync finds the row this made.
+        reviewReconciler.recordSystemNote(
+                pullRequest,
+                author,
+                new GitLabReviewReconciler.SystemNote(note.note(), at, "gid://gitlab/Note/" + note.id(), true),
+                pullRequest.getProvider(),
+                new HashSet<>());
+    }
+
     private void detectRequestedChanges(GitLabNoteEventDTO event, ProcessingContext context) {
         var mr = event.mergeRequest();
         if (mr == null || mr.iid() == null || mr.detailedMergeStatus() == null) return;

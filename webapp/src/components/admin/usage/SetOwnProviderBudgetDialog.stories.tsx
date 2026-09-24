@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
-import { expectAmountRejected } from "@/test/budget-amount-field";
-import { expectControlOnScreen, expectDialogFitsViewport } from "@/test/reflow";
+import { expectAmountRejected } from "@/stories/budget-amount-field";
+import { expectControlOnScreen, expectDialogFitsViewport } from "@/stories/reflow";
 
 import { SetOwnProviderBudgetDialog } from "./SetOwnProviderBudgetDialog";
 
@@ -41,17 +41,17 @@ export const ServerRejectionSitsAtTheField: Story = {
 	args: { serverError: "Monthly cap must not exceed 99999999.99." },
 	play: async () => {
 		const dialog = await capDialog();
-		await expect(dialog.getByRole("alert")).toHaveTextContent(/must not exceed/i);
+		await expect(dialog.getByRole("alert")).toHaveTextContent(/must not exceed/iu);
 	},
 };
 
 export const PassesItsFieldAndButtonCopyThrough: Story = {
 	play: async ({ args }) =>
-		await expectAmountRejected({
-			fieldLabel: /monthly cap/i,
-			submitLabel: /save cap/i,
+		expectAmountRejected({
+			fieldLabel: /monthly cap/iu,
+			submitLabel: /save cap/iu,
 			typed: "",
-			reason: /enter an amount/i,
+			reason: /enter an amount/iu,
 			onSubmit: args.onSubmit,
 		}),
 };
@@ -68,7 +68,7 @@ export const MobileReflow: Story = {
 	play: async () => {
 		const dialog = await capDialog();
 		await expectDialogFitsViewport();
-		for (const name of [/save cap/i, /remove cap/i, /^cancel$/i, /^close$/i]) {
+		for (const name of [/save cap/iu, /remove cap/iu, /^cancel$/iu, /^close$/iu]) {
 			await expectControlOnScreen(dialog.getByRole("button", { name }));
 		}
 	},
@@ -79,9 +79,9 @@ export const RemoveCap: Story = {
 	play: async ({ args }) => {
 		const dialog = await capDialog();
 
-		await expect(dialog.getByLabelText(/monthly cap/i)).toHaveValue(25);
+		await expect(dialog.getByLabelText(/monthly cap/iu)).toHaveValue(25);
 
-		await userEvent.click(dialog.getByRole("button", { name: /remove cap/i }));
+		await userEvent.click(dialog.getByRole("button", { name: /remove cap/iu }));
 
 		await expect(args.onSubmit).toHaveBeenCalledWith(null);
 	},
@@ -91,7 +91,7 @@ export const UncappedOffersNoRemoval: Story = {
 	args: { currentCapUsd: null },
 	play: async () => {
 		const dialog = await capDialog();
-		await expect(dialog.getByLabelText(/monthly cap/i)).toHaveValue(null);
-		await expect(dialog.queryByRole("button", { name: /remove cap/i })).toBeNull();
+		await expect(dialog.getByLabelText(/monthly cap/iu)).toHaveValue(null);
+		await expect(dialog.queryByRole("button", { name: /remove cap/iu })).toBeNull();
 	},
 };

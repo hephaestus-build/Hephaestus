@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.env.MockEnvironment;
 
 @ExtendWith(MockitoExtension.class)
 @Tag("unit")
@@ -85,7 +87,8 @@ class WorkspaceProvisioningServiceTest {
                 workspaceMembershipService,
                 authenticatedGitProviderUserService,
                 connectionService,
-                List.of());
+                List.of(),
+                new ScmServerEndpointPolicy(new MockEnvironment()));
     }
 
     @Test
@@ -231,7 +234,8 @@ class WorkspaceProvisioningServiceTest {
                 workspaceMembershipService,
                 authenticatedGitProviderUserService,
                 connectionService,
-                List.of());
+                List.of(),
+                new ScmServerEndpointPolicy(new MockEnvironment()));
         when(workspaceRepository.findAllByAccountLoginIgnoreCase("hephaestustest"))
                 .thenReturn(List.of(gitlabWorkspace, githubDuplicate));
         when(connectionService.findActive(10L, IntegrationKind.GITLAB)).thenReturn(Optional.of(mock(Connection.class)));

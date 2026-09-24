@@ -1,8 +1,11 @@
 package de.tum.cit.aet.hephaestus.practices.model;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -131,6 +134,20 @@ public class Practice {
     @Column(name = "source_curated_fingerprint", length = 96)
     private @Nullable String sourceCuratedFingerprint;
 
+    /** Complete source definition at adoption; never changed by workspace edits. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "adopted_base", columnDefinition = "jsonb")
+    @ToString.Exclude
+    private @Nullable PracticeDefinition adoptedBase;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "adopted_base_source", length = 32)
+    private @Nullable AdoptedBaseSource adoptedBaseSource;
+
+    /** Offered definition last declined by this workspace; a different offer is shown again. */
+    @Column(name = "declined_offered_digest", length = 96)
+    private @Nullable String declinedOfferedDigest;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "current_revision_id", foreignKey = @ForeignKey(name = "fk_practice_current_revision"))
     @ToString.Exclude
@@ -152,9 +169,8 @@ public class Practice {
     private List<PracticeBinding> bindings = List.of();
 
     /**
-     * The detection rubric the agent evaluates the artifact against — the rule's normative text, never shown
-     * to developers. The {@code DEFECT-DETECTOR DISCIPLINE} marker token (see {@link #isDefectDetector()}) lives
-     * in this text.
+     * The practice criteria the runtime evaluates the reviewed work against; normative text for contextual
+     * behavior assessment, separate from developer-facing guidance.
      */
     @Column(name = "criteria", columnDefinition = "TEXT", nullable = false)
     @ToString.Exclude
@@ -190,6 +206,10 @@ public class Practice {
     @Column(name = "automated_review_policy", columnDefinition = "jsonb", nullable = false)
     @ToString.Exclude
     private PracticeAutomatedReviewPolicy automatedReviewPolicy;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "delivery_behavior", columnDefinition = "jsonb", nullable = false)
+    private PracticeDeliveryBehavior deliveryBehavior = PracticeDeliveryBehavior.DEFAULT;
 
     /**
      * This practice's own answer to how much autonomy the system has over it, or {@code null} to inherit its
@@ -228,17 +248,5 @@ public class Practice {
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = Instant.now();
-    }
-
-    /**
-     * Whether this practice is a defect-detector — its criteria declare {@code DEFECT-DETECTOR DISCIPLINE}, so a
-     * clean surface is NOT_APPLICABLE, never a {@code (PRESENT, GOOD)} strength to endorse.
-     *
-     * <p>The marker is matched verbatim and is LOAD-BEARING: an admin who edits {@link #criteria} and drops or
-     * reformats it (lowercasing, hyphen→space, wrapping across a line) silently turns this back into an
-     * ordinary practice.
-     */
-    public boolean isDefectDetector() {
-        return criteria != null && criteria.contains("DEFECT-DETECTOR DISCIPLINE");
     }
 }

@@ -8,14 +8,18 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.MergeStateStatus;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -203,7 +207,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                 null, // mergeStateStatus
                 null, // isMergeable
                 false, // maintainerCanModify
-                null // mergeCommitInfo
+                null, // mergeCommitInfo
+                null, // headChecks
+                null // closingIssueNumbers
                 );
     }
 
@@ -253,7 +259,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.process(dto, createContext());
@@ -306,7 +314,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             // Verify the fallback works
@@ -361,7 +371,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             // Verify fallback returns null
@@ -444,6 +456,76 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
     class ProcessMethodCreate {
 
         @Test
+        void shouldStoreTheSyncOnlyFactsWhenTheWebhookAlreadyStoredTheSameUpdatedAt() {
+            // The webhook wrote GitHub's updated_at first ...
+            GitHubPullRequestDTO fromWebhook = createBasicPullRequestDto(FIXTURE_PR_ID, 26);
+            processor.process(fromWebhook, createContext());
+            Issue closed = new Issue();
+            closed.setNativeId(9_100L);
+            closed.setNumber(3);
+            closed.setTitle("Issue #3");
+            closed.setState(Issue.State.OPEN);
+            closed.setRepository(testRepository);
+            closed.setProvider(githubProvider);
+            closed = issueRepository.save(closed);
+
+            // ... and the sync row carries the same moment, with what only it reads.
+            GitHubPullRequestDTO fromSync = new GitHubPullRequestDTO(
+                    fromWebhook.id(),
+                    fromWebhook.databaseId(),
+                    fromWebhook.nodeId(),
+                    fromWebhook.number(),
+                    fromWebhook.title(),
+                    fromWebhook.body(),
+                    fromWebhook.state(),
+                    fromWebhook.htmlUrl(),
+                    fromWebhook.createdAt(),
+                    fromWebhook.updatedAt(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    false,
+                    false,
+                    null,
+                    false,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    createAuthorDto(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    ReviewDecision.APPROVED,
+                    MergeStateStatus.CLEAN,
+                    true,
+                    false,
+                    null,
+                    new GitHubPullRequestDTO.HeadChecks("f".repeat(40), CheckState.SUCCESS),
+                    List.of(3));
+
+            PullRequest result = processor.process(fromSync, createContext());
+
+            assertNotNull(result);
+            PullRequest stored =
+                    pullRequestRepository.findByIdWithAllForGate(result.getId()).orElseThrow();
+            assertThat(stored.getReviewDecision()).isEqualTo(ReviewDecision.APPROVED);
+            assertThat(stored.getMergeStateStatus()).isEqualTo(MergeStateStatus.CLEAN);
+            assertThat(stored.getHeadCheckState()).isEqualTo(CheckState.SUCCESS);
+            assertThat(stored.getHeadCheckSha()).isEqualTo("f".repeat(40));
+            assertThat(pullRequestRepository.findClosingIssuesById(stored.getId()))
+                    .extracting(Issue::getId)
+                    .containsExactly(closed.getId());
+        }
+
+        @Test
         void shouldCreateNewPullRequestAndPublishCreatedEvent() {
             GitHubPullRequestDTO dto = createBasicPullRequestDto(FIXTURE_PR_ID, 26);
 
@@ -523,7 +605,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.process(dto, createContext());
@@ -591,7 +675,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.process(dto, createContext());
@@ -652,7 +738,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.processClosed(closedDto, createContext());
@@ -710,7 +798,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.processClosed(mergedDto, createContext());
@@ -770,7 +860,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
             processor.process(draftDto, createContext());
             eventListener.clear();
@@ -812,7 +904,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.processReadyForReview(readyDto, createContext());
@@ -872,7 +966,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.processConvertedToDraft(draftDto, createContext());
@@ -932,7 +1028,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             PullRequest result = processor.processSynchronize(syncDto, createContext());
@@ -996,7 +1094,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             processor.processLabeled(labeledDto, labelDto, createContext());
@@ -1049,7 +1149,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
             processor.process(withLabelDto, createContext());
             eventListener.clear();
@@ -1091,7 +1193,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null, // mergeStateStatus
                     null, // isMergeable
                     false, // maintainerCanModify
-                    null // mergeCommitInfo
+                    null, // mergeCommitInfo
+                    null, // headChecks
+                    null // closingIssueNumbers
                     );
 
             processor.processUnlabeled(unlabeledDto, labelDto, createContext());

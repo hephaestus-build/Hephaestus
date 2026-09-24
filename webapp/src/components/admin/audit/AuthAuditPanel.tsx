@@ -1,21 +1,20 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { DownloadIcon } from "lucide-react";
-import { useState } from "react";
 import { toast } from "sonner";
 
 import { adminListAuthEventsInfiniteOptions } from "@/api/@tanstack/react-query.gen";
 import { adminExportAuthEvents } from "@/api/sdk.gen";
 import type { AuthEventView } from "@/api/types.gen";
+import { AdminAuditTable } from "@/components/admin/audit/AdminAuditTable";
+import { EVENT_TYPE_LABELS } from "@/components/admin/audit/audit-format";
 import {
 	type AuditSearch,
 	dayAfterInstant,
 	dayStartInstant,
 	fromDateRange,
 	toDateRange,
-} from "@/components/admin/audit-shared/audit-search";
-import { nameForRef } from "@/components/admin/audit-shared/name-for-ref";
-import { AdminAuditTable } from "@/components/admin/audit/AdminAuditTable";
-import { EVENT_TYPE_LABELS } from "@/components/admin/audit/audit-format";
+} from "@/components/admin/audit/audit-search";
+import { nameForRef } from "@/components/admin/audit/name-for-ref";
 import { DateRangeFacet } from "@/components/common/DateRangeFacet";
 import { FacetMultiSelect, toFacetOptions } from "@/components/common/FacetMultiSelect";
 import { FilterToolbar } from "@/components/common/FilterToolbar";
@@ -23,9 +22,10 @@ import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { loadedPages, springPageParams } from "@/integrations/tanstack-query/spring-page";
 import { dedupeById } from "@/lib/dedupe-by-id";
+import { saveTextFile } from "@/lib/download";
 import { narrowToEnum, nonEmpty } from "@/lib/search-params";
+import { loadedPages, springPageParams } from "@/runtime/tanstack-query/spring-page";
 
 const PAGE_SIZE = 50;
 
@@ -49,8 +49,6 @@ export function AuthAuditPanel({
 	onSearchChange,
 	resolveWorkspaceName,
 }: AuthAuditPanelProps) {
-	const [exporting, setExporting] = useState(false);
-
 	const dateRange = toDateRange(search);
 	const filters = {
 		eventType: narrowToEnum(search.eventType, EVENT_TYPES),
@@ -86,28 +84,17 @@ export function AuthAuditPanel({
 			to: undefined,
 		});
 
-	const handleExport = async () => {
-		setExporting(true);
-		try {
+	const exportCsv = useMutation({
+		mutationFn: async () => {
 			const { data, error } = await adminExportAuthEvents({ query: filters });
-			if (error || typeof data !== "string") {
-				throw new Error("export failed");
+			if (error !== undefined || typeof data !== "string") {
+				throw new Error("Export failed");
 			}
-			const blob = new Blob([data], { type: "text/csv;charset=utf-8;" });
-			const url = URL.createObjectURL(blob);
-			const anchor = document.createElement("a");
-			anchor.href = url;
-			anchor.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
-			document.body.appendChild(anchor);
-			anchor.click();
-			anchor.remove();
-			URL.revokeObjectURL(url);
-		} catch {
-			toast.error("Could not export the audit log. Please try again.");
-		} finally {
-			setExporting(false);
-		}
-	};
+			const day = new Date().toISOString().slice(0, 10);
+			saveTextFile(data, `audit-log-${day}.csv`, "text/csv;charset=utf-8;");
+		},
+		onError: () => toast.error("Could not export the audit log. Please try again."),
+	});
 
 	return (
 		<div className="space-y-4">
@@ -119,10 +106,10 @@ export function AuthAuditPanel({
 						variant="outline"
 						size="sm"
 						className="h-8"
-						onClick={() => void handleExport()}
-						disabled={exporting || events.length === 0}
+						onClick={() => exportCsv.mutate()}
+						disabled={exportCsv.isPending || events.length === 0}
 					>
-						{exporting ? <Spinner className="size-3.5" /> : <DownloadIcon aria-hidden />}
+						{exportCsv.isPending ? <Spinner className="size-3.5" /> : <DownloadIcon aria-hidden />}
 						Export CSV
 					</Button>
 				}
@@ -154,7 +141,7 @@ export function AuthAuditPanel({
 				)}
 				{search.actorId !== undefined && (
 					<ReferenceFilterPill
-						label="Impersonated by"
+						label="Acting account"
 						id={search.actorId}
 						name={nameForRef(events, search.actorId)}
 						onClear={() => onSearchChange({ actorId: undefined })}
@@ -172,8 +159,12 @@ export function AuthAuditPanel({
 				onResetFilters={reset}
 				hasNextPage={listQuery.hasNextPage}
 				isFetchingNextPage={listQuery.isFetchingNextPage}
-				onLoadMore={() => void listQuery.fetchNextPage()}
-				onRetry={() => void listQuery.refetch()}
+				onLoadMore={() => {
+					void listQuery.fetchNextPage();
+				}}
+				onRetry={() => {
+					void listQuery.refetch();
+				}}
 				onFilterAccount={(accountId) => onSearchChange({ accountId })}
 				onFilterActor={(actorId) => onSearchChange({ actorId })}
 				resolveWorkspaceName={resolveWorkspaceName}

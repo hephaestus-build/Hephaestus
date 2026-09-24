@@ -3,8 +3,8 @@ import { useParams } from "@tanstack/react-router";
 
 import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
 import type { WorkspaceListItem } from "@/api/types.gen";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { toScmProviderType } from "@/lib/provider";
+import { toScmProviderType } from "@/lib/provider/provider-terms";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 /** Shared so an unloaded query keeps the same `workspaces` identity across renders. */
 const NO_WORKSPACES: WorkspaceListItem[] = [];
@@ -14,8 +14,6 @@ export function useActiveWorkspaceSlug() {
 	const query = useQuery({
 		...listWorkspacesOptions(),
 		enabled: isAuthenticated && !authLoading,
-		staleTime: 30_000,
-		refetchOnWindowFocus: true,
 	});
 	const workspaces = Array.isArray(query.data) ? query.data : NO_WORKSPACES;
 	const workspaceSlug = useParams({ strict: false, select: (params) => params.workspaceSlug });
@@ -30,6 +28,7 @@ export function useActiveWorkspaceSlug() {
 	return {
 		workspaceSlug,
 		chromeWorkspaceSlug,
+		chromeWorkspace,
 		workspaces,
 		// A workspace is SCM-backed; SLACK (an identity provider) never reaches SCM-only UI, but the
 		// generated type includes it, so narrow to the SCM ProviderType with a GITHUB fallback.

@@ -340,7 +340,7 @@ public final class GraphQlPaginationHelper {
              * @param processor the page processor
              * @return this builder
              */
-            public Builder<T> pageProcessor(PageProcessor<T> processor) {
+            public Builder<T> pageProcessorWhile(PageProcessor<T> processor) {
                 this.pageProcessor = processor;
                 return this;
             }

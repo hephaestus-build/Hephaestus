@@ -2,7 +2,7 @@ import { CircleStopIcon, SendIcon, UserRoundCheckIcon } from "lucide-react";
 
 import type { PracticeAutonomy } from "@/lib/practice-autonomy";
 
-import type { StatusDefs } from "./status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export const AUTONOMY_DEFS: StatusDefs<PracticeAutonomy> = {
 	OFF: {
@@ -15,12 +15,13 @@ export const AUTONOMY_DEFS: StatusDefs<PracticeAutonomy> = {
 		label: "Review before sending",
 		icon: UserRoundCheckIcon,
 		badgeVariant: "warning",
-		description: "Feedback is prepared for an authorized person to approve or reject.",
+		description:
+			"Feedback on the work waits for an authorized person to approve or reject it; the developer's own practice pages and the mentor are written regardless.",
 	},
 	AUTOMATIC: {
 		label: "Send automatically",
 		icon: SendIcon,
 		badgeVariant: "success",
-		description: "Eligible feedback is sent without waiting for approval.",
+		description: "Eligible feedback is sent onto the work without waiting for approval.",
 	},
 };

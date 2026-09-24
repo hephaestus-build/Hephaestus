@@ -1,6 +1,7 @@
 import { PulseIcon } from "@primer/octicons-react";
 import { MessageSquareTextIcon } from "lucide-react";
 
+import type { ReactNode } from "react";
 import type { PracticeGroupReviewRun, PracticeStanding } from "@/api/types.gen";
 import {
 	PracticeTabsList,
@@ -10,9 +11,9 @@ import {
 } from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { SectionLabel } from "@/components/common/SectionLabel";
-import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
-import { DetailPath, type LevelPath } from "@/components/core/detail-drawer/DetailPath";
-import { Section } from "@/components/core/Section";
+import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
+import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { Section } from "@/components/layout/Section";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
 import { isSettledStanding } from "@/components/practice-vocabulary/practice-group-standing-defs";
 import { formatStandingBasis } from "@/components/practice-vocabulary/practice-trend-presentation";
@@ -37,6 +38,7 @@ import {
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { hasText } from "@/lib/text";
 
 import { DEFAULT_PRACTICE_TAB, PRACTICE_TABS, type PracticeTab } from "./practice-profile-search";
 
@@ -103,6 +105,8 @@ function feedbackCardsOf(cards: PracticeFeedbackCardEntry[], practiceSlug: strin
  * the deepest level, so it is the one that carries the observations — the newest open on arrival
  * and every earlier one a press away, each opening and closing on its own.
  */
+const NO_CARDS: PracticeFeedbackCardEntry[] = [];
+
 export function PracticeDetailLevel({
 	nested,
 	path,
@@ -112,7 +116,7 @@ export function PracticeDetailLevel({
 	tab = DEFAULT_PRACTICE_TAB,
 	onTabChange,
 	feed = EMPTY_FEED,
-	feedbackCards = [],
+	feedbackCards = NO_CARDS,
 	ratingProps,
 	skeletonRows = 3,
 	observations,
@@ -157,12 +161,164 @@ export function PracticeDetailLevel({
 		/>
 	);
 
+	let body: ReactNode;
+	if (isLoading) {
+		body = (
+			// The tabs and the observations they open on, as they will be laid out.
+			<>
+				<PracticeTabsSkeleton />
+				<ReviewRunFeedSkeleton rows={skeletonRows} />
+			</>
+		);
+	} else if (error != null) {
+		body = (
+			<QueryErrorAlert
+				error={error}
+				title={
+					practice
+						? `Could not load your standing for ${practice.name}`
+						: "Could not load this practice"
+				}
+				onRetry={onRetry}
+			/>
+		);
+	} else if (practice) {
+		body = (
+			<Tabs
+				value={tab}
+				onValueChange={(next) => {
+					const chosen = PRACTICE_TABS.find((candidate) => candidate === next);
+					if (chosen) {
+						onTabChange?.(chosen);
+					}
+				}}
+				className="gap-4"
+			>
+				<PracticeTabsRail>
+					<PracticeTabsList aria-label="Practice">
+						{PRACTICE_TABS.map((candidate) => (
+							<PracticeTabsTrigger key={candidate} value={candidate} count={counts[candidate]}>
+								{TAB_LABELS[candidate]}
+							</PracticeTabsTrigger>
+						))}
+					</PracticeTabsList>
+				</PracticeTabsRail>
+				<TabsContent value="observations" className="min-w-0">
+					<Section
+						size="lg"
+						title="Observations"
+						description="Reviews of your work that reached this practice, newest first: why each was noted, the evidence, and the next step."
+					>
+						<ReviewRunFeed
+							feed={feed}
+							runs={runs}
+							skeletonRows={skeletonRows}
+							observations={observations}
+						/>
+					</Section>
+				</TabsContent>
+				<TabsContent value="feedback" className="min-w-0">
+					<Section
+						size="lg"
+						title="Feedback"
+						description="The feedback written about this practice: the open card, then the ones that resolved, newest first."
+					>
+						{feedbackCount === 0 ? (
+							<Empty>
+								<EmptyHeader>
+									<EmptyMedia variant="icon">
+										<MessageSquareTextIcon />
+									</EmptyMedia>
+									<EmptyTitle>No feedback yet.</EmptyTitle>
+									<EmptyDescription>
+										Feedback appears once the same shortcoming keeps showing up on your work.
+									</EmptyDescription>
+								</EmptyHeader>
+							</Empty>
+						) : (
+							<div className="flex flex-col gap-6">
+								{feedback.open && (
+									<section
+										className="flex flex-col gap-2.5"
+										aria-labelledby="current-feedback-heading"
+									>
+										<SectionLabel as="h3" id="current-feedback-heading">
+											Current feedback
+										</SectionLabel>
+										{feedbackCard(feedback.open)}
+									</section>
+								)}
+								{feedback.resolved.length > 0 && (
+									<section
+										className="flex flex-col gap-2.5"
+										aria-labelledby="resolved-feedback-heading"
+									>
+										<SectionLabel as="h3" id="resolved-feedback-heading">
+											Resolved feedback
+										</SectionLabel>
+										{feedback.resolved.map(feedbackCard)}
+									</section>
+								)}
+							</div>
+						)}
+					</Section>
+				</TabsContent>
+				<TabsContent value="about" className="min-w-0">
+					<div className="flex flex-col gap-6">
+						<WhereYouStand
+							standing={practice.standing}
+							// A standing no review has settled rests on nothing: no work is named under it.
+							basis={
+								isSettledStanding(practice.standing) && practice.trendSupport
+									? formatStandingBasis(practice.trendSupport)
+									: undefined
+							}
+							direction={practice.direction}
+							support={practice.trendSupport}
+							scope="practice"
+						/>
+						{hasText(practice.whyItMatters) && (
+							<section className="flex flex-col gap-1.5" aria-labelledby="why-it-matters-heading">
+								<SectionLabel as="h2" id="why-it-matters-heading">
+									Why it matters
+								</SectionLabel>
+								<p className="max-w-2xl text-sm">{practice.whyItMatters}</p>
+							</section>
+						)}
+						{hasText(practice.whatGoodLooksLike) && (
+							<section className="flex flex-col gap-1.5" aria-labelledby="what-good-heading">
+								<SectionLabel as="h2" id="what-good-heading">
+									What good looks like
+								</SectionLabel>
+								<p className="max-w-2xl text-sm">{practice.whatGoodLooksLike}</p>
+							</section>
+						)}
+						{!hasText(practice.whyItMatters) && !hasText(practice.whatGoodLooksLike) && (
+							<section className="flex flex-col gap-1.5" aria-labelledby="about-practice-heading">
+								<SectionLabel as="h2" id="about-practice-heading">
+									About this practice
+								</SectionLabel>
+								<p className="text-sm text-muted-foreground">No description yet.</p>
+							</section>
+						)}
+					</div>
+				</TabsContent>
+			</Tabs>
+		);
+	} else {
+		body = (
+			<p className="text-sm text-muted-foreground">
+				This practice does not exist or is not reviewed in this group.
+			</p>
+		);
+	}
+
 	return (
 		<>
 			<DetailDrawerHeader nested={nested}>
 				<div className="flex min-w-0 flex-1 flex-col gap-2">
 					<DetailPath {...path} current="Practice" />
-					<DrawerTitle className="break-words text-2xl font-semibold tracking-tight">
+					<DrawerTitle className="text-2xl font-semibold tracking-tight break-words">
 						{practice?.name ?? "Practice"}
 					</DrawerTitle>
 					{practice && (
@@ -177,146 +333,7 @@ export function PracticeDetailLevel({
 					)}
 				</div>
 			</DetailDrawerHeader>
-			<DrawerBody className="flex flex-col gap-4 pt-2">
-				{isLoading ? (
-					// The tabs and the observations they open on, as they will be laid out.
-					<>
-						<PracticeTabsSkeleton />
-						<ReviewRunFeedSkeleton rows={skeletonRows} />
-					</>
-				) : error ? (
-					<QueryErrorAlert
-						error={error}
-						title={
-							practice
-								? `Could not load your standing for ${practice.name}`
-								: "Could not load this practice"
-						}
-						onRetry={onRetry}
-					/>
-				) : !practice ? (
-					<p className="text-sm text-muted-foreground">
-						This practice does not exist or is not reviewed in this group.
-					</p>
-				) : (
-					<Tabs
-						value={tab}
-						onValueChange={(next) => {
-							const chosen = PRACTICE_TABS.find((candidate) => candidate === next);
-							if (chosen) onTabChange?.(chosen);
-						}}
-						className="gap-4"
-					>
-						<PracticeTabsRail>
-							<PracticeTabsList aria-label="Practice">
-								{PRACTICE_TABS.map((candidate) => (
-									<PracticeTabsTrigger key={candidate} value={candidate} count={counts[candidate]}>
-										{TAB_LABELS[candidate]}
-									</PracticeTabsTrigger>
-								))}
-							</PracticeTabsList>
-						</PracticeTabsRail>
-						<TabsContent value="observations" className="min-w-0">
-							<Section
-								size="lg"
-								title="Observations"
-								description="Reviews of your work that reached this practice, newest first: why each was noted, the evidence, and the next step."
-							>
-								<ReviewRunFeed
-									feed={feed}
-									runs={runs}
-									skeletonRows={skeletonRows}
-									observations={observations}
-								/>
-							</Section>
-						</TabsContent>
-						<TabsContent value="feedback" className="min-w-0">
-							<Section
-								size="lg"
-								title="Feedback"
-								description="The feedback written about this practice: the open card, then the ones that resolved, newest first."
-							>
-								{feedbackCount === 0 ? (
-									<Empty>
-										<EmptyHeader>
-											<EmptyMedia variant="icon">
-												<MessageSquareTextIcon />
-											</EmptyMedia>
-											<EmptyTitle>No feedback yet.</EmptyTitle>
-											<EmptyDescription>
-												Feedback appears once the same shortcoming keeps showing up on your work.
-											</EmptyDescription>
-										</EmptyHeader>
-									</Empty>
-								) : (
-									<div className="flex flex-col gap-6">
-										{feedback.open && (
-											<section
-												className="flex flex-col gap-2.5"
-												aria-labelledby="current-feedback-heading"
-											>
-												<SectionLabel as="h3" id="current-feedback-heading">
-													Current feedback
-												</SectionLabel>
-												{feedbackCard(feedback.open)}
-											</section>
-										)}
-										{feedback.resolved.length > 0 && (
-											<section
-												className="flex flex-col gap-2.5"
-												aria-labelledby="resolved-feedback-heading"
-											>
-												<SectionLabel as="h3" id="resolved-feedback-heading">
-													Resolved feedback
-												</SectionLabel>
-												{feedback.resolved.map(feedbackCard)}
-											</section>
-										)}
-									</div>
-								)}
-							</Section>
-						</TabsContent>
-						<TabsContent value="about" className="flex min-w-0 flex-col gap-6">
-							<WhereYouStand
-								standing={practice.standing}
-								// A standing no review has settled rests on nothing: no work is named under it.
-								basis={
-									isSettledStanding(practice.standing) && practice.trendSupport
-										? formatStandingBasis(practice.trendSupport)
-										: undefined
-								}
-								direction={practice.direction}
-								support={practice.trendSupport}
-								scope="practice"
-							/>
-							{practice.whyItMatters && (
-								<section className="flex flex-col gap-1.5" aria-labelledby="why-it-matters-heading">
-									<SectionLabel as="h2" id="why-it-matters-heading">
-										Why it matters
-									</SectionLabel>
-									<p className="max-w-2xl text-sm">{practice.whyItMatters}</p>
-								</section>
-							)}
-							{practice.whatGoodLooksLike && (
-								<section className="flex flex-col gap-1.5" aria-labelledby="what-good-heading">
-									<SectionLabel as="h2" id="what-good-heading">
-										What good looks like
-									</SectionLabel>
-									<p className="max-w-2xl text-sm">{practice.whatGoodLooksLike}</p>
-								</section>
-							)}
-							{!practice.whyItMatters && !practice.whatGoodLooksLike && (
-								<section className="flex flex-col gap-1.5" aria-labelledby="about-practice-heading">
-									<SectionLabel as="h2" id="about-practice-heading">
-										About this practice
-									</SectionLabel>
-									<p className="text-sm text-muted-foreground">No description yet.</p>
-								</section>
-							)}
-						</TabsContent>
-					</Tabs>
-				)}
-			</DrawerBody>
+			<DrawerBody className="flex flex-col gap-4 pt-2">{body}</DrawerBody>
 		</>
 	);
 }
@@ -338,7 +355,9 @@ function ReviewRunFeed({ feed, runs, skeletonRows, observations }: ReviewRunFeed
 			/>
 		);
 	}
-	if (feed.status === "loading") return <ReviewRunFeedSkeleton rows={skeletonRows} />;
+	if (feed.status === "loading") {
+		return <ReviewRunFeedSkeleton rows={skeletonRows} />;
+	}
 	if (runs.length === 0) {
 		return (
 			<Empty>
@@ -368,7 +387,8 @@ function ReviewRunFeed({ feed, runs, skeletonRows, observations }: ReviewRunFeed
 				<Button
 					type="button"
 					variant="link"
-					className="w-fit px-0"
+					size="inline"
+					className="w-fit text-sm"
 					onClick={feed.onLoadMore}
 					disabled={feed.isLoadingMore}
 				>

@@ -25,13 +25,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.data.domain.Pageable;
 
-/**
- * The recovery path for feedback that a saturated async pool dropped.
- *
- * <p>Every test here fails if the sweeper stops doing something the live incident needed: leaving the
- * listener its own window, running only the lane that is actually missing, surviving one lane's failure,
- * and leaving a failed lane unmarked so the next pass retries it.
- */
 class FeedbackLanePreparationSweeperTest extends BaseUnitTest {
 
     private static final Instant NOW = Instant.parse("2026-08-16T12:00:00Z");

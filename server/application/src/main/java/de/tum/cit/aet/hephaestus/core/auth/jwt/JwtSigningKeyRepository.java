@@ -34,9 +34,8 @@ public interface JwtSigningKeyRepository extends JpaRepository<JwtSigningKey, St
      *
      * <p>Uses the two-integer advisory key space ({@code classId=17}, ADR 0017 native auth, as a
      * namespace; {@code objId=1}, the single global bootstrap) so it cannot collide with
-     * {@code UserRepository#acquireLoginLock} (single-bigint space) or
-     * {@code UserAchievementRepository#acquireUserLock} ({@code classId=1313}) — the integer and bigint
-     * advisory key spaces are disjoint in Postgres, and the two classIds are distinct.
+     * {@code UserRepository#acquireLoginLock} (single-bigint space) — the integer and bigint
+     * advisory key spaces are disjoint in Postgres.
      */
     @Query(value = "SELECT pg_advisory_xact_lock(17, 1)", nativeQuery = true)
     void acquireBootstrapLock();

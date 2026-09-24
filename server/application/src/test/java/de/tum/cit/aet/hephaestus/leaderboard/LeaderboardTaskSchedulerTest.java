@@ -74,8 +74,9 @@ class LeaderboardTaskSchedulerTest extends BaseUnitTest {
                 leaguePointsUpdateTask,
                 workspaceRepository,
                 lockProvider);
-        when(taskScheduler.schedule(any(Runnable.class), any(Trigger.class)))
-                .thenReturn(Mockito.mock(ScheduledFuture.class));
+        org.mockito.Mockito.doReturn(Mockito.mock(ScheduledFuture.class))
+                .when(taskScheduler)
+                .schedule(any(Runnable.class), any(Trigger.class));
         when(workspaceRepository.findById(7L)).thenReturn(Optional.of(workspace(7L)));
 
         scheduler.onWorkspaceCreated(new WorkspaceCreatedEvent(7L, IntegrationKind.GITHUB));

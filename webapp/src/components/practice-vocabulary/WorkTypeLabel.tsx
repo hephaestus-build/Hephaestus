@@ -1,5 +1,5 @@
+import { cn } from "cn";
 import { artifactKindIcon, artifactKindLabel } from "@/lib/artifact-kinds";
-import { cn } from "@/lib/utils";
 
 export interface WorkTypeLabelProps {
 	/** The wire value. An unknown kind falls back to the neutral page icon rather than a hole. */

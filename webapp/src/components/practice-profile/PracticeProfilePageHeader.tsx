@@ -1,5 +1,6 @@
 import { ArrowRightIcon, GitCommitHorizontalIcon } from "lucide-react";
 
+import { cn } from "cn";
 import type { ReviewRunRef } from "@/api/types.gen";
 import { count } from "@/components/common/feedback-text";
 import { InlineLink } from "@/components/common/InlineLink";
@@ -12,7 +13,6 @@ import { StandingSummaryBox } from "@/components/practice-vocabulary/StandingSum
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { asDate, formatDayTime } from "@/lib/dates";
-import { cn } from "@/lib/utils";
 
 export interface PracticeProfilePageHeaderProps {
 	/**
@@ -95,7 +95,7 @@ function LatestRunChip({ run }: { run: ReviewRunRef }) {
 	const shownLabel = cut ? `${label.slice(0, WORK_LABEL_MAX).trimEnd()}…` : label;
 	return (
 		<div className="mb-1.5 flex max-w-full">
-			<Badge variant="outline" className="max-w-full bg-sidebar">
+			<Badge variant="outline" className="max-w-full">
 				<GitCommitHorizontalIcon className="text-muted-foreground" aria-hidden />
 				<span className="font-semibold">Latest run</span>
 				{at && (

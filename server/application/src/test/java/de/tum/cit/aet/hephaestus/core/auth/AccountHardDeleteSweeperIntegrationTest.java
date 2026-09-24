@@ -227,6 +227,29 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
         });
     }
 
+    @Test
+    void shouldRedactAViewOfTheErasedUserWhenTheViewPredatesTheirSignIn() {
+        Long erasedId = persistedId(
+                newAccount("Viewed user", "viewed-erased@example.com").getId());
+        seedUserView(9012L, 77_777L, "{\"reason\":\"Before sign-in\"}");
+        seedUserView(9011L, 66_666L, "{\"reason\":\"Another user\"}");
+        IdentityLink linkedLater = new IdentityLink();
+        linkedLater.setAccount(accountRepository.findById(erasedId).orElseThrow());
+        linkedLater.setProviderId(1L);
+        linkedLater.setSubject("77777");
+        linkedLater.setExternalActorId(77_777L);
+        identityLinkRepository.save(linkedLater);
+        markDeleting(
+                erasedId, clock.instant().minus(authProperties.deleteCooldown()).minus(Duration.ofHours(1)));
+
+        sweeper.sweepNow();
+
+        assertThat(jdbcTemplate.queryForObject("SELECT details::text FROM auth_event WHERE id = 9012", String.class))
+                .isNull();
+        assertThat(jdbcTemplate.queryForObject("SELECT details::text FROM auth_event WHERE id = 9011", String.class))
+                .contains("Another user");
+    }
+
     // ── Case 6: product submissions the account owns are erased with it ───────────────────────
 
     @Test
@@ -237,9 +260,9 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
                 newAccount("Retained", "retained-submissions@example.com").getId());
         UUID erasedFeedback = seedProductFeedback(erasedId);
         UUID retainedFeedback = seedProductFeedback(retainedId);
-        UUID erasedResponse = seedSurveySubmission(erasedId, "RESPONDED");
-        UUID erasedDismissal = seedSurveySubmission(erasedId, "DISMISSED");
-        UUID retainedResponse = seedSurveySubmission(retainedId, "RESPONDED");
+        UUID erasedResponse = seedSurveyParticipation(erasedId, "RESPONDED");
+        UUID erasedDecline = seedSurveyParticipation(erasedId, "DECLINED");
+        UUID retainedResponse = seedSurveyParticipation(retainedId, "RESPONDED");
         markDeleting(
                 erasedId, clock.instant().minus(authProperties.deleteCooldown()).minus(Duration.ofHours(1)));
 
@@ -253,12 +276,12 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
                 .as("the erased account's feedback is gone and another account's is untouched")
                 .containsExactly(retainedFeedback);
         assertThat(jdbcTemplate.queryForList(
-                        "SELECT id FROM product_survey_submission WHERE id IN (?, ?, ?)",
+                        "SELECT id FROM product_survey_participation WHERE id IN (?, ?, ?)",
                         UUID.class,
                         erasedResponse,
-                        erasedDismissal,
+                        erasedDecline,
                         retainedResponse))
-                .as("both a response and a dismissal are erased; another account's response is untouched")
+                .as("both a response and a decline are erased; another account's response is untouched")
                 .containsExactly(retainedResponse);
         assertThat(accountRepository.findById(erasedId).orElseThrow().getStatus())
                 .isEqualTo(Account.Status.DELETED);
@@ -269,14 +292,14 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
     private UUID seedProductFeedback(Long accountId) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
-                "INSERT INTO product_feedback (id, account_id, kind, message, created_at, submission_minute) "
-                        + "VALUES (?, ?, 'FEEDBACK', 'Personal submission', now(), now())",
+                "INSERT INTO product_feedback (id, account_id, kind, message, app_version, created_at, submission_minute) "
+                        + "VALUES (?, ?, 'FEEDBACK', 'Personal submission', 'test', now(), now())",
                 id,
                 accountId);
         return id;
     }
 
-    private UUID seedSurveySubmission(Long accountId, String disposition) {
+    private UUID seedSurveyParticipation(Long accountId, String status) {
         UUID id = UUID.randomUUID();
         UUID surveyId = UUID.randomUUID();
         jdbcTemplate.update(
@@ -284,19 +307,28 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
                         + "VALUES (?, 'Survey', 'Description', CAST('[]' AS jsonb), now(), true, now())",
                 surveyId);
         jdbcTemplate.update(
-                "INSERT INTO product_survey_submission (id, survey_id, account_id, disposition, answers_json, created_at) "
-                        + "VALUES (?, ?, ?, ?, CAST(? AS jsonb), now())",
+                "INSERT INTO product_survey_participation (id, survey_id, account_id, status, answers_json, invited_at, decided_at) "
+                        + "VALUES (?, ?, ?, ?, CAST(? AS jsonb), now(), now())",
                 id,
                 surveyId,
                 accountId,
-                disposition,
-                disposition.equals("RESPONDED") ? "{\"answer\":\"Personal response\"}" : null);
+                status,
+                status.equals("RESPONDED") ? "[{\"questionId\":\"q\",\"text\":\"Personal response\"}]" : null);
         return id;
+    }
+
+    private void seedUserView(long id, long viewedUserId, String details) {
+        jdbcTemplate.update(
+                "INSERT INTO auth_event (id, occurred_at, acting_account_id, viewed_user_id, event_type, result, details) "
+                        + "VALUES (?, now(), 88888, ?, 'USER_VIEW', 'SUCCESS', CAST(? AS jsonb))",
+                id,
+                viewedUserId,
+                details);
     }
 
     private void seedAuthEvent(
             long id,
-            Long accountId,
+            @Nullable Long accountId,
             @Nullable Long actingAccountId,
             String eventType,
             String ip,

@@ -61,7 +61,7 @@ await test("rejects a report whose fixed version is not a string", () => {
 				{ Results: [{ Vulnerabilities: [{ ...finding, FixedVersion: 2 }] }] },
 				policy,
 			),
-		/FixedVersion must be a string/,
+		/FixedVersion must be a string/u,
 	);
 });
 
@@ -134,8 +134,9 @@ await test("matches an exception without its digest, but still on every other fi
 		{ package: "other" },
 		{ installedVersion: "0" },
 		{ vulnerability: "CVE-2" },
-	] satisfies Partial<typeof exception>[])
+	] satisfies Partial<typeof exception>[]) {
 		assert.deepEqual(rejectedWith(override), ["server|CVE-1|lib|1"], JSON.stringify(override));
+	}
 	assert.match(
 		evaluate(
 			"server",
@@ -147,7 +148,7 @@ await test("matches an exception without its digest, but still on every other fi
 			now,
 			subject,
 		).errors.join("\n"),
-		/duplicate exception: server\|linux\/amd64\|CVE-1\|lib\|1/,
+		/duplicate exception: server\|linux\/amd64\|CVE-1\|lib\|1/u,
 	);
 });
 
@@ -169,19 +170,19 @@ await test("rejects expired and malformed exceptions", () => {
 	];
 	assert.match(
 		evaluate("server", report, { ...policy, exceptions }, new Date("2021-01-01")).errors[0] ?? "",
-		/expired/,
+		/expired/u,
 	);
-	assert.throws(() => evaluate("server", {}, policy), /malformed Trivy report/);
+	assert.throws(() => evaluate("server", {}, policy), /malformed Trivy report/u);
 	assert.throws(
 		() => evaluate("server", { Results: [{ Vulnerabilities: [{ Severity: "HIGH" }] }] }, policy),
-		/InstalledVersion must be a string/,
+		/InstalledVersion must be a string/u,
 	);
 	assert.match(
 		evaluate("server", report, {
 			...policy,
 			exceptions: [exceptions[0], exceptions[0]],
 		}).errors.join("\n"),
-		/duplicate exception/,
+		/duplicate exception/u,
 	);
 	assert.match(
 		evaluate(
@@ -193,7 +194,7 @@ await test("rejects expired and malformed exceptions", () => {
 			},
 			now,
 		).errors.join("\n"),
-		/90-day limit/,
+		/90-day limit/u,
 	);
 	assert.match(
 		evaluate(
@@ -203,7 +204,7 @@ await test("rejects expired and malformed exceptions", () => {
 			new Date(),
 			subject,
 		).errors.join("\n"),
-		/Trivy report is for/,
+		/Trivy report is for/u,
 	);
 });
 
@@ -236,21 +237,22 @@ await test("holds a not_affected exception to one of CISA's five justifications"
 		"vulnerable_code_not_in_execute_path",
 		"vulnerable_code_cannot_be_controlled_by_adversary",
 		"inline_mitigations_already_exist",
-	])
+	]) {
 		assert.equal(errorsWith({ justificationCategory: category }), "", category);
+	}
 
 	assert.throws(
 		() => errorsWith({ justificationCategory: "not_reachable" }),
-		/malformed vulnerability policy/,
+		/malformed vulnerability policy/u,
 	);
 	const { justificationCategory: _omitted, ...uncategorised } = exception;
 	assert.match(
 		evaluate("server", report, { ...policy, exceptions: [uncategorised] }, now).errors.join("\n"),
-		/not_affected exception must name a justification category: CVE-1/,
+		/not_affected exception must name a justification category: CVE-1/u,
 	);
 	assert.match(
 		errorsWith({ status: "affected" }),
-		/affected exception must not name a justification category: CVE-1/,
+		/affected exception must not name a justification category: CVE-1/u,
 	);
 	assert.equal(
 		evaluate(
@@ -278,17 +280,17 @@ await test("names the rejected findings in the run summary", () => {
 			policy,
 		),
 	);
-	assert.match(rendered, /server \(linux\/amd64\): fail/);
-	assert.match(rendered, /2 HIGH\/CRITICAL, 1 rejected/);
-	assert.match(rendered, /\| CVE-1 \| lib \| 1 \|/);
-	assert.doesNotMatch(rendered, /\| CVE-2 \|/);
+	assert.match(rendered, /server \(linux\/amd64\): fail/u);
+	assert.match(rendered, /2 HIGH\/CRITICAL, 1 rejected/u);
+	assert.match(rendered, /\| CVE-1 \| lib \| 1 \|/u);
+	assert.doesNotMatch(rendered, /\| CVE-2 \|/u);
 
 	const clean = renderSummary(
 		{ digest, image: "server", platform: "linux/amd64" },
 		evaluate("server", { Results: [] }, policy),
 	);
-	assert.match(clean, /server \(linux\/amd64\): pass/);
-	assert.doesNotMatch(clean, /\| Vulnerability \|/);
+	assert.match(clean, /server \(linux\/amd64\): pass/u);
+	assert.doesNotMatch(clean, /\| Vulnerability \|/u);
 });
 
 await test("rejects malformed severities rather than treating them as below HIGH", () => {
@@ -300,7 +302,7 @@ await test("rejects malformed severities rather than treating them as below HIGH
 					{ Results: [{ Vulnerabilities: [{ ...finding, Severity: severity }] }] },
 					policy,
 				),
-			/Severity/,
+			/Severity/u,
 		);
 	}
 	for (const severity of ["UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL"]) {
@@ -334,6 +336,6 @@ await test("rejects an exception expiry that JavaScript rolls into another month
 			{ ...policy, exceptions: [exception] },
 			new Date("2026-02-01T00:00:00Z"),
 		).errors.join("\n"),
-		/invalid or expired exception/,
+		/invalid or expired exception/u,
 	);
 });

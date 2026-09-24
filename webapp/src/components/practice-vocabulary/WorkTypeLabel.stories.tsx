@@ -6,7 +6,6 @@ import { ARTIFACT_KIND_VALUES } from "@/lib/artifact-kinds";
 import { WorkTypeLabel } from "./WorkTypeLabel";
 
 const meta = {
-	title: "Shared/Practice vocabulary/Work type",
 	component: WorkTypeLabel,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

@@ -18,6 +18,9 @@ public class SyncJobConflictException extends RuntimeException {
     @Serial
     private static final long serialVersionUID = 1L;
 
+    // The caught conflict returns its managed entity to the same request; it never crosses a Java serialization
+    // boundary.
+    @SuppressWarnings("serial")
     private final SyncJob activeJob;
 
     public SyncJobConflictException(SyncJob activeJob) {

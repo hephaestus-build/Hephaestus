@@ -7,7 +7,7 @@ import {
 	useNavigate,
 } from "@tanstack/react-router";
 import { formatISO } from "date-fns";
-import { useEffect } from "react";
+import { type ReactNode, useEffect } from "react";
 import { z } from "zod";
 
 import {
@@ -17,21 +17,23 @@ import {
 	getUserProfileOptions,
 	getWorkspaceOptions,
 } from "@/api/@tanstack/react-query.gen";
+import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { useNow } from "@/components/common/use-now";
 import { LeaderboardPage } from "@/components/leaderboard/LeaderboardPage";
 import type { LeaderboardSortType } from "@/components/leaderboard/SortFilter";
 import { Spinner } from "@/components/ui/spinner";
-import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { useAuth } from "@/integrations/auth/AuthContext";
+import { asDate } from "@/lib/dates";
 import { resolveLeaderboardSchedule } from "@/lib/leaderboard-schedule";
+import { hasText } from "@/lib/text";
 import {
 	formatDateRangeForApi,
 	getLeaderboardWeekEnd,
 	getLeaderboardWeekStart,
 } from "@/lib/timeframe";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 const leaderboardSearchSchema = z.object({
 	team: z.string().default("all"),
@@ -80,7 +82,7 @@ function LeaderboardContainer() {
 	const now = new Date(useNow());
 
 	const getEffectiveDates = () => {
-		if (after) {
+		if (hasText(after)) {
 			return { after, before };
 		}
 		const weekStart = getLeaderboardWeekStart(now, schedule);
@@ -89,14 +91,8 @@ function LeaderboardContainer() {
 	};
 	const effectiveDates = getEffectiveDates();
 
-	const parseDateParam = (value?: string | null) => {
-		if (!value) return undefined;
-		const parsed = new Date(value);
-		return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-	};
-
-	const parsedAfter = parseDateParam(effectiveDates.after);
-	const parsedBefore = parseDateParam(effectiveDates.before);
+	const parsedAfter = asDate(effectiveDates.after);
+	const parsedBefore = asDate(effectiveDates.before);
 
 	const teamsQuery = useQuery({
 		...getAllTeamsOptions({
@@ -133,18 +129,18 @@ function LeaderboardContainer() {
 		placeholderData: (previousData) => previousData,
 		enabled: hasWorkspace && Boolean(username),
 	});
-	const currentUserEntry = username
+	const currentUserEntry = hasText(username)
 		? leaderboardQuery.data?.find(
 				(entry) => entry.user?.login.toLowerCase() === username.toLowerCase(),
 			)
 		: undefined;
 
-	type MetaTeam = {
+	interface MetaTeam {
 		id: number;
 		name: string;
 		parentId?: number;
 		hidden?: boolean;
-	};
+	}
 
 	const teamsList = (teamsQuery.data ?? []) as MetaTeam[];
 	const teamById = new Map<number, MetaTeam>(teamsList.map((t) => [t.id, t]));
@@ -153,28 +149,30 @@ function LeaderboardContainer() {
 		const names: string[] = [];
 		let cur: MetaTeam | undefined = t;
 		while (cur) {
-			if (!cur.hidden) names.push(cur.name);
+			if (cur.hidden !== true) {
+				names.push(cur.name);
+			}
 			const parent: MetaTeam | undefined =
-				cur.parentId !== undefined ? teamById.get(cur.parentId) : undefined;
+				cur.parentId === undefined ? undefined : teamById.get(cur.parentId);
 			cur = parent;
 		}
 		return names.reverse().join(" / ");
 	};
 
-	const teamLabelsById = teamsList.reduce<Record<number, string>>((acc, candidate) => {
+	const teamLabelsById: Record<number, string> = {};
+	for (const candidate of teamsList) {
 		const label = makeLabel(candidate);
-		acc[candidate.id] = label.length > 0 ? label : candidate.name;
-		return acc;
-	}, {});
+		teamLabelsById[candidate.id] = label.length > 0 ? label : candidate.name;
+	}
 
 	const visibleTeamEntries = teamsList
-		.filter((t) => !t.hidden)
+		.filter((t) => t.hidden !== true)
 		.map((candidate) => ({ team: candidate, label: teamLabelsById[candidate.id] }));
 
 	const visibleTeams = visibleTeamEntries.map((entry) => entry.label);
 
 	const teamOptions = visibleTeamEntries
-		.flatMap(({ label }) => (label ? [{ value: label, label }] : []))
+		.flatMap(({ label }) => (hasText(label) ? [{ value: label, label }] : []))
 		.sort((a, b) => a.label.localeCompare(b.label));
 
 	useEffect(() => {
@@ -231,8 +229,8 @@ function LeaderboardContainer() {
 		!featureState.isLoading &&
 		!featureState.isError &&
 		leaderboardEnabled === false &&
-		workspaceSlug &&
-		username
+		hasText(workspaceSlug) &&
+		hasText(username)
 	) {
 		return (
 			<Navigate
@@ -259,7 +257,7 @@ function LeaderboardContainer() {
 
 	if (featureState.isLoading || leaderboardEnabled !== true) {
 		return (
-			<div className="flex items-center justify-center h-96">
+			<div className="flex h-96 items-center justify-center">
 				<Spinner className="size-8" />
 			</div>
 		);
@@ -308,11 +306,7 @@ function LeaderboardContainer() {
 		<LeaderboardPage
 			providerType={providerType}
 			leaderboard={leaderboardQuery.data ?? []}
-			isLoading={
-				isWorkspaceLoading ||
-				teamsQuery.isPending ||
-				(leaderboardQuery.isPending && !leaderboardQuery.data)
-			}
+			isLoading={isWorkspaceLoading || teamsQuery.isPending || leaderboardQuery.isPending}
 			currentUser={userProfileQuery.data?.userInfo}
 			currentUserEntry={currentUserEntry}
 			leaguePoints={userProfileQuery.data?.userInfo.leaguePoints}
@@ -321,8 +315,8 @@ function LeaderboardContainer() {
 			teamLabelsById={teamLabelsById}
 			selectedTeam={team}
 			selectedSort={sort}
-			initialAfterDate={effectiveDates.after}
-			initialBeforeDate={effectiveDates.before}
+			afterDate={effectiveDates.after}
+			beforeDate={effectiveDates.before}
 			leaderboardEnd={leaderboardEnd}
 			leaderboardSchedule={schedule}
 			onTeamChange={handleTeamChange}
@@ -339,9 +333,9 @@ function LeaderboardContainer() {
 			)}
 			selectedMode={mode}
 			onModeChange={handleModeChange}
-			renderTeamLink={(teamId, children) => {
+			renderTeamLink={(teamId, children): ReactNode => {
 				const label = teamLabelsById[teamId];
-				return label ? (
+				return hasText(label) ? (
 					<Link
 						to="."
 						search={(previous) => ({

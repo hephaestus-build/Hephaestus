@@ -43,7 +43,9 @@ export function formatMonthLabel(month: string): string {
 /** A day bucket as `Jul 22`. An unparseable day renders a dash rather than `Invalid Date`. */
 export function formatUsageDay(value: DateLike): string {
 	const date = asDate(value);
-	if (!date) return "–";
+	if (!date) {
+		return "–";
+	}
 	return date.toLocaleDateString(undefined, {
 		month: "short",
 		day: "numeric",
@@ -72,6 +74,8 @@ export function budgetResetDayLabel(month: string): string {
  * Display only, and that is a rule: money is exact decimal on the server and binary64 here, so
  * nothing this returns may decide anything. Whether work is held back is `paused` on the payload.
  */
+export function budgetUsedPercent(spendUsd: number, capUsd: number): number;
+export function budgetUsedPercent(spendUsd: number, capUsd: number | undefined): number | undefined;
 export function budgetUsedPercent(
 	spendUsd: number,
 	capUsd: number | undefined,
@@ -129,4 +133,11 @@ export function projectBudget(
 		projectedMonthEndUsd,
 		reachedOn: new Date(Date.UTC(year, monthIndex, dayReached)),
 	};
+}
+
+export function formatTokens(value: number | undefined): string {
+	if (value == null) {
+		return "—";
+	}
+	return value.toLocaleString();
 }

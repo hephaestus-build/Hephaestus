@@ -47,9 +47,8 @@ public record PracticeBinding(
 
         @NonNull
         @NotNull
-        @Valid
         @Schema(description = "Sources a review occasioned this way reads, each with the stance it takes")
-        List<PracticeEvidenceRequirement> needs,
+        List<@Valid PracticeEvidenceRequirement> needs,
 
         @Schema(description = "Whether an artifact still marked draft occasions this review; omit for false")
         boolean onDrafts,

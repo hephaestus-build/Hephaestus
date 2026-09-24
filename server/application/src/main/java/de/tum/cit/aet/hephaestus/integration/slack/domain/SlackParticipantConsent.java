@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.Objects;
@@ -51,7 +52,7 @@ public class SlackParticipantConsent {
     @ColumnDefault("false")
     private boolean ingestionOptedOut;
 
-    /** Persisted research opt-out bit (written by the App Home toggle); research-eligibility semantics unchanged. */
+    /** Historical value retained for schema compatibility; current research consent lives in the native-account ledger. */
     @Column(name = "research_opted_out", nullable = false)
     @ColumnDefault("false")
     private boolean researchOptedOut;
@@ -73,6 +74,9 @@ public class SlackParticipantConsent {
     @Setter
     @NoArgsConstructor
     public static class Id implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         private @Nullable Long workspaceId;
         private @Nullable String slackUserId;

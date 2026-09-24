@@ -5,7 +5,7 @@
 schema-version = "0.2"
 
 [io.buildpacks]
-builder = "paketobuildpacks/builder-noble-java-tiny@sha256:3a9f6efa2351dba2492a9c6eb28b3bf52b5f930832a20c39b6261ed7c1a0a085"
+builder = "paketobuildpacks/builder-noble-java-tiny@sha256:ff218b8c7e2e6e2e85e6eac5f027f71d3fd52c082bfdebba4b5222a85db09195"
 
 # Naming a group replaces the builder's order, so the java composite is listed before the
 # health-checker buildpack the builder does not bundle; it contributes the shell-free `thc` probe the

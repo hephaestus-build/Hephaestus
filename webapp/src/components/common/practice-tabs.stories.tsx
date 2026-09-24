@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect } from "storybook/test";
 
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import {
 	PracticeTabsList,
@@ -19,7 +19,6 @@ const TABS = [
 ];
 
 const meta = {
-	title: "Common/Practice tabs",
 	component: PracticeTabsRail,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
@@ -37,8 +36,10 @@ const meta = {
 				<span className="pb-2 text-sm text-muted-foreground">Newest first</span>
 			</PracticeTabsRail>
 			{TABS.map((tab) => (
-				<TabsContent key={tab.value} value={tab.value} className="text-sm text-muted-foreground">
-					{tab.label}: {tab.count}
+				<TabsContent key={tab.value} value={tab.value}>
+					<p className="text-sm text-muted-foreground">
+						{tab.label}: {tab.count}
+					</p>
 				</TabsContent>
 			))}
 		</Tabs>

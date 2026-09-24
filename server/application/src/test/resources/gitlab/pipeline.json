@@ -1,0 +1,74 @@
+{
+  "object_kind": "pipeline",
+  "object_attributes": {
+    "id": 31,
+    "iid": 3,
+    "name": null,
+    "ref": "feature/fixture",
+    "tag": false,
+    "sha": "bcbb5ec396a2c0f828686f14fac9b80b780504f2",
+    "before_sha": "0000000000000000000000000000000000000000",
+    "source": "merge_request_event",
+    "status": "failed",
+    "detailed_status": "failed",
+    "stages": [
+      "test"
+    ],
+    "created_at": "2026-04-15 10:20:00 UTC",
+    "finished_at": "2026-04-15 10:26:12 UTC",
+    "duration": 372,
+    "queued_duration": 10,
+    "variables": [],
+    "url": "https://gitlab.lrz.de/hephaestustest/demo-repository/-/pipelines/31"
+  },
+  "merge_request": {
+    "id": 343218,
+    "iid": 11,
+    "title": "Add fixture feature",
+    "source_branch": "feature/fixture",
+    "source_project_id": 246765,
+    "target_branch": "main",
+    "target_project_id": 246765,
+    "state": "opened",
+    "merge_status": "can_be_merged",
+    "detailed_merge_status": "mergeable",
+    "url": "https://gitlab.lrz.de/hephaestustest/demo-repository/-/merge_requests/11"
+  },
+  "user": {
+    "id": 31315,
+    "name": "Simon Winter",
+    "username": "simon.christian.winter",
+    "avatar_url": "https://gitlab.lrz.de/uploads/-/system/user/avatar/31315/avatar.png",
+    "email": "[REDACTED]"
+  },
+  "project": {
+    "id": 246765,
+    "name": "demo-repository",
+    "description": "Demo repository for testing GitLab webhooks and generating fixture data",
+    "web_url": "https://gitlab.lrz.de/hephaestustest/demo-repository",
+    "avatar_url": null,
+    "git_ssh_url": "git@gitlab.lrz.de:hephaestustest/demo-repository.git",
+    "git_http_url": "https://gitlab.lrz.de/hephaestustest/demo-repository.git",
+    "namespace": "HephaestusTest",
+    "visibility_level": 0,
+    "path_with_namespace": "hephaestustest/demo-repository",
+    "default_branch": "main",
+    "ci_config_path": "",
+    "homepage": "https://gitlab.lrz.de/hephaestustest/demo-repository",
+    "url": "git@gitlab.lrz.de:hephaestustest/demo-repository.git",
+    "ssh_url": "git@gitlab.lrz.de:hephaestustest/demo-repository.git",
+    "http_url": "https://gitlab.lrz.de/hephaestustest/demo-repository.git"
+  },
+  "commit": {
+    "id": "bcbb5ec396a2c0f828686f14fac9b80b780504f2",
+    "message": "feat: add fixture feature\n",
+    "title": "feat: add fixture feature",
+    "timestamp": "2026-04-15T10:19:40+02:00",
+    "url": "https://gitlab.lrz.de/hephaestustest/demo-repository/-/commit/bcbb5ec396a2c0f828686f14fac9b80b780504f2",
+    "author": {
+      "name": "Simon Winter",
+      "email": "[REDACTED]"
+    }
+  },
+  "builds": []
+}

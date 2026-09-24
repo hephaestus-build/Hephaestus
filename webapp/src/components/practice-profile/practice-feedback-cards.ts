@@ -1,6 +1,6 @@
 import type { InAppFeedback, PracticeGroup } from "@/api/types.gen";
-import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
 import { count, type FeedbackTextSegment, refs, text } from "@/components/common/feedback-text";
+import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import type {
 	PracticeFeedbackCardEntry,
 	ReviewedWorkOutcome,

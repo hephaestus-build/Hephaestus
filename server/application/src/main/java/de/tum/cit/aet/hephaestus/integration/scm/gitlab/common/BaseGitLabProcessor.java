@@ -234,7 +234,7 @@ public abstract class BaseGitLabProcessor {
      * GraphQL ISO-8601 format ({@code "2026-01-31T19:03:35Z"}).
      */
     @Nullable
-    protected static Instant parseGitLabTimestamp(@Nullable String timestamp) {
+    public static Instant parseGitLabTimestamp(@Nullable String timestamp) {
         if (timestamp == null || timestamp.isBlank()) {
             return null;
         }

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1789135709162-1" author="hephaestus">
+        <addColumn tableName="git_commit">
+            <column name="git_details_captured_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789135709162-2" author="hephaestus">
+        <createTable tableName="pull_request_closing_issue">
+            <column name="pull_request_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pull_request_closing_issuePK"/>
+            </column>
+            <column name="issue_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pull_request_closing_issuePK"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1789135709162-3" author="hephaestus">
+        <addColumn tableName="issue">
+            <column name="head_check_sha" type="VARCHAR(40)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789135709162-4" author="hephaestus">
+        <addColumn tableName="issue">
+            <column name="head_check_state" type="VARCHAR(16)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789135709162-5" author="hephaestus">
+        <addColumn tableName="pull_request_review_thread">
+            <column name="resolved_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789135709162-6" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="issue_id" baseTableName="pull_request_closing_issue" constraintName="fk_pull_request_closing_issue_issue" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="issue" validate="true"/>
+    </changeSet>
+    <changeSet id="1789135709162-7" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="pull_request_id" baseTableName="pull_request_closing_issue" constraintName="fk_pull_request_closing_issue_pull_request" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="issue" validate="true"/>
+    </changeSet>
+    <changeSet id="1789135709162-8" author="hephaestus">
+        <preConditions onFail="MARK_RAN" onFailMessage="feedback suppression reasons already admit COMPOSER_WITHHELD">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM pg_constraint
+                WHERE conname = 'chk_feedback_suppression_reason'
+                  AND conrelid = 'feedback'::regclass
+                  AND pg_get_constraintdef(oid) LIKE '%COMPOSER_WITHHELD%'
+            </sqlCheck>
+        </preConditions>
+        <comment>Admit "the composer withheld this practice from the work, with a reason" as a withholding rationale.</comment>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE feedback DROP CONSTRAINT IF EXISTS chk_feedback_suppression_reason;
+            ALTER TABLE feedback ADD CONSTRAINT chk_feedback_suppression_reason
+                CHECK (suppression_reason IS NULL OR suppression_reason IN (
+                    'VOLUME_CAPPED', 'COMPOSER_DEDUPED', 'COMPOSER_WITHHELD', 'REACTED_DISPUTED',
+                    'REACTED_NOT_APPLICABLE', 'CONVERSATION_EXPIRED', 'ARTIFACT_GONE', 'ARTIFACT_CLOSED',
+                    'ARTIFACT_MERGED', 'ARTIFACT_DRAFT', 'RECIPIENT_OPTED_OUT', 'EMPTY_AFTER_SANITIZE',
+                    'INSTANCE_SILENCED', 'PRACTICE_REQUIRES_APPROVAL', 'BACKFILL_QUIET', 'WORKSPACE_DISABLED',
+                    'APPROVAL_STALE', 'APPROVAL_NO_LONGER_ELIGIBLE', 'WORKSPACE_DELIVERY_PAUSED',
+                    'STALE_ROLLOUT_REVISION', 'OUTSIDE_CURRENT_COVERAGE'));
+        ]]></sql>
+        <rollback><![CDATA[
+            DELETE FROM feedback WHERE suppression_reason = 'COMPOSER_WITHHELD';
+            ALTER TABLE feedback DROP CONSTRAINT IF EXISTS chk_feedback_suppression_reason;
+            ALTER TABLE feedback ADD CONSTRAINT chk_feedback_suppression_reason
+                CHECK (suppression_reason IS NULL OR suppression_reason IN (
+                    'VOLUME_CAPPED', 'COMPOSER_DEDUPED', 'REACTED_DISPUTED', 'REACTED_NOT_APPLICABLE',
+                    'CONVERSATION_EXPIRED', 'ARTIFACT_GONE', 'ARTIFACT_CLOSED', 'ARTIFACT_MERGED',
+                    'ARTIFACT_DRAFT', 'RECIPIENT_OPTED_OUT', 'EMPTY_AFTER_SANITIZE', 'INSTANCE_SILENCED',
+                    'PRACTICE_REQUIRES_APPROVAL', 'BACKFILL_QUIET', 'WORKSPACE_DISABLED', 'APPROVAL_STALE',
+                    'APPROVAL_NO_LONGER_ELIGIBLE', 'WORKSPACE_DELIVERY_PAUSED', 'STALE_ROLLOUT_REVISION',
+                    'OUTSIDE_CURRENT_COVERAGE'));
+        ]]></rollback>
+    </changeSet>
+    <changeSet id="1789135709162-9" author="hephaestus">
+        <addColumn tableName="llm_model">
+            <column name="reasoning_effort" type="VARCHAR(16)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789135709162-10" author="hephaestus">
+        <addColumn tableName="workspace_llm_model">
+            <column name="reasoning_effort" type="VARCHAR(16)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1789135709162-11" author="hephaestus">
+        <comment>A reasoning model ran at the Pi session's default thinking level, which sends medium; it keeps asking for medium. supports_reasoning is no longer read or written and is dropped in the next release (pending contraction).</comment>
+        <sql><![CDATA[
+            UPDATE llm_model SET reasoning_effort = 'MEDIUM' WHERE supports_reasoning AND reasoning_effort IS NULL;
+            UPDATE workspace_llm_model SET reasoning_effort = 'MEDIUM' WHERE supports_reasoning AND reasoning_effort IS NULL;
+        ]]></sql>
+        <rollback><![CDATA[
+            UPDATE llm_model SET supports_reasoning = (reasoning_effort IS NOT NULL);
+            UPDATE workspace_llm_model SET supports_reasoning = (reasoning_effort IS NOT NULL);
+        ]]></rollback>
+    </changeSet>
+</databaseChangeLog>

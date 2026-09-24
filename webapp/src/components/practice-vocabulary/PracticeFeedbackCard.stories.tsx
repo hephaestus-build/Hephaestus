@@ -4,8 +4,8 @@ import { expect, fn, userEvent, within } from "storybook/test";
 import { text, work } from "@/components/common/feedback-text";
 import { NEW_FEEDBACK_CARD } from "@/stories/practice-feedback-cards-story-mock-data";
 import { conversation, issue, pullRequest } from "@/stories/practice-profile-story-mock-data";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { expectTouchTarget } from "@/test/controls";
-import { expectNoPageOverflow } from "@/test/reflow";
 
 import { PracticeFeedbackCard } from "./PracticeFeedbackCard";
 
@@ -14,7 +14,6 @@ const twoClean = [21, 22].map(pullRequest);
 const threeClean = [20, 21, 22].map(pullRequest);
 
 const meta = {
-	title: "Shared/Practice vocabulary/Feedback card",
 	component: PracticeFeedbackCard,
 	tags: ["autodocs"],
 	args: {
@@ -88,7 +87,9 @@ export const New: Story = {
 		await expect(args.onOpenGroup).toHaveBeenCalledWith("review-ready-work");
 		// The strip reads left to right in time: #17 on 28 Aug, #20 on 3 Sep, #19 on 6 Sep.
 		const strip = canvas.getByText("Seen on three pull requests").parentElement;
-		if (!strip) throw new Error("Expected the strip around its label.");
+		if (!strip) {
+			throw new Error("Expected the strip around its label.");
+		}
 		await expect(
 			within(strip)
 				.getAllByRole("link")
@@ -129,14 +130,16 @@ export const MarkdownBody: Story = {
 	},
 	play: async ({ canvas }) => {
 		const [pageSize, retries, ...rest] = within(canvas.getByRole("list")).getAllByRole("listitem");
-		if (!pageSize || !retries) throw new Error("One bullet per change the body names");
+		if (!pageSize || !retries) {
+			throw new Error("One bullet per change the body names");
+		}
 		await expect(rest).toHaveLength(1);
 		// The lead-in is a bold run inside the item, and the raw Markdown is nowhere on screen.
-		await expect(pageSize.querySelector("strong")).toHaveTextContent(/^Page size \(#17/);
-		await expect(canvas.queryByText(/\*\*/)).toBeNull();
+		await expect(pageSize.querySelector("strong")).toHaveTextContent(/^Page size \(#17/u);
+		await expect(canvas.queryByText(/\*\*/u)).toBeNull();
 		// A backticked value is code, and the reference beside it is still the work's own link.
 		await expect(within(pageSize).getByText("20", { selector: "code" })).toBeVisible();
-		await expect(within(pageSize).getByRole("link", { name: /^#17/ })).toHaveAttribute(
+		await expect(within(pageSize).getByRole("link", { name: /^#17/u })).toHaveAttribute(
 			"target",
 			"_blank",
 		);
@@ -158,7 +161,7 @@ export const TwoOfThreeClean: Story = {
 		await expect(canvas.getByText("Seen on five pull requests")).toBeVisible();
 		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
 		const outcomeNames = canvas
-			.getAllByText(/:$/, { selector: ".sr-only" })
+			.getAllByText(/:$/u, { selector: ".sr-only" })
 			.map((name) => name.textContent.trim());
 		await expect(outcomeNames).toStrictEqual([
 			"Needs improvement:",
@@ -168,7 +171,7 @@ export const TwoOfThreeClean: Story = {
 			"Strength shown:",
 		]);
 		// The wire names the clean work without a date, so the strip shows it by number alone.
-		await expect(canvas.getByRole("link", { name: /^#22/ })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: /^#22/u })).toBeVisible();
 	},
 };
 
@@ -178,10 +181,12 @@ export const TwoOfThreeClean: Story = {
  */
 function stripLabels(label: HTMLElement): string[] {
 	const strip = label.parentElement;
-	if (!strip) throw new Error("The strip's label sits in the strip");
+	if (!strip) {
+		throw new Error("The strip's label sits in the strip");
+	}
 	return within(strip)
 		.getAllByRole("link")
-		.map((link) => link.textContent.replace(/\s*\(opens.*$/, ""));
+		.map((link) => link.textContent.replace(/\s*\(opens.*$/u, ""));
 }
 
 /**
@@ -269,8 +274,8 @@ export const Resolved: Story = {
 		await expect(canvas.getByText("Resolved 9 September")).toBeVisible();
 		// Each reference carries its own "(opens in a new tab)", so the words are matched around
 		// them.
-		await expect(canvas.getByText(/came back clean$/)).toHaveTextContent(
-			/^Resolved by the work on 9 September · #20.*, #21.* and #22.* came back clean$/,
+		await expect(canvas.getByText(/came back clean$/u)).toHaveTextContent(
+			/^Resolved by the work on 9 September · #20.*, #21.* and #22.* came back clean$/u,
 		);
 		await expect(canvas.getByRole("button", { name: "Helpful" })).toHaveAttribute(
 			"aria-pressed",
@@ -391,7 +396,7 @@ export const EveryOutcome: Story = {
 		// Each outcome names itself once in the strip, oldest first whatever order the work was
 		// given in — #16 on 24 Aug, #20 on 3 Sep, #19 on 6 Sep — and the clean piece last.
 		const outcomeNames = canvas
-			.getAllByText(/:$/, { selector: ".sr-only" })
+			.getAllByText(/:$/u, { selector: ".sr-only" })
 			.map((name) => name.textContent.trim());
 		await expect(outcomeNames).toStrictEqual([
 			"Expected practice missing:",
@@ -419,7 +424,7 @@ export const GitLabWork: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Seen on three merge requests")).toBeVisible();
-		await expect(canvas.getByRole("link", { name: /^!17/ })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: /^!17/u })).toBeVisible();
 	},
 };
 
@@ -441,7 +446,7 @@ export const MixedWork: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Seen on three pieces of work")).toBeVisible();
-		await expect(canvas.queryByText(/pull requests/)).toBeNull();
+		await expect(canvas.queryByText(/pull requests/u)).toBeNull();
 	},
 };
 
@@ -473,7 +478,7 @@ export const WorkWithoutAnAddress: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("link")).toBeNull();
 		// The body names it in its own words, since only a number carries an address to link to.
-		await expect(canvas.getByText(/^In #backend-review the outage/)).toBeVisible();
+		await expect(canvas.getByText(/^In #backend-review the outage/u)).toBeVisible();
 		for (const word of [canvas.getByText("#backend-review"), canvas.getByText("#releases")]) {
 			await expect(word.tagName).toBe("SPAN");
 			await expect(word).not.toHaveClass("hover:underline");

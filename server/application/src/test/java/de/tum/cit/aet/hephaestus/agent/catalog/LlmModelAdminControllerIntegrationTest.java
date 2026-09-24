@@ -57,6 +57,49 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
+    void shouldStoreAReasoningEffortAndRefuseOneOutsideTheScale() {
+        LlmConnection connection = seedConnection();
+        LlmModelDTO created = createModel(connection.getId(), "gpt-5-effort");
+
+        webTestClient
+                .patch()
+                .uri("/admin/llm/models/{id}", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"reasoningEffort\":\"XHIGH\"}")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.reasoningEffort")
+                .isEqualTo("XHIGH");
+
+        webTestClient
+                .patch()
+                .uri("/admin/llm/models/{id}", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"reasoningEffort\":\"EXTREME\"}")
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+
+        webTestClient
+                .patch()
+                .uri("/admin/llm/models/{id}", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"clearReasoningEffort\":true}")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.reasoningEffort")
+                .doesNotExist();
+    }
+
+    @Test
     void appAdminCanCreateGetListUpdateAndDeleteAModel() {
         LlmConnection connection = seedConnection();
         LlmModelDTO created = createModel(connection.getId(), "gpt-5-eu");
@@ -87,7 +130,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .jsonPath("$.length()")
                 .isEqualTo(1);
 
-        var updateRequest = new UpdateLlmModelRequestDTO("Renamed Model", null, null, null, null);
+        var updateRequest = new UpdateLlmModelRequestDTO("Renamed Model", null, null, null, null, null);
         webTestClient
                 .patch()
                 .uri("/admin/llm/models/{id}", created.id())
@@ -107,7 +150,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -115,7 +159,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -133,7 +178,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .bodyValue(firstPrice)
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         var secondPrice = new UpdateLlmModelPriceRequestDTO(
                 PricingMode.PRICED, new BigDecimal("3.00"), new BigDecimal("4.00"), null, null, null);
@@ -253,7 +299,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isEqualTo(409);
+                .isEqualTo(409)
+                .expectBody(Void.class);
     }
 
     @Test
@@ -298,7 +345,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     private LlmModel llmModelFromRepository(Long id) {

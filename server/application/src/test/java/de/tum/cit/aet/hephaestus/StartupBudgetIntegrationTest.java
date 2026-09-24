@@ -20,12 +20,15 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-/** Guards the application-controlled portion of Spring's startup path against slow bean initialization. */
 @SpringBootTest(useMainMethod = UseMainMethod.ALWAYS)
 @ActiveProfiles("test")
 @Import({TestSecurityConfig.class, TestAsyncConfiguration.class})
-@Tag("architecture")
+@Tag("integration")
 class StartupBudgetIntegrationTest {
+
+    // Isolate schema creation/drop from other contexts sharing the PostgreSQL container.
+    private static final PostgreSQLTestContainer.TestDatabase DATABASE =
+            PostgreSQLTestContainer.createDatabase("startup_budget");
 
     private static final String BEAN_INSTANTIATE = "spring.beans.instantiate";
 
@@ -36,10 +39,9 @@ class StartupBudgetIntegrationTest {
 
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
-        var postgres = PostgreSQLTestContainer.getInstance();
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.url", DATABASE::jdbcUrl);
+        registry.add("spring.datasource.username", DATABASE::username);
+        registry.add("spring.datasource.password", DATABASE::password);
     }
 
     @Autowired
@@ -57,9 +59,7 @@ class StartupBudgetIntegrationTest {
                 .toList();
 
         assertThat(beans.stream().map(StartupBudgetIntegrationTest::beanNameOf))
-                .as(
-                        "%s is exempt below, so it has to be a bean that is really built — a renamed one would widen the exemption to nothing in silence",
-                        JPA_WARM_UP_BEAN)
+                .as("startup events must contain the exempt bean %s", JPA_WARM_UP_BEAN)
                 .contains(JPA_WARM_UP_BEAN);
 
         var slowest = beans.stream()
@@ -69,8 +69,7 @@ class StartupBudgetIntegrationTest {
 
         assertThat(slowest.getDuration())
                 .as(
-                        "slowest bean instantiation %s (%s) exceeded the %s budget — that bean is doing egregious "
-                                + "synchronous work on the startup path; check its constructor/@PostConstruct.",
+                        "slowest bean instantiation %s (%s); budget %s",
                         slowest.getDuration(), beanNameOf(slowest), PER_BEAN_CEILING)
                 .isLessThan(PER_BEAN_CEILING);
     }

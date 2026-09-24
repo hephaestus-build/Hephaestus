@@ -3,6 +3,7 @@ import { CircleDotIcon, FileTextIcon, MessagesSquareIcon } from "lucide-react";
 import type { ComponentType } from "react";
 
 import type { ReviewedWorkRef } from "@/api/types.gen";
+import { hasText } from "@/lib/text";
 
 /** Wide enough for both icon sets in use: lucide and the provider registry's octicons. */
 export type ArtifactKindIcon = ComponentType<{
@@ -59,12 +60,16 @@ export function isKnownArtifactKind(kind: string | null | undefined): kind is Kn
 }
 
 export function artifactKindLabel(kind: string | undefined): string {
-	if (!kind) return "Reviewed work";
+	if (!hasText(kind)) {
+		return "Reviewed work";
+	}
 	return isKnownArtifactKind(kind) ? ARTIFACT_KIND_LABELS[kind] : kind;
 }
 
 export function artifactKindPluralLabel(kind: string | undefined): string {
-	if (!kind) return "Reviewed work";
+	if (!hasText(kind)) {
+		return "Reviewed work";
+	}
 	return isKnownArtifactKind(kind) ? ARTIFACT_KIND_PLURAL_LABELS[kind] : kind;
 }
 
@@ -98,7 +103,12 @@ export function artifactKindNoun(
 	count: number,
 	provider?: WorkProvider,
 ): string {
-	if (!kind || !isKnownArtifactKind(kind)) return kind ?? "reviewed work";
+	if (!hasText(kind)) {
+		return "reviewed work";
+	}
+	if (!isKnownArtifactKind(kind)) {
+		return kind;
+	}
 	const labels =
 		kind === ARTIFACT_KIND.pullRequest && provider === "GITLAB"
 			? MERGE_REQUEST
@@ -118,5 +128,5 @@ const ARTIFACT_KIND_ICONS: Record<KnownArtifactKind, ArtifactKindIcon> = {
  * borrows the icon of a kind it is not.
  */
 export function artifactKindIcon(kind: string | undefined): ArtifactKindIcon {
-	return kind && isKnownArtifactKind(kind) ? ARTIFACT_KIND_ICONS[kind] : FileTextIcon;
+	return hasText(kind) && isKnownArtifactKind(kind) ? ARTIFACT_KIND_ICONS[kind] : FileTextIcon;
 }

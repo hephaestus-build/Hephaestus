@@ -1,14 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent } from "storybook/test";
 
-import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
+import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 
 import { GroupName } from "./GroupName";
 
 const packaging = getGroupVisual("Package", "sky");
 
 const meta = {
-	title: "Shared/Practice vocabulary/Group name",
 	component: GroupName,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],

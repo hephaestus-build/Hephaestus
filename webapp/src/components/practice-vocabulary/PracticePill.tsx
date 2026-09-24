@@ -1,6 +1,6 @@
+import { cn } from "cn";
 import { HIT_AREA_24 } from "@/components/common/focus";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 export interface PracticePillProps {
 	name: string;
@@ -19,11 +19,7 @@ export function PracticePill({ name, onOpen, className }: PracticePillProps) {
 		<Badge
 			variant="secondary"
 			render={onOpen ? <button type="button" onClick={onOpen} /> : undefined}
-			className={cn(
-				"max-w-full",
-				onOpen && [HIT_AREA_24, "cursor-pointer hover:bg-secondary/80"],
-				className,
-			)}
+			className={cn("max-w-full", onOpen && [HIT_AREA_24, "cursor-pointer"], className)}
 		>
 			<span className="truncate">{name}</span>
 		</Badge>

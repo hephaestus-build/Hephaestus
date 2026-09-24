@@ -27,6 +27,25 @@ const OWN_IMAGE_PREFIX = "ghcr.io/hephaestus-build/";
  * added to the reference and not considered here fails the build.
  */
 const DELIBERATELY_OMITTED = new Set([
+	// Previews send no email: no relay host, sender identity or production SMTP credentials.
+	"HEPHAESTUS_EMAIL_FROM",
+	"HEPHAESTUS_EMAIL_FROM_NAME",
+	"HEPHAESTUS_EMAIL_REPLY_TO",
+	"HEPHAESTUS_EMAIL_RATE_LIMIT_DAILY_CAPACITY",
+	"HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY",
+	"SPRING_MAIL_HOST",
+	"SPRING_MAIL_PORT",
+	"SPRING_MAIL_PROTOCOL",
+	"SPRING_MAIL_USERNAME",
+	"SPRING_MAIL_PASSWORD",
+	"SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH",
+	"SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE",
+	"SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE",
+	"SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED",
+	// A preview pins its own commit rather than a release lock: nothing to report, nothing to compare.
+	"HEPHAESTUS_RELEASE_COMMIT",
+	"HEPHAESTUS_IMAGE_APPLICATION_SERVER",
+	"HEPHAESTUS_RELEASE_CHECK_ENABLED",
 	"GITLAB_DEFAULT_SERVER_URL",
 	"GITLAB_OAUTH_BASE_URL",
 	"GITLAB_OAUTH_CLIENT_ID",
@@ -45,7 +64,9 @@ const DELIBERATELY_OMITTED = new Set([
 	"GH_APP_PRIVATE_KEY_LOCATION",
 	// The agent sandbox is off, so nothing reads its runtime, limits or image override.
 	"HEPHAESTUS_AGENT_IMAGE_REFERENCE",
-	"HEPHAESTUS_FABRIC_GC_RETENTION_DAYS",
+	// Git checkout is off, so no repository is mirrored or ingested.
+	"GIT_MAX_CONCURRENT_INGESTIONS",
+	"GIT_MAX_SNAPSHOT_BYTES",
 	"HEPHAESTUS_FABRIC_ROOT",
 	"HEPHAESTUS_LLM_DISPLAY_CURRENCY",
 	"HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK",
@@ -58,7 +79,7 @@ const DELIBERATELY_OMITTED = new Set([
 	"SANDBOX_CPUS",
 	"SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID",
 	"SANDBOX_DOCKER_CERT_PATH",
-	"SANDBOX_DOCKER_CLI",
+	"SANDBOX_DOCKER_OWNER",
 	"SANDBOX_DOCKER_CONTAINER_RUNTIME",
 	"SANDBOX_DOCKER_HOST",
 	"SANDBOX_DOCKER_TLS_VERIFY",
@@ -80,10 +101,14 @@ const DELIBERATELY_OMITTED = new Set([
 	"PRACTICE_REVIEW_BACKFILL_MAX_ARTIFACTS",
 	"PRACTICE_REVIEW_BACKFILL_MAX_WINDOW",
 	"PRACTICE_REVIEW_COOLDOWN_MINUTES",
+	"TRACING_SAMPLING_PROBABILITY",
+	"TRACING_OTLP_ENABLED",
+	"TRACING_OTLP_ENDPOINT",
 	"PRACTICE_REVIEW_DELIVER_TO_MERGED",
 	"PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR",
 	"PRACTICE_REVIEW_PROGRESS_FOOTER",
 	"PRACTICE_REVIEW_REACTION_SUPPRESSION",
+	"PRACTICE_REVIEW_SAMPLING_TEMPERATURE",
 	"SIGNAL_LEDGER_PENDING_LAPSE_AFTER",
 	"SIGNAL_LEDGER_PENDING_RETRY_AFTER",
 	"SIGNAL_LEDGER_SWEEP_BATCH_SIZE",
@@ -94,8 +119,9 @@ const DELIBERATELY_OMITTED = new Set([
 export function findEnvDrift(referenceText: string, previewText: string): string[] {
 	const reference = readComposeServices(referenceText).get("application-server");
 	const preview = readComposeServices(previewText).get("appserver");
-	if (!reference || !preview)
+	if (!reference || !preview) {
 		return ["could not read the reference or preview application service"];
+	}
 	return [...reference.flags.keys()]
 		.filter((key) => !preview.flags.has(key) && !DELIBERATELY_OMITTED.has(key))
 		.toSorted()
@@ -108,7 +134,9 @@ export function findEnvDrift(referenceText: string, previewText: string): string
 /** An omission entry outliving the variable it excuses would silently mask a future divergence. */
 export function findStaleOmissions(referenceText: string): string[] {
 	const reference = readComposeServices(referenceText).get("application-server");
-	if (!reference) return ["could not read the reference application service"];
+	if (!reference) {
+		return ["could not read the reference application service"];
+	}
 	return [...DELIBERATELY_OMITTED]
 		.filter((key) => !reference.flags.has(key))
 		.toSorted()
@@ -118,13 +146,13 @@ export function findStaleOmissions(referenceText: string): string[] {
 }
 
 /** The heredoc the seed loader pipes into psql, and the query that decides whether it took effect. */
-const SEED_POLICY = /<<'SQL'\n([\s\S]*?)\n[ \t]*SQL\n/;
-const SEED_VERIFICATION = /LIVE=\$\$\(psql[^\n]*-c "([\s\S]*?)"\)/;
-const CHANGED_TABLE = /\b(?:UPDATE|DELETE FROM)[\s\n]+([a-z_]+)/g;
-const COUNTED_TABLE = /\bFROM[\s\n]+([a-z_]+)/g;
+const SEED_POLICY = /<<'SQL'\n(?<sql>[\s\S]*?)\n[ \t]*SQL\n/u;
+const SEED_VERIFICATION = /LIVE=\$\$\(psql[^\n]*-c "(?<query>[\s\S]*?)"\)/u;
+const CHANGED_TABLE = /\b(?:UPDATE|DELETE FROM)[\s\n]+(?<table>[a-z_]+)/gu;
+const COUNTED_TABLE = /\bFROM[\s\n]+(?<table>[a-z_]+)/gu;
 
 function tablesIn(sql: string, pattern: RegExp): Set<string> {
-	return new Set([...sql.matchAll(pattern)].flatMap((match) => match[1] ?? []));
+	return new Set([...sql.matchAll(pattern)].flatMap((match) => match.groups?.table ?? []));
 }
 
 /**
@@ -135,9 +163,11 @@ function tablesIn(sql: string, pattern: RegExp): Set<string> {
  * watches and the policy never clears leaves every preview un-booted.
  */
 export function findSeedPolicyGaps(previewText: string): string[] {
-	const policy = SEED_POLICY.exec(previewText)?.[1];
-	if (policy === undefined) return ["the seed loader applies no SQL policy"];
-	const verification = SEED_VERIFICATION.exec(previewText)?.[1];
+	const policy = SEED_POLICY.exec(previewText)?.groups?.sql;
+	if (policy === undefined) {
+		return ["the seed loader applies no SQL policy"];
+	}
+	const verification = SEED_VERIFICATION.exec(previewText)?.groups?.query;
 	if (verification === undefined) {
 		return ["the seed loader marks a clone seeded without verifying its policy"];
 	}
@@ -166,7 +196,6 @@ const RENDER_ENV: Record<string, string> = {
 	NATS_PASSWORD: "ci-not-a-real-nats-password",
 	HEPHAESTUS_TRUSTED_PROXIES: "172.(1[6-9]|2[0-9]|3[01]).[0-9]{1,3}.[0-9]{1,3}",
 	SERVICE_FQDN_WEBAPP: "pr1.example.com",
-	SERVICE_FQDN_APPSERVER: "pr1.api.example.com",
 };
 
 /**
@@ -203,101 +232,220 @@ export const REQUIRED_SWITCHES: Record<string, string> = {
 };
 
 function records(value: unknown): [string, Record<string, unknown>][] {
-	if (!isRecord(value)) return [];
+	if (!isRecord(value)) {
+		return [];
+	}
 	return Object.entries(value).filter((entry): entry is [string, Record<string, unknown>] =>
 		isRecord(entry[1]),
 	);
 }
 
+/**
+ * Mirrors `AuthProperties.normalizeApiBasePath`, so a spelling the server accepts — `api`, `/api/`,
+ * `//api`, or one padded with spaces — is not reported as a mismatch.
+ */
+function normalizeApiBasePath(value: string): string {
+	const trimmed = value.trim().replace(/\/+$/u, "");
+	if (trimmed === "") {
+		return "";
+	}
+	const rooted = trimmed.replace(/^\/+/u, "/");
+	return rooted.startsWith("/") ? rooted : `/${rooted}`;
+}
+
+/**
+ * The OAuth prefix production re-adds to browser-facing URLs, read from the profile that owns it
+ * rather than repeated here. The proxy strips the path before the request reaches the server, and
+ * native forward-headers cannot restore it.
+ */
+function productionAuthApiBasePath(): string {
+	const profile = readFileSync(
+		"server/application/src/main/resources/application-prod.yml",
+		"utf8",
+	);
+	const declared = /^\s*api-base-path:\s*(?<path>\S+)\s*$/mu.exec(profile)?.groups?.path;
+	if (declared === undefined) {
+		throw new Error("application-prod.yml no longer declares api-base-path");
+	}
+	return declared;
+}
+
+function mountViolations(name: string, service: Record<string, unknown>): string[] {
+	const violations: string[] = [];
+	const mounts = Array.isArray(service.volumes) ? service.volumes : [];
+	for (const mount of mounts) {
+		const source = isRecord(mount) && typeof mount.source === "string" ? mount.source : "";
+		// A `:ro` socket mount restricts the file, not the API: a container holding it can still
+		// create containers, and from there mount the host. There is no scoped way to hold this, so
+		// no service in this stack holds it — the seed loader reads staging over the network.
+		if (source.includes("docker.sock")) {
+			violations.push(`${name} mounts the Docker socket`);
+		}
+	}
+	return violations;
+}
+
+function imageViolations(name: string, service: Record<string, unknown>): string[] {
+	const violations: string[] = [];
+	// A preview runs the artifact CI published, not one built here: a build stage would make it a
+	// lookalike of the shipped image rather than the shipped image.
+	if (service.build !== undefined) {
+		violations.push(`${name} builds from pull-request source instead of the published image`);
+	}
+	// The reference stack pins upstream images through a generated release lock, which Coolify does
+	// not supply. A preview therefore pins its own, and a floating tag would silently change what
+	// it exercises between two deployments of the same commit.
+	const image = typeof service.image === "string" ? service.image : "";
+	if (image && !image.startsWith(OWN_IMAGE_PREFIX) && !image.includes("@sha256:")) {
+		violations.push(`${name} runs ${image}, an upstream image that is not digest-pinned`);
+	}
+	return violations;
+}
+
+function privilegeViolations(name: string, service: Record<string, unknown>): string[] {
+	const violations: string[] = [];
+	if (service.privileged === true) {
+		violations.push(`${name} runs privileged`);
+	}
+	const options = Array.isArray(service.security_opt) ? service.security_opt : [];
+	if (!options.includes("no-new-privileges:true")) {
+		violations.push(`${name} does not set no-new-privileges`);
+	}
+	const dropped = Array.isArray(service.cap_drop) ? service.cap_drop : [];
+	if (!dropped.includes("ALL")) {
+		violations.push(`${name} does not drop all capabilities`);
+	}
+	const added = Array.isArray(service.cap_add) ? service.cap_add : [];
+	const allowed = ALLOWED_CAPABILITIES[name] ?? [];
+	for (const capability of added) {
+		if (typeof capability !== "string" || !allowed.includes(capability)) {
+			violations.push(`${name} adds capability ${String(capability)}, which is not recorded here`);
+		}
+	}
+	return violations;
+}
+
+function isolationViolations(name: string, service: Record<string, unknown>): string[] {
+	const violations: string[] = [];
+	if (service.network_mode !== undefined) {
+		violations.push(`${name} sets network_mode and escapes its own networks`);
+	}
+	if (Array.isArray(service.ports) && service.ports.length > 0) {
+		violations.push(`${name} publishes a port on the shared host`);
+	}
+	const deploy = isRecord(service.deploy) ? service.deploy : {};
+	const resources = isRecord(deploy.resources) ? deploy.resources : {};
+	const limits = isRecord(resources.limits) ? resources.limits : {};
+	if (limits.memory === undefined || limits.memory === "") {
+		violations.push(`${name} has no memory limit and can starve staging`);
+	}
+	return violations;
+}
+
+/** What every service in the stack must hold to, whatever it runs. */
+function findServiceViolations(name: string, service: Record<string, unknown>): string[] {
+	return [
+		...mountViolations(name, service),
+		...imageViolations(name, service),
+		...privilegeViolations(name, service),
+		...isolationViolations(name, service),
+	];
+}
+
+function switchViolations(name: string, service: Record<string, unknown>): string[] {
+	const violations: string[] = [];
+	const environment = isRecord(service.environment) ? service.environment : {};
+	for (const [key, expected] of Object.entries(REQUIRED_SWITCHES)) {
+		const actual = environment[key];
+		if (actual !== expected) {
+			const shown = typeof actual === "string" ? actual : "«unset»";
+			violations.push(`${name} sets ${key}=${shown}, expected ${expected}`);
+		}
+	}
+	for (const key of REQUIRED_NON_EMPTY) {
+		const value = environment[key];
+		if (typeof value !== "string" || value === "") {
+			violations.push(`${name} renders an empty ${key}, which the server refuses to start with`);
+		}
+	}
+	return violations;
+}
+
+/**
+ * The browser reaches the API under a path, and the server re-adds that path to the OAuth URLs it
+ * sends the browser to. Disagree, and sign-in alone breaks: it redirects to a path nothing serves
+ * while every other request keeps working, so a healthy stack and a reachable page report success.
+ */
+function authPathViolations(services: readonly [string, Record<string, unknown>][]): string[] {
+	const serviceEnv = (wanted: string): Record<string, unknown> => {
+		const found = services.find(([name]) => name === wanted)?.[1];
+		return found && isRecord(found.environment) ? found.environment : {};
+	};
+	const serverUrl = serviceEnv("webapp").APPLICATION_SERVER_URL;
+	if (typeof serverUrl !== "string" || serverUrl === "") {
+		return [];
+	}
+	const violations: string[] = [];
+	let apiPath = "";
+	try {
+		apiPath = new URL(serverUrl).pathname.replace(/\/$/u, "");
+	} catch {
+		violations.push(`webapp sets APPLICATION_SERVER_URL=${serverUrl}, which is not a URL`);
+	}
+	const override = serviceEnv("appserver").HEPHAESTUS_AUTH_API_BASE_PATH;
+	const effective = normalizeApiBasePath(
+		typeof override === "string" ? override : productionAuthApiBasePath(),
+	);
+	if (effective !== normalizeApiBasePath(apiPath)) {
+		violations.push(
+			`the API is served at "${apiPath}" but OAuth URLs are built with "${effective}", so sign-in would leave the API`,
+		);
+	}
+	return violations;
+}
+
+/**
+ * Coolify runs every preview of this application under one Compose project, named after the
+ * application UUID with no pull request in it. A network defined here is therefore `<uuid>_<name>`
+ * for all of them at once — a shared network that reads as private. An external one names a
+ * network that already exists, so joining it is a decision rather than a side effect.
+ */
+function networkViolations(networks: unknown): string[] {
+	const violations: string[] = [];
+	for (const [name, network] of records(networks)) {
+		if (name === "default") {
+			continue;
+		}
+		if (network.external === true && typeof network.name === "string" && network.name !== "") {
+			continue;
+		}
+		violations.push(`the stack defines the ${name} network, which every preview would share`);
+	}
+	return violations;
+}
+
 export function findViolations(stack: unknown): string[] {
-	if (!isRecord(stack)) return ["the rendered stack is not an object"];
+	if (!isRecord(stack)) {
+		return ["the rendered stack is not an object"];
+	}
 	const violations: string[] = [];
 	const services = records(stack.services);
-	if (services.length === 0) violations.push("the rendered stack declares no services");
+	if (services.length === 0) {
+		violations.push("the rendered stack declares no services");
+	}
 
 	for (const [name, service] of services) {
-		const mounts = Array.isArray(service.volumes) ? service.volumes : [];
-		for (const mount of mounts) {
-			const source = isRecord(mount) && typeof mount.source === "string" ? mount.source : "";
-			// A `:ro` socket mount restricts the file, not the API: a container holding it can still
-			// create containers, and from there mount the host. There is no scoped way to hold this, so
-			// no service in this stack holds it — the seed loader reads staging over the network.
-			if (source.includes("docker.sock")) violations.push(`${name} mounts the Docker socket`);
-		}
-		// A preview runs the artifact CI published, not one built here: a build stage would make it a
-		// lookalike of the shipped image rather than the shipped image.
-		if (service.build !== undefined) {
-			violations.push(`${name} builds from pull-request source instead of the published image`);
-		}
-		// The reference stack pins upstream images through a generated release lock, which Coolify does
-		// not supply. A preview therefore pins its own, and a floating tag would silently change what
-		// it exercises between two deployments of the same commit.
-		const image = typeof service.image === "string" ? service.image : "";
-		if (image && !image.startsWith(OWN_IMAGE_PREFIX) && !image.includes("@sha256:")) {
-			violations.push(`${name} runs ${image}, an upstream image that is not digest-pinned`);
-		}
-		if (service.privileged === true) violations.push(`${name} runs privileged`);
-		const options = Array.isArray(service.security_opt) ? service.security_opt : [];
-		if (!options.includes("no-new-privileges:true")) {
-			violations.push(`${name} does not set no-new-privileges`);
-		}
-		const dropped = Array.isArray(service.cap_drop) ? service.cap_drop : [];
-		if (!dropped.includes("ALL")) violations.push(`${name} does not drop all capabilities`);
-		const added = Array.isArray(service.cap_add) ? service.cap_add : [];
-		const allowed = ALLOWED_CAPABILITIES[name] ?? [];
-		for (const capability of added) {
-			if (typeof capability !== "string" || !allowed.includes(capability)) {
-				violations.push(
-					`${name} adds capability ${String(capability)}, which is not recorded here`,
-				);
-			}
-		}
-		if (service.network_mode !== undefined) {
-			violations.push(`${name} sets network_mode and escapes its own networks`);
-		}
-		if (Array.isArray(service.ports) && service.ports.length > 0) {
-			violations.push(`${name} publishes a port on the shared host`);
-		}
-
-		const deploy = isRecord(service.deploy) ? service.deploy : {};
-		const resources = isRecord(deploy.resources) ? deploy.resources : {};
-		const limits = isRecord(resources.limits) ? resources.limits : {};
-		if (limits.memory === undefined || limits.memory === "") {
-			violations.push(`${name} has no memory limit and can starve staging`);
-		}
-
-		if (name !== "appserver") continue;
-		const environment = isRecord(service.environment) ? service.environment : {};
-		for (const [key, expected] of Object.entries(REQUIRED_SWITCHES)) {
-			const actual = environment[key];
-			if (actual !== expected) {
-				const shown = typeof actual === "string" ? actual : "«unset»";
-				violations.push(`${name} sets ${key}=${shown}, expected ${expected}`);
-			}
-		}
-		for (const key of REQUIRED_NON_EMPTY) {
-			const value = environment[key];
-			if (typeof value !== "string" || value === "") {
-				violations.push(`${name} renders an empty ${key}, which the server refuses to start with`);
-			}
+		violations.push(...findServiceViolations(name, service));
+		if (name === "appserver") {
+			violations.push(...switchViolations(name, service));
 		}
 	}
 
 	if (!services.some(([name]) => name === "appserver")) {
 		violations.push("the rendered stack has no appserver service, so no switch was checked");
 	}
-	// Coolify runs every preview of this application under one Compose project, named after the
-	// application UUID with no pull request in it. A network defined here is therefore `<uuid>_<name>`
-	// for all of them at once — a shared network that reads as private. An external one names a
-	// network that already exists, so joining it is a decision rather than a side effect.
-	for (const [name, network] of records(stack.networks)) {
-		if (name === "default") continue;
-		if (network.external === true && typeof network.name === "string" && network.name !== "") {
-			continue;
-		}
-		violations.push(`the stack defines the ${name} network, which every preview would share`);
-	}
 
+	violations.push(...authPathViolations(services), ...networkViolations(stack.networks));
 	return violations;
 }
 
@@ -317,8 +465,10 @@ export function renderStack(): unknown {
 	if (result.status !== 0) {
 		const unavailable =
 			result.status === null ||
-			/Cannot connect to the Docker daemon|not found/i.test(result.stderr);
-		if (unavailable) return undefined;
+			/Cannot connect to the Docker daemon|not found/iu.test(result.stderr);
+		if (unavailable) {
+			return undefined;
+		}
 		throw new Error(`${COMPOSE_FILE} does not render: ${result.stderr.trim().slice(0, 400)}`);
 	}
 	try {
@@ -332,23 +482,34 @@ if (import.meta.main) {
 	try {
 		const previewText = readFileSync(COMPOSE_FILE, "utf8");
 		const drift = findEnvDrift(readFileSync(REFERENCE_FILE, "utf8"), previewText);
-		for (const problem of drift) console.error(`error: ${problem}`);
+		for (const problem of drift) {
+			console.error(`error: ${problem}`);
+		}
 		const gaps = findSeedPolicyGaps(previewText);
-		for (const gap of gaps) console.error(`error: ${COMPOSE_FILE}: ${gap}`);
-		if (drift.length + gaps.length > 0) process.exitCode = 1;
+		for (const gap of gaps) {
+			console.error(`error: ${COMPOSE_FILE}: ${gap}`);
+		}
+		if (drift.length + gaps.length > 0) {
+			process.exitCode = 1;
+		}
 
 		const stack = renderStack();
 		if (stack === undefined) {
 			console.log(`${COMPOSE_FILE}: skipped, no Docker daemon to render it with.`);
 		} else {
 			const violations = findViolations(stack);
-			for (const violation of violations) console.error(`error: ${COMPOSE_FILE}: ${violation}`);
-			if (violations.length > 0) process.exitCode = 1;
-			else console.log(`${COMPOSE_FILE}: stack renders and stays sandboxed.`);
+			for (const violation of violations) {
+				console.error(`error: ${COMPOSE_FILE}: ${violation}`);
+			}
+			if (violations.length > 0) {
+				process.exitCode = 1;
+			} else {
+				console.log(`${COMPOSE_FILE}: stack renders and stays sandboxed.`);
+			}
 		}
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "unknown preview stack error";
-		console.error(`error: ${message.replaceAll(/[\r\n]+/g, " ")}`);
+		console.error(`error: ${message.replaceAll(/[\r\n]+/gu, " ")}`);
 		process.exitCode = 1;
 	}
 }

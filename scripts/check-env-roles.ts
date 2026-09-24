@@ -38,14 +38,14 @@
  * fails rather than passes.
  */
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import path from "node:path";
 
 import { parse, parseAllDocuments } from "yaml";
 
 import { isRecord } from "./lib/json.ts";
 
 /** Resolved from this file, so the gate answers the same whatever the working directory is. */
-const REPO_ROOT = resolve(import.meta.dirname, "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const APPLICATION_YML = "server/application/src/main/resources/application.yml";
 /** The production topology. Both files together are one deployment, split by role. */
 const COMPOSE_FILES = ["docker/compose.app.yaml", "docker/compose.core.yaml"];
@@ -65,6 +65,11 @@ interface RoleScope {
  * readable everywhere, which is the safe default: it can only miss a check, never invent one.
  */
 const ROLE_SCOPES: readonly RoleScope[] = [
+	{
+		path: "hephaestus.release.check-enabled",
+		role: "server",
+		why: "ReleaseCheckService and ReleaseCheckClient are @ConditionalOnServerRole; RunningRelease, which reads the rest of hephaestus.release, is ungated",
+	},
 	{
 		path: "hephaestus.sandbox.docker",
 		role: "worker",
@@ -109,6 +114,16 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 		path: "hephaestus.integration.consumer",
 		role: "server",
 		why: "IntegrationNatsConsumer and IntegrationConsumerHealthIndicator are gated on hephaestus.runtime.server.enabled",
+	},
+	{
+		path: "spring.mail",
+		role: "server",
+		why: "EmailGateway and every notification listener are @ConditionalOnServerRole; the worker and webhook roles never open the relay",
+	},
+	{
+		path: "hephaestus.email",
+		role: "server",
+		why: "the sender identity is read by EmailGateway, which is @ConditionalOnServerRole",
 	},
 ];
 
@@ -189,27 +204,31 @@ export async function readProfileRoles(root = REPO_ROOT): Promise<ProfileRoles> 
 		try {
 			profileRoles.set(
 				profile,
-				readDisabledRoles(await readFile(join(root, PROFILE_YML(profile)), "utf8")),
+				readDisabledRoles(await readFile(path.join(root, PROFILE_YML(profile)), "utf8")),
 			);
 		} catch (error) {
-			if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+			if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+				throw error;
+			}
 		}
 	}
 	return profileRoles;
 }
 
 /** `${VAR:default}` — Spring's syntax. Stops at `$` so a nested placeholder is skipped, not misread. */
-const SPRING_PLACEHOLDER = /\$\{([A-Z0-9_]+):[^}$]*\}/;
+const SPRING_PLACEHOLDER = /\$\{(?<variable>[A-Z0-9_]+):[^}$]*\}/u;
 
 function yamlDocuments(text: string): unknown[] {
 	return parseAllDocuments(text, { merge: true }).map((document) => {
 		const error = document.errors[0];
-		if (error) throw error;
+		if (error) {
+			throw error;
+		}
 		return document.toJS() as unknown;
 	});
 }
 
-const unquote = (raw: string): string => raw.trim().replace(/^["']|["']$/g, "");
+const unquote = (raw: string): string => raw.trim().replaceAll(/^["']|["']$/gu, "");
 
 /**
  * `${VAR:-d}` and `${VAR-d}` fall back to `d`; a bare `${VAR}` resolves to the empty string, exactly
@@ -217,9 +236,11 @@ const unquote = (raw: string): string => raw.trim().replace(/^["']|["']$/g, "");
  */
 export function composeDefault(raw: string): string {
 	const value = unquote(raw);
-	const placeholder = /^\$\{[A-Z0-9_]+(?<dash>:?-)?(?<fallback>[^}]*)\}$/.exec(value);
-	if (!placeholder) return value;
-	const groups = placeholder.groups;
+	const placeholder = /^\$\{[A-Z0-9_]+(?<dash>:?-)?(?<fallback>[^}]*)\}$/u.exec(value);
+	if (!placeholder) {
+		return value;
+	}
+	const { groups } = placeholder;
 	return groups?.dash === undefined ? "" : (groups.fallback ?? "");
 }
 
@@ -229,24 +250,43 @@ interface ApplicationConfig {
 	readonly placeholders: ReadonlyMap<string, string>;
 }
 
+/**
+ * Only the `local` profile is developer-only. Production and role-specific overlays still describe
+ * the shipped deployment and must keep their environment forwarding checks.
+ */
+function activatesOnlyLocally(document: unknown): boolean {
+	if (!isRecord(document) || !isRecord(document.spring) || !isRecord(document.spring.config)) {
+		return false;
+	}
+	const { activate } = document.spring.config;
+	return isRecord(activate) && activate["on-profile"] === "local";
+}
+
 /** Every key path in `application.yml`, and the `${VAR}` placeholders the paths carry. */
 export function readApplicationConfig(text: string): ApplicationConfig {
 	const paths = new Set<string>();
 	const placeholders = new Map<string, string>();
 	const visit = (value: unknown, parent: readonly string[]): void => {
-		if (!isRecord(value)) return;
+		if (!isRecord(value)) {
+			return;
+		}
 		for (const [key, child] of Object.entries(value)) {
-			const path = [...parent, key];
-			const dotted = path.join(".");
+			const keyPath = [...parent, key];
+			const dotted = keyPath.join(".");
 			paths.add(dotted);
 			if (typeof child === "string") {
-				const variable = SPRING_PLACEHOLDER.exec(child)?.[1];
-				if (variable) placeholders.set(variable, dotted);
+				const variable = SPRING_PLACEHOLDER.exec(child)?.groups?.variable;
+				if (variable !== undefined) {
+					placeholders.set(variable, dotted);
+				}
 			}
-			visit(child, path);
+			visit(child, keyPath);
 		}
 	};
 	for (const document of yamlDocuments(text)) {
+		if (activatesOnlyLocally(document)) {
+			continue;
+		}
 		visit(document, []);
 	}
 	return { paths, placeholders };
@@ -270,19 +310,30 @@ export interface ComposeService {
  * the same environment; reading only the mapping would let the sequence form empty a service's
  * environment and pass. A sequence entry with no `=` inherits from the caller's shell, which this
  * gate deliberately does not read, so it delivers nothing here.
+ * @yields each delivered `[key, value]` pair, in file order.
  */
 function* environmentEntries(environment: unknown): Generator<readonly [string, string]> {
 	if (isRecord(environment)) {
 		for (const [key, value] of Object.entries(environment)) {
-			if (value === null) yield [key, ""];
-			else if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+			if (value === null) {
+				yield [key, ""];
+			} else if (
+				typeof value === "string" ||
+				typeof value === "number" ||
+				typeof value === "boolean"
+			) {
 				yield [key, `${value}`];
+			}
 		}
 		return;
 	}
-	if (!Array.isArray(environment)) return;
+	if (!Array.isArray(environment)) {
+		return;
+	}
 	for (const entry of environment) {
-		if (typeof entry !== "string") continue;
+		if (typeof entry !== "string") {
+			continue;
+		}
 		const separator = entry.indexOf("=");
 		yield separator === -1 ? [entry, ""] : [entry.slice(0, separator), entry.slice(separator + 1)];
 	}
@@ -295,10 +346,14 @@ function* environmentEntries(environment: unknown): Generator<readonly [string, 
 export function readComposeServices(text: string): Map<string, ComposeService> {
 	const services = new Map<string, ComposeService>();
 	const compose = parse(text, { merge: true }) as unknown;
-	if (!isRecord(compose) || !isRecord(compose.services)) return services;
+	if (!isRecord(compose) || !isRecord(compose.services)) {
+		return services;
+	}
 
 	for (const [name, value] of Object.entries(compose.services)) {
-		if (!isRecord(value)) continue;
+		if (!isRecord(value)) {
+			continue;
+		}
 		const service: ComposeService = {
 			name,
 			env: new Set(),
@@ -321,22 +376,30 @@ export function readComposeServices(text: string): Map<string, ComposeService> {
  * activates. The application defaults every role on, so silence means yes.
  */
 const runsRole = (service: ComposeService, role: Role, profileRoles: ProfileRoles): boolean => {
-	if (service.flags.get(ROLE_FLAGS[role]) === "false") return false;
+	if (service.flags.get(ROLE_FLAGS[role]) === "false") {
+		return false;
+	}
 	const profiles = (service.flags.get("SPRING_PROFILES_ACTIVE") ?? "")
 		.split(",")
 		.map((p) => p.trim());
-	return !profiles.some((profile) => profileRoles.get(profile)?.has(role));
+	return !profiles.some((profile) => profileRoles.get(profile)?.has(role) === true);
 };
 
 /** Roles an `application-<profile>.yml` overlay switches off. */
 export function readDisabledRoles(text: string): Set<string> {
 	const disabled = new Set<string>();
 	for (const document of yamlDocuments(text)) {
-		if (!isRecord(document) || !isRecord(document.hephaestus)) continue;
-		const runtime = document.hephaestus.runtime;
-		if (!isRecord(runtime)) continue;
+		if (!isRecord(document) || !isRecord(document.hephaestus)) {
+			continue;
+		}
+		const { runtime } = document.hephaestus;
+		if (!isRecord(runtime)) {
+			continue;
+		}
 		for (const [role, configuration] of Object.entries(runtime)) {
-			if (isRecord(configuration) && configuration.enabled === false) disabled.add(role);
+			if (isRecord(configuration) && configuration.enabled === false) {
+				disabled.add(role);
+			}
 		}
 	}
 	return disabled;
@@ -366,20 +429,219 @@ interface Analysis {
 	readonly applicationContainers: readonly string[];
 }
 
+/** Which role scope each placeholder variable binds; longest path first so a nested scope wins over its parent. */
+function variableOwnership(placeholders: ReadonlyMap<string, string>): Map<string, RoleScope> {
+	const scopeOrder = [...ROLE_SCOPES].toSorted((a, b) => b.path.length - a.path.length);
+	const ownership = new Map<string, RoleScope>();
+	for (const [variable, keyPath] of placeholders) {
+		const scope = scopeOrder.find((s) => keyPath === s.path || keyPath.startsWith(`${s.path}.`));
+		if (scope) {
+			ownership.set(variable, scope);
+		}
+	}
+	return ownership;
+}
+
+/** One Compose file's services, or why it could not be read; a YAML error is a failure, not a crash. */
+type ReadCompose = { services: Map<string, ComposeService> } | { error: string };
+
+function readDeployment(compose: readonly ComposeFile[]): Map<string, ReadCompose> {
+	const deployment = new Map<string, ReadCompose>();
+	for (const [label, text] of compose) {
+		try {
+			deployment.set(label, { services: readComposeServices(text) });
+		} catch (error) {
+			deployment.set(label, { error: error instanceof Error ? error.message : String(error) });
+		}
+	}
+	return deployment;
+}
+
+function composeFailures(deployment: ReadonlyMap<string, ReadCompose>): string[] {
+	const failures: string[] = [];
+	for (const [label, read] of deployment) {
+		if ("error" in read) {
+			failures.push(`${label} is not valid YAML: ${read.error}`);
+		} else if (read.services.size === 0) {
+			failures.push(
+				`${label} parsed to zero services, so every check below ran against nothing.\n` +
+					"  Either the file is not a Compose file or its shape has moved past what this script reads.",
+			);
+		}
+	}
+	return failures;
+}
+
+function collectDeliveries(
+	deployment: ReadonlyMap<string, ReadCompose>,
+	ownership: ReadonlyMap<string, RoleScope>,
+): { delivered: Map<string, DeliveredVariable>; applicationContainers: Delivery[] } {
+	const delivered = new Map<string, DeliveredVariable>();
+	const applicationContainers: Delivery[] = [];
+	for (const [label, read] of deployment) {
+		if ("error" in read) {
+			continue;
+		}
+		for (const [name, service] of read.services) {
+			const id = `${label}:${name}`;
+			if (service.image.includes(APPLICATION_IMAGE)) {
+				applicationContainers.push({ id, service });
+			}
+			for (const variable of service.env) {
+				const scope = ownership.get(variable);
+				if (!scope) {
+					continue;
+				}
+				const record = delivered.get(variable) ?? { scope, deliveries: [] };
+				delivered.set(variable, record);
+				record.deliveries.push({ id, service });
+			}
+		}
+	}
+	return { delivered, applicationContainers };
+}
+
+/** Variables set on a container that has switched off the role reading them. */
+function misdeliveredFailures(
+	delivered: ReadonlyMap<string, DeliveredVariable>,
+	profileRoles: ProfileRoles,
+): string[] {
+	const failures: string[] = [];
+	for (const [variable, { scope, deliveries }] of delivered) {
+		for (const { id, service } of deliveries) {
+			if (runsRole(service, scope.role, profileRoles)) {
+				continue;
+			}
+			failures.push(
+				`${id} sets ${variable}, and disables the ${scope.role} role that reads it.\n` +
+					`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
+					"  On this container those beans do not exist, so the variable configures nothing.\n" +
+					`  Move it to a service that runs the ${scope.role} role.`,
+			);
+		}
+	}
+	return failures;
+}
+
+/** Variables forwarded somewhere, but never to a container running the role that reads them. */
+function undeliveredFailures(
+	delivered: ReadonlyMap<string, DeliveredVariable>,
+	profileRoles: ProfileRoles,
+): string[] {
+	const failures: string[] = [];
+	for (const [variable, { scope, deliveries }] of delivered) {
+		if (deliveries.some(({ service }) => runsRole(service, scope.role, profileRoles))) {
+			continue;
+		}
+		failures.push(
+			`${variable} is forwarded by ${deliveries.map((d) => d.id).join(", ")}, but no service running the ${scope.role} role receives it.\n` +
+				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
+				"  Nothing in the deployment can read it, so it and anything documented around it are inert.",
+		);
+	}
+	return failures;
+}
+
+/** Placeholders the application offers that no service forwards. */
+function unforwardedFailures(
+	ownership: ReadonlyMap<string, RoleScope>,
+	delivered: ReadonlyMap<string, DeliveredVariable>,
+): string[] {
+	const failures: string[] = [];
+	for (const [variable, scope] of ownership) {
+		if (delivered.has(variable)) {
+			continue;
+		}
+		failures.push(
+			`${variable} is offered by ${APPLICATION_YML} but no service in the deployment forwards it.\n` +
+				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
+				"  The placeholder is what makes it an operator knob, so setting it in .env reaches nothing.\n" +
+				`  Forward it from a service that runs the ${scope.role} role, or drop the placeholder.`,
+		);
+	}
+	return failures;
+}
+
+/**
+ * Settings the application containers disagree on. Compared on the raw spelling rather than the
+ * resolved default, because two containers can both resolve to nothing and still be handed
+ * different values.
+ */
+function disagreementFailures(applicationContainers: readonly Delivery[]): string[] {
+	const failures: string[] = [];
+	const spellings = new Map<string, Map<string, string[]>>();
+	for (const { id, service } of applicationContainers) {
+		for (const [variable, value] of service.raw) {
+			if (PER_CONTAINER.has(variable)) {
+				continue;
+			}
+			const byValue = spellings.get(variable) ?? new Map<string, string[]>();
+			spellings.set(variable, byValue);
+			byValue.set(value, [...(byValue.get(value) ?? []), id]);
+		}
+	}
+	for (const [variable, byValue] of spellings) {
+		if (byValue.size < 2) {
+			continue;
+		}
+		const written = [...byValue]
+			.map(([value, ids]) => `    ${value === "" ? "<nothing>" : value}\n      ${ids.join(", ")}`)
+			.join("\n");
+		failures.push(
+			`Containers running the application image disagree on ${variable}:\n${written}\n` +
+				"  No runtime role gates this setting, so every one of them reads it and they cannot both\n" +
+				"  be describing the same deployment.\n" +
+				`  Give them one value, or name ${variable} in PER_CONTAINER with the reason it differs.`,
+		);
+	}
+	return failures;
+}
+
+/**
+ * Deployment-wide settings an application container omits. The disagreement check sees only
+ * containers that mention the key, so an absence has to be checked separately: the container that
+ * omits it reads the application default instead.
+ */
+function omissionFailures(
+	applicationContainers: readonly Delivery[],
+	paths: ReadonlySet<string>,
+): string[] {
+	const failures: string[] = [];
+	for (const { variable, path: keyPath, why } of DEPLOYMENT_WIDE) {
+		if (!paths.has(keyPath)) {
+			failures.push(
+				`DEPLOYMENT_WIDE declares "${keyPath}" (${variable}), which ${APPLICATION_YML} does not have.\n` +
+					"  Point it at wherever the setting moved, or drop the entry — as written it checks nothing.",
+			);
+			continue;
+		}
+		const missing = applicationContainers.filter(({ service }) => !service.env.has(variable));
+		if (missing.length === 0) {
+			continue;
+		}
+		const listed = missing.map(({ id }) => `    ${id}`).join("\n");
+		failures.push(
+			missing.length === applicationContainers.length
+				? `${variable} binds ${keyPath}, and no container running the application image is given it.\n` +
+						`  ${why}.\n` +
+						"  Every one of them reads it, so the deployment has nowhere to get the value from."
+				: `${variable} binds ${keyPath}, and these containers run the application image without it:\n${listed}\n` +
+						`  ${why}.\n` +
+						"  The setting is not gated on a runtime role, so leaving it off one container does not\n" +
+						"  scope it — that container falls back to the application default and reads a different\n" +
+						"  deployment than its siblings.",
+		);
+	}
+	return failures;
+}
+
 export function analyse(
 	applicationText: string,
 	compose: readonly ComposeFile[],
 	profileRoles: ProfileRoles = new Map(),
 ): Analysis {
 	const { paths, placeholders } = readApplicationConfig(applicationText);
-
-	// Longest path first so a nested scope wins over its parent.
-	const scopeOrder = [...ROLE_SCOPES].toSorted((a, b) => b.path.length - a.path.length);
-	const ownership = new Map<string, RoleScope>();
-	for (const [variable, path] of placeholders) {
-		const scope = scopeOrder.find((s) => path === s.path || path.startsWith(`${s.path}.`));
-		if (scope) ownership.set(variable, scope);
-	}
+	const ownership = variableOwnership(placeholders);
 
 	const failures: string[] = [];
 	for (const scope of ROLE_SCOPES) {
@@ -391,132 +653,35 @@ export function analyse(
 		}
 	}
 
-	const delivered = new Map<string, DeliveredVariable>();
-	const applicationContainers: Delivery[] = [];
-	for (const [label, text] of compose) {
-		let services: Map<string, ComposeService>;
-		try {
-			services = readComposeServices(text);
-		} catch (error) {
-			// Only here is the file's name known, so a YAML error is reported the way every other
-			// failure in this list is rather than ending the run as an unlabelled stack trace.
-			failures.push(
-				`${label} is not valid YAML: ${error instanceof Error ? error.message : String(error)}`,
-			);
-			continue;
-		}
-		if (services.size === 0) {
-			failures.push(
-				`${label} parsed to zero services, so every check below ran against nothing.\n` +
-					"  Either the file is not a Compose file or its shape has moved past what this script reads.",
-			);
-		}
-		for (const [name, service] of services) {
-			const id = `${label}:${name}`;
-			if (service.image.includes(APPLICATION_IMAGE)) applicationContainers.push({ id, service });
-			for (const variable of service.env) {
-				const scope = ownership.get(variable);
-				if (!scope) continue;
-				const record = delivered.get(variable) ?? { scope, deliveries: [] };
-				delivered.set(variable, record);
-				record.deliveries.push({ id, service });
-				if (!runsRole(service, scope.role, profileRoles)) {
-					failures.push(
-						`${id} sets ${variable}, and disables the ${scope.role} role that reads it.\n` +
-							`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
-							"  On this container those beans do not exist, so the variable configures nothing.\n" +
-							`  Move it to a service that runs the ${scope.role} role.`,
-					);
-				}
-			}
-		}
-	}
-
-	for (const [variable, { scope, deliveries }] of delivered) {
-		if (deliveries.some(({ service }) => runsRole(service, scope.role, profileRoles))) continue;
-		failures.push(
-			`${variable} is forwarded by ${deliveries.map((d) => d.id).join(", ")}, but no service running the ${scope.role} role receives it.\n` +
-				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
-				"  Nothing in the deployment can read it, so it and anything documented around it are inert.",
-		);
-	}
-
-	for (const [variable, scope] of ownership) {
-		if (delivered.has(variable)) continue;
-		failures.push(
-			`${variable} is offered by ${APPLICATION_YML} but no service in the deployment forwards it.\n` +
-				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
-				"  The placeholder is what makes it an operator knob, so setting it in .env reaches nothing.\n" +
-				`  Forward it from a service that runs the ${scope.role} role, or drop the placeholder.`,
-		);
-	}
-
-	// disagreed. Compared on the raw spelling rather than the resolved default, because two
-	// containers can both resolve to nothing and still be handed different values.
-	const spellings = new Map<string, Map<string, string[]>>();
-	for (const { id, service } of applicationContainers) {
-		for (const [variable, value] of service.raw) {
-			if (PER_CONTAINER.has(variable)) continue;
-			const byValue = spellings.get(variable) ?? new Map<string, string[]>();
-			spellings.set(variable, byValue);
-			byValue.set(value, [...(byValue.get(value) ?? []), id]);
-		}
-	}
-	for (const [variable, byValue] of spellings) {
-		if (byValue.size < 2) continue;
-		const written = [...byValue]
-			.map(([value, ids]) => `    ${value === "" ? "<nothing>" : value}\n      ${ids.join(", ")}`)
-			.join("\n");
-		failures.push(
-			`Containers running the application image disagree on ${variable}:\n${written}\n` +
-				"  No runtime role gates this setting, so every one of them reads it and they cannot both\n" +
-				"  be describing the same deployment.\n" +
-				`  Give them one value, or name ${variable} in PER_CONTAINER with the reason it differs.`,
-		);
-	}
-
-	// omitted. The loop above sees only containers that mention the key, so an absence has to be
-	// checked separately: the container that omits it reads the application default instead.
-	for (const { variable, path, why } of DEPLOYMENT_WIDE) {
-		if (!paths.has(path)) {
-			failures.push(
-				`DEPLOYMENT_WIDE declares "${path}" (${variable}), which ${APPLICATION_YML} does not have.\n` +
-					"  Point it at wherever the setting moved, or drop the entry — as written it checks nothing.",
-			);
-			continue;
-		}
-		const missing = applicationContainers.filter(({ service }) => !service.env.has(variable));
-		if (missing.length === 0) continue;
-		const listed = missing.map(({ id }) => `    ${id}`).join("\n");
-		failures.push(
-			missing.length === applicationContainers.length
-				? `${variable} binds ${path}, and no container running the application image is given it.\n` +
-						`  ${why}.\n` +
-						"  Every one of them reads it, so the deployment has nowhere to get the value from."
-				: `${variable} binds ${path}, and these containers run the application image without it:\n${listed}\n` +
-						`  ${why}.\n` +
-						"  The setting is not gated on a runtime role, so leaving it off one container does not\n" +
-						"  scope it — that container falls back to the application default and reads a different\n" +
-						"  deployment than its siblings.",
-		);
-	}
+	const deployment = readDeployment(compose);
+	const { delivered, applicationContainers } = collectDeliveries(deployment, ownership);
+	failures.push(
+		...composeFailures(deployment),
+		...misdeliveredFailures(delivered, profileRoles),
+		...undeliveredFailures(delivered, profileRoles),
+		...unforwardedFailures(ownership, delivered),
+		...disagreementFailures(applicationContainers),
+		...omissionFailures(applicationContainers, paths),
+	);
 
 	return { failures, delivered, applicationContainers: applicationContainers.map((c) => c.id) };
 }
 
-if (process.argv[1] === import.meta.filename) {
+if (import.meta.main) {
 	const compose: ComposeFile[] = [];
 	for (const file of COMPOSE_FILES) {
-		compose.push([file, await readFile(join(REPO_ROOT, file), "utf8")]);
+		compose.push([file, await readFile(path.join(REPO_ROOT, file), "utf8")]);
 	}
 	const profileRoles = await readProfileRoles();
 	const { failures, delivered, applicationContainers } = analyse(
-		await readFile(join(REPO_ROOT, APPLICATION_YML), "utf8"),
+		await readFile(path.join(REPO_ROOT, APPLICATION_YML), "utf8"),
 		compose,
 		profileRoles,
 	);
 	if (failures.length > 0) {
-		for (const failure of failures) console.error(`${failure}\n`);
+		for (const failure of failures) {
+			console.error(`${failure}\n`);
+		}
 		process.exit(1);
 	}
 	console.log(

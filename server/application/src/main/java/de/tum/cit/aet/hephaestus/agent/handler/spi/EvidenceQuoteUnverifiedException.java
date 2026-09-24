@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler.spi;
 
+import java.io.Serial;
+
 /**
  * An observation quoted evidence that does not appear where it said the evidence was.
  *
@@ -11,7 +13,17 @@ package de.tum.cit.aet.hephaestus.agent.handler.spi;
  */
 public class EvidenceQuoteUnverifiedException extends JobDeliveryException {
 
-    public EvidenceQuoteUnverifiedException(String message) {
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    private final int citationIndex;
+
+    public EvidenceQuoteUnverifiedException(String message, int citationIndex) {
         super(message);
+        this.citationIndex = citationIndex;
+    }
+
+    public int citationIndex() {
+        return citationIndex;
     }
 }

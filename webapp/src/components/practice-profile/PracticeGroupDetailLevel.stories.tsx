@@ -2,8 +2,9 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import type { PracticeGroup } from "@/api/types.gen";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { withPageBehind } from "@/stories/decorators";
+import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
 import { detailPractices } from "@/stories/practice-detail-story-mock-data";
 import { ALL_FEEDBACK_CARDS } from "@/stories/practice-feedback-cards-story-mock-data";
 import {
@@ -11,9 +12,8 @@ import {
 	packagingGroup,
 	packagingStanding,
 } from "@/stories/practice-profile-story-mock-data";
+import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { expectSettledVisible, settledDrawerPanel } from "@/test/overlay";
-import { expectNoPanelOverflow } from "@/test/reflow";
 
 import { composeNextStep, composeOverview, groupOverviewOf } from "./compose-overview";
 import { PracticeGroupDetailLevel } from "./PracticeGroupDetailLevel";
@@ -28,7 +28,6 @@ const groupOverview = (groupSlug: string) => ({
  * The level has no page of its own, so every story mounts a real drawer over a real page.
  */
 const meta = {
-	title: "Practice profile/Practice group detail level",
 	component: PracticeGroupDetailLevel,
 	parameters: { layout: "fullscreen" },
 	decorators: [withPageBehind],
@@ -97,7 +96,7 @@ export const Default: Story = {
 		await expect(summary).toBeVisible();
 		await expect(summary.closest("[data-slot='drawer-header']")).not.toBeNull();
 		await expect(screen.getByText("Next step")).toBeVisible();
-		const nextStep = screen.getByText(/That is the open next step on/);
+		const nextStep = screen.getByText(/That is the open next step on/u);
 		await expect(nextStep).toBeVisible();
 		// The practice the next step names, and each practice in the table, is the grey pill.
 		await expect(
@@ -112,10 +111,10 @@ export const Default: Story = {
 			"true",
 		);
 		await expect(screen.getByRole("tab", { name: "About this group" })).toBeVisible();
-		await expect(screen.queryByText(/one concern per change/)).not.toBeInTheDocument();
+		await expect(screen.queryByText(/one concern per change/u)).not.toBeInTheDocument();
 		// One practice carries a sentence under its pill, its clean work linked; the others show only
 		// the pill.
-		await expect(screen.getByText(/^Feedback resolved by the work after/)).toBeVisible();
+		await expect(screen.getByText(/^Feedback resolved by the work after/u)).toBeVisible();
 		await expect(screen.queryByText("Suggested next step")).not.toBeInTheDocument();
 		await userEvent.click(screen.getByRole("button", { name: "Open Keep changes focused" }));
 		await expect(args.onOpenPractice).toHaveBeenCalledWith("small-changes");
@@ -145,8 +144,8 @@ export const AboutTab: Story = {
 		// The badge and the chip are printed beside their sentences, so neither is a tooltip's trigger.
 		await expect(within(stand).queryByRole("button")).toBeNull();
 		await expect(screen.getByRole("heading", { name: "About this group" })).toBeVisible();
-		await expect(screen.getByText(/one concern per change/)).toBeVisible();
-		await waitFor(() =>
+		await expect(screen.getByText(/one concern per change/u)).toBeVisible();
+		await waitFor(async () =>
 			expect(
 				screen.queryByRole("table", { name: "Practices in this group" }),
 			).not.toBeInTheDocument(),
@@ -164,7 +163,7 @@ export const Sorting: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByText("Practices in this group"));
 		const names = () =>
-			practiceRows().map((row) => within(row).getByRole("button", { name: /^Open / }).textContent);
+			practiceRows().map((row) => within(row).getByRole("button", { name: /^Open /u }).textContent);
 		await expect(practiceRows()).toHaveLength(3);
 		const standing = screen.getByRole("button", { name: "Standing" });
 		await expect(standing.closest("th")).toHaveAttribute("aria-sort", "ascending");
@@ -226,7 +225,7 @@ export const NoPractices: Story = {
 		await expect(
 			within(stand).getByText("No practice in this group has a current verdict for you."),
 		).toBeVisible();
-		await expect(within(stand).queryByText(/^Of /)).toBeNull();
+		await expect(within(stand).queryByText(/^Of /u)).toBeNull();
 		// The header's chip is the only one: no direction is claimed over no verdict.
 		await expect(screen.getAllByText("Not enough to compare yet")).toHaveLength(1);
 	},
@@ -240,7 +239,7 @@ export const OpenPracticeRow: Story = {
 	args: { openPracticeSlug: "small-changes" },
 	play: async () => {
 		await expectSettledVisible(await screen.findByText("Practices in this group"));
-		const openRows = practiceRows().filter((row) => row.getAttribute("data-state") === "open");
+		const openRows = practiceRows().filter((row) => row.dataset.state === "open");
 		await expect(openRows).toHaveLength(1);
 		await expect(openRows[0]).toHaveTextContent("Keep changes focused");
 		await expect(openRows[0]).toHaveClass("data-[state=open]:[&>td:first-child]:before:bg-mentor");

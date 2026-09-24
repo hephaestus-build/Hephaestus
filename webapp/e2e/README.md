@@ -36,3 +36,11 @@ E2E_LIVE_USERNAME=e2e E2E_GITHUB_WORKSPACE=github-workspace \
 ```
 
 Set `E2E_MUTATE_LIVE_INTEGRATIONS=true` as well to run the provider-sync mutation test.
+
+## Reading the result
+
+The coverage reporter prints actual test outcomes and lists every selected live-provider check and
+skipped test with its skip reason. CI also appends this report to the job summary. A skipped check
+is not a pass; the ordinary packaged-server suite does not prove that live GitHub or GitLab
+integrations are healthy. A filtered run explicitly says when no live-provider checks were selected.
+The reporter does not enable tests, install credentials, or opt into mutations.

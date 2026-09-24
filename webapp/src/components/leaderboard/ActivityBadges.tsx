@@ -1,9 +1,9 @@
 import { ChevronLeftIcon } from "@primer/octicons-react";
 
+import { cn } from "cn";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { ProviderType } from "@/lib/provider";
-import { cn } from "@/lib/utils";
+import type { ProviderType } from "@/lib/provider/provider-terms";
 
 import {
 	type ActivityBadgeKey,
@@ -27,11 +27,13 @@ export interface ActivityBadgesProps {
 	highlightReviews?: boolean;
 	className?: string;
 	isLoading?: boolean;
-	providerType?: ProviderType;
+	providerType: ProviderType;
 }
 
+const NO_PULL_REQUESTS: readonly ReviewedPullRequest[] = [];
+
 export function ActivityBadges({
-	reviewedPullRequests = [],
+	reviewedPullRequests = NO_PULL_REQUESTS,
 	changeRequests,
 	approvals,
 	comments,
@@ -45,7 +47,7 @@ export function ActivityBadges({
 	highlightReviews = false,
 	className,
 	isLoading = false,
-	providerType = "GITHUB",
+	providerType,
 }: ActivityBadgesProps) {
 	const counts: Record<ActivityBadgeKey, number> = {
 		changeRequests,
@@ -68,13 +70,15 @@ export function ActivityBadges({
 
 	const hasActivity = hasScoredActivity || hasVisibleOnlyActivity;
 
-	if (!hasActivity && !isLoading) return null;
+	if (!hasActivity && !isLoading) {
+		return null;
+	}
 
 	if (isLoading) {
 		return (
 			<div className={cn("flex items-center gap-2", className)}>
-				{[40, 15, 25, 35, 30, 30, 30].map((width, index) => (
-					<Skeleton key={`activity-badge-skeleton-${index}`} className="h-4" style={{ width }} />
+				{["w-10", "w-4", "w-6", "w-9", "w-8", "w-8", "w-8"].map((width, index) => (
+					<Skeleton key={`activity-badge-skeleton-${index}`} className={cn("h-4", width)} />
 				))}
 			</div>
 		);
@@ -116,7 +120,9 @@ interface ActivityBadgeItemProps {
 }
 
 function ActivityBadgeItem({ item, count }: ActivityBadgeItemProps) {
-	if (count <= 0) return null;
+	if (count <= 0) {
+		return null;
+	}
 
 	const Icon = item.icon;
 

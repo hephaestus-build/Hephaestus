@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.jwt;
 
+import static de.tum.cit.aet.hephaestus.testconfig.TestSystemEncryptionKeys.systemKey;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
@@ -40,7 +41,7 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
 
     @Test
     void generatedSealedKey_roundTripsThroughDbLoad() {
-        JwtSigningKeySealer sealer = new JwtSigningKeySealer(KEY, "dev");
+        JwtSigningKeySealer sealer = new JwtSigningKeySealer(systemKey(KEY, "dev"));
         assertThat(sealer.isEnabled()).isTrue();
 
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
@@ -74,7 +75,7 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
 
     @Test
     void disabledSealer_storesUnsealedAndStillLoads() {
-        JwtSigningKeySealer sealer = new JwtSigningKeySealer((String) null, "dev"); // disabled
+        JwtSigningKeySealer sealer = new JwtSigningKeySealer(systemKey(null, "dev")); // disabled
         assertThat(sealer.isEnabled()).isFalse();
 
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
@@ -97,7 +98,7 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
         // A legacy v0-unsealed row must fail closed at both the startup assertion and the signing path.
         // ensureActiveKey() is intentionally NOT the guard here: it runs inside AuthJwtConfig's
         // swallowing @PostConstruct, so making it the guard would be inert — the exact bug this pins.
-        JwtSigningKeySealer sealer = new JwtSigningKeySealer(KEY, "prod");
+        JwtSigningKeySealer sealer = new JwtSigningKeySealer(systemKey(KEY, "prod"));
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
 
         JwtSigningKey legacy = new JwtSigningKey();
@@ -124,7 +125,7 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
         // insert outside the lock or drop the re-check (the load-bearing step countByActiveTrue's
         // Javadoc calls out). Postgres owns the cross-pod semantics of pg_advisory_xact_lock; this pins
         // OUR sequence around it.
-        JwtSigningKeySealer sealer = new JwtSigningKeySealer(KEY, "dev");
+        JwtSigningKeySealer sealer = new JwtSigningKeySealer(systemKey(KEY, "dev"));
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
         when(repo.countByActiveTrue()).thenReturn(0L); // empty before AND after the lock
         when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -143,7 +144,7 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
         // Two pods race past the unlocked fast path (both see 0). The loser blocks on the advisory lock;
         // by the time it acquires it, the winner has committed a key. The post-lock re-check must see
         // that key and SKIP the insert — otherwise the cluster mints two active signing identities.
-        JwtSigningKeySealer sealer = new JwtSigningKeySealer(KEY, "dev");
+        JwtSigningKeySealer sealer = new JwtSigningKeySealer(systemKey(KEY, "dev"));
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
         // 0 at the fast path, then 1 after acquiring the lock (the winner inserted while we waited).
         when(repo.countByActiveTrue()).thenReturn(0L).thenReturn(1L);
@@ -158,7 +159,7 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
     void warmBoot_skipsTheAdvisoryLockEntirely() {
         // The overwhelmingly common path: a key already exists, so the cheap unlocked read short-circuits
         // and the bootstrap lock is never taken (it would needlessly serialize every warm boot).
-        JwtSigningKeySealer sealer = new JwtSigningKeySealer(KEY, "dev");
+        JwtSigningKeySealer sealer = new JwtSigningKeySealer(systemKey(KEY, "dev"));
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
         when(repo.countByActiveTrue()).thenReturn(1L);
 
@@ -170,7 +171,7 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
 
     @Test
     void prod_emptyTable_bootstrapsSealedKey() {
-        JwtSigningKeySealer sealer = new JwtSigningKeySealer(KEY, "prod");
+        JwtSigningKeySealer sealer = new JwtSigningKeySealer(systemKey(KEY, "prod"));
         JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
         when(repo.countByActiveTrue()).thenReturn(0L);
         ArgumentCaptor<JwtSigningKey> saved = ArgumentCaptor.forClass(JwtSigningKey.class);

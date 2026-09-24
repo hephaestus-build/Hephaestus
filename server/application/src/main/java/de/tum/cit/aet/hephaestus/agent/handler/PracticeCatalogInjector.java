@@ -20,12 +20,10 @@ import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -49,6 +47,15 @@ class PracticeCatalogInjector {
 
     /** Job-metadata key naming the signal that occasioned the review. */
     static final String SIGNAL_METADATA_KEY = "signal";
+
+    /** Job-metadata key: whether the work was a draft when the signal occasioned the review. */
+    static final String DRAFT_METADATA_KEY = "draft";
+
+    /** The author of the reviewed pull request, so a MERGER practice can tell whether the author merged. */
+    static final String AUTHOR_ID_METADATA_KEY = "author_id";
+
+    /** Who merged the reviewed pull request; absent until it is merged. */
+    static final String MERGED_BY_ID_METADATA_KEY = "merged_by_id";
 
     private static final Logger log = LoggerFactory.getLogger(PracticeCatalogInjector.class);
 
@@ -93,7 +100,6 @@ class PracticeCatalogInjector {
             }
         }
         ArrayNode index = objectMapper.createArrayNode();
-        StringBuilder bundle = new StringBuilder();
         Map<String, String> why = new LinkedHashMap<>();
         revisions.values().stream()
                 .sorted(Comparator.comparing(PracticeRevision::getSlug))
@@ -106,11 +112,6 @@ class PracticeCatalogInjector {
                     files.put(
                             SandboxLayout.PRACTICES_PREFIX + revision.getSlug() + ".md",
                             criteria.getBytes(StandardCharsets.UTF_8));
-                    bundle.append("# ")
-                            .append(revision.getSlug())
-                            .append("\n\n")
-                            .append(criteria)
-                            .append("\n\n---\n\n");
                     if (revision.getWhyItMatters() != null
                             && !revision.getWhyItMatters().isBlank()) {
                         why.put(revision.getSlug(), revision.getWhyItMatters());
@@ -121,27 +122,7 @@ class PracticeCatalogInjector {
         } catch (JacksonException e) {
             throw new JobPreparationException("Failed to serialize composition practice index: " + e.getMessage(), e);
         }
-        files.put(
-                SandboxLayout.PRACTICES_PREFIX + "all-criteria.md",
-                bundle.toString().getBytes(StandardCharsets.UTF_8));
         return Map.copyOf(why);
-    }
-
-    /**
-     * The slugs of {@code focus}-scoped active practices that declare {@code DEFECT-DETECTOR DISCIPLINE} in
-     * their criteria — i.e. practices with no legal {@code (PRESENT, GOOD)} clean-bill-of-health observation
-     * (a clean surface is {@code NOT_APPLICABLE}, never a good reading). The delivery layer uses this to coerce
-     * a model-emitted {@code (PRESENT, GOOD)} to {@code NOT_APPLICABLE} before it ships to the student as a
-     * false strength (see {@code ValidatedObservation#coerceCoherence}).
-     */
-    Set<String> defectDetectorSlugs(AgentJob job) {
-        Set<String> slugs = new HashSet<>();
-        for (JsonNode practice : admittedPractices(job)) {
-            if (practice.path("defectDetector").asBoolean(false)) {
-                slugs.add(practice.path("slug").asString());
-            }
-        }
-        return Set.copyOf(slugs);
     }
 
     private static JsonNode admittedPractices(AgentJob job) {
@@ -202,8 +183,10 @@ class PracticeCatalogInjector {
                 .toList();
         SignalName signal = signalOf(job);
         if (signal != null) {
+            boolean draft = job.getMetadata() != null
+                    && job.getMetadata().path(DRAFT_METADATA_KEY).asBoolean(false);
             practices = practices.stream()
-                    .filter(p -> p.getBindings().stream().anyMatch(binding -> binding.matches(signal)))
+                    .filter(p -> p.getBindings().stream().anyMatch(binding -> binding.occasionedBy(signal, draft)))
                     .toList();
         }
         practices = practices.stream().filter(p -> attributable(p, signal, job)).toList();
@@ -226,14 +209,7 @@ class PracticeCatalogInjector {
 
     private boolean attributable(Practice practice, @Nullable SignalName signal, AgentJob job) {
         ActorRole subject = PracticeBinding.subjectRoleOf(practice.getBindings(), signal);
-        JsonNode metadata = job.getMetadata();
-        boolean reviewerRun = metadata != null
-                && metadata.path("about_user_id").isNumber()
-                && "REVIEWER".equals(metadata.path("subject_role").asString());
-        if (subject == ActorRole.AUTHOR) {
-            return !reviewerRun;
-        }
-        if (subject == ActorRole.REVIEWER && reviewerRun) {
+        if (subjectNameable(subject, job.getMetadata())) {
             return true;
         }
         log.debug(
@@ -242,6 +218,30 @@ class PracticeCatalogInjector {
                 practice.getSlug(),
                 job.getId());
         return false;
+    }
+
+    /**
+     * Whether a review job can name the person a practice's subject refers to. An author run names the
+     * author; a reviewer run names the reviewer it is about; a MERGER practice is nameable in an author
+     * run only when the author is the one who merged — otherwise the lapse would be filed against a
+     * person who did not act, and the practice is withheld instead. Delivery applies the same rule.
+     */
+    static boolean subjectNameable(ActorRole subject, @Nullable JsonNode metadata) {
+        boolean reviewerRun = metadata != null
+                && metadata.path("about_user_id").isNumber()
+                && "REVIEWER".equals(metadata.path("subject_role").asString());
+        return switch (subject) {
+            case AUTHOR -> !reviewerRun;
+            case REVIEWER -> reviewerRun;
+            case MERGER ->
+                !reviewerRun
+                        && metadata != null
+                        && metadata.path(MERGED_BY_ID_METADATA_KEY).isNumber()
+                        && metadata.path(AUTHOR_ID_METADATA_KEY).isNumber()
+                        && metadata.path(MERGED_BY_ID_METADATA_KEY).asLong()
+                                == metadata.path(AUTHOR_ID_METADATA_KEY).asLong();
+            case ASSIGNEE -> false;
+        };
     }
 
     void inject(Map<String, byte[]> files, AgentJob job, ArtifactKind focus, List<Practice> practices) {
@@ -261,7 +261,6 @@ class PracticeCatalogInjector {
                 throw new JobPreparationException("Practice has no current revision: " + p.getSlug());
             }
             entry.put("revisionId", p.getCurrentRevision().getId());
-            entry.put("defectDetector", p.isDefectDetector());
             // A pointer, not a fence: what may be CITED is what the run staged (inputs/manifest.json), so
             // reading beyond this list is expected, not a violation.
             ArrayNode readsSources = entry.putArray("readsSources");
@@ -286,19 +285,10 @@ class PracticeCatalogInjector {
             throw new JobPreparationException("Failed to serialize practice index.json: " + e.getMessage(), e);
         }
 
-        StringBuilder bundle = new StringBuilder();
         for (Practice p : practices) {
             String criteria = p.getCriteria() + renderKnownLimitations(p);
             files.put(SandboxLayout.PRACTICES_PREFIX + p.getSlug() + ".md", criteria.getBytes(StandardCharsets.UTF_8));
-            bundle.append("# ")
-                    .append(p.getSlug())
-                    .append("\n\n")
-                    .append(criteria)
-                    .append("\n\n---\n\n");
         }
-        files.put(
-                SandboxLayout.PRACTICES_PREFIX + "all-criteria.md",
-                bundle.toString().getBytes(StandardCharsets.UTF_8));
 
         files.put(SandboxLayout.ANALYSIS_PRACTICES_PREFIX + ".gitkeep", new byte[0]);
 

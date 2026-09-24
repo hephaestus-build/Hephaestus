@@ -42,21 +42,72 @@ class SandboxReconcilerTest extends BaseUnitTest {
     /** Older than the grace window, so a fixture is reapable unless it opts out. */
     private static final Instant LONG_AGO = NOW.minus(Duration.ofDays(1));
 
+    @Mock
+    private DockerVolumeOperations volumes;
+
     private SandboxReconciler reconciler;
     private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
+        lenient().when(networkManager.networkPrefix()).thenReturn("hephaestus-sandbox-default--");
         meterRegistry = new SimpleMeterRegistry();
         reconciler = new SandboxReconciler(
-                jobRepository, containerManager, networkManager, meterRegistry, Clock.fixed(NOW, ZoneOffset.UTC));
+                jobRepository,
+                containerManager,
+                networkManager,
+                new SandboxVolumeManager(
+                        volumes,
+                        new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default")),
+                meterRegistry,
+                Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    @Test
+    void shouldRemoveOnlyAbandonedAttemptVolumesAfterTheCreationGrace() {
+        UUID active = UUID.randomUUID();
+        UUID orphan = UUID.randomUUID();
+        UUID starting = UUID.randomUUID();
+        var job = new AgentJob();
+        job.setId(active);
+        when(jobRepository.findByStatusIn(any())).thenReturn(List.of(job));
+        when(containerManager.listManagedContainers()).thenReturn(List.of());
+        when(volumes.listVolumes(any()))
+                .thenReturn(List.of(
+                        new DockerOperations.VolumeInfo(
+                                "active",
+                                Map.of(
+                                        SandboxLabels.JOB_ID,
+                                        active.toString(),
+                                        SandboxLabels.CREATED_AT,
+                                        LONG_AGO.toString())),
+                        new DockerOperations.VolumeInfo(
+                                "orphan",
+                                Map.of(
+                                        SandboxLabels.JOB_ID,
+                                        orphan.toString(),
+                                        SandboxLabels.CREATED_AT,
+                                        LONG_AGO.toString())),
+                        new DockerOperations.VolumeInfo(
+                                "starting",
+                                Map.of(
+                                        SandboxLabels.JOB_ID,
+                                        starting.toString(),
+                                        SandboxLabels.CREATED_AT,
+                                        NOW.toString()))));
+
+        reconciler.onStartup();
+
+        verify(volumes).removeVolume("orphan");
+        verify(volumes, never()).removeVolume("active");
+        verify(volumes, never()).removeVolume("starting");
     }
 
     private static DockerOperations.ContainerInfo container(String id, UUID jobId, @Nullable Instant createdAt) {
         return new DockerOperations.ContainerInfo(
                 id,
                 "test",
-                Map.of(SandboxLabels.MANAGED, "true", SandboxLabels.JOB_ID, jobId.toString()),
+                Map.of(SandboxLabels.OWNER, "default", SandboxLabels.JOB_ID, jobId.toString()),
                 "running",
                 createdAt);
     }
@@ -66,8 +117,8 @@ class SandboxReconcilerTest extends BaseUnitTest {
                 id,
                 "test",
                 Map.of(
-                        SandboxLabels.MANAGED,
-                        "true",
+                        SandboxLabels.OWNER,
+                        "default",
                         SandboxLabels.KIND,
                         SandboxLabels.KIND_INTERACTIVE,
                         SandboxLabels.SESSION_ID,
@@ -105,12 +156,13 @@ class SandboxReconcilerTest extends BaseUnitTest {
             when(containerManager.listManagedContainers())
                     .thenReturn(List.of(container("orphaned-ctr", orphanedJobId, LONG_AGO)));
             when(networkManager.listOrphanedNetworks())
-                    .thenReturn(List.of(new DockerOperations.NetworkInfo("net-1", "agent-net-" + orphanedJobId)));
+                    .thenReturn(List.of(
+                            new DockerOperations.NetworkInfo("net-1", "hephaestus-sandbox-default--" + orphanedJobId)));
 
             reconciler.onStartup();
 
             verify(containerManager).forceRemove("orphaned-ctr");
-            verify(networkManager).forceRemoveNetwork("net-1", "agent-net-" + orphanedJobId);
+            verify(networkManager).forceRemoveNetwork("net-1", "hephaestus-sandbox-default--" + orphanedJobId);
         }
 
         @Test
@@ -198,11 +250,12 @@ class SandboxReconcilerTest extends BaseUnitTest {
             when(containerManager.listManagedContainers()).thenReturn(List.of());
 
             when(networkManager.listOrphanedNetworks())
-                    .thenReturn(List.of(new DockerOperations.NetworkInfo(networkId, "agent-net-" + orphanedJobId)));
+                    .thenReturn(List.of(new DockerOperations.NetworkInfo(
+                            networkId, "hephaestus-sandbox-default--" + orphanedJobId)));
 
             reconciler.periodicReconciliation();
 
-            verify(networkManager).forceRemoveNetwork(networkId, "agent-net-" + orphanedJobId);
+            verify(networkManager).forceRemoveNetwork(networkId, "hephaestus-sandbox-default--" + orphanedJobId);
             assertThat(meterRegistry
                             .counter("sandbox.reconciler.orphaned", "resource", "network")
                             .count())
@@ -238,8 +291,8 @@ class SandboxReconcilerTest extends BaseUnitTest {
             // Orphaned by the job set alone; only the unreadable inventory can spare it.
             lenient()
                     .when(networkManager.listOrphanedNetworks())
-                    .thenReturn(
-                            List.of(new DockerOperations.NetworkInfo("net-live", "agent-net-" + UUID.randomUUID())));
+                    .thenReturn(List.of(new DockerOperations.NetworkInfo(
+                            "net-live", "hephaestus-sandbox-default--" + UUID.randomUUID())));
 
             reconciler.periodicReconciliation();
 
@@ -262,7 +315,8 @@ class SandboxReconcilerTest extends BaseUnitTest {
                     .thenReturn(List.of(container("ctr-live", jobId, LONG_AGO)));
             lenient()
                     .when(networkManager.listOrphanedNetworks())
-                    .thenReturn(List.of(new DockerOperations.NetworkInfo("net-live", "agent-net-" + jobId)));
+                    .thenReturn(List.of(
+                            new DockerOperations.NetworkInfo("net-live", "hephaestus-sandbox-default--" + jobId)));
 
             reconciler.periodicReconciliation();
 
@@ -318,7 +372,8 @@ class SandboxReconcilerTest extends BaseUnitTest {
             when(containerManager.listManagedContainers())
                     .thenReturn(List.of(mentorContainer("ctr-mentor", sessionId)));
             when(networkManager.listOrphanedNetworks())
-                    .thenReturn(List.of(new DockerOperations.NetworkInfo("net-mentor", "agent-net-" + sessionId)));
+                    .thenReturn(List.of(new DockerOperations.NetworkInfo(
+                            "net-mentor", "hephaestus-sandbox-default--" + sessionId)));
 
             reconciler.periodicReconciliation();
 
@@ -333,7 +388,8 @@ class SandboxReconcilerTest extends BaseUnitTest {
             when(containerManager.listManagedContainers())
                     .thenReturn(List.of(container("ctr-young", jobId, NOW.minus(Duration.ofSeconds(30)))));
             when(networkManager.listOrphanedNetworks())
-                    .thenReturn(List.of(new DockerOperations.NetworkInfo("net-young", "agent-net-" + jobId)));
+                    .thenReturn(List.of(
+                            new DockerOperations.NetworkInfo("net-young", "hephaestus-sandbox-default--" + jobId)));
 
             reconciler.periodicReconciliation();
 
@@ -350,7 +406,8 @@ class SandboxReconcilerTest extends BaseUnitTest {
                     .when(containerManager)
                     .forceRemove("ctr-stuck");
             when(networkManager.listOrphanedNetworks())
-                    .thenReturn(List.of(new DockerOperations.NetworkInfo("net-stuck", "agent-net-" + jobId)));
+                    .thenReturn(List.of(
+                            new DockerOperations.NetworkInfo("net-stuck", "hephaestus-sandbox-default--" + jobId)));
 
             reconciler.periodicReconciliation();
 

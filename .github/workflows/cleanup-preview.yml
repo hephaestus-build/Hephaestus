@@ -3,7 +3,7 @@ name: Preview cleanup
 on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] No pull-request code is checked out or executed.
     branches: [main]
-    types: [closed, unlabeled, converted_to_draft]
+    types: [closed, unlabeled]
 
 permissions: {}
 

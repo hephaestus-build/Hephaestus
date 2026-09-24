@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,7 +52,7 @@ public class MentorInFlightReaper {
             ChatMessageRepository chatMessageRepository,
             MentorInFlightAccounting accounting,
             MeterRegistry meterRegistry,
-            @Value("${hephaestus.mentor.in-flight-reaper.window:PT70M}") Duration window) {
+            @Value("${hephaestus.mentor.in-flight-reaper.window:#{null}}") @Nullable Duration window) {
         this.chatMessageRepository = chatMessageRepository;
         this.accounting = accounting;
         this.meterRegistry = meterRegistry;
@@ -93,7 +94,10 @@ public class MentorInFlightReaper {
                     failed);
     }
 
-    private static Duration safeWindow(Duration configuredWindow) {
+    private static Duration safeWindow(@Nullable Duration configuredWindow) {
+        if (configuredWindow == null) {
+            return MINIMUM_SAFE_WINDOW;
+        }
         if (configuredWindow.compareTo(MINIMUM_SAFE_WINDOW) < 0) {
             log.warn(
                     "Mentor in-flight reaper window {} is unsafe for configured turns; using {}",

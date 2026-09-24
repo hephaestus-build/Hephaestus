@@ -1,0 +1,159 @@
+name: Quality leg
+
+on:
+  workflow_call:
+    inputs:
+      leg:
+        description: "Quality task: server, tooling, webapp, or windows"
+        required: true
+        type: string
+      pmd_canary:
+        description: "Whether PMD wiring inputs changed"
+        required: false
+        type: string
+        default: "false"
+
+permissions: {}
+
+jobs:
+  quality:
+    name: Gates
+    runs-on: ${{ inputs.leg == 'windows' && 'windows-latest' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      checks: write
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # gate:contracts compares the branch with the base, which needs the history. The depths
+          # are QUOTED: unquoted, `cond && 0 || 1` always yields 1, because the number 0 is falsy in
+          # GitHub expressions and the non-empty string '0' is truthy.
+          fetch-depth: ${{ (inputs.leg == 'server' || inputs.leg == 'windows') && '0' || '1' }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+
+      # Content-addressed, so a pull request may save them for its own reruns.
+      # Windows task-input tracking cannot reliably invalidate new files, so it runs uncached.
+      - name: Restore Vite task cache
+        if: inputs.leg != 'windows'
+        id: task-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ inputs.leg }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            vite-task-${{ runner.os }}-${{ runner.arch }}-${{ inputs.leg }}-
+
+      - name: Setup application-server caches
+        if: inputs.leg == 'server'
+        uses: ./.github/actions/setup-caches
+
+      - name: Quality gates
+        env:
+          LEG: ${{ inputs.leg }}
+        run: |
+          case "$LEG" in
+            server) vp run ci:server ;;
+            tooling) vp run ci:tooling ;;
+            webapp) vp run ci:webapp ;;
+            windows) vp run --no-cache ci:windows ;;
+            *) echo "::error::Unknown quality leg: $LEG"; exit 1 ;;
+          esac
+
+      - name: Task report
+        if: ${{ !cancelled() }}
+        run: vp run --last-details | node scripts/report-task-run.ts
+
+      - name: PMD canary
+        if: inputs.leg == 'server' && inputs.pmd_canary == 'true'
+        run: vp run gate:pmd-canary
+
+      # CI installs with --ignore-scripts, so prepare never runs: both hooks are dispatched here instead.
+      - name: Commit-msg hook
+        if: (inputs.leg == 'tooling' || inputs.leg == 'windows') && !cancelled()
+        run: |
+          node scripts/enable-hooks.ts
+          test "$(git config core.hooksPath)" = ".vite-hooks/_"
+          git config user.name ci
+          git config user.email ci@example.invalid
+          if git commit --allow-empty --quiet -m "bad message"; then
+            echo "::error::commit-msg accepted a message commitlint rejects"
+            exit 1
+          fi
+          git commit --allow-empty --quiet -m "chore(ci): probe the commit-msg hook"
+
+      # The dispatcher prepends node_modules/.bin to PATH, so the launcher is shadowed there; the
+      # gate itself must not run a second time.
+      - name: Pre-push hook
+        if: (inputs.leg == 'tooling' || inputs.leg == 'windows') && !cancelled()
+        run: |
+          node scripts/enable-hooks.ts
+          probe="$(mktemp)"
+          remote="$(mktemp -d)"
+          launcher=node_modules/.bin/vp
+          # Nothing else in CI runs the local launcher: GitHub does not put node_modules/.bin on PATH.
+          "$launcher" --version > /dev/null
+          mv "$launcher" "$launcher.real"
+          trap 'mv "$launcher.real" "$launcher"; rm -f "$probe"; rm -rf "$remote"' EXIT
+          cat > "$launcher" <<'EOF'
+          #!/bin/sh
+          if [ "$#" -ne 2 ] || [ "$1" != run ] || [ "$2" != check ]; then
+            exit 1
+          fi
+          printf 'ran\n' > "$PRE_PUSH_PROBE"
+          EOF
+          chmod +x "$launcher"
+          export PRE_PUSH_PROBE="$probe"
+          git init --bare --quiet "$remote"
+          git push --dry-run --quiet "$remote" HEAD:refs/heads/pre-push-probe
+          test "$(cat "$probe")" = ran
+
+      - name: Upload webapp unit-test results
+        if: inputs.leg == 'webapp' && !cancelled()
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        with:
+          name: "Test Results - Webapp Unit"
+          path: "webapp/test-results/junit-*.xml"
+          reporter: java-junit
+          list-suites: failed
+          list-tests: failed
+          # Source lookup is needed only for failure annotations, not successful summaries.
+          max-annotations: ${{ job.status == 'failure' && 50 || 0 }}
+          fail-on-error: false
+
+      - name: Retain full webapp unit-test reports
+        if: inputs.leg == 'webapp' && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: webapp-unit-reports-${{ github.run_attempt }}
+          path: webapp/test-results
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Summarize webapp unit tests
+        if: inputs.leg == 'webapp' && !cancelled()
+        continue-on-error: true
+        run: vp run report:test-results "Webapp Unit" webapp/test-results ci-metrics/webapp-unit.json
+
+      - name: Upload webapp test metrics
+        if: inputs.leg == 'webapp' && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-metrics-webapp-unit
+          path: ci-metrics/webapp-unit.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Save Vite task cache
+        if: inputs.leg != 'windows' && !cancelled()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.task-cache.outputs.cache-primary-key }}

@@ -1,17 +1,22 @@
 package de.tum.cit.aet.hephaestus.core.runtime;
 
+import java.util.Arrays;
+import java.util.List;
+import org.springframework.core.env.Environment;
+
 /**
- * Runtime role names — string constants used in {@code @ConditionalOnProperty} keys to gate
- * subsystems by deployment role. Single source of truth so role gating cannot drift between
- * the property file, the ArchUnit boundary test, and the smoke test.
+ * The slices of one JAR a container can boot, and the {@code @ConditionalOnProperty} keys that gate
+ * subsystems by them. Single source of truth so role gating cannot drift between the property file,
+ * the ArchUnit boundary test, the smoke test and what a process reports about itself.
  *
  * <p>See ADR 0005 (two-role baseline) and ADR 0008 (third role: webhook). Defaults: every
  * role enabled (single-JVM monolith); production deploys flip the appropriate flag to
  * {@code false} per pod via the corresponding profile YAML.
  */
-public final class RuntimeRole {
-
-    private RuntimeRole() {}
+public enum RuntimeRole {
+    SERVER(RuntimeRole.SERVER_PROPERTY),
+    WORKER(RuntimeRole.WORKER_PROPERTY),
+    WEBHOOK(RuntimeRole.WEBHOOK_PROPERTY);
 
     /**
      * Property prefix for every runtime role flag. Concrete keys are
@@ -52,4 +57,22 @@ public final class RuntimeRole {
      * up wherever jobs can run — it is the only LLM credential path a job has.
      */
     public static final String AGENT_ENABLED_PROPERTY = "hephaestus.agent.enabled";
+
+    private final String property;
+
+    RuntimeRole(String property) {
+        this.property = property;
+    }
+
+    /** The flag that switches this role off. */
+    public String property() {
+        return property;
+    }
+
+    /** The roles this process booted with, read from the flags so no role-conditional bean is needed. */
+    public static List<RuntimeRole> enabled(Environment environment) {
+        return Arrays.stream(values())
+                .filter(role -> environment.getProperty(role.property, Boolean.class, true))
+                .toList();
+    }
 }

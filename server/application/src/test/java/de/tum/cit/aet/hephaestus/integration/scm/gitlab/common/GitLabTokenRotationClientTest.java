@@ -70,13 +70,13 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
         @SuppressWarnings("unchecked")
         void shouldReturnTokenInfoWithExpiry() {
             stubTokenService();
-            RequestHeadersUriSpec uriSpec = mock(RequestHeadersUriSpec.class);
-            RequestHeadersSpec headersSpec = mock(RequestHeadersSpec.class);
+            RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
+            RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
             ResponseSpec responseSpec = mock(ResponseSpec.class);
 
-            when(mockWebClient.get()).thenReturn(uriSpec);
-            when(uriSpec.uri(anyString())).thenReturn(headersSpec);
-            when(headersSpec.header(anyString(), anyString())).thenReturn(headersSpec);
+            org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
+            org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString());
+            org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                     .thenReturn(Mono.just(Map.of("id", 123, "name", "my-token", "expires_at", "2026-06-01")));
@@ -92,13 +92,13 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
         @SuppressWarnings("unchecked")
         void shouldHandleNullExpiry() {
             stubTokenService();
-            RequestHeadersUriSpec uriSpec = mock(RequestHeadersUriSpec.class);
-            RequestHeadersSpec headersSpec = mock(RequestHeadersSpec.class);
+            RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
+            RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
             ResponseSpec responseSpec = mock(ResponseSpec.class);
 
-            when(mockWebClient.get()).thenReturn(uriSpec);
-            when(uriSpec.uri(anyString())).thenReturn(headersSpec);
-            when(headersSpec.header(anyString(), anyString())).thenReturn(headersSpec);
+            org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
+            org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString());
+            org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
 
             // expires_at can be null for non-expiring tokens
@@ -118,12 +118,12 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
         @SuppressWarnings("unchecked")
         void shouldThrowOn401() {
             stubTokenService();
-            RequestHeadersUriSpec uriSpec = mock(RequestHeadersUriSpec.class);
-            RequestHeadersSpec headersSpec = mock(RequestHeadersSpec.class);
+            RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
+            RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
 
-            when(mockWebClient.get()).thenReturn(uriSpec);
-            when(uriSpec.uri(anyString())).thenReturn(headersSpec);
-            when(headersSpec.header(anyString(), anyString())).thenReturn(headersSpec);
+            org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
+            org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString());
+            org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
             when(headersSpec.retrieve())
                     .thenThrow(WebClientResponseException.create(
                             401, "Unauthorized", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));

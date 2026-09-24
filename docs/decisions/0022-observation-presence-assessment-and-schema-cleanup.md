@@ -1,6 +1,6 @@
 # ADR 0022: Observation = presence × assessment (drop `Practice.kind`); reaction anchors on feedback; ruthless column cleanup
 
-**Status:** Accepted
+**Status:** Accepted (observation semantics amended before 1.0; 2026-09-17 — channel value corrected)
 **Date:** 2026-06-24
 **Authors:** Felix T.J. Dietrich
 **Supersedes (in part):** [ADR 0021](0021-observations-feedback-synthesis-seam.md) F-6 (the sign-neutral `Observation` × `Practice.kind` split) and F-13/F-24 (the `FeedbackReaction` reshape with a nullable `finding_id` and an open `verb` event log)
@@ -27,24 +27,16 @@ represent a practice with both good and bad aspects.
 
 ### 1. Split the evaluation into two orthogonal columns on the observation; drop `Practice.kind`
 
-| Column | Values |
-| --- | --- |
-| `presence` | `PRESENT` · `ABSENT` · `NOT_APPLICABLE` |
-| `assessment` | `GOOD` · `BAD` (NULL iff `presence = NOT_APPLICABLE`) |
-| `severity` | unchanged; NULL unless `assessment = BAD` |
+The current contract is owned by
+[practice feedback language](../contributor/practice-feedback-language.md#observation-assessment-axes).
+The pre-1.0 amendment separates assessment status from presence and assesses the specified behavior’s contextual
+desirability. POSITIVE/NEGATIVE is derived from presence × assessment. Severity is populated exactly
+for negative outcomes. Neither unassessed status is a verdict or a substitute for failed capture.
 
-The 2×2 reads directly:
-
-| | `assessment = GOOD` | `assessment = BAD` |
-| --- | --- | --- |
-| `presence = PRESENT` | good behaviour present → strength | bad behaviour present → problem |
-| `presence = ABSENT` | bad behaviour avoided → clean | good behaviour missing → gap |
-
-`assessment` is resolved **per observation** by the detector, so one practice can emit both `GOOD` and
-`BAD` observations (the matrix lives across a practice's observations, one cell per row). Direction is no
-longer a rule column — it lives in `criteria` + `what_good_looks_like`. `Practice.kind`,
-`CONTEXTUAL`, and `PracticeKind.isProblem`/`isStrength` are removed; readers recompute "is this a
-problem?" as `assessment = BAD`.
+This replaces the earlier convention in this ADR where GOOD/BAD alone encoded the verdict. The
+migration swaps assessment on historical ABSENT rows to preserve their original outcome and severity;
+it does not reinterpret their evidence against newly revised criteria. Frozen evaluation reports must
+retain their declared historical convention. Newly annotated datasets use an explicit schema version.
 
 ### 2. The reaction anchors on feedback only
 
@@ -53,9 +45,8 @@ removed entirely — no backward compatibility. A developer reacts to the *deliv
 private observation. The action stays a closed enum (`ADDRESSED` / `DISPUTED` / `NOT_APPLICABLE`); an open
 verb / event log is rejected (no second producer; it turns the uptake metric into free-text). `DISPUTED`
 requires an explanation. The historical `reaction.recurrence_key` column remains for schema compatibility,
-but current re-nag suppression follows the response through `feedback_observation` and matches the bound
-observation's `recurrence_key`. That keeps the response anchored only to what the developer received while
-using the observation as the authoritative locus.
+but delivery suppression follows the response through `feedback_observation` to the exact bound
+observation. Location grouping does not transfer a reaction to another behavior or another review.
 
 ### 3. Identity collapses to the minimal correct set
 
@@ -88,17 +79,16 @@ profile and named a storage location rather than how the developer engages — s
 `feedback_thread_key`→`thread_key`, `slot`→`placement_type`, `external_ref`→`posted_comment_ref`,
 `evidence_role`→`role`, `detected_at`→`observed_at`.
 
-`Practice.kind` and the observation `observer` column are transient migration scaffolding — intermediate columns that never ship in the final schema; direction is recomputed from `assessment` and the observer was always `SYSTEM`.
+`Practice.kind` and the observation `observer` column are transient migration scaffolding — intermediate columns that never ship in the final schema; outcome is derived from `presence` × `assessment` and the observer was always `SYSTEM`.
 
 ## Consequences
 
 - The schema speaks plainly and stops conflating measurement with evaluation: omission vs commission is
-  recoverable from `(presence, assessment)`, and mixed-aspect practices are expressible.
+  recoverable from `(presence, assessment)`, with a stable behavior referent within each observation.
 - Direction is no longer a rule column; every former reader of `Practice.kind` recomputes "is this a
-  problem?" as `assessment = BAD`.
+  problem?" from the presence × assessment matrix.
 - A developer reacts to delivered feedback, never to a private observation: authorization derives the
-  recipient through `feedback`, and re-nag suppression follows its observation bindings to the recurrence
-  locus.
+  recipient through `feedback`, and suppression follows its exact observation bindings.
 
 ## Evidence
 
@@ -120,3 +110,16 @@ profile and named a storage location rather than how the developer engages — s
   <https://www.informit.com/articles/article.aspx?p=2020371&seqNum=4>
 - Keep a single time axis; derive the trajectory, do not store it; avoid bitemporal (Fowler).
   <https://martinfowler.com/articles/bitemporal-history.html>
+
+## Update — 2026-09-17
+
+Corrects § 5 on the channel value and the "Supersedes" pointer in the header.
+
+- The channel value renamed `REFLECTION_DASHBOARD` → `PROFILE` → `REFLECTION` is `IN_APP`:
+  `practices.feedback.FeedbackChannel` is `IN_CONTEXT`, `IN_CHAT`, `IN_APP`, and
+  `chk_feedback_channel` in `0000000000000_baseline_v0_77_4.sql` admits exactly those three;
+  [ADR 0029](0029-measurement-intervention-seam-and-channel-levels.md) owns the channel vocabulary.
+- The header's "ADR 0021 F-6 / F-13 / F-24" names a numbered decision table that
+  [ADR 0021](0021-observations-feedback-synthesis-seam.md) carried before the in-place rewrites its
+  § Status dates; the superseded content is what § Context quotes, and the last revision carrying the
+  table is `7dc852afc:docs/decisions/0021-findings-feedback-synthesis-seam.md`.

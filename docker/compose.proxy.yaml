@@ -11,7 +11,11 @@ services:
       - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./letsencrypt:/letsencrypt
+      # A named volume, not a path beside this file: under the reconciler this file lives in a
+      # per-release worktree, so a relative bind would put the ACME account and certificates in
+      # state that a release replaces. Traefik would then re-issue on every deployment and Let's
+      # Encrypt would rate-limit the domain into serving an untrusted certificate.
+      - letsencrypt:/letsencrypt
     command:
       - "--ping=true"
       - "--ping.entrypoint=http"
@@ -57,7 +61,7 @@ services:
       - traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true
       - traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true
       - traefik.http.middlewares.security-headers.headers.frameDeny=true
-      - traefik.http.middlewares.security-headers.headers.referrerPolicy=strict-origin-when-cross-origin
+      - traefik.http.middlewares.security-headers.headers.referrerPolicy=no-referrer
       - traefik.http.middlewares.security-headers.headers.permissionsPolicy=geolocation=(), camera=(), microphone=(), payment=()
       - "traefik.http.middlewares.security-headers.headers.contentSecurityPolicy=default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; worker-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests"
       - traefik.http.middlewares.errorpage.errors.status=501,502,503,504
@@ -173,3 +177,6 @@ configs:
           </div>
       </article>
       </html>
+
+volumes:
+  letsencrypt:

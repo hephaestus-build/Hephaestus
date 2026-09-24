@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { fn } from "storybook/test";
 
 import type { LabelInfo, RepositoryInfo, TeamInfo } from "@/api/types.gen";
 
@@ -73,7 +74,7 @@ export const Default: Story = {
 		childrenMap,
 		displaySet,
 		getCatalogLabels: (repoId: number) => (repoId === 100 ? [bug] : []),
-		onToggleVisibility: () => {},
-		onToggleRepositoryVisibility: () => {},
+		onToggleVisibility: fn(),
+		onToggleRepositoryVisibility: fn(),
 	},
 };

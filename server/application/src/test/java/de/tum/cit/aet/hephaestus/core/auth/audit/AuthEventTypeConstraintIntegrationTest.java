@@ -10,13 +10,6 @@ import java.sql.SQLException;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-/**
- * The other tiers run against {@code ddl-auto: create}, where the CHECK constraint and the
- * append-only trigger do not exist — so a migration that forgot an event type passes every one of
- * them and only fails in production, where the audit write is swallowed and the action commits
- * unaudited. This test migrates a real database instead and asserts against the constraint the
- * changelog chain actually produces.
- */
 @Tag("database")
 class AuthEventTypeConstraintIntegrationTest {
 
@@ -37,17 +30,6 @@ class AuthEventTypeConstraintIntegrationTest {
                         + "FOR VALUES FROM ('2000-01-01') TO ('2000-02-01')");
             }
 
-            try (var statement = connection.createStatement();
-                    var constraint =
-                            statement.executeQuery("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname ="
-                                    + " 'ck_auth_event_event_type' AND conrelid = 'auth_event'::regclass")) {
-                assertThat(constraint.next()).isTrue();
-                String definition = constraint.getString(1);
-                for (AuthEvent.EventType type : AuthEvent.EventType.values()) {
-                    assertThat(definition).as("constraint admits %s", type).contains(type.name());
-                }
-            }
-
             try (var insert = connection.prepareStatement("INSERT INTO auth_event (occurred_at, event_type, result)"
                     + " VALUES ('2000-01-15', ?, 'SUCCESS')")) {
                 for (AuthEvent.EventType type : AuthEvent.EventType.values()) {
@@ -57,14 +39,13 @@ class AuthEventTypeConstraintIntegrationTest {
                 insert.setString(1, "NOT_AN_EVENT_TYPE");
                 assertThatThrownBy(insert::executeUpdate)
                         .isInstanceOf(SQLException.class)
+                        .hasMessageContaining("ck_auth_event_event_type")
                         .satisfies(thrown -> assertThat(((SQLException) thrown).getSQLState())
                                 .as("check_violation")
                                 .isEqualTo("23514"));
             }
 
-            // The new column joins the append-only invariant: the GDPR redaction carve-out compares the
-            // whole row minus ip_inet/user_agent/details, so flipping the elevation bit is still refused
-            // even when the redacted columns are NULLed in the same statement.
+            // Redacting PII must not authorize changes to the recorded elevation status.
             try (var update = connection.createStatement()) {
                 assertThatThrownBy(() -> update.executeUpdate(
                                 "UPDATE auth_event SET elevated_via_instance_admin = true, ip_inet = NULL,"

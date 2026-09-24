@@ -3,6 +3,8 @@ import { useId } from "react";
 import type { TrendSupport } from "@/api/types.gen";
 import { SectionLabel } from "@/components/common/SectionLabel";
 
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { hasText } from "@/lib/text";
 import {
 	isSettledStanding,
 	type PracticeGroupStandingValue,
@@ -11,7 +13,6 @@ import {
 import { PRACTICE_TREND_DEFS, type TrendDirection } from "./practice-trend-defs";
 import { formatTrendProvenance, type TrendScope } from "./practice-trend-presentation";
 import { TrendNote } from "./StandingBadge";
-import { StatusBadge } from "./StatusBadge";
 
 export interface WhereYouStandProps {
 	standing: PracticeGroupStandingValue;
@@ -48,7 +49,7 @@ export function WhereYouStand({ standing, basis, direction, support, scope }: Wh
 				<p className="text-sm">
 					<StatusBadge def={def} className="mr-2 align-middle" />
 					{def.description}
-					{basis && ` ${basis}`}
+					{hasText(basis) && ` ${basis}`}
 				</p>
 				{settled && (
 					<p className="text-sm">

@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { ChevronDownIcon } from "lucide-react";
 import { Fragment, type ReactNode, useState } from "react";
 
@@ -10,6 +11,8 @@ import {
 	toneOf,
 } from "@/components/common/ResponseCommentBand";
 import { SectionLabel } from "@/components/common/SectionLabel";
+import { statusValues } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { CLAIM_CURRENTNESS_NOTES } from "@/components/practice-vocabulary/claim-currentness-notes";
 import {
@@ -23,13 +26,11 @@ import {
 	observationOutcome,
 } from "@/components/practice-vocabulary/observation-outcome";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
-import { statusValues } from "@/components/practice-vocabulary/status-def";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
 import { StatusTooltip } from "@/components/practice-vocabulary/StatusTooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { artifactKindLabel } from "@/lib/artifact-kinds";
-import { capitalise } from "@/lib/text";
-import { cn } from "@/lib/utils";
+import { rendersContent } from "@/lib/react-node";
+import { capitalise, hasText } from "@/lib/text";
 
 import { toEvidenceCheck, toEvidenceLocations } from "./evidence";
 import { EvidenceFileBlock } from "./EvidenceFileBlock";
@@ -90,14 +91,15 @@ export interface ReviewObservationRowProps {
  * One observation as a row of its review's card, showing everything the feed carries about it:
  * its summary and outcome on one line and, when not live, where it came from; then why it was
  * noted, what the review checked to say it, the evidence, the next step and the reader's
- * response. The outcome is what the reader
- * acts on, so the severity behind it stays in the admin console rather than ranking the reader's
- * own work here. The day is the card's, named once
- * on the timeline above these rows, so no row repeats it; the work is the card's too, unless the
- * card handed this row a `work` line because the two are one block. Each row opens and closes on its own,
- * and nothing is loaded when it does — the feed already brought it all — so the open state is the
- * row's, through the collapsible's own `defaultOpen`. A block whose field is absent is left out
- * rather than headed over nothing.
+ * response. The outcome is what the reader acts on, so the severity behind it stays in the admin
+ * console rather than ranking the reader's own work here; an observation reviewed under rules
+ * that have since changed says so in one line over its body rather than in a badge, since it is
+ * still shown in full. The day is the card's, named once on the timeline above these rows, so no
+ * row repeats it; the work is the card's too, unless the card handed this row a `work` line
+ * because the two are one block. Each row opens and closes on its own, and nothing is loaded when
+ * it does — the feed already brought it all — so the open state is the row's, through the
+ * collapsible's own `defaultOpen`. A block whose field is absent is left out rather than headed
+ * over nothing.
  */
 export function ReviewObservationRow({
 	observation,
@@ -108,8 +110,6 @@ export function ReviewObservationRow({
 	onRespond,
 	isFeedbackResponsePending = false,
 }: ReviewObservationRowProps) {
-	// The resolution whose comment band is open; recorded only once Send or Skip closes it.
-	const [pendingResolution, setPendingResolution] = useState<FeedbackResolution>();
 	const outcome = OBSERVATION_OUTCOME_PRESENTATION[observationOutcome(observation)];
 	const OutcomeIcon = outcome.icon;
 	const note =
@@ -124,47 +124,22 @@ export function ReviewObservationRow({
 	const nextStep = capitalise(observation.nextStep ?? observation.deliveredFeedback ?? "");
 	const workLink = showWorkLink ? observation.artifactUrl : undefined;
 	const detector = observation.evidence?.detector;
-	const canRespond = Boolean(observation.feedbackId && onRespond);
+	// A response needs feedback to respond to and a route that records it.
+	const respondTo = hasText(observation.feedbackId) ? onRespond : undefined;
+	const hasWorkLine = rendersContent(work);
 	const hasBody =
 		note !== undefined ||
-		Boolean(observation.evidenceRationale) ||
+		hasText(observation.evidenceRationale) ||
 		checks.length > 0 ||
 		evidenceLocations.length > 0 ||
-		workLink !== undefined ||
-		Boolean(nextStep) ||
-		canRespond;
+		hasText(workLink) ||
+		hasText(nextStep) ||
+		respondTo !== undefined;
 	// The summary is the row's anchor and the heaviest text in it; the practice under it is the pill
 	// every practice surface names a practice with, and it stands alone when the observation has no
 	// words of its own.
 	const summary = observation.summary.trim();
 	const showPill = showPracticeName || summary.length === 0;
-
-	const recorded = feedbackResponseOf(observation);
-	const shownResolution = pendingResolution ?? recorded.resolution;
-	// The endpoint replaces, so the usefulness the observation arrived with travels every time.
-	const respond = (change: Pick<FeedbackResponse, "resolution" | "comment">) => {
-		if (!observation.feedbackId || !onRespond) return;
-		onRespond(observation, { usefulness: recorded.usefulness, ...change });
-	};
-	// A press opens the band for that choice; the chosen one pressed again withdraws it, comment
-	// and all, and a band still open closes without recording anything.
-	const chooseResolution = (resolution: FeedbackResolution) => {
-		if (pendingResolution === resolution) {
-			setPendingResolution(undefined);
-			return;
-		}
-		if (recorded.resolution === resolution) {
-			setPendingResolution(undefined);
-			respond({ resolution: undefined, comment: undefined });
-			return;
-		}
-		setPendingResolution(resolution);
-	};
-	const record = (comment: string | undefined) => {
-		if (!pendingResolution) return;
-		setPendingResolution(undefined);
-		respond({ resolution: pendingResolution, comment });
-	};
 
 	// At the reflow width the summary takes the whole line and the outcome and the badges sit under
 	// it, at the right, wrapping among themselves when even that line is too narrow; from `sm` up
@@ -172,7 +147,7 @@ export function ReviewObservationRow({
 	const headLineClassName = cn(
 		"flex w-full min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 px-4 pt-2.5",
 		// The work line below is the same block's second line, so the padding closes under it.
-		work ? "pb-1" : "pb-2.5",
+		hasWorkLine ? "pb-1" : "pb-2.5",
 	);
 	const headLine = (
 		<>
@@ -190,9 +165,9 @@ export function ReviewObservationRow({
 					def={outcome}
 					render={hasBody ? <span /> : <button type="button" />}
 					className={cn(
-						"whitespace-nowrap inline-flex items-center gap-1.5 text-sm font-medium",
+						"inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap",
 						outcome.className,
-						!hasBody && ["rounded-sm", FOCUS_RING],
+						!hasBody && FOCUS_RING,
 					)}
 				>
 					<OutcomeIcon className="size-3.5 shrink-0" aria-hidden />
@@ -214,7 +189,7 @@ export function ReviewObservationRow({
 		return (
 			<li>
 				<div className={headLineClassName}>{headLine}</div>
-				{work && <div className="px-4 pb-2.5">{work}</div>}
+				{hasWorkLine && <div className="px-4 pb-2.5">{work}</div>}
 			</li>
 		);
 	}
@@ -231,12 +206,12 @@ export function ReviewObservationRow({
 					>
 						{headLine}
 					</CollapsibleTrigger>
-					{work && <div className="px-4 pb-2.5">{work}</div>}
+					{hasWorkLine && <div className="px-4 pb-2.5">{work}</div>}
 				</div>
 				<CollapsibleContent className="border-t bg-sidebar">
 					<div className="flex min-w-0 flex-col gap-3.5 px-4 pt-3.5 pb-4">
-						{note && <p className="text-sm text-muted-foreground">{note}</p>}
-						{observation.evidenceRationale && (
+						{note !== undefined && <p className="text-sm text-muted-foreground">{note}</p>}
+						{hasText(observation.evidenceRationale) && (
 							<DetailSection label="Why it was noted">
 								<ReviewerText>{observation.evidenceRationale}</ReviewerText>
 							</DetailSection>
@@ -257,24 +232,24 @@ export function ReviewObservationRow({
 								</dl>
 							</DetailSection>
 						)}
-						{(evidenceLocations.length > 0 || workLink) && (
+						{(evidenceLocations.length > 0 || hasText(workLink)) && (
 							<DetailSection label="Evidence" className="gap-1.5">
 								<div className="flex min-w-0 flex-col gap-2">
 									{evidenceLocations.map((location) => (
 										<EvidenceFileBlock
-											key={`${location.sourceKind}-${location.path}-${location.startLine}`}
+											key={`${location.sourceKind}-${location.path}-${location.revision ?? ""}-${location.startLine}`}
 											location={location}
 											detector={detector}
 										/>
 									))}
-									{(detector !== undefined || workLink !== undefined) && (
+									{(hasText(detector) || hasText(workLink)) && (
 										<p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-											{detector && (
+											{hasText(detector) && (
 												<span>
 													Captured by <code className="font-mono">{detector}</code>
 												</span>
 											)}
-											{workLink && (
+											{hasText(workLink) && (
 												<InlineLink href={workLink} external className="text-xs">
 													Open the {artifactKindLabel(observation.artifactKind).toLowerCase()}
 												</InlineLink>
@@ -284,76 +259,126 @@ export function ReviewObservationRow({
 								</div>
 							</DetailSection>
 						)}
-						{nextStep && (
+						{hasText(nextStep) && (
 							<DetailSection label="Next step">
 								<ReviewerText>{nextStep}</ReviewerText>
 							</DetailSection>
 						)}
-						{canRespond && (
-							<DetailSection label="Your response" className="gap-2.5">
-								<div className="flex flex-wrap items-center gap-2">
-									{statusValues(FEEDBACK_RESOLUTION_DEFS).map((value) => {
-										const def = FEEDBACK_RESOLUTION_DEFS[value];
-										const isChosen = shownResolution === value;
-										return (
-											<ResponseButton
-												key={value}
-												tone={toneOf(def.badgeVariant)}
-												pressed={isChosen}
-												disabled={isFeedbackResponsePending}
-												className="bg-background"
-												onClick={() => chooseResolution(value)}
-											>
-												{def.label}
-											</ResponseButton>
-										);
-									})}
-								</div>
-								{/* What the reader already said: the rating given on the feedback card, and
-									    the comment sent with the response that stands. */}
-								{(recorded.usefulness !== undefined || recorded.comment !== undefined) && (
-									<p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-										{recorded.usefulness && (
-											<StatusBadge def={FEEDBACK_USEFULNESS_DEFS[recorded.usefulness]} />
-										)}
-										{recorded.comment && <q>{recorded.comment}</q>}
-									</p>
-								)}
-							</DetailSection>
-						)}
 					</div>
-					{canRespond &&
-						pendingResolution === "DISPUTED" && (
-							// The sentence is what a dispute has to carry, so Skip only closes the band.
-							<ResponseCommentBand
-								key={pendingResolution}
-								name="Why you dispute this"
-								label="What was missed?"
-								placeholder="One or two sentences on what is off"
-								required
-								isPending={isFeedbackResponsePending}
-								onSend={({ comment }) => {
-									const sentence = comment.trim();
-									if (sentence) record(sentence);
-								}}
-								onSkip={() => setPendingResolution(undefined)}
-							/>
-						)}
-					{canRespond && pendingResolution && pendingResolution !== "DISPUTED" && (
-						<ResponseCommentBand
-							key={pendingResolution}
-							name={
-								pendingResolution === "ADDRESSED" ? "What you changed" : "Why this does not apply"
-							}
-							label="Anything to add?"
-							placeholder="Optional: a note to yourself"
+					{respondTo && (
+						<ObservationResponse
+							observation={observation}
+							onRespond={respondTo}
 							isPending={isFeedbackResponsePending}
-							onSend={({ comment }) => record(comment.trim() || undefined)}
-							onSkip={() => record(undefined)}
 						/>
 					)}
 				</CollapsibleContent>
 			</Collapsible>
 		</li>
+	);
+}
+
+interface ObservationResponseProps {
+	observation: ObservationDetail;
+	onRespond: NonNullable<ReviewObservationRowProps["onRespond"]>;
+	isPending: boolean;
+}
+
+/**
+ * The reader's response under the row: the three resolutions, what already stands — the rating
+ * given on the feedback card and the comment sent with the response — and the comment band a
+ * press opens. The endpoint replaces, so the usefulness the observation arrived with travels every
+ * time.
+ */
+function ObservationResponse({ observation, onRespond, isPending }: ObservationResponseProps) {
+	// The resolution whose comment band is open; recorded only once Send or Skip closes it.
+	const [pendingResolution, setPendingResolution] = useState<FeedbackResolution>();
+	const recorded = feedbackResponseOf(observation);
+	const shownResolution = pendingResolution ?? recorded.resolution;
+	const respond = (change: Pick<FeedbackResponse, "resolution" | "comment">) => {
+		onRespond(observation, { usefulness: recorded.usefulness, ...change });
+	};
+	// A press opens the band for that choice; the chosen one pressed again withdraws it, comment
+	// and all, and a band still open closes without recording anything.
+	const chooseResolution = (resolution: FeedbackResolution) => {
+		if (pendingResolution === resolution) {
+			setPendingResolution(undefined);
+			return;
+		}
+		if (recorded.resolution === resolution) {
+			setPendingResolution(undefined);
+			respond({ resolution: undefined, comment: undefined });
+			return;
+		}
+		setPendingResolution(resolution);
+	};
+	const record = (comment: string | undefined) => {
+		if (pendingResolution === undefined) {
+			return;
+		}
+		setPendingResolution(undefined);
+		respond({ resolution: pendingResolution, comment });
+	};
+	return (
+		<>
+			<DetailSection label="Your response" className="gap-2.5 px-4 pb-4">
+				<div className="flex flex-wrap items-center gap-2">
+					{statusValues(FEEDBACK_RESOLUTION_DEFS).map((value) => {
+						const def = FEEDBACK_RESOLUTION_DEFS[value];
+						return (
+							<ResponseButton
+								key={value}
+								tone={toneOf(def.badgeVariant)}
+								pressed={shownResolution === value}
+								disabled={isPending}
+								className="bg-background"
+								onClick={() => chooseResolution(value)}
+							>
+								{def.label}
+							</ResponseButton>
+						);
+					})}
+				</div>
+				{/* What the reader already said: the rating given on the feedback card, and the
+				    comment sent with the response that stands. */}
+				{(recorded.usefulness !== undefined || hasText(recorded.comment)) && (
+					<p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+						{recorded.usefulness !== undefined && (
+							<StatusBadge def={FEEDBACK_USEFULNESS_DEFS[recorded.usefulness]} />
+						)}
+						{hasText(recorded.comment) && <q>{recorded.comment}</q>}
+					</p>
+				)}
+			</DetailSection>
+			{pendingResolution === "DISPUTED" && (
+				// The sentence is what a dispute has to carry, so Skip only closes the band.
+				<ResponseCommentBand
+					key={pendingResolution}
+					name="Why you dispute this"
+					label="What was missed?"
+					placeholder="One or two sentences on what is off"
+					required
+					isPending={isPending}
+					onSend={({ comment }) => {
+						const sentence = comment.trim();
+						if (hasText(sentence)) {
+							record(sentence);
+						}
+					}}
+					onSkip={() => setPendingResolution(undefined)}
+				/>
+			)}
+			{pendingResolution !== undefined && pendingResolution !== "DISPUTED" && (
+				<ResponseCommentBand
+					key={pendingResolution}
+					name={pendingResolution === "ADDRESSED" ? "What you changed" : "Why this does not apply"}
+					label="Anything to add?"
+					placeholder="Optional: a note to yourself"
+					isPending={isPending}
+					onSend={({ comment }) => record(comment.trim() || undefined)}
+					onSkip={() => record(undefined)}
+				/>
+			)}
+		</>
 	);
 }

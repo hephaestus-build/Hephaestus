@@ -224,10 +224,9 @@ public class WorkspaceSettingsService {
                 WorkspaceAuditSnapshots.FeaturesSnapshot.of(workspace.getFeatures())));
 
         log.info(
-                "Updated workspace features: workspaceId={}, practices={}, achievements={}, leaderboard={}, progression={}, leagues={}",
+                "Updated workspace features: workspaceId={}, practices={}, leaderboard={}, progression={}, leagues={}",
                 workspaceId,
                 request.practicesEnabled(),
-                request.achievementsEnabled(),
                 request.leaderboardEnabled(),
                 request.progressionEnabled(),
                 request.leaguesEnabled());

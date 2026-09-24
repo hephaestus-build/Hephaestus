@@ -1,7 +1,7 @@
 import type { Meta, StoryContext, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { withStandardPage } from "@/stories/decorators";
 
 import { PracticeReviewsHeader } from "./PracticeReviewsLayout";
@@ -11,7 +11,6 @@ import { PracticeReviewsHeader } from "./PracticeReviewsLayout";
 // `link.js`, so an explicit `aria-current={undefined}` cannot turn it off. Two mechanisms decide one
 // attribute, so the stories below assert the *count* of current tabs, not which one it is.
 const meta = {
-	title: "Workspace admin/Practice reviews/Navigation",
 	component: PracticeReviewsHeader,
 	parameters: {
 		layout: "fullscreen",

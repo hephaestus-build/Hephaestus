@@ -5,8 +5,11 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
+import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -43,12 +46,12 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.io.Serial;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -148,6 +151,7 @@ public class AgentJobExecutor {
     private final AgentJobRepository jobRepository;
     private final WorkspaceAgentBindingRepository bindingRepository;
     private final JobTypeHandlerRegistry handlerRegistry;
+    private final JobEvidenceFiles evidenceFiles;
     private final PracticePiAdapter practiceAgent;
     private final WorkerJwtIssuer workerJwtIssuer;
 
@@ -189,6 +193,7 @@ public class AgentJobExecutor {
             AgentJobRepository jobRepository,
             WorkspaceAgentBindingRepository bindingRepository,
             JobTypeHandlerRegistry handlerRegistry,
+            JobEvidenceFiles evidenceFiles,
             PracticePiAdapter practiceAgent,
             WorkerJwtIssuer workerJwtIssuer,
             SandboxManager sandboxManager,
@@ -207,6 +212,7 @@ public class AgentJobExecutor {
         this.jobRepository = jobRepository;
         this.bindingRepository = bindingRepository;
         this.handlerRegistry = handlerRegistry;
+        this.evidenceFiles = evidenceFiles;
         this.practiceAgent = practiceAgent;
         this.workerJwtIssuer = workerJwtIssuer;
         this.sandboxManager = sandboxManager;
@@ -585,8 +591,13 @@ public class AgentJobExecutor {
     /** Runs on the sandbox executor, not the poll thread. */
     private void runClaimedJob(UUID jobId, ClaimResult claim) {
         AgentJob job = claim.job;
-        MDC.put(StructuredLogKeys.TRACE_ID, job.getTraceId());
-        MDC.put(StructuredLogKeys.SPAN_ID, randomSpanId());
+        var executionSpan = jobTelemetry.startExecution(job);
+        var executionScope = jobTelemetry.executionScope(executionSpan);
+        MDC.put(StructuredLogKeys.TRACE_ID, executionSpan.context().traceId());
+        MDC.put(StructuredLogKeys.SPAN_ID, executionSpan.context().spanId());
+        MDC.put(
+                StructuredLogKeys.TRACE_FLAGS,
+                Boolean.TRUE.equals(executionSpan.context().sampled()) ? "01" : "00");
         MDC.put(MDC_JOB_ID, jobId.toString());
         MDC.put(StructuredLogKeys.WORKSPACE_ID, job.getWorkspace().getId().toString());
         MDC.put(MDC_JOB_TYPE, job.getJobType().name());
@@ -618,6 +629,22 @@ public class AgentJobExecutor {
             SandboxResult result = sandboxManager.execute(sandboxSpec);
             AgentResult agentResult = practiceAgent.parseResult(result);
 
+            // Two exits say the run could not reach something it needed, rather than anything about the
+            // reviewed work: the review finished and could not admit it, because the sandbox holds an
+            // address the server has since moved away from; or no practice was reached at all because
+            // every model call went unanswered. Neither leaves anything to deliver, and neither is a
+            // fact a second attempt would repeat. Past the retry cap both fall through and terminalize.
+            String unreachable = unreachableReason(result.exitCode());
+            if (unreachable != null && requeueForAnotherAttempt(jobId, job, unreachable, true, result.logs())) {
+                metricOutcome = "REQUEUED";
+                log.warn(
+                        "Requeuing job {} ({}): nothing it measured can be delivered from here (attempt {})",
+                        jobId,
+                        unreachable,
+                        job.getRetryCount() + 1);
+                return;
+            }
+
             JobTypeHandler handler = handlerRegistry.getHandler(job.getJobType());
             AgentJobStatus terminalStatus = completeJob(jobId, agentResult, result, handler, job);
             metricOutcome = terminalStatus != null ? terminalStatus.name() : "unknown";
@@ -626,15 +653,16 @@ public class AgentJobExecutor {
         } catch (SandboxCancelledException e) {
             metricOutcome = handleCancellation(jobId, job) ? AgentJobStatus.CANCELLED.name() : "OWNERSHIP_LOST";
         } catch (InsufficientEvidenceException e) {
-            try {
-                persistRefusedEvidence(jobId, job.getJobType(), job.getRetryCount(), e.preparedInputs());
+            // The evidence it carries was never staged for an attempt, so nothing else releases it.
+            try (PreparedJobInputs refused = e.preparedInputs()) {
+                persistRefusedEvidence(jobId, job.getJobType(), job.getRetryCount(), refused);
                 ObjectNode output = objectMapper.createObjectNode().put("outcome", "INSUFFICIENT_EVIDENCE");
                 Integer updated = transactionTemplate.execute(status -> jobRepository.transitionToEvidenceRefused(
                         jobId, workerId, job.getRetryCount(), Instant.now(), output));
                 if (updated != null && updated == 1) {
                     recordPracticeReviewRefusal(job, "insufficient_evidence");
-                    // Keep the pre-existing execution-duration outcome label; the lifecycle contract
-                    // still records the committed terminal state as COMPLETED.
+                    // The metric outcome names the refusal; the lifecycle contract records the committed
+                    // terminal state as COMPLETED.
                     metricOutcome = "INSUFFICIENT_EVIDENCE";
                     jobTelemetry.terminal(job, AgentJobStatus.COMPLETED, AgentJobTelemetry.age(job));
                     log.info(
@@ -654,8 +682,8 @@ public class AgentJobExecutor {
         } catch (Exception e) {
             metricOutcome = handleExecutionFailure(jobId, job, e, sandboxExecutionStarted);
         } finally {
-            // The sandbox has whatever it was going to get by now, so the staging directories behind any
-            // disk-staged evidence are no longer referenced by anything.
+            // Admission and delivery are done by now, so the attempt's evidence can be retired: deleted
+            // once its observations were admitted, kept for the cleanup grace otherwise.
             if (stagedInputs != null) {
                 stagedInputs.close();
             }
@@ -673,6 +701,10 @@ public class AgentJobExecutor {
             MDC.remove(MDC_JOB_TYPE);
             MDC.remove(StructuredLogKeys.TRACE_ID);
             MDC.remove(StructuredLogKeys.SPAN_ID);
+            MDC.remove(StructuredLogKeys.TRACE_FLAGS);
+            executionSpan.tag("hephaestus.job.outcome", metricOutcome);
+            executionScope.close();
+            executionSpan.end();
         }
     }
 
@@ -710,8 +742,7 @@ public class AgentJobExecutor {
     }
 
     /**
-     * The staging directories must outlive {@code injectFiles} — which runs inside the sandbox
-     * execution — so the caller closes them once the run is over, whatever its outcome.
+     * Prepared inputs stay available through execution and admission; the caller releases them on every outcome.
      */
     private record PreparedSandbox(SandboxSpec spec, PreparedJobInputs stagedInputs) {}
 
@@ -719,43 +750,50 @@ public class AgentJobExecutor {
     private PreparedSandbox prepareSandboxSpec(UUID jobId, AgentJob job, ConfigSnapshot snapshot) {
         JobTypeHandler handler = handlerRegistry.getHandler(job.getJobType());
 
-        // The claim transaction is long gone, so the handler needs a transaction of its own here to
-        // resolve lazy JPA proxies, and a re-fetch that eagerly loads the workspace.
-        TransactionTemplate readOnlyTx =
-                new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
-        readOnlyTx.setReadOnly(true);
-        PreparedJobInputs preparedInputs = readOnlyTx.execute(status -> {
-            AgentJob managedJob = jobRepository.findByIdWithWorkspace(jobId).orElse(job);
-            return handler.prepareInputs(managedJob);
-        });
+        AgentJob preparedJob = jobRepository.findByIdWithWorkspace(jobId).orElse(job);
+        PreparedJobInputs preparedInputs = handler.prepareInputs(preparedJob);
 
-        // Sandboxes access providers through the LLM proxy with an attempt-scoped credential.
-        String jobToken = workerJwtIssuer.issueForJob(
-                jobId,
-                job.getWorkspace().getId(),
-                job.getRetryCount(),
-                Duration.ofSeconds(snapshot.timeoutSeconds()).plusMinutes(5));
-        PracticeAgentRequest adapterRequest = new PracticeAgentRequest(
-                snapshot.apiProtocol(),
-                snapshot.upstreamModelId(),
-                snapshot.contextWindow(),
-                snapshot.maxOutputTokens(),
-                snapshot.supportsReasoning(),
-                jobToken,
-                snapshot.allowInternet(),
-                snapshot.timeoutSeconds());
+        preparedInputs = evidenceFiles.prepare(job, preparedInputs);
+        try {
+            // Sandboxes access providers through the LLM proxy with an attempt-scoped credential.
+            Instant workDeadline = Instant.now()
+                    .plusSeconds(snapshot.timeoutSeconds())
+                    .truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+            String jobToken = workerJwtIssuer.issueForJobUntil(
+                    jobId,
+                    job.getWorkspace().getId(),
+                    job.getRetryCount(),
+                    workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE));
+            PracticeAgentRequest adapterRequest = new PracticeAgentRequest(
+                    snapshot.apiProtocol(),
+                    snapshot.upstreamModelId(),
+                    snapshot.contextWindow(),
+                    snapshot.maxOutputTokens(),
+                    snapshot.reasoningEffort(),
+                    jobToken,
+                    snapshot.timeoutSeconds());
 
-        PracticeSandboxSpec agentSpec = practiceAgent.buildSandboxSpec(adapterRequest);
-        SandboxSpec sandboxSpec =
-                buildSandboxSpec(jobId, preparedInputs.files(), preparedInputs.filesOnDisk(), agentSpec, snapshot);
-        persistProvenanceDigests(
-                jobId,
-                job.getJobType(),
-                agentSpec.promptDigest(),
-                sandboxSpec.inputFiles(),
-                job.getRetryCount(),
-                preparedInputs.automatedReviewReadinessReport());
-        return new PreparedSandbox(sandboxSpec, preparedInputs);
+            PracticeSandboxSpec agentSpec = practiceAgent.buildSandboxSpec(adapterRequest);
+            SandboxSpec sandboxSpec = buildSandboxSpec(
+                    jobId,
+                    preparedInputs.files(),
+                    preparedInputs.filesOnDisk(),
+                    preparedInputs.directories(),
+                    agentSpec,
+                    snapshot,
+                    workDeadline);
+            persistProvenanceDigests(
+                    jobId,
+                    job.getJobType(),
+                    agentSpec.promptDigest(),
+                    sandboxSpec.inputFiles(),
+                    job.getRetryCount(),
+                    preparedInputs.automatedReviewReadinessReport());
+            return new PreparedSandbox(sandboxSpec, preparedInputs);
+        } catch (RuntimeException exception) {
+            preparedInputs.close();
+            throw exception;
+        }
     }
 
     private void persistRefusedEvidence(
@@ -799,6 +837,7 @@ public class AgentJobExecutor {
         log.debug("Provenance digests: jobId={}, prompt={}, inputs={}", jobId, promptDigest, inputsDigest);
     }
 
+    /** The manifest and admitted practices as the sandbox sees them. */
     private @Nullable JsonNode evidenceSnapshot(
             Map<String, byte[]> inputFiles, @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport) {
         byte[] manifest = inputFiles.get(SandboxLayout.MANIFEST_PATH);
@@ -810,7 +849,7 @@ public class AgentJobExecutor {
             throw new IllegalStateException("Practice review inputs have an incomplete evidence snapshot");
         }
         ObjectNode snapshot = objectMapper.createObjectNode();
-        if (manifest != null) snapshot.set("manifest", objectMapper.readTree(manifest));
+        snapshot.set("manifest", objectMapper.readTree(manifest));
         if (practices != null) {
             snapshot.set("practices", objectMapper.readTree(practices));
         }
@@ -821,10 +860,14 @@ public class AgentJobExecutor {
             UUID jobId,
             Map<String, byte[]> handlerFiles,
             Map<String, java.nio.file.Path> handlerFilesOnDisk,
+            List<EvidenceDirectory> handlerDirectories,
             PracticeSandboxSpec agentSpec,
-            ConfigSnapshot snapshot) {
+            ConfigSnapshot snapshot,
+            Instant workDeadline) {
         Map<String, byte[]> allInputFiles = new HashMap<>(handlerFiles);
         allInputFiles.putAll(agentSpec.inputFiles());
+        Map<String, String> environment = new HashMap<>(agentSpec.environment());
+        environment.put("SANDBOX_WORK_DEADLINE_MS", Long.toString(workDeadline.toEpochMilli()));
 
         ResourceLimits limits = new ResourceLimits(
                 ResourceLimits.DEFAULT.memoryBytes(),
@@ -836,14 +879,14 @@ public class AgentJobExecutor {
                 jobId,
                 agentSpec.image(),
                 agentSpec.command(),
-                agentSpec.environment(),
+                environment,
                 agentSpec.networkPolicy(),
                 limits,
                 agentSpec.securityProfile(),
                 allInputFiles,
                 handlerFilesOnDisk,
-                agentSpec.outputPath(),
-                agentSpec.volumeMounts());
+                handlerDirectories,
+                agentSpec.outputPath());
     }
 
     private boolean handleCancellation(UUID jobId, AgentJob job) {
@@ -904,20 +947,7 @@ public class AgentJobExecutor {
 
         if (workerId != null && isRetryableInfraFailure(e)) {
             int currentRetryCount = job.getRetryCount();
-            Integer updated = transactionTemplate.execute(status -> {
-                // BEFORE requeuing: the requeue zeroes the accumulators, so a later read bills zero.
-                AgentJobLlmUsage retryCounts = sandboxExecutionStarted
-                        ? jobRepository.findLlmUsageById(jobId).orElse(null)
-                        : null;
-                int rows = requeueOrphanWithRotation(jobId, workerId, currentRetryCount);
-                if (rows > 0 && sandboxExecutionStarted) {
-                    billTerminatedJob(
-                            job, "infra-failure retry (attempt " + (currentRetryCount + 1) + ")", retryCounts);
-                }
-                return rows;
-            });
-            if (updated != null && updated > 0) {
-                infraRetryRequeued.increment();
+            if (requeueForAnotherAttempt(jobId, job, "infra-failure", sandboxExecutionStarted, null)) {
                 log.warn(
                         "Requeuing job {} after classified sandbox-infrastructure failure (attempt {}): {}",
                         jobId,
@@ -945,6 +975,86 @@ public class AgentJobExecutor {
      */
     static boolean isRetryableInfraFailure(Exception e) {
         return e instanceof SandboxInfrastructureException || e instanceof IOException;
+    }
+
+    /**
+     * Which unreachable service this exit names, or null when the exit says something about the work.
+     * The name is what the usage ledger records the attempt under.
+     */
+    private static @Nullable String unreachableReason(int exitCode) {
+        if (exitCode == SandboxLayout.EXIT_SERVER_UNREACHABLE) {
+            return "server-unreachable";
+        }
+        if (exitCode == SandboxLayout.EXIT_PROVIDER_UNREACHABLE) {
+            return "provider-unreachable";
+        }
+        return null;
+    }
+
+    /**
+     * Whether this job's observations reached the server after all — the admission committed and only
+     * its answer was lost. Repeating the review would submit a different payload against the digest the
+     * job already carries, which the admission refuses, so an attempt that got this far is finished
+     * even though its runner could not tell.
+     */
+    private static boolean observationsAdmitted(AgentJob job) {
+        JsonNode metadata = job.getMetadata();
+        return metadata != null
+                && !metadata.path(ObservationAdmissionService.DIGEST_METADATA_KEY)
+                        .asString("")
+                        .isBlank();
+    }
+
+    /**
+     * Hands the job back to the queue for another attempt, billing what this attempt already spent.
+     * The usage read happens inside the same transaction and before the requeue, which zeroes the
+     * accumulators — a later read would bill zero.
+     *
+     * @param transcript this attempt's container log, kept on the row so the next reader can still see
+     *     why the attempt was given up on; the following attempt's terminal write replaces it
+     * @param bill whether provider work happened at all — nothing accrues before the sandbox starts
+     * @return whether the job is queued again; false means the retry cap is spent or the fence is
+     *     lost, and the caller owns the terminal outcome
+     */
+    private boolean requeueForAnotherAttempt(
+            UUID jobId, AgentJob job, String reason, boolean bill, @Nullable String transcript) {
+        if (workerId == null) {
+            return false;
+        }
+        int currentRetryCount = job.getRetryCount();
+        Integer updated = transactionTemplate.execute(status -> {
+            // Under the same row lock the admission takes, so the two decisions serialize: a review
+            // whose observations reached the server is finished, whatever its sandbox went on to do.
+            // Running it again would submit a different payload against the digest the job already
+            // carries, which the admission refuses — a second attempt could only lose what the first
+            // recorded.
+            AgentJob locked =
+                    jobRepository.findByIdWithWorkspaceForUpdate(jobId).orElse(null);
+            if (locked != null && observationsAdmitted(locked)) {
+                log.info("Not requeuing job {}: its observations already reached this server", jobId);
+                return 0;
+            }
+            AgentJobLlmUsage retryCounts =
+                    bill ? jobRepository.findLlmUsageById(jobId).orElse(null) : null;
+            int rows = requeueOrphanWithRotation(jobId, workerId, currentRetryCount);
+            if (rows == 0) {
+                // The fence is lost: this row belongs to another attempt now, and nothing this one has
+                // to say about itself may be written over it.
+                return 0;
+            }
+            if (bill) {
+                billTerminatedJob(job, reason + " retry (attempt " + (currentRetryCount + 1) + ")", retryCounts);
+            }
+            if (transcript != null) {
+                jobRepository.findById(jobId).ifPresent(requeued -> requeued.setContainerLogs(transcript));
+            }
+            return rows;
+        });
+        if (updated == null || updated == 0) {
+            return false;
+        }
+        infraRetryRequeued.increment();
+        return true;
     }
 
     /**
@@ -1271,13 +1381,14 @@ public class AgentJobExecutor {
             // otherwise a runner that never wrote usage.json would book real spend as zero.
             TerminalUsage usage = TerminalUsage.resolve(runnerUsage, proxyCounts);
 
+            // Use the ledger totals: the runner may omit usage details counted by the proxy.
             if (runnerUsage != null && runnerUsage.totalCalls() > 0) {
-                freshJob.setLlmTotalCalls(runnerUsage.totalCalls());
-                freshJob.setLlmTotalInputTokens(runnerUsage.inputTokens());
-                freshJob.setLlmTotalOutputTokens(runnerUsage.outputTokens());
-                freshJob.setLlmTotalReasoningTokens(runnerUsage.reasoningTokens());
-                freshJob.setLlmCacheReadTokens(runnerUsage.cacheReadTokens());
-                freshJob.setLlmCacheWriteTokens(runnerUsage.cacheWriteTokens());
+                freshJob.setLlmTotalCalls(usage.totalCalls());
+                freshJob.setLlmTotalInputTokens(clampToInt(usage.inputTokens()));
+                freshJob.setLlmTotalOutputTokens(clampToInt(usage.outputTokens()));
+                freshJob.setLlmTotalReasoningTokens(clampToInt(usage.reasoningTokens()));
+                freshJob.setLlmCacheReadTokens(clampToInt(usage.cacheReadTokens()));
+                freshJob.setLlmCacheWriteTokens(clampToInt(usage.cacheWriteTokens()));
             }
             // Provider output is telemetry only. The admitted snapshot is authoritative identity.
             freshJob.setLlmModel(snapshot.upstreamModelId());
@@ -1291,6 +1402,9 @@ public class AgentJobExecutor {
     }
 
     private static final class TerminalPersistenceException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         private TerminalPersistenceException(Throwable cause) {
             super("Could not durably persist terminal job result and usage", cause);
@@ -1381,5 +1495,9 @@ public class AgentJobExecutor {
         return message.length() > MAX_ERROR_MESSAGE_LENGTH
                 ? message.substring(0, MAX_ERROR_MESSAGE_LENGTH) + "... [truncated]"
                 : message;
+    }
+
+    private static int clampToInt(long value) {
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(0, value));
     }
 }

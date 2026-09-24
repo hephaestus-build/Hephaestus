@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project version="4">
-  <component name="DiffGenerationConfig">
-    <option name="sourceModelValue" value="hephaestus:hephaestus" />
-    <option name="targetDbValue" value="95e1d0ee-eb80-4133-ab17-7c399dbdb2a2" />
-    <option name="updateChangeLogPath" value="src/main/resources/db/master.xml" />
-    <option name="updateDbConnectionName" value="95e1d0ee-eb80-4133-ab17-7c399dbdb2a2" />
-  </component>
-</project>

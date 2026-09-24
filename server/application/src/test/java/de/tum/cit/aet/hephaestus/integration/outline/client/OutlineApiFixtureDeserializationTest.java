@@ -138,7 +138,7 @@ class OutlineApiFixtureDeserializationTest {
         assertThat(subscription.getEnabled()).isTrue();
         assertThat(subscription.getEvents()).contains("documents.update", "collections.delete");
         // The secret itself is redacted in the committed fixture — the model field still maps.
-        assertThat(subscription.getUrl()).isEqualTo("https://hephaestus-test.felixdietrich.com/webhooks/outline");
+        assertThat(subscription.getUrl()).isEqualTo("https://hephaestus.example.com/webhooks/outline");
     }
 
     private static OutlineDocumentModel findById(List<OutlineDocumentModel> data, String id) {

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { delay, HttpResponse, http, type PathParams } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import type { CuratedPracticeRequest } from "@/api/types.gen";
+import type { CuratedPracticeRequest, PracticeReleaseProposal } from "@/api/types.gen";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockConversationWorkType,
@@ -12,13 +12,10 @@ import {
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { server } from "@/mocks/server";
+import { precedes } from "@/test/dom";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 20_000 });
-
-function precedes(earlier: Node, later: Node) {
-	return Boolean(earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING);
-}
 
 const status = (overrides: Record<string, unknown> = {}) => ({
 	etag: "tag-1",
@@ -42,6 +39,36 @@ const practiceDefinition = {
 	whyItMatters: "Reviewers need context",
 	automatedReviewPolicy: mockPullRequestPolicy,
 	automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
+	deliveryBehavior: { summaryOnly: false },
+};
+
+const release: PracticeReleaseProposal = {
+	slug: "describe-what-and-why",
+	base: {
+		name: practiceDefinition.name,
+		bindings: practiceDefinition.bindings,
+		criteria: "Earlier criteria",
+		automatedReviewPolicy: mockPullRequestPolicy,
+		deliveryBehavior: { summaryOnly: false },
+	},
+	current: {
+		name: practiceDefinition.name,
+		bindings: practiceDefinition.bindings,
+		criteria: practiceDefinition.criteria,
+		automatedReviewPolicy: mockPullRequestPolicy,
+		deliveryBehavior: { summaryOnly: false },
+	},
+	offered: {
+		name: practiceDefinition.name,
+		bindings: practiceDefinition.bindings,
+		criteria: "The definition Hephaestus ships now",
+		automatedReviewPolicy: mockPullRequestPolicy,
+		deliveryBehavior: { summaryOnly: false },
+	},
+	baseSource: "EXACT_ADOPTION",
+	offeredDigest: "offered-digest",
+	etag: "release-tag",
+	fields: [{ field: "CRITERIA", offeredChanged: true, conflict: true }],
 };
 
 function mockCatalog(overrides: Record<string, unknown> = {}) {
@@ -283,10 +310,12 @@ describe("instance catalog routes", () => {
 		await waitFor(() => expect(latestGroup).toBe("delivery"));
 
 		fireEvent.click(await screen.findByRole("link", { name: practiceDefinition.name }));
-		expect(
-			(await screen.findByRole("combobox", { name: "Practice group" }, ROUTE_RENDER_WAIT))
-				.textContent,
-		).toContain("Delivery");
+		const group = await screen.findByRole(
+			"combobox",
+			{ name: "Practice group" },
+			ROUTE_RENDER_WAIT,
+		);
+		expect(group.textContent).toContain("Delivery");
 	});
 
 	it("explains which practices group exclusion affects", async () => {
@@ -315,7 +344,7 @@ describe("instance catalog routes", () => {
 			),
 		);
 		const confirmation = screen.getByRole("alertdialog");
-		within(confirmation).getByText(/also stops offering 1 currently offered practice/);
+		within(confirmation).getByText(/also stops offering 1 currently offered practice/u);
 		within(confirmation).getByText("Say what changed and why");
 		fireEvent.click(within(confirmation).getByRole("button", { name: "Stop offering" }));
 
@@ -450,7 +479,7 @@ describe("instance catalog routes", () => {
 		await waitFor(() => expect(latestTag).toBe("tag-2"));
 
 		fireEvent.click(await screen.findByRole("link", { name: practiceDefinition.name }));
-		const name = await screen.findByRole("textbox", { name: /Name/ }, ROUTE_RENDER_WAIT);
+		const name = await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT);
 		fireEvent.change(name, { target: { value: "Updated name" } });
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
@@ -468,19 +497,20 @@ describe("instance catalog routes", () => {
 					status: status({ state: "UPDATE_WAITING", changeKind: "DETECTION" }),
 				}),
 			),
+			http.get("*/admin/practice-catalog/practices/:slug/release", () =>
+				HttpResponse.json(release),
+			),
 		);
 		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
 
-		fireEvent.click(
-			await screen.findByRole("button", { name: "Review Hephaestus update" }, ROUTE_RENDER_WAIT),
-		);
-
 		await screen.findByText("The definition Hephaestus ships now", undefined, ROUTE_RENDER_WAIT);
+		screen.getByText("Conflict");
 	});
 
-	it("confirms and sends the entry's tag before using the Hephaestus version", async () => {
+	it("accepts a selected field with the reviewed release tag", async () => {
 		mockCatalog();
 		let ifMatch: string | null = null;
+		let body: unknown;
 		server.use(
 			http.get("*/admin/practice-catalog/practices/:slug", () =>
 				HttpResponse.json({
@@ -490,28 +520,78 @@ describe("instance catalog routes", () => {
 					status: status({ state: "UPDATE_WAITING", changeKind: "DETECTION" }),
 				}),
 			),
-			http.delete("*/admin/practice-catalog/practices/:slug/override", ({ request }) => {
+			http.get("*/admin/practice-catalog/practices/:slug/release", () =>
+				HttpResponse.json(release),
+			),
+			http.put("*/admin/practice-catalog/practices/:slug/release", async ({ request }) => {
 				ifMatch = request.headers.get("if-match");
+				body = await request.json();
 				return HttpResponse.json({
 					slug: "describe-what-and-why",
-					definition: { ...practiceDefinition, criteria: "Hephaestus criteria" },
-					status: status(),
+					definition: { ...practiceDefinition, criteria: release.offered.criteria },
+					status: status({ state: "EDITED_HERE", etag: "tag-2" }),
 				});
 			}),
 		);
 		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
 
-		fireEvent.click(
-			await screen.findByRole("button", { name: "Apply Hephaestus update" }, ROUTE_RENDER_WAIT),
+		const radioGroup = await screen.findByRole(
+			"radiogroup",
+			{ name: "Use a version for Review criteria" },
+			ROUTE_RENDER_WAIT,
 		);
-		fireEvent.click(
-			within(screen.getByRole("alertdialog", { name: "Apply Hephaestus update?" })).getByRole(
-				"button",
-				{ name: "Apply Hephaestus update" },
-			),
-		);
+		fireEvent.click(within(radioGroup).getByRole("radio", { name: "Offered" }));
+		fireEvent.click(screen.getByRole("button", { name: "Accept selected fields" }));
 
-		await waitFor(() => expect(ifMatch).toBe('"tag-1"'));
+		await waitFor(() => expect(ifMatch).toBe('"release-tag"'));
+		expect(body).toStrictEqual({ choices: { CRITERIA: "OFFERED" } });
+	});
+
+	it("refreshes the practice when a release decision is stale", async () => {
+		mockCatalog();
+		server.use(
+			http.get("*/admin/practice-catalog/practices/:slug", () =>
+				HttpResponse.json({
+					slug: "describe-what-and-why",
+					definition: practiceDefinition,
+					shipped: { ...practiceDefinition, criteria: "Hephaestus criteria" },
+					status: status({ state: "UPDATE_WAITING" }),
+				}),
+			),
+			http.get("*/admin/practice-catalog/practices/:slug/release", () =>
+				HttpResponse.json(release),
+			),
+			http.put("*/admin/practice-catalog/practices/:slug/release", () => {
+				server.use(
+					http.get("*/admin/practice-catalog/practices/:slug", () =>
+						HttpResponse.json({
+							slug: "describe-what-and-why",
+							definition: practiceDefinition,
+							status: status({ state: "EDITED_HERE" }),
+						}),
+					),
+					http.get(
+						"*/admin/practice-catalog/practices/:slug/release",
+						() => new HttpResponse(null, { status: 404 }),
+					),
+				);
+				return HttpResponse.json({ status: 412, title: "Stale" }, { status: 412 });
+			}),
+		);
+		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
+
+		const radioGroup = await screen.findByRole(
+			"radiogroup",
+			{ name: "Use a version for Review criteria" },
+			ROUTE_RENDER_WAIT,
+		);
+		fireEvent.click(within(radioGroup).getByRole("radio", { name: "Offered" }));
+		fireEvent.click(screen.getByRole("button", { name: "Accept selected fields" }));
+
+		await screen.findByText("Customized on this instance", undefined, ROUTE_RENDER_WAIT);
+		expect(
+			screen.queryByRole("radiogroup", { name: "Use a version for Review criteria" }),
+		).toBeNull();
 	});
 
 	it("lets a waiting update be declined, not only taken", async () => {
@@ -526,27 +606,27 @@ describe("instance catalog routes", () => {
 					status: status({ state: "UPDATE_WAITING", changeKind: "DETECTION" }),
 				}),
 			),
-			http.put(
-				"*/admin/practice-catalog/practices/:slug/override/acknowledgement",
-				({ request }) => {
-					ifMatch = request.headers.get("if-match");
-					return HttpResponse.json({
-						slug: "describe-what-and-why",
-						definition: practiceDefinition,
-						status: status({ state: "EDITED_HERE", etag: "tag-2" }),
-					});
-				},
+			http.get("*/admin/practice-catalog/practices/:slug/release", () =>
+				HttpResponse.json(release),
 			),
+			http.delete("*/admin/practice-catalog/practices/:slug/release", ({ request }) => {
+				ifMatch = request.headers.get("if-match");
+				return HttpResponse.json({
+					slug: "describe-what-and-why",
+					definition: practiceDefinition,
+					status: status({ state: "EDITED_HERE", etag: "tag-2" }),
+				});
+			}),
 		);
 		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
-		const name = await screen.findByRole("textbox", { name: /Name/ }, ROUTE_RENDER_WAIT);
+		const name = await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT);
 		fireEvent.change(name, { target: { value: "Unsaved draft name" } });
 
 		fireEvent.click(
-			await screen.findByRole("button", { name: "Keep saved version" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Decline this update" }, ROUTE_RENDER_WAIT),
 		);
 
-		await waitFor(() => expect(ifMatch).toBe('"tag-1"'));
+		await waitFor(() => expect(ifMatch).toBe('"release-tag"'));
 		await screen.findByText("Customized on this instance", undefined, ROUTE_RENDER_WAIT);
 		expect(name).toHaveProperty("value", "Unsaved draft name");
 	});
@@ -622,14 +702,14 @@ describe("instance catalog routes", () => {
 		);
 		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
 
-		const name = await screen.findByRole("textbox", { name: /Name/ }, ROUTE_RENDER_WAIT);
+		const name = await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT);
 		fireEvent.change(name, { target: { value: "My unsaved draft" } });
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		await screen.findByText("This practice changed while you were editing");
 
 		fireEvent.click(screen.getByRole("button", { name: "Continue with my draft" }));
 		await waitFor(() =>
-			expect(screen.getByRole<HTMLInputElement>("textbox", { name: /Name/ }).value).toBe(
+			expect(screen.getByRole<HTMLInputElement>("textbox", { name: /Name/u }).value).toBe(
 				"My unsaved draft",
 			),
 		);
@@ -639,11 +719,18 @@ describe("instance catalog routes", () => {
 	});
 
 	it.each([
-		["unchanged", async () => {}, mockPullRequestPolicy, mockPullRequestBinding.signals],
+		[
+			"unchanged",
+			async () => {
+				/* keep the pull request the route loaded */
+			},
+			mockPullRequestPolicy,
+			mockPullRequestBinding.signals,
+		],
 		[
 			"changed",
 			async () => {
-				await userEvent.setup().click(screen.getByRole("radio", { name: /Conversation/ }));
+				await userEvent.setup().click(screen.getByRole("radio", { name: /Conversation/u }));
 			},
 			mockConversationWorkType.recommendedPolicy,
 			["chat.conversation_thread.settled"],

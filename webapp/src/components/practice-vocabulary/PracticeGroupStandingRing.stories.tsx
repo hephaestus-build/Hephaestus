@@ -3,7 +3,6 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { PracticeGroupStandingRing } from "./PracticeGroupStandingRing";
 
 const meta = {
-	title: "Shared/Practice vocabulary/Practice group standing ring",
 	component: PracticeGroupStandingRing,
 	parameters: {
 		layout: "centered",

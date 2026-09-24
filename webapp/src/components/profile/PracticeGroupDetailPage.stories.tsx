@@ -6,8 +6,8 @@ import type {
 	PracticeGroupReviewRun,
 	PracticeGroupStanding,
 } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
+import { daysBefore } from "@/stories/story-clock";
 import { PracticeGroupDetailPage } from "./PracticeGroupDetailPage";
 import type { ReviewRunFeedState } from "./review-runs";
 
@@ -33,7 +33,6 @@ const standing: PracticeGroupStanding = {
 };
 
 const meta = {
-	title: "Profile/PracticeGroupDetailPage",
 	component: PracticeGroupDetailPage,
 	tags: ["autodocs"],
 	args: {
@@ -62,6 +61,7 @@ const observation: ObservationDetail = {
 	practiceSlug: "small-changes",
 	practiceName: "Keep changes focused",
 	summary: "The refactor and the fix arrived together",
+	assessmentStatus: "ASSESSED",
 	presence: "PRESENT",
 	assessment: "BAD",
 	severity: "MAJOR",

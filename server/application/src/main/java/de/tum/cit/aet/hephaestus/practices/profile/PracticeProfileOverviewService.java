@@ -103,8 +103,8 @@ public class PracticeProfileOverviewService {
         StandingSnapshot before = edges.get(0);
         StandingSnapshot after = edges.get(1);
         List<PracticeGroup> groups = practiceGroupService.listGroups(workspaceContext, true);
-        List<PracticeGroupStandingDTO> groupsBefore = practiceGroupStandingService.rollUp(before, groups);
-        List<PracticeGroupStandingDTO> groupsAfter = practiceGroupStandingService.rollUp(after, groups);
+        List<PracticeGroupStandingDTO> groupsBefore = practiceGroupStandingService.summarize(groups, before);
+        List<PracticeGroupStandingDTO> groupsAfter = practiceGroupStandingService.summarize(groups, after);
 
         Map<String, List<Work>> windowWorkByPractice = windowWorkByPractice(after, window);
         Map<String, Instant> firstObservedAt =

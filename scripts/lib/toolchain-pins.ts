@@ -11,6 +11,7 @@ export const CATALOG_FILE = "pnpm-workspace.yaml";
 
 /** Catalog entry → the bundled package whose version it restates. */
 export const BUNDLED_PINS: Record<string, string> = {
+	vite: "vite",
 	oxfmt: "oxfmt",
 	oxlint: "oxlint",
 	"oxlint-tsgolint": "oxlint-tsgolint",
@@ -32,8 +33,10 @@ export function bundledVersions(): Record<string, string> {
 	return Object.fromEntries(
 		Object.entries(BUNDLED_PINS).map(([name, source]) => {
 			const pin = dependencies[source];
-			if (typeof pin !== "string") throw new Error(`vite-plus does not bundle ${source}`);
-			return [name, pin.replace(/^=/, "")];
+			if (typeof pin !== "string") {
+				throw new Error(`vite-plus does not bundle ${source}`);
+			}
+			return [name, pin.replace(/^=/u, "")];
 		}),
 	);
 }

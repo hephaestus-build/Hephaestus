@@ -55,7 +55,7 @@ export interface OutlineConnectCardProps {
 }
 
 // Client-side format hint only — the server re-validates the URL through the SSRF guard on connect.
-const HTTPS_URL = /^https:\/\/.+/i;
+const HTTPS_URL = /^https:\/\/.+/iu;
 const CLOUD_SERVER_URL = "https://app.getoutline.com";
 
 /** Inside this window the admin has to act: Outline keys cannot be rotated through the API. */
@@ -103,14 +103,33 @@ export function OutlineConnectCard({
 					{!connected && (
 						<CardDescription>
 							Mirror Outline collections so their design docs and decision records reach practice
-							detection as context. Use a dedicated bot-user API token; after connecting you choose
+							reviews as context. Use a dedicated bot-user API token; after connecting you choose
 							exactly which collections are mirrored.
 						</CardDescription>
 					)}
 				</CardHeader>
 
 				<CardContent className="space-y-4">
-					{!connected ? (
+					{connected ? (
+						<>
+							{/* Which Outline instance is linked — the one fact the connection plane above doesn't
+							    carry. The green check is a claim that syncing works, so it is spent only on ACTIVE;
+							    any other state is explained by the shared notice above this card. */}
+							<div className="flex items-center gap-2 text-sm">
+								{isConnectionActive ? (
+									<CheckIcon className="size-4 text-success" aria-hidden />
+								) : (
+									<CircleAlertIcon className="size-4 text-muted-foreground" aria-hidden />
+								)}
+								<span>
+									Outline {connectionState ? CONNECTION_STATE_LABEL[connectionState] : "connected"}
+									{hasText(connectionLabel) ? ` — ${connectionLabel}` : ""}
+								</span>
+							</div>
+
+							<OutlineTokenPanel tokenStatus={tokenStatus} isLoading={isTokenStatusLoading} />
+						</>
+					) : (
 						<FieldGroup>
 							<Field data-invalid={serverUrlInvalid}>
 								<FieldLabel htmlFor="outline-server-url">Server URL</FieldLabel>
@@ -149,7 +168,7 @@ export function OutlineConnectCard({
 								</FieldDescription>
 							</Field>
 
-							{errorMessage && <FieldError>{errorMessage}</FieldError>}
+							{hasText(errorMessage) && <FieldError>{errorMessage}</FieldError>}
 
 							{connectUnavailable && (
 								<Alert variant="warning">
@@ -172,25 +191,6 @@ export function OutlineConnectCard({
 								{isConnecting ? "Connecting…" : "Connect Outline"}
 							</Button>
 						</FieldGroup>
-					) : (
-						<>
-							{/* Which Outline instance is linked — the one fact the connection plane above doesn't
-							    carry. The green check is a claim that syncing works, so it is spent only on ACTIVE;
-							    any other state is explained by the shared notice above this card. */}
-							<div className="flex items-center gap-2 text-sm">
-								{isConnectionActive ? (
-									<CheckIcon className="size-4 text-success" aria-hidden />
-								) : (
-									<CircleAlertIcon className="size-4 text-muted-foreground" aria-hidden />
-								)}
-								<span>
-									Outline {connectionState ? CONNECTION_STATE_LABEL[connectionState] : "connected"}
-									{connectionLabel ? ` — ${connectionLabel}` : ""}
-								</span>
-							</div>
-
-							<OutlineTokenPanel tokenStatus={tokenStatus} isLoading={isTokenStatusLoading} />
-						</>
 					)}
 				</CardContent>
 
@@ -293,7 +293,7 @@ function OutlineTokenPanel({ tokenStatus, isLoading }: OutlineTokenPanelProps) {
 				{hasMetadata && (hasText(tokenStatus.name) || hasText(tokenStatus.last4)) && (
 					<span>
 						{tokenStatus.name ?? "API key"}
-						{tokenStatus.last4 ? ` (…${tokenStatus.last4})` : ""}
+						{hasText(tokenStatus.last4) ? ` (…${tokenStatus.last4})` : ""}
 					</span>
 				)}
 				{lastActiveAt && (

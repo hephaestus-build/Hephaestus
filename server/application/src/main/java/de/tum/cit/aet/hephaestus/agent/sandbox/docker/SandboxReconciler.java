@@ -15,15 +15,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Scheduled;
 
 /**
  * Detects and cleans up orphaned sandbox resources.
@@ -33,7 +30,7 @@ import org.springframework.scheduling.annotation.Scheduled;
  * <ol>
  *   <li><b>Startup</b> ({@link ApplicationReadyEvent}): resources left by a previous worker process
  *       are cleaned immediately.
- *   <li><b>Periodic</b> ({@link Scheduled}): orphaned containers and networks are cleaned up on a
+ *   <li><b>Periodic</b> (worker maintenance scheduler): orphaned containers and networks are cleaned up on a
  *       configurable interval.
  * </ol>
  *
@@ -58,16 +55,19 @@ public class SandboxReconciler {
     private final Counter skippedSweeps;
     private final Timer reconciliationDuration;
     private final Clock clock;
+    private final SandboxVolumeManager volumeManager;
 
     public SandboxReconciler(
             AgentJobRepository jobRepository,
             SandboxContainerManager containerManager,
             SandboxNetworkManager networkManager,
+            SandboxVolumeManager volumeManager,
             MeterRegistry meterRegistry,
             Clock clock) {
         this.jobRepository = jobRepository;
         this.containerManager = containerManager;
         this.networkManager = networkManager;
+        this.volumeManager = volumeManager;
         this.clock = clock;
         this.orphanedContainers = Counter.builder(AgentMetrics.SANDBOX_RECONCILER_ORPHANED)
                 .tag("resource", "container")
@@ -91,7 +91,6 @@ public class SandboxReconciler {
     }
 
     /** On startup, clean only resources on this worker's Docker daemon. */
-    @EventListener(ApplicationReadyEvent.class)
     public void onStartup() {
         MDC.put(MDC_RECONCILER_TYPE, "startup");
         try {
@@ -115,6 +114,7 @@ public class SandboxReconciler {
     private void sweep(Set<UUID> activeJobIds) {
         cleanupOrphanedContainers(activeJobIds).ifPresent(inUse -> {
             cleanupOrphanedNetworks(activeJobIds, inUse);
+            cleanupOrphanedVolumes(activeJobIds, inUse);
             completedSweeps.increment();
         });
     }
@@ -137,10 +137,6 @@ public class SandboxReconciler {
     }
 
     /** Periodic sweep: clean up orphaned Docker resources. */
-    @Scheduled(
-            initialDelayString = "${hephaestus.sandbox.reconciliation-initial-delay-seconds:10}",
-            fixedDelayString = "${hephaestus.sandbox.reconciliation-interval-seconds:60}",
-            timeUnit = TimeUnit.SECONDS)
     public void periodicReconciliation() {
         MDC.put(MDC_RECONCILER_TYPE, "periodic");
         try {
@@ -214,6 +210,29 @@ public class SandboxReconciler {
         }
     }
 
+    private void cleanupOrphanedVolumes(Set<UUID> activeJobIds, Set<UUID> inUse) {
+        try {
+            for (var volume : volumeManager.listAttemptVolumes()) {
+                var id = parseUuid(volume.labels().get(SandboxLabels.JOB_ID));
+                String createdAt = volume.labels().get(SandboxLabels.CREATED_AT);
+                if (id.isEmpty() || createdAt == null || activeJobIds.contains(id.get()) || inUse.contains(id.get())) {
+                    continue;
+                }
+                try {
+                    if (java.time.Instant.parse(createdAt)
+                            .isAfter(clock.instant().minus(REAP_GRACE))) {
+                        continue;
+                    }
+                    volumeManager.removeVolume(volume.name());
+                } catch (RuntimeException exception) {
+                    log.warn("Could not reconcile attempt volume {}", volume.name(), exception);
+                }
+            }
+        } catch (RuntimeException exception) {
+            log.warn("Skipping attempt volume reconciliation: volume inventory unavailable", exception);
+        }
+    }
+
     private void cleanupOrphanedNetworks(Set<UUID> activeJobIds, Set<UUID> inUse) {
         try {
             List<DockerOperations.NetworkInfo> networks = networkManager.listOrphanedNetworks();
@@ -221,10 +240,10 @@ public class SandboxReconciler {
             for (DockerOperations.NetworkInfo network : networks) {
                 // The suffix is a job id, or a mentor session id for an interactive sandbox.
                 String name = network.name();
-                if (!name.startsWith(SandboxNetworkManager.NETWORK_PREFIX)) {
+                if (!name.startsWith(networkManager.networkPrefix())) {
                     continue;
                 }
-                String jobIdStr = name.substring(SandboxNetworkManager.NETWORK_PREFIX.length());
+                String jobIdStr = name.substring(networkManager.networkPrefix().length());
                 try {
                     UUID jobId = UUID.fromString(jobIdStr);
                     if (!activeJobIds.contains(jobId) && !inUse.contains(jobId)) {

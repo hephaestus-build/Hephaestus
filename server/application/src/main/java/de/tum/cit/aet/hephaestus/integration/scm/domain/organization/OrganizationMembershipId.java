@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.organization;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.Objects;
 import lombok.NoArgsConstructor;
@@ -7,6 +8,9 @@ import org.jspecify.annotations.Nullable;
 
 @NoArgsConstructor
 public class OrganizationMembershipId implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private @Nullable Long organizationId;
     private @Nullable Long userId;

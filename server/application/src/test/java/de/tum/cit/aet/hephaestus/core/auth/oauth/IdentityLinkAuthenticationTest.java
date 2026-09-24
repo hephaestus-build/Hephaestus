@@ -22,7 +22,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -85,18 +84,6 @@ class IdentityLinkAuthenticationTest extends BaseUnitTest {
     void anInvalidOrRevokedTokenMeansNoAccountToLinkInto() {
         when(bearerTokenResolver.resolve(any())).thenReturn("token");
         when(jwtDecoder.decode("token")).thenThrow(new JwtException("revoked"));
-
-        assertThat(identityLinkAuthentication.resolveAuthenticatedAccountId(mock(HttpServletRequest.class)))
-                .isNull();
-    }
-
-    /** An operator acting as someone else must not be able to install a second way into their account. */
-    @Test
-    void anImpersonatedSessionMayNotLink() {
-        presenting(session("7")
-                .claim("act", Map.of("sub", "2"))
-                .claim("auth_time", NOW.getEpochSecond())
-                .build());
 
         assertThat(identityLinkAuthentication.resolveAuthenticatedAccountId(mock(HttpServletRequest.class)))
                 .isNull();

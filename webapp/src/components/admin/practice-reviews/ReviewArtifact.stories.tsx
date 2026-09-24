@@ -1,9 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
-import { ReviewArtifactLabel, ReviewArtifactLink } from "./ReviewArtifact";
 import {
 	gitlabMergeRequest,
 	outlineDocument,
@@ -11,7 +10,8 @@ import {
 	type ReviewWork,
 	slackConversation,
 	trackerIssue,
-} from "./story-mock-data";
+} from "./fixtures";
+import { ReviewArtifactLabel, ReviewArtifactLink } from "./ReviewArtifact";
 
 /** The work as a run names it: the server's label, and the provider's mark since the run records one. */
 const onRun = ({ reviewedWork, provider }: ReviewWork) => ({ artifact: reviewedWork, provider });
@@ -22,7 +22,6 @@ const onRun = ({ reviewedWork, provider }: ReviewWork) => ({ artifact: reviewedW
  * indistinguishable from a GitLab one.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Reviewed work",
 	component: ReviewArtifactLabel,
 	parameters: { layout: "padded", chromatic: { viewports: [1440] } },
 	tags: ["autodocs"],

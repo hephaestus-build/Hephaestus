@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent } from "storybook/test";
 
-import { settledPopup } from "@/test/overlay";
+import { settledPopup } from "@/stories/overlay";
 
 import { ASSESSMENT_DEFS } from "./assessment-defs";
 import { StatusBadgeWithSentence } from "./StatusTooltip";
@@ -12,7 +12,6 @@ import { StatusBadgeWithSentence } from "./StatusTooltip";
  * as a pointer does; `StatusTooltip` underneath is the same tooltip over a bare icon.
  */
 const meta = {
-	title: "Shared/Practice vocabulary/Status tooltip",
 	component: StatusBadgeWithSentence,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],

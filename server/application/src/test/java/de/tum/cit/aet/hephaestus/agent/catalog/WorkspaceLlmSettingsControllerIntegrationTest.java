@@ -68,7 +68,8 @@ class WorkspaceLlmSettingsControllerIntegrationTest extends AbstractWorkspaceInt
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -93,7 +94,8 @@ class WorkspaceLlmSettingsControllerIntegrationTest extends AbstractWorkspaceInt
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -101,6 +103,7 @@ class WorkspaceLlmSettingsControllerIntegrationTest extends AbstractWorkspaceInt
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
     }
 }

@@ -10,7 +10,7 @@ import { Streamdown } from "streamdown";
 
 import { MarkdownCode } from "@/components/common/MarkdownCode";
 
-const HTTP_URL = /^https?:\/\//i;
+const HTTP_URL = /^https?:\/\//iu;
 
 /** A link the model wrote is only a link when it is one: anything else renders as its own text. */
 function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnchorElement>) {
@@ -45,11 +45,15 @@ const RenderTextContext = createContext<(value: string) => ReactNode>((value) =>
  * renderer hands over a single node or an array of them, and only the strings are text runs — a
  * nested element carries its own, through its own `TextRuns`.
  */
-function TextRuns({ children }: { children?: ReactNode }) {
+function TextRuns({ children }: { children?: ReactNode }): ReactNode {
 	const renderText = useContext(RenderTextContext);
-	if (typeof children === "string") return renderText(children);
-	if (!Array.isArray(children)) return children;
-	return children.map((child: ReactNode, index) =>
+	if (typeof children === "string") {
+		return renderText(children);
+	}
+	if (!Array.isArray(children)) {
+		return children;
+	}
+	return children.map((child: ReactNode, index): ReactNode =>
 		typeof child === "string" ? <Fragment key={index}>{renderText(child)}</Fragment> : child,
 	);
 }
@@ -140,6 +144,8 @@ export function UntrustedMarkdown({ children, renderText }: UntrustedMarkdownPro
 			{children}
 		</Streamdown>
 	);
-	if (!renderText) return markdown;
+	if (!renderText) {
+		return markdown;
+	}
 	return <RenderTextContext.Provider value={renderText}>{markdown}</RenderTextContext.Provider>;
 }

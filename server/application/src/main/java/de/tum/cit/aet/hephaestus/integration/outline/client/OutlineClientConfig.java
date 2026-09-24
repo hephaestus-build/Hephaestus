@@ -63,7 +63,7 @@ public class OutlineClientConfig {
      * </ul>
      *
      * <p>Unknown <em>enum</em> values are tolerated separately, at the contract level (openapi-generator's
-     * {@code enumUnknownDefaultCase=true} in {@code server/pom.xml}), not here — full rationale in
+     * {@code enumUnknownDefaultCase=true} in {@code server/generated-clients/build.gradle.kts}), not here — full rationale in
      * {@code OutlineDeserializationToleranceTest#unknownEnumValueDecodesToUnknownDefaultOnWebClientPath}.
      *
      * <p>Exposed so tests that deserialize real fixtures exercise the exact same policy as the running client.

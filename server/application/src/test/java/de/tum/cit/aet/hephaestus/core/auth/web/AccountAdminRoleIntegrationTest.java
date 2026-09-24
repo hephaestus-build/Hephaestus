@@ -64,7 +64,8 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
                 .bodyValue(Map.of("appRole", "USER"))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         assertThat(accountRepository.findById(persistedId(victim.getId())))
                 .get()
@@ -160,7 +161,8 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(tokenFor(user)))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     private Callable<Integer> demote(String token, Long targetId, CountDownLatch ready, CountDownLatch go) {

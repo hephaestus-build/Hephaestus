@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception;
 
+import java.io.Serial;
+
 /**
  * Exception thrown when a GitHub API call is rejected because the circuit breaker is open.
  * <p>
@@ -14,6 +16,9 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception;
  * </ul>
  */
 public class CircuitBreakerOpenException extends RuntimeException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     public CircuitBreakerOpenException(String message) {
         super(message);

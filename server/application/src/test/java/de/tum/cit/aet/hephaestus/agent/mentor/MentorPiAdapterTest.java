@@ -79,7 +79,7 @@ class MentorPiAdapterTest extends BaseUnitTest {
                 "gpt-5.4",
                 null,
                 null,
-                false,
+                null,
                 null,
                 null,
                 null,

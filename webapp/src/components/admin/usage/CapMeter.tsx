@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 
-import { Progress } from "@/components/ui/progress";
+import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
 import { formatCapUsd, formatCostUsd } from "@/lib/money";
-import { cn } from "@/lib/utils";
 
 import { BUDGET_WARN_PERCENT } from "./usage-utils";
 
@@ -52,19 +51,23 @@ export function CapMeter({ spendUsd, capUsd, percent, paused, label }: CapMeterP
 	const rounded = Math.round(percent);
 	// Comma, not an em-dash: screen readers render an em-dash inconsistently, and some spell it out.
 	const valueText = `${rounded}% used, ${formatCostUsd(spendUsd)} of ${formatCapUsd(capUsd)}`;
-	const tone =
-		paused || percent >= 100
-			? "**:data-[slot=progress-indicator]:bg-destructive"
-			: percent >= BUDGET_WARN_PERCENT
-				? "**:data-[slot=progress-indicator]:bg-warning"
-				: "**:data-[slot=progress-indicator]:bg-primary";
+	let tone = "bg-primary";
+	if (paused || percent >= 100) {
+		tone = "bg-destructive";
+	} else if (percent >= BUDGET_WARN_PERCENT) {
+		tone = "bg-warning";
+	}
 
 	return (
 		<Progress
 			value={value}
 			aria-label={label}
 			getAriaValueText={() => valueText}
-			className={cn("w-full *:data-[slot=progress-track]:h-1.5", tone)}
-		/>
+			className="w-full"
+		>
+			<ProgressTrack className="h-1.5">
+				<ProgressIndicator className={tone} />
+			</ProgressTrack>
+		</Progress>
 	);
 }

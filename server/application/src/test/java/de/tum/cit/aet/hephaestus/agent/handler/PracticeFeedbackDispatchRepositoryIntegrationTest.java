@@ -191,7 +191,7 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
 
         assertThat(dispatchRepository.findById(dispatchId)).hasValueSatisfying(dispatch -> {
             assertThat(dispatch.getBody()).isEqualTo("body");
-            assertThat(dispatch.packageContent().path("mrNote").asText()).isEqualTo("body");
+            assertThat(dispatch.packageContent().path("mrNote").asString()).isEqualTo("body");
         });
     }
 

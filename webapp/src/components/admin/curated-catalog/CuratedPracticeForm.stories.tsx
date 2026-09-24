@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
@@ -10,9 +10,9 @@ import {
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
+import { settledDrawerPanel } from "@/stories/overlay";
+import { expectNoPanelOverflow, expectPanelContentInset } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { settledDrawerPanel } from "@/test/overlay";
-import { expectNoPanelOverflow, expectPanelContentInset } from "@/test/reflow";
 
 import { curatedPracticeLevel, GUARDED_CURATED_LEVEL_KINDS } from "./curated-catalog-search";
 import { CuratedFormLevel } from "./CuratedFormLevel";
@@ -32,6 +32,7 @@ const initialData: CuratedPracticeFormInitialValue = {
 	whyItMatters: "Reviewers should not need to reconstruct the author's intent.",
 	whatGoodLooksLike: "The description states why, what changed, and how it was verified.",
 	precomputeScript: "export default function precompute() { return {}; }",
+	deliveryBehavior: { summaryOnly: false },
 	automatedReviewPolicy: mockPullRequestPolicy,
 	automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 	status: {
@@ -43,7 +44,6 @@ const initialData: CuratedPracticeFormInitialValue = {
 };
 
 const meta = {
-	title: "Instance admin/Practice catalog/Practice editor",
 	component: CuratedPracticeForm,
 	parameters: {
 		layout: "fullscreen",
@@ -103,6 +103,33 @@ export const Edit: Story = {
 	},
 };
 
+const scopedGate = {
+	absentSays: "the change has no Swift code",
+	anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+};
+
+export const ScopedReviewerEdit: Story = {
+	args: {
+		mode: "edit",
+		initialData: {
+			...initialData,
+			bindings: [{ ...mockPullRequestBinding, subject: "REVIEWER", appliesWhen: scopedGate }],
+		},
+		groups,
+		isPending: false,
+		onSubmit: fn(),
+	},
+	play: async () => {
+		await settledDrawerPanel();
+		await expect(
+			screen.getByRole("combobox", { name: "Person this practice judges" }),
+		).toHaveTextContent("reviewer");
+		await expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveValue(
+			JSON.stringify(scopedGate, null, 2),
+		);
+	},
+};
+
 export const StaleEdit: Story = {
 	args: {
 		mode: "edit",
@@ -135,6 +162,7 @@ export const HephaestusUpdateAvailable: Story = {
 				artifactKind: "scm.pull_request",
 				bindings: [mockPullRequestBinding],
 				criteria: "The updated default criteria",
+				deliveryBehavior: { summaryOnly: false },
 				automatedReviewPolicy: mockPullRequestPolicy,
 				automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 				whyItMatters: "So a reviewer can start from intent rather than diff archaeology.",
@@ -142,24 +170,18 @@ export const HephaestusUpdateAvailable: Story = {
 		},
 		groups,
 		isPending: false,
+		releaseReview: <p>Compare the adopted, saved, and offered fields.</p>,
 		onUseHephaestusVersion: fn(),
 		onKeepCurrentDefinition: fn(),
 		onSubmit: fn(),
 	},
 	play: async () => {
 		const popup = await settledDrawerPanel();
-		// The version banner is the host's, not the form's: rendered as a sibling of `DrawerBody` it
-		// lands directly on the panel, which has no padding, and touches both edges.
 		await expectPanelContentInset(popup);
-		// The full label, since colour alone cannot carry which kind of update it is.
-		await expect(screen.getByText("Hephaestus update available: review rules")).toBeVisible();
-		await expect(screen.getByText(/would change review rules/)).toBeVisible();
-		await expect(screen.getByRole("button", { name: "Review Hephaestus update" })).toBeVisible();
-		await expect(screen.getByRole("button", { name: "Apply Hephaestus update" })).toBeVisible();
-		await expect(screen.getByRole("button", { name: "Keep saved version" })).toBeVisible();
-		await userEvent.click(screen.getByRole("button", { name: "Review Hephaestus update" }));
-		await expect(screen.getByText("Unassigned")).toBeVisible();
-		await expect(screen.getAllByText("Not set").length).toBeGreaterThan(0);
+		await expect(screen.getByText("Compare the adopted, saved, and offered fields.")).toBeVisible();
+		await expect(
+			screen.queryByRole("button", { name: "Keep saved version" }),
+		).not.toBeInTheDocument();
 	},
 };
 
@@ -176,7 +198,7 @@ export const ValidationErrors: Story = {
 		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));
 		await expect(screen.getByText("Name must be at least 3 characters")).toBeVisible();
 		await expect(screen.queryByText("Select at least one trigger event")).not.toBeInTheDocument();
-		await expect(screen.getByRole("textbox", { name: /Name/ })).toHaveAttribute(
+		await expect(screen.getByRole("textbox", { name: /Name/u })).toHaveAttribute(
 			"aria-describedby",
 			"practice-name-error",
 		);
@@ -193,6 +215,6 @@ export const Submitting: Story = {
 	},
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByRole("textbox", { name: /Name/ })).toBeDisabled();
+		await expect(screen.getByRole("textbox", { name: /Name/u })).toBeDisabled();
 	},
 };

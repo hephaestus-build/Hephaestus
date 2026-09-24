@@ -1,13 +1,14 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
-import type { DetailStackEntry } from "@/components/core/detail-drawer/detail-stack";
-import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
+import type { DetailStackEntry } from "@/components/layout/detail-drawer/detail-stack";
+import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import type { ReviewRunFeedState } from "@/components/profile/review-runs";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
 import { withPageBehind } from "@/stories/decorators";
 import { useFeedbackRatings } from "@/stories/feedback-ratings";
+import { expectSettledVisible } from "@/stories/overlay";
 import {
 	detailObservation,
 	detailPractices,
@@ -17,9 +18,8 @@ import {
 } from "@/stories/practice-detail-story-mock-data";
 import { ALL_FEEDBACK_CARDS } from "@/stories/practice-feedback-cards-story-mock-data";
 import { packagingGroup } from "@/stories/practice-profile-story-mock-data";
+import { expectNoPanelOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
-import { expectSettledVisible } from "@/test/overlay";
-import { expectNoPanelOverflow } from "@/test/reflow";
 
 import {
 	DEFAULT_PRACTICE_TAB,
@@ -57,7 +57,6 @@ function RatedLevel(props: PracticeDetailLevelProps) {
  * there. Which observations are open is each row's own.
  */
 const meta = {
-	title: "Practice profile/Practice detail level",
 	component: PracticeDetailLevel,
 	parameters: { layout: "fullscreen" },
 	decorators: [withPageBehind],
@@ -135,7 +134,9 @@ type Story = StoryObj<typeof meta>;
 
 /** The second-newest observation in the fixture feed. */
 const olderObservation = detailRuns[1]?.observations[0];
-if (!olderObservation) throw new Error("Expected a second run in the fixture feed.");
+if (!olderObservation) {
+	throw new Error("Expected a second run in the fixture feed.");
+}
 
 /**
  * Arrives on the observations with the newest open to why it was noted, the evidence, the next
@@ -159,10 +160,10 @@ export const Default: Story = {
 
 		// The newest is open without a press, with its reasons; every earlier one waits for one.
 		await expect(
-			screen.getByRole("button", { name: new RegExp(detailObservation.summary) }),
+			screen.getByRole("button", { name: new RegExp(detailObservation.summary, "u") }),
 		).toHaveAttribute("aria-expanded", "true");
 		await expect(
-			screen.getByRole("button", { name: new RegExp(olderObservation.summary) }),
+			screen.getByRole("button", { name: new RegExp(olderObservation.summary, "u") }),
 		).toHaveAttribute("aria-expanded", "false");
 		await expect(screen.getAllByText("Why it was noted")).toHaveLength(1);
 		await expect(screen.getAllByText("Next step")).toHaveLength(1);
@@ -170,10 +171,12 @@ export const Default: Story = {
 		// A run reviews this practice once, so every card here is one block: the summary leads and
 		// the work it was seen on is the line under it, with no head divided off above.
 		const row = screen.getByText(detailObservation.summary).closest("li");
-		if (!row) throw new Error("Expected the observation's own row.");
+		if (!row) {
+			throw new Error("Expected the observation's own row.");
+		}
 		const rows = row.closest("ul");
 		await expect(rows?.parentElement?.firstElementChild).toBe(rows);
-		await expect(within(row).getByRole("link", { name: /^#902/ })).toBeVisible();
+		await expect(within(row).getByRole("link", { name: /^#902/u })).toBeVisible();
 		await expect(within(row).getByText("HephaestusTest/practice-validation")).toBeVisible();
 
 		await expect(screen.getByText("PracticeCatalogLoader.java")).toBeVisible();
@@ -189,12 +192,12 @@ export const Default: Story = {
 export const OpenedAndClosed: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
-		const older = screen.getByRole("button", { name: new RegExp(olderObservation.summary) });
+		const older = screen.getByRole("button", { name: new RegExp(olderObservation.summary, "u") });
 		await userEvent.click(older);
 		await expect(older).toHaveAttribute("aria-expanded", "true");
 		await expect(screen.getAllByText("Why it was noted")).toHaveLength(2);
 
-		const newest = screen.getByRole("button", { name: new RegExp(detailObservation.summary) });
+		const newest = screen.getByRole("button", { name: new RegExp(detailObservation.summary, "u") });
 		await userEvent.click(newest);
 		await expect(newest).toHaveAttribute("aria-expanded", "false");
 		await expect(older).toHaveAttribute("aria-expanded", "true");
@@ -254,7 +257,9 @@ export const FeedbackTab: Story = {
 		const [open, resolved] = screen.getAllByRole("article", {
 			name: "Descriptions named the what, rarely the why",
 		});
-		if (!open || !resolved) throw new Error("Expected the open and the resolved card.");
+		if (!open || !resolved) {
+			throw new Error("Expected the open and the resolved card.");
+		}
 		await expect(within(open).getByText("Open")).toBeVisible();
 		// Each card heads with the practice as the grey pill, on the practice's own level too.
 		for (const card of [open, resolved]) {
@@ -279,7 +284,9 @@ export const FeedbackToAbout: Story = {
 	play: async ({ args }) => {
 		await expectSettledVisible(await screen.findByText("Current feedback"));
 		const [open] = screen.getAllByRole("article");
-		if (!open) throw new Error("Expected the open card.");
+		if (!open) {
+			throw new Error("Expected the open card.");
+		}
 		await userEvent.click(
 			within(open).getByRole("button", { name: "Learn more about this practice" }),
 		);
@@ -375,8 +382,8 @@ export const NotObserved: Story = {
 		await expect(
 			screen.getByText("This practice has no current verdict for you yet."),
 		).toBeVisible();
-		await expect(screen.queryByText(/No practice in this group/)).not.toBeInTheDocument();
-		await expect(screen.queryByText(/Based on your latest/)).not.toBeInTheDocument();
+		await expect(screen.queryByText(/No practice in this group/u)).not.toBeInTheDocument();
+		await expect(screen.queryByText(/Based on your latest/u)).not.toBeInTheDocument();
 		// The header's chip is the only one: no direction is claimed over no verdict.
 		await expect(screen.getAllByText("Not enough to compare yet")).toHaveLength(1);
 	},
@@ -410,8 +417,10 @@ export const MobileReflow: Story = {
 		await expectSettledVisible(await screen.findByText("PracticeCatalogLoader.java"));
 		// The frontmost panel: the group level behind it is a placeholder with no body to measure.
 		const panels = document.querySelectorAll<HTMLElement>('[data-slot="drawer-popup"]');
-		const frontmost = panels[panels.length - 1];
-		if (!frontmost) throw new Error("Expected the practice level to be open.");
+		const frontmost = [...panels].at(-1);
+		if (!frontmost) {
+			throw new Error("Expected the practice level to be open.");
+		}
 		await expectNoPanelOverflow(frontmost);
 	},
 };

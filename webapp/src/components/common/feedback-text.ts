@@ -46,7 +46,7 @@ export function work(ref: ReviewedWorkRef): FeedbackTextSegment {
  * How the composer names a piece of work in a body: the provider's number after its sigil,
  * "#418" or "!421" — `feedback-composer.md` allows no other way to refer to work.
  */
-const WORK_REFERENCE = /[#!]\d+/g;
+const WORK_REFERENCE = /[#!]\d+/gu;
 
 /**
  * A run of the composer's own words with every reference to a piece of work the caller knows — a
@@ -56,19 +56,25 @@ const WORK_REFERENCE = /[#!]\d+/g;
 export function linkWork(body: string, known: ReviewedWorkRef[]): FeedbackTextSegment[] {
 	const byNumber = new Map(
 		known
-			.filter((ref) => /^[#!]\d+$/.test(ref.label))
+			.filter((ref) => /^[#!]\d+$/u.test(ref.label))
 			.map((ref) => [ref.label.slice(1), ref] as const),
 	);
 	const segments: FeedbackTextSegment[] = [];
 	let cursor = 0;
 	for (const match of body.matchAll(WORK_REFERENCE)) {
 		const ref = byNumber.get(match[0].slice(1));
-		if (!ref) continue;
-		if (match.index > cursor) segments.push(text(body.slice(cursor, match.index)));
+		if (!ref) {
+			continue;
+		}
+		if (match.index > cursor) {
+			segments.push(text(body.slice(cursor, match.index)));
+		}
 		segments.push(work(ref));
 		cursor = match.index + match[0].length;
 	}
-	if (cursor < body.length || segments.length === 0) segments.push(text(body.slice(cursor)));
+	if (cursor < body.length || segments.length === 0) {
+		segments.push(text(body.slice(cursor)));
+	}
 	return segments;
 }
 
@@ -96,7 +102,9 @@ export const countedWork = (kind: string | undefined, n: number, provider?: Work
 /** "A", "A and B", "A, B and C". */
 export function list(items: FeedbackTextSegment[][]): FeedbackTextSegment[] {
 	return items.flatMap((item, index) => {
-		if (index === 0) return item;
+		if (index === 0) {
+			return item;
+		}
 		return [text(index === items.length - 1 ? " and " : ", "), ...item];
 	});
 }

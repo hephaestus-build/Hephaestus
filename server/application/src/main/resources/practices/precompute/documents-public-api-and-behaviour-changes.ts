@@ -5,36 +5,40 @@
 // surface) or merely internal/private? An app-only repo with no library product has no public API to document,
 // and a modifier-less Swift declaration is INTERNAL — not public. We surface {hasPublicProduct,
 // changedPublicSymbols, changedInternalSymbols} and let the model decide whether documentation was owed.
-// Treating modifier-less Swift as public on an app-only repo yields false assessment=BAD findings, so the
+// Treating modifier-less Swift as public on an app-only repo yields false negative observations, so the
 // export-status table classifies it as internal. The table is keyed off file extension: adding a language =
 // one row, no engine change.
+import { isCommentLine } from "../lib/declarations.ts";
 import { findFiles, readFileLines } from "../lib/grep.ts";
+import { languageOf } from "../lib/languages.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 // ── (1) Public-product manifest scan ──────────────────────────────────────────────────────────────────────
 // Each manifest filename maps to a predicate over its raw text that answers "does this declare a consumable
 // library/framework product?". One row per ecosystem; the predicate stays neutral (a structural test, no observation).
-const PRODUCT_MANIFESTS: Array<[RegExp, (text: string) => boolean]> = [
+const PRODUCT_MANIFESTS: [RegExp, (text: string) => boolean][] = [
 	// Swift Package Manager: a `.library(...)` product (executables/apps don't expose a public API surface).
-	[/(^|\/)Package\.swift$/, (t) => /\.library\s*\(/.test(t)],
+	[/(?:^|\/)Package\.swift$/u, (t) => /\.library\s*\(/u.test(t)],
 	// npm: a non-private package that declares an entry/types surface for consumers.
 	[
-		/(^|\/)package\.json$/,
-		(t) => !/"private"\s*:\s*true/.test(t) && /"(main|module|exports|types|typings)"\s*:/.test(t),
+		/(?:^|\/)package\.json$/u,
+		(t) =>
+			!/"private"\s*:\s*true/u.test(t) && /"(?:main|module|exports|types|typings)"\s*:/u.test(t),
 	],
 	// Maven: packaged as a real artifact (jar/etc.), not an aggregator pom.
-	[/(^|\/)pom\.xml$/, (t) => !/<packaging>\s*pom\s*<\/packaging>/.test(t)],
+	[/(?:^|\/)pom\.xml$/u, (t) => !/<packaging>\s*pom\s*<\/packaging>/u.test(t)],
 	// Gradle: applies the java-library plugin or a publishing plugin.
 	[
-		/(^|\/)build\.gradle(\.kts)?$/,
-		(t) => /(java-library|maven-publish|`maven-publish`|com\.vanniktech\.maven\.publish)/.test(t),
+		/(?:^|\/)build\.gradle(?:\.kts)?$/u,
+		(t) =>
+			/(?:java-library|maven-publish|`maven-publish`|com\.vanniktech\.maven\.publish)/u.test(t),
 	],
 	// Python: declares packages to distribute.
-	[/(^|\/)setup\.py$/, (t) => /(packages\s*=|find_packages\s*\()/.test(t)],
-	[/(^|\/)setup\.cfg$/, (t) => /\[options\][^[]*packages\s*=/.test(t)],
-	[/(^|\/)pyproject\.toml$/, (t) => /(\[project\]|\[tool\.poetry\]|packages\s*=)/.test(t)],
+	[/(?:^|\/)setup\.py$/u, (t) => /(?:packages\s*=|find_packages\s*\()/u.test(t)],
+	[/(?:^|\/)setup\.cfg$/u, (t) => /\[options\][^[]*packages\s*=/u.test(t)],
+	[/(?:^|\/)pyproject\.toml$/u, (t) => /(?:\[project\]|\[tool\.poetry\]|packages\s*=)/u.test(t)],
 	// Go: a module declaration makes the package importable by others.
-	[/(^|\/)go\.mod$/, (t) => /^module\s+\S+/m.test(t)],
+	[/(?:^|\/)go\.mod$/u, (t) => /^module\s+\S+/mu.test(t)],
 ];
 
 const MANIFEST_NAMES = ["swift", "json", "xml", "gradle", "kts", "py", "cfg", "toml", "mod"];
@@ -43,73 +47,65 @@ const MANIFEST_NAMES = ["swift", "json", "xml", "gradle", "kts", "py", "cfg", "t
 // For each language: detect that a line declares a symbol, and whether that symbol is PUBLIC (exported) or not.
 // `isPublic` is only consulted when `decl` matches. Modifier-less Swift is INTERNAL, not public.
 interface ExportRule {
-	decl: RegExp; // line introduces a named declaration (func/class/type/var/const)
-	isPublic: (line: string) => boolean; // is that declaration part of the public surface?
+	// line introduces a named declaration (func/class/type/var/const)
+	decl: RegExp;
+	// is that declaration part of the public surface?
+	isPublic: (line: string) => boolean;
 }
 
 const EXPORT_RULES: Record<string, ExportRule> = {
 	// Swift: public/open are exported; modifier-less / internal / private / fileprivate are NOT public.
 	swift: {
-		decl: /\b(func|class|struct|enum|protocol|extension|var|let|typealias|actor|init)\b/,
-		isPublic: (l) => /\b(public|open)\b/.test(l),
+		decl: /\b(?:func|class|struct|enum|protocol|extension|var|let|typealias|actor|init)\b/u,
+		isPublic: (l) => /\b(?:public|open)\b/u.test(l),
 	},
-	// TypeScript: an `export` keyword (or `export default`) marks the public surface.
-	ts: {
-		decl: /\b(function|class|interface|type|enum|const|let|var|namespace)\b/,
-		isPublic: (l) => /\bexport\b/.test(l),
+	// TypeScript and JavaScript: an `export` keyword (or `export default`) marks the public surface.
+	typescript: {
+		decl: /\b(?:function|class|interface|type|enum|const|let|var|namespace)\b/u,
+		isPublic: (l) => /\bexport\b/u.test(l),
+	},
+	javascript: {
+		decl: /\b(?:function|class|const|let|var)\b/u,
+		isPublic: (l) => /\bexport\b/u.test(l),
 	},
 	// Java: only `public` declarations are part of the API; package-private/protected/private are not.
 	java: {
-		decl: /\b(class|interface|enum|record|void|[A-Z][A-Za-z0-9_<>[\]]*)\s+[A-Za-z_]\w*\s*[({]/,
-		isPublic: (l) => /\bpublic\b/.test(l),
+		decl: /\b(?:class|interface|enum|record|void|[A-Z][A-Za-z0-9_<>[\]]*)\s+[A-Za-z_]\w*\s*[({]/u,
+		isPublic: (l) => /\bpublic\b/u.test(l),
 	},
 	// Kotlin: declarations are public by default; private/internal/protected demote them.
 	kotlin: {
-		decl: /\b(fun|class|interface|object|val|var)\b/,
-		isPublic: (l) => !/\b(private|internal|protected)\b/.test(l),
+		decl: /\b(?:fun|class|interface|object|val|var)\b/u,
+		isPublic: (l) => !/\b(?:private|internal|protected)\b/u.test(l),
 	},
 	// Python: a leading-underscore name is private by convention; anything else is public.
 	python: {
-		decl: /^\s*(def|class)\s+[A-Za-z_]/,
-		isPublic: (l) => !/^\s*(def|class)\s+_/.test(l),
+		decl: /^\s*(?:def|class)\s+[A-Za-z_]/u,
+		isPublic: (l) => !/^\s*(?:def|class)\s+_/u.test(l),
 	},
 	// Go: an exported identifier starts with an upper-case letter.
 	go: {
-		decl: /^\s*(func|type|var|const)\s+[A-Za-z_]/,
-		isPublic: (l) => /^\s*(func|type|var|const)\s+(\([^)]*\)\s*)?[A-Z]/.test(l),
+		decl: /^\s*(?:func|type|var|const)\s+[A-Za-z_]/u,
+		isPublic: (l) => /^\s*(?:func|type|var|const)\s+(?:\([^)]*\)\s*)?[A-Z]/u.test(l),
 	},
 };
 
-// extension -> language key (one source of truth).
-const EXT_LANG: Record<string, string> = {
-	swift: "swift",
-	ts: "ts",
-	tsx: "ts",
-	mts: "ts",
-	cts: "ts",
-	js: "ts",
-	jsx: "ts",
-	mjs: "ts",
-	cjs: "ts",
-	java: "java",
-	kt: "kotlin",
-	kts: "kotlin",
-	py: "python",
-	go: "go",
-};
-
-function langOf(path: string): string | null {
-	const ext = path.split(".").pop()?.toLowerCase() ?? "";
-	return EXT_LANG[ext] ?? null;
-}
-
-function isComment(trimmed: string): boolean {
-	return (
-		trimmed.startsWith("//") ||
-		trimmed.startsWith("#") ||
-		trimmed.startsWith("*") ||
-		trimmed.startsWith("/*")
-	);
+// (1) Does the repo declare a public library/framework product?
+async function declaresPublicProduct(repoPath: string): Promise<boolean> {
+	for (const ext of MANIFEST_NAMES) {
+		for (const manifestPath of findFiles(repoPath, ext)) {
+			const matcher = PRODUCT_MANIFESTS.find(([re]) => re.test(manifestPath));
+			if (!matcher) {
+				continue;
+			}
+			const lines = await readFileLines(manifestPath);
+			const text = [...lines.values()].join("\n");
+			if (matcher[1](text)) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 export default async function documentsPublicApiAndBehaviourChanges(
@@ -117,37 +113,38 @@ export default async function documentsPublicApiAndBehaviourChanges(
 	diffFiles: Map<string, DiffFile>,
 	_m: PullRequestMetadata,
 ) {
-	// (1) Does the repo declare a public library/framework product?
-	let hasPublicProduct = false;
-	for (const ext of MANIFEST_NAMES) {
-		if (hasPublicProduct) break;
-		for (const manifestPath of findFiles(repoPath, ext)) {
-			const matcher = PRODUCT_MANIFESTS.find(([re]) => re.test(manifestPath));
-			if (!matcher) continue;
-			const lines = await readFileLines(manifestPath);
-			const text = [...lines.values()].join("\n");
-			if (matcher[1](text)) {
-				hasPublicProduct = true;
-				break;
-			}
-		}
-	}
+	const hasPublicProduct = await declaresPublicProduct(repoPath);
 
 	// (2) Classify each declaration ADDED in the diff as public (exported) or internal.
 	const hints: Hint[] = [];
 	let changedPublicSymbols = 0;
 	let changedInternalSymbols = 0;
+	let filesScanned = 0;
+	let linesAdded = 0;
 	for (const [path, df] of diffFiles) {
-		const lang = langOf(path);
-		if (!lang) continue;
+		const lang = languageOf(path);
+		if (lang === null) {
+			continue;
+		}
 		const rule = EXPORT_RULES[lang];
-		if (!rule) continue;
+		if (!rule) {
+			continue;
+		}
+		filesScanned += 1;
 		for (const [line, content] of df.addedLines) {
-			const trimmed = content.trimStart();
-			if (isComment(trimmed) || !rule.decl.test(content)) continue;
+			if (isCommentLine(content, lang)) {
+				continue;
+			}
+			linesAdded += 1;
+			if (!rule.decl.test(content)) {
+				continue;
+			}
 			const isPublic = rule.isPublic(content);
-			if (isPublic) changedPublicSymbols++;
-			else changedInternalSymbols++;
+			if (isPublic) {
+				changedPublicSymbols += 1;
+			} else {
+				changedInternalSymbols += 1;
+			}
 			if (hints.length < 40) {
 				hints.push({
 					file: path,
@@ -184,6 +181,8 @@ export default async function documentsPublicApiAndBehaviourChanges(
 			hasPublicProduct: hasPublicProduct ? 1 : 0,
 			changedPublicSymbols,
 			changedInternalSymbols,
+			filesScanned,
+			linesAdded,
 		},
 		directions,
 	};

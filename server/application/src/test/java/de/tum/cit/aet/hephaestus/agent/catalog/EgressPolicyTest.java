@@ -218,11 +218,9 @@ class EgressPolicyTest extends BaseUnitTest {
         @Test
         @DisplayName("a host present in the allowlist (case-insensitive) is permitted")
         void permitsAHostListedInTheAllowlistIgnoringCase() {
-            // example.com is IANA-reserved and guaranteed globally resolvable — used here (instead of an
-            // IP literal) specifically to exercise the allowlist's case-insensitive host match.
-            stubAllowlist("api.openai.com,EXAMPLE.COM\napi.anthropic.com");
+            stubAllowlist("8.8.8.8,[2606:4700:4700::ABCD]\n1.1.1.1");
 
-            assertThatCode(() -> loopbackBlocked().validate("https://example.com/v1"))
+            assertThatCode(() -> loopbackBlocked().validate("https://[2606:4700:4700::abcd]/v1"))
                     .doesNotThrowAnyException();
         }
 

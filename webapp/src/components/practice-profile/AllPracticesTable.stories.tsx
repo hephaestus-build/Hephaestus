@@ -12,14 +12,13 @@ import {
 	practicesByGroup,
 	SHARED_TRANSITION_OVERVIEW,
 } from "@/stories/practice-profile-story-mock-data";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { expectNoPageOverflow } from "@/test/reflow";
 
 import { AllPracticesTable } from "./AllPracticesTable";
 import { composeOverview } from "./compose-overview";
 
 const meta = {
-	title: "Practice profile/All practices table",
 	component: AllPracticesTable,
 	tags: ["autodocs"],
 	args: {
@@ -58,7 +57,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
 		// What needs attention comes first, and the standing words are the registry's.
-		const rows = canvas.getAllByRole("button", { name: /^Open group / });
+		const rows = canvas.getAllByRole("button", { name: /^Open group /u });
 		await expect(rows.map((row) => row.getAttribute("aria-label"))).toStrictEqual([
 			"Open group Packaging work for review",
 			"Open group Communicating in the open",
@@ -105,7 +104,9 @@ export const Default: Story = {
 export const ManyEvents: Story = {
 	play: async ({ args, canvas }) => {
 		const cell = canvas.getByText("Packaging work for review").closest("td");
-		if (!cell) throw new Error("The group's name sits in its cell");
+		if (!cell) {
+			throw new Error("The group's name sits in its cell");
+		}
 		await expect(within(cell).getByRole("list")).toHaveClass("marker:text-muted-foreground");
 		const items = within(cell).getAllByRole("listitem");
 		await expect(items).toHaveLength(5);
@@ -113,7 +114,7 @@ export const ManyEvents: Story = {
 		// Each reference carries its own "(opens in a new tab)", so the sentence is matched to its
 		// first.
 		await expect(items[1]).toHaveTextContent(
-			/^Describe what changed and why resolved by the work after #22/,
+			/^Describe what changed and why resolved by the work after #22/u,
 		);
 		const pill = within(cell).getByRole("button", { name: "Scope the change to one concern" });
 		await expect(pill).toHaveAttribute("data-slot", "badge");
@@ -133,7 +134,9 @@ export const OneBulletPerMove: Story = {
 	args: { sentences: composeOverview(SHARED_TRANSITION_OVERVIEW).groupSentences },
 	play: async ({ args, canvas }) => {
 		const cell = canvas.getByText("Packaging work for review").closest("td");
-		if (!cell) throw new Error("The group's name sits in its cell");
+		if (!cell) {
+			throw new Error("The group's name sits in its cell");
+		}
 		const items = within(cell).getAllByRole("listitem");
 		await expect(items).toHaveLength(3);
 		// The group moved where this practice moved, so it is the tail of that practice's bullet.
@@ -156,7 +159,9 @@ export const OneBulletPerMove: Story = {
 		// A move none of the group's practices made is the group's own bullet, and it says "the
 		// group": the row beside it already names it.
 		const alone = canvas.getByText("Communicating in the open").closest("td");
-		if (!alone) throw new Error("The group's name sits in its cell");
+		if (!alone) {
+			throw new Error("The group's name sits in its cell");
+		}
 		await expect(within(alone).getByRole("listitem")).toHaveTextContent(
 			"The group moved to Mixed feedback.",
 		);
@@ -174,7 +179,7 @@ export const Sorting: Story = {
 		await userEvent.click(within(standing).getByRole("button", { name: "Standing" }));
 		await expect(args.onSortChange).toHaveBeenLastCalledWith({ direction: "desc" });
 		await expect(standing).toHaveAttribute("aria-sort", "descending");
-		const rows = canvas.getAllByRole("button", { name: /^Open group / });
+		const rows = canvas.getAllByRole("button", { name: /^Open group /u });
 		await expect(rows[0]).toHaveAccessibleName("Open group Testing your changes");
 
 		await userEvent.click(within(standing).getByRole("button", { name: "Standing" }));
@@ -189,7 +194,7 @@ export const SortedDescending: Story = {
 			"aria-sort",
 			"descending",
 		);
-		const rows = canvas.getAllByRole("button", { name: /^Open group / });
+		const rows = canvas.getAllByRole("button", { name: /^Open group /u });
 		await expect(rows[0]).toHaveAccessibleName("Open group Testing your changes");
 	},
 };
@@ -198,9 +203,7 @@ export const SortedDescending: Story = {
 export const OpenRow: Story = {
 	args: { openGroupSlug: "communication" },
 	play: async ({ canvas }) => {
-		const openRows = canvas
-			.getAllByRole("row")
-			.filter((row) => row.getAttribute("data-state") === "open");
+		const openRows = canvas.getAllByRole("row").filter((row) => row.dataset.state === "open");
 		await expect(openRows).toHaveLength(1);
 		await expect(openRows[0]).toHaveTextContent("Communicating in the open");
 	},
@@ -210,7 +213,7 @@ export const OpenRow: Story = {
 export const ReadOnly: Story = {
 	args: { onOpenGroup: undefined },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("button", { name: /^Open group / })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: /^Open group /u })).toBeNull();
 		await expect(canvas.getByText("Packaging work for review")).toBeVisible();
 	},
 };
@@ -235,7 +238,7 @@ export const Loading: Story = {
 			"aria-busy",
 			"true",
 		);
-		await expect(canvas.queryByRole("button", { name: /^Open group / })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: /^Open group /u })).toBeNull();
 	},
 };
 

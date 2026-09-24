@@ -6,7 +6,8 @@
  * `security/release-images.json`. Both hand the Trivy report to `check-release-vulnerabilities.ts`
  * — the same evaluator and the same policy file the build gate and the release use. A second copy
  * of either is precisely the failure this whole effort removes, so the policy is evaluated by
- * invoking that script rather than by reimplementing it.
+ * invoking that script rather than by reimplementing it. The blocking build scan shares only the
+ * platform-digest resolver through `resolve-image-scan-subject.ts`.
  */
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
@@ -19,7 +20,7 @@ import { output, run, succeeds } from "./process.ts";
  * gate, which is keyed per platform, name both — see `scan-upstream-images.ts`. */
 export const PLATFORM = "linux/amd64";
 
-const DIGEST = /^sha256:[a-f0-9]{64}$/;
+const DIGEST = /^sha256:[a-f0-9]{64}$/u;
 
 export interface Subject {
 	/** Short image name, as `security/release-images.json` and the policy exceptions spell it. */
@@ -56,24 +57,49 @@ export interface ScanOptions {
  */
 export function selectPlatformDigest(raw: unknown, platform: string): string | undefined {
 	const document = asRecord(raw, "imagetools manifest");
-	if (!Array.isArray(document.manifests)) return undefined;
+	if (!Array.isArray(document.manifests)) {
+		return undefined;
+	}
 	const [os, architecture] = platform.split("/");
 	for (const entry of document.manifests) {
-		if (!isRecord(entry) || !isRecord(entry.platform)) continue;
-		if (entry.platform.os !== os || entry.platform.architecture !== architecture) continue;
-		if (typeof entry.digest === "string") return entry.digest;
+		if (!isRecord(entry) || !isRecord(entry.platform)) {
+			continue;
+		}
+		if (entry.platform.os !== os || entry.platform.architecture !== architecture) {
+			continue;
+		}
+		if (typeof entry.digest === "string") {
+			return entry.digest;
+		}
 	}
 	return undefined;
 }
 
 /** Whether the inspected document is a multi-platform index rather than a single manifest. */
 export function isImageIndex(raw: unknown): boolean {
-	return Array.isArray(asRecord(raw, "imagetools manifest").manifests);
+	const document = asRecord(raw, "imagetools manifest");
+	if (Object.hasOwn(document, "manifests") && !Array.isArray(document.manifests)) {
+		throw new Error("imagetools index manifests must be an array");
+	}
+	return Array.isArray(document.manifests);
 }
 
-async function resolveDigest(subject: Subject, platform: string): Promise<string> {
+/** The digest of the manifest `reference` names, which for an index is the index itself. */
+async function manifestDigest(reference: string): Promise<string> {
+	const inspected = await output("docker", [
+		"buildx",
+		"imagetools",
+		"inspect",
+		"--format",
+		"{{.Manifest.Digest}}",
+		reference,
+	]);
+	return inspected.trim();
+}
+
+export async function resolvePlatformDigest(reference: string, platform: string): Promise<string> {
 	const raw: unknown = JSON.parse(
-		await output("docker", ["buildx", "imagetools", "inspect", subject.reference, "--raw"]),
+		await output("docker", ["buildx", "imagetools", "inspect", reference, "--raw"]),
 	);
 	const selected = selectPlatformDigest(raw, platform);
 	// An index that publishes no manifest for this platform must fail, never fall through. The
@@ -81,22 +107,13 @@ async function resolveDigest(subject: Subject, platform: string): Promise<string
 	// against the host it runs on — so the scan would quietly be `linux/amd64` while being filed as
 	// this platform's evidence, and the evaluator's ArtifactName check cannot catch it, because the
 	// reference Trivy reports is exactly the one it was handed.
-	if (selected === undefined && isImageIndex(raw))
-		throw new Error(`${subject.reference} publishes no ${platform} manifest`);
-	const digest =
-		selected ??
-		(
-			await output("docker", [
-				"buildx",
-				"imagetools",
-				"inspect",
-				"--format",
-				"{{.Manifest.Digest}}",
-				subject.reference,
-			])
-		).trim();
-	if (!DIGEST.test(digest))
-		throw new Error(`no ${platform} digest for ${subject.reference} (got: ${digest || "<empty>"})`);
+	if (selected === undefined && isImageIndex(raw)) {
+		throw new Error(`${reference} publishes no ${platform} manifest`);
+	}
+	const digest = selected ?? (await manifestDigest(reference));
+	if (!DIGEST.test(digest)) {
+		throw new Error(`no ${platform} digest for ${reference} (got: ${digest || "<empty>"})`);
+	}
 	return digest;
 }
 
@@ -106,7 +123,9 @@ export function reportStem(image: string, platform: string): string {
 }
 
 async function evaluatorPassed(evaluator: string[], annotate: boolean): Promise<boolean> {
-	if (!annotate) return succeeds("node", evaluator);
+	if (!annotate) {
+		return succeeds("node", evaluator);
+	}
 	try {
 		await run("node", evaluator);
 		return true;
@@ -121,7 +140,7 @@ async function scan(
 	platform: string,
 	annotate: boolean,
 ): Promise<ScanOutcome> {
-	const digest = await resolveDigest(subject, platform);
+	const digest = await resolvePlatformDigest(subject.reference, platform);
 	const stem = reportStem(subject.image, platform);
 	const report = path.join(directory, `${stem}.json`);
 	await run("trivy", [
@@ -146,8 +165,9 @@ async function scan(
 		"security/vulnerability-policy.json",
 		result,
 	];
-	if (await evaluatorPassed(evaluator, annotate))
+	if (await evaluatorPassed(evaluator, annotate)) {
 		return { image: subject.image, passed: true, platform };
+	}
 	if (!existsSync(result)) {
 		// It threw before writing anything — a malformed report or policy, not a finding. Re-run so
 		// the reason reaches the log, then fail: this is an infrastructure failure, and unlike a CVE
@@ -166,7 +186,8 @@ export async function scanAll(
 	await mkdir(directory, { recursive: true });
 	const platform = options.platform ?? PLATFORM;
 	const outcomes: ScanOutcome[] = [];
-	for (const subject of subjects)
+	for (const subject of subjects) {
 		outcomes.push(await scan(subject, directory, platform, options.annotate ?? false));
+	}
 	return outcomes;
 }

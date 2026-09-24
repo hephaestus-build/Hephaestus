@@ -1,6 +1,5 @@
 import { Copy, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import type { LoginProviderView } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -37,7 +36,8 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { getProviderLabel } from "@/lib/provider";
+import { copyToClipboard } from "@/lib/clipboard";
+import { getProviderLabel } from "@/lib/provider/provider-labels";
 
 interface LoginProvidersTableProps {
 	providers: LoginProviderView[];
@@ -96,7 +96,7 @@ export function LoginProvidersTable({
 
 	if (providers.length === 0) {
 		return (
-			<Empty className="border">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<KeyRound aria-hidden />
@@ -117,15 +117,6 @@ export function LoginProvidersTable({
 			</Empty>
 		);
 	}
-
-	const copyRedirect = async (uri: string) => {
-		try {
-			await navigator.clipboard.writeText(uri);
-			toast.success("Redirect URI copied");
-		} catch {
-			toast.error("Could not copy to clipboard");
-		}
-	};
 
 	return (
 		<>
@@ -149,7 +140,7 @@ export function LoginProvidersTable({
 									<div className="font-medium">{provider.displayName}</div>
 									<div className="text-xs text-muted-foreground">
 										{provider.registrationId}
-										{provider.seededFromEnv && (
+										{provider.seededFromEnv === true && (
 											<Badge variant="outline" className="ml-2 align-middle">
 												seeded
 											</Badge>
@@ -175,7 +166,9 @@ export function LoginProvidersTable({
 													<InputGroupButton
 														size="icon-xs"
 														aria-label={`Copy redirect URI for ${provider.displayName}`}
-														onClick={() => void copyRedirect(provider.redirectUri)}
+														onClick={() =>
+															copyToClipboard(provider.redirectUri, "Redirect URI copied")
+														}
 													>
 														<Copy aria-hidden />
 													</InputGroupButton>
@@ -191,7 +184,7 @@ export function LoginProvidersTable({
 											checked={provider.enabled}
 											disabled={busy}
 											aria-busy={busy}
-											aria-label={`${provider.enabled ? "Disable" : "Enable"} ${provider.displayName}`}
+											aria-label={`${provider.enabled === true ? "Disable" : "Enable"} ${provider.displayName}`}
 											onCheckedChange={(checked) => onToggleEnabled(provider, checked)}
 										/>
 										{busy && <Spinner className="size-3.5 text-muted-foreground" />}
@@ -231,7 +224,9 @@ export function LoginProvidersTable({
 				open={deleting != null}
 				// Dismissal is allowed even while the DELETE is in flight (ADR 0027).
 				onOpenChange={(open) => {
-					if (!open) setDeleting(null);
+					if (!open) {
+						setDeleting(null);
+					}
 				}}
 			>
 				<AlertDialogContent>
@@ -247,7 +242,11 @@ export function LoginProvidersTable({
 						<AlertDialogAction
 							variant="destructive"
 							disabled={isDeletePending}
-							onClick={() => deleting && onDelete(deleting)}
+							onClick={() => {
+								if (deleting !== null) {
+									onDelete(deleting);
+								}
+							}}
 						>
 							{isDeletePending ? "Deleting…" : "Delete"}
 						</AlertDialogAction>

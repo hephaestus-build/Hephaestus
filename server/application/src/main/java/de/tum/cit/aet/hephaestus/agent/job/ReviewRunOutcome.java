@@ -1,5 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import org.jspecify.annotations.Nullable;
+import tools.jackson.databind.JsonNode;
+
 /**
  * Why a run that reached {@link AgentJobStatus#COMPLETED} produced the observations it did.
  *
@@ -20,7 +23,7 @@ public enum ReviewRunOutcome {
     static final String OUTPUT_FIELD = "outcome";
 
     /** Reads the outcome an executor recorded on {@code agent_job.output}; defaults to {@link #REVIEWED}. */
-    static ReviewRunOutcome fromJobOutput(tools.jackson.databind.JsonNode output) {
+    static ReviewRunOutcome fromJobOutput(@Nullable JsonNode output) {
         if (output == null || !output.has(OUTPUT_FIELD)) {
             return REVIEWED;
         }

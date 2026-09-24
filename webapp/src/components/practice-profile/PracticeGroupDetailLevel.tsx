@@ -1,8 +1,8 @@
 import { ClipboardCheckIcon } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
-import { GroupPill } from "@/components/admin/practice-catalog/GroupPill";
+import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
 import { count, type FeedbackTextSegment } from "@/components/common/feedback-text";
 import { FeedbackText } from "@/components/common/FeedbackText";
 import {
@@ -13,9 +13,9 @@ import {
 } from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { SectionLabel } from "@/components/common/SectionLabel";
-import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
-import { DetailPath, type LevelPath } from "@/components/core/detail-drawer/DetailPath";
-import { Section } from "@/components/core/Section";
+import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
+import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { Section } from "@/components/layout/Section";
 import {
 	HephFeedbackCard,
 	type HephFeedbackCardProps,
@@ -45,6 +45,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableCell } from "@/components/ui/table";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { hasText } from "@/lib/text";
 
 export interface PracticeGroupDetailLevelProps extends Partial<
 	Pick<HephFeedbackCardProps, "holdingUp" | "holdingUpNote" | "reviewedWork">
@@ -120,17 +121,21 @@ const loadingRow = (
  * word on what holds and the next step, and in two tabs the practices it reviews and what the
  * group is about. What the reviews found stays one level deeper, on the practice.
  */
+const NO_HELD: NonNullable<PracticeGroupDetailLevelProps["holdingUp"]> = [];
+const NO_WORK: NonNullable<PracticeGroupDetailLevelProps["reviewedWork"]> = [];
+const NO_SENTENCES: NonNullable<PracticeGroupDetailLevelProps["practiceSentences"]> = {};
+
 export function PracticeGroupDetailLevel({
 	nested,
 	path,
 	group,
 	standing,
 	practices,
-	holdingUp = [],
+	holdingUp = NO_HELD,
 	holdingUpNote,
-	reviewedWork = [],
+	reviewedWork = NO_WORK,
 	nextStep,
-	practiceSentences = {},
+	practiceSentences = NO_SENTENCES,
 	onOpenPractice,
 	openPracticeSlug,
 	isLoading,
@@ -186,6 +191,118 @@ export function PracticeGroupDetailLevel({
 		/>
 	);
 
+	let body: ReactNode;
+	if (isLoading) {
+		body = (
+			// Heph's card, the tabs and the practices table, as they will be laid out.
+			<>
+				<HephFeedbackCard holdingUp={[]} reviewedWork={[]} isLoading />
+				<PracticeTabsSkeleton tabs={2} />
+				{practicesTable}
+			</>
+		);
+	} else if (error != null) {
+		body = (
+			<QueryErrorAlert
+				error={error}
+				title={
+					group
+						? `Could not load your standing for ${group.name}`
+						: "Could not load this practice group"
+				}
+				onRetry={onRetry}
+			/>
+		);
+	} else if (group) {
+		body = (
+			<>
+				<HephFeedbackCard
+					holdingUp={holdingUp}
+					holdingUpNote={holdingUpNote}
+					reviewedWork={reviewedWork}
+					onOpenPractice={onOpenPractice}
+					blocks={
+						nextStep
+							? [
+									{
+										label: "Next step",
+										content: (
+											<FeedbackText
+												as="p"
+												segments={nextStep}
+												onOpenPractice={onOpenPractice}
+												className="max-w-2xl text-sm"
+											/>
+										),
+									},
+								]
+							: []
+					}
+				/>
+				<Tabs
+					value={tab}
+					onValueChange={(next) => {
+						const chosen = GROUP_TABS.find((candidate) => candidate === next);
+						if (chosen) {
+							setTab(chosen);
+						}
+					}}
+					className="gap-4"
+				>
+					<PracticeTabsRail>
+						<PracticeTabsList aria-label="Practice group">
+							{GROUP_TABS.map((candidate) => (
+								<PracticeTabsTrigger
+									key={candidate}
+									value={candidate}
+									count={candidate === "practices" ? practiceCount : undefined}
+								>
+									{TAB_LABELS[candidate]}
+								</PracticeTabsTrigger>
+							))}
+						</PracticeTabsList>
+					</PracticeTabsRail>
+					<TabsContent value="practices" className="min-w-0">
+						<Section
+							size="lg"
+							title="Practices in this group"
+							description="Each practice with its standing and trend. Open one for the work behind it."
+						>
+							{practicesTable}
+						</Section>
+					</TabsContent>
+					<TabsContent value="about" className="min-w-0">
+						<div className="flex flex-col gap-6">
+							<WhereYouStand
+								standing={standing?.standing ?? "NOT_OBSERVED"}
+								basis={formatGroupStandingBasis(counts)}
+								direction={standing?.direction}
+								support={standing?.trendSupport}
+								scope="group"
+							/>
+							<section className="flex flex-col gap-1.5" aria-labelledby="about-group-heading">
+								<SectionLabel as="h2" id="about-group-heading">
+									About this group
+								</SectionLabel>
+								{hasText(group.description) ? (
+									<p className="max-w-2xl text-sm">{group.description}</p>
+								) : (
+									<p className="text-sm text-muted-foreground">No description yet.</p>
+								)}
+							</section>
+						</div>
+					</TabsContent>
+				</Tabs>
+			</>
+		);
+	} else {
+		body = (
+			<p className="text-sm text-muted-foreground">
+				This practice group does not exist or is not active in this workspace.
+			</p>
+		);
+	}
+
 	return (
 		<>
 			<DetailDrawerHeader nested={nested}>
@@ -199,7 +316,7 @@ export function PracticeGroupDetailLevel({
 							icon={group?.icon}
 							color={group?.color}
 						/>
-						<DrawerTitle className="break-words text-2xl font-semibold tracking-tight">
+						<DrawerTitle className="text-2xl font-semibold tracking-tight break-words">
 							{group?.name ?? "Practice group"}
 						</DrawerTitle>
 					</div>
@@ -230,104 +347,7 @@ export function PracticeGroupDetailLevel({
 				{/* The line under the header, with room on both sides: the header, the line and Heph's
 				    card read as three things. */}
 				<Separator className="mb-2" />
-				{isLoading ? (
-					// Heph's card, the tabs and the practices table, as they will be laid out.
-					<>
-						<HephFeedbackCard holdingUp={[]} reviewedWork={[]} isLoading />
-						<PracticeTabsSkeleton tabs={2} />
-						{practicesTable}
-					</>
-				) : error ? (
-					<QueryErrorAlert
-						error={error}
-						title={
-							group
-								? `Could not load your standing for ${group.name}`
-								: "Could not load this practice group"
-						}
-						onRetry={onRetry}
-					/>
-				) : !group ? (
-					<p className="text-sm text-muted-foreground">
-						This practice group does not exist or is not active in this workspace.
-					</p>
-				) : (
-					<>
-						<HephFeedbackCard
-							holdingUp={holdingUp}
-							holdingUpNote={holdingUpNote}
-							reviewedWork={reviewedWork}
-							onOpenPractice={onOpenPractice}
-							blocks={
-								nextStep
-									? [
-											{
-												label: "Next step",
-												content: (
-													<FeedbackText
-														as="p"
-														segments={nextStep}
-														onOpenPractice={onOpenPractice}
-														className="max-w-2xl text-sm"
-													/>
-												),
-											},
-										]
-									: []
-							}
-						/>
-						<Tabs
-							value={tab}
-							onValueChange={(next) => {
-								const chosen = GROUP_TABS.find((candidate) => candidate === next);
-								if (chosen) setTab(chosen);
-							}}
-							className="gap-4"
-						>
-							<PracticeTabsRail>
-								<PracticeTabsList aria-label="Practice group">
-									{GROUP_TABS.map((candidate) => (
-										<PracticeTabsTrigger
-											key={candidate}
-											value={candidate}
-											count={candidate === "practices" ? practiceCount : undefined}
-										>
-											{TAB_LABELS[candidate]}
-										</PracticeTabsTrigger>
-									))}
-								</PracticeTabsList>
-							</PracticeTabsRail>
-							<TabsContent value="practices" className="min-w-0">
-								<Section
-									size="lg"
-									title="Practices in this group"
-									description="Each practice with its standing and trend. Open one for the work behind it."
-								>
-									{practicesTable}
-								</Section>
-							</TabsContent>
-							<TabsContent value="about" className="flex min-w-0 flex-col gap-6">
-								<WhereYouStand
-									standing={standing?.standing ?? "NOT_OBSERVED"}
-									basis={formatGroupStandingBasis(counts)}
-									direction={standing?.direction}
-									support={standing?.trendSupport}
-									scope="group"
-								/>
-								<section className="flex flex-col gap-1.5" aria-labelledby="about-group-heading">
-									<SectionLabel as="h2" id="about-group-heading">
-										About this group
-									</SectionLabel>
-									{group.description ? (
-										<p className="max-w-2xl text-sm">{group.description}</p>
-									) : (
-										<p className="text-sm text-muted-foreground">No description yet.</p>
-									)}
-								</section>
-							</TabsContent>
-						</Tabs>
-					</>
-				)}
+				{body}
 			</DrawerBody>
 		</>
 	);

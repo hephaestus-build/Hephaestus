@@ -1,13 +1,18 @@
 import { UserRoundCog } from "lucide-react";
 
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { optionalIntegrationsAvailable } from "@/integrations/consent";
+import { optionalIntegrationsAvailable } from "@/runtime/consent";
 
 import { CookiePreferencesSection } from "./CookiePreferencesSection";
 import { DangerZoneSection } from "./DangerZoneSection";
+import {
+	EmailPreferencesSection,
+	hasEmailPreferences,
+	type EmailPreferencesSectionProps,
+} from "./EmailPreferencesSection";
 import { LinkedAccountsSection, type LinkedAccountsSectionProps } from "./LinkedAccountsSection";
 import {
 	PracticeFeedbackSection,
@@ -24,6 +29,7 @@ import {
 } from "./SlackPreferencesSection";
 
 export interface SettingsPageProps {
+	emailPreferencesProps: EmailPreferencesSectionProps;
 	practiceFeedbackProps: PracticeFeedbackSectionProps;
 	researchProps: ResearchParticipationSectionProps;
 	showResearchSection: boolean;
@@ -37,6 +43,7 @@ export interface SettingsPageProps {
 }
 
 export function SettingsPage({
+	emailPreferencesProps,
 	practiceFeedbackProps,
 	researchProps,
 	showResearchSection,
@@ -74,7 +81,7 @@ export function SettingsPage({
 								Preferences
 							</h2>
 							<p className="text-sm text-destructive" role="alert">
-								We couldn't load your preferences, so your feedback and research settings aren't
+								We couldn’t load your preferences, so your feedback and research settings aren’t
 								shown.
 							</p>
 							{onRetrySettings && (
@@ -98,6 +105,13 @@ export function SettingsPage({
 								<ResearchParticipationSection {...researchRest} isLoading={researchPending} />
 							</>
 						)}
+					</>
+				)}
+
+				{hasEmailPreferences(emailPreferencesProps.state) && (
+					<>
+						<Separator />
+						<EmailPreferencesSection {...emailPreferencesProps} />
 					</>
 				)}
 

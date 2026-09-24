@@ -40,7 +40,13 @@ class CsrfProtectionIntegrationTest extends BaseIntegrationTest {
         // No Authorization: Bearer header → treated as a cookie-style browser POST, so CSRF applies.
         // No token → 403 from the CSRF filter (before authentication; the SecurityContext has no
         // authentication yet, so AccessDenied resolves to 403, not the entry-point 401).
-        webTestClient.post().uri("/auth/logout").exchange().expectStatus().isForbidden();
+        webTestClient
+                .post()
+                .uri("/auth/logout")
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -55,7 +61,8 @@ class CsrfProtectionIntegrationTest extends BaseIntegrationTest {
                 .headers(TestAuthUtils.withCsrf(token))
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -69,6 +76,7 @@ class CsrfProtectionIntegrationTest extends BaseIntegrationTest {
                 .header(XSRF_HEADER, "totally-different-value")
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 }

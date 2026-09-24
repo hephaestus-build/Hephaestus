@@ -7,7 +7,7 @@ import {
 	reviewFeedback,
 	reviewObservations,
 	workspacePractices,
-} from "@/components/admin/practice-reviews/story-mock-data";
+} from "@/components/admin/practice-reviews/fixtures";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
@@ -21,7 +21,7 @@ const forArtifact = <T extends { artifact?: { id: string } }>(rows: T[]) =>
 	rows.filter((row) => row.artifact?.id === reviewArtifact.reviewedWork.id);
 
 /** The work as every row names it, and as the page links to it: the repository and the provider's own label. */
-const WORK_LINK = /ls1intum\/Hephaestus · #1423/;
+const WORK_LINK = /ls1intum\/Hephaestus · #1423/u;
 
 const pageOf = <T,>(rows: T[]) => ({
 	content: rows.slice(0, 5),

@@ -19,7 +19,10 @@
 	// `decisions/` (every ADR) and `runbooks/` are mounted by no Docusaurus plugin, so the site
 	// build never compiles them and never link-checks them — the linter is their only gate.
 	"globs": ["**/*.md", "**/*.mdx", "../load-tests/**/*.md"],
-	"ignores": ["node_modules", "build", ".docusaurus"],
+	// `venv/` is a Docusaurus contributor's Python environment for the diagram tooling. It is
+	// git-ignored, but this linter walks the filesystem rather than asking git, so without this the
+	// gate reports hundreds of findings in vendored site-packages that CI never sees.
+	"ignores": ["node_modules", "build", ".docusaurus", "venv", ".venv"],
 
 	"config": {
 		"default": true,

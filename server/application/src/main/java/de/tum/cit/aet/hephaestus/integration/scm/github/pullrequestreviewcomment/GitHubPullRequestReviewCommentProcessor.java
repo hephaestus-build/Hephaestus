@@ -199,6 +199,10 @@ public class GitHubPullRequestReviewCommentProcessor {
                 .map(comment -> {
                     comment.setBody(dto.body());
                     comment.setUpdatedAt(dto.updatedAt());
+                    // Rows stored before the side was kept get it on their next edit or sync.
+                    if (dto.side() != null && comment.getSide() == null) {
+                        comment.setSide(mapSide(dto.side()));
+                    }
                     PullRequestReviewComment saved = commentRepository.save(comment);
                     eventPublisher.publishEvent(new ScmDomainEvent.ReviewCommentEdited(
                             ScmEventPayload.ReviewCommentData.from(saved),
@@ -287,6 +291,14 @@ public class GitHubPullRequestReviewCommentProcessor {
 
         // Outdated flag (whether the comment's code context has changed)
         comment.setOutdated(dto.outdated());
+
+        // Which side of the diff the comment sits on: the webhook's own `side`, the sync's thread side.
+        if (dto.side() != null) {
+            comment.setSide(mapSide(dto.side()));
+        }
+        if (dto.startSide() != null) {
+            comment.setStartSide(mapSide(dto.startSide()));
+        }
 
         // Link to review if present (reviewId is the provider's native ID, not the JPA PK)
         if (dto.reviewId() != null) {

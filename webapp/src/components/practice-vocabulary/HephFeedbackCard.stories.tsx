@@ -15,7 +15,6 @@ import { HephFeedbackCard } from "./HephFeedbackCard";
  * draws nothing.
  */
 const meta = {
-	title: "Shared/Practice vocabulary/Heph feedback card",
 	component: HephFeedbackCard,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
@@ -93,9 +92,11 @@ export const HeldWithoutASentence: Story = {
 	},
 	play: async ({ canvas }) => {
 		const row = canvas.getByRole("button", { name: "A practice of our own" }).closest("li");
-		if (!row) throw new Error("Every held row is a list item");
+		if (!row) {
+			throw new Error("Every held row is a list item");
+		}
 		await expect(row).toHaveTextContent(
-			/^Strength: A practice of our ownHeld across four pull requests$/,
+			/^Strength: A practice of our ownHeld across four pull requests$/u,
 		);
 		await expect(canvas.queryByText("Going well")).toBeNull();
 	},

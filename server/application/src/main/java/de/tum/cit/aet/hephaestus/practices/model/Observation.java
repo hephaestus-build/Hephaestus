@@ -34,7 +34,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Immutable assessment of one practice on one work artifact. Presence and assessment are separate axes;
- * later reviews append a new row linked by {@link #recurrenceKey}.
+ * later reviews append a new row. The recurrence key groups locations, not equivalent behaviors.
  */
 @Entity
 @Immutable
@@ -62,6 +62,10 @@ import tools.jackson.databind.JsonNode;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Observation {
+
+    /** A later reviewable issue transition retired this claim; provenance remains unchanged. */
+    @Column(name = "superseded_at")
+    private @Nullable Instant supersededAt;
 
     @Id
     @Column(columnDefinition = "UUID")
@@ -139,11 +143,10 @@ public class Observation {
     private Long aboutUserId;
 
     /**
-     * Cross-run locus grain: a deterministic hash of WHAT the observation is about (practice + target +
-     * subject + a content anchor), never of WHEN, computed by
-     * {@link de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint}. Lets a
-     * {@code Feedback} supersede rather than re-post and lets a reaction follow one locus across
-     * re-detections. NULL means the observation predates the fingerprint, not a missing reference.
+     * Cross-run location grouping (practice, artifact, subject and file), computed by
+     * {@link de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint}. Several different
+     * behaviors can share it. Row identity and reactions use the observation itself; this grouping
+     * establishes neither semantic recurrence nor resolution. NULL means no grouping was recorded.
      */
     @Column(name = "recurrence_key", length = 64)
     private String recurrenceKey;
@@ -152,21 +155,17 @@ public class Observation {
     @Column(name = "summary", nullable = false, length = 255)
     private String summary;
 
-    /**
-     * Whether the practice's target signal was seen, expected-but-absent, inapplicable, or undecidable
-     * from evidence that was present (ADR 0022). Measurement only — the good/bad valence lives on
-     * {@link #assessment}.
-     */
     @NotNull
     @Enumerated(EnumType.STRING)
-    @Column(name = "presence", length = 16, nullable = false)
+    @Column(name = "assessment_status", length = 16, nullable = false)
+    private AssessmentStatus assessmentStatus;
+
+    /** The specified behavior’s presence; null unless assessed. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "presence", length = 16)
     private Presence presence;
 
-    /**
-     * The good/bad valence of this observation, resolved per observation by the detector (ADR 0022).
-     * NULL exactly when {@link #presence} does not {@link Presence#carriesValence() carry valence} —
-     * enforced in the DB by {@code chk_observation_presence_assessment} and mirrored by {@link #onCreate}.
-     */
+    /** The judgment of the work; null unless assessed. */
     @Enumerated(EnumType.STRING)
     @Column(name = "assessment", length = 8)
     private Assessment assessment;
@@ -184,9 +183,8 @@ public class Observation {
     private ObservationOrigin origin = ObservationOrigin.LIVE;
 
     /**
-     * Impact band — meaningful only for an {@link Assessment#BAD} observation; NULL on a GOOD or
-     * NOT_APPLICABLE row (ADR 0022). Unlike {@link #assessment}, this coupling has no DB CHECK — the
-     * detection parser's coherence coercion enforces it, with {@link #onCreate} as the JPA-path backstop.
+     * Impact band — required for a {@link Outcome#NEGATIVE} outcome; NULL on a positive or
+     * unassessed row. The database and {@link AssessmentStatus#validate} enforce the same invariant.
      */
     @Enumerated(EnumType.STRING)
     @Column(name = "severity", length = 16)
@@ -202,6 +200,12 @@ public class Observation {
     @NotNull
     @Column(name = "observed_at", nullable = false)
     private Instant observedAt;
+
+    /** The result is derived, never persisted separately from its axes. */
+    @jakarta.persistence.Transient
+    public @org.jspecify.annotations.Nullable Outcome getOutcome() {
+        return Outcome.of(presence, assessment);
+    }
 
     /**
      * JPA-path safety net only: the production write path is the native
@@ -221,21 +225,9 @@ public class Observation {
         if (origin == null) {
             origin = ObservationOrigin.LIVE;
         }
-        if (presence.carriesValence() != (assessment != null)) {
-            throw new IllegalStateException(
-                    "Observation coherence violation: assessment is required exactly for a presence that carries valence (presence="
-                            + presence
-                            + ", assessment="
-                            + assessment
-                            + ")");
+        if (assessmentStatus == null) {
+            throw new IllegalStateException("Assessment status is required");
         }
-        if (assessment != Assessment.BAD && severity != null) {
-            throw new IllegalStateException(
-                    "Observation coherence violation: severity must be null unless assessment is BAD (assessment="
-                            + assessment
-                            + ", severity="
-                            + severity
-                            + ")");
-        }
+        assessmentStatus.validate(presence, assessment, severity);
     }
 }

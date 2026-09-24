@@ -2,12 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 
 import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
 import type { WorkspaceListItem } from "@/api/types.gen";
-import { useAuth } from "@/integrations/auth/AuthContext";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 export interface WorkspaceFeatures {
 	practicesEnabled: boolean;
 	mentorEnabled: boolean;
-	achievementsEnabled: boolean;
 	leaderboardEnabled: boolean;
 	progressionEnabled: boolean;
 	leaguesEnabled: boolean;
@@ -27,7 +26,6 @@ export function useWorkspaceFeatures(workspaceSlug: string | undefined): Workspa
 	const query = useQuery({
 		...listWorkspacesOptions(),
 		enabled: isAuthenticated && !authLoading,
-		staleTime: 30_000,
 	});
 
 	const workspaces = Array.isArray(query.data) ? query.data : [];
@@ -40,7 +38,9 @@ export function useWorkspaceFeatures(workspaceSlug: string | undefined): Workspa
 		isLoading: authLoading || query.isLoading,
 		isError: query.isError || workspaceMissing,
 		error: query.error ?? (workspaceMissing ? new Error("Workspace not found") : undefined),
-		refetch: () => void query.refetch(),
+		refetch: () => {
+			void query.refetch();
+		},
 	};
 }
 
@@ -48,7 +48,6 @@ function workspaceFeaturesOf(workspace: WorkspaceListItem): WorkspaceFeatures {
 	return {
 		practicesEnabled: workspace.practicesEnabled,
 		mentorEnabled: workspace.mentorEnabled,
-		achievementsEnabled: workspace.achievementsEnabled,
 		leaderboardEnabled: workspace.leaderboardEnabled,
 		progressionEnabled: workspace.progressionEnabled,
 		leaguesEnabled: workspace.leaguesEnabled,

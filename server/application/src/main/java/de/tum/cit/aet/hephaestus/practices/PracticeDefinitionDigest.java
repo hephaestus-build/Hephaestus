@@ -7,12 +7,18 @@ final class PracticeDefinitionDigest {
     static String digest(String slug, PracticeDefinition definition) {
         CanonicalDigest digest = new CanonicalDigest().add(slug).add(definition.name());
         ReviewRuleFingerprint.addBindings(digest, definition.bindings());
-        return digest.add(definition.criteria())
+        digest.add(definition.criteria())
                 .addNullable(definition.precomputeScript())
                 .add(PracticeAutomatedReviewPolicyDigest.digest(definition.automatedReviewPolicy()))
                 .addNullable(definition.whyItMatters())
                 .addNullable(definition.whatGoodLooksLike())
-                .addNullable(definition.groupSlug())
-                .hex();
+                .addNullable(definition.groupSlug());
+        if (!definition.deliveryBehavior().equals(PracticeDeliveryBehavior.DEFAULT)) {
+            digest.add("deliveryBehavior")
+                    .add(String.valueOf(definition.deliveryBehavior().summaryOnly()))
+                    .addNullable(definition.deliveryBehavior().overlapGroup())
+                    .addNullable(definition.deliveryBehavior().redundantToSlug());
+        }
+        return digest.hex();
     }
 }

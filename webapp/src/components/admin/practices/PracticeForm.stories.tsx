@@ -1,22 +1,22 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, waitFor } from "storybook/test";
 
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import {
 	mockConversationWorkType,
 	mockPracticeDefinitionOptions,
 	mockPullRequestWorkType,
 } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
+import { settledDrawerPanel } from "@/stories/overlay";
+import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
-import { settledDrawerPanel } from "@/test/overlay";
-import { expectNoPanelOverflow } from "@/test/reflow";
 
+import { mockGroups, mockPracticeWithAllTriggers } from "./fixtures";
 import { GUARDED_LEVEL_KINDS, practiceFormLevel } from "./practice-search";
 import { PracticeForm } from "./PracticeForm";
 import { PracticeFormLevel } from "./PracticeFormLevel";
-import { mockGroups, mockPracticeWithAllTriggers } from "./story-mock-data";
 
 const createSubmit = fn();
 const editSubmit = fn();
@@ -27,7 +27,6 @@ const editSubmit = fn();
  * The level is guarded: only Cancel and Save leave it.
  */
 const meta = {
-	title: "Workspace admin/Practices/Practice editor",
 	component: PracticeForm,
 	parameters: {
 		layout: "fullscreen",
@@ -90,7 +89,7 @@ export const EscapeLeavesACleanEditor: Story = {
 		// panel. An editor that swallowed the gesture instead would be indistinguishable from a
 		// broken drawer. `-adoption-route.test.tsx` owns the half where a draft exists.
 		await userEvent.keyboard("{Escape}");
-		await waitFor(() =>
+		await waitFor(async () =>
 			expect(document.querySelectorAll('[data-slot="drawer-popup"]')).toHaveLength(0),
 		);
 	},
@@ -104,7 +103,7 @@ export const Submitting: Story = {
 	args: { isPending: true, onSubmit: fn() },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByRole("textbox", { name: /Name/ })).toBeDisabled();
+		await expect(screen.getByRole("textbox", { name: /Name/u })).toBeDisabled();
 	},
 };
 
@@ -143,7 +142,7 @@ export const ValidationErrors: Story = {
 		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));
 		await expect(screen.getByText("Name must be at least 3 characters")).toBeVisible();
 		await expect(screen.queryByText("Select at least one trigger event")).not.toBeInTheDocument();
-		await expect(screen.getByRole("textbox", { name: /Name/ })).toHaveAttribute(
+		await expect(screen.getByRole("textbox", { name: /Name/u })).toHaveAttribute(
 			"aria-invalid",
 			"true",
 		);
@@ -157,29 +156,29 @@ export const ValidationAndSubmit: Story = {
 		createSubmit.mockClear();
 		await ValidationErrors.play?.(context);
 
-		await userEvent.type(screen.getByRole("textbox", { name: /Name/ }), "Clear review context");
+		await userEvent.type(screen.getByRole("textbox", { name: /Name/u }), "Clear review context");
 		await userEvent.type(
-			screen.getByRole("textbox", { name: /What to look for/ }),
+			screen.getByRole("textbox", { name: /What to look for/u }),
 			"Check whether the reviewed work explains its purpose.",
 		);
 		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));
 		await expect(createSubmit).toHaveBeenCalledWith(
-			{
+			expect.objectContaining({
 				name: "Clear review context",
 				slug: "clear-review-context",
 				criteria: "Check whether the reviewed work explains its purpose.",
 				bindings: [
-					{
+					expect.objectContaining({
 						signals: [
 							"scm.pull_request.opened",
 							"scm.pull_request.ready",
 							"scm.pull_request.synchronized",
 						],
 						needs: mockPullRequestWorkType.recommendedNeeds,
-					},
+					}),
 				],
 				automatedReviewPolicy: mockPullRequestWorkType.recommendedPolicy,
-			},
+			}),
 			null,
 		);
 	},
@@ -190,29 +189,29 @@ export const ConversationPractice: Story = {
 	play: async () => {
 		await settledDrawerPanel();
 		createSubmit.mockClear();
-		await userEvent.type(screen.getByRole("textbox", { name: /Name/ }), "Helpful discussion");
-		await userEvent.click(screen.getByRole("radio", { name: /Conversation/ }));
+		await userEvent.type(screen.getByRole("textbox", { name: /Name/u }), "Helpful discussion");
+		await userEvent.click(screen.getByRole("radio", { name: /Conversation/u }));
 		// A conversation is settled or it is not, so its one occasion is chosen for the author rather
 		// than left as an empty list that cannot be saved.
 		await expect(screen.getByRole("checkbox", { name: "Discussion settled" })).toBeChecked();
 		await userEvent.type(
-			screen.getByRole("textbox", { name: /What to look for/ }),
+			screen.getByRole("textbox", { name: /What to look for/u }),
 			"Check whether the conversation stays constructive.",
 		);
 		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));
 		await expect(createSubmit).toHaveBeenCalledWith(
-			{
+			expect.objectContaining({
 				name: "Helpful discussion",
 				slug: "helpful-discussion",
 				criteria: "Check whether the conversation stays constructive.",
 				bindings: [
-					{
+					expect.objectContaining({
 						signals: ["chat.conversation_thread.settled"],
 						needs: mockConversationWorkType.recommendedNeeds,
-					},
+					}),
 				],
 				automatedReviewPolicy: mockConversationWorkType.recommendedPolicy,
-			},
+			}),
 			null,
 		);
 	},

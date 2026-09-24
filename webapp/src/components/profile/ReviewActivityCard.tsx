@@ -1,13 +1,16 @@
 import { CheckIcon, CommentIcon, FileDiffIcon } from "@primer/octicons-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistance } from "date-fns";
 import { AwardIcon } from "lucide-react";
 
-import { FormattedTitle } from "@/components/shared/FormattedTitle";
+import { cn } from "cn";
+import { FormattedTitle } from "@/components/common/FormattedTitle";
+import { useNow } from "@/components/common/use-now";
+import { getPullRequestStateIcon, type IconComponent } from "@/components/icons/provider-icons";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { getPullRequestStateIcon, type IconComponent, type ProviderType } from "@/lib/provider";
-import { cn } from "@/lib/utils";
+import type { ProviderType } from "@/lib/provider/provider-terms";
+import { hasText } from "@/lib/text";
 
 const UNKNOWN_STATE_STYLE = {
 	icon: null,
@@ -80,7 +83,7 @@ export interface ReviewActivityCardProps {
 	};
 	repositoryName?: string;
 	score?: number;
-	providerType?: ProviderType;
+	providerType: ProviderType;
 }
 
 export function ReviewActivityCard({
@@ -90,25 +93,25 @@ export function ReviewActivityCard({
 	htmlUrl,
 	pullRequest,
 	score,
-	providerType = "GITHUB",
+	providerType,
 }: ReviewActivityCardProps) {
 	const stateStyle = REVIEW_STATE_STYLES[state] ?? UNKNOWN_STATE_STYLE;
 	const StateIcon = stateStyle.icon ?? getPullRequestStateIcon(providerType, "OPEN").icon;
 
+	const now = useNow();
 	const relativeTime = submittedAt
-		? formatDistanceToNow(submittedAt, { addSuffix: true })
+		? formatDistance(submittedAt, now, { addSuffix: true })
 		: undefined;
 
 	const card = (
 		<Card
-			className={cn(
-				"rounded-lg border border-border bg-card text-card-foreground shadow-sm py-0 gap-0",
-				htmlUrl && !isLoading && "cursor-pointer hover:bg-accent/50",
-			)}
+			flush
+			variant={hasText(htmlUrl) && !isLoading ? "interactive" : "default"}
+			className={cn(hasText(htmlUrl) && !isLoading && "cursor-pointer")}
 		>
 			<div className="flex flex-col gap-1 p-4">
-				<div className="flex justify-between gap-2 items-center text-sm text-provider-muted-foreground">
-					<span className="font-medium flex justify-center items-center space-x-1">
+				<div className="flex items-center justify-between gap-2 text-sm text-provider-muted-foreground">
+					<span className="flex items-center justify-center space-x-1 font-medium">
 						{isLoading ? (
 							<>
 								<Skeleton className={cn("size-5", stateStyle.skeletonColor)} />
@@ -127,7 +130,7 @@ export function ReviewActivityCard({
 					</span>
 
 					{!isLoading && score !== undefined && score > 0 && (
-						<span className="flex items-center gap-1 text-provider-done-foreground font-semibold">
+						<span className="flex items-center gap-1 font-semibold text-provider-done-foreground">
 							<Tooltip>
 								<TooltipTrigger className="flex items-center gap-1">
 									<AwardIcon size={16} />
@@ -139,7 +142,7 @@ export function ReviewActivityCard({
 					)}
 				</div>
 
-				<div className="flex justify-between font-medium contain-inline-size leading-normal">
+				<div className="flex justify-between leading-normal font-medium contain-inline-size">
 					{isLoading ? (
 						<Skeleton className="h-6 w-3/4" />
 					) : (
@@ -150,7 +153,7 @@ export function ReviewActivityCard({
 		</Card>
 	);
 
-	if (htmlUrl && !isLoading) {
+	if (hasText(htmlUrl) && !isLoading) {
 		return (
 			<a href={htmlUrl} target="_blank" rel="noopener noreferrer" className="block w-full">
 				{card}

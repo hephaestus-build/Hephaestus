@@ -23,7 +23,6 @@ const WORKSPACE = {
 	leaderboardEnabled: true,
 	practicesEnabled: false,
 	mentorEnabled: false,
-	achievementsEnabled: false,
 	progressionEnabled: false,
 	practiceReviewAutoTriggerEnabled: true,
 	practiceReviewManualTriggerEnabled: true,

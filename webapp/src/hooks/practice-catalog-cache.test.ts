@@ -5,7 +5,7 @@ import {
 	chosenAutonomy,
 	inheritedAutonomy,
 	mockPractice,
-} from "@/components/admin/practices/story-mock-data";
+} from "@/components/admin/practices/fixtures";
 
 import {
 	applyDisplayOrder,

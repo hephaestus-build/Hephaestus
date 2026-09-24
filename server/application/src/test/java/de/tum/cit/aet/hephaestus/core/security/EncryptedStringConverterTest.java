@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.security;
 
+import static de.tum.cit.aet.hephaestus.testconfig.TestSystemEncryptionKeys.systemKey;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -8,7 +9,7 @@ import java.util.Base64;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit-level guarantees for the AES-256-GCM at-rest converter via its canonical (key, profiles) seam:
+ * Unit-level guarantees for the AES-256-GCM at-rest converter with shared system-key configuration:
  * round-trip, IV uniqueness, prod fail-fast, legacy-plaintext passthrough, and tamper detection.
  */
 class EncryptedStringConverterTest extends BaseUnitTest {
@@ -16,7 +17,7 @@ class EncryptedStringConverterTest extends BaseUnitTest {
     private static final String KEY = "0123456789abcdef0123456789abcdef"; // 32 ASCII chars = 32 bytes
 
     private EncryptedStringConverter converter() {
-        return new EncryptedStringConverter(KEY, "test");
+        return new EncryptedStringConverter(systemKey(KEY, "test"));
     }
 
     @Test
@@ -58,42 +59,9 @@ class EncryptedStringConverterTest extends BaseUnitTest {
     }
 
     @Test
-    void failsFastInProdWhenKeyMissing() {
-        assertThatThrownBy(() -> new EncryptedStringConverter("", "prod")).isInstanceOf(IllegalStateException.class);
-    }
-
-    @Test
     void disabledWhenKeyMissingOutsideProd() {
         // No key + non-prod ⇒ encryption disabled, values pass through untouched.
-        EncryptedStringConverter disabled = new EncryptedStringConverter("", "test");
+        EncryptedStringConverter disabled = new EncryptedStringConverter(systemKey("", "test"));
         assertThat(disabled.convertToDatabaseColumn("x")).isEqualTo("x");
-    }
-
-    /**
-     * The operator this message has to serve counted 32 characters and still got rejected. Saying only
-     * "must be 32 bytes. Got: 64" sends them hunting for a length they already have, so the message
-     * must state both counts and say which one is wrong and why.
-     */
-    @Test
-    void rejectsKeyThatIsNot32BytesAndExplainsTheCharacterCountItGotInstead() {
-        // 32 CHARS but multibyte ⇒ >32 bytes ⇒ must fail fast at construction, not at first encrypt.
-        String multibyte = "ä".repeat(32); // 32 chars, 64 UTF-8 bytes
-        assertThatThrownBy(() -> new EncryptedStringConverter(multibyte, "test"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("32-byte")
-                .hasMessageContaining("Got 64 bytes from 32 characters")
-                .hasMessageContaining("non-ASCII")
-                .hasMessageContaining("openssl rand -base64 24 | cut -c1-32")
-                .as("never echo the key material itself")
-                .hasMessageNotContaining(multibyte);
-    }
-
-    /** An ASCII key of the wrong length is the ordinary case, and "32 characters" is true for it. */
-    @Test
-    void tellsAnAsciiKeyOfTheWrongLengthTheCountInCharacters() {
-        assertThatThrownBy(() -> new EncryptedStringConverter("tooshort", "test"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Got 8 bytes from 8 characters")
-                .hasMessageContaining("that is 32 characters");
     }
 }

@@ -1,5 +1,5 @@
+import { cn } from "cn";
 import type { PracticeStanding, PracticeTrend, TrendSupport } from "@/api/types.gen";
-import { cn } from "@/lib/utils";
 
 import { standingDefs, type StandingScope } from "./practice-group-standing-defs";
 import { PracticeTrendChip, type PracticeTrendChipProps } from "./PracticeTrendChip";
@@ -38,7 +38,7 @@ export function TrendNote({ direction, support, scope, render, className }: Tren
 				: { direction: "INSUFFICIENT_EVIDENCE" as const })}
 			scope={scope}
 			render={render}
-			className={cn("whitespace-nowrap flex-nowrap gap-x-1.5", className)}
+			className={cn("flex-nowrap gap-x-1.5 whitespace-nowrap", className)}
 		/>
 	);
 }

@@ -43,4 +43,7 @@ public interface ScmTokenSource {
      * repository, including for contributions submitted from forks.
      */
     Optional<String> reviewHeadRef(long pullRequestNumber);
+
+    /** Whether the recorded review base identifies the diff base rather than the target branch tip. */
+    boolean recordsReviewDiffBase();
 }

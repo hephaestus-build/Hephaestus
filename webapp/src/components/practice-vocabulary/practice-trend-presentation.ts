@@ -1,5 +1,6 @@
 import type { TrendSupport } from "@/api/types.gen";
 import { count as counted, spell } from "@/components/common/feedback-text";
+import { statusValues } from "@/components/common/status-def";
 import { capitalise } from "@/lib/text";
 
 import {
@@ -9,7 +10,6 @@ import {
 } from "./practice-group-standing-defs";
 import type { TrendDirection } from "./practice-trend-defs";
 import type { StandingCounts } from "./PracticeGroupStandingRing";
-import { statusValues } from "./status-def";
 
 /** "four pieces of reviewed work", under the number rule of `feedback-text`. */
 function reviewedWork(count: number, digits?: boolean): string {
@@ -25,7 +25,9 @@ export type TrendScope = StandingScope;
  */
 export function formatStandingBasis(support: TrendSupport): string | undefined {
 	const current = support.currentOpportunities;
-	if (current === 0) return undefined;
+	if (current === 0) {
+		return undefined;
+	}
 	return current === 1
 		? "Based on your latest piece of reviewed work."
 		: `Based on your latest ${reviewedWork(current)}.`;
@@ -51,7 +53,9 @@ export function formatGroupStandingBasis(counts: StandingCounts): string | undef
 		return n > 0 ? [{ standing, n }] : [];
 	});
 	const total = present.reduce((sum, { n }) => sum + n, 0);
-	if (total === 0) return undefined;
+	if (total === 0) {
+		return undefined;
+	}
 	const digits = total >= 10;
 	const parts = present.map(({ standing, n }) => {
 		const { one, many } = STANDING_PREDICATES[standing];
@@ -69,10 +73,13 @@ export function formatTrendProvenance(
 ): string {
 	const current = support.currentOpportunities;
 	const previous = support.previousOpportunities;
-	if (current + previous === 0) return "No reviewed work is available yet.";
+	if (current + previous === 0) {
+		return "No reviewed work is available yet.";
+	}
 
 	const span = support.calendarSpanDays;
-	const spanSentence = span ? ` Evidence spans ${counted(span, "day", "days")}.` : "";
+	const spanSentence =
+		span !== undefined && span > 0 ? ` Evidence spans ${counted(span, "day", "days")}.` : "";
 
 	if (direction === "INSUFFICIENT_EVIDENCE") {
 		const missing = support.opportunitiesUntilComparable;

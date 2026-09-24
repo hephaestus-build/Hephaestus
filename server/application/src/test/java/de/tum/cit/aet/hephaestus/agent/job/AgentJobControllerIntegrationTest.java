@@ -52,6 +52,22 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Test
     @WithAdminUser
+    void shouldNotExposePrivateExecutionEvidenceOverHttp() {
+        Workspace workspace = setupWorkspace();
+        AgentJob job = createJob(workspace, AgentJobStatus.COMPLETED);
+        for (String suffix : java.util.List.of("execution-archive", "execution-archive/0/files/" + "a".repeat(64))) {
+            webTestClient
+                    .get()
+                    .uri("/workspaces/{slug}/agents/jobs/{id}/" + suffix, workspace.getWorkspaceSlug(), job.getId())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isNotFound();
+        }
+    }
+
+    @Test
+    @WithAdminUser
     void listJobsReturnsEmptyPageWhenNoJobs() {
         Workspace workspace = setupWorkspace();
 
@@ -154,7 +170,8 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -174,7 +191,8 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -255,7 +273,8 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isEqualTo(409);
+                .isEqualTo(409)
+                .expectBody(Void.class);
     }
 
     @Test
@@ -269,7 +288,8 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -289,7 +309,8 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -328,6 +349,7 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .uri("/workspaces/{slug}/agents/jobs", workspace.getWorkspaceSlug())
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 }

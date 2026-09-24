@@ -117,6 +117,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
             for (Method method : ObservationRepository.class.getDeclaredMethods()) {
                 Query query = method.getAnnotation(Query.class);
                 if (query == null) continue;
+                if (method.isAnnotationPresent(WorkspaceAgnostic.class)) continue;
                 assertThat(method.getParameters())
                         .as("%s must bind workspaceId", method.getName())
                         .anyMatch(parameter -> {
@@ -499,7 +500,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "Comment", // Through PR -> repository.organization.workspaceId
                                         "Commit", // Through repository.organization.workspaceId
                                         "Project", // Through organization.workspaceId
-                                        "ActivitySavedEvent", // Carries user context for achievement evaluation
                                         "PracticeDetectionCompletedEvent", // carries workspaceId directly (mentor cache
                                         // eviction)
                                         "PracticeDetectionDeliveredEvent", // carries workspaceId directly
@@ -511,6 +511,10 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "LeaderboardDigestReadyEvent", // Carries workspaceId for the vendor-publish
                                         // fan-out
                                         "WorkspaceCreatedEvent", // Carries workspaceId + kind
+                                        "IntegrationAttentionChangedEvent", // Carries an explicit workspaceId and
+                                        // connectionId
+                                        "ProductFeedbackSubmittedEvent", // Instance-admin fan-out; submission UUID
+                                        // covers instance or workspace feedback
                                         // ConnectionLifecycleEvent.Activated / .Deactivated carry workspaceId directly
                                         // (published from ConnectionService.transition; consumed by vendor adapters).
                                         "Activated",
@@ -522,6 +526,9 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "ScmMirrorErasedEvent", // Carries workspaceId directly (SCM disconnect/purge
                                         // erase; derived-row listeners in practices + activity)
                                         "ApplicationReadyEvent", // Spring lifecycle, no workspace needed
+                                        // Control-plane lifecycle: a worker's session closed, so the Git operations
+                                        // dispatched to it fail; no workspace is party to the event.
+                                        "WorkerDisconnectedEvent",
                                         "ContextRefreshedEvent", // Spring lifecycle, no workspace needed
                                         "WorkspacesInitializedEvent", // Startup lifecycle, signals all workspaces ready
                                         // core.auth (ADR 0017): authentication is USER/SYSTEM-scoped, never
@@ -569,8 +576,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
         static final Set<String> ASYNC_LISTENERS_WITH_PAYLOAD_CONTEXT = Set.of(
                 // ActivityEventListener handles CommentCreated, ReviewSubmitted events which carry full entity graphs
                 "ActivityEventListener",
-                // AchievementEventListener handles ActivitySavedEvent which carries workspaceId context
-                "AchievementEventListener",
                 // AgentJobEventListener handles ScmDomainEvent.PullRequest{Created,Ready,Synchronized,
                 // Merged,Closed}/ReviewSubmitted whose EventContext carries the originating repository →
                 // workspaceId is resolved per-event

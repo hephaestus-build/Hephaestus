@@ -43,9 +43,10 @@ public class SandboxGatewayConfiguration {
 
     /**
      * Buckets for the gateway's rate limit on a pod that runs no server role, where the worker overlay
-     * drops {@code core.auth} and with it the instance's shared resolver. Per JVM, so per worker
-     * replica — but a job token is only ever presented to the worker that issued it, so a job's budget
-     * is whole either way. A pod that does run the server role shares that resolver instead.
+     * drops {@code core.auth} and with it the instance's shared resolver. Limits are per worker:
+     * sandbox adapters route to their worker's address on the job network, not a load balancer.
+     * This is local flood protection, not a fleet-wide quota. A pod running the server role shares
+     * its auth resolver instead.
      */
     @Bean
     @ConditionalOnProperty(name = RuntimeRole.SERVER_PROPERTY, havingValue = "false")

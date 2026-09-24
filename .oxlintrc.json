@@ -1,19 +1,26 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
 
-	// Everything outside `webapp/` and `docs/`, both of which carry their own config. A nested config
-	// REPLACES this one for the files under it rather than merging, so each tree states its rules in full.
-	// Only the file-naming rule is enabled from the SPA's house plugin. The rest hold the SPA's own
-	// conventions — its Storybook stories, its Testing Library queries, its query keys, its clock —
-	// and nothing out here renders anything.
+	// The base for every TypeScript file in the repository, and the config for everything outside
+	// `webapp/` and `docs/`, which extend it (`AGENTS.md` § Lint and format says what `extends`
+	// carries). Every rule enabled outside `correctness` and `suspicious` is listed here by name, with
+	// the reason beside it wherever the choice is not the obvious one. A rule turned off carries its
+	// reason too: for a rule a category enables, why not here; for one no category enables, why the
+	// rule someone will reach for is wrong here — the entry pins that decision across a category
+	// change in an oxlint release.
+
+	// Only the file-naming rule is enabled from the house plugin here; the rest read a Storybook
+	// story, a Testing Library query, a query key or the clock, and nothing out here renders.
 	"jsPlugins": ["./webapp/tools/oxlint/index.ts"],
 
-	"plugins": ["typescript", "unicorn", "oxc", "import", "promise"],
+	"plugins": ["typescript", "unicorn", "oxc", "import", "promise", "jsdoc"],
 
-	// Root-only, and global: `typeAware` governs every config in the repo, nested ones included. It
-	// needs `oxlint-tsgolint`; without it oxlint refuses to start rather than skipping the rules.
+	// `typeAware` needs `oxlint-tsgolint`; without it oxlint refuses to start rather than skipping
+	// the rules.
 	"options": { "reportUnusedDisableDirectives": "error", "typeAware": true, "typeCheck": true },
 
+	// No `warn` tier: oxlint exits 0 on warnings unless `--deny-warnings` is passed. The other
+	// categories are picked from by name below, so a rule they would enable is a decision here.
 	"categories": {
 		"correctness": "error",
 		"suspicious": "error",
@@ -26,124 +33,89 @@
 	"env": { "node": true, "es2023": true },
 
 	"rules": {
+		// -- One way to write it ---------------------------------------------------------------------
+		// Declarations, because they hoist — a helper can sit below its first use — and because that
+		// is the form the shadcn registry ships, so a re-vendored file arrives in house style. Arrow
+		// functions stay for callbacks and handlers.
+		"func-style": ["error", "declaration", { "allowArrowFunctions": true }],
+		// Hoisting is what the declaration style buys; a variable read before its declaration in the
+		// same scope is a temporal dead zone crash that type-checks clean.
+		"no-use-before-define": ["error", { "functions": false, "classes": false, "variables": false }],
+		// Braces on every branch: the one-line `if` is where a second statement gets added under the
+		// wrong indentation and runs unconditionally.
+		"curly": ["error", "all"],
+		// A nested ternary is a decision table written on one line; the second level is an `if`, an
+		// early return or a lookup.
+		"no-nested-ternary": "error",
+		"no-lonely-if": "error",
+		"unicorn/no-lonely-if": "error",
+		"unicorn/no-negated-condition": "error",
 		"no-else-return": "error",
-		"prefer-const": "error",
-		"prefer-template": "error",
-		"operator-assignment": "error",
-		"typescript/prefer-for-of": "error",
-		"typescript/no-explicit-any": "error",
-		"typescript/require-await": "error",
-		"typescript/no-unsafe-call": "error",
-		"typescript/no-unsafe-assignment": "error",
-		"typescript/no-unsafe-argument": "error",
-		"typescript/no-unsafe-return": "error",
-		"typescript/no-unsafe-member-access": "error",
-		"typescript/no-non-null-assertion": "error",
-		"unicorn/prefer-node-protocol": "error",
-		"unicorn/prefer-import-meta-properties": "error",
-		"oxc/no-accumulating-spread": "error",
-		"eqeqeq": [
+		"no-useless-return": "error",
+		// Rewrites `if (a) { await x(); } else { await y(); }` as `await (a ? x() : y());`, a statement
+		// pair folded into an expression for no reader.
+		"unicorn/prefer-ternary": "off",
+		"unicorn/prefer-logical-operator-over-ternary": "error",
+		"arrow-body-style": ["error", "as-needed"],
+		"object-shorthand": "error",
+		// Declarations only: `({ x } = y);` as a statement reads worse than `x = y.x;`.
+		"prefer-destructuring": [
 			"error",
-			"always",
 			{
-				"null": "ignore"
+				"VariableDeclarator": { "object": true, "array": false },
+				"AssignmentExpression": { "object": false, "array": false }
 			}
 		],
-		"unicorn/no-abusive-eslint-disable": "error",
-		"no-fallthrough": "error",
-		"no-case-declarations": "error",
-		"no-inner-declarations": "error",
-		"no-prototype-builtins": "error",
-		"no-self-compare": "error",
-		"no-shadow": "error",
-		"no-throw-literal": "error",
-		"no-constructor-return": "error",
-		"no-promise-executor-return": "error",
-		"no-loop-func": "error",
-		"no-new-wrappers": "error",
-		"no-object-constructor": "error",
-		"no-array-constructor": "error",
-		"no-useless-call": "error",
-		"prefer-promise-reject-errors": "error",
-		"array-callback-return": "error",
-		"accessor-pairs": "error",
-		"radix": "error",
-		"symbol-description": "error",
-		"typescript/no-unsafe-function-type": "error",
-		"typescript/prefer-enum-initializers": "error",
-		"typescript/no-mixed-enums": "error",
-		"unicorn/new-for-builtins": "error",
-		"unicorn/no-instanceof-array": "error",
-		"unicorn/no-immediate-mutation": "error",
-		"unicorn/no-this-assignment": "error",
-		"unicorn/no-static-only-class": "error",
-		"unicorn/no-unreadable-iife": "error",
-		"unicorn/no-negation-in-equality-check": "error",
-		"unicorn/no-useless-promise-resolve-reject": "error",
-		"unicorn/no-unnecessary-array-flat-depth": "error",
-		"unicorn/no-unnecessary-array-splice-count": "error",
-		"unicorn/no-unnecessary-slice-end": "error",
-		"unicorn/consistent-assert": "error",
-		"unicorn/consistent-empty-array-spread": "error",
-		"unicorn/prefer-array-find": "error",
-		"unicorn/prefer-array-flat": "error",
-		"unicorn/prefer-array-flat-map": "error",
-		"unicorn/prefer-array-some": "error",
-		"unicorn/prefer-date-now": "error",
-		"unicorn/prefer-dom-node-remove": "error",
-		"unicorn/prefer-math-min-max": "error",
-		"unicorn/prefer-prototype-methods": "error",
-		"unicorn/prefer-regexp-test": "error",
-		"unicorn/prefer-single-call": "error",
-		"unicorn/prefer-blob-reading-methods": "error",
-		"unicorn/require-number-to-fixed-digits-argument": "error",
-		"no-proto": "error",
-		"no-script-url": "error",
-		"no-var": "error",
-		"no-empty": "error",
-		"typescript/no-namespace": "error",
-		"typescript/ban-ts-comment": "error",
-		"unicorn/prefer-number-properties": "error",
-		"unicorn/prefer-array-index-of": "error",
-		"no-alert": "error",
-		"no-sequences": "error",
-		"no-implicit-globals": "error",
-		"no-regex-spaces": "error",
-		"no-div-regex": "error",
-		"unicode-bom": "error",
-		"typescript/no-require-imports": "error",
-		"typescript/no-var-requires": "error",
-		"typescript/no-empty-object-type": "error",
-		"typescript/no-import-type-side-effects": "error",
-		"typescript/no-non-null-asserted-nullish-coalescing": "error",
-		"typescript/prefer-literal-enum-member": "error",
-		"import/no-commonjs": "error",
-		"import/no-amd": "error",
-		"import/no-dynamic-require": "error",
-		"import/no-webpack-loader-syntax": "error",
-		"unicorn/no-anonymous-default-export": "error",
-		"unicorn/no-process-exit": "error",
-		"unicorn/no-length-as-slice-end": "error",
-		"unicorn/no-magic-array-flat-depth": "error",
-		"unicorn/no-useless-error-capture-stack-trace": "error",
-		"oxc/no-const-enum": "error",
-		"oxc/bad-bitwise-operator": "error",
-		"promise/catch-or-return": "error",
-		"no-template-curly-in-string": "error",
-		"no-new-func": "error",
-		"no-return-assign": "error",
+		"prefer-const": "error",
+		"one-var": ["error", "never"],
+		"vars-on-top": "error",
+		"yoda": "error",
+		"no-redeclare": "error",
+		"prefer-template": "error",
+		"operator-assignment": "error",
+		"logical-assignment-operators": "error",
+		"no-plusplus": "error",
+		"no-implicit-coercion": "error",
+		"no-param-reassign": "error",
 		"no-multi-assign": "error",
+		"no-return-assign": "error",
+		"no-sequences": "error",
 		"no-lone-blocks": "error",
 		"no-labels": "error",
 		"no-label-var": "error",
 		"no-extra-label": "error",
 		"no-multi-str": "error",
 		"no-useless-computed-key": "error",
-		"no-lonely-if": "error",
+		"no-template-curly-in-string": "error",
+		"no-var": "error",
+		"no-empty": "error",
+		// An empty body is a decision with no reason attached; a comment inside says why nothing
+		// happens. A test double that must do nothing is a mock (`mock.fn()`, `vi.fn()`), which also
+		// records the call.
+		"no-empty-function": "error",
+		// A comment on the line it explains competes with it for width; above the line it reads first.
+		"no-inline-comments": "error",
+		// A TODO is a plan in the repository, and plans do not live here (`AGENTS.md` § Plans and work
+		// artifacts). `react/todo` is a different rule: a compiler diagnostic that borrows the word.
+		"no-warning-comments": "error",
 		"default-case-last": "error",
 		"default-param-last": "error",
+		// A `default` on a `switch` over a union is the branch `switch-exhaustiveness-check` cannot see
+		// past; the rule would demand one everywhere.
+		"default-case": "off",
 		"grouped-accessor-pairs": "error",
+		"accessor-pairs": "error",
 		"func-name-matching": "error",
+		"class-methods-use-this": "error",
+		"max-classes-per-file": "error",
+		"max-nested-callbacks": "error",
+		"max-depth": "error",
+		"complexity": "error",
+		"radix": "error",
+		"symbol-description": "error",
+		"no-bitwise": "error",
+		"no-void": ["error", { "allowAsStatement": true }],
+		"guard-for-in": "error",
 		"prefer-regex-literals": "error",
 		"prefer-object-has-own": "error",
 		"prefer-object-spread": "error",
@@ -152,115 +124,352 @@
 		"prefer-numeric-literals": "error",
 		"prefer-exponentiation-operator": "error",
 		"prefer-arrow-callback": "error",
-		"import/no-relative-parent-imports": "error",
-		"hephaestus/no-non-ascii-filename": "error",
-		"import/no-cycle": "error",
-		"import/no-duplicates": "error",
+		// `/u` makes a regex reject its own syntax errors and match astral characters as one.
+		"require-unicode-regexp": "error",
+		// A named group says what a capture is for at the match site, not at the pattern.
+		"prefer-named-capture-group": "error",
+		"no-regex-spaces": "error",
+		"no-div-regex": "error",
+		"no-fallthrough": "error",
+		"no-case-declarations": "error",
+		"no-inner-declarations": "error",
+		"no-prototype-builtins": "error",
+		"no-self-compare": "error",
+		"no-constructor-return": "error",
+		"no-promise-executor-return": "error",
+		"no-loop-func": "error",
+		"no-new-wrappers": "error",
+		"no-new-func": "error",
+		"no-object-constructor": "error",
+		"no-array-constructor": "error",
+		"no-useless-call": "error",
+		"no-proto": "error",
+		"no-script-url": "error",
+		"no-alert": "error",
+		"no-implicit-globals": "error",
+		"unicode-bom": "error",
+		"array-callback-return": "error",
+		// `null == x` is the one loose comparison with an exact meaning — null or undefined, both of
+		// which arrive here — and `eqeqeq` carves it out by name; `no-eq-null` reports exactly that
+		// carve-out and would spell it as two comparisons at every site.
+		"eqeqeq": ["error", "always", { "null": "ignore" }],
+		"no-eq-null": "off",
+		// Sequential awaits are the design in a retry loop, a bounded worker pool and an ordered
+		// Playwright or story step; where the iterations are independent the code already fans out.
+		"no-await-in-loop": "off",
+		// An `async` function with no `await` is a style question — `promise-function-async` requires
+		// the keyword on every promise-returning function, and a synchronous implementation of a
+		// promise-typed contract then has nothing to await — and the forgotten `await` it would also
+		// catch is `no-floating-promises`, which is on.
+		"require-await": "off",
+		"typescript/require-await": "off",
+		// Object key order carries meaning here — the task graph, a wire payload in the order the spec
+		// lists it, story args in prop order.
+		"sort-keys": "off",
+		// GraphQL introspection names its own fields: a schema query asks for `__schema`. The SPA adds
+		// server field names, test hooks and the runtime config global to that list.
+		"no-underscore-dangle": "off",
+		// `varsIgnorePattern` buys less than it looks where a tsconfig sets `noUnusedLocals`, which
+		// still fails an unused `_local`; the parameter and caught-error escapes hold everywhere.
+		"no-unused-vars": [
+			"error",
+			{ "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "caughtErrorsIgnorePattern": "^_" }
+		],
+
+		// -- Imports ---------------------------------------------------------------------------------
+		"import/first": "error",
+		"import/newline-after-import": "error",
+		// One import statement per module, with the erased part marked: a module imported for a value
+		// and a type carries the type inline, and a type-only module is `import type` — an all-inline
+		// `import { type A }` still emits a runtime import of the module. One statement is easier to
+		// grep than the two `import/consistent-type-specifier-style` would ask for.
+		"typescript/consistent-type-imports": ["error", { "fixStyle": "inline-type-imports" }],
+		"typescript/no-import-type-side-effects": "error",
+		"typescript/consistent-type-exports": "error",
+		// Not `import/no-duplicates`, which accepts a type-only import beside a value import from the
+		// same module; one import list per module is the point.
 		"no-duplicate-imports": "error",
+		// The house spelling is an alias, and a `../` survives moving the file only by accident. The
+		// Node trees that have no alias are excused below, each with the reason.
+		"import/no-relative-parent-imports": "error",
+		// A circular import leaves one side reading `undefined` at module-init time, and which side
+		// depends on entry order.
+		"import/no-cycle": "error",
 		"import/no-mutable-exports": "error",
 		"import/no-named-default": "error",
 		"import/no-anonymous-default-export": "error",
-		"promise/no-nesting": "error",
-		"promise/no-return-wrap": "error",
-		"promise/prefer-catch": "error",
-		"typescript/adjacent-overload-signatures": "error",
+		"import/no-commonjs": "error",
+		"import/no-amd": "error",
+		"import/no-dynamic-require": "error",
+		"import/no-webpack-loader-syntax": "error",
+		"import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
+		"unicorn/prefer-module": "error",
+		"unicorn/prefer-node-protocol": "error",
+		// `import.meta.dirname` and `import.meta.filename` are the spelling of what
+		// `dirname(fileURLToPath(import.meta.url))` builds by hand, and they need no imports.
+		"unicorn/prefer-import-meta-properties": "error",
+		"unicorn/prefer-export-from": "error",
+		// `path.join`, not `join`: a Node module read as a namespace says where a name comes from.
+		"unicorn/import-style": "error",
+		"unicorn/require-module-attributes": "error",
+		"oxc/no-barrel-file": "error",
+		"typescript/no-require-imports": "error",
+		"typescript/no-var-requires": "error",
+		"typescript/no-namespace": "error",
+
+		// -- Types -----------------------------------------------------------------------------------
+		// An object shape is an `interface`; a `type` alias is for a union or a computed type.
+		"typescript/consistent-type-definitions": ["error", "interface"],
+		"typescript/consistent-indexed-object-style": "error",
+		"typescript/consistent-generic-constructors": "error",
+		"typescript/array-type": "error",
+		"typescript/no-explicit-any": "error",
+		// `no-explicit-any` catches the `any` this repo writes; the `no-unsafe-*` rules catch the `any`
+		// that arrives — from a library, from `JSON.parse`, from an untyped `vi.fn()`.
+		"typescript/no-unsafe-call": "error",
+		"typescript/no-unsafe-assignment": "error",
+		"typescript/no-unsafe-argument": "error",
+		"typescript/no-unsafe-return": "error",
+		"typescript/no-unsafe-member-access": "error",
+		// Without it, `!` is an unchecked way to make the claim `no-unsafe-type-assertion` rejects.
+		"typescript/no-non-null-assertion": "error",
+		"typescript/non-nullable-type-assertion-style": "error",
+		"typescript/no-non-null-asserted-nullish-coalescing": "error",
+		"typescript/consistent-type-assertions": "error",
+		"typescript/ban-types": "error",
+		"typescript/ban-ts-comment": "error",
 		"typescript/ban-tslint-comment": "error",
+		"typescript/prefer-ts-expect-error": "error",
+		"typescript/no-empty-object-type": "error",
 		"typescript/no-empty-interface": "error",
 		"typescript/no-inferrable-types": "error",
 		"typescript/no-unnecessary-qualifier": "error",
+		"typescript/no-invalid-void-type": "error",
+		"typescript/no-unsafe-function-type": "error",
 		"typescript/prefer-function-type": "error",
 		"typescript/unified-signatures": "error",
-		"typescript/consistent-type-assertions": "error",
+		"typescript/adjacent-overload-signatures": "error",
+		// `strictFunctionTypes` only checks property syntax; a method shorthand stays bivariant, so
+		// `handler(e: MouseEvent): void` accepts a handler that will be called with something else.
+		"typescript/method-signature-style": "error",
+		"typescript/parameter-properties": "error",
+		"typescript/class-literal-property-style": "error",
+		"typescript/prefer-readonly": "error",
+		"typescript/related-getter-setter-pairs": "error",
+		"typescript/prefer-return-this-type": "error",
+		"typescript/prefer-reduce-type-parameter": "error",
+		"typescript/prefer-enum-initializers": "error",
+		"typescript/prefer-literal-enum-member": "error",
+		"typescript/no-mixed-enums": "error",
+		"oxc/no-const-enum": "error",
+		"typescript/no-dynamic-delete": "error",
+		"typescript/dot-notation": "error",
+		"typescript/restrict-plus-operands": "error",
+		"typescript/no-deprecated": "error",
+		// Truthful only under `noUncheckedIndexedAccess`, which makes an array index nullable and which
+		// every tsconfig with source of its own sets. A finding is as often a type claiming more than
+		// the wire delivers — fix the type, keep the guard — as it is a dead branch.
+		"typescript/no-unnecessary-condition": "error",
+		// Truthiness is not a type. A nullable string, number or boolean in a condition says which of
+		// its falsy values it means: `hasText`, `=== 0`, `=== true`.
+		"typescript/strict-boolean-expressions": "error",
+		"typescript/prefer-nullish-coalescing": "error",
+		// A `switch` over a union names every member; a `default` does not stand in for the ones it
+		// leaves out, which is what makes `default-case` (above) wrong here.
+		"typescript/switch-exhaustiveness-check": "error",
+		// TS2366 and the declared return type already govern every report — an effect returning a
+		// cleanup on one path, a switch exhaustive over a union — and the rule adds a stylistic "spell
+		// it `return undefined`" to code TypeScript has accepted.
+		"typescript/consistent-return": "off",
+
+		// -- Promises and errors ---------------------------------------------------------------------
+		// The typed `only-throw-error`, `prefer-promise-reject-errors` and `prefer-includes` subsume
+		// `no-throw-literal`, the untyped `prefer-promise-reject-errors` and `unicorn/prefer-includes`,
+		// which are not listed.
+		// A function that returns a promise is `async`, so a thrown error and a rejection are one thing
+		// to a caller.
+		"typescript/promise-function-async": "error",
+		// `return await` inside `try` is the only way the `catch` sees the rejection.
+		"typescript/return-await": ["error", "in-try-catch"],
+		// A void expression used as a value is a bug; the arrow shorthand `() => setOpen(false)` is not.
+		"typescript/no-confusing-void-expression": ["error", { "ignoreArrowShorthand": true }],
+		// A value-returning function handed to a void callback slot has its result thrown away, and
+		// `() => cond && act()` is control flow spelled as an expression. A function returning `any` —
+		// a `vi.fn()` or a Storybook `fn()` — is the harness's, not the caller's.
+		"typescript/strict-void-return": ["error", { "allowReturnAny": true }],
+		"typescript/no-misused-promises": "error",
+		"typescript/only-throw-error": "error",
+		"typescript/prefer-promise-reject-errors": "error",
+		"typescript/use-unknown-in-catch-callback-variable": "error",
+		// A deferred is `Promise.withResolvers()` — spelled `<undefined>` where it settles with nothing,
+		// since `no-invalid-void-type` rejects `void` as a call's type argument — and a delay is
+		// `setTimeout` from `node:timers/promises`; the constructor is for wrapping a callback API.
+		"promise/avoid-new": "error",
+		"promise/prefer-await-to-then": "error",
+		"promise/prefer-await-to-callbacks": "error",
+		"promise/catch-or-return": "error",
+		"promise/no-nesting": "error",
+		"promise/no-return-wrap": "error",
+		"promise/prefer-catch": "error",
+		"promise/spec-only": "error",
+		"promise/param-names": "error",
+		"promise/no-return-in-finally": "error",
+		// `void somePromise.then(sideEffect)` is fire-and-forget; only a chain's interior needs a return.
+		"promise/always-return": ["error", { "ignoreLastCallback": true }],
+		"unicorn/error-message": "error",
+		"unicorn/throw-new-error": "error",
+		"unicorn/custom-error-definition": "error",
+		// Reads any `throw` after a `typeof` guard as a type error, including a value that failed
+		// validation; the class would then say something the error is not.
+		"unicorn/prefer-type-error": "off",
+		"unicorn/catch-error-name": "error",
+		"unicorn/prefer-optional-catch-binding": "error",
+		"unicorn/no-useless-promise-resolve-reject": "error",
+		"unicorn/no-useless-error-capture-stack-trace": "error",
+		"unicorn/no-abusive-eslint-disable": "error",
+
+		// -- Modern spellings ------------------------------------------------------------------------
+		"typescript/prefer-for-of": "error",
+		"typescript/prefer-find": "error",
+		// The typed `prefer-find` reads `[0]` and `.at(0)`; `.shift()`, `.pop()`, `.at(-1)` and a
+		// destructured first element are this one's.
+		"unicorn/prefer-array-find": "error",
+		"typescript/prefer-includes": "error",
+		"typescript/prefer-string-starts-ends-with": "error",
+		"typescript/prefer-regexp-exec": "error",
+		"unicorn/no-array-for-each": "error",
+		// A `reduce` is a loop whose accumulator is hidden in a parameter; the loop reads.
+		"unicorn/no-array-reduce": "error",
+		"unicorn/no-array-method-this-argument": "error",
+		"unicorn/prefer-array-flat": "error",
+		"unicorn/prefer-array-flat-map": "error",
+		"unicorn/prefer-array-some": "error",
+		"unicorn/prefer-array-index-of": "error",
+		"unicorn/prefer-at": "error",
+		"unicorn/prefer-negative-index": "error",
+		"unicorn/prefer-set-has": "error",
+		"unicorn/prefer-spread": "error",
+		"unicorn/prefer-string-slice": "error",
+		"unicorn/prefer-string-replace-all": "error",
+		"unicorn/prefer-string-trim-start-end": "error",
+		"unicorn/prefer-string-raw": "error",
+		"unicorn/prefer-code-point": "error",
+		"unicorn/prefer-date-now": "error",
+		"unicorn/prefer-math-min-max": "error",
+		"unicorn/prefer-math-trunc": "error",
+		"unicorn/prefer-modern-math-apis": "error",
+		"unicorn/prefer-number-properties": "error",
+		"unicorn/prefer-native-coercion-functions": "error",
+		"unicorn/prefer-object-from-entries": "error",
+		"unicorn/prefer-structured-clone": "error",
+		"unicorn/prefer-regexp-test": "error",
+		"unicorn/prefer-single-call": "error",
+		"unicorn/prefer-prototype-methods": "error",
+		"unicorn/prefer-reflect-apply": "error",
+		"unicorn/prefer-default-parameters": "error",
+		"unicorn/prefer-class-fields": "error",
+		"unicorn/prefer-event-target": "error",
+		"unicorn/prefer-blob-reading-methods": "error",
+		"unicorn/prefer-response-static-json": "error",
+		"unicorn/prefer-bigint-literals": "error",
+		"unicorn/prefer-dom-node-append": "error",
+		"unicorn/prefer-dom-node-dataset": "error",
+		"unicorn/prefer-dom-node-remove": "error",
+		"unicorn/prefer-dom-node-text-content": "error",
+		"unicorn/prefer-modern-dom-apis": "error",
+		"unicorn/prefer-classlist-toggle": "error",
+		"unicorn/prefer-keyboard-event-key": "error",
+		"unicorn/relative-url-style": "error",
+		"unicorn/new-for-builtins": "error",
+		"unicorn/no-new-buffer": "error",
+		"unicorn/no-instanceof-array": "error",
+		"unicorn/no-immediate-mutation": "error",
+		"unicorn/no-this-assignment": "error",
+		"unicorn/no-static-only-class": "error",
+		"unicorn/no-unreadable-iife": "error",
+		"unicorn/no-unreadable-array-destructuring": "error",
+		"unicorn/no-negation-in-equality-check": "error",
+		"unicorn/no-await-expression-member": "error",
+		"unicorn/no-typeof-undefined": "error",
+		"unicorn/no-object-as-default-parameter": "error",
+		"unicorn/no-unnecessary-array-flat-depth": "error",
+		"unicorn/no-unnecessary-array-splice-count": "error",
+		"unicorn/no-unnecessary-slice-end": "error",
+		"unicorn/no-length-as-slice-end": "error",
+		"unicorn/no-magic-array-flat-depth": "error",
+		"unicorn/no-useless-switch-case": "error",
+		"unicorn/no-useless-collection-argument": "error",
+		"unicorn/no-useless-iterator-to-array": "error",
+		// Not arguments — `.catch(undefined)` on a zod schema and `.mockReturnValue(undefined)` mean what
+		// they say, and dropping the argument changes the call — and not an arrow body, where
+		// `() => undefined` is typed `undefined` and the `() => {}` it proposes is `void`.
+		"unicorn/no-useless-undefined": [
+			"error",
+			{ "checkArguments": false, "checkArrowFunctionBody": false }
+		],
+		"unicorn/no-zero-fractions": "error",
+		"unicorn/numeric-separators-style": "error",
+		"unicorn/no-hex-escape": "error",
+		"unicorn/escape-case": "error",
+		"unicorn/consistent-assert": "error",
+		"unicorn/consistent-empty-array-spread": "error",
+		"unicorn/consistent-existence-index-check": "error",
+		"unicorn/consistent-date-clone": "error",
+		"unicorn/consistent-template-literal-escape": "error",
+		"unicorn/switch-case-braces": "error",
+		"unicorn/switch-case-break-position": "error",
+		"unicorn/explicit-length-check": "error",
+		"unicorn/explicit-timer-delay": "error",
+		"unicorn/empty-brace-spaces": "error",
+		"unicorn/no-console-spaces": "error",
+		"unicorn/no-document-cookie": "error",
+		"unicorn/no-process-exit": "error",
+		"unicorn/require-array-join-separator": "error",
+		"unicorn/require-number-to-fixed-digits-argument": "error",
+		"unicorn/text-encoding-identifier-case": "error",
+		// `Number("")` is `0` and `parseInt("12px")` is `12`: the rewrite the rule proposes is not
+		// the same function.
+		"unicorn/prefer-number-coercion": "off",
+		// `getElementById(id)` takes an id; `querySelector` takes a selector, so an id from data
+		// would need `CSS.escape` first.
+		"unicorn/prefer-query-selector": "off",
+		"oxc/no-accumulating-spread": "error",
+		"oxc/bad-bitwise-operator": "error",
+		"oxc/branches-sharing-code": "error",
+
+		// -- Doc comments ----------------------------------------------------------------------------
+		// A tag that is present says something; whether to write one at all stays a judgement, so
+		// `require-yields` is off, and the type is the signature's to state, so the tag-type rules —
+		// `require-property-type` among the category's — are off.
+		"jsdoc/check-access": "error",
+		"jsdoc/empty-tags": "error",
+		"jsdoc/no-blank-blocks": "error",
+		"jsdoc/require-param-name": "error",
+		"jsdoc/require-param-description": "error",
+		"jsdoc/require-returns-description": "error",
+		"jsdoc/require-throws-description": "error",
+		"jsdoc/require-yields-description": "error",
+		"jsdoc/require-yields": "off",
+		"jsdoc/require-property-type": "off",
+		"jsdoc/require-throws-type": "off",
+		"jsdoc/require-yields-type": "off",
+
+		// -- Nursery, opted in by name ---------------------------------------------------------------
+		// A bump that drops one fails config load, which is the signal to revisit.
 		"import/export": "error",
 		"import/named": "error",
 		"no-unreachable-loop": "error",
-		"promise/no-return-in-finally": "error",
-		"promise/spec-only": "error",
-		"typescript/no-invalid-void-type": "error",
-		"typescript/prefer-find": "error",
-		"typescript/consistent-type-exports": "error",
-		"typescript/related-getter-setter-pairs": "error",
-		"typescript/prefer-reduce-type-parameter": "error",
-		"typescript/prefer-return-this-type": "error",
-		"typescript/restrict-plus-operands": "error",
-		"typescript/prefer-readonly": "error",
-		"typescript/method-signature-style": "error",
-		"typescript/prefer-ts-expect-error": "error",
-		"unicorn/no-useless-switch-case": "error",
-		"unicorn/no-useless-iterator-to-array": "error",
-		"unicorn/prefer-event-target": "error",
-		"unicorn/prefer-type-error": "error",
-		"unicorn/prefer-classlist-toggle": "error",
-		"unicorn/prefer-reflect-apply": "error",
-		"unicorn/prefer-response-static-json": "error",
-		"unicorn/prefer-bigint-literals": "error",
-		"unicorn/require-module-attributes": "error",
-		"oxc/no-barrel-file": "error",
-		"typescript/no-misused-promises": "error",
-		"typescript/no-deprecated": "error",
-		"typescript/no-misused-spread": "error",
-		"typescript/prefer-nullish-coalescing": "error",
-		"typescript/require-array-sort-compare": "error",
-		"typescript/prefer-promise-reject-errors": "error",
-		"typescript/no-meaningless-void-operator": "error",
-		"typescript/no-unnecessary-template-expression": "error",
-		"typescript/no-unnecessary-condition": "error",
-		"typescript/switch-exhaustiveness-check": [
-			"error",
-			{
-				"considerDefaultExhaustiveForUnions": true
-			}
-		],
-		// No allowance: the SPA's is for TanStack Router's thrown `Redirect`/`NotFoundError`, and nothing
-		// under this config depends on `@tanstack/router-core`. Out here an Error is the only thing to throw.
-		"typescript/only-throw-error": "error",
-		"unicorn/error-message": "error",
-		"unicorn/throw-new-error": "error",
-		"unicorn/no-array-method-this-argument": "error",
-		"unicorn/no-unreadable-array-destructuring": "error",
-		"unicorn/consistent-date-clone": "error",
-		"unicorn/prefer-keyboard-event-key": "error",
-		"unicorn/require-array-join-separator": "error",
-		"unicorn/no-useless-collection-argument": "error",
-		"unicorn/explicit-timer-delay": "error",
-		"unicorn/prefer-structured-clone": "error",
-		"unicorn/prefer-dom-node-text-content": "error",
-		"unicorn/prefer-modern-dom-apis": "error",
-		"unicorn/switch-case-break-position": "error",
-		"unicorn/prefer-object-from-entries": "error",
-		"unicorn/prefer-includes": "error",
-		"unicorn/prefer-logical-operator-over-ternary": "error",
-		"unicorn/prefer-string-trim-start-end": "error",
-		"unicorn/consistent-template-literal-escape": "error",
-		"unicorn/text-encoding-identifier-case": "error",
-		// The diagnostic names the helper but points at the *enclosing* function, so the line it sends you
-		// to is the exported entry point rather than the thing to change. What it finds is a helper
-		// deliberately scoped to the script or spec that owns it; hoisting one widens its reach.
-		"unicorn/consistent-function-scoping": "off",
-		// GraphQL introspection names its own fields: a schema query asks for `__schema`.
-		"no-underscore-dangle": "off",
-		"promise/always-return": [
-			"error",
-			{
-				"ignoreLastCallback": true
-			}
-		],
-		// Unlike the SPA, these trees have no approved CSS side-effect or module-augmentation imports.
-		"import/no-unassigned-import": "error",
-		"no-unused-vars": [
-			"error",
-			{
-				"argsIgnorePattern": "^_",
-				"varsIgnorePattern": "^_",
-				"caughtErrorsIgnorePattern": "^_"
-			}
-		]
+
+		// -- Files -----------------------------------------------------------------------------------
+		// The SPA adds PascalCase for a file that exports a component.
+		"unicorn/filename-case": ["error", { "case": "kebabCase" }],
+		"hephaestus/no-non-ascii-filename": "error"
 	},
 
 	"overrides": [
 		{
-			// Maven splits a module across `src/test/resources` and `src/main/resources`, so a spec
-			// reaches its subject across that boundary and no alias spans it.
+			// Java source sets split resources across `src/test/resources` and `src/main/resources`, so a
+			// spec reaches its subject across that boundary and no alias spans it.
 			"files": ["server/application/src/test/resources/agent/**"],
 			"rules": { "import/no-relative-parent-imports": "off" }
 		},
@@ -284,9 +493,40 @@
 			"rules": { "unicorn/no-process-exit": "off" }
 		},
 		{
+			// The runner's tools answer per item, so a validator is one guard per rule of a contract, and
+			// a precompute script is one guard per shape it recognises; at the default 20 the rule grades
+			// how many rules the contract has. Forty is the line between that and a function doing several
+			// functions' work. An orchestration scenario is one linear story per stage, and is not graded.
+			"files": [
+				"server/application/src/main/resources/agent/**",
+				"server/application/src/main/resources/practices/precompute/**",
+				"docker/agents/precompute/**"
+			],
+			"rules": { "complexity": ["error", { "max": 40 }] }
+		},
+		{
+			"files": ["server/application/src/test/resources/agent/*.spec.ts"],
+			"rules": { "complexity": "off" }
+		},
+		{
 			// A changesets changelog plugin is loaded by `require`, so CommonJS is the format it must be in.
 			"files": [".changeset/*.cjs"],
-			"rules": { "import/no-commonjs": "off" }
+			"rules": { "import/no-commonjs": "off", "unicorn/prefer-module": "off" }
+		},
+		{
+			// Plain JavaScript — the k6 scenarios and the changesets plugin: a JSDoc tag here carries
+			// the type, which is what it is for.
+			"files": ["load-tests/**/*.js", ".changeset/*.cjs"],
+			"rules": {
+				"jsdoc/require-param-description": "off",
+				"jsdoc/require-returns-description": "off"
+			}
+		},
+		{
+			// The gate hands Vite+ the same lint object the webapp's Vite config builds, so it uses the
+			// loader that builds it, which lives with the house plugin; no alias spans the two trees.
+			"files": ["scripts/check-lint-contract.ts"],
+			"rules": { "import/no-relative-parent-imports": "off" }
 		}
 	]
 }

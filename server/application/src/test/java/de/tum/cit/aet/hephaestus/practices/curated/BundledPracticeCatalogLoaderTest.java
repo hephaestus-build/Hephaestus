@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.curated;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
@@ -23,6 +24,42 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
             new PracticeEvidenceDefaults(catalogs, PracticeSignalOptionsFixture.catalog()));
 
     @Test
+    void shouldDescribeBehaviorsWithoutFixingAssessmentPerPractice() {
+        assertThat(loader.catalog().practices()).allSatisfy(practice -> {
+            assertThat(practice.definition().criteria())
+                    .contains("BEHAVIOR FOCUS:")
+                    .doesNotContain("TARGET ASSESSMENT:", "fixed target", "DEFECT-DETECTOR DISCIPLINE");
+        });
+    }
+
+    @Test
+    void shouldKeepCaptureFailuresOutOfObservationStatuses() {
+        assertThat(loader.catalog().practices())
+                .allSatisfy(practice -> assertThat(practice.definition().criteria())
+                        .as("canonical observation vocabulary in %s", practice.slug())
+                        .doesNotContain("INCONCLUSIVE", "NO_REVIEW_OCCASION", "INSUFFICIENT_EVIDENCE"));
+        assertThat(loader.catalog().practices())
+                .filteredOn(practice -> java.util.Set.of(
+                                "describe-what-and-why", "merged-past-unresolved-review-threads",
+                                "records-significant-decisions-with-rationale", "asks-answerable-questions")
+                        .contains(practice.slug()))
+                .hasSize(4)
+                .allSatisfy(practice -> assertThat(practice.definition().criteria())
+                        .contains("collection gap")
+                        .doesNotContain("you could not read it: return UNDETERMINED"));
+    }
+
+    @Test
+    void shouldNotCallApplicableGoodWorkNotApplicable() {
+        assertThat(loader.catalog().practices())
+                .filteredOn(practice -> practice.slug().equals("asks-answerable-questions")
+                        || practice.slug().equals("posts-clear-status-and-blocker-updates"))
+                .hasSize(2)
+                .allSatisfy(practice ->
+                        assertThat(practice.definition().criteria()).contains("PRESENT/GOOD", "not NOT_APPLICABLE"));
+    }
+
+    @Test
     void shouldLoadComposedDefinitionsAndScripts() {
         BundledPracticeCatalog catalog = loader.catalog();
 
@@ -39,15 +76,12 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
     }
 
     /**
-     * The loader runs every shipped practice through {@link PracticeDefinitionValidator}, so a second
-     * {@code on} entry would fail the boot rather than reach a workspace. Asserted on the composed
-     * definitions as well, because a bare-string entry expands into a binding without looking like one.
-     */
-    /**
      * The declarations that stop us spending a model call on a question the staged evidence already
      * answers. Pinned by slug because the value of each is measured — on the corpus these were written
      * against, they account for the great majority of every {@code NOT_APPLICABLE} ever recorded — and a
-     * declaration dropped in an edit would restore that cost in silence.
+     * declaration dropped in an edit would restore that cost in silence. The iOS practices are gated on a
+     * Swift file in the change for the same reason: on a repository with no Swift in it they would be
+     * asked on every change and answer nothing.
      */
     @Test
     void shouldShipTheSubjectDeclarationsThatKeepPracticesFromBeingAskedForNothing() {
@@ -60,7 +94,28 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                 .containsExactlyInAnyOrder(
                         "changes-dependencies-deliberately",
                         "keeps-the-test-suite-honest",
-                        "engaging-with-inline-review-comments");
+                        "engaging-with-inline-review-comments",
+                        "keeps-views-free-of-networking-and-persistence",
+                        "owns-state-at-the-right-level",
+                        "makes-ui-accessible-by-default",
+                        "uses-structured-concurrency-safely",
+                        "ships-a-preview-with-each-new-view",
+                        "declares-permissions-truthfully-at-point-of-use",
+                        "uses-adaptive-colors-for-every-appearance",
+                        "avoids-insecure-defaults-and-over-broad-permissions",
+                        "validates-and-escapes-untrusted-input");
+    }
+
+    @Test
+    void shouldJudgeReviewersForReviewerPractices() {
+        assertThat(loader.catalog().practices().stream()
+                        .filter(practice ->
+                                practice.definition().bindings().getFirst().subject() == ActorRole.REVIEWER)
+                        .map(practice -> practice.slug()))
+                .containsExactlyInAnyOrder(
+                        "leaves-useful-specific-review-comments",
+                        "reviews-respectfully-asks-rather-than-demands",
+                        "reviews-substantively-with-understanding");
     }
 
     /**

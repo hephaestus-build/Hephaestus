@@ -3,6 +3,10 @@ package de.tum.cit.aet.hephaestus.workspace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -39,6 +43,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -223,8 +228,8 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("both standard triggers reach the same choke point: purge adapter and GitHub/GitLab revoke")
-    void bothTriggers_eraseTheSameRowSet() {
+    @DisplayName("purge and GitHub disconnect erase the same rows even when vendor uninstall is unavailable")
+    void bothTriggers_eraseTheSameRowSetDespiteUnavailableVendorUninstall() {
         // Trigger B — workspace purge via the adapter.
         assertThat(scmWorkspacePurgeAdapter.getOrder()).isEqualTo(-200);
         scmWorkspacePurgeAdapter.deleteWorkspaceData(tenantA.getId());
@@ -234,8 +239,24 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(repositoryRepository.findByNameWithOwner(EXCLUSIVE_REPO)).isEmpty();
         assertThat(repositoryRepository.findByNameWithOwner(SHARED_REPO)).isPresent();
 
-        // Trigger A — admin disconnect must erase too, reaching the same end state as the purge above.
-        githubConnectionStrategy.revoke(new IntegrationRef(IntegrationKind.GITHUB, tenantB.getId(), "5002"));
+        // No GitHub credentials are configured: vendor failure must not prevent local erasure.
+        var ref = new IntegrationRef(IntegrationKind.GITHUB, tenantB.getId(), "5002");
+        var logger = (Logger) LoggerFactory.getLogger(GithubConnectionStrategy.class);
+        var events = new ListAppender<ILoggingEvent>();
+        events.start();
+        logger.addAppender(events);
+        try {
+            githubConnectionStrategy.revoke(ref);
+            assertThat(events.list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("GitHub uninstall failed during disconnect: ref=" + ref
+                                + ", error=java.lang.IllegalStateException: GitHub App credentials not configured.");
+            });
+        } finally {
+            logger.detachAppender(events);
+            events.stop();
+        }
 
         assertThat(repositoryToMonitorRepository.count()).isZero();
         assertThat(repositoryRepository.count()).isZero();

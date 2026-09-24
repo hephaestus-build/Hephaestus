@@ -9,10 +9,14 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
+import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -33,6 +37,8 @@ public class AccountService {
     private final IdentityLinkRepository identityLinkRepository;
     private final IssuedJwtRepository issuedJwtRepository;
     private final AuthEventLogger authEventLogger;
+    private final AuthProperties authProperties;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public AccountService(
@@ -40,11 +46,15 @@ public class AccountService {
             IdentityLinkRepository identityLinkRepository,
             IssuedJwtRepository issuedJwtRepository,
             AuthEventLogger authEventLogger,
+            AuthProperties authProperties,
+            ApplicationEventPublisher eventPublisher,
             Clock clock) {
         this.accountRepository = accountRepository;
         this.identityLinkRepository = identityLinkRepository;
         this.issuedJwtRepository = issuedJwtRepository;
         this.authEventLogger = authEventLogger;
+        this.authProperties = authProperties;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
@@ -65,29 +75,28 @@ public class AccountService {
      * the account's personal/auth child rows (identity_link, account_feature, issued_jwt,
      * account_export) and flips the row to DELETED. Retained, lawful-basis audit data (auth_event,
      * Art. 30) and the read-only git-activity mirror (Art. 17(3)) are intentionally kept.
-     *
-     * @param actingAccountId the impersonating operator's id when this runs under an {@code act} claim,
-     *     else {@code null} for a genuine self-service deletion. Stamped on the audit row so an
-     *     operator-driven erasure records the (target, operator) pair instead of reading as the victim
-     *     self-deleting — non-repudiation on the highest-risk action.
      */
     @Transactional
-    public void softDelete(Long accountId, @Nullable Long actingAccountId) {
+    public void softDelete(Long accountId) {
         Account account = requireById(accountId);
         if (account.getStatus() == Account.Status.DELETING || account.getStatus() == Account.Status.DELETED) {
             // Idempotent: only ACTIVE/SUSPENDED → DELETING starts the Art.17 cooldown. A re-invocation
             // must NOT reset deleted_at (restarting the 48h purge clock) or re-emit ACCOUNT_DELETED.
             return;
         }
+        Instant deletedAt = clock.instant();
         account.setStatus(Account.Status.DELETING);
-        account.setDeletedAt(clock.instant());
+        account.setDeletedAt(deletedAt);
         accountRepository.save(account);
-        issuedJwtRepository.revokeAllForAccount(accountId, clock.instant(), IssuedJwt.RevokedReason.ACCOUNT_DELETED);
+        issuedJwtRepository.revokeAllForAccount(accountId, deletedAt, IssuedJwt.RevokedReason.ACCOUNT_DELETED);
         authEventLogger
                 .event(AuthEvent.EventType.ACCOUNT_DELETED, AuthEvent.Result.SUCCESS)
                 .account(accountId)
-                .actingAccount(actingAccountId)
                 .record();
+        // Same transaction as the status flip: the confirmation email is only owed once the
+        // cooldown really started, and the registry row commits with it.
+        eventPublisher.publishEvent(
+                new AccountDeletionScheduledEvent(accountId, deletedAt.plus(authProperties.deleteCooldown())));
     }
 
     /**
@@ -101,13 +110,9 @@ public class AccountService {
      * </ul>
      * Reversible: re-linking only requires signing in with that provider again. The current session
      * is account-scoped (not identity-scoped), so unlinking never logs the user out.
-     *
-     * @param actingAccountId the impersonating operator's id when this runs under an {@code act} claim,
-     *     else {@code null} for a self-service unlink. Stamped on the audit row for operator attribution
-     *     (see {@link #softDelete}).
      */
     @Transactional
-    public void unlinkIdentity(Long accountId, Long identityLinkId, @Nullable Long actingAccountId) {
+    public void unlinkIdentity(Long accountId, Long identityLinkId) {
         // Write-lock the account's active links so two concurrent unlinks of different identities
         // serialize — otherwise both pass the last-identity guard below and drain the account to zero.
         List<IdentityLink> active = identityLinkRepository.findActiveByAccountIdForUpdate(accountId);
@@ -130,9 +135,10 @@ public class AccountService {
         authEventLogger
                 .event(AuthEvent.EventType.IDENTITY_UNLINKED, AuthEvent.Result.SUCCESS)
                 .account(accountId)
-                .actingAccount(actingAccountId)
                 .gitProvider(gitProviderId)
                 .record();
+        eventPublisher.publishEvent(new AccountSecurityChangedEvent(
+                accountId, AccountSecurityChangedEvent.Kind.IDENTITY_UNLINKED, clock.instant()));
     }
 
     public List<Account> adminList(int page, int size) {
@@ -150,7 +156,7 @@ public class AccountService {
             try {
                 role = Account.AppRole.valueOf(appRole);
             } catch (IllegalArgumentException e) {
-                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "unknown app role: " + appRole, e);
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "unknown app role: " + appRole, e);
             }
             // Last-admin lockout guard: demoting the only remaining APP_ADMIN — or yourself —
             // would lock everyone out of /admin with no recovery.
@@ -171,6 +177,9 @@ public class AccountService {
                 }
             }
             Account.AppRole previousRole = account.getAppRole();
+            if (previousRole == role) {
+                return account;
+            }
             account.setAppRole(role);
             accountRepository.save(account);
             if (isDemotion) {
@@ -192,14 +201,14 @@ public class AccountService {
                     .actingAccount(actingAccountId)
                     .details("{\"from\":\"" + previousRole.name() + "\",\"to\":\"" + role.name() + "\"}")
                     .record();
+            eventPublisher.publishEvent(new AccountSecurityChangedEvent(
+                    accountId, AccountSecurityChangedEvent.Kind.APP_ROLE_CHANGED, clock.instant()));
         }
         return account;
     }
 
     /**
-     * Instance-admin force sign-out: revoke all of {@code accountId}'s active sessions. Also ends any
-     * in-flight impersonation OF this account — an impersonation token's subject is the target's id, so
-     * its row is revoked here too; the operator's own session is a separate jti and is untouched.
+     * Instance-admin force sign-out: revoke all of {@code accountId}'s active sessions.
      * Audited as {@code JWT_REVOKED}.
      */
     @Transactional

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
-import { daysBefore } from "@/components/common/story-clock";
+import { daysBefore } from "@/stories/story-clock";
 
 import { TimelineItem } from "./TimelineItem";
 
@@ -9,7 +9,6 @@ import { TimelineItem } from "./TimelineItem";
  * Rows without a label join the group above — same rail, no dot of their own.
  */
 const meta = {
-	title: "Profile/Timeline item",
 	component: TimelineItem,
 	tags: ["autodocs"],
 	parameters: { layout: "padded" },

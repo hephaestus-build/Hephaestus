@@ -45,7 +45,6 @@ const loadingRow = (
  * exported beside it and orders them under the sort the header shows.
  */
 const meta = {
-	title: "Shared/Practice vocabulary/Practice table",
 	component: PracticeTable,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
@@ -100,7 +99,7 @@ export const Default: Story = {
 	play: async ({ args, canvas }) => {
 		const links = () =>
 			canvas
-				.getAllByRole("button", { name: /^Open / })
+				.getAllByRole("button", { name: /^Open /u })
 				.map((link) => link.getAttribute("aria-label"));
 		await expect(links()).toStrictEqual([
 			"Open Keep the diff reviewable in one sitting",
@@ -135,7 +134,9 @@ export const OpensFromTheStatusCell: Story = {
 		const row = canvas
 			.getByRole("button", { name: "Open Describe what changed and why" })
 			.closest("tr");
-		if (!row) throw new Error("Expected the row around its link.");
+		if (!row) {
+			throw new Error("Expected the row around its link.");
+		}
 		await userEvent.click(within(row).getByRole("button", { name: "Mixed feedback" }));
 		await expect(onOpen).toHaveBeenLastCalledWith("describe-what-and-why");
 		await userEvent.click(within(row).getByRole("button", { name: "Not enough to compare yet" }));
@@ -151,7 +152,7 @@ export const Loading: Story = {
 			"aria-busy",
 			"true",
 		);
-		await expect(canvas.queryByRole("button", { name: /^Open / })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: /^Open /u })).toBeNull();
 	},
 };
 

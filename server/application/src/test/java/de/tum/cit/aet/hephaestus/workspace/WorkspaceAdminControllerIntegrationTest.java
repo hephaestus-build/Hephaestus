@@ -50,7 +50,6 @@ class WorkspaceAdminControllerIntegrationTest extends AbstractWorkspaceIntegrati
                 .orElseThrow(() -> new AssertionError("seeded workspace not in the admin overview"));
         assertThat(acme.displayName()).isEqualTo("Acme");
         assertThat(acme.ownerLogin()).isEqualTo("acme-owner");
-        assertThat(acme.ownerAccountId()).isNull();
         assertThat(acme.memberCount()).isEqualTo(1L);
         assertThat(acme.status()).isNotBlank();
     }
@@ -63,6 +62,7 @@ class WorkspaceAdminControllerIntegrationTest extends AbstractWorkspaceIntegrati
                 .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 }

@@ -129,7 +129,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
         job.setWorkspace(ws);
         job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
-        job.setEvidenceSnapshot(OBJECT_MAPPER.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.0.0"))));
+        job.setEvidenceSnapshot(OBJECT_MAPPER.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.2.0"))));
         return agentJobRepository.save(job);
     }
 
@@ -192,7 +192,8 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
                 artifactId,
                 developer.getId(),
                 title,
-                presence,
+                assessment == null ? presence : "ASSESSED",
+                assessment == null ? null : presence,
                 assessment,
                 severity,
                 evidenceJson,
@@ -239,7 +240,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @DisplayName("returns a review run whole, with every observation that explains it")
     void shouldReturnCompleteRun() {
         insertObservation("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
-        insertObservation("No testing notes", "ABSENT", "BAD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
+        insertObservation("No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
 
         getHistory()
                 .jsonPath("$.content.length()")
@@ -254,15 +255,17 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("carries an undecided observation with a null assessment rather than dropping it")
     void shouldCarryInconclusiveObservationWithoutAnAssessment() {
-        insertObservation("Could not tell from the diff", "INCONCLUSIVE", null, null, "scm.pull_request", 1L);
+        insertObservation("Could not tell from the diff", "UNDETERMINED", null, null, "scm.pull_request", 1L);
 
         getHistory()
                 .jsonPath("$.content.length()")
                 .isEqualTo(1)
                 .jsonPath("$.content[0].observations.length()")
                 .isEqualTo(1)
+                .jsonPath("$.content[0].observations[0].assessmentStatus")
+                .isEqualTo("UNDETERMINED")
                 .jsonPath("$.content[0].observations[0].presence")
-                .isEqualTo("INCONCLUSIVE")
+                .doesNotExist()
                 .jsonPath("$.content[0].observations[0].assessment")
                 .doesNotExist();
     }
@@ -271,7 +274,8 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("an unfiltered request is not silently narrowed to pull requests")
     void shouldNotDefaultToPullRequestsWhenNoKindFilterIsGiven() {
-        insertObservation("Issue lacks acceptance criteria", "ABSENT", "BAD", "MINOR", ArtifactKinds.ISSUE.value(), 7L);
+        insertObservation(
+                "Issue lacks acceptance criteria", "ABSENT", "GOOD", "MINOR", ArtifactKinds.ISSUE.value(), 7L);
 
         getHistory()
                 .jsonPath("$.content.length()")
@@ -314,7 +318,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
 
     @Test
     @WithUser
-    void shouldFillAPageAfterWithholdingANewerRun() {
+    void shouldPageHistoricalAndCurrentRunsWithoutLosingEither() {
         AgentJob olderJob = persistAgentJob(workspace);
         insertObservation(
                 practice,
@@ -332,7 +336,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
         insertObservation(
                 superseded,
                 newerJob,
-                "Withheld observation",
+                "Historical observation",
                 "PRESENT",
                 "GOOD",
                 null,
@@ -356,22 +360,47 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
                 .isOk()
                 .expectBody()
                 .jsonPath("$.content[0].observations[0].summary")
+                .isEqualTo("Historical observation")
+                .jsonPath("$.content[0].observations[0].claimCurrentness")
+                .isEqualTo("STALE")
+                .jsonPath("$.hasNext")
+                .isEqualTo(true);
+
+        webTestClient
+                .get()
+                .uri(uriBuilder -> uriBuilder
+                        .path(REVIEW_RUNS_URI)
+                        .queryParam("size", 1)
+                        .queryParam("page", 1)
+                        .build(workspace.getWorkspaceSlug(), group.getSlug()))
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[0].observations[0].summary")
                 .isEqualTo("Visible observation")
+                .jsonPath("$.content[0].observations[0].claimCurrentness")
+                .isEqualTo("CURRENT")
                 .jsonPath("$.hasNext")
                 .isEqualTo(false);
     }
 
     @Test
     @WithUser
-    @DisplayName("a run whose observations the visibility gate withholds leaves the page entirely")
-    void shouldWithholdARunMeasuredAgainstSupersededReviewRules() {
+    @DisplayName("a run measured against older review rules stays in history")
+    void shouldKeepARunMeasuredAgainstSupersededReviewRulesAsHistorical() {
         insertObservation("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
         practice.setCriteria("Rewritten criteria, which is what makes the fingerprint differ");
         practice.setGroup(group);
         practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 2)));
         practiceRepository.saveAndFlush(practice);
 
-        getHistory().jsonPath("$.content.length()").isEqualTo(0);
+        getHistory()
+                .jsonPath("$.content.length()")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].observations[0].claimCurrentness")
+                .isEqualTo("STALE");
     }
 
     @Test
@@ -383,7 +412,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
                 agentJob,
                 "No testing notes",
                 "ABSENT",
-                "BAD",
+                "GOOD",
                 "MAJOR",
                 ArtifactKinds.PULL_REQUEST.value(),
                 1L,
@@ -430,8 +459,8 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("a run carries its opening sentence, its coverage, its duration and the next step it wrote")
     void shouldCarryWhatTheRunWroteAboutItself() {
-        UUID observationId =
-                insertObservation("No testing notes", "ABSENT", "BAD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
+        UUID observationId = insertObservation(
+                "No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
         agentJob.setStartedAt(Instant.parse("2025-03-04T05:06:07Z"));
         agentJob.setCompletedAt(Instant.parse("2025-03-04T05:08:29Z"));
         agentJob.setOutput(OBJECT_MAPPER.readTree("""
@@ -465,7 +494,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("a run that wrote no opening sentence says so rather than inventing one")
     void shouldLeaveTheRunNarrativeEmptyWhenTheRunComposedNothing() {
-        insertObservation("No testing notes", "ABSENT", "BAD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
+        insertObservation("No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
 
         getHistory()
                 .jsonPath("$.content[0].lead")
@@ -488,7 +517,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
                 agentJob,
                 "Cites a source nobody may show",
                 "ABSENT",
-                "BAD",
+                "GOOD",
                 "MAJOR",
                 ArtifactKinds.PULL_REQUEST.value(),
                 1L,

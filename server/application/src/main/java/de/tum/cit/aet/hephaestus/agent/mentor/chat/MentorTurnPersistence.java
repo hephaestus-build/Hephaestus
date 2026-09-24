@@ -138,7 +138,9 @@ public class MentorTurnPersistence {
             userMessage.setRole(ChatMessage.Role.USER);
             userMessage.setStatus(ChatMessage.Status.completed);
             userMessage.setParts(toTextParts(userText));
-            ChatMessage savedUser = chatMessageRepository.save(userMessage);
+            // Materialize the parent before its dependent row. Both writes remain in this transaction,
+            // including rollback when a concurrent turn wins the unique in-flight constraint.
+            ChatMessage savedUser = chatMessageRepository.saveAndFlush(userMessage);
 
             ChatMessage assistant = new ChatMessage();
             assistant.setId(assistantMessageId);

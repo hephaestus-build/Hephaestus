@@ -1,3 +1,9 @@
+/**
+ * Whether an optional string carries anything; `""` counts as absent. The API client emits `null`,
+ * so this reading takes it. The Node trees carry their own copies — `scripts/lib/env.ts`'s `isSet`,
+ * because `import/no-relative-parent-imports` keeps `scripts/` inside its tree, and the runner's
+ * `pi-text.ts`, which ships into the sandbox where no alias reaches this file.
+ */
 export function hasText(value: string | null | undefined): value is string {
 	return value != null && value !== "";
 }
@@ -14,8 +20,10 @@ export function firstNonBlank(...values: (string | null | undefined)[]): string 
  * the profile's composed prose — opens it through this one rule.
  */
 export function capitalise(value: string): string {
-	const index = value.search(/\S/);
+	const index = value.search(/\S/u);
 	const char = value[index];
-	if (index === -1 || char === undefined || !/\p{L}/u.test(char)) return value;
+	if (index === -1 || char === undefined || !/\p{L}/u.test(char)) {
+		return value;
+	}
 	return value.slice(0, index) + char.toUpperCase() + value.slice(index + 1);
 }

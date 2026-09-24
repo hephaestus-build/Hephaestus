@@ -11,6 +11,7 @@ import {
 	type LoadState,
 	queryLoadState,
 } from "@/components/common/panel-state";
+import { hasText } from "@/lib/text";
 
 export interface PracticeStandings {
 	/** The groups the practice profile shows, in catalog order. */
@@ -30,7 +31,9 @@ export function groupPracticeStandings(
 ): Record<string, PracticeStanding[] | undefined> {
 	const byGroup: Record<string, PracticeStanding[] | undefined> = {};
 	for (const practice of practiceStandings) {
-		if (practice.groupSlug) (byGroup[practice.groupSlug] ??= []).push(practice);
+		if (hasText(practice.groupSlug)) {
+			(byGroup[practice.groupSlug] ??= []).push(practice);
+		}
 	}
 	return byGroup;
 }

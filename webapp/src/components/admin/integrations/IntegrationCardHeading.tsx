@@ -1,6 +1,6 @@
 import type * as React from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 /**
  * Semantic `<h2>` card title, used inside `CardHeader`. `CardTitle` renders a `<div>` and takes no

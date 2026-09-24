@@ -12,13 +12,16 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -29,7 +32,6 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * <p>The bearer path is deliberate: an API client that never loads the SPA must be refused identically,
  * so the gate cannot be a property of the dialog.
  */
-@Sql(scripts = "/db/auth-event-sequence.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
@@ -49,6 +51,9 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private AuthProperties authProperties;
+
+    @Autowired
+    private WorkspaceRepository workspaceRepository;
 
     @Test
     void aStaleAdminIsAskedToConfirmAccessAndTheRoleIsUnchanged() {
@@ -89,7 +94,8 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .bodyValue(Map.of("appRole", "APP_ADMIN"))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         assertThat(authEventRepository.findByAccountSince(adminId, Instant.now().minus(Duration.ofMinutes(5))))
                 .singleElement()
@@ -133,7 +139,8 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .bodyValue(Map.of("appRole", "APP_ADMIN"))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         assertThat(accountRepository.findById(victimId))
                 .get()
@@ -152,7 +159,43 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .headers(h -> h.setBearerAuth(tokenFor(admin, staleSignIn())))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldRecordOnlyARefusalWhenAUserViewRequiresRecentSignIn() {
+        Account admin = persistAdmin("Viewing Vera");
+        Workspace workspace = new Workspace();
+        workspace.setWorkspaceSlug("stale-user-view");
+        workspace.setDisplayName("User view step-up");
+        workspace.setAccountLogin("support");
+        workspace.setAccountType(AccountType.USER);
+        workspace.setRepositorySelection(RepositorySelection.ALL);
+        workspace.setLeaderboardNotificationEnabled(false);
+        workspaceRepository.save(workspace);
+
+        webTestClient
+                .get()
+                .uri("/workspaces/stale-user-view/user-view/users/99/practices")
+                .headers(h -> h.setBearerAuth(tokenFor(admin, staleSignIn())))
+                .header("X-User-View-Reason", "Support")
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo(StepUpRequiredException.CODE);
+
+        assertThat(authEventRepository.findByAccountSince(
+                        persistedId(admin.getId()), Instant.now().minusSeconds(60)))
+                .filteredOn(event -> event.getEventType() == AuthEvent.EventType.USER_VIEW)
+                .singleElement()
+                .satisfies(event -> {
+                    assertThat(event.getResult()).isEqualTo(AuthEvent.Result.FAILURE);
+                    assertThat(event.getViewedUserId()).isNull();
+                    assertThat(event.getFailureReason()).isEqualTo(StepUpRequiredException.CODE);
+                });
     }
 
     private Instant staleSignIn() {

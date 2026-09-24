@@ -4,19 +4,23 @@ import type { Profile, ProfileActivityMonitor } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Separator } from "@/components/ui/separator";
 import type { ActivityMonitorFilters } from "@/lib/activity-monitor";
-import type { ProviderType } from "@/lib/provider";
+import type { ProviderType } from "@/lib/provider/provider-terms";
+import { rendersContent } from "@/lib/react-node";
 import type { LeaderboardSchedule } from "@/lib/timeframe";
 
 import { ProfileContent } from "./ProfileContent";
 import { ProfileHeader } from "./ProfileHeader";
 
 interface ProfileProps {
-	providerType?: ProviderType;
+	providerType: ProviderType;
 	profileData?: Profile;
 	activityMonitorData?: ProfileActivityMonitor;
+	activityMonitorError?: unknown;
+	onRetryActivityMonitor?: () => void;
 	activityMonitorFilters: ActivityMonitorFilters;
 	onActivityMonitorFiltersChange: (filters: ActivityMonitorFilters) => void;
 	isLoading: boolean;
+	isActivityLoading?: boolean;
 	error?: unknown;
 	onRetry?: () => void;
 	username: string;
@@ -26,19 +30,21 @@ interface ProfileProps {
 	before?: string;
 	onTimeframeChange?: (afterDate: string, beforeDate?: string) => void;
 	schedule?: LeaderboardSchedule;
-	achievementsEnabled?: boolean;
 	progressionEnabled?: boolean;
 	leaguesEnabled?: boolean;
 	practiceGroupStandings?: ReactNode;
 }
 
 export function ProfilePage({
-	providerType = "GITHUB",
+	providerType,
 	profileData,
 	activityMonitorData,
+	activityMonitorError,
+	onRetryActivityMonitor,
 	activityMonitorFilters,
 	onActivityMonitorFiltersChange,
 	isLoading,
+	isActivityLoading = isLoading,
 	error,
 	onRetry,
 	username,
@@ -48,12 +54,11 @@ export function ProfilePage({
 	before,
 	onTimeframeChange,
 	schedule,
-	achievementsEnabled = true,
 	progressionEnabled = true,
 	leaguesEnabled = true,
 	practiceGroupStandings,
 }: ProfileProps) {
-	if (error) {
+	if (error != null) {
 		return (
 			<div className="mx-auto w-full max-w-xl">
 				<QueryErrorAlert error={error} title="Could not load this profile" onRetry={onRetry} />
@@ -70,32 +75,38 @@ export function ProfilePage({
 				leaguePoints={profileData?.userInfo.leaguePoints}
 				userXpRecord={profileData?.xpRecord}
 				isLoading={isLoading}
-				workspaceSlug={workspaceSlug}
-				achievementsEnabled={achievementsEnabled}
 				progressionEnabled={progressionEnabled}
 				leaguesEnabled={leaguesEnabled}
 			/>
-			{practiceGroupStandings && (
+			{rendersContent(practiceGroupStandings) && (
 				<>
 					{practiceGroupStandings}
 					<Separator />
 				</>
 			)}
-			<ProfileContent
-				providerType={providerType}
-				activityMonitorData={activityMonitorData}
-				activityMonitorFilters={activityMonitorFilters}
-				onActivityMonitorFiltersChange={onActivityMonitorFiltersChange}
-				isLoading={isLoading}
-				username={username}
-				displayName={profileData?.userInfo.name}
-				currUserIsDashboardUser={currUserIsDashboardUser}
-				workspaceSlug={workspaceSlug}
-				afterDate={after}
-				beforeDate={before}
-				onTimeframeChange={onTimeframeChange}
-				schedule={schedule}
-			/>
+			{activityMonitorError == null ? (
+				<ProfileContent
+					providerType={providerType}
+					activityMonitorData={activityMonitorData}
+					activityMonitorFilters={activityMonitorFilters}
+					onActivityMonitorFiltersChange={onActivityMonitorFiltersChange}
+					isLoading={isActivityLoading}
+					username={username}
+					displayName={profileData?.userInfo.name}
+					currUserIsDashboardUser={currUserIsDashboardUser}
+					workspaceSlug={workspaceSlug}
+					afterDate={after}
+					beforeDate={before}
+					onTimeframeChange={onTimeframeChange}
+					schedule={schedule}
+				/>
+			) : (
+				<QueryErrorAlert
+					error={activityMonitorError}
+					title="Could not load activity"
+					onRetry={onRetryActivityMonitor}
+				/>
+			)}
 		</div>
 	);
 }

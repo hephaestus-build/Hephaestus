@@ -4,10 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
-import de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
@@ -16,16 +13,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
-/** Exercises the ADR-0022 assessment backfill SQL against the migrated production schema. */
+/** Exercises the ADR-0022 assessment backfill SQL against its historical input schema; current-schema coverage lives in ObservationAssessmentMigrationTest. */
 @Tag("database")
 class ObservationAssessmentBackfillIntegrationTest {
 
     private static final TestDatabase DATABASE =
-            PostgreSQLTestContainer.createMigratedDatabase("hephaestus_assessment_backfill");
+            PostgreSQLTestContainer.createDatabase("hephaestus_assessment_backfill");
 
     private final JdbcTemplate jdbcTemplate = new JdbcTemplate(
             new SingleConnectionDataSource(DATABASE.jdbcUrl(), DATABASE.username(), DATABASE.password(), true));
-    private final SchemaRowSeeder seeder = new SchemaRowSeeder(jdbcTemplate);
 
     /**
      * The four backfill UPDATE statements, copied VERBATIM from changeSet {@code 1781092589259-60}
@@ -46,36 +42,17 @@ class ObservationAssessmentBackfillIntegrationTest {
     @DisplayName(
             "ADR-0022 backfill derives observation.assessment from practice.polarity × presence (NOT_APPLICABLE ⇒ NULL)")
     void assessmentBackfillProducesTheFourQuadrantMatrix() {
-        // Sanity: the full production schema is what we are exercising — assessment exists, the
-        // coherence CHECK is present, and the transient polarity column is gone post-migration.
-        assertThat(columnExists("observation", "assessment"))
-                .as("observation.assessment must exist (added by changeSet 1781092589259-60)")
-                .isTrue();
-        assertThat(constraintExists("chk_observation_presence_assessment"))
-                .as("coherence CHECK from changeSet 1781092589259-61 must be present")
-                .isTrue();
-        assertThat(columnExists("practice", "polarity"))
-                .as("transient practice.polarity must be dropped post-migration (changeSet 1781092589259-65)")
-                .isFalse();
-
-        // Disable the post-migration constraints while seeding the pre-backfill state.
-        jdbcTemplate.execute("ALTER TABLE observation DROP CONSTRAINT IF EXISTS chk_observation_presence_assessment");
-        jdbcTemplate.execute("ALTER TABLE observation DROP CONSTRAINT IF EXISTS chk_observation_assessment");
-
-        // Re-add the transient valence source the migration read from.
-        jdbcTemplate.execute("ALTER TABLE practice ADD COLUMN polarity VARCHAR(16) NOT NULL DEFAULT 'DESIRABLE'");
-
-        // Seed without dragging in the FK web (workspace/user/agent_job) by turning off FK/trigger
-        // enforcement for the seed. The Testcontainers postgres role is a superuser.
-        jdbcTemplate.execute("SET session_replication_role = 'replica'");
+        // This archived migration used assessment as the verdict. Its input schema is deliberately
+        // isolated from the current target-assessment constraints.
+        jdbcTemplate.execute("CREATE TABLE practice (id BIGINT PRIMARY KEY, polarity VARCHAR(16) NOT NULL)");
+        jdbcTemplate.execute(
+                "CREATE TABLE observation (id UUID PRIMARY KEY, practice_id BIGINT REFERENCES practice(id), "
+                        + "presence VARCHAR(32) NOT NULL, assessment VARCHAR(8))");
 
         long desirablePracticeId = 9_000_001L;
         long undesirablePracticeId = 9_000_002L;
-        seeder.insert(
-                "practice", Map.of("id", desirablePracticeId, "slug", "backfill-desirable", "polarity", "DESIRABLE"));
-        seeder.insert(
-                "practice",
-                Map.of("id", undesirablePracticeId, "slug", "backfill-undesirable", "polarity", "UNDESIRABLE"));
+        jdbcTemplate.update("INSERT INTO practice VALUES (?, 'DESIRABLE')", desirablePracticeId);
+        jdbcTemplate.update("INSERT INTO practice VALUES (?, 'UNDESIRABLE')", undesirablePracticeId);
 
         // Six observations: every (polarity, presence) pair, all with assessment NULL pre-backfill.
         UUID desPresent = seedObservation(desirablePracticeId, "PRESENT");
@@ -84,8 +61,6 @@ class ObservationAssessmentBackfillIntegrationTest {
         UUID undPresent = seedObservation(undesirablePracticeId, "PRESENT");
         UUID undAbsent = seedObservation(undesirablePracticeId, "ABSENT");
         UUID undNa = seedObservation(undesirablePracticeId, "NOT_APPLICABLE");
-
-        jdbcTemplate.execute("SET session_replication_role = 'origin'");
 
         // Precondition: every seeded row starts with a NULL assessment.
         assertThat(assessmentOf(desPresent)).isNull();
@@ -127,36 +102,13 @@ class ObservationAssessmentBackfillIntegrationTest {
     /** Seeds one observation row for a practice + presence, assessment left NULL. Returns its id. */
     private UUID seedObservation(long practiceId, String presence) {
         UUID id = UUID.randomUUID();
-        Map<String, Object> overrides = new LinkedHashMap<>();
-        overrides.put("id", id);
-        overrides.put("practice_id", practiceId);
-        overrides.put("presence", presence);
-        // artifact_kind carries a value-restricting CHECK (IN ('scm.pull_request','scm.issue')); the generic
-        // dummy filler can't know that, so pin a valid value explicitly.
-        overrides.put("artifact_kind", "scm.pull_request");
-        // assessment intentionally omitted -> NULL (the pre-backfill state).
-        seeder.insert("observation", overrides);
+        jdbcTemplate.update(
+                "INSERT INTO observation (id, practice_id, presence) VALUES (?, ?, ?)", id, practiceId, presence);
         return id;
     }
 
     private @Nullable String assessmentOf(UUID observationId) {
         return jdbcTemplate.queryForObject(
                 "SELECT assessment FROM observation WHERE id = ?", String.class, observationId);
-    }
-
-    private boolean columnExists(String table, String column) {
-        Integer count = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM information_schema.columns "
-                        + "WHERE table_schema = 'public' AND table_name = ? AND column_name = ?",
-                Integer.class,
-                table,
-                column);
-        return count != null && count > 0;
-    }
-
-    private boolean constraintExists(String constraintName) {
-        Integer count = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM pg_constraint WHERE conname = ?", Integer.class, constraintName);
-        return count != null && count > 0;
     }
 }

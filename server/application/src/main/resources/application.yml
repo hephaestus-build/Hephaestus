@@ -14,6 +14,57 @@ spring:
     config:
         import: optional:file:.env[.properties]
 
+    # Moments enables scheduling independently of our runtime-role gate; no calendar events are used.
+    modulith:
+        moments:
+            enabled: false
+        # Event publication registry — the durable outbox behind notification listeners (ADR 0044).
+        # Only @ApplicationModuleListener methods get a registry row; the plain
+        # @TransactionalEventListener fan-out elsewhere in the tree keeps its fire-and-forget
+        # semantics. A completed row is deleted, a failed one stays until
+        # notification.NotificationRedeliveryJob resubmits it; each listener owns expiration.
+        events:
+            registry-trigger-annotation: org.springframework.modulith.events.ApplicationModuleListener
+            completion-mode: delete
+            republish-outstanding-events-on-restart: false
+            # Liquibase owns event_publication (db/changelog); the registry's own DDL stays off.
+            jdbc:
+                schema-initialization:
+                    enabled: false
+            # A listener that crashed mid-flight, or a publication whose listener never ran, is
+            # marked FAILED after this long so the redelivery job can pick it up.
+            staleness:
+                published: 15m
+                processing: 15m
+                resubmitted: 15m
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SMTP TRANSPORT — Boot's own spring.mail.* properties, so the env names are the ones an
+    # operator guesses from the property path (SPRING_MAIL_HOST ↔ spring.mail.host). Unset host
+    # = no sender bean = email off (notification.email.EmailTransportConfiguration). The three
+    # timeouts are set because Jakarta Mail's defaults are infinite. The sender identity is
+    # hephaestus.email.* below. Local development points at Mailpit (see the `local` profile).
+    # ═══════════════════════════════════════════════════════════════════════════
+    mail:
+        host: ${SPRING_MAIL_HOST:}
+        port: ${SPRING_MAIL_PORT:587}
+        username: ${SPRING_MAIL_USERNAME:}
+        password: ${SPRING_MAIL_PASSWORD:}
+        properties:
+            "[mail.smtp.ssl.enable]": ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE:false}
+            "[mail.smtp.ssl.checkserveridentity]": true
+            "[mail.smtp.auth]": ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:true}
+            "[mail.smtp.starttls.enable]": ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:true}
+            "[mail.smtp.starttls.required]": ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED:true}
+            "[mail.smtp.connectiontimeout]": 5000
+            "[mail.smtp.timeout]": 10000
+            "[mail.smtp.writetimeout]": 10000
+            "[mail.smtps.ssl.checkserveridentity]": true
+            "[mail.smtps.auth]": true
+            "[mail.smtps.connectiontimeout]": 5000
+            "[mail.smtps.timeout]": 10000
+            "[mail.smtps.writetimeout]": 10000
+
     threads:
         virtual:
             enabled: true
@@ -119,10 +170,32 @@ server:
 
 # Actuator on the management port; health probes for Kubernetes liveness/readiness.
 management:
+    metrics:
+        web:
+            server:
+                # The API has more route templates than Boot's default 100. The integration test
+                # checks this bounded budget against registered mappings and rejects raw URI tags.
+                max-uri-tags: 256
     tracing:
-        # Propagate trace context without sampling spans.
+        # Raw prompts never enter span attributes.
         sampling:
-            probability: 0.0
+            probability: ${TRACING_SAMPLING_PROBABILITY:0.0}
+        export:
+            otlp:
+                enabled: ${TRACING_OTLP_ENABLED:false}
+    opentelemetry:
+        tracing:
+            export:
+                otlp:
+                    endpoint: ${TRACING_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+    otlp:
+        metrics:
+            export:
+                enabled: false
+    logging:
+        export:
+            otlp:
+                enabled: false
     server:
         port: ${MANAGEMENT_PORT:8080}
     endpoints:
@@ -182,12 +255,22 @@ springdoc:
     writer-with-order-by-keys: true
 
 hephaestus:
+    # What the verified release lock handed this container (docs/admin/release-image-lock.md).
+    # The check asks GitHub for the newest published release; disable it on an air-gapped host.
+    release:
+        commit: ${HEPHAESTUS_RELEASE_COMMIT:}
+        image: ${HEPHAESTUS_IMAGE_APPLICATION_SERVER:}
+        check-enabled: ${HEPHAESTUS_RELEASE_CHECK_ENABLED:true}
     database:
         allow-insecure-remote: ${HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE:false}
+    consent:
+        # Names the organisation running the optional research programme. Unset means this deployment
+        # runs none, and first-login setup and account settings then omit the question entirely.
+        research-organization: ${HEPHAESTUS_RESEARCH_ORGANIZATION:}
     auth:
         issuer: ${HEPHAESTUS_AUTH_ISSUER:http://localhost:8080}
         audience: ${HEPHAESTUS_AUTH_AUDIENCE:hephaestus-spa}
-        access-ttl: ${HEPHAESTUS_AUTH_ACCESS_TTL:15m}
+        access-ttl: ${HEPHAESTUS_AUTH_ACCESS_TTL:24h}
         step-up-max-age: ${HEPHAESTUS_AUTH_STEP_UP_MAX_AGE:5m}
         cookie-name: ${HEPHAESTUS_AUTH_COOKIE_NAME:__Host-HEPHAESTUS_AT}
         state-cookie-key: ${HEPHAESTUS_AUTH_STATE_COOKIE_KEY:}
@@ -243,10 +326,10 @@ hephaestus:
             refresh:
                 capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_REFRESH_CAPACITY:60}
                 period: ${HEPHAESTUS_AUTH_RATE_LIMIT_REFRESH_PERIOD:1m}
-            # POST /auth/impersonate — keyed by admin account, IP fallback
-            impersonate:
-                capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_IMPERSONATE_CAPACITY:10}
-                period: ${HEPHAESTUS_AUTH_RATE_LIMIT_IMPERSONATE_PERIOD:1m}
+            # Read-only user view — keyed by admin account, IP fallback
+            user-view:
+                capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY:120}
+                period: ${HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_PERIOD:1m}
             # DELETE /user — keyed by account, IP fallback
             delete-user:
                 capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_DELETE_USER_CAPACITY:3}
@@ -361,19 +444,25 @@ hephaestus:
     # ═══════════════════════════════════════════════════════════════════════════
     fabric:
         root: ${HEPHAESTUS_FABRIC_ROOT:/data/git-repos}
-        gc-retention-days: ${HEPHAESTUS_FABRIC_GC_RETENTION_DAYS:30}
 
     git:
+        max-concurrent-ingestions: ${GIT_MAX_CONCURRENT_INGESTIONS:2}
         enabled: ${GIT_CHECKOUT_ENABLED:false}
-        # Bounds on one repository-tree capture. The defaults are the numbers the shipped
-        # scm.repository.tree source contract promises; a tree that exceeds them is staged up to the
-        # bound and reported PARTIAL, never COMPLETE.
-        tree-max-files: ${GIT_TREE_MAX_FILES:20000}
-        tree-max-total-size: ${GIT_TREE_MAX_TOTAL_SIZE:32MB}
-        tree-max-file-size: ${GIT_TREE_MAX_FILE_SIZE:10MB}
+        # A repository whose checkout and history exceed this is refused whole; nothing is captured in part.
+        max-snapshot-bytes: ${GIT_MAX_SNAPSHOT_BYTES:8589934592}
 
     webapp:
         url: ${HEPHAESTUS_WEBAPP_URL:${APPLICATION_HOST_URL:http://localhost:4200}}
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # EMAIL — sender identity for the notification module (notification.email.EmailProperties).
+    # The SMTP transport is spring.mail.* above; email is on exactly when spring.mail.host is set,
+    # and `from` is then required (the configuration-readiness page reports the pair).
+    # ═══════════════════════════════════════════════════════════════════════════
+    email:
+        from: ${HEPHAESTUS_EMAIL_FROM:}
+        from-name: ${HEPHAESTUS_EMAIL_FROM_NAME:Hephaestus}
+        reply-to: ${HEPHAESTUS_EMAIL_REPLY_TO:}
 
     leaderboard:
         schedule:
@@ -448,12 +537,13 @@ hephaestus:
         # catches somebody asking for one review each on twenty colleagues' merge requests. The cooldown
         # above will not: those are twenty different PRs.
         max-requests-per-requester-per-hour: ${PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR:5}
-        # Append the cross-run progress-delta footer and post the re-review notifying reply. Needs at
-        # least two runs on a target before it renders anything.
-        progress-footer: ${PRACTICE_REVIEW_PROGRESS_FOOTER:false}
-        # Stop re-raising a locus the developer already disputed or marked not-applicable. Inert until a
-        # response exists for a recurring locus.
+        # Stop redelivering an observation the developer disputed or marked not-applicable.
+        # Responses apply only to the exact observations bound to the feedback.
         reaction-suppression: ${PRACTICE_REVIEW_REACTION_SUPPRESSION:false}
+        # The sampling temperature of every model call in a practice review; unset means the model's
+        # own default. A review classifies work against fixed criteria, so a low value keeps the same
+        # work landing in the same cell run after run.
+        sampling-temperature: ${PRACTICE_REVIEW_SAMPLING_TEMPERATURE:}
         # Fleet-wide limits on backfill campaigns (ReviewBackfillProperties). max-window and
         # max-artifacts are the spend guard rails: a campaign wider than either is refused at preflight,
         # before anything is confirmed and before anything is paid for.
@@ -489,7 +579,7 @@ hephaestus:
             app-server-container-id: ${SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID:}
             # OCI runtime: null=runc (default), "runsc"=gVisor (recommended for production)
             container-runtime: ${SANDBOX_DOCKER_CONTAINER_RUNTIME:}
-            cli: ${SANDBOX_DOCKER_CLI:docker}
+            owner: ${SANDBOX_DOCKER_OWNER:default}
         max-concurrent-containers: ${SANDBOX_MAX_CONCURRENT:5}
         container-stop-timeout-seconds: ${SANDBOX_STOP_TIMEOUT:10}
         reconciliation-interval-seconds: ${SANDBOX_RECONCILIATION_INTERVAL:60}
@@ -497,8 +587,6 @@ hephaestus:
             port: ${SANDBOX_API_PORT:8081}
             max-request-bytes: ${SANDBOX_API_MAX_REQUEST_BYTES:4194304}
             requests-per-minute: ${SANDBOX_API_REQUESTS_PER_MINUTE:120}
-        max-directory-bytes: ${SANDBOX_MAX_DIRECTORY_BYTES:1073741824}  # 1 GB
-        max-directory-entries: ${SANDBOX_MAX_DIRECTORY_ENTRIES:500000}
         default-resource-limits:
             memory-bytes: ${SANDBOX_MEMORY_BYTES:4294967296}  # 4 GB (includes tmpfs)
             cpus: ${SANDBOX_CPUS:2.0}
@@ -794,8 +882,7 @@ logging:
         # Liquibase logs every changeset at INFO on each boot (the bulk of startup noise).
         # WARN keeps real migration problems (validation/checksum/lock-wait).
         liquibase: WARN
-        # Hibernate HHH100503 (batch-on-release) was a symptom of the achievement lock
-        # contention fixed separately; WARN keeps genuine batch problems visible.
+        # Keep genuine Hibernate batch problems visible without per-batch bookkeeping.
         org.hibernate.orm.jdbc.batch: WARN
         # Webhook receipts and per-event bookkeeping are logged at DEBUG at the source, so
         # per-repo sync rollups stay the only INFO. Flip the package to DEBUG to restore the
@@ -812,3 +899,15 @@ spring:
             enabled: true
             file: ../compose.yaml
             lifecycle-management: start-only
+    # Mailpit (compose.yaml) catches every email; open its UI on MAILPIT_UI_PORT (8025 by default).
+    mail:
+        host: localhost
+        port: ${MAILPIT_SMTP_PORT:1025}
+        properties:
+            "[mail.smtp.auth]": false
+            "[mail.smtp.starttls.enable]": false
+            "[mail.smtp.starttls.required]": false
+
+hephaestus:
+    email:
+        from: hephaestus@localhost

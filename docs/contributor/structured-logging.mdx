@@ -1,0 +1,87 @@
+---
+title: Structured logging
+---
+
+# Structured logging
+
+The [operator observability contract](/admin/observability) owns the JSON schema, event names,
+and correlation semantics. Preserve that contract when changing a log producer or its encoder.
+Logging is an operational interface: useful severity, trustworthy context, and bounded disclosure
+matter more than a console with no warnings.
+
+## Use the existing framework facilities
+
+Use SLF4J's fluent API for events operators need to query. Keep a stable `event.name`, a short
+human-readable message, and typed fields rather than embedding `key=value` fragments in the message.
+Use parameterized logging for ordinary diagnostic text. Do not build a second event abstraction or
+serialize a JSON string inside a log message.
+
+```java
+log.atWarn()
+        .addKeyValue("event.name", "integration.request.failed")
+        .addKeyValue("http.request.method", exception.getMethod().name())
+        .addKeyValue("server.address", exception.getUri().getHost())
+        .addKeyValue("error.type", exception.getMostSpecificCause().getClass().getName())
+        .log("External service request failed");
+```
+
+[Spring Boot structured logging](https://docs.spring.io/spring-boot/reference/features/logging.html#features.logging.structured)
+supports both MDC and the [SLF4J key-value API](https://www.slf4j.org/manual.html#fluent). Hephaestus
+already uses Logback with the pinned
+[Logstash encoder](https://github.com/logfellow/logstash-logback-encoder/tree/logstash-logback-encoder-9.0#loggingevent-fields),
+including its field and value masking. Boot's native JSON formats are a supported alternative, not
+a reason to replace a working encoder without proving equivalent masking and field compatibility.
+Do not claim this custom schema is ECS- or OTLP-compliant merely because it is JSON.
+
+## Keep private data out at the source
+
+Follow [OWASP's logging guidance](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html#data-to-exclude):
+never log credentials, full request/response bodies, signed URLs, private reviewed work, or raw
+SQL/row values. Exception messages can contain those same values. At a shared integration boundary,
+prefer the failure class and safe request metadata to the full exception. Preserve useful failure
+severity and correlation; do not replace an operational failure with silence.
+
+Use fixed field names. Request-controlled keys must not become top-level log keys. The configured
+encoder escapes string values and keeps MDC in a separate object. This prevents JSON record
+injection and context collisions; it does not make the underlying string public data.
+[CWE-117](https://cwe.mitre.org/data/definitions/117.html) explains why an untrusted value must not
+change the structure or apparent origin of a log record.
+
+Encoder masking is a last defense. Prefer masking known sensitive fields to scanning every value:
+the encoder's [masking documentation](https://github.com/logfellow/logstash-logback-encoder/tree/logstash-logback-encoder-9.0#masking)
+explains the performance difference and that value-mask ordering is unspecified. Patterns must work
+independently. No regex can reliably recognize every secret or personal datum in arbitrary prose.
+Never enable request-body debugging as a substitute for safe structured diagnostics.
+
+## Scope and restore correlation
+
+Use Boot/Micrometer tracing and the existing task-context propagation. Do not generate an unrelated
+request ID or invent parent spans. [Spring's tracing documentation](https://docs.spring.io/spring-boot/reference/actuator/tracing.html)
+defines MDC correlation and requires auto-configured HTTP-client builders for propagation.
+[Spring's context-propagation guidance](https://docs.spring.io/spring-boot/reference/actuator/observability.html#actuator.observability.context-propagation)
+and [Logback's MDC manual](https://logback.qos.ch/manual/mdc.html) explain why thread-local context
+needs explicit lifecycle management when work moves between threads.
+
+Test both directions: context reaches the asynchronous task, and completion or failure restores
+what was present before the task. Reuse the same worker thread in the regression so a workspace
+identifier left behind cannot pass unnoticed. Keep high-cardinality identifiers in logs/traces,
+not metric labels. The [OpenTelemetry log data model](https://opentelemetry.io/docs/specs/otel/logs/data-model/)
+distinguishes event attributes, severity, resource identity and trace/span correlation; it does not
+make log text or an identifier proof of successful export.
+
+## Verify the emitted record
+
+`RedactionContractTest` loads the production encoder configuration and parses its actual bytes.
+Its contract includes typed values, correlation fields, severity isolation, nested exception
+redaction, opaque sensitive fields, and exactly one JSON record despite control characters.
+`GlobalControllerAdviceLoggingTest` supplies hostile synthetic request/database values and verifies
+the actual emitted event and unchanged HTTP error contract. GitLab webhook and Outline client
+regressions exercise their own adapters with private response/transport payloads; the GitLab failure
+still reports its status and Outline retains its retryability contract. `MdcPropagationTest` proves propagation
+and restoration on a reused worker thread, including a failed task.
+
+Run focused regressions first, then the unit baseline and affected server tiers. Also inspect
+current CI's raw reports: a green test count is not proof that every log is appropriate. Known
+upstream scanner, buildpack or compiler diagnostics need an explicit disposition, not a blanket
+logging-level change. Test failures in expected-negative fixtures should be asserted narrowly;
+unexpected diagnostics remain visible.

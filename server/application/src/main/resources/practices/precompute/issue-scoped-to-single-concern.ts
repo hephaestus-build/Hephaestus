@@ -1,3 +1,4 @@
+import { classifyIssue, type IssueMetadata } from "../lib/issue-classification.ts";
 // Precompute HINTS for issue-scoped-to-single-concern: surface signals that an issue may bundle more than
 // one independently-shippable deliverable — multiple distinct task sections, "and also"/enumerated asks,
 // many referenced child issues. FACTS only (counts + the sub-issue rollup); the LLM decides single vs
@@ -6,10 +7,7 @@
 import { readProjectInventory } from "../lib/context.ts";
 import type { Hint } from "../lib/types.ts";
 
-interface IssueMeta {
-	title?: string;
-	body?: string;
-	labels?: string[];
+interface IssueScopeMetadata extends IssueMetadata {
 	sub_issues_total?: number;
 	sub_issues_completed?: number;
 }
@@ -17,54 +15,43 @@ interface IssueMeta {
 export default async function issueScopedToSingleConcern(
 	_repo: string,
 	_diff: Map<string, unknown>,
-	m: IssueMeta,
+	m: IssueScopeMetadata,
 	contextDir?: string,
 ) {
-	const body = (m.body ?? "").trim();
-	const title = (m.title ?? "").trim();
-	const labels = (m.labels ?? []).map((l) => l.toLowerCase());
+	const { body, title, labels, emptyOrTitleEcho } = classifyIssue(m);
 
 	const isStub = body.length < 40;
 	const isDiscussion =
-		labels.some((l) => /support|question|discussion/.test(l)) ||
-		(/\?\s*$/.test(title) && body.length < 120);
+		labels.some((l) => /support|question|discussion/u.test(l)) ||
+		(/\?\s*$/u.test(title) && body.length < 120);
 
-	// Empty-or-title-echo gate — the SAME classification fact issue-has-checkable-outcome keys its observation
-	// off. When the body carries no content of its own, there is NO deliverable to scope, so the practice is
-	// NOT_APPLICABLE — never a PRESENT, GOOD reading off the title alone. Kept byte-aligned with the sibling's
-	// computation on purpose (precompute scripts ship as standalone DB rows).
-	const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-	const titleNorm = norm(title);
-	const bodyNorm = norm(body);
-	const titleEcho =
-		bodyNorm.length > 0 &&
-		(bodyNorm === titleNorm || titleNorm.includes(bodyNorm) || bodyNorm.includes(titleNorm));
-	const emptyOrTitleEcho = body.length < 25 || titleEcho;
-
-	const checkboxes = (body.match(/^[\s>]*[-*]\s+\[[ xX]\]/gm) ?? []).length;
-	const childRefs = new Set((body.match(/(^|\s)#\d+\b/g) ?? []).map((s) => s.trim())).size;
-	const andAlso = (body.match(/\b(and also|additionally|as well as|plus,|also,)\b/gi) ?? []).length;
+	const checkboxes = (body.match(/^[\s>]*[-*]\s+\[[ xX]\]/gmu) ?? []).length;
+	const childRefs = new Set((body.match(/(?:^|\s)#\d+\b/gu) ?? []).map((s) => s.trim())).size;
+	const andAlso = (body.match(/\b(?:and also|additionally|as well as|plus,|also,)\b/giu) ?? [])
+		.length;
 	// distinct imperative deliverable verbs as a coarse multi-ask signal
 	const deliverableVerbs = (
 		body.match(
-			/\b(add|implement|fix|refactor|migrate|remove|create|build|support|introduce|redesign)\b/gi,
+			/\b(?:add|implement|fix|refactor|migrate|remove|create|build|support|introduce|redesign)\b/giu,
 		) ?? []
 	).length;
-	const headingSections = (body.match(/^#{1,4}\s+\S/gm) ?? []).length;
+	const headingSections = (body.match(/^#{1,4}\s+\S/gmu) ?? []).length;
 
 	const directions: string[] = [];
-	if (emptyOrTitleEcho)
+	if (emptyOrTitleEcho) {
 		directions.push(
 			`Classification fact: body is empty or merely echoes the title (emptyOrTitleEcho=1) — there is NO quotable deliverable to scope. Decide from this fact; do not manufacture a concern from the title alone.`,
 		);
-	else if (isStub)
+	} else if (isStub) {
 		directions.push(
 			`Body is ${body.length} chars — no quotable deliverable span to scope for single-vs-multi concern.`,
 		);
-	if (isDiscussion)
+	}
+	if (isDiscussion) {
 		directions.push(
 			`Looks like a question/discussion (support/question label or interrogative-only body) — no concrete deliverable to scope.`,
 		);
+	}
 	directions.push(
 		`Scope-breadth facts: deliverableVerbMentions=${deliverableVerbs}, andAlsoConjunctions=${andAlso}, headingSections=${headingSections}, childIssueRefs=${childRefs}, subIssuesTotal=${m.sub_issues_total ?? 0}. Multi-concern requires >=2 quotable independently-shippable deliverables — verify in the body, do not infer from counts alone.`,
 	);

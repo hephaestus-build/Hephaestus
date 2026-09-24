@@ -1,14 +1,14 @@
-import { createFileRoute, retainSearchParams } from "@tanstack/react-router";
+import { createFileRoute, Navigate, retainSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 
 import type { PracticeGroup } from "@/api/types.gen";
-import { combinePanelStates, loadProps } from "@/components/common/panel-state";
+import { combinePanelStates, loadProps, queryLoadState } from "@/components/common/panel-state";
 import {
 	type DetailStackEntry,
 	encodeDetailStack,
 	parseDetailStack,
-} from "@/components/core/detail-drawer/detail-stack";
-import { useDetailStack } from "@/components/core/detail-drawer/use-detail-stack";
+} from "@/components/layout/detail-drawer/detail-stack";
+import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
 import { AllPracticesLevel } from "@/components/practice-profile/AllPracticesLevel";
 import { composeNextStep, groupOverviewOf } from "@/components/practice-profile/compose-overview";
 import {
@@ -36,8 +36,10 @@ import { useInAppFeedback } from "@/hooks/use-in-app-feedback";
 import { usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
 import { usePracticeProfileOverview } from "@/hooks/use-practice-profile-overview";
 import { usePracticeStandings } from "@/hooks/use-practice-standings";
+import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { workspaceHead } from "@/lib/page-title";
 import { useSearchState } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
 
 const practiceProfileSearchSchema = z.object({
 	...practiceGroupListSearchSchema.shape,
@@ -55,9 +57,9 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-
 });
 
 /** The selection inside the practice level, which leaves the URL with the level. */
-const PRACTICE_LEVEL_PARAMS = ["practiceTab"] as const satisfies ReadonlyArray<
-	keyof PracticeGroupDetailSelection
->;
+const PRACTICE_LEVEL_PARAMS = [
+	"practiceTab",
+] as const satisfies readonly (keyof PracticeGroupDetailSelection)[];
 
 function PracticeProfile() {
 	const { workspaceSlug } = Route.useParams();
@@ -72,9 +74,11 @@ function PracticeProfile() {
 	// already on, so it is written through `useSearchState` in place, keeping the history entry's
 	// state: the level was pushed on this entry, and `useDetailStack` reads that stamp to dismiss
 	// the level by going back.
-	const updateSelection = (selection: PracticeGroupDetailSelection) =>
+	const updateSelection = (selection: PracticeGroupDetailSelection) => {
 		void setSearch((previous) => ({ ...previous, ...selection }), { state: true, replace: true });
+	};
 
+	const featureState = useWorkspaceFeatures(workspaceSlug);
 	const { groups, groupStandings, practiceStandings, practicesByGroup, ...standings } =
 		usePracticeStandings(workspaceSlug);
 	const { overview, ...overviewQuery } = usePracticeProfileOverview(workspaceSlug);
@@ -87,9 +91,22 @@ function PracticeProfile() {
 		practiceStandings,
 	});
 
-	// The page and every level over it show the three together, so they load and fail as one.
-	const page = combinePanelStates([standings.state, overviewQuery.state, feedback.state]);
+	// The page and every level over it show the three together, so they load and fail as one;
+	// whether this workspace reviews practices at all is read with them, since without that answer
+	// nothing here is known to exist.
+	const page = combinePanelStates([
+		queryLoadState({ ...featureState, isPending: featureState.isLoading }),
+		standings.state,
+		overviewQuery.state,
+		feedback.state,
+	]);
 	const load = loadProps(page);
+
+	// Only a definite "off" redirects: the surface exists only where practices review the work, and
+	// sending someone away before the answer arrives would bounce them out of a workspace that does.
+	if (featureState.features?.practicesEnabled === false) {
+		return <Navigate to="/w/$workspaceSlug" params={{ workspaceSlug }} replace />;
+	}
 
 	const visibleGroups = sortPracticeGroups(groups, groupStandings, sort);
 
@@ -98,7 +115,7 @@ function PracticeProfile() {
 	// practice over it — so the level's back arrow, which goes back in history, lands on the group
 	// and the browser's Back button agrees with it. Pushed in turn, since each entry is written
 	// against the location the one before it produced. A list that is open stays underneath.
-	const pushLevel = (
+	const pushLevel = async (
 		stack: DetailStackEntry<PracticeProfileDetailLevelKind>[],
 		tab?: PracticeTab,
 	) =>
@@ -113,8 +130,12 @@ function PracticeProfile() {
 	// A practice whose standing this workspace does not carry opens alone and the level says so.
 	const openPractice = async (practiceSlug: string, tab?: PracticeTab) => {
 		const groupSlug = practiceStandings.find((entry) => entry.slug === practiceSlug)?.groupSlug;
-		const withGroup = groupSlug ? [...detailStack, practiceGroupLevel(groupSlug)] : detailStack;
-		if (groupSlug) await pushLevel(withGroup);
+		const withGroup = hasText(groupSlug)
+			? [...detailStack, practiceGroupLevel(groupSlug)]
+			: detailStack;
+		if (hasText(groupSlug)) {
+			await pushLevel(withGroup);
+		}
 		await pushLevel([...withGroup, practiceLevel(practiceSlug)], tab);
 	};
 
@@ -127,9 +148,11 @@ function PracticeProfile() {
 				feedbackCards={feedback.cards}
 				ratingProps={feedback.ratingProps}
 				onOpenGroup={openGroup}
-				onOpenPractice={(slug, tab) => void openPractice(slug, tab)}
+				onOpenPractice={(slug, tab) => {
+					void openPractice(slug, tab);
+				}}
 				feedbackTab={search.feedback ?? DEFAULT_FEEDBACK_TAB}
-				onFeedbackTabChange={(tab) =>
+				onFeedbackTabChange={(tab) => {
 					// A tab is a view of the page, not a place: rewritten in place, with the default as
 					// the URL's silence, so Back still leaves the page.
 					void setSearch(
@@ -138,8 +161,8 @@ function PracticeProfile() {
 							feedback: tab === DEFAULT_FEEDBACK_TAB ? undefined : tab,
 						}),
 						{ state: true, replace: true },
-					)
-				}
+					);
+				}}
 				onShowAllPractices={() => stackControls.open(allPracticesLevel())}
 				{...load}
 			/>
@@ -157,7 +180,7 @@ function PracticeProfile() {
 							practicesByGroup={practicesByGroup}
 							sentences={overview.groupSentences}
 							sort={sort}
-							onSortChange={(next) =>
+							onSortChange={(next) => {
 								// The default sort is the URL's silence, so a header press that lands back
 								// on it leaves a clean address.
 								void setSearch((previous) => ({
@@ -166,13 +189,15 @@ function PracticeProfile() {
 										next.direction === DEFAULT_PRACTICE_GROUP_SORT.direction
 											? undefined
 											: next.direction,
-								}))
-							}
+								}));
+							}}
 							onOpenGroup={openGroup}
 							openGroupSlug={
 								detailStack.find((candidate) => candidate.kind === "practice-group")?.id
 							}
-							onOpenPractice={(slug) => void openPractice(slug)}
+							onOpenPractice={(slug) => {
+								void openPractice(slug);
+							}}
 							{...load}
 						/>
 					) : null

@@ -1,6 +1,6 @@
 # ADR 0020: Context Fabric — everything is an integration, only practice review and mentor are native
 
-**Status:** Accepted (amended 2026-08-04, 2026-08-30 and 2026-09-03 — see the updates below)
+**Status:** Accepted (amended 2026-08-04 #1430 — artifact-source contract shipped; 2026-08-30 #1636 — filesystem evidence store superseded by [ADR 0039](0039-git-and-postgresql-own-evidence.md); 2026-09-03 #1719 — filesystem layout superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-09-17 — shipped slice corrected against the code)
 **Date:** 2026-06-12
 **Authors:** Hephaestus maintainers
 **Builds on:** [ADR 0015](0015-unified-integration-framework.md) (the integration framework and `Connection` aggregate), [ADR 0004](0004-sql-layer-tenancy-via-statement-inspector.md) (SQL-layer tenancy), [ADR 0014](0014-per-row-aes-gcm-aad-binding.md) (per-row AAD), [ADR 0007](0007-sandbox-spi-shape.md) (the agent sandbox / `ContentSource` seam)
@@ -144,8 +144,10 @@ reframe end-to-end before paying for the migration:
 - **Cross-context `ContentSource`s** under `agent.context.providers`, each best-effort
   (`required() == false`: a missing repo/branch/issue logs and skips, never aborts the
   job), each telescope-not-cage (capped, excerpted, every item carries a real `url`):
-  - `linked_work_items.json` — already shipped; resolves closing/branch/commit issue refs
-    to the issue row with an excerpted body (the acceptance criteria).
+  - `linked_work_items.json` — resolves candidate issue mentions from the description,
+    branch and commit subjects to issue summaries. Exact bounded mention context accompanies
+    each candidate; a closing-keyword match is text syntax, not an established relationship
+    or author adoption. The discovery source remains explicitly partial.
   - `branch_graph.json` — `looksBranchedOffFeatureBranch` + `commitsAhead` +
     `distinctAuthorsInRange`, computed from the local clone via
     `GitRepositoryManager.walkCommits` / `GitDiffOperations.resolveDiffRange`.
@@ -153,8 +155,9 @@ reframe end-to-end before paying for the migration:
     `Files.walk` of the clone (path strings only, capped).
 - **Consuming practices** that turn those files into formative feedback:
   - `honours-linked-issue-acceptance-criteria` (goal `review-ready-work`) — consumes
-    `linked_work_items.json` + `diff.patch`; asks which of `#N`'s criteria are done vs
-    deferred; **never asserts an AC is unmet** from code it cannot verify.
+    `linked_work_items.json` + `diff.patch`; establishes whether the author actually refers
+    to or adopts the candidate issue's criteria before evaluating them against the change;
+    **never asserts an AC is unmet** from code it cannot verify.
   - `branches-from-the-integration-branch` (goal `delivery-and-version-control-discipline`)
     — consumes `branch_graph.json`; nudges the branching habit, MINOR-only, heuristic.
   - `keeps-the-test-suite-honest` — **revised** to read `test_presence.json`: when
@@ -397,3 +400,28 @@ it, and selective erasure stops being a deployment-approval consideration tied t
 [ADR 0041](0041-compose-1x-kubernetes-2.md) supersedes what remains of § CAS and final filesystem
 layout, the 2026-08-04 update's § Filesystem layout (finalises §1/§2), and § Decision register's
 retained-payload entries. One job folder per attempt, rendered at job start, replaces them.
+
+## Update — 2026-09-17
+
+Corrects § Shipped slice and § CAS and final filesystem layout against the code, and records one
+revisit trigger.
+
+- Of the three cross-context files only `linked_work_items.json` exists
+  (`agent.context.providers.LinkedWorkItemContentSource`, source kind `scm.linked-work-items`);
+  `branch_graph.json` and `test_presence.json` have no producer, and `keeps-the-test-suite-honest`
+  declares `scm.pull-request.diff` and `scm.repository.tree` as its sources in
+  `server/application/src/main/resources/practices/default-catalog.json`. The 2026-08-04 update
+  withdraws `branches-from-the-integration-branch`.
+- `PullRequestReviewHandler.ALLOWED_INTERNAL_CONTEXT_PATHS` and `METADATA_LEVEL_PRACTICES` do not
+  exist; `filterByDiffScope` keeps an observation whose citation names any `sourceKind` other than
+  `scm.pull-request.diff`, which is the declared-source admission of the 2026-08-04 update.
+- `SandboxSpec.symlinks`, `SandboxWorkspaceManager.injectSymlinks` and the `/workspace/blobs/scm/repo`
+  mount do not exist; the sandbox sees the `/workspace/inputs` tree of the 2026-08-04 update § 7
+  (`agent.runtime.SandboxLayout`). `ContentSource` has no `connectorId()`; a provider declares its
+  catalogued kinds through `EvidenceSource.sourceKinds()` (`agent.context.EvidenceSource`).
+- `integration.core.fabric.FabricLayout`, `ContentAddressedStore` and `FabricGarbageCollector` exist
+  in the pre-cutover code; their replacement is what the 2026-08-30 and 2026-09-03 updates decide.
+- Revisit trigger §9: [ADR 0004](0004-sql-layer-tenancy-via-statement-inspector.md) § Update
+  2026-08-30 makes `throw` the default in every profile, and `db/changelog/` contains no
+  `ROW LEVEL SECURITY`; the controller layer plus the throwing inspector are the boundary, and
+  folding RLS in is undecided.

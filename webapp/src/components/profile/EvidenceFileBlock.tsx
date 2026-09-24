@@ -1,10 +1,11 @@
+import { cn } from "cn";
 import { ShieldAlertIcon } from "lucide-react";
 
 import {
 	DIFF_SIDE_LABELS,
 	evidenceSourceDef,
 } from "@/components/practice-vocabulary/evidence-source-defs";
-import { cn } from "@/lib/utils";
+import { hasText } from "@/lib/text";
 
 import { type EvidenceLocation, evidenceLineRangeLabel, splitPath } from "./evidence";
 
@@ -32,24 +33,33 @@ interface EvidenceFileBlockProps {
  * handed — `inputs/context/metadata.json`, line 9 — which is the runner's own file and not a place
  * the reader could open, so the caption names the source in the registry's words and no numbers at
  * all. Which side of the diff a passage came from is said on the quoted lines themselves, where
- * the reader is looking at them, rather than once in the caption above them.
+ * the reader is looking at them, rather than once in the caption above them. A quote verified
+ * against a commit in the repository's history names that commit under the caption, since the
+ * lines may no longer read so at the reviewed one.
  */
 export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps) {
 	const source = evidenceSourceDef(location.sourceKind);
 	const locatedByLine = source.locator === "code";
 	const { directory, fileName } = splitPath(location.path);
-	const change = location.change;
-	const side = location.side;
+	const { change } = location;
+	const { side } = location;
 	const lines = location.snippet?.split("\n") ?? [];
 	const firstLineNumber = location.startLine;
 	const hasSnippet = change !== undefined || lines.length > 0;
 	const SourceIcon = source.icon;
+	/** The side of the diff on the first line, the line number on a code quote, or nothing at all. */
+	const gutterOf = (index: number): number | string | undefined => {
+		if (side) {
+			return index === 0 ? DIFF_SIDE_LABELS[side] : "";
+		}
+		return locatedByLine ? firstLineNumber + index : undefined;
+	};
 
 	return (
 		<figure className="min-w-0 overflow-hidden rounded-xl border">
 			<figcaption
 				className={cn(
-					"flex min-w-0 items-center gap-2 bg-code-header px-2.5 py-1.5",
+					"flex min-w-0 flex-wrap items-center gap-2 bg-code-header px-2.5 py-1.5",
 					hasSnippet && "border-b",
 				)}
 			>
@@ -57,7 +67,7 @@ export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps
 				{locatedByLine ? (
 					<span className="flex min-w-0 flex-1 font-mono text-xs" title={location.path}>
 						{/* The directory gives way first; at the reflow width the file name alone must fit. */}
-						{directory && (
+						{hasText(directory) && (
 							<span className="hidden truncate text-muted-foreground sm:inline">{directory}</span>
 						)}
 						<span className="min-w-0 truncate font-medium sm:shrink-0">{fileName}</span>
@@ -69,6 +79,11 @@ export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps
 					<span className="shrink-0 font-mono text-xs text-muted-foreground">
 						{evidenceLineRangeLabel(location)}
 					</span>
+				)}
+				{hasText(location.revision) && (
+					<p className="min-w-0 basis-full text-xs break-all text-muted-foreground">
+						Commit <code>{location.revision}</code>
+					</p>
 				)}
 			</figcaption>
 			{location.redacted && (
@@ -103,18 +118,7 @@ export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps
 										)),
 								)
 							: lines.map((line, index) => (
-									<QuoteLine
-										key={firstLineNumber + index}
-										gutter={
-											side
-												? index === 0
-													? DIFF_SIDE_LABELS[side]
-													: ""
-												: locatedByLine
-													? firstLineNumber + index
-													: undefined
-										}
-									>
+									<QuoteLine key={firstLineNumber + index} gutter={gutterOf(index)}>
 										{line}
 									</QuoteLine>
 								))}
@@ -142,7 +146,7 @@ function QuoteLine({
 			{gutter !== undefined && (
 				<span
 					className={cn(
-						"sticky left-0 select-none bg-inherit pe-3 ps-2.5 text-muted-foreground",
+						"sticky left-0 bg-inherit ps-2.5 pe-3 text-muted-foreground select-none",
 						// The two side words are not the same width, so their column is fixed and the code
 						// beside them starts in the same place on both lines.
 						typeof gutter === "string" ? "w-20" : "text-end tabular-nums",

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import path from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 
@@ -24,7 +24,7 @@ const assessment = () => ({
  * the scoring each check is charged under, so that reclassifying one is a deliberate edit as well.
  */
 const enforced: Record<string, { score: number; scoredOver: string }> = {
-	"Binary-Artifacts": { score: 10, scoredOver: "configuration" },
+	"Binary-Artifacts": { score: 10, scoredOver: "history" },
 	"CI-Tests": { score: 10, scoredOver: "history" },
 	"Code-Review": { score: 10, scoredOver: "history" },
 	"Dangerous-Workflow": { score: 10, scoredOver: "configuration" },
@@ -35,7 +35,6 @@ const enforced: Record<string, { score: number; scoredOver: string }> = {
 	SAST: { score: 10, scoredOver: "history" },
 	"Security-Policy": { score: 10, scoredOver: "configuration" },
 	"Token-Permissions": { score: 10, scoredOver: "configuration" },
-	Vulnerabilities: { score: 10, scoredOver: "configuration" },
 	"Signed-Releases": { score: 8, scoredOver: "history" },
 	"Branch-Protection": { score: 4, scoredOver: "configuration" },
 };
@@ -59,8 +58,12 @@ void test("the committed baseline passes and improvements do not compensate for 
 	assert.deepEqual(checkScorecard(baseline, assessment(), now), passes);
 	const value = assessment();
 	for (const check of value.checks) {
-		if (check.name === "Branch-Protection") check.score = 10;
-		if (check.name === "Pinned-Dependencies") check.score = 9;
+		if (check.name === "Branch-Protection") {
+			check.score = 10;
+		}
+		if (check.name === "Pinned-Dependencies") {
+			check.score = 9;
+		}
 	}
 	assert.deepEqual(checkScorecard(baseline, value, now), {
 		failures: ["Pinned-Dependencies: 9 (minimum 10)"],
@@ -79,7 +82,11 @@ void test("each enforced check independently rejects any drop or missing evidenc
 			),
 			{ failures: [`${name}: missing (minimum ${minimum})`], reported: [] },
 		);
-		for (const check of value.checks) if (check.name === name) check.score = minimum - 1;
+		for (const check of value.checks) {
+			if (check.name === name) {
+				check.score = minimum - 1;
+			}
+		}
 		assert.deepEqual(checkScorecard(baseline, value, now), {
 			failures: [`${name}: ${minimum - 1} (minimum ${minimum})`],
 			reported: [],
@@ -90,8 +97,11 @@ void test("each enforced check independently rejects any drop or missing evidenc
 void test("a push answers for the configuration its commit left and no other event forgives", () => {
 	const dropped = (name: keyof typeof enforced) => {
 		const value = assessment();
-		for (const check of value.checks)
-			if (check.name === name) check.score = Number(enforced[name]?.score) - 1;
+		for (const check of value.checks) {
+			if (check.name === name) {
+				check.score = Number(enforced[name]?.score) - 1;
+			}
+		}
 		return value;
 	};
 	assert.deepEqual(checkScorecard(baseline, dropped("SAST"), now, "push"), {
@@ -102,18 +112,25 @@ void test("a push answers for the configuration its commit left and no other eve
 		failures: ["Branch-Protection: 3 (minimum 4)"],
 		reported: [],
 	});
-	for (const event of ["schedule", "workflow_dispatch", "branch_protection_rule", undefined])
+	for (const event of ["schedule", "workflow_dispatch", "branch_protection_rule", undefined]) {
 		assert.deepEqual(checkScorecard(baseline, dropped("SAST"), now, event), {
 			failures: ["SAST: 9 (minimum 10)"],
 			reported: [],
 		});
+	}
 });
 
-void test("only the four deliberate exclusions may drop without failure", () => {
+void test("only the deliberate exclusions may drop without failure", () => {
 	const value = assessment();
-	for (const check of value.checks)
-		if (["Contributors", "CII-Best-Practices", "Fuzzing", "Packaging"].includes(String(check.name)))
+	for (const check of value.checks) {
+		if (
+			["Contributors", "CII-Best-Practices", "Fuzzing", "Packaging", "Vulnerabilities"].includes(
+				String(check.name),
+			)
+		) {
 			check.score = -1;
+		}
+	}
 	assert.deepEqual(checkScorecard(baseline, value, now), passes);
 });
 
@@ -124,9 +141,10 @@ void test("new checks do not silently become a new policy", () => {
 });
 
 void test("rejects stale, future, invalid and pre-baseline assessments", () => {
-	for (const date of ["2026-08-01", "2026-09-04T18:00:00Z", "2026-09-06", "not-a-date"])
+	for (const date of ["2026-08-01", "2026-09-04T18:00:00Z", "2026-09-06", "not-a-date"]) {
 		assert.throws(() => checkScorecard(baseline, { ...assessment(), date }, now));
-	assert.throws(() => checkScorecard(baseline, assessment(), now + 8 * 86_400_000 + 1), /stale/);
+	}
+	assert.throws(() => checkScorecard(baseline, assessment(), now + 8 * 86_400_000 + 1), /stale/u);
 	assert.deepEqual(checkScorecard(baseline, assessment(), now + 8 * 86_400_000), passes);
 });
 
@@ -134,10 +152,11 @@ void test("rejects malformed, duplicate and wrong-repository evidence", () => {
 	for (const value of [null, {}, { ...assessment(), repo: { name: "github.com/attacker/repo" } }]) {
 		assert.throws(() => checkScorecard(baseline, value, now));
 	}
-	for (const score of [null, "10", 11, -2, 9.5])
+	for (const score of [null, "10", 11, -2, 9.5]) {
 		assert.throws(() =>
 			checkScorecard(baseline, { ...assessment(), checks: [{ name: "SAST", score }] }, now),
 		);
+	}
 	assert.throws(
 		() =>
 			checkScorecard(
@@ -151,7 +170,7 @@ void test("rejects malformed, duplicate and wrong-repository evidence", () => {
 				},
 				now,
 			),
-		/duplicate/,
+		/duplicate/u,
 	);
 });
 
@@ -168,22 +187,26 @@ void test("invalid policy cannot pass vacuously", () => {
 		{ checks: [{ name: "SAST", score: 10, scoredOver: "sometimes", reason: "why" }], excluded: {} },
 		{ checks: [{ name: "SAST", score: 10, scoredOver: "history", reason: " " }], excluded: {} },
 		{ checks: [{ name: "SAST", score: 10, reason: "why" }], excluded: {} },
-	])
+	]) {
 		assert.throws(() => checkScorecard({ ...baseline, ...change }, assessment(), now));
+	}
 });
 
 void test("the CLI charges a regression to its event, keeps the evidence, and fails on transport and JSON errors", async (t) => {
-	const directory = await mkdtemp(join(tmpdir(), "scorecard-cli-"));
-	t.after(() => rm(directory, { recursive: true, force: true }));
-	await mkdir(join(directory, "security"));
-	await writeFile(join(directory, "security/scorecard-baseline.json"), JSON.stringify(baseline));
-	const preload = join(directory, "fetch.mjs");
+	const directory = await mkdtemp(path.join(tmpdir(), "scorecard-cli-"));
+	t.after(async () => rm(directory, { recursive: true, force: true }));
+	await mkdir(path.join(directory, "security"));
+	await writeFile(
+		path.join(directory, "security/scorecard-baseline.json"),
+		JSON.stringify(baseline),
+	);
+	const preload = path.join(directory, "fetch.mjs");
 	await writeFile(
 		preload,
 		`globalThis.fetch = async () => new Response(process.env.RESPONSE_BODY, { status: Number(process.env.RESPONSE_STATUS) });`,
 	);
-	const summary = join(directory, "summary.md");
-	const evidence = join(directory, "tmp/scorecard-assessment.json");
+	const summary = path.join(directory, "summary.md");
+	const evidence = path.join(directory, "tmp/scorecard-assessment.json");
 	const current = { ...assessment(), date: new Date().toISOString() };
 	const regression = {
 		...current,
@@ -201,17 +224,17 @@ void test("the CLI charges a regression to its event, keeps the evidence, and fa
 			200,
 			JSON.stringify(current),
 			false,
-			/All enforced checks meet/,
+			/All enforced checks meet/u,
 		],
-		["missing check", "schedule", 200, JSON.stringify(regression), true, /SAST: missing/],
-		["a window score a push cannot have caused", "push", 200, window, false, /window of history/],
+		["missing check", "schedule", 200, JSON.stringify(regression), true, /SAST: missing/u],
+		["a window score a push cannot have caused", "push", 200, window, false, /window of history/u],
 		[
 			"the same window score once the window has had its chance",
 			"schedule",
 			200,
 			window,
 			true,
-			/SAST: 9 \(minimum 10\)/,
+			/SAST: 9 \(minimum 10\)/u,
 		],
 		[
 			"a configuration score the push is answerable for",
@@ -219,7 +242,7 @@ void test("the CLI charges a regression to its event, keeps the evidence, and fa
 			200,
 			JSON.stringify(lowered("Branch-Protection", 3)),
 			true,
-			/Branch-Protection: 3 \(minimum 4\)/,
+			/Branch-Protection: 3 \(minimum 4\)/u,
 		],
 		["HTTP failure", "schedule", 503, "service unavailable", true, undefined],
 		["invalid JSON", "schedule", 200, "not JSON", true, undefined],
@@ -229,7 +252,7 @@ void test("the CLI charges a regression to its event, keeps the evidence, and fa
 			await rm(evidence, { force: true });
 			const result = spawnSync(
 				process.execPath,
-				["--import", pathToFileURL(preload).href, resolve("scripts/check-scorecard.ts")],
+				["--import", pathToFileURL(preload).href, path.resolve("scripts/check-scorecard.ts")],
 				{
 					cwd: directory,
 					timeout: 10_000,

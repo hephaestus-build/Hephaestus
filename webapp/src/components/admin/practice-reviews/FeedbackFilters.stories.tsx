@@ -5,9 +5,9 @@ import { withStandardPage } from "@/stories/decorators";
 import { StatefulPatch } from "@/stories/stateful";
 
 import { FeedbackFilters } from "./FeedbackFilters";
+import { reviewArtifact, workspaceMembers } from "./fixtures";
 import type { FeedbackSearch } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
-import { reviewArtifact, workspaceMembers } from "./story-mock-data";
 
 const PEOPLE: ReviewPeople = {
 	options: workspaceMembers
@@ -28,7 +28,6 @@ const PEOPLE: ReviewPeople = {
  * response.
  */
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Delivery filters",
 	component: FeedbackFilters,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	decorators: [withStandardPage],
@@ -107,7 +106,7 @@ export const ReportsAChosenOutcome: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Outcome" }));
 		const listbox = await screen.findByRole("listbox", { name: "Outcome options" });
-		await userEvent.click(await within(listbox).findByRole("option", { name: /Delivered/ }));
+		await userEvent.click(await within(listbox).findByRole("option", { name: /Delivered/u }));
 		await expect(args.onPatch).toHaveBeenCalledWith({ deliveryState: ["DELIVERED"] });
 	},
 };
@@ -129,8 +128,8 @@ export const ScopedToOnePieceOfWork: Story = {
 		total: 4,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/Reviewed work/);
-		canvas.getByText(/ls1intum\/Hephaestus · #1423/);
+		canvas.getByText(/Reviewed work/u);
+		canvas.getByText(/ls1intum\/Hephaestus · #1423/u);
 	},
 };
 
@@ -145,7 +144,7 @@ export const ScopedToOneReview: Story = {
 		total: 4,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/Review/);
+		canvas.getByText(/Review/u);
 	},
 };
 

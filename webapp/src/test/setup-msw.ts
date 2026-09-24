@@ -6,10 +6,11 @@
 // `server.use(...)` override in one test never leaks into the next.
 
 import { toast } from "sonner";
-import { afterAll, afterEach, beforeAll } from "vitest";
+import { afterAll, afterEach, beforeAll, vi } from "vitest";
 
 import { client } from "@/api/client.gen";
 import { server } from "@/mocks/server";
+import { ObserverStub } from "@/test/observers";
 
 // The generated hey-api client resolves request paths against `baseUrl` (it does
 // `new URL(path, baseUrl)`); with no baseUrl a relative path like `/user` throws
@@ -19,14 +20,8 @@ import { server } from "@/mocks/server";
 client.setConfig({ baseUrl: "http://localhost:8080" });
 
 // jsdom has no ResizeObserver; Base UI's anchor positioning observes elements to keep a popup
-// pinned to its trigger. A no-op stub is enough — no assertion depends on the measurements.
-if (typeof globalThis.ResizeObserver === "undefined") {
-	globalThis.ResizeObserver = class ResizeObserver {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
+// pinned to its trigger. A stub that never fires is enough — no assertion depends on the measurements.
+vi.stubGlobal("ResizeObserver", ObserverStub);
 
 // jsdom has no `matchMedia`; the toaster asks it for `prefers-reduced-motion` on mount.
 if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
@@ -37,18 +32,37 @@ if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
 		// `MediaQueryList` still declares the pre-`addEventListener` pair, and library code
 		// feature-detects it, so the stand-in has to answer to it as well.
 		// oxlint-disable-next-line typescript/no-deprecated -- a polyfill has to implement the interface it stands in for
-		addListener: () => {},
+		addListener: vi.fn(),
 		// oxlint-disable-next-line typescript/no-deprecated -- a polyfill has to implement the interface it stands in for
-		removeListener: () => {},
-		addEventListener: () => {},
-		removeEventListener: () => {},
+		removeListener: vi.fn(),
+		addEventListener: vi.fn(),
+		removeEventListener: vi.fn(),
 		dispatchEvent: () => false,
 	});
 }
 
+// jsdom exposes scrollTo but throws when the router restores scroll after navigation.
+// Layout and scrolling are covered in browser tests, not this DOM-only environment.
+window.scrollTo = () => {
+	/* layout is not modelled here */
+};
+
+// jsdom has no pointer capture; sonner asks for it on pointerdown to track a toast swipe.
+if (typeof Element.prototype.setPointerCapture !== "function") {
+	Element.prototype.setPointerCapture = () => {
+		/* no pointer to capture */
+	};
+	Element.prototype.releasePointerCapture = () => {
+		/* no pointer to release */
+	};
+	Element.prototype.hasPointerCapture = () => false;
+}
+
 // jsdom has no scrollIntoView either; Base UI calls it to keep the highlighted option in view.
 if (typeof Element.prototype.scrollIntoView !== "function") {
-	Element.prototype.scrollIntoView = () => {};
+	Element.prototype.scrollIntoView = () => {
+		/* layout is not modelled here */
+	};
 }
 
 // jsdom implements no Web Animations API; Base UI's ScrollArea viewport asks its element for

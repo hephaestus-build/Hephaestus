@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.tenancy.TenancyViolationException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Path;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -88,9 +89,19 @@ public class GlobalControllerAdvice {
     @ExceptionHandler(DataIntegrityViolationException.class)
     ProblemDetail handleDataIntegrityViolation(DataIntegrityViolationException exception) {
         // Unique/FK constraint races (e.g. concurrent connection installs) → 409, not a 500.
-        log.warn(
-                "Handled data integrity violation: message={}",
-                exception.getMostSpecificCause().getMessage());
+        // Database diagnostics can include SQL and rejected row values. Keep the failure class,
+        // not the payload, at this shared boundary.
+        Throwable cause = exception.getMostSpecificCause();
+        var event = log.atWarn()
+                .addKeyValue("event.name", "database.constraint.conflict")
+                .addKeyValue("error.type", cause.getClass().getName());
+        if (cause instanceof SQLException sqlException) {
+            String state = sqlException.getSQLState();
+            if (state != null && state.matches("[A-Z0-9]{5}")) {
+                event = event.addKeyValue("db.response.status_code", state);
+            }
+        }
+        event.log("Request conflicts with database constraints");
         return problem(HttpStatus.CONFLICT, "Conflict", "The request conflicts with the current resource state.");
     }
 
@@ -127,9 +138,16 @@ public class GlobalControllerAdvice {
 
     @ExceptionHandler(WebClientRequestException.class)
     ProblemDetail handleWebClientRequestException(WebClientRequestException exception) {
-        // All WebClient request failures (connection refused, DNS, timeout, etc.) are unexpected
-        // and warrant WARN level - environment-specific log filtering should be configured externally
-        log.warn("External service request failed: uri={}, reason={}", exception.getUri(), messageOf(exception));
+        // URLs, headers and exception messages may contain provider credentials or private work.
+        // Keep enough structure to distinguish DNS, connection and timeout failures without them.
+        log.atWarn()
+                .addKeyValue("event.name", "integration.request.failed")
+                .addKeyValue("http.request.method", exception.getMethod().name())
+                .addKeyValue("server.address", exception.getUri().getHost())
+                .addKeyValue(
+                        "error.type",
+                        exception.getMostSpecificCause().getClass().getName())
+                .log("External service request failed");
 
         return problem(
                 HttpStatus.SERVICE_UNAVAILABLE,

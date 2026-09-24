@@ -1,6 +1,6 @@
 import { CircleCheckIcon, CircleMinusIcon, CircleSlashIcon, SparkleIcon } from "lucide-react";
 
-import type { StatusDef } from "./status-def";
+import type { StatusDef } from "@/components/common/status-def";
 
 /**
  * Where one piece of practice feedback on the Practice profile stands: not yet read, open,

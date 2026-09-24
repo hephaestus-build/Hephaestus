@@ -1,11 +1,11 @@
 import { ClipboardCheckIcon } from "lucide-react";
 
 import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
-import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
 import { BulletList } from "@/components/common/BulletList";
 import type { FeedbackTextSegment } from "@/components/common/feedback-text";
 import { FeedbackText } from "@/components/common/FeedbackText";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { GroupName } from "@/components/practice-vocabulary/GroupName";
 import type { PracticeGroupSort } from "@/components/practice-vocabulary/practice-group-list-order";
 import {
@@ -62,7 +62,7 @@ function GroupRow({
 	group,
 	standing,
 	practices,
-	sentences = [],
+	sentences = NO_SENTENCES,
 	open,
 	onOpenGroup,
 	onOpenPractice,
@@ -138,6 +138,8 @@ const loadingRow = (
  * row opens its group through the "Open group" at its end, and a practice's pill opens the
  * practice.
  */
+const NO_SENTENCES: FeedbackTextSegment[][] = [];
+
 export function AllPracticesTable({
 	groups,
 	standings,
@@ -152,7 +154,7 @@ export function AllPracticesTable({
 	error,
 	onRetry,
 }: AllPracticesTableProps) {
-	if (error) {
+	if (error != null) {
 		return (
 			<QueryErrorAlert error={error} title="Could not load your practices" onRetry={onRetry} />
 		);

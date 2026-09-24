@@ -29,7 +29,8 @@ class DevLoginDisabledIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectCookie()
-                .doesNotExist("__Host-HEPHAESTUS_AT");
+                .doesNotExist("__Host-HEPHAESTUS_AT")
+                .expectBody(Void.class);
     }
 
     @Test

@@ -31,15 +31,14 @@ public class PiRuntimeFactory {
 
     private static final Logger log = LoggerFactory.getLogger(PiRuntimeFactory.class);
 
-    /** Grace window before the sandbox hard-kills the runner — must fire before that deadline. */
+    /** Time reserved for runner shutdown and sandbox teardown, outside the model's work budget. */
     public static final int TIMEOUT_BUFFER_SECONDS = 60;
 
-    /**
-     * Floor for the self-watchdog budget, so a spec just above the minimum timeout does not compute an
-     * effectively-zero one. Must stay below {@code TIMEOUT_BUFFER_SECONDS * 1000}: the watchdog has to
-     * fire before the sandbox hard kill.
-     */
-    static final long MIN_BUDGET_MS = (TIMEOUT_BUFFER_SECONDS - 1) * 1000L;
+    /** Turns the SDK repeats before a provider failure ends the session that hit it. */
+    private static final int RETRY_MAX_ATTEMPTS = 5;
+
+    /** Wait before the first repeat; each further attempt doubles it. */
+    private static final int RETRY_BASE_DELAY_MS = 4000;
 
     static final String AGENT_RESOURCE_PREFIX = "agent/";
 
@@ -77,11 +76,11 @@ public class PiRuntimeFactory {
         inputFiles.putAll(promptScaffolding);
         inputFiles.putAll(spec.extraInputs());
 
-        long agentTimeoutMs = Math.max(MIN_BUDGET_MS, (long) (spec.timeoutSeconds() - TIMEOUT_BUFFER_SECONDS) * 1000);
+        long agentTimeoutMs = (spec.timeoutSeconds() - TIMEOUT_BUFFER_SECONDS) * 1000L;
         env.put("AGENT_BUDGET_MS", Long.toString(agentTimeoutMs));
 
         env.put("HOME", "/home/agent");
-        env.put("XDG_CONFIG_HOME", "/home/agent/.config");
+        env.put("XDG_CONFIG_HOME", "/home/agent/.local/config");
         env.put("TMPDIR", PiRunnerProfile.AGENT_TMPDIR);
         env.put("PI_CODING_AGENT_DIR", SandboxLayout.PI_AGENT_DIR);
 
@@ -97,13 +96,7 @@ public class PiRuntimeFactory {
         }
         // Every directory the runner may write exists before Node starts; PiRunnerProfile says why.
         String command = "mkdir -p " + String.join(" ", PiRunnerProfile.WRITABLE_DIRECTORIES)
-                + " /home/agent/.config && "
-                +
-                // The runner imports the Pi SDK by bare specifier, which resolves from <workspace>/node_modules,
-                // so the SDK the image exposes at /opt/pi-sdk must be symlinked into place.
-                "ln -sf /opt/pi-sdk/node_modules "
-                + workspaceRoot
-                + "/node_modules && "
+                + " /home/agent/.local/config && "
                 + precomputeStep
                 + runtimeEnvFragment
                 + "node "
@@ -158,6 +151,12 @@ public class PiRuntimeFactory {
         compaction.put("enabled", true);
         compaction.put("reserveTokens", 16384);
         settings.put("compaction", compaction);
+        // Retry transient provider failures; the review deadline still bounds the session.
+        Map<String, Object> retry = new LinkedHashMap<>();
+        retry.put("enabled", true);
+        retry.put("maxRetries", RETRY_MAX_ATTEMPTS);
+        retry.put("baseDelayMs", RETRY_BASE_DELAY_MS);
+        settings.put("retry", retry);
         try {
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(settings);
         } catch (JacksonException e) {
@@ -173,7 +172,11 @@ public class PiRuntimeFactory {
         Map<String, Object> provider = new LinkedHashMap<>();
         provider.put("apiProtocol", spec.apiProtocol());
         provider.put("modelId", spec.upstreamModelId());
-        provider.put("supportsReasoning", spec.supportsReasoning());
+        // The Pi runner maps the effort onto a thinking level and the provider's wire value; absent,
+        // the runner sends none and the provider's own default applies.
+        if (spec.reasoningEffort() != null) {
+            provider.put("reasoningEffort", spec.reasoningEffort().name());
+        }
         if (spec.contextWindow() != null) {
             provider.put("contextWindow", spec.contextWindow());
         }

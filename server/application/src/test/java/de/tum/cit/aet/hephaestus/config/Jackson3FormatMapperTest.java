@@ -26,8 +26,7 @@ class Jackson3FormatMapperTest extends BaseUnitTest {
                 .hasRootCauseInstanceOf(JacksonException.class);
     }
 
-    @SuppressWarnings("unchecked")
     private static <T> JavaType<T> javaTypeOf(Class<T> type) {
-        return (JavaType<T>) new JavaTypeRegistry(null).getDescriptor(type);
+        return new JavaTypeRegistry(null).resolveDescriptor(type);
     }
 }

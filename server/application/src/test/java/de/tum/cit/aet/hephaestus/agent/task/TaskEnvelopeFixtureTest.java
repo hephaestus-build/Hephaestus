@@ -11,25 +11,18 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
-/**
- * Byte-identical snapshot test for {@link TaskEnvelopeWriter} output. The fixture lives at
- * {@code src/test/resources/task-fixtures/v1/practice-review.json} — see the adjacent
- * {@code REGENERATE.md} for the regen workflow.
- *
- * <p>Uses {@link JsonMapper#builder()} to mirror the production bean configuration.
- * A future change to that configuration that alters byte output is intentionally caught here.
- */
+/** JSON contract fixture shared with the TypeScript runner tests. */
 class TaskEnvelopeFixtureTest extends BaseUnitTest {
 
-    private static final String FIXTURE_PATH = "task-fixtures/v1/practice-review.json";
+    private static final String FIXTURE_PATH = "task-fixtures/v2/practice-review.json";
 
     @Test
     void matchesFixture() throws IOException {
-        JsonMapper productionMapper = JsonMapper.builder().build();
-        TaskEnvelopeWriter writer = new TaskEnvelopeWriter(productionMapper);
+        JsonMapper mapper = JsonMapper.builder().build();
+        TaskEnvelopeWriter writer = new TaskEnvelopeWriter(mapper);
 
         TaskEnvelope envelope = new TaskEnvelope(
-                1,
+                TaskEnvelope.SCHEMA_VERSION,
                 UUID.fromString("00000000-0000-0000-0000-00000000abcd"),
                 99L,
                 new Task.PracticeReview(
@@ -37,7 +30,8 @@ class TaskEnvelopeFixtureTest extends BaseUnitTest {
                                 + "then persist every justified observation via the report_observation tool. "
                                 + "Follow .pi/AGENTS.md for the schema and rules.",
                         42,
-                        "owner/repo"));
+                        "owner/repo"),
+                TaskPaths.capturedInputs());
 
         String actual = writer.writeAsString(envelope);
 
@@ -47,7 +41,7 @@ class TaskEnvelopeFixtureTest extends BaseUnitTest {
         }
 
         String expected = readFixture();
-        assertThat(actual.replace("\r\n", "\n")).isEqualTo(expected.replace("\r\n", "\n"));
+        assertThat(mapper.readTree(actual)).isEqualTo(mapper.readTree(expected));
     }
 
     private static String readFixture() throws IOException {

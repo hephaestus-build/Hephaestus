@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.domain;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +22,27 @@ import org.springframework.stereotype.Repository;
 @WorkspaceAgnostic(
         "Account is the Hephaestus-native principal; it spans workspaces (membership lives on WorkspaceMembership)")
 public interface AccountRepository extends JpaRepository<Account, Long> {
+
+    List<Account> findAllByIdInAndStatusNot(Collection<Long> ids, Account.Status status);
+
+    @Query("""
+        SELECT a.id FROM Account a
+         WHERE a.appRole = de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole.APP_ADMIN
+           AND a.status = de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status.ACTIVE
+           AND a.primaryEmail IS NOT NULL AND a.primaryEmailVerifiedAt IS NOT NULL
+         ORDER BY a.id
+        """)
+    List<Long> findActiveVerifiedAdministratorIds();
+
+    @Query("""
+        SELECT a.primaryEmail FROM Account a
+         WHERE a.id = :accountId
+           AND a.appRole = de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole.APP_ADMIN
+           AND a.status = de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status.ACTIVE
+           AND a.primaryEmail IS NOT NULL AND a.primaryEmailVerifiedAt IS NOT NULL
+        """)
+    Optional<String> findActiveVerifiedAdministratorEmail(@Param("accountId") long accountId);
+
     /**
      * Ids of accounts whose GDPR soft-delete cooldown has elapsed: {@code status = DELETING} and
      * {@code deleted_at} strictly older than {@code cutoff}, oldest first. Paged so a large erasure

@@ -33,7 +33,7 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
                 .as("runner reads the task envelope at SandboxLayout.TASK_ENVELOPE_FILENAME")
                 .contains("/" + SandboxLayout.TASK_ENVELOPE_FILENAME);
 
-        assertThat(body)
+        assertThat(Files.readString(resolveResource("agent/pi-task-paths.ts")))
                 .as("runner pins SUPPORTED_SCHEMA_VERSION to the Java SCHEMA_VERSION constant")
                 .contains("SUPPORTED_SCHEMA_VERSION = " + TaskEnvelope.SCHEMA_VERSION);
 
@@ -42,30 +42,26 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
                 .contains("ENVELOPE_MISMATCH_EXIT = " + SandboxLayout.EXIT_ENVELOPE_MISMATCH);
 
         assertThat(body)
+                .as("runner pins SERVER_UNREACHABLE_EXIT to SandboxLayout.EXIT_SERVER_UNREACHABLE")
+                .contains("SERVER_UNREACHABLE_EXIT = " + SandboxLayout.EXIT_SERVER_UNREACHABLE);
+
+        assertThat(body)
+                .as("runner pins PROVIDER_UNREACHABLE_EXIT to SandboxLayout.EXIT_PROVIDER_UNREACHABLE")
+                .contains("PROVIDER_UNREACHABLE_EXIT = " + SandboxLayout.EXIT_PROVIDER_UNREACHABLE);
+
+        assertThat(body)
                 .as("runner writes its output under SandboxLayout.OUTPUT_PATH")
                 .contains(SandboxLayout.OUTPUT_PATH.substring(SandboxLayout.WORKSPACE_ROOT.length()));
 
-        assertThat(body)
-                .as("runner reads the practices index under SandboxLayout.PRACTICES_PREFIX")
-                .contains("/" + SandboxLayout.PRACTICES_PREFIX + "index.json");
+        assertThat(body).as("runner uses the task-declared practice index").contains("INPUT_PATHS.practiceIndex");
     }
 
     @Test
-    @DisplayName("pi-orchestrator.md cites the repo mount at SandboxLayout.REPO_MOUNT_RELATIVE (prompt↔ABI pin)")
-    void orchestratorPromptCitesRepoMountFromAbi() throws IOException {
-        // The orchestrator prompt tells the LIVE agent where to read the repo checkout. That path is NOT
-        // pinned by the runner sync above, so a rename of the sandbox source region (e.g. worktrees→sources)
-        // could silently rot the prompt — shipping CI-green while pointing the agent at a dead path and
-        // losing all surrounding-code context on every real SCM review. Pin it to the ABI constant so the
-        // next rename must update both in lockstep or this test fails.
-        Path orchestrator = resolveResource("agent/pi-orchestrator.md");
-        assertThat(orchestrator).isRegularFile();
-        String body = Files.readString(orchestrator, StandardCharsets.UTF_8);
-
-        assertThat(body)
-                .as("orchestrator prompt references the repo mount at SandboxLayout.REPO_MOUNT_RELATIVE")
-                .contains(SandboxLayout.REPO_MOUNT_RELATIVE);
-        assertThat(body).doesNotContain("evidence.locations", "evidence.location", "evidence.snippets");
+    void shouldResolvePromptLocationsFromTheTask() throws IOException {
+        for (String prompt : new String[] {"pi-orchestrator.md", "feedback-composer.md"}) {
+            String body = Files.readString(resolveResource("agent/" + prompt));
+            assertThat(body).contains("task.json.paths", "<practiceIndex>").doesNotContain("inputs/");
+        }
     }
 
     @Test

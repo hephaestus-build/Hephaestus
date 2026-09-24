@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.ExponentialBackoff;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.Category;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
@@ -637,7 +639,7 @@ class GitHubProjectItemSyncServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldHandleExceptionDuringPaginationAndBreak() {
+        void shouldStopAfterThreeRetriesWithoutPersistingItems() {
             Repository repository = new Repository();
             when(graphQlClientProvider.forScope(SCOPE_ID)).thenReturn(graphQlClient);
             when(syncProperties.graphqlTimeout()).thenReturn(Duration.ofSeconds(10));
@@ -649,10 +651,18 @@ class GitHubProjectItemSyncServiceTest extends BaseUnitTest {
             when(exceptionClassifier.classifyWithDetails(any()))
                     .thenReturn(ClassificationResult.of(GitHubExceptionClassifier.Category.RETRYABLE, "Network error"));
 
-            int result = service.syncRemainingProjectItems(
-                    SCOPE_ID, "I_nodeId", false, repository, "cursor", PARENT_ISSUE_ID);
+            try (var backoff = mockStatic(ExponentialBackoff.class)) {
+                int result = service.syncRemainingProjectItems(
+                        SCOPE_ID, "I_nodeId", false, repository, "cursor", PARENT_ISSUE_ID);
 
-            assertThat(result).isZero();
+                assertThat(result).isZero();
+                verify(requestSpec, times(4)).execute();
+                verify(transactionTemplate, never()).execute(any());
+                backoff.verify(() -> ExponentialBackoff.sleep(1));
+                backoff.verify(() -> ExponentialBackoff.sleep(2));
+                backoff.verify(() -> ExponentialBackoff.sleep(3));
+                backoff.verifyNoMoreInteractions();
+            }
         }
 
         @Test

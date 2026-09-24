@@ -1,6 +1,8 @@
 import { execFile, spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+// oxlint-disable-next-line typescript/strict-void-return -- the rule reads the callback overload; tsc resolves the CustomPromisify one to { stdout, stderr }.
 const execFileAsync = promisify(execFile);
 
 /**
@@ -32,14 +34,16 @@ export async function run(
 		stdio: [options.stdin ?? "inherit", options.stdout ?? "inherit", options.stderr ?? "inherit"],
 		signal: options.signal,
 	});
-	await new Promise<void>((resolve, reject) => {
-		child.once("error", reject);
-		child.once("exit", (code, signal) =>
-			code === 0
-				? resolve()
-				: reject(new Error(`${command} exited with ${signal ?? `code ${code}`}`)),
-		);
+	const exited = Promise.withResolvers<undefined>();
+	child.once("error", exited.reject);
+	child.once("exit", (code, signal) => {
+		if (code === 0) {
+			exited.resolve(undefined);
+		} else {
+			exited.reject(new Error(`${command} exited with ${signal ?? `code ${code}`}`));
+		}
 	});
+	await exited.promise;
 }
 
 export async function succeeds(
@@ -68,4 +72,16 @@ export async function output(
 		maxBuffer: CAPTURE_LIMIT_BYTES,
 	});
 	return stdout;
+}
+
+/**
+ * This repository's CLI, as an argument for `process.execPath`.
+ *
+ * Resolved as a module rather than looked up on PATH: it is a dependency of this repository, so it
+ * is on PATH only for what the package manager starts, and process creation without a shell finds
+ * neither the extensionless script nor the `.cmd` shim a bin directory holds on Windows. Throws
+ * when the dependency is absent, which is the one case a caller can act on.
+ */
+export function repositoryCli(): string {
+	return fileURLToPath(import.meta.resolve("vite-plus/bin"));
 }

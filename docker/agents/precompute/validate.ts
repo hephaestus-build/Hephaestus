@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { cp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import path from "node:path";
 /**
  * Validate precompute scripts WITHOUT the sandbox: runs each script over a real repo + diff exactly as the
  * runner does, checks the PracticeResult shape, and prints the metrics/directions/hints so you can eyeball
@@ -17,7 +17,7 @@ import { globFilesSync } from "./lib/files.ts";
 import { parsePracticeResult } from "./lib/practice-contract.ts";
 import type { PracticeResult } from "./lib/types.ts";
 
-const DEFAULT_SCRIPTS_DIR = resolve(
+const DEFAULT_SCRIPTS_DIR = path.resolve(
 	import.meta.dirname,
 	"../../../server/application/src/main/resources/practices/precompute",
 );
@@ -32,7 +32,7 @@ const { values } = parseArgs({
 		scripts: { type: "string", default: DEFAULT_SCRIPTS_DIR },
 	},
 });
-if (!values.repo) {
+if (values.repo === undefined || values.repo === "") {
 	console.error("--repo required");
 	process.exit(2);
 }
@@ -43,18 +43,30 @@ const work = `/tmp/pc-validate.${process.pid}`;
 await rm(work, { recursive: true, force: true });
 await mkdir(`${work}/practices`, { recursive: true });
 await writeFile(`${work}/package.json`, '{"type":"module"}\n');
-await symlink(resolve(import.meta.dirname, "lib"), `${work}/lib`);
+await symlink(path.resolve(import.meta.dirname, "lib"), `${work}/lib`);
 let n = 0;
 for (const f of globFilesSync("*.ts", scriptsDir)) {
-	await cp(join(scriptsDir, f), `${work}/practices/${f}`);
-	n++;
+	await cp(path.join(scriptsDir, f), `${work}/practices/${f}`);
+	n += 1;
 }
 console.error(`Validating ${n} script(s) from ${scriptsDir}`);
 
-const args = [resolve(import.meta.dirname, "runner.ts"), "--repo", values.repo, "--output", work];
-if (values.diff) args.push("--diff", values.diff);
-if (values.metadata) args.push("--metadata", values.metadata);
-if (values.context) args.push("--context", values.context);
+const args = [
+	path.resolve(import.meta.dirname, "runner.ts"),
+	"--repo",
+	values.repo,
+	"--output",
+	work,
+];
+if (values.diff !== undefined && values.diff !== "") {
+	args.push("--diff", values.diff);
+}
+if (values.metadata !== undefined && values.metadata !== "") {
+	args.push("--metadata", values.metadata);
+}
+if (values.context !== undefined && values.context !== "") {
+	args.push("--context", values.context);
+}
 const proc = spawnSync(process.execPath, args, { stdio: ["ignore", "ignore", "inherit"] });
 if (proc.status !== 0) {
 	console.error(`runner exited ${String(proc.status)}; results below may be partial or absent`);
@@ -64,18 +76,22 @@ let fail = 0;
 for (const f of globFilesSync("*.json", work)) {
 	let result: PracticeResult;
 	try {
-		result = parsePracticeResult(JSON.parse(await readFile(join(work, f), "utf8")), f);
-	} catch (e) {
-		fail++;
-		console.log(`\n❌ ${f}  [${e instanceof Error ? e.message : String(e)}]`);
+		result = parsePracticeResult(JSON.parse(await readFile(path.join(work, f), "utf8")), f);
+	} catch (error) {
+		fail += 1;
+		console.log(`\n❌ ${f}  [${error instanceof Error ? error.message : String(error)}]`);
 		continue;
 	}
 
 	const ok = result.status === "ok";
-	if (!ok) fail++;
+	if (!ok) {
+		fail += 1;
+	}
 	console.log(`\n${ok ? "✅" : "❌"} ${result.practice}  [status=${result.status}]`);
 	console.log(`   metrics: ${JSON.stringify(result.metrics)}`);
-	for (const d of result.directions) console.log(`   • ${d}`);
+	for (const d of result.directions) {
+		console.log(`   • ${d}`);
+	}
 	const [firstHint] = result.hints;
 	if (firstHint) {
 		console.log(

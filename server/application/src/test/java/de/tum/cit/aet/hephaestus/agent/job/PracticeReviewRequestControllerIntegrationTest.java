@@ -102,7 +102,8 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
                     .bodyValue(body(ArtifactKinds.PULL_REQUEST.value(), pullRequestId))
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         /**
@@ -115,7 +116,8 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
         void refusesAWorkspaceMemberWhoIsNeitherAuthorNorAssignee() {
             post(ArtifactKinds.PULL_REQUEST.value(), pullRequestId)
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -123,7 +125,8 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
         void admitsTheAuthorOfTheWork() {
             post(ArtifactKinds.PULL_REQUEST.value(), pullRequestId)
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -133,7 +136,8 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
 
             post(ArtifactKinds.PULL_REQUEST.value(), pullRequestId)
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
         }
     }
 
@@ -169,7 +173,8 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
         void answersNotFoundForWorkThisWorkspaceDoesNotMonitor() {
             post(ArtifactKinds.PULL_REQUEST.value(), pullRequestId + 9999)
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         /** A chat thread is reviewed on the occasion its source produces; there is nothing to point at. */
@@ -178,13 +183,14 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
         void refusesAKindThatHasNoFrontDoorHere() {
             post(ArtifactKinds.CONVERSATION_THREAD.value(), pullRequestId)
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test
         @WithUser
         void refusesSomethingThatIsNotAnArtifactKindAtAll() {
-            post("NotAKind", pullRequestId).expectStatus().isBadRequest();
+            post("NotAKind", pullRequestId).expectStatus().isBadRequest().expectBody(Void.class);
         }
 
         /**
@@ -285,7 +291,8 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
 
             post(ArtifactKinds.PULL_REQUEST.value(), pullRequestId)
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             org.assertj.core.api.Assertions.assertThat(signalRepository.findForArtifact(
                             workspace.getId(), ArtifactKinds.PULL_REQUEST.value(), pullRequestId))

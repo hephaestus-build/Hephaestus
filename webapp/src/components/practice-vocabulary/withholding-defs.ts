@@ -1,6 +1,6 @@
 import { ArchiveIcon, BrushCleaningIcon, UserRoundXIcon, VolumeOffIcon } from "lucide-react";
 import type { ReviewFeedback } from "@/api/types.gen";
-import type { StatusDefs } from "./status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type WithholdingReason = NonNullable<ReviewFeedback["suppressionReason"]>;
 export type WithholdingFamily = "WORK_MOVED_ON" | "POLICY" | "DEVELOPER_CHOICE" | "HOUSEKEEPING";
@@ -41,6 +41,7 @@ export const WITHHOLDING_FAMILY_DEFS: StatusDefs<WithholdingFamily> = {
 const REASON_FAMILY: Record<WithholdingReason, WithholdingFamily> = {
 	ARTIFACT_GONE: "WORK_MOVED_ON",
 	ARTIFACT_CLOSED: "WORK_MOVED_ON",
+	ISSUE_SNAPSHOT_CHANGED: "WORK_MOVED_ON",
 	ARTIFACT_MERGED: "WORK_MOVED_ON",
 	ARTIFACT_DRAFT: "WORK_MOVED_ON",
 	VOLUME_CAPPED: "POLICY",
@@ -57,6 +58,7 @@ const REASON_FAMILY: Record<WithholdingReason, WithholdingFamily> = {
 	REACTED_DISPUTED: "DEVELOPER_CHOICE",
 	REACTED_NOT_APPLICABLE: "DEVELOPER_CHOICE",
 	COMPOSER_DEDUPED: "HOUSEKEEPING",
+	COMPOSER_WITHHELD: "HOUSEKEEPING",
 	EMPTY_AFTER_SANITIZE: "HOUSEKEEPING",
 	CONVERSATION_EXPIRED: "HOUSEKEEPING",
 };
@@ -68,6 +70,7 @@ const REASON_FAMILY: Record<WithholdingReason, WithholdingFamily> = {
 export const WITHHOLDING_REASON_DEFS: Record<WithholdingReason, string> = {
 	ARTIFACT_GONE: "The work no longer exists.",
 	ARTIFACT_CLOSED: "The work was closed before the feedback could be posted.",
+	ISSUE_SNAPSHOT_CHANGED: "The issue changed before this feedback could be posted.",
 	ARTIFACT_MERGED: "The work was already merged, so a note on it would arrive too late.",
 	ARTIFACT_DRAFT: "The work was still a draft.",
 	VOLUME_CAPPED: "Over the limit on how much feedback one person gets from a single review.",
@@ -88,6 +91,7 @@ export const WITHHOLDING_REASON_DEFS: Record<WithholdingReason, string> = {
 	REACTED_DISPUTED: "The developer disputed feedback like this before.",
 	REACTED_NOT_APPLICABLE: "The developer marked feedback like this not applicable before.",
 	COMPOSER_DEDUPED: "Nearly the same as other feedback from the same review.",
+	COMPOSER_WITHHELD: "The review decided, with a reason, not to put this on the work.",
 	EMPTY_AFTER_SANITIZE: "Nothing was left to send once the text had been cleaned up.",
 	CONVERSATION_EXPIRED: "It waited for a conversation that never happened, then aged out.",
 };
@@ -104,20 +108,15 @@ function isWithholdingReason(value: string): value is WithholdingReason {
 	return Object.hasOwn(REASON_FAMILY, value);
 }
 
-const WITHHOLDING_FAMILY_REASONS = Object.keys(REASON_FAMILY)
-	.filter(isWithholdingReason)
-	.reduce<Record<WithholdingFamily, WithholdingReason[]>>(
-		(families, reason) => {
-			families[withholdingFamily(reason)].push(reason);
-			return families;
-		},
-		{
-			WORK_MOVED_ON: [],
-			POLICY: [],
-			DEVELOPER_CHOICE: [],
-			HOUSEKEEPING: [],
-		},
-	);
+const WITHHOLDING_FAMILY_REASONS: Record<WithholdingFamily, WithholdingReason[]> = {
+	WORK_MOVED_ON: [],
+	POLICY: [],
+	DEVELOPER_CHOICE: [],
+	HOUSEKEEPING: [],
+};
+for (const reason of Object.keys(REASON_FAMILY).filter(isWithholdingReason)) {
+	WITHHOLDING_FAMILY_REASONS[withholdingFamily(reason)].push(reason);
+}
 
 export function reasonsInFamilies(families: readonly WithholdingFamily[]): WithholdingReason[] {
 	return families.flatMap((family) => WITHHOLDING_FAMILY_REASONS[family]);

@@ -1,5 +1,5 @@
 /**
- * Refreshes the vendored Outline OpenAPI spec, which the openapi-generator Maven plugin turns into
+ * Refreshes the vendored Outline OpenAPI spec, which the OpenAPI Generator Gradle plugin turns into
  * the client models. Vendoring makes each refresh a reviewable diff instead of a build that changes
  * under you, and the content is checked before it reaches disk for the reason `update-github-schema`
  * gives: a public URL can answer 200 with something that is not the document.
@@ -9,13 +9,13 @@
  */
 
 import { renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import path from "node:path";
 
-const SPEC_DIR = resolve(
+const SPEC_DIR = path.resolve(
 	import.meta.dirname,
 	"../server/generated-clients/src/main/resources/openapi/outline",
 );
-const SPEC_FILE = join(SPEC_DIR, "spec3.yml");
+const SPEC_FILE = path.join(SPEC_DIR, "spec3.yml");
 const SPEC_URL = "https://raw.githubusercontent.com/outline/openapi/main/spec3.yml";
 
 // The spec runs a few hundred kilobytes; an error page or a redirect notice is nowhere near.
@@ -42,16 +42,16 @@ function validateSpec(content: string): { valid: boolean; reason?: string } {
 			reason: "Content contains null bytes (possible binary data)",
 		};
 	}
-	if (!/^openapi:\s*3\./m.test(content)) {
+	if (!/^openapi:\s*3\./mu.test(content)) {
 		return { valid: false, reason: "Content is not an OpenAPI 3 document" };
 	}
-	if (!/title:\s*Outline API/.test(content)) {
+	if (!/title:\s*Outline API/u.test(content)) {
 		return {
 			valid: false,
 			reason: "Content is missing the expected 'Outline API' title",
 		};
 	}
-	if (!/^\s*schemas:/m.test(content) || !/^\s*Document:/m.test(content)) {
+	if (!/^\s*schemas:/mu.test(content) || !/^\s*Document:/mu.test(content)) {
 		return {
 			valid: false,
 			reason: "Content is missing expected Outline component schemas",
@@ -94,9 +94,7 @@ async function main(): Promise<void> {
 		console.log(`Downloaded ${Math.round(stats.size / 1024)}KB`);
 		renameSync(tempFile, SPEC_FILE);
 		console.log(`Spec updated successfully: ${SPEC_FILE}`);
-		console.log(
-			"\nTo regenerate models: cd server && ./mvnw -pl generated-clients -am compile -DskipTests",
-		);
+		console.log("\nTo regenerate models: cd server && ./gradlew :generated-clients:classes");
 	} catch (error) {
 		try {
 			unlinkSync(tempFile);
@@ -107,7 +105,9 @@ async function main(): Promise<void> {
 	}
 }
 
-main().catch((error) => {
+try {
+	await main();
+} catch (error) {
 	console.error("Error updating spec:", error);
 	process.exit(1);
-});
+}

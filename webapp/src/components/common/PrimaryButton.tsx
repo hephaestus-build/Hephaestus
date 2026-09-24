@@ -1,7 +1,7 @@
 import type { ComponentProps } from "react";
 
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 /**
  * The primary button of a practice surface, in the accent: "See all practices" on the page,

@@ -31,7 +31,8 @@ public final class NatsTestContainer {
         return "nats://" + c.getHost() + ":" + c.getMappedPort(CLIENT_PORT);
     }
 
-    @SuppressWarnings("resource") // Closed by the JVM shutdown hook.
+    // Ryuk stops this singleton after JVM exit, keeping it available while Spring closes cached contexts.
+    @SuppressWarnings("resource")
     private static GenericContainer<?> createContainer() {
         GenericContainer<?> newContainer = new GenericContainer<>(IMAGE)
                 .withCommand("-js")
@@ -44,11 +45,6 @@ public final class NatsTestContainer {
                 newContainer.getHost(),
                 newContainer.getMappedPort(CLIENT_PORT));
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            if (newContainer.isRunning()) {
-                newContainer.stop();
-            }
-        }));
         return newContainer;
     }
 }

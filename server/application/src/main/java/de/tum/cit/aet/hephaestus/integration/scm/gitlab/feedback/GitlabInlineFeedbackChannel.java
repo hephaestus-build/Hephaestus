@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitlabMrResolver.MrCoordinates;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitlabMrResolver.MrInfo;
+import java.io.Serial;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,11 +38,11 @@ import org.springframework.stereotype.Component;
  * time via {@code CreateDiffNote} (GitLab has no batch API). For positions outside the
  * diff hunk, falls back to a regular MR comment with {@code file:line} prefix.
  *
- * <p>Reconciles by {@code recurrenceKey} rather than clear-then-post: each finding's stable key is embedded
+ * <p>Reconciles by {@code deliveryKey} rather than clear-then-post: each delivery's exact key is embedded
  * in the note body as a hidden HTML tag, and before posting we read the MR's existing discussions
  * ({@code GetMergeRequestDiscussions}) and index this reviewer's own prior threads by that key. A finding whose
- * key matches a prior, non-human-replied thread is EDITED in place ({@code UpdateNote}) so a stable finding
- * keeps its single thread across re-runs instead of being deleted and re-created; a human-replied thread is
+ * key matches a prior, non-human-replied thread is EDITED in place ({@code UpdateNote}) so an exact delivery
+ * keeps its single thread across retries instead of being deleted and re-created; a human-replied thread is
  * PRESERVED untouched; an unmatched finding is posted as a fresh {@code CreateDiffNote} thread. Prior bot
  * threads whose key is absent from the current run AND have no human reply are the truly-gone ones — those, and
  * only those, are {@code DestroyNote}d. Reconciliation reads are best-effort; a failed read degrades to
@@ -73,12 +74,12 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
     private static final int MAX_DISCUSSION_PAGES = 50;
 
     /**
-     * Hidden per-finding correlation tag embedded in a note body so a prior thread can be matched back to the
+     * Hidden per-delivery correlation tag embedded in a note body so a prior thread can be matched back to the
      * finding that produced it across re-runs. Distinct from the run-level {@code marker} (which identifies all
      * hephaestus notes for the zero-note clear path); both coexist in the body. The key is alnum/dash/underscore
      * (a {@link de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint} digest), so no escaping is needed.
      */
-    private static final Pattern CK_TAG = Pattern.compile("<!-- hephaestus-diff-note-ck=([A-Za-z0-9_-]+) -->");
+    private static final Pattern CK_TAG = Pattern.compile("<!-- hephaestus-diff-note-ck=([A-Za-z0-9_:-]+) -->");
 
     private final GitLabGraphQlClientProvider gitLabProvider;
     private final GitlabMrResolver mrResolver;
@@ -156,7 +157,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
         boolean rateLimited = false;
         Set<String> seenKeys = new HashSet<>();
         // Keys we've already posted/edited a thread for THIS run. Guards the case where two feedbackItems in one
-        // batch carry the same non-null recurrenceKey (a fingerprint that escaped upstream dedup): without
+        // batch carry the same non-null deliveryKey (an exact duplicate delivery): without
         // this, both would createThread a fresh duplicate, and the next run's last-wins index would orphan one
         // permanently (its key stays in seenKeys, so it is never reaped). First wins; the twin is skipped.
         Set<String> processedKeys = new HashSet<>();
@@ -174,7 +175,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
             // Register the key as seen BEFORE the blank-body guard: a finding whose key is still present this
             // run must never be reaped by destroyVanishedThreads, regardless of body content. Otherwise a
             // valid-key, blank-body finding would silently delete its own still-current prior thread.
-            String key = finding.recurrenceKey();
+            String key = finding.deliveryKey();
             if (key != null) {
                 seenKeys.add(key);
             }
@@ -182,11 +183,11 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
                 continue;
             }
 
-            // Within-batch duplicate fingerprint: this key already produced a thread this run. Skip the twin
+            // Within-batch duplicate delivery identity: this key already produced a thread this run. Skip the twin
             // rather than create a second thread that no future run could reconcile. (Null keys are
             // pre-correlation feedbackItems and are never collapsed.)
             if (key != null && !processedKeys.add(key)) {
-                log.warn("Skipping duplicate recurrenceKey within batch: workspaceId={}, key={}", scopeId, key);
+                log.warn("Skipping duplicate deliveryKey within batch: workspaceId={}, key={}", scopeId, key);
                 continue;
             }
 
@@ -216,7 +217,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
                         key, diff, outcome.disposition(), outcome.noteId(), outcome.discussionId()));
             } catch (OutboundEgressSuppressedException e) {
                 return InlineResult.suppressed(
-                        posted, failed, signals, recurrenceKeys(feedbackItems.subList(index, feedbackItems.size())));
+                        posted, failed, signals, deliveryKeys(feedbackItems.subList(index, feedbackItems.size())));
             } catch (RateLimitHit e) {
                 log.warn("GitLab rate limit hit during diff note posting — stopping: workspaceId={}", scopeId);
                 failed += remaining + 1;
@@ -242,9 +243,9 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
         return new InlineResult(posted, failed, List.copyOf(signals));
     }
 
-    private static List<String> recurrenceKeys(List<InlineFeedback> feedbackItems) {
+    private static List<String> deliveryKeys(List<InlineFeedback> feedbackItems) {
         return feedbackItems.stream()
-                .map(InlineFeedback::recurrenceKey)
+                .map(InlineFeedback::deliveryKey)
                 .filter(Objects::nonNull)
                 .toList();
     }
@@ -434,7 +435,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
             }
             if (body.contains(marker)) {
                 botNoteId = noteId;
-                botKey = parseObservationFingerprint(body);
+                botKey = parseDeliveryKey(body);
             } else {
                 humanReplied = true; // a person (or other tool) participated in this thread
             }
@@ -459,7 +460,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
     }
 
     private static DeliveredSignal failedSignal(InlineFeedback finding) {
-        return new DeliveredSignal(finding.recurrenceKey(), finding.anchor(), Disposition.FAILED, null, null);
+        return new DeliveredSignal(finding.deliveryKey(), finding.anchor(), Disposition.FAILED, null, null);
     }
 
     @Nullable
@@ -475,17 +476,17 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
     }
 
     @Nullable
-    private static String parseObservationFingerprint(String body) {
+    private static String parseDeliveryKey(String body) {
         Matcher m = CK_TAG.matcher(body);
         return m.find() ? m.group(1) : null;
     }
 
-    /** Appends the hidden per-finding correlation tag; a null key (pre-correlation finding) appends nothing. */
-    private static String appendCorrelationTag(String body, @Nullable String recurrenceKey) {
-        if (recurrenceKey == null || recurrenceKey.isBlank()) {
+    /** Appends the hidden per-delivery correlation tag; a null key appends nothing. */
+    private static String appendCorrelationTag(String body, @Nullable String deliveryKey) {
+        if (deliveryKey == null || deliveryKey.isBlank()) {
             return body;
         }
-        return body + "\n<!-- hephaestus-diff-note-ck=" + recurrenceKey + " -->";
+        return body + "\n<!-- hephaestus-diff-note-ck=" + deliveryKey + " -->";
     }
 
     /** A prior diff-note thread we posted, matched by its embedded correlation key. */
@@ -504,6 +505,9 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
 
     /** Signals the per-finding loop to stop and fail the rest of the batch on a rate-limit hit. */
     private static final class RateLimitHit extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         private RateLimitHit(Throwable cause) {
             super(cause);

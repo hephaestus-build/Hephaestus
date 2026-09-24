@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import path from "node:path";
 import process from "node:process";
 import { parseArgs } from "node:util";
 
@@ -139,9 +139,9 @@ const issue = (number: number): ArtifactRef => ({
 	number,
 });
 
-const diff = (path: string, startLine: number, endLine: number, quote: string): Citation => ({
+const diff = (file: string, startLine: number, endLine: number, quote: string): Citation => ({
 	sourceKind: "scm.pull-request.diff",
-	path,
+	path: file,
 	startLine,
 	endLine,
 	quote,
@@ -945,13 +945,17 @@ async function resolve(client: Client): Promise<Resolved> {
 		WORKSPACE_SLUG,
 	]);
 	const workspaceId = workspace.rows[0]?.id;
-	if (workspaceId === undefined) throw new Error(`No workspace with slug ${WORKSPACE_SLUG}`);
+	if (workspaceId === undefined) {
+		throw new Error(`No workspace with slug ${WORKSPACE_SLUG}`);
+	}
 
 	const developer = await client.query<{ id: number }>('SELECT id FROM "user" WHERE login = $1', [
 		DEVELOPER_LOGIN,
 	]);
 	const developerId = developer.rows[0]?.id;
-	if (developerId === undefined) throw new Error(`No synced user with login ${DEVELOPER_LOGIN}`);
+	if (developerId === undefined) {
+		throw new Error(`No synced user with login ${DEVELOPER_LOGIN}`);
+	}
 
 	const slugs = [
 		...new Set(
@@ -964,7 +968,9 @@ async function resolve(client: Client): Promise<Resolved> {
 	);
 	const practices = new Map<string, Practice>();
 	for (const row of practiceRows.rows) {
-		if (row.revision_id === null) throw new Error(`Practice ${row.slug} has no current revision`);
+		if (row.revision_id === null) {
+			throw new Error(`Practice ${row.slug} has no current revision`);
+		}
 		practices.set(row.slug, { id: row.id, revisionId: row.revision_id });
 	}
 	const missingPractices = slugs.filter((slug) => !practices.has(slug));
@@ -982,7 +988,9 @@ async function resolve(client: Client): Promise<Resolved> {
 			[ref.repository, ref.number, ref.kind === "scm.pull_request" ? "PULL_REQUEST" : "ISSUE"],
 		);
 		const row = rows.rows[0];
-		if (!row) throw new Error(`${ref.repository}#${ref.number} is not synced into this database`);
+		if (!row) {
+			throw new Error(`${ref.repository}#${ref.number} is not synced into this database`);
+		}
 		artifacts.set(key, {
 			id: row.id,
 			number: ref.number,
@@ -1015,24 +1023,25 @@ interface Counts {
 	reaction: number;
 }
 
-async function insertSeed(client: Client, resolved: Resolved): Promise<Counts> {
-	const counts: Counts = {
-		agent_job: 0,
-		observation: 0,
-		feedback: 0,
-		feedback_observation: 0,
-		reaction: 0,
-	};
+interface Seeded {
+	/** Job id by run key; a card names the run whose cycle composed it. */
+	jobIds: Map<string, string>;
+	/** Observation id by run key and practice slug, for the cards' evidence bindings. */
+	observationIds: Map<string, string>;
+}
+
+/** Writes the review runs and the observations they recorded. */
+async function insertReviews(client: Client, resolved: Resolved, counts: Counts): Promise<Seeded> {
 	const { workspaceId, developerId } = resolved;
 	const jobIds = new Map<string, string>();
-	/** Observation id by run key and practice slug, for the cards' evidence bindings. */
 	const observationIds = new Map<string, string>();
 	let observationOrdinal = 0;
-	let feedbackOrdinal = 0;
 
 	for (const [runIndex, run] of RUNS.entries()) {
 		const artifact = resolved.artifacts.get(artifactKey(run.artifact));
-		if (!artifact) throw new Error(`Unresolved artifact for run ${run.key}`);
+		if (!artifact) {
+			throw new Error(`Unresolved artifact for run ${run.key}`);
+		}
 		const jobId = seedId(TABLE.job, runIndex + 1);
 		jobIds.set(run.key, jobId);
 		const isPullRequest = artifact.kind === "scm.pull_request";
@@ -1077,12 +1086,15 @@ async function insertSeed(client: Client, resolved: Resolved): Promise<Counts> {
 				jobId.replaceAll("-", "").slice(0, 32),
 			],
 		);
-		counts.agent_job++;
+		counts.agent_job += 1;
 
 		for (const observation of run.observations) {
 			const practice = resolved.practices.get(observation.practice);
-			if (!practice) throw new Error(`Unresolved practice ${observation.practice}`);
-			const observationId = seedId(TABLE.observation, ++observationOrdinal);
+			if (!practice) {
+				throw new Error(`Unresolved practice ${observation.practice}`);
+			}
+			observationOrdinal += 1;
+			const observationId = seedId(TABLE.observation, observationOrdinal);
 			observationIds.set(`${run.key}/${observation.practice}`, observationId);
 			const citation = {
 				sourceKind: observation.citation.sourceKind,
@@ -1122,18 +1134,33 @@ async function insertSeed(client: Client, resolved: Resolved): Promise<Counts> {
 					workspaceId,
 				],
 			);
-			counts.observation++;
+			counts.observation += 1;
 		}
 	}
+	return { jobIds, observationIds };
+}
 
+/** Writes the in-app cards, the observations each stands on and the developer's responses. */
+async function insertCards(
+	client: Client,
+	resolved: Resolved,
+	counts: Counts,
+	{ jobIds, observationIds }: Seeded,
+): Promise<void> {
+	const { workspaceId, developerId } = resolved;
 	const inAppPositions = new Map<string, number>();
+	let feedbackOrdinal = 0;
 	let reactionOrdinal = 0;
 	for (const card of CARDS) {
 		const jobId = jobIds.get(card.composedBy);
-		if (!jobId) throw new Error(`Card on ${card.practice} names an unknown run ${card.composedBy}`);
+		if (jobId === undefined) {
+			throw new Error(`Card on ${card.practice} names an unknown run ${card.composedBy}`);
+		}
 		const position = IN_APP_POSITION_BASE + (inAppPositions.get(jobId) ?? 0);
 		inAppPositions.set(jobId, position - IN_APP_POSITION_BASE + 1);
-		const feedbackId = seedId(TABLE.feedback, ++feedbackOrdinal);
+		feedbackOrdinal += 1;
+		const feedbackId = seedId(TABLE.feedback, feedbackOrdinal);
+		const read = card.deliveredAt !== undefined;
 		await client.query(
 			`INSERT INTO feedback (
 				id, agent_job_id, workspace_id, recipient_user_id, about_user_id, channel, position,
@@ -1146,7 +1173,7 @@ async function insertSeed(client: Client, resolved: Resolved): Promise<Counts> {
 				workspaceId,
 				developerId,
 				position,
-				card.deliveredAt ? "DELIVERED" : "PREPARED",
+				read ? "DELIVERED" : "PREPARED",
 				inAppBody(card),
 				threadKey("practice", card.practice, developerId, "IN_APP"),
 				card.createdAt,
@@ -1154,10 +1181,10 @@ async function insertSeed(client: Client, resolved: Resolved): Promise<Counts> {
 				JSON.stringify([card.practice]),
 			],
 		);
-		counts.feedback++;
+		counts.feedback += 1;
 		for (const [ordinal, runKey] of card.evidence.entries()) {
 			const observationId = observationIds.get(`${runKey}/${card.practice}`);
-			if (!observationId) {
+			if (observationId === undefined) {
 				throw new Error(
 					`Card on ${card.practice} cites run ${runKey}, which recorded nothing on it`,
 				);
@@ -1166,16 +1193,18 @@ async function insertSeed(client: Client, resolved: Resolved): Promise<Counts> {
 				"INSERT INTO feedback_observation (feedback_id, observation_id, role, ordinal) VALUES ($1, $2, 'PRIMARY', $3)",
 				[feedbackId, observationId, ordinal],
 			);
-			counts.feedback_observation++;
+			counts.feedback_observation += 1;
 		}
 		if (card.response) {
-			if (!card.deliveredAt)
+			if (!read) {
 				throw new Error(`Card on ${card.practice} was answered before it was read`);
+			}
+			reactionOrdinal += 1;
 			await client.query(
 				`INSERT INTO reaction (id, reactor_user_id, action, explanation, created_at, feedback_id, usefulness)
 				 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 				[
-					seedId(TABLE.reaction, ++reactionOrdinal),
+					seedId(TABLE.reaction, reactionOrdinal),
 					developerId,
 					card.response.resolution ?? null,
 					card.response.comment ?? null,
@@ -1184,9 +1213,21 @@ async function insertSeed(client: Client, resolved: Resolved): Promise<Counts> {
 					card.response.usefulness ?? null,
 				],
 			);
-			counts.reaction++;
+			counts.reaction += 1;
 		}
 	}
+}
+
+async function insertSeed(client: Client, resolved: Resolved): Promise<Counts> {
+	const counts: Counts = {
+		agent_job: 0,
+		observation: 0,
+		feedback: 0,
+		feedback_observation: 0,
+		reaction: 0,
+	};
+	const seeded = await insertReviews(client, resolved, counts);
+	await insertCards(client, resolved, counts, seeded);
 	return counts;
 }
 
@@ -1195,8 +1236,8 @@ async function main(): Promise<void> {
 	if ((mode !== "seed" && mode !== "reset") || rest.length > 0) {
 		throw new Error(`Unknown mode ${positionals.join(" ")}; use "seed" (the default) or "reset"`);
 	}
-	const server = join(import.meta.dirname, "..", "server");
-	const env = { ...(await readEnvFile(join(server, ".env"))), ...process.env };
+	const server = path.join(import.meta.dirname, "..", "server");
+	const env = { ...(await readEnvFile(path.join(server, ".env"))), ...process.env };
 	const host = env.POSTGRES_HOST ?? "localhost";
 	// The seed writes straight into the database, so it refuses every host but this machine's.
 	// The loopback rule lives in `scripts/e2e-setup.ts`, on E2E_DB_URL; this is the same list.

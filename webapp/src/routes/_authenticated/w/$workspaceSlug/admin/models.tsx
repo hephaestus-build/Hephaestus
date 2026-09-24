@@ -14,13 +14,13 @@ import {
 	workspaceListAvailableLlmModelsOptions,
 } from "@/api/@tanstack/react-query.gen";
 import type { AgentBinding } from "@/api/types.gen";
+import { currentMonthUtc } from "@/components/admin/usage/usage-utils";
 import {
 	AgentBindingsPage,
 	isPurpose,
 	PURPOSE_TITLES,
-} from "@/components/admin/ai/AgentBindingsPage";
-import { WorkspaceLlmProviderPanel } from "@/components/admin/ai/WorkspaceLlmProviderPanel";
-import { currentMonthUtc } from "@/components/admin/usage/usage-utils";
+} from "@/components/admin/workspace-llm/AgentBindingsPage";
+import { WorkspaceLlmProviderPanel } from "@/components/admin/workspace-llm/WorkspaceLlmProviderPanel";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -53,7 +53,7 @@ function ModelsContainer() {
 	const pageQueries = [bindingsQuery, workspaceQuery, llmSettingsQuery, availableModelsQuery];
 
 	const bindingsKey = listAgentsQueryKey({ path: { workspaceSlug } });
-	const invalidateBindings = () => queryClient.invalidateQueries({ queryKey: bindingsKey });
+	const invalidateBindings = async () => queryClient.invalidateQueries({ queryKey: bindingsKey });
 
 	const cacheSavedBinding = (saved: AgentBinding) =>
 		queryClient.setQueryData<AgentBinding[]>(bindingsKey, (current) => {

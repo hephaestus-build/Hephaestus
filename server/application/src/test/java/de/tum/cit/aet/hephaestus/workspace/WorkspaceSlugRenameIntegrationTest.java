@@ -88,7 +88,8 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             currentSlug = nextSlug;
         }
@@ -162,7 +163,8 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .bodyValue(request)
                 .exchange()
                 .expectStatus()
-                .isEqualTo(HttpStatus.CONFLICT);
+                .isEqualTo(HttpStatus.CONFLICT)
+                .expectBody(Void.class);
     }
 
     @Test

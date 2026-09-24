@@ -139,6 +139,8 @@ class MentorTurnLockTest extends BaseUnitTest {
 
     // Sandbox-level FIFO lock (multi-session)
 
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     @Test
     void sandboxLock_sameKeySerialises_differentKeysParallel() throws Exception {
         MentorTurnLock lock = new MentorTurnLock();

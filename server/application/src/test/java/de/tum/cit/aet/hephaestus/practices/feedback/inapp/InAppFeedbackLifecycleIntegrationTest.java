@@ -171,7 +171,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
     private Feedback card(Instant preparedAt, FeedbackDeliveryState state, int number) {
         AgentJob run = persistPullRequestReview(workspace, number, preparedAt.minus(Duration.ofHours(1)));
         UUID problem = observe(
-                practice, run, number, developer, "ABSENT", "BAD", "MAJOR", preparedAt.minus(Duration.ofHours(1)));
+                practice, run, number, developer, "ABSENT", "GOOD", "MAJOR", preparedAt.minus(Duration.ofHours(1)));
         Feedback feedback = persistInAppFeedback(
                 run,
                 developer,
@@ -195,14 +195,14 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
         AgentJob run = persistPullRequestReview(workspace, 12, NOW);
         List<Observation> evidence = List.of(
                 observation(observe(
-                        practice, run, 12, developer, "ABSENT", "BAD", "MAJOR", NOW.minus(Duration.ofHours(1)))),
+                        practice, run, 12, developer, "ABSENT", "GOOD", "MAJOR", NOW.minus(Duration.ofHours(1)))),
                 observation(observe(
                         practice,
                         persistPullRequestReview(workspace, 11, NOW.minus(Duration.ofDays(3))),
                         11,
                         developer,
                         "ABSENT",
-                        "BAD",
+                        "GOOD",
                         "MAJOR",
                         NOW.minus(Duration.ofDays(3)))));
         PreviousInAppFeedback.Previous previous = previousInAppFeedback

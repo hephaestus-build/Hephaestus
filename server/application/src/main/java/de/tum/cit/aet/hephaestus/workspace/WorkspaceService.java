@@ -160,6 +160,8 @@ public class WorkspaceService {
         return createWorkspaceInTransaction(request);
     }
 
+    // Trusted in-process provisioners still supply an owner without an HTTP authentication context.
+    @SuppressWarnings("removal")
     private Workspace createWorkspaceInTransaction(CreateWorkspaceRequestDTO request) {
         String workspaceSlug = Objects.requireNonNull(request.workspaceSlug(), "workspaceSlug is required");
         String displayName = Objects.requireNonNull(request.displayName(), "displayName is required");

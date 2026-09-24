@@ -97,7 +97,7 @@ public class ConversationThreadContentSource implements EvidenceSource, ReviewCo
 
         ObjectNode payload = projection.buildThreadPayload(workspaceId, channelId, threadTs);
         try {
-            files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(payload));
+            files.put(OUTPUT_KEY, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(payload));
         } catch (Exception e) {
             throw new JobPreparationException("Failed to serialize conversation_thread.json: " + e.getMessage(), e);
         }
@@ -130,8 +130,8 @@ public class ConversationThreadContentSource implements EvidenceSource, ReviewCo
         Map<SourceKind, SourceCaptureState> stateOverrides = messageCount == 0
                 ? absenceOf(projection.threadReadability(
                         job.getWorkspace().getId(),
-                        metadata.path("slack_channel_id").asText(),
-                        metadata.path("slack_thread_ts").asText()))
+                        metadata.path("slack_channel_id").asString(),
+                        metadata.path("slack_thread_ts").asString()))
                 : Map.of();
         return new EvidenceContribution(
                 captured.files(),

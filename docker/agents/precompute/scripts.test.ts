@@ -1,22 +1,22 @@
 import assert from "node:assert/strict";
 import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import path from "node:path";
 import { afterEach, before, describe, it } from "node:test";
 
 import { isPracticeModule } from "./lib/practice-contract.ts";
 import type { DiffFile, PracticeScript } from "./lib/types.ts";
 
-const SCRIPTS_DIR = resolve(
+const SCRIPTS_DIR = path.resolve(
 	import.meta.dirname,
 	"../../../server/application/src/main/resources/practices/precompute",
 );
-const LIB_DIR = resolve(import.meta.dirname, "lib");
+const LIB_DIR = path.resolve(import.meta.dirname, "lib");
 
 const tempDirs: string[] = [];
 
 async function createTempDir(prefix: string): Promise<string> {
-	const dir = await mkdtemp(join(tmpdir(), prefix));
+	const dir = await mkdtemp(path.join(tmpdir(), prefix));
 	tempDirs.push(dir);
 	return dir;
 }
@@ -27,11 +27,11 @@ async function createTempDir(prefix: string): Promise<string> {
  */
 async function loadScript(name: string): Promise<PracticeScript> {
 	const work = await createTempDir(`pc-script-${name}-`);
-	await mkdir(join(work, "practices"), { recursive: true });
-	await writeFile(join(work, "package.json"), '{"type":"module"}\n');
-	await symlink(LIB_DIR, join(work, "lib"));
-	const staged = join(work, "practices", `${name}.ts`);
-	await cp(join(SCRIPTS_DIR, `${name}.ts`), staged);
+	await mkdir(path.join(work, "practices"), { recursive: true });
+	await writeFile(path.join(work, "package.json"), '{"type":"module"}\n');
+	await symlink(LIB_DIR, path.join(work, "lib"));
+	const staged = path.join(work, "practices", `${name}.ts`);
+	await cp(path.join(SCRIPTS_DIR, `${name}.ts`), staged);
 	const mod: unknown = await import(staged);
 	if (!isPracticeModule(mod)) {
 		throw new Error(`${name} does not export a default function`);
@@ -40,12 +40,14 @@ async function loadScript(name: string): Promise<PracticeScript> {
 }
 
 /** A path the diff touched. The scripts under test read the changed paths, not the hunk bodies. */
-function changedFile(path: string): DiffFile {
-	return { path, addedLines: new Map(), removedLines: new Map(), hunks: [] };
+function changedFile(file: string): DiffFile {
+	return { path: file, addedLines: new Map(), removedLines: new Map(), hunks: [] };
 }
 
 afterEach(async () => {
-	await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+	await Promise.all(
+		tempDirs.splice(0).map(async (dir) => rm(dir, { recursive: true, force: true })),
+	);
 });
 
 void describe("ships-tests-with-the-change", () => {
@@ -56,9 +58,9 @@ void describe("ships-tests-with-the-change", () => {
 
 	async function repoWith(files: Record<string, string>): Promise<string> {
 		const repo = await createTempDir("pc-repo-");
-		for (const [path, body] of Object.entries(files)) {
-			const full = join(repo, path);
-			await mkdir(join(full, ".."), { recursive: true });
+		for (const [file, body] of Object.entries(files)) {
+			const full = path.join(repo, file);
+			await mkdir(path.join(full, ".."), { recursive: true });
 			await writeFile(full, body);
 		}
 		return repo;
@@ -105,4 +107,202 @@ void describe("ships-tests-with-the-change", () => {
 		assert.equal(result.metrics.worktreeVisible, 0);
 		assert.ok(result.directions.join(" ").includes("WORKTREE NOT VISIBLE"));
 	});
+});
+
+void describe("issue classification across practices", () => {
+	const names = [
+		"issue-has-checkable-outcome",
+		"issue-states-an-actionable-problem",
+		"issue-scoped-to-single-concern",
+	];
+
+	for (const { name, metadata, emptyOrTitleEcho, hasDeliverableType, looksUmbrella } of [
+		{
+			name: "empty deliverable",
+			metadata: { title: "Export billing reports", labels: ["FEATURE"] },
+			emptyOrTitleEcho: 1,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "title repeated with different punctuation",
+			metadata: {
+				title: "Export billing reports to CSV",
+				body: "EXPORT billing reports: to CSV!",
+				issue_type: "Task",
+			},
+			emptyOrTitleEcho: 1,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive umbrella",
+			metadata: {
+				title: "Billing improvements",
+				body: "Split the invoice work into independently deliverable child issues with their own acceptance criteria.",
+				labels: ["REQUIREMENT"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 1,
+		},
+		{
+			name: "substantive body with an omitted title",
+			metadata: {
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+				labels: ["BUG"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive body with an empty title",
+			metadata: {
+				title: "",
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+				labels: ["BUG"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive body with a non-Latin title",
+			metadata: {
+				title: "报告",
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+				labels: ["BUG"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "substantive untyped issue",
+			metadata: {
+				title: "Unreadable invoice",
+				body: "The PDF contains overlapping text when a customer's address spans more than three lines.",
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 0,
+			looksUmbrella: 0,
+		},
+	]) {
+		void it(`preserves shared facts for a ${name}`, async () => {
+			for (const scriptName of names) {
+				const run = await loadScript(scriptName);
+				const result = await run("", new Map(), metadata);
+				assert.equal(result.metrics.emptyOrTitleEcho, emptyOrTitleEcho, scriptName);
+				assert.deepEqual(result.hints, [], scriptName);
+				if (scriptName !== "issue-scoped-to-single-concern") {
+					assert.equal(result.metrics.hasDeliverableType, hasDeliverableType, scriptName);
+					assert.equal(result.metrics.looksUmbrella, looksUmbrella, scriptName);
+				}
+				if (
+					scriptName === "issue-states-an-actionable-problem" &&
+					emptyOrTitleEcho &&
+					hasDeliverableType
+				) {
+					assert.ok(
+						result.directions.some((direction) =>
+							direction.includes("investigate whether a maintainer can actually act on it."),
+						),
+					);
+				}
+			}
+		});
+	}
+});
+
+void it("linked-work analysis reads only explicitly supplied context, never a repository-derived fallback", async () => {
+	const root = await createTempDir("linked-work-context-");
+	const analyse = await loadScript("honours-linked-issue-acceptance-criteria");
+	try {
+		const legacy = path.join(root, "inputs", "context");
+		const context = path.join(root, "areas/linked work");
+		const repo = path.join(root, "inputs", "sources", "scm", "repo");
+		await mkdir(legacy, { recursive: true });
+		await mkdir(context, { recursive: true });
+		await writeFile(
+			path.join(legacy, "linked_work_items.json"),
+			JSON.stringify({ workItems: [{ body: "- [ ] WRONG CONTEXT" }] }),
+		);
+		await writeFile(
+			path.join(context, "linked_work_items.json"),
+			JSON.stringify({ workItems: [{ body: "Acceptance criteria\n- [ ] one\n- [ ] two" }] }),
+		);
+		const metadata = {
+			source_branch: "fix-example",
+			title: "Fixes #12",
+			pr_number: 1,
+			pr_url: "https://example.invalid/pull/1",
+			repository_full_name: "owner/project",
+			target_branch: "main",
+			commit_sha: "a".repeat(40),
+		};
+		const explicit = await analyse(repo, new Map(), metadata, context);
+		assert.equal(explicit.metrics.acceptanceCriteriaCheckboxes, 2);
+		const absent = await analyse(repo, new Map(), metadata);
+		assert.equal(absent.metrics.linkedItemsFilePresent, 0);
+		const missing = await analyse(repo, new Map(), metadata, path.join(root, "missing"));
+		assert.equal(missing.metrics.linkedItemsFilePresent, 0);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+void it("issue-reference syntax in templates remains a candidate rather than an authored closing claim", async () => {
+	const metadata = {
+		source_branch: "plain-branch",
+		title: "Documentation update",
+		body: "- [ ] Related issue is linked (e.g., `Closes #12`)\nFor the intended check, see #12.",
+		pr_number: 1,
+		pr_url: "https://example.invalid/pull/1",
+		repository_full_name: "owner/project",
+		target_branch: "main",
+		commit_sha: "a".repeat(40),
+	};
+	const linked = await loadScript("honours-linked-issue-acceptance-criteria");
+	const result = await linked("unused", new Map(), metadata);
+	assert.equal(result.metrics.issueReferenceSyntaxCandidateCount, 1);
+	assert.match(result.directions.join("\n"), /syntax candidate/u);
+	assert.match(result.directions.join("\n"), /before establishing that the author/u);
+	assert.doesNotMatch(result.directions.join("\n"), /this change claims to close/u);
+	const traceable = await loadScript("ready-and-traceable-handoff");
+	const trace = await traceable("unused", new Map(), metadata);
+	assert.equal(trace.metrics.issueMentionSyntaxCandidateCount, 1);
+	assert.match(
+		trace.directions.join("\n"),
+		/templates, examples and branch numbers may be unrelated/u,
+	);
+	assert.doesNotMatch(
+		trace.directions.join("\n"),
+		/all establish the link|motivating-issue reference IS present/u,
+	);
+});
+
+void it("current issue rollups do not establish state at closure or a longitudinal habit", async () => {
+	const script = await loadScript("issue-closed-with-unmet-outcome");
+	for (const checked of [false, true]) {
+		const result = await script("unused", new Map(), {
+			source_branch: "unused",
+			target_branch: "main",
+			commit_sha: "a".repeat(40),
+			pr_number: 1,
+			pr_url: "https://example.invalid/issue/1",
+			repository_full_name: "owner/project",
+			state: "CLOSED",
+			body: checked ? "- [x] Expected result" : "- [ ] Expected result",
+		});
+		const directions = result.directions.join("\n");
+		assert.match(directions, /Current captured issue facts/u);
+		assert.match(directions, /dated.*closure|closure.*dated/u);
+		assert.doesNotMatch(
+			directions,
+			/completed at close|outcome appears confirmed|frame as a lifecycle habit/u,
+		);
+		assert.equal(result.metrics.currentSubIssuesOpen, 0);
+		assert.equal("subIssuesOpenAtClose" in result.metrics, false);
+	}
 });

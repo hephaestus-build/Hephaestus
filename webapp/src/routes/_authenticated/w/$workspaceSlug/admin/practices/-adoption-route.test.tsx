@@ -3,7 +3,7 @@ import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CatalogPracticePreview } from "@/api/types.gen";
-import { mockPractices } from "@/components/admin/practices/story-mock-data";
+import { mockPractices } from "@/components/admin/practices/fixtures";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
@@ -30,6 +30,7 @@ const preview: CatalogPracticePreview = {
 		name: "Describe what changed and why",
 		artifactKind: "scm.pull_request",
 		bindings: [mockPullRequestBinding],
+		deliveryBehavior: { summaryOnly: false },
 		automatedReviewPolicy: mockPullRequestPolicy,
 		automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 		criteria: "Explain the change and why it is needed.",
@@ -94,6 +95,7 @@ describe("catalog adoption over practice setup", () => {
 			),
 			http.get("*/workspaces/:workspaceSlug/practice-groups", () => HttpResponse.json([])),
 			http.get("*/workspaces/:workspaceSlug/practices", () => HttpResponse.json([])),
+			http.get("*/workspaces/:workspaceSlug/practices/releases", () => HttpResponse.json([])),
 			http.get("*/workspaces/:workspaceSlug/members/me", () =>
 				HttpResponse.json({ role: "ADMIN", userId: 1, userLogin: "ada", userName: "Ada" }),
 			),
@@ -107,7 +109,6 @@ describe("catalog adoption over practice setup", () => {
 						status: "ACTIVE",
 						practicesEnabled: false,
 						mentorEnabled: false,
-						achievementsEnabled: false,
 						leaderboardEnabled: false,
 						progressionEnabled: false,
 						leaguesEnabled: false,
@@ -152,9 +153,9 @@ describe("catalog adoption over practice setup", () => {
 		await screen.findByRole("heading", { name: "Instance catalog" }, ROUTE_RENDER_WAIT);
 		expect(screen.queryByText("Available")).toBeNull();
 		await screen.findByText("Name unavailable");
-		screen.getByRole("link", { name: /Describe what changed and why/ });
+		screen.getByRole("link", { name: /Describe what changed and why/u });
 		screen.getByRole("link", {
-			name: /Include enough issue context, see why it cannot be added/,
+			name: /Include enough issue context, see why it cannot be added/u,
 		});
 	});
 
@@ -179,7 +180,11 @@ describe("catalog adoption over practice setup", () => {
 
 		const { router } = renderRouteAtWithRouter(LIBRARY);
 		fireEvent.click(
-			await screen.findByRole("link", { name: /Describe what changed and why/ }, ROUTE_RENDER_WAIT),
+			await screen.findByRole(
+				"link",
+				{ name: /Describe what changed and why/u },
+				ROUTE_RENDER_WAIT,
+			),
 		);
 
 		await screen.findByRole("button", { name: "Add practice" }, ROUTE_RENDER_WAIT);
@@ -198,6 +203,7 @@ describe("catalog adoption over practice setup", () => {
 			http.get("*/workspaces/:workspaceSlug/practices/definition-options", () =>
 				HttpResponse.json(mockPracticeDefinitionOptions),
 			),
+			http.get("*/workspaces/:workspaceSlug/practices/releases", () => HttpResponse.json([])),
 			http.get("*/workspaces/:workspaceSlug/practices/:practiceSlug", () =>
 				HttpResponse.json(workspacePractice),
 			),
@@ -359,15 +365,24 @@ describe("catalog adoption over practice setup", () => {
 		);
 
 		const { router } = renderRouteAtWithRouter("/w/acme/admin/practices?detail=practice-new:draft");
-		fireEvent.change(await screen.findByRole("textbox", { name: /Name/ }, ROUTE_RENDER_WAIT), {
+		fireEvent.change(await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT), {
 			target: { value: "Explain the change" },
 		});
-		fireEvent.change(screen.getByRole("textbox", { name: /What to look for/ }), {
+		fireEvent.change(screen.getByRole("textbox", { name: /What to look for/u }), {
 			target: { value: "Check that the description says why." },
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Create practice" }));
 
-		await waitFor(() => expect(created).toHaveBeenCalled(), ROUTE_RENDER_WAIT);
+		await waitFor(
+			() =>
+				expect(created).toHaveBeenCalledWith(
+					expect.objectContaining({
+						name: "Explain the change",
+						criteria: "Check that the description says why.",
+					}),
+				),
+			ROUTE_RENDER_WAIT,
+		);
 		expect(created).toHaveBeenCalledWith(
 			expect.objectContaining({ name: "Explain the change", slug: "explain-the-change" }),
 		);
@@ -383,7 +398,7 @@ describe("catalog adoption over practice setup", () => {
 	// guard, so it is the half worth asserting against the real form.
 	it("asks before Escape discards a draft, and keeps it when refused", async () => {
 		const { router } = renderRouteAtWithRouter("/w/acme/admin/practices?detail=practice-new:draft");
-		fireEvent.change(await screen.findByRole("textbox", { name: /Name/ }, ROUTE_RENDER_WAIT), {
+		fireEvent.change(await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT), {
 			target: { value: "A draft worth keeping" },
 		});
 
@@ -400,7 +415,7 @@ describe("catalog adoption over practice setup", () => {
 
 	it("discards the draft and leaves when the reader says so", async () => {
 		const { router } = renderRouteAtWithRouter("/w/acme/admin/practices?detail=practice-new:draft");
-		fireEvent.change(await screen.findByRole("textbox", { name: /Name/ }, ROUTE_RENDER_WAIT), {
+		fireEvent.change(await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT), {
 			target: { value: "A draft worth losing" },
 		});
 
@@ -417,7 +432,7 @@ describe("catalog adoption over practice setup", () => {
 
 	it("leaves a clean editor without asking anything", async () => {
 		const { router } = renderRouteAtWithRouter("/w/acme/admin/practices?detail=practice-new:draft");
-		await screen.findByRole("textbox", { name: /Name/ }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT);
 
 		fireEvent.keyDown(document.body, { key: "Escape" });
 

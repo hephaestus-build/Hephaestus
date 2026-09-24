@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.audit.spi;
 
+import java.io.Serial;
+
 /**
  * The audit trail could not record a change, so the change must not commit.
  *
@@ -8,6 +10,9 @@ package de.tum.cit.aet.hephaestus.core.audit.spi;
  * quietly at the observability layer.
  */
 public class ConfigAuditUnavailableException extends RuntimeException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     public ConfigAuditUnavailableException(String message) {
         super(message);

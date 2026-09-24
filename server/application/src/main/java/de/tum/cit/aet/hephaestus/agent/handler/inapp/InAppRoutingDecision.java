@@ -15,14 +15,10 @@ public enum InAppRoutingDecision {
      */
     NO_EVIDENCE,
 
-    /**
-     * Fewer than {@link InAppFeedbackRouter#CORROBORATION_ARTIFACTS} distinct artifacts carry the
-     * problem. One occurrence is a task-level note and belongs on the work, not on a surface whose whole
-     * claim is "this recurs".
-     */
+    /** Evidence does not meet the composition contract's minimum distinct-work threshold. */
     UNCORROBORATED,
 
-    /** The practice's autonomy (OFF or HUMAN_APPROVAL) does not admit the in-app lane. */
+    /** The practice's autonomy is OFF, or the evidence's origin has no entitlement to the in-app lane. */
     PRACTICE_REQUIRES_APPROVAL,
 
     /**

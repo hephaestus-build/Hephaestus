@@ -4,15 +4,16 @@ import { FacetMultiSelect } from "@/components/common/FacetMultiSelect";
 import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
+import { statusFacetOptions } from "@/components/common/status-def";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import {
 	DELIVERY_PLACE_DEFS,
 	FILTERABLE_PLACES,
 } from "@/components/practice-vocabulary/delivery-place-defs";
-import { statusFacetOptions } from "@/components/practice-vocabulary/status-def";
 import { WITHHOLDING_FAMILY_DEFS } from "@/components/practice-vocabulary/withholding-defs";
 import { fromDateRange, toDateRange } from "@/lib/date-range-search";
 import { nonEmpty } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
 
 import { AppliedFacetPills, facetPills } from "./AppliedFacetPills";
 import type { FeedbackSearch } from "./review-search";
@@ -150,7 +151,7 @@ export function FeedbackFilters({
 					),
 				]}
 			/>
-			{search.agentJobId && (
+			{hasText(search.agentJobId) && (
 				<ReferenceFilterPill
 					label="Review"
 					value={search.agentJobId}

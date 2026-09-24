@@ -29,7 +29,11 @@ export default defineConfig({
 	optimizeDeps: {
 		noDiscovery: true,
 		include: [
-			...runtimeDeps.filter((dependency) => dependency !== "@monaco-editor/react"),
+			// `@shadcn/react` has no root export; only the subpath the app imports can be pre-bundled.
+			...runtimeDeps.filter(
+				(dependency) => dependency !== "@monaco-editor/react" && dependency !== "@shadcn/react",
+			),
+			"@shadcn/react/questionnaire",
 			"use-sync-external-store/shim",
 			"use-sync-external-store/shim/with-selector",
 		],
@@ -51,7 +55,7 @@ export default defineConfig({
 			instances: [{ browser: "chromium" }],
 		},
 		setupFiles: [".storybook/vitest.setup.ts"],
-		reporters: ["verbose", "junit"],
+		reporters: ["default", "junit"],
 		outputFile: {
 			junit: "./test-results/junit-storybook.xml",
 		},

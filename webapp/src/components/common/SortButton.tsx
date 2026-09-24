@@ -1,8 +1,8 @@
-import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 
+import { cn } from "cn";
 import { FOCUS_RING } from "@/components/common/focus";
-import { cn } from "@/lib/utils";
 
 export interface SortButtonProps extends Omit<ComponentProps<"button">, "type"> {
 	/** `false` when this column is not the sorted one. */
@@ -13,11 +13,17 @@ export interface SortButtonProps extends Omit<ComponentProps<"button">, "type"> 
 	children: ReactNode;
 }
 
+const SORT_ICONS = {
+	none: ChevronsUpDownIcon,
+	asc: ArrowUpIcon,
+	desc: ArrowDownIcon,
+};
+
 /**
  * The clickable label in a sortable column header. The icon carries the direction because
  * `aria-sort`, which belongs on the surrounding `<th>`, is invisible to everyone who can see.
- * An unsorted column keeps the icon's width and shows it only on hover or focus, pointing the way
- * a press would sort, so the sorted column is the one arrow visible at rest.
+ * An unsorted column keeps a faint two-way chevron, so every sortable header reads as one at
+ * rest, and the sorted column's arrow is the one accent on the header row.
  *
  * Presentational on purpose: the two sorting models in this app — a TanStack column and a
  * hand-rolled sort key — both reduce to a direction and a toggle, and the control should not
@@ -35,7 +41,7 @@ export function SortButton({
 	onClick,
 	...props
 }: SortButtonProps) {
-	const SortIcon = sorted === "desc" ? ArrowDownIcon : ArrowUpIcon;
+	const SortIcon = SORT_ICONS[sorted === false ? "none" : sorted];
 
 	return (
 		<button
@@ -46,9 +52,9 @@ export function SortButton({
 				onToggle();
 			}}
 			className={cn(
-				"group inline-flex items-center gap-1 rounded-sm",
+				"group inline-flex items-center gap-1 rounded-sm hover:text-foreground",
 				FOCUS_RING,
-				sorted ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+				sorted === false ? "text-muted-foreground" : "text-foreground",
 				reverse && "flex-row-reverse",
 				className,
 			)}
@@ -57,7 +63,7 @@ export function SortButton({
 			<SortIcon
 				className={cn(
 					"size-3.5 shrink-0",
-					sorted ? "text-mentor" : "invisible group-hover:visible group-focus-visible:visible",
+					sorted === false ? "opacity-40 group-hover:opacity-70" : "text-mentor",
 				)}
 				aria-hidden
 			/>

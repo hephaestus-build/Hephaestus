@@ -1,6 +1,6 @@
 # ADR 0021: Separate observations from feedback
 
-**Status:** Accepted  
+**Status:** Accepted (amended 2026-07-31 #1423, 2026-08-18 #1444 — rewritten in place; refined by [ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md) and [ADR 0029](0029-measurement-intervention-seam-and-channel-levels.md))  
 **Date:** 2026-06-14  
 **Authors:** Felix T.J. Dietrich
 

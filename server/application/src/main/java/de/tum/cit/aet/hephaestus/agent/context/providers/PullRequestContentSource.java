@@ -14,40 +14,35 @@ import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewContextBuilder;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ScmTokenSource;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
-import org.eclipse.jgit.diff.DiffEntry;
-import org.eclipse.jgit.diff.Edit;
-import org.eclipse.jgit.patch.FormatError;
-import org.eclipse.jgit.patch.Patch;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.jspecify.annotations.Nullable;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 @Component
@@ -69,46 +64,47 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         return Set.of(CORE, DIFF, COMMENTS);
     }
 
+    /** Pins {@code base_sha} and {@code head_sha} for derived change views and diff citations. */
+    public static final String CHANGE_FILE = OUTPUT_PREFIX + "change.json";
+
+    /** Unescaped author text for line-based citations; metadata.json also contains it as a JSON string. */
+    public static final String DESCRIPTION_FILE = OUTPUT_PREFIX + "description.md";
+
+    /**
+     * Commit messages and file changes, oldest first. Staged on the server so admission can
+     * verify citations of commit messages.
+     */
+    public static final String COMMITS_FILE = OUTPUT_PREFIX + "commits.json";
+
     @Override
     public SourceKind sourceKindFor(String path) {
         if (path.endsWith("comments.json")) return COMMENTS;
-        if (path.endsWith("diff.patch") || path.endsWith("diff_stat.txt") || path.endsWith("diff_summary.md"))
-            return DIFF;
+        if (path.equals(CHANGE_FILE)) return DIFF;
         return CORE;
     }
 
-    private static final Logger log = LoggerFactory.getLogger(PullRequestContentSource.class);
-
     static final int MAX_COMMENTS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
+
+    /** Excludes Hephaestus feedback from captured reviewer comments to prevent self-citation. */
+    static final String HEPHAESTUS_MARKER = "<!-- hephaestus";
 
     private final ObjectMapper objectMapper;
     private final GitRepositoryManager gitRepositoryManager;
     private final PullRequestRepository pullRequestRepository;
     private final PullRequestReviewCommentRepository reviewCommentRepository;
-    private final GitDiffOperations gitDiffOperations;
-    private final ConnectionService connectionService;
-
-    private final Map<IntegrationKind, ScmTokenSource> tokenSources;
+    private final ReviewRepositoryPreparer repositoryPreparer;
 
     public PullRequestContentSource(
             ObjectMapper objectMapper,
             GitRepositoryManager gitRepositoryManager,
             PullRequestRepository pullRequestRepository,
             PullRequestReviewCommentRepository reviewCommentRepository,
-            GitDiffOperations gitDiffOperations,
-            ConnectionService connectionService,
-            List<ScmTokenSource> tokenSourceList) {
+            ReviewRepositoryPreparer repositoryPreparer) {
         this.objectMapper = objectMapper;
         this.gitRepositoryManager = gitRepositoryManager;
         this.pullRequestRepository = pullRequestRepository;
         this.reviewCommentRepository = reviewCommentRepository;
-        this.gitDiffOperations = gitDiffOperations;
-        this.connectionService = connectionService;
-        Map<IntegrationKind, ScmTokenSource> map = new EnumMap<>(IntegrationKind.class);
-        for (ScmTokenSource src : tokenSourceList) {
-            map.put(src.kind(), src);
-        }
-        this.tokenSources = map;
+        this.repositoryPreparer = repositoryPreparer;
     }
 
     @Override
@@ -118,34 +114,11 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
 
     @Override
     public void contribute(ContextRequest request, Map<String, byte[]> files) {
-        prepareCapture(request, sourceKinds());
-        contributeSelected(request, sourceKinds(), files);
-    }
-
-    @Override
-    public void prepareCapture(ContextRequest request, Set<SourceKind> selectedKinds) {
-        if (!(request instanceof ContextRequest.PracticeReviewRequest practiceReview)) return;
-        if (!selectedKinds.contains(DIFF)) return;
-        JsonNode metadata = practiceReview.job().getMetadata();
-        if (metadata == null || metadata.isNull() || metadata.isMissingNode()) return;
-        if (!pullRequestRepository.existsByIdAndDeletedAtIsNull(requireLong(metadata, "pull_request_id"))) return;
-        long repositoryId = requireLong(metadata, "repository_id");
-        if (!gitRepositoryManager.isEnabled() || !gitRepositoryManager.isRepositoryCloned(repositoryId)) return;
-        String headSha = metadata.path("commit_sha").asString(null);
-        fetchAndVerifyHead(repositoryId, practiceReview.job(), headSha);
-    }
-
-    @Override
-    public void contributeSelected(ContextRequest request, Set<SourceKind> selectedKinds, Map<String, byte[]> files) {
-        files.putAll(captureSelected(request, selectedKinds).files());
+        throw new UnsupportedOperationException("Pull request evidence records its capture state; use capture()");
     }
 
     @Override
     public EvidenceContribution capture(ContextRequest request, Set<SourceKind> selectedKinds) {
-        return captureSelected(request, selectedKinds);
-    }
-
-    private EvidenceContribution captureSelected(ContextRequest request, Set<SourceKind> selectedKinds) {
         if (!(request instanceof ContextRequest.PracticeReviewRequest practiceReview)) {
             throw new IllegalStateException("PullRequestContentSource.contribute called with unsupported variant: "
                     + request.getClass().getSimpleName());
@@ -157,28 +130,31 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         }
         long repositoryId = requireLong(metadata, "repository_id");
         long pullRequestId = requireLong(metadata, "pull_request_id");
-        PullRequest pullRequest = pullRequestRepository
-                .findByIdWithAuthorAndRepository(pullRequestId)
-                .orElse(null);
+        PullRequest pullRequest =
+                pullRequestRepository.findByIdForReviewContext(pullRequestId).orElse(null);
         if (pullRequest == null || pullRequest.getDeletedAt() != null) {
             return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
+        }
+        ReviewRepositoryPreparer.PreparedReview prepared = null;
+        if (readsClone(selectedKinds) && gitRepositoryManager.isEnabled()) {
+            prepared = practiceReview.preparation().prepare(repositoryPreparer, job);
+        } else {
+            repositoryPreparer.authorize(job);
         }
         Map<String, byte[]> files = new HashMap<>();
         Map<SourceKind, SourceCompleteness> completeness = new HashMap<>();
         Map<SourceKind, String> identities = new HashMap<>();
-        Map<SourceKind, java.time.Instant> observedAt = new HashMap<>();
+        Map<SourceKind, Instant> observedAt = new HashMap<>();
         Map<SourceKind, SourceContentState> contentStates = new HashMap<>();
 
-        boolean headVerified = false;
-        if (selectedKinds.contains(DIFF)) {
-            ensureRepositoryAvailable(repositoryId);
-            String headSha =
-                    metadata.has("commit_sha") ? metadata.get("commit_sha").asString() : null;
-            headVerified =
-                    headSha != null && !headSha.isBlank() && gitRepositoryManager.commitExists(repositoryId, headSha);
+        if (readsClone(selectedKinds)) {
+            ensureRepositoryAvailable(new RepositoryKey(job.getWorkspace().getId(), repositoryId));
         }
         if (selectedKinds.contains(CORE)) {
             storeMetadata(files, pullRequest, metadata);
+            files.put(
+                    DESCRIPTION_FILE,
+                    (pullRequest.getBody() == null ? "" : pullRequest.getBody()).getBytes(StandardCharsets.UTF_8));
             completeness.put(CORE, SourceCompleteness.COMPLETE);
             if (pullRequest.getLastSyncAt() != null) {
                 observedAt.put(CORE, pullRequest.getLastSyncAt());
@@ -191,19 +167,33 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             contentStates.put(
                     COMMENTS, comments.comments().isEmpty() ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
         }
-        if (selectedKinds.contains(DIFF)) {
-            computeAndStoreDiff(files, repositoryId, metadata, headVerified);
-            completeness.put(DIFF, SourceCompleteness.COMPLETE);
-            String headSha = metadata.path("commit_sha").asString();
-            if (!headSha.isBlank()) identities.put(DIFF, headSha);
-            byte[] diff = files.get(OUTPUT_PREFIX + "diff.patch");
-            contentStates.put(
-                    DIFF, diff == null || diff.length == 0 ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
+        if (prepared != null) {
+            String range = prepared.target() + ":" + prepared.head();
+            if (selectedKinds.contains(CORE)) {
+                identities.put(CORE, range);
+                storeCommits(files, prepared);
+            }
+            if (selectedKinds.contains(DIFF)) {
+                storeChange(files, prepared);
+                completeness.put(DIFF, SourceCompleteness.COMPLETE);
+                identities.put(DIFF, range);
+                contentStates.put(
+                        DIFF,
+                        gitRepositoryManager
+                                        .changedPaths(prepared.key(), prepared.target(), prepared.head())
+                                        .isEmpty()
+                                ? SourceContentState.EMPTY
+                                : SourceContentState.NON_EMPTY);
+            }
         }
         return new EvidenceContribution(files, completeness, identities, observedAt, Map.of(), contentStates);
     }
 
-    private void ensureRepositoryAvailable(long repositoryId) {
+    private static boolean readsClone(Set<SourceKind> selectedKinds) {
+        return selectedKinds.contains(CORE) || selectedKinds.contains(DIFF);
+    }
+
+    private void ensureRepositoryAvailable(RepositoryKey repositoryId) {
         if (!gitRepositoryManager.isEnabled()) {
             throw new JobPreparationException(
                     "Git local storage is disabled but required for repository evidence: repoId=" + repositoryId);
@@ -212,73 +202,6 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             throw new JobPreparationException(
                     "Repository is not available locally for evidence capture: repoId=" + repositoryId);
         }
-    }
-
-    private boolean fetchAndVerifyHead(long repositoryId, AgentJob job, String headSha) {
-        if (!gitRepositoryManager.isRepositoryCloned(repositoryId)) {
-            log.debug("Repository not cloned locally, skipping fetch: repoId={}", repositoryId);
-            return false;
-        }
-
-        var workspace = job.getWorkspace();
-        var kind = workspace == null
-                ? Optional.<IntegrationKind>empty()
-                : connectionService.findActiveProviderKind(workspace.getId());
-        ScmTokenSource source = kind.map(tokenSources::get).orElse(null);
-
-        boolean fetched = false;
-        String serverUrl = null;
-        try {
-            if (source != null) {
-                Long scopeId = workspace.getId();
-                serverUrl = source.serverUrl(scopeId).orElse(null);
-                String token = source.accessToken(scopeId).orElse(null);
-                JsonNode metadata = job.getMetadata();
-                String repoFullName = metadata != null && metadata.has("repository_full_name")
-                        ? metadata.get("repository_full_name").asString()
-                        : null;
-                if (serverUrl != null && token != null && repoFullName != null) {
-                    String cloneUrl = serverUrl + "/" + repoFullName + ".git";
-                    gitRepositoryManager.ensureRepository(repositoryId, cloneUrl, token);
-                    fetched = true;
-                    long pullRequestNumber = requireLong(
-                            Objects.requireNonNull(metadata, "pull request job metadata is required"), "pr_number");
-                    Optional<String> reviewHeadRef = source.reviewHeadRef(pullRequestNumber);
-                    if (headSha != null && !headSha.isBlank() && reviewHeadRef.isPresent()) {
-                        boolean pinnedHeadFetched = gitRepositoryManager.fetchRemoteCommit(
-                                repositoryId, reviewHeadRef.get(), headSha, token);
-                        if (!pinnedHeadFetched) {
-                            log.warn("Remote review ref did not match the pinned commit: repoId={}", repositoryId);
-                        }
-                    }
-                    log.debug("Fetched latest refs: repoId={}", repositoryId);
-                }
-            }
-        } catch (Exception e) {
-            log.warn(
-                    "Pre-diff fetch failed: repoId={}, kind={}, serverUrl={}",
-                    repositoryId,
-                    kind.orElse(null),
-                    serverUrl,
-                    e);
-        }
-
-        if (headSha != null && !headSha.isBlank()) {
-            boolean exists = gitRepositoryManager.commitExists(repositoryId, headSha);
-            if (!exists && fetched) {
-                log.error(
-                        "Head commit {} not found in local clone after successful fetch. repoId={}",
-                        headSha,
-                        repositoryId);
-            } else if (!exists) {
-                log.warn(
-                        "Head commit {} not found locally (no fetch possible). Diff may fail. repoId={}",
-                        headSha,
-                        repositoryId);
-            }
-            return exists;
-        }
-        return false;
     }
 
     private void storeMetadata(Map<String, byte[]> files, PullRequest pullRequest, JsonNode metadata) {
@@ -290,6 +213,69 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         } catch (JacksonException e) {
             throw new JobPreparationException("Failed to serialize pull request metadata", e);
         }
+    }
+
+    private void storeChange(Map<String, byte[]> files, ReviewRepositoryPreparer.PreparedReview prepared) {
+        ObjectNode change = objectMapper.createObjectNode();
+        change.put("base_sha", prepared.target());
+        change.put("head_sha", prepared.head());
+        try {
+            files.put(CHANGE_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(change));
+        } catch (JacksonException e) {
+            throw new JobPreparationException("Failed to serialize the reviewed change", e);
+        }
+    }
+
+    private void storeCommits(Map<String, byte[]> files, ReviewRepositoryPreparer.PreparedReview prepared) {
+        List<CommitDetails> commits =
+                gitRepositoryManager.commitsBetween(prepared.key(), prepared.target(), prepared.head());
+        ObjectNode root = objectMapper.createObjectNode();
+        ArrayNode array = root.putArray("commits");
+        for (CommitDetails commit : commits) {
+            ObjectNode node = array.addObject();
+            node.put("sha", commit.sha());
+            ArrayNode parents = node.putArray("parents");
+            commit.parentShas().forEach(parents::add);
+            // Names, never addresses: the record names who did what, and an address is not that.
+            node.put("author", commit.authorName());
+            node.put("authoredAt", commit.authoredAt().toString());
+            node.put("committer", commit.committerName());
+            node.put("committedAt", commit.committedAt().toString());
+            node.put(
+                    "message",
+                    commit.messageBody() == null ? commit.message() : commit.message() + "\n\n" + commit.messageBody());
+            ArrayNode changes = node.putArray("files");
+            for (CommitDetails.FileChange change : commit.fileChanges()) {
+                ObjectNode file = changes.addObject();
+                file.put("path", change.filename());
+                file.put("status", statusLetter(change.changeType()));
+                if (change.previousFilename() != null) {
+                    file.put("oldPath", change.previousFilename());
+                }
+                file.put("additions", change.additions());
+                file.put("deletions", change.deletions());
+            }
+        }
+        try {
+            files.put(
+                    COMMITS_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
+        } catch (JacksonException e) {
+            throw new JobPreparationException("Failed to serialize the commits of the change", e);
+        }
+    }
+
+    /** The status letter {@code git diff --name-status} prints, which is what the container's readers parse. */
+    private static String statusLetter(ChangeType changeType) {
+        return switch (changeType) {
+            case ADDED -> "A";
+            case MODIFIED -> "M";
+            case REMOVED -> "D";
+            case RENAMED -> "R";
+            case COPIED -> "C";
+            // The mirror's diff never yields these two; a provider's own sync does.
+            case CHANGED -> "M";
+            case UNKNOWN -> "M";
+        };
     }
 
     private void storeComments(Map<String, byte[]> files, List<PullRequestReviewComment> comments) {
@@ -318,19 +304,57 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             result.put("state", pullRequest.getState().name());
         }
         result.put("is_draft", pullRequest.isDraft());
+        // Stated on its own because state alone does not carry it: a pull request the webhook closed
+        // after the merge is stored CLOSED with merged_at set, and is merged.
+        result.put("is_merged", pullRequest.isMerged());
+        putInstant(result, "created_at", pullRequest.getCreatedAt());
+        putInstant(result, "closed_at", pullRequest.getClosedAt());
+        putInstant(result, "merged_at", pullRequest.getMergedAt());
         result.put("additions", pullRequest.getAdditions());
         result.put("deletions", pullRequest.getDeletions());
         result.put("changed_files", pullRequest.getChangedFiles());
         if (pullRequest.getAuthor() != null) {
             result.put("author", pullRequest.getAuthor().getLogin());
+            if (pullRequest.getAuthor().getType() == User.Type.BOT) {
+                result.put("author_bot", true);
+            }
+        }
+        if (pullRequest.getMergedBy() != null) {
+            result.put("merged_by", pullRequest.getMergedBy().getLogin());
+        }
+        ArrayNode labels = result.putArray("labels");
+        pullRequest.getLabels().stream().map(Label::getName).sorted().forEach(labels::add);
+        ArrayNode assignees = result.putArray("assignees");
+        pullRequest.getAssignees().stream().map(User::getLogin).sorted().forEach(assignees::add);
+        if (pullRequest.getMilestone() != null) {
+            result.put("milestone", pullRequest.getMilestone().getTitle());
+        }
+        // Both come from the GraphQL sync only; a webhook-only record has neither, and an absent key
+        // says so rather than a null a program might read as a value.
+        if (pullRequest.getMergeStateStatus() != null) {
+            result.put("merge_state_status", pullRequest.getMergeStateStatus().name());
+        }
+        if (pullRequest.getReviewDecision() != null) {
+            result.put("review_decision", pullRequest.getReviewDecision().name());
+        }
+        // What the checks said about this head; a state observed for an earlier head is not the
+        // current one and is left out, as is a head no sync or event has reported on.
+        if (pullRequest.getHeadCheckState() != null
+                && pullRequest.getHeadCheckSha() != null
+                && pullRequest.getHeadCheckSha().equals(pullRequest.getHeadRefOid())) {
+            result.put("head_checks", pullRequest.getHeadCheckState().name());
         }
 
         return result;
     }
 
+    private static void putInstant(ObjectNode node, String field, @Nullable Instant instant) {
+        if (instant != null) node.put(field, instant.toString());
+    }
+
     private CommentCapture loadComments(long pullRequestId) {
-        var comments = new ArrayList<>(reviewCommentRepository.findRecentByPullRequestIdWithAuthor(
-                pullRequestId, PageRequest.of(0, MAX_COMMENTS + 1)));
+        var comments = new ArrayList<>(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(
+                pullRequestId, HEPHAESTUS_MARKER, PageRequest.of(0, MAX_COMMENTS + 1)));
         if (comments.size() > MAX_COMMENTS + 1) {
             comments = new ArrayList<>(comments.subList(0, MAX_COMMENTS + 1));
         }
@@ -345,11 +369,29 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         var commentsArray = objectMapper.createArrayNode();
         for (var comment : comments) {
             var commentNode = objectMapper.createObjectNode();
+            // Thread and parent-comment IDs link these entries to review_threads.json and comments.json.
+            if (comment.getId() != null) {
+                commentNode.put("id", comment.getId());
+            }
+            if (comment.getThread() != null && comment.getThread().getId() != null) {
+                commentNode.put("thread", comment.getThread().getId());
+            }
+            if (comment.getInReplyTo() != null && comment.getInReplyTo().getId() != null) {
+                commentNode.put("in_reply_to", comment.getInReplyTo().getId());
+            }
             commentNode.put("path", comment.getPath());
             // line is a primitive int; a file-level comment has no anchor and reports 0. Omit the key then,
             // so an absent anchor reads as absent rather than as a literal line-0 anchor.
             if (comment.getLine() > 0) {
                 commentNode.put("line", comment.getLine());
+            }
+            // LEFT is a line of the base, RIGHT a line of the head; the provider's UNKNOWN says nothing.
+            PullRequestReviewComment.Side side = comment.getSide();
+            if (side != null && side != PullRequestReviewComment.Side.UNKNOWN) {
+                commentNode.put("side", side.name());
+            }
+            if (Boolean.TRUE.equals(comment.getOutdated())) {
+                commentNode.put("outdated", true);
             }
             commentNode.put("body", comment.getBody());
             if (comment.getCreatedAt() != null) {
@@ -357,6 +399,9 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             }
             if (comment.getAuthor() != null) {
                 commentNode.put("author", comment.getAuthor().getLogin());
+                if (comment.getAuthor().getType() == User.Type.BOT) {
+                    commentNode.put("bot", true);
+                }
             }
             commentsArray.add(commentNode);
         }
@@ -364,120 +409,4 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     }
 
     private record CommentCapture(List<PullRequestReviewComment> comments, boolean complete) {}
-
-    private void computeAndStoreDiff(
-            Map<String, byte[]> files, long repositoryId, JsonNode metadata, boolean headVerified) {
-        String headSha = metadata.has("commit_sha") ? metadata.get("commit_sha").asString() : null;
-        if (headSha == null || headSha.isBlank()) {
-            throw new JobPreparationException("Cannot compute diff because commit_sha is missing");
-        }
-        String targetBranch = requireText(metadata, "target_branch");
-        String sourceBranch = requireText(metadata, "source_branch");
-        Path repoPath = gitRepositoryManager.getRepositoryPath(repositoryId);
-
-        try {
-            String[] range = gitDiffOperations.resolveDiffRange(repoPath, targetBranch, sourceBranch, headSha);
-            if (range == null) {
-                String reason = headVerified
-                        ? "all resolution strategies failed"
-                        : "the pinned head commit is unavailable after repository refresh";
-                throw new JobPreparationException("Cannot compute diff because " + reason
-                        + ". headSha="
-                        + headSha
-                        + ", targetBranch="
-                        + targetBranch
-                        + ", sourceBranch="
-                        + sourceBranch
-                        + ", repoId="
-                        + repositoryId);
-            }
-            String diffStat = gitDiffOperations.diffStat(repoPath, range[0], range[1]);
-            String diff = gitDiffOperations.diff(repoPath, range[0], range[1]);
-            // A null diff denotes a failed read (unresolved object, I/O error, or the size cap), never an
-            // empty diff: storing zero bytes would report a change that was never read as AVAILABLE,
-            // EMPTY and COMPLETE.
-            if (diff == null) {
-                throw new JobPreparationException("Diff could not be read for range=" + range[0]
-                        + ".."
-                        + range[1]
-                        + ", headSha="
-                        + headSha
-                        + ", repoId="
-                        + repositoryId);
-            }
-            computeAndStoreDiffSummary(files, diff);
-            if (!diff.isBlank()) {
-                String annotatedDiff = GitDiffOperations.annotateDiffWithLineNumbers(diff);
-                files.put(OUTPUT_PREFIX + "diff.patch", annotatedDiff.getBytes(StandardCharsets.UTF_8));
-                if (diffStat != null) {
-                    files.put(OUTPUT_PREFIX + "diff_stat.txt", diffStat.getBytes(StandardCharsets.UTF_8));
-                }
-
-                int addedLines = 0;
-                int removedLines = 0;
-                for (String line : diff.split("\n", -1)) {
-                    if (line.startsWith("+") && !line.startsWith("+++")) addedLines++;
-                    else if (line.startsWith("-") && !line.startsWith("---")) removedLines++;
-                }
-                String strategyUsed = range[1].equals(headSha) ? "SHA-based" : "branch-based";
-                log.info(
-                        "Pre-computed diff: strategy={}, range={}..{}, +{}/-{} lines, {} bytes (annotated: {} bytes), headSha={}",
-                        strategyUsed,
-                        range[0],
-                        range[1],
-                        addedLines,
-                        removedLines,
-                        diff.length(),
-                        annotatedDiff.length(),
-                        headSha);
-            } else {
-                files.put(OUTPUT_PREFIX + "diff.patch", new byte[0]);
-                files.put(OUTPUT_PREFIX + "diff_stat.txt", new byte[0]);
-                log.info("Pre-computed empty diff: range={}..{}, headSha={}", range[0], range[1], headSha);
-            }
-        } catch (JobPreparationException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new JobPreparationException("Failed to pre-compute diff: " + e.getMessage(), e);
-        }
-    }
-
-    void computeAndStoreDiffSummary(Map<String, byte[]> files, String diff) {
-        byte[] rawDiff = diff.getBytes(StandardCharsets.UTF_8);
-        Patch patch = new Patch();
-        patch.parse(rawDiff, 0, rawDiff.length);
-        // JGit records recoverable oddities as warnings on the same list; only an ERROR means the
-        // headers cannot be trusted to name the files they claim.
-        boolean unreadable =
-                patch.getErrors().stream().anyMatch(error -> error.getSeverity() == FormatError.Severity.ERROR);
-        if (unreadable || (!diff.isBlank() && patch.getFiles().isEmpty())) {
-            throw new JobPreparationException("Diff could not be parsed for its summary");
-        }
-
-        StringBuilder summary = new StringBuilder("# Diff Summary\n\n");
-        summary.append("**")
-                .append(patch.getFiles().size())
-                .append(patch.getFiles().size() == 1 ? " file changed" : " files changed")
-                .append("**\n\n");
-        int ordinal = 0;
-        for (var file : patch.getFiles()) {
-            String path = file.getChangeType() == DiffEntry.ChangeType.DELETE ? file.getOldPath() : file.getNewPath();
-            int added = file.getHunks().stream()
-                    .flatMap(hunk -> hunk.toEditList().stream())
-                    .mapToInt(Edit::getLengthB)
-                    .sum();
-            summary.append("File ")
-                    .append(++ordinal)
-                    .append(": +")
-                    .append(added)
-                    .append(added == 1 ? " line\n\n    " : " lines\n\n    ")
-                    .append(objectMapper.writeValueAsString(path))
-                    .append("\n\n");
-        }
-
-        // Keep one line-annotated copy of the change for citation; this file is only its index, so it
-        // carries no [L<n>] markers to quote from.
-        summary.append("The change itself is in `diff.patch`, annotated with line numbers for citation.\n");
-        files.put(OUTPUT_PREFIX + "diff_summary.md", summary.toString().getBytes(StandardCharsets.UTF_8));
-    }
 }

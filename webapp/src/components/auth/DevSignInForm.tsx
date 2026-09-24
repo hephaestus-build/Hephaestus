@@ -3,39 +3,39 @@ import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { authClient } from "@/integrations/auth/auth-client";
+import { hasText } from "@/lib/text";
+import { authClient } from "@/runtime/auth/auth-client";
 
 /**
- * Passwordless dev/test sign-in form, rendered by {@link SignInButtons} only when the server advertises
- * the `dev` provider (the `hephaestus.auth.dev-login-enabled` flag — off and fail-closed in prod). Mints
- * a real admin session for a local account so local dev and live (Playwright) E2E can authenticate
- * without an OAuth IdP. Never present in a production build's discovery list.
+ * Passwordless dev/test sign-in, shown only when the server advertises the `dev` provider. It mints a
+ * real admin session, so local development and the live E2E suite can authenticate without an OAuth
+ * provider; the server decides whether it is offered, and does not offer it in production.
  */
 export function DevSignInForm({ returnTo }: { returnTo?: string }) {
 	const [username, setUsername] = useState("dev-admin");
 	const [pending, setPending] = useState(false);
-	const [error, setError] = useState<string>();
+	const [signInError, setSignInError] = useState<string>();
 
 	const submit = async () => {
 		const name = username.trim() || "dev-admin";
 		setPending(true);
-		setError(undefined);
+		setSignInError(undefined);
 		try {
 			await authClient.devLogin(name, true, returnTo);
-		} catch (e) {
-			setError(e instanceof Error ? e.message : "Dev sign-in failed");
+		} catch (error) {
+			setSignInError(error instanceof Error ? error.message : "Dev sign-in failed");
 			setPending(false);
 		}
 	};
 
 	return (
-		<div className="flex flex-col gap-2 rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 p-3">
+		<div className="flex flex-col gap-2 rounded-md border border-dashed border-warning/50 bg-warning/5 p-3">
 			<p className="text-xs font-medium text-muted-foreground">Dev sign-in (non-production)</p>
-			{/* aria-live so the dev-form error is announced, mirroring LoginCard's OAuth-error region. */}
+			{/* aria-live: the error arrives after the button is pressed, so nothing announces it. */}
 			<div aria-live="assertive" aria-atomic="true">
-				{error ? (
+				{hasText(signInError) ? (
 					<Alert variant="destructive">
-						<AlertDescription>{error}</AlertDescription>
+						<AlertDescription>{signInError}</AlertDescription>
 					</Alert>
 				) : null}
 			</div>

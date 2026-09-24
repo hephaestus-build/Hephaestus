@@ -1,6 +1,7 @@
 import { ExternalLinkIcon } from "lucide-react";
 import type { ComponentType } from "react";
 
+import { cn } from "cn";
 import type { ReviewedWorkRef, ReviewRunTarget } from "@/api/types.gen";
 import { GithubIcon, GitlabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 import {
@@ -12,7 +13,7 @@ import {
 	isKnownArtifactKind,
 	type KnownArtifactKind,
 } from "@/lib/artifact-kinds";
-import { cn } from "@/lib/utils";
+import { hasText } from "@/lib/text";
 
 /**
  * URL-facing spelling of a kind: the wire id carries a dot, which reads badly in a path segment, so
@@ -57,7 +58,7 @@ export function reviewArtifactIcon(kind: string, provider?: Provider): ArtifactG
 
 /** The repository and the item, when a repository is recorded: `ls1intum/Hephaestus · #1423`. */
 function qualifiedLabel(artifact: ReviewedWorkRef): string {
-	return [artifact.repositoryName, artifact.label].filter(Boolean).join(" · ");
+	return [artifact.repositoryName, artifact.label].filter(hasText).join(" · ");
 }
 
 export function reviewArtifactScopeLabel(
@@ -94,7 +95,7 @@ export function ReviewArtifactLabel({ artifact, provider, className }: ReviewArt
 	}
 	const Icon = reviewArtifactIcon(artifact.kind, provider);
 	return (
-		<span className={cn("inline-flex min-w-0 max-w-full items-center gap-1.5", className)}>
+		<span className={cn("inline-flex max-w-full min-w-0 items-center gap-1.5", className)}>
 			<Icon className="size-3.5 shrink-0" aria-hidden />
 			<span className="min-w-0 break-words">{qualifiedLabel(artifact)}</span>
 		</span>
@@ -106,7 +107,7 @@ export function ReviewArtifactLabel({ artifact, provider, className }: ReviewArt
  * not the link's name. A caller that wants the work's title renders it outside.
  */
 export function ReviewArtifactLink({ artifact, provider, className }: ReviewArtifactProps) {
-	if (!artifact?.url) {
+	if (!hasText(artifact?.url)) {
 		return <ReviewArtifactLabel artifact={artifact} provider={provider} className={className} />;
 	}
 	const Icon = reviewArtifactIcon(artifact.kind, provider);
@@ -116,7 +117,7 @@ export function ReviewArtifactLink({ artifact, provider, className }: ReviewArti
 			target="_blank"
 			rel="noopener noreferrer"
 			className={cn(
-				"group relative inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm",
+				"group relative inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-sm",
 				className,
 			)}
 		>

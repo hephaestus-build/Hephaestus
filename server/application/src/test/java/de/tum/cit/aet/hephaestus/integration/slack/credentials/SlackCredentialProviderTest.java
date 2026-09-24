@@ -33,7 +33,7 @@ class SlackCredentialProviderTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        converter = new CredentialBundleConverter("0123456789abcdef0123456789abcdef", "dev");
+        converter = new CredentialBundleConverter("0123456789abcdef0123456789abcdef", false);
         provider = new SlackCredentialProvider(connectionService, CredentialReaders.forTests(converter));
     }
 

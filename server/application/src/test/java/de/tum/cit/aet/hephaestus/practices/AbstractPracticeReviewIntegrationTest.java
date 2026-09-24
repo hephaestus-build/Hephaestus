@@ -104,7 +104,7 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
                 "pr_url",
                 "https://github.com/acme/api/pull/" + number)));
         job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
-        job.setEvidenceSnapshot(OBJECT_MAPPER.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.0.0"))));
+        job.setEvidenceSnapshot(OBJECT_MAPPER.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.2.0"))));
         if (completedAt != null) {
             job.setCompletedAt(completedAt);
         }
@@ -148,7 +148,8 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
                 artifactId,
                 about.getId(),
                 "Observation " + id,
-                presence,
+                assessment == null ? presence : "ASSESSED",
+                assessment == null ? null : presence,
                 assessment,
                 severity,
                 evidenceJson,

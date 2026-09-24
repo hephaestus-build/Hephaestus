@@ -1,6 +1,7 @@
 import { HttpResponse, http } from "msw";
 
 import type { ReviewFeedback, ReviewObservation } from "@/api/types.gen";
+import { hasText } from "@/lib/text";
 
 import {
 	feedbackDetail,
@@ -12,7 +13,7 @@ import {
 	reviewRuns,
 	workspaceMembers,
 	workspacePractices,
-} from "./story-mock-data";
+} from "./fixtures";
 
 // These handlers filter, sort and paginate the fixture the way the server does. A mock that answers
 // every URL with the same array leaves a story that clicks a facet testing nothing.
@@ -45,17 +46,27 @@ function withinScope(
 	const agentJobId = single(url, "agentJobId");
 	const artifactKind = single(url, "artifactKind");
 	const artifactId = single(url, "artifactId");
-	if (agentJobId && row.agentJobId !== agentJobId) return false;
-	if (artifactKind && row.artifact?.kind !== artifactKind) return false;
-	if (artifactId && row.artifact?.id !== artifactId) return false;
+	if (hasText(agentJobId) && row.agentJobId !== agentJobId) {
+		return false;
+	}
+	if (hasText(artifactKind) && row.artifact?.kind !== artifactKind) {
+		return false;
+	}
+	if (hasText(artifactId) && row.artifact?.id !== artifactId) {
+		return false;
+	}
 	return true;
 }
 
 function withinDates(url: URL, at: Date) {
 	const from = single(url, "from");
 	const to = single(url, "to");
-	if (from && at < new Date(from)) return false;
-	if (to && at >= new Date(to)) return false;
+	if (hasText(from) && at < new Date(from)) {
+		return false;
+	}
+	if (hasText(to) && at >= new Date(to)) {
+		return false;
+	}
 	return true;
 }
 
@@ -81,10 +92,11 @@ function filterObservations(rows: ReviewObservation[], url: URL) {
 			withinDates(url, row.observedAt) &&
 			matches(values(url, "groupSlug"), row.group?.slug) &&
 			matches(values(url, "practiceSlug"), row.practiceSlug) &&
+			matches(values(url, "assessmentStatus"), row.assessmentStatus) &&
 			matches(values(url, "presence"), row.presence) &&
 			matches(values(url, "assessment"), row.assessment) &&
 			matches(values(url, "severity"), row.severity) &&
-			(!subjectUserId || String(row.subject?.id) === subjectUserId),
+			(!hasText(subjectUserId) || String(row.subject?.id) === subjectUserId),
 	);
 }
 
@@ -97,7 +109,7 @@ function filterFeedback(rows: ReviewFeedback[], url: URL) {
 			matches(values(url, "deliveryState"), row.deliveryState) &&
 			matches(values(url, "channel"), row.channel) &&
 			matches(values(url, "suppressionReason"), row.suppressionReason) &&
-			(!recipientUserId || String(row.recipient?.id) === recipientUserId),
+			(!hasText(recipientUserId) || String(row.recipient?.id) === recipientUserId),
 	);
 }
 
@@ -109,12 +121,19 @@ function filterFeedback(rows: ReviewFeedback[], url: URL) {
 const ACTIONABILITY_RANK: Record<string, number> = { CRITICAL: 0, MAJOR: 1, MINOR: 2, INFO: 3 };
 
 function actionability(row: ReviewObservation): number {
-	if (row.assessment === "BAD") return ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4;
-	return row.assessment === "GOOD" ? 5 : 6;
+	if (row.assessmentStatus !== "ASSESSED" || !row.presence || !row.assessment) {
+		return 6;
+	}
+	if ((row.presence === "PRESENT") !== (row.assessment === "GOOD")) {
+		return ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4;
+	}
+	return 5;
 }
 
 function sortObservations(rows: ReviewObservation[], url: URL) {
-	if (single(url, "sort") !== "ACTIONABILITY") return rows;
+	if (single(url, "sort") !== "ACTIONABILITY") {
+		return rows;
+	}
 	// Ties are newest first, as on the server.
 	return [...rows].sort(
 		(a, b) =>
@@ -148,7 +167,7 @@ export function reviewHandlers({
 	return [
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/observations", ({ request }) => {
 			const url = new URL(request.url);
-			if (requireObservationSort && single(url, "sort") !== requireObservationSort) {
+			if (hasText(requireObservationSort) && single(url, "sort") !== requireObservationSort) {
 				return HttpResponse.json(
 					{ detail: `Expected sort=${requireObservationSort}` },
 					{ status: 400 },
@@ -173,7 +192,7 @@ export function reviewHandlers({
 				// Both filters, intersected, exactly as the endpoint applies them. Honouring only
 				// `status` here would let a story "prove" a date range that the screen never sent.
 				reviewRuns.filter(
-					(run) => (!status || run.status === status) && withinDates(url, run.createdAt),
+					(run) => (!hasText(status) || run.status === status) && withinDates(url, run.createdAt),
 				),
 				url,
 			);

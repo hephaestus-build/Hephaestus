@@ -6,7 +6,6 @@ import { EvidenceFileBlock } from "./EvidenceFileBlock";
 const meta = {
 	component: EvidenceFileBlock,
 	tags: ["autodocs"],
-	title: "Profile/EvidenceFileBlock",
 	parameters: {
 		docs: {
 			description: {
@@ -75,7 +74,7 @@ export const AlwaysQuoted: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/addColumn/)).toBeVisible();
+		await expect(canvas.getByText(/addColumn/u)).toBeVisible();
 		await expect(canvas.queryByRole("button")).toBeNull();
 	},
 };
@@ -202,7 +201,9 @@ export const OneChangedLine: Story = {
 		// The file and its line are named once, in the caption, and neither side word is up there.
 		await expect(canvas.getAllByText("line 4")).toHaveLength(1);
 		const caption = canvas.getByText("pagination.ts").closest("figcaption");
-		if (!caption) throw new Error("The path is the block's caption");
+		if (!caption) {
+			throw new Error("The path is the block's caption");
+		}
 		await expect(within(caption).queryByText("Before")).toBeNull();
 		await expect(within(caption).queryByText("After")).toBeNull();
 
@@ -213,7 +214,9 @@ export const OneChangedLine: Story = {
 		await expect(added).toHaveClass("bg-success/10");
 		const removedRow = removed.closest<HTMLElement>("span.grid");
 		const addedRow = added.closest<HTMLElement>("span.grid");
-		if (!removedRow || !addedRow) throw new Error("Every quoted line is a row of the quote");
+		if (!removedRow || !addedRow) {
+			throw new Error("Every quoted line is a row of the quote");
+		}
 		await expect(within(removedRow).getByText("Before")).toBeVisible();
 		await expect(within(addedRow).getByText("After")).toBeVisible();
 	},
@@ -275,5 +278,28 @@ export const FoldedObjectSource: Story = {
 		await expect(canvas.getByText('"body" : ""')).toBeVisible();
 		// An object locator points into the runner's own file, so no line number is shown for either.
 		await expect(canvas.queryByText("line 4")).toBeNull();
+	},
+};
+
+/**
+ * A quote from the repository's history rather than the reviewed diff: the caption also names the
+ * commit it was verified against, since the lines may no longer read so at the reviewed one.
+ */
+export const HistoricalSource: Story = {
+	args: {
+		location: {
+			path: "src/service.ts",
+			startLine: 12,
+			endLine: 12,
+			sourceKind: "scm.repository.tree",
+			revision: "b".repeat(40),
+			snippet: "return previousValue;",
+			redacted: false,
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("service.ts")).toBeVisible();
+		await expect(canvas.getByText("line 12")).toBeVisible();
+		await expect(canvas.getByText("b".repeat(40))).toBeVisible();
 	},
 };

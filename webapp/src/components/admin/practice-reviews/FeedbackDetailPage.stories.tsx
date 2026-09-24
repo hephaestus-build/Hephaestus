@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, within } from "storybook/test";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { FeedbackDetailPage } from "./FeedbackDetailPage";
 import {
 	feedbackDetail,
 	longFeedbackDetail,
 	reviewFeedbackDetail,
 	workspacePractices,
-} from "./story-mock-data";
+} from "./fixtures";
 
 const partiallyDeliveredFeedback = {
 	...feedbackDetail("99999999-6666-6666-6666-666666666666"),
@@ -46,7 +46,6 @@ const rejectedFeedback = {
 };
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Feedback details",
 	component: FeedbackDetailPage,
 	parameters: {
 		layout: "padded",
@@ -88,7 +87,7 @@ export const Delivered: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(await canvas.findAllByText("Delivered")).toHaveLength(1);
-		canvas.getByText(/As an inline note on the work/);
+		canvas.getByText(/As an inline note on the work/u);
 		canvas.getByText("server/application/src/main/resources/application.yml:118–120");
 	},
 };
@@ -107,11 +106,13 @@ export const Rejected: Story = {
 	args: { state: { status: "ready", feedback: rejectedFeedback } },
 	play: async ({ canvas }) => {
 		const audit = canvas.getByText("Human decision").parentElement;
-		if (!audit) throw new Error("Human decision did not render in its audit card");
+		if (!audit) {
+			throw new Error("Human decision did not render in its audit card");
+		}
 		await expect(within(audit).getByText("Rejected")).toBeVisible();
 		within(audit).getByText("Missing important context");
 		within(audit).getByText("The review did not account for the provider's retry contract.");
-		await expect(canvas.queryByText(/comments confirmed delivered/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/comments confirmed delivered/u)).not.toBeInTheDocument();
 	},
 };
 
@@ -126,9 +127,9 @@ export const LongFeedback: Story = {
 	args: { state: { status: "ready", feedback: longFeedbackDetail } },
 	parameters: { chromatic: { viewports: [320, 1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findByText(/2 issues to tighten in this change/);
-		canvas.getByText(/without HTTP\./);
-		canvas.getByText(/repository\.findVisible/);
+		await canvas.findByText(/2 issues to tighten in this change/u);
+		canvas.getByText(/without HTTP\./u);
+		canvas.getByText(/repository\.findVisible/u);
 		canvas.getByRole("link", {
 			name: "A cache miss and a permission failure come back as the same 404",
 		});
@@ -147,7 +148,7 @@ export const PreparedForConversation: Story = {
 	},
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findAllByText(/for conversation/);
+		await canvas.findAllByText(/for conversation/u);
 		canvas.getByText("#engineering");
 	},
 };
@@ -157,7 +158,7 @@ export const RenderedAndSource: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
 		await canvas.findByRole("link", { name: "See the feedback this replaced" });
-		await canvas.findByText(/2 issues to tighten in this change/);
+		await canvas.findByText(/2 issues to tighten in this change/u);
 		await userEvent.click(canvas.getByRole("tab", { name: "Source" }));
 		await expect(canvas.getByRole("tabpanel", { name: "Source" }).textContent).toContain("```java");
 		await userEvent.click(canvas.getByRole("tab", { name: "Rendered" }));
@@ -171,8 +172,10 @@ export const PracticeSaysWhatItIs: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
 	play: async ({ canvas, userEvent }) => {
 		const productLanguage = workspacePractices.find((p) => p.slug === "product-language");
-		if (!productLanguage) throw new Error("The practice fixtures no longer cover product-language");
-		await userEvent.hover(await canvas.findByRole("link", { name: /Product language/ }));
+		if (!productLanguage) {
+			throw new Error("The practice fixtures no longer cover product-language");
+		}
+		await userEvent.hover(await canvas.findByRole("link", { name: /Product language/u }));
 		await screen.findByText(productLanguage.whyItMatters ?? "");
 	},
 };

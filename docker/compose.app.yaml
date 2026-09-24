@@ -2,14 +2,16 @@
 # rate-limits a review asked for by hand, while the worker composes and delivers what a review found.
 # Anchored rather than repeated because forwarding a key to only one of them is silent — the role that
 # does not receive it falls back to the built-in default and the operator's setting does nothing.
-x-practice-review-env: &practice-review-env
-  # Auto-trigger is a per-workspace setting; this is the instance gate above it.
+x-practice-review-env:
+  &practice-review-env # Auto-trigger is a per-workspace setting; this is the instance gate above it.
   PRACTICE_REVIEW_DELIVER_TO_MERGED: ${PRACTICE_REVIEW_DELIVER_TO_MERGED:-false}
   PRACTICE_REVIEW_COOLDOWN_MINUTES: ${PRACTICE_REVIEW_COOLDOWN_MINUTES:-15}
   # Feature visibility, separate from the review gate above.
   PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR: ${PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR:-5}
   PRACTICE_REVIEW_PROGRESS_FOOTER: ${PRACTICE_REVIEW_PROGRESS_FOOTER:-false}
   PRACTICE_REVIEW_REACTION_SUPPRESSION: ${PRACTICE_REVIEW_REACTION_SUPPRESSION:-false}
+  # The sampling temperature of every review model call; unset leaves the model's own default.
+  PRACTICE_REVIEW_SAMPLING_TEMPERATURE: ${PRACTICE_REVIEW_SAMPLING_TEMPERATURE:-}
   # Spend guardrails for reviewing past work. A campaign is priced before it runs; these bound what
   # an administrator can confirm in one.
   PRACTICE_REVIEW_BACKFILL_MAX_WINDOW: ${PRACTICE_REVIEW_BACKFILL_MAX_WINDOW:-400d}
@@ -31,6 +33,20 @@ x-scm-access-env: &scm-access-env
   GH_APP_PRIVATE_KEY_LOCATION: ${GH_APP_PRIVATE_KEY_LOCATION:-}
   GH_AUTH_TOKEN: ${GH_AUTH_TOKEN}
   GIT_CHECKOUT_ENABLED: ${GIT_CHECKOUT_ENABLED:-false}
+  GIT_MAX_CONCURRENT_INGESTIONS: ${GIT_MAX_CONCURRENT_INGESTIONS:-2}
+  GIT_MAX_SNAPSHOT_BYTES: ${GIT_MAX_SNAPSHOT_BYTES:-8589934592}
+
+x-observability-env: &observability-env
+  TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.0}
+  TRACING_OTLP_ENABLED: ${TRACING_OTLP_ENABLED:-false}
+  TRACING_OTLP_ENDPOINT: ${TRACING_OTLP_ENDPOINT:-http://localhost:4318/v1/traces}
+
+# What the verified release lock says this container runs, reported back by every role under
+# `release` in /actuator/info (webhook-server spells the same two lines in compose.core.yaml). The
+# version itself travels as APP_VERSION above; an empty value is a deployment without a lock.
+x-release-identity-env: &release-identity-env
+  HEPHAESTUS_RELEASE_COMMIT: ${HEPHAESTUS_RELEASE_COMMIT:-}
+  HEPHAESTUS_IMAGE_APPLICATION_SERVER: ${HEPHAESTUS_IMAGE_APPLICATION_SERVER}
 
 services:
   webapp:
@@ -121,9 +137,10 @@ services:
     command:
       - sh
       - -c
-      - "chown -Rh 1002:1001 /data/git-repos && chmod 0755 /data/git-repos"
+      - "chown -Rh 1002:1001 /data/git-repos /data/worker-git-repos && chmod 0755 /data/git-repos /data/worker-git-repos"
     volumes:
       - git-repos:/data/git-repos
+      - worker-git-repos:/data/worker-git-repos
     restart: "no"
     network_mode: none
     logging:
@@ -131,7 +148,6 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
-
 
   application-server:
     image: "${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
@@ -157,6 +173,9 @@ services:
       # + docker/compose.core.yaml). Disable it here so the receiver beans don't load
       # in application-server (saves RAM; prevents accidental localhost traffic).
       HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED: "false"
+      # Names the organisation running the optional research study, and its presence is what makes
+      # first-login setup ask about it at all. Unset means this deployment runs none.
+      HEPHAESTUS_RESEARCH_ORGANIZATION: ${HEPHAESTUS_RESEARCH_ORGANIZATION:-}
       # Internal, trusted docker-network DB: skip TLS. pgJDBC doesn't validate Postgres' self-signed cert
       # so it adds no authentication, only the SSL handshake's NIO direct buffers that OOM the JVM off-heap
       # default; confidentiality is fine to drop here (creds already sit in plaintext compose env).
@@ -202,6 +221,22 @@ services:
       LEADERBOARD_SCHEDULE_DAY: ${LEADERBOARD_SCHEDULE_DAY:-2}
       LEADERBOARD_SCHEDULE_TIME: ${LEADERBOARD_SCHEDULE_TIME:-9}
       SENTRY_DSN: ${SENTRY_DSN}
+      # Email: off until SPRING_MAIL_HOST is set. Server role only — notifications are sent here.
+      # Boot's own property names, forwarded as-is (docs/admin/production-setup.mdx § Email).
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_PROTOCOL: ${SPRING_MAIL_PROTOCOL:-smtp}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE:-false}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:-true}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:-true}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED:-true}
+      HEPHAESTUS_EMAIL_FROM: ${HEPHAESTUS_EMAIL_FROM:-}
+      HEPHAESTUS_EMAIL_FROM_NAME: ${HEPHAESTUS_EMAIL_FROM_NAME:-Hephaestus}
+      HEPHAESTUS_EMAIL_RATE_LIMIT_DAILY_CAPACITY: ${HEPHAESTUS_EMAIL_RATE_LIMIT_DAILY_CAPACITY:-250}
+      HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY: ${HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY:-200}
+      HEPHAESTUS_EMAIL_REPLY_TO: ${HEPHAESTUS_EMAIL_REPLY_TO:-}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:?Set WEBHOOK_SECRET to at least 32 printable ASCII characters}
       # WEBHOOK_EXTERNAL_URL intentionally unset: GitLab auto-registration defaults it to
       # APPLICATION_HOST_URL (same origin here), then appends /webhooks/gitlab itself.
@@ -252,7 +287,7 @@ services:
       SANDBOX_DOCKER_TLS_VERIFY: ${SANDBOX_DOCKER_TLS_VERIFY:-false}
       SANDBOX_DOCKER_CERT_PATH: ${SANDBOX_DOCKER_CERT_PATH:-}
       SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID: ${SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID:-}
-      SANDBOX_DOCKER_CLI: ${SANDBOX_DOCKER_CLI:-docker}
+      SANDBOX_DOCKER_OWNER: ${SANDBOX_DOCKER_OWNER:-default}
       SANDBOX_API_PORT: ${SANDBOX_API_PORT:-8081}
       SANDBOX_API_MAX_REQUEST_BYTES: ${SANDBOX_API_MAX_REQUEST_BYTES:-4194304}
       SANDBOX_API_REQUESTS_PER_MINUTE: ${SANDBOX_API_REQUESTS_PER_MINUTE:-120}
@@ -264,7 +299,6 @@ services:
       # stays required elsewhere on this pod for webhook-driven sync consumption (NATS_ENABLED above).
       AGENT_ENABLED: ${AGENT_ENABLED:-false}
       HEPHAESTUS_FABRIC_ROOT: /data/git-repos
-      HEPHAESTUS_FABRIC_GC_RETENTION_DAYS: ${HEPHAESTUS_FABRIC_GC_RETENTION_DAYS:-30}
       # Instance-wide LLM knobs. Providers, models, prices and credentials are NOT here — they are
       # runtime catalog data an instance admin registers in the UI. These three are the deploy-time
       # facts that cannot be.
@@ -282,7 +316,9 @@ services:
       # a loopback provider URL may be SAVED, the worker's proxy decides whether it may be DIALLED.
       # Leave false in production.
       HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK: ${HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK:-false}
-      <<: [*practice-review-env, *scm-access-env]
+      <<: [*practice-review-env, *scm-access-env, *observability-env, *release-identity-env]
+      # Only the server role asks GitHub for newer releases; set false on an air-gapped host.
+      HEPHAESTUS_RELEASE_CHECK_ENABLED: ${HEPHAESTUS_RELEASE_CHECK_ENABLED:-true}
       GITLAB_WORKSPACE_CREATION: ${GITLAB_WORKSPACE_CREATION:-false}
       # LLM providers are registered at runtime (Instance admin → AI models), not via env vars —
       # the proxy reads each connection's base URL/auth from the catalog per request.
@@ -344,7 +380,7 @@ services:
       - "traefik.http.services.https-application-server.loadbalancer.healthcheck.interval=10s"
       - "traefik.http.services.https-application-server.loadbalancer.healthcheck.timeout=3s"
     # The distroless image has no shell for a wget probe; the probe is the static thc binary the
-    # health-checker buildpack adds at /workspace/health-check (server/application/pom.xml).
+    # health-checker buildpack adds at /workspace/health-check (server/application/project.toml).
     healthcheck:
       test: ["CMD", "/workspace/health-check"]
       interval: 15s
@@ -373,7 +409,7 @@ services:
       JAVA_TOOL_OPTIONS: "-XX:MaxDirectMemorySize=${APP_MAX_DIRECT_MEMORY:-128M}"
       APP_VERSION: ${IMAGE_TAG}
       SPRING_PROFILES_ACTIVE: prod,worker
-      <<: [*practice-review-env, *scm-access-env]
+      <<: [*practice-review-env, *scm-access-env, *observability-env, *release-identity-env]
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES:-}
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
       # Valueless, as on application-server above; this is the pod that actually opens sandboxes.
@@ -384,12 +420,11 @@ services:
       # all (it runs no sync/webhook role), so no NATS_SERVER is set here.
       AGENT_ENABLED: ${AGENT_ENABLED:-false}
       HEPHAESTUS_FABRIC_ROOT: /data/git-repos
-      HEPHAESTUS_FABRIC_GC_RETENTION_DAYS: ${HEPHAESTUS_FABRIC_GC_RETENTION_DAYS:-30}
       SANDBOX_DOCKER_HOST: ${SANDBOX_DOCKER_HOST:-unix:///var/run/docker.sock}
       SANDBOX_DOCKER_TLS_VERIFY: ${SANDBOX_DOCKER_TLS_VERIFY:-false}
       SANDBOX_DOCKER_CERT_PATH: ${SANDBOX_DOCKER_CERT_PATH:-}
       SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID: ${SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID:-}
-      SANDBOX_DOCKER_CLI: ${SANDBOX_DOCKER_CLI:-docker}
+      SANDBOX_DOCKER_OWNER: ${SANDBOX_DOCKER_OWNER:-default}
       SANDBOX_API_PORT: ${SANDBOX_API_PORT:-8081}
       SANDBOX_API_MAX_REQUEST_BYTES: ${SANDBOX_API_MAX_REQUEST_BYTES:-4194304}
       SANDBOX_API_REQUESTS_PER_MINUTE: ${SANDBOX_API_REQUESTS_PER_MINUTE:-120}
@@ -457,7 +492,7 @@ services:
       - "${DOCKER_GROUP_ID:-999}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - git-repos:/data/git-repos
+      - worker-git-repos:/data/git-repos
     networks:
       - shared-network
     # 5m drain budget + 1m headroom; matches spring.lifecycle.timeout-per-shutdown-phase.
@@ -515,3 +550,4 @@ networks:
 volumes:
   postgresql-data:
   git-repos:
+  worker-git-repos:

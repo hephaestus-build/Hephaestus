@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.ChatSignals;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.dto.BindPracticeGroupRequestDTO;
@@ -178,6 +179,38 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
     @Test
     @WithAdminUser
+    void workspaceAdminCanOpenTheReleaseInbox() {
+        ensureAdminMembership(workspace);
+
+        webTestClient
+                .get()
+                .uri(BASE_URI + "/releases", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .json("[]");
+    }
+
+    @Test
+    @WithMentorUser
+    void workspaceMentorCannotOpenTheReleaseInbox() {
+        User member = persistUser("mentor");
+        ensureWorkspaceMembership(workspace, member, WorkspaceMembership.WorkspaceRole.MEMBER);
+
+        webTestClient
+                .get()
+                .uri(BASE_URI + "/releases", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    @WithAdminUser
     void workspaceAdminCanReadEvidenceAuthoringOptions() {
         ensureAdminMembership(workspace);
 
@@ -192,11 +225,16 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 // Selected by kind rather than by position: the list is whatever the registered domains
                 // declare reviewable, so an index would pin the wrong thing the first time a domain is added.
                 .jsonPath("$.workTypes[*].artifactKind")
-                .value(containsInAnyOrder("scm.pull_request", "scm.issue", "chat.conversation_thread", "docs.document"))
+                .value((java.util.List<String> value) -> org.hamcrest.MatcherAssert.assertThat(
+                        value,
+                        containsInAnyOrder(
+                                "scm.pull_request", "scm.issue", "chat.conversation_thread", "docs.document")))
                 .jsonPath("$.workTypes[?(@.artifactKind == 'scm.pull_request')].recommendedNeeds[1].sourceKind")
-                .value(contains("scm.pull-request.diff"))
+                .value((java.util.List<String> value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, contains("scm.pull-request.diff")))
                 .jsonPath("$.workTypes[?(@.artifactKind == 'scm.pull_request')].allowedSources[0].displayName")
-                .value(contains("Pull request details"))
+                .value((java.util.List<String> value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, contains("Pull request details")))
                 .jsonPath("$.workTypes[?(@.artifactKind == 'scm.pull_request')].allowedSources[0].description")
                 .exists();
     }
@@ -300,7 +338,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -311,7 +350,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .uri(BASE_URI, workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 
@@ -361,7 +401,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -393,7 +434,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .uri(BASE_URI + "/{slug}", workspace.getWorkspaceSlug(), "any-slug")
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 
@@ -562,7 +604,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(inGroup(validCreateRequest("scoped-practice"), "foreign-group"))
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
 
             assertThat(practiceRepository.findByWorkspaceIdAndSlug(workspace.getId(), "scoped-practice"))
                     .isEmpty();
@@ -750,7 +793,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .isCreated()
                     .expectBody()
                     .jsonPath("$.bindings[0].signals")
-                    .value(contains(ScmSignals.PULL_REQUEST_OPENED.value()));
+                    .value((java.util.List<String> value) -> org.hamcrest.MatcherAssert.assertThat(
+                            value, contains(ScmSignals.PULL_REQUEST_OPENED.value())));
         }
 
         @Test
@@ -865,7 +909,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -892,7 +937,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -909,7 +955,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(validCreateRequest("forbidden-practice"))
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -922,7 +969,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(validCreateRequest("anon-practice"))
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
     }
 
@@ -932,14 +980,21 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
         @Test
         @WithAdminUser
-        @DisplayName("partially updates practice (only name)")
+        @DisplayName("updates only the name and keeps the gate and reviewer on reload")
         void shouldPartiallyUpdate() {
             ensureAdminMembership(workspace);
             Practice practice = persistPractice("update-me", "Original Name", true);
             practice.setGroup(persistGroup("existing-group"));
+            PracticeBinding binding = practice.getBindings().getFirst();
+            PracticeSubject gate = new PracticeSubject(
+                    "the change has no Swift code",
+                    List.of(PracticeSubjectClause.changedPathMatches(List.of("**/*.swift"))));
+            practice.setBindings(List.of(new PracticeBinding(
+                    binding.signals(), binding.needs(), binding.onDrafts(), ActorRole.REVIEWER, gate)));
             practiceRepository.save(practice);
 
-            var request = new UpdatePracticeRequestDTO("Updated Name", null, null, null, null, null, null, null, null);
+            var request =
+                    new UpdatePracticeRequestDTO("Updated Name", null, null, null, null, null, null, null, null, null);
 
             PracticeDTO result = webTestClient
                     .patch()
@@ -960,6 +1015,20 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             assertThat(result.criteria()).isEqualTo("Detect prompt for update-me");
             assertThat(result.autonomy().effective()).isEqualTo(PracticeAutonomy.AUTOMATIC);
             assertThat(result.groupSlug()).isEqualTo("existing-group");
+
+            PracticeDTO reloaded = webTestClient
+                    .get()
+                    .uri(BASE_URI + "/{slug}", workspace.getWorkspaceSlug(), "update-me")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(PracticeDTO.class)
+                    .returnResult()
+                    .getResponseBody();
+            assertThat(reloaded).isNotNull();
+            assertThat(reloaded.bindings().getFirst().appliesWhen()).isEqualTo(gate);
+            assertThat(reloaded.bindings().getFirst().subject()).isEqualTo(ActorRole.REVIEWER);
         }
 
         @Test
@@ -970,6 +1039,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             var request = new UpdatePracticeRequestDTO(
                     null,
                     PracticeTestEvidence.bindings(ScmSignals.ISSUE_OPENED),
+                    null,
                     null,
                     null,
                     null,
@@ -1002,7 +1072,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             ensureAdminMembership(workspace);
             Practice practice = persistPractice("remove-automated-review", "Remove assessment", true);
             PracticeAutomatedReviewPolicy requirements = withoutAutomatedReview(practice.getAutomatedReviewPolicy());
-            var request = new UpdatePracticeRequestDTO(null, null, null, null, requirements, null, null, null, null);
+            var request =
+                    new UpdatePracticeRequestDTO(null, null, null, null, requirements, null, null, null, null, null);
 
             PracticeDTO result = webTestClient
                     .patch()
@@ -1049,6 +1120,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     null,
                     new BindPracticeGroupRequestDTO("target-group"),
+                    null,
                     null);
 
             PracticeDTO result = webTestClient
@@ -1103,6 +1175,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     null,
                     new BindPracticeGroupRequestDTO("missing-group"),
+                    null,
                     null);
 
             webTestClient
@@ -1113,7 +1186,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
 
             Practice persisted = practiceRepository
                     .findByWorkspaceIdAndSlug(workspace.getId(), "atomic-update")
@@ -1202,7 +1276,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         void shouldReturn404() {
             ensureAdminMembership(workspace);
 
-            var request = new UpdatePracticeRequestDTO("Name", null, null, null, null, null, null, null, null);
+            var request = new UpdatePracticeRequestDTO("Name", null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -1212,7 +1286,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -1221,7 +1296,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             ensureAdminMembership(workspace);
             persistPractice("bad-update", "Name", true);
 
-            var request = new UpdatePracticeRequestDTO("AB", null, null, null, null, null, null, null, null);
+            var request = new UpdatePracticeRequestDTO("AB", null, null, null, null, null, null, null, null, null);
 
             ProblemDetail problem = webTestClient
                     .patch()
@@ -1250,7 +1325,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             ensureAdminMembership(workspace);
             persistPractice("ws-name", "Name", true);
 
-            var request = new UpdatePracticeRequestDTO("   ", null, null, null, null, null, null, null, null);
+            var request = new UpdatePracticeRequestDTO("   ", null, null, null, null, null, null, null, null, null);
 
             ProblemDetail problem = webTestClient
                     .patch()
@@ -1279,7 +1354,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             ensureAdminMembership(workspace);
             persistPractice("ws-criteria", "Name", true);
 
-            var request = new UpdatePracticeRequestDTO(null, null, "   ", null, null, null, null, null, null);
+            var request = new UpdatePracticeRequestDTO(null, null, "   ", null, null, null, null, null, null, null);
 
             ProblemDetail problem = webTestClient
                     .patch()
@@ -1320,6 +1395,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     null,
                     null,
+                    null,
                     null);
 
             webTestClient
@@ -1330,7 +1406,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -1340,7 +1417,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             ensureWorkspaceMembership(workspace, memberUser, WorkspaceMembership.WorkspaceRole.MEMBER);
             persistPractice("forbidden-update", "Name", true);
 
-            var request = new UpdatePracticeRequestDTO("New Name", null, null, null, null, null, null, null, null);
+            var request =
+                    new UpdatePracticeRequestDTO("New Name", null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -1350,13 +1428,14 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
         @DisplayName("returns 401 when not logged in")
         void shouldReturnUnauthorized() {
-            var request = new UpdatePracticeRequestDTO("Name", null, null, null, null, null, null, null, null);
+            var request = new UpdatePracticeRequestDTO("Name", null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -1366,7 +1445,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 
@@ -1521,7 +1601,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
             place("protected", new PlacePracticeRequestDTO(null, 0))
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -1534,11 +1615,16 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
             place("alpha", new PlacePracticeRequestDTO("group", 2))
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
             place("alpha", new PlacePracticeRequestDTO("missing", 0))
                     .expectStatus()
-                    .isNotFound();
-            place("alpha", "{\"groupSlug\":\"group\"}").expectStatus().isBadRequest();
+                    .isNotFound()
+                    .expectBody(Void.class);
+            place("alpha", "{\"groupSlug\":\"group\"}")
+                    .expectStatus()
+                    .isBadRequest()
+                    .expectBody(Void.class);
 
             List<Practice> persisted = practiceRepository.findByWorkspaceIdAndGroupIdOrderByDisplayOrderAscNameAsc(
                     workspace.getId(), group.getId());
@@ -1623,7 +1709,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(new UpdatePracticeAutonomyRequestDTO(PracticeAutonomy.AUTOMATIC))
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -1664,7 +1751,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(new UpdatePracticeAutonomyRequestDTO(PracticeAutonomy.OFF))
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -1682,7 +1770,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(new UpdatePracticeAutonomyRequestDTO(PracticeAutonomy.OFF))
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         /**
@@ -1737,7 +1826,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(new UpdatePracticeAutonomyRequestDTO(PracticeAutonomy.OFF))
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 
@@ -1757,7 +1847,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNoContent();
+                    .isNoContent()
+                    .expectBody(Void.class);
 
             Optional<Practice> persisted = practiceRepository.findByWorkspaceIdAndSlug(workspace.getId(), "to-delete");
             assertThat(persisted).isEmpty();
@@ -1775,7 +1866,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -1791,7 +1883,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -1803,7 +1896,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .headers(withCsrfForAnonymousWrite())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 
@@ -1836,7 +1930,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             webTestClient
                     .get()
@@ -1844,7 +1939,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -1897,7 +1993,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(validCreateRequest("shared-slug"))
                     .exchange()
                     .expectStatus()
-                    .isCreated();
+                    .isCreated()
+                    .expectBody(Void.class);
 
             webTestClient
                     .post()
@@ -1907,7 +2004,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(validCreateRequest("shared-slug"))
                     .exchange()
                     .expectStatus()
-                    .isCreated();
+                    .isCreated()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -1930,7 +2028,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
             practiceRepository.save(practice);
 
-            var request = new UpdatePracticeRequestDTO("Hacked Name", null, null, null, null, null, null, null, null);
+            var request =
+                    new UpdatePracticeRequestDTO("Hacked Name", null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -1940,7 +2039,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
     }
 
@@ -1973,7 +2073,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(validCreateRequest("versioned-practice"))
                     .exchange()
                     .expectStatus()
-                    .isCreated();
+                    .isCreated()
+                    .expectBody(Void.class);
 
             List<PracticeRevision> revisions = revisionsFor("versioned-practice");
             assertThat(revisions).hasSize(1);
@@ -1986,7 +2087,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .extracting(PracticeBinding::signals, as(InstanceOfAssertFactories.list(SignalName.class)))
                     .containsExactly(ScmSignals.PULL_REQUEST_OPENED, ScmSignals.PULL_REQUEST_REVIEWED);
             assertThat(revisions.get(0).getCriteria()).isEqualTo("Detect if the PR follows best practices");
-            assertThat(revisions.get(0).getReviewRuleFingerprint()).hasSize(67).startsWith("v3:");
+            assertThat(revisions.get(0).getReviewRuleFingerprint()).hasSize(67).startsWith("v4:");
             assertThat(revisions.get(0).getCreatedAt()).isNotNull();
         }
 
@@ -2004,10 +2105,11 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(validCreateRequest("evolving-practice"))
                     .exchange()
                     .expectStatus()
-                    .isCreated();
+                    .isCreated()
+                    .expectBody(Void.class);
 
             var request = new UpdatePracticeRequestDTO(
-                    null, null, "A revised detection rubric", null, null, null, null, null, null);
+                    null, null, "A revised detection rubric", null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -2017,7 +2119,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             List<PracticeRevision> revisions = revisionsFor("evolving-practice");
             assertThat(revisions).hasSize(2);
@@ -2042,10 +2145,11 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(validCreateRequest("stable-practice"))
                     .exchange()
                     .expectStatus()
-                    .isCreated();
+                    .isCreated()
+                    .expectBody(Void.class);
 
-            var request =
-                    new UpdatePracticeRequestDTO("Renamed Practice", null, null, null, null, null, null, null, null);
+            var request = new UpdatePracticeRequestDTO(
+                    "Renamed Practice", null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -2055,7 +2159,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             List<PracticeRevision> revisions = revisionsFor("stable-practice");
             assertThat(revisions).hasSize(2);
@@ -2081,10 +2186,11 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(validCreateRequest("noop-criteria-practice"))
                     .exchange()
                     .expectStatus()
-                    .isCreated();
+                    .isCreated()
+                    .expectBody(Void.class);
 
             var request = new UpdatePracticeRequestDTO(
-                    null, null, "Detect if the PR follows best practices", null, null, null, null, null, null);
+                    null, null, "Detect if the PR follows best practices", null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -2094,7 +2200,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             assertThat(revisionsFor("noop-criteria-practice")).hasSize(1);
         }
@@ -2109,7 +2216,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             practiceService.updatePractice(
                     ctx,
                     "raced-practice",
-                    new UpdatePracticeRequestDTO(null, null, "baseline criteria", null, null, null, null, null, null));
+                    new UpdatePracticeRequestDTO(
+                            null, null, "baseline criteria", null, null, null, null, null, null, null));
 
             int threads = 2;
             var startGate = new CountDownLatch(1);
@@ -2127,7 +2235,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                                     ctx,
                                     "raced-practice",
                                     new UpdatePracticeRequestDTO(
-                                            null, null, criteria, null, null, null, null, null, null));
+                                            null, null, criteria, null, null, null, null, null, null, null));
                         } catch (Throwable t) {
                             failures.add(t);
                         } finally {
@@ -2227,7 +2335,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
 
             assertThat(practiceRepository.findByWorkspaceIdAndSlug(workspace.getId(), "two-minds"))
                     .isEmpty();
@@ -2298,7 +2407,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isCreated();
+                    .isCreated()
+                    .expectBody(Void.class);
 
             String rawJson = webTestClient
                     .get()
@@ -2378,7 +2488,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(createWithExemplar("guard-assessment", "Flagged GOOD, BAD, or ABSENT by the detector."))
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -2406,7 +2517,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(dto)
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
             assertThat(practiceRepository.findByWorkspaceIdAndSlug(workspace.getId(), "guard-why"))
                     .isEmpty();
         }
@@ -2425,7 +2537,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(createWithExemplar("guard-not-applicable", "Marked NOT_APPLICABLE here."))
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -2436,7 +2549,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             persistPractice("guard-update", "Guard Update", true);
 
             var request = new UpdatePracticeRequestDTO(
-                    null, null, null, null, null, null, "This behaviour is PRESENT.", null, null);
+                    null, null, null, null, null, null, "This behaviour is PRESENT.", null, null, null);
 
             webTestClient
                     .patch()
@@ -2446,7 +2559,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test

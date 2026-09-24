@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.dto;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -36,12 +37,11 @@ public record CreatePracticeRequestDTO(
                 max = 1,
                 message = "A practice is reviewed on one occasion. To read different evidence at a different moment, "
                         + "split this into two practices.")
-        @Valid
         @Schema(
                 description = "The one occasion this practice is reviewed on, with the evidence that review reads. "
                         + "The kind of work reviewed is read off the signals.")
         @Nullable
-        List<PracticeBinding> bindings,
+        List<@Valid PracticeBinding> bindings,
 
         @NotBlank(message = "Criteria is required")
         @Size(max = 50000, message = "Criteria must be at most 50000 characters")
@@ -77,4 +77,29 @@ public record CreatePracticeRequestDTO(
                 description = "Practice group to add the practice to. Omit or set to null for Unassigned.",
                 nullable = true)
         @Nullable
-        String groupSlug) {}
+        String groupSlug,
+
+        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior) {
+    public CreatePracticeRequestDTO(
+            @Nullable String slug,
+            @Nullable String name,
+            @Nullable List<PracticeBinding> bindings,
+            @Nullable String criteria,
+            @Nullable String precomputeScript,
+            @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy,
+            @Nullable String whyItMatters,
+            @Nullable String whatGoodLooksLike,
+            @Nullable String groupSlug) {
+        this(
+                slug,
+                name,
+                bindings,
+                criteria,
+                precomputeScript,
+                automatedReviewPolicy,
+                whyItMatters,
+                whatGoodLooksLike,
+                groupSlug,
+                null);
+    }
+}

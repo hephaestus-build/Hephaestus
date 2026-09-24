@@ -1,6 +1,6 @@
 import type { PracticeGroup } from "@/api/types.gen";
-import { getGroupVisual } from "@/components/admin/practice-catalog/group-visuals";
 import { InlineLink } from "@/components/common/InlineLink";
+import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { GroupName } from "@/components/practice-vocabulary/GroupName";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 
@@ -28,6 +28,8 @@ export interface FeedbackTextProps {
  * a work reference is a link only when it has an address — the provider's page for the work, so it
  * opens in a new tab — and a word otherwise.
  */
+const NO_GROUPS: PracticeGroup[] = [];
+
 export function FeedbackText({
 	segments,
 	onOpenPractice,
@@ -54,12 +56,14 @@ export function FeedbackText({
 function Segment({
 	segment,
 	onOpenPractice,
-	groups = [],
+	groups = NO_GROUPS,
 	onOpenGroup,
 }: {
 	segment: FeedbackTextSegment;
 } & Pick<FeedbackTextProps, "onOpenPractice" | "groups" | "onOpenGroup">) {
-	if (segment.type === "text") return segment.text;
+	if (segment.type === "text") {
+		return segment.text;
+	}
 	if (segment.type === "work") {
 		return (
 			<InlineLink href={segment.ref.url} external>

@@ -110,7 +110,7 @@ class AgentJobServiceTest extends BaseUnitTest {
                 handlerRegistry,
                 objectMapper,
                 transactionTemplate,
-                new PracticeReviewProperties(false, 15, 5, false, false),
+                new PracticeReviewProperties(false, 15, 5, false, null),
                 practiceRepository,
                 llmBudgetService,
                 llmModelResolver,
@@ -147,7 +147,7 @@ class AgentJobServiceTest extends BaseUnitTest {
         lenient()
                 .when(llmModelResolver.resolve(any()))
                 .thenReturn(new ResolvedLlmModel(
-                        "https://api.anthropic.com", "anthropic-messages", "claude-sonnet-4", null, null, false));
+                        "https://api.anthropic.com", "anthropic-messages", "claude-sonnet-4", null, null, null));
         lenient()
                 .when(llmModelResolver.connectionRef(any()))
                 .thenReturn(new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 99L, null, null));
@@ -488,7 +488,7 @@ class AgentJobServiceTest extends BaseUnitTest {
 
             assertThat(java.util.Objects.requireNonNull(job.getMetadata())
                             .path(AgentJob.SIGNAL_REVISION_METADATA_KEY)
-                            .asText())
+                            .asString())
                     .isEqualTo(key.revision().value());
             assertThat(submission.metadata().has(AgentJob.SIGNAL_REVISION_METADATA_KEY))
                     .isFalse();
@@ -590,6 +590,7 @@ class AgentJobServiceTest extends BaseUnitTest {
             pr.setHeadRefOid("abc123");
             pr.setHeadRefName("feature/test");
             pr.setBaseRefName("main");
+            pr.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
             Repository repo = new Repository();
             repo.setId(100L);
             repo.setNameWithOwner("owner/repo");

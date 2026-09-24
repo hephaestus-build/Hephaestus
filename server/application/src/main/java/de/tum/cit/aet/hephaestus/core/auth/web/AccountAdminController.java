@@ -23,12 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Instance-admin account management, guarded by the namespaced {@code app_admin} authority (the
- * granted authority the issuer mints for {@code APP_ADMIN}; see {@code JwtPrincipalFactory}). Thin
- * adapter over {@link AccountService}. Access JWTs are short-lived (~15m) and refresh re-derives
- * roles from the DB, so no legacy-authority grace is carried in code.
- */
+/** Instance-admin account management. */
 @ConditionalOnServerRole
 @RestController
 @RequestMapping("/admin/users")

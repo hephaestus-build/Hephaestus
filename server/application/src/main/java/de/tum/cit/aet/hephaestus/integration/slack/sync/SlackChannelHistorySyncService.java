@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService.HistoryPage;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackRetentionSweeper;
 import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackChannelMessageHandler;
 import java.time.Clock;
@@ -151,11 +152,17 @@ public class SlackChannelHistorySyncService {
                 // coarse "not synced this pass" figure that also covers benign nothing-to-sync channels.
                 skipped++;
                 failed++;
+                String reason = e instanceof SlackSendException slack
+                                && slack.slackError().matches("[a-z_]{1,64}")
+                        ? slack.slackError()
+                        : e.getClass().getSimpleName();
+                monitoredChannelRepository.recordHistorySyncError(
+                        workspaceId, channel.getSlackChannelId(), "History sync failed (" + reason + ")");
                 log.warn(
                         "slack.sync: history sync failed for workspaceId={} channelId={} (watermark not advanced): {}",
                         workspaceId,
                         channel.getSlackChannelId(),
-                        e.toString());
+                        reason);
             }
         }
         return new WorkspaceSyncSummary(
@@ -224,8 +231,9 @@ public class SlackChannelHistorySyncService {
             cursor = page.nextCursor();
         } while (cursor != null);
 
-        monitoredChannelRepository.advanceHistoryWatermark(workspaceId, channelId, latest, clock.instant());
-        return ingested;
+        return monitoredChannelRepository.advanceHistoryWatermark(workspaceId, channelId, latest, clock.instant()) == 1
+                ? ingested
+                : null;
     }
 
     /**

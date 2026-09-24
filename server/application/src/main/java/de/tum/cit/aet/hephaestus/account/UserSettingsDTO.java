@@ -7,11 +7,6 @@ import org.jspecify.annotations.NonNull;
 @Schema(description = "User preferences and settings")
 public record UserSettingsDTO(
         @NonNull
-        @NotNull(message = "participateInResearch must not be null")
-        @Schema(description = "Whether the user consents to participate in research studies")
-        Boolean participateInResearch,
-
-        @NonNull
         @NotNull(message = "practiceFeedbackDeliveryEnabled must not be null")
         @Schema(
                 description =

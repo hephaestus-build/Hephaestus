@@ -15,14 +15,16 @@ function ReviewActivityListRoute() {
 	const { workspaceSlug } = Route.useParams();
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
-	const updateSearch = (patch: Partial<TraceSearch>) =>
+	const updateSearch = (patch: Partial<TraceSearch>) => {
 		void navigate({
 			search: (previous) => {
 				const next = { ...previous, ...patch };
 				return { ...next, page: pageParam(next.page) };
 			},
 			replace: true,
+			resetScroll: false,
 		});
+	};
 
 	const query = useQuery({
 		...listTracedArtifactsOptions({
@@ -39,7 +41,9 @@ function ReviewActivityListRoute() {
 			artifacts={query.data}
 			isLoading={query.isLoading}
 			error={query.isError ? query.error : undefined}
-			onRetry={() => void query.refetch()}
+			onRetry={() => {
+				void query.refetch();
+			}}
 		/>
 	);
 }

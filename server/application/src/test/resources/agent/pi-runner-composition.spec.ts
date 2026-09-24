@@ -8,6 +8,7 @@ import {
 	notReachedNote,
 	undeliverableUnits,
 	validateFeedbackEvidence,
+	sameLinesNote,
 } from "../../../main/resources/agent/pi-runner-composition.ts";
 
 const supersede = (threadKey: string): ComposedFeedbackUnit => ({
@@ -82,11 +83,11 @@ void test("one feedback intervention may synthesize related practice observation
 	);
 	assert.match(
 		validateFeedbackEvidence("review-loop", ["support-1"], practices) ?? "",
-		/primary practice 'review-loop'/,
+		/primary practice 'review-loop'/u,
 	);
 	assert.match(
 		validateFeedbackEvidence("review-loop", ["missing"], practices) ?? "",
-		/does not name an admitted observation/,
+		/does not name an admitted observation/u,
 	);
 });
 
@@ -96,10 +97,58 @@ void test("a review that reached every practice says nothing about coverage", ()
 
 void test("a review names the practices it never settled and forbids a verdict on them", () => {
 	const one = notReachedNote(["ships-tests-with-the-change"]);
-	assert.match(one, /one of its practices: ships-tests-with-the-change\./);
-	assert.match(one, /Say nothing about them, for or against/);
-	assert.match(one, /do not describe this review as complete/);
+	assert.match(one, /one of its practices: ships-tests-with-the-change\./u);
+	assert.match(one, /Say nothing about them, for or against/u);
+	assert.match(one, /do not describe this review as complete/u);
 
 	const many = notReachedNote(["ships-tests-with-the-change", "describe-what-and-why"]);
-	assert.match(many, /2 of its practices: ships-tests-with-the-change, describe-what-and-why\./);
+	assert.match(many, /2 of its practices: ships-tests-with-the-change, describe-what-and-why\./u);
+});
+
+const cite = (path: string, startLine: number) => ({ path, startLine });
+
+void test("negatives that quote the same line are named as one likely event; one practice alone is not", () => {
+	const note = sameLinesNote([
+		{
+			id: "a",
+			practiceSlug: "scope-one-reviewable-change",
+			outcome: "NEGATIVE",
+			citations: [cite("inputs/context/metadata.json", 18)],
+		},
+		{
+			id: "b",
+			practiceSlug: "ready-and-traceable-handoff",
+			outcome: "NEGATIVE",
+			citations: [cite("inputs/context/metadata.json", 18)],
+		},
+		{
+			id: "c",
+			practiceSlug: "ships-tests-with-the-change",
+			outcome: "NEGATIVE",
+			citations: [cite("App/Model.swift", 9)],
+		},
+		{
+			id: "d",
+			practiceSlug: "ships-tests-with-the-change",
+			outcome: "NEGATIVE",
+			citations: [cite("App/Model.swift", 9)],
+		},
+		// A POSITIVE on the same line is not part of an event to write about.
+		{
+			id: "e",
+			practiceSlug: "describe-what-and-why",
+			outcome: "POSITIVE",
+			citations: [cite("inputs/context/metadata.json", 18)],
+		},
+	]);
+	assert.match(note, /^NEGATIVE measurements that quote the same line/u);
+	assert.match(
+		note,
+		/- inputs\/context\/metadata\.json:18: scope-one-reviewable-change \(a\), ready-and-traceable-handoff \(b\)\n/u,
+	);
+	assert.doesNotMatch(note, /App\/Model\.swift/u);
+	assert.equal(
+		sameLinesNote([{ id: "a", practiceSlug: "x", outcome: "NEGATIVE", citations: [] }]),
+		"",
+	);
 });

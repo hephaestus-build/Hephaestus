@@ -12,7 +12,7 @@ interface DockerNetworkOperations {
     /**
      * Create a Docker network.
      *
-     * @param name network name (e.g. {@code agent-net-{jobId}})
+     * @param name installation-scoped network name
      * @param internal if true, creates an {@code --internal} network with no external connectivity
      * @return the network ID
      */

@@ -1,10 +1,10 @@
 import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 
 import type { PracticeStanding } from "@/api/types.gen";
-import { cn } from "@/lib/utils";
+import { statusToneClass, statusValues } from "@/components/common/status-def";
 
 import { PRACTICE_GROUP_STANDING_DEFS } from "./practice-group-standing-defs";
-import { statusToneClass, statusValues } from "./status-def";
 
 type Standing = PracticeStanding["standing"];
 /**
@@ -20,11 +20,11 @@ const RING_OPACITY: Partial<Record<Standing, string>> = {
 	NO_OPPORTUNITY: "text-muted-foreground/45",
 };
 
-const SEGMENTS: ReadonlyArray<{
+const SEGMENTS: readonly {
 	standing: Standing;
 	colorClass: string;
 	label: string;
-}> = statusValues(PRACTICE_GROUP_STANDING_DEFS).map((standing) => ({
+}[] = statusValues(PRACTICE_GROUP_STANDING_DEFS).map((standing) => ({
 	standing,
 	colorClass:
 		RING_OPACITY[standing] ?? statusToneClass(PRACTICE_GROUP_STANDING_DEFS[standing].badgeVariant),
@@ -35,7 +35,7 @@ export const STANDING_LEGEND = SEGMENTS;
 
 export type StandingCounts = Partial<Record<Standing, number>>;
 
-export function countPracticeStandings(practices: ReadonlyArray<HasStanding>): StandingCounts {
+export function countPracticeStandings(practices: readonly HasStanding[]): StandingCounts {
 	const counts: StandingCounts = {};
 	for (const practice of practices) {
 		counts[practice.standing] = (counts[practice.standing] ?? 0) + 1;
@@ -80,7 +80,9 @@ export interface StandingCountsListProps extends VariantProps<typeof standingCou
  */
 export function StandingCountsList({ counts, size, className, ...props }: StandingCountsListProps) {
 	const segments = summarizeStandingCounts(counts);
-	if (segments.length === 0) return null;
+	if (segments.length === 0) {
+		return null;
+	}
 	return (
 		<ul
 			className={cn(
@@ -93,7 +95,7 @@ export function StandingCountsList({ counts, size, className, ...props }: Standi
 			{segments.map(({ standing, count, colorClass, label }) => {
 				const StandingIcon = PRACTICE_GROUP_STANDING_DEFS[standing].icon;
 				return (
-					<li key={standing} className="whitespace-nowrap inline-flex items-center gap-1.5">
+					<li key={standing} className="inline-flex items-center gap-1.5 whitespace-nowrap">
 						<StandingIcon className={cn("shrink-0", colorClass)} aria-hidden />
 						<span className="font-semibold text-foreground tabular-nums">{count}</span>
 						{label}

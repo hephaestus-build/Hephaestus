@@ -225,3 +225,8 @@ venv.bak/
 .webassets-cache
 wheels/
 # When using Gradle or Maven with auto-import, you should exclude module files,
+
+# Gradle owns its outputs; the verified wrapper is the only committed build binary.
+/server/**/build/
+/server/**/.gradle/
+!server/gradle/wrapper/gradle-wrapper.jar

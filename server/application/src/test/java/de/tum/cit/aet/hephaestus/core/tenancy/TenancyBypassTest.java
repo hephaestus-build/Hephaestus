@@ -12,14 +12,19 @@ class TenancyBypassTest extends BaseUnitTest {
         assertThat(TenancyBypass.isActive()).isFalse();
     }
 
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     @Test
     void scopeActivatesAndClosesCleanly() {
+
         try (TenancyBypass.Scope ignored = TenancyBypass.open("admin op")) {
             assertThat(TenancyBypass.isActive()).isTrue();
         }
         assertThat(TenancyBypass.isActive()).isFalse();
     }
 
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     @Test
     void nestedScopesUseDepthCounter() {
         try (TenancyBypass.Scope outer = TenancyBypass.open("outer")) {
@@ -33,6 +38,8 @@ class TenancyBypassTest extends BaseUnitTest {
         assertThat(TenancyBypass.isActive()).isFalse();
     }
 
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     @Test
     void scopeStillDecrementsWhenBodyThrows() {
         try {

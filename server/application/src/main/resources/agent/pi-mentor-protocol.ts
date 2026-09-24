@@ -34,12 +34,12 @@ export type JsonRpcId = string | number | null;
  * sandbox-poisoning: receiving either force-closes the container rather than retrying the turn.
  */
 export const MENTOR_ERROR_CODES = Object.freeze({
-	INVALID_REQUEST: -32600,
-	METHOD_NOT_FOUND: -32601,
-	THREAD_NOT_OPEN: -32000,
-	TURN_IN_FLIGHT: -32001,
-	PI_ERROR: -32002,
-	INVALID_STATE: -32003,
+	INVALID_REQUEST: -32_600,
+	METHOD_NOT_FOUND: -32_601,
+	THREAD_NOT_OPEN: -32_000,
+	TURN_IN_FLIGHT: -32_001,
+	PI_ERROR: -32_002,
+	INVALID_STATE: -32_003,
 });
 
 export type MentorErrorCode = (typeof MENTOR_ERROR_CODES)[keyof typeof MENTOR_ERROR_CODES];
@@ -78,12 +78,12 @@ export interface MentorRequestParams {
 
 export type MentorMethod = keyof MentorRequestParams;
 
-type RequestFrame<M extends MentorMethod> = {
+interface RequestFrame<M extends MentorMethod> {
 	jsonrpc: typeof JSONRPC_VERSION;
 	id: JsonRpcId;
 	method: M;
 	params: MentorRequestParams[M];
-};
+}
 
 /** Discriminated union over `method`, so `params` is correlated with the method it accompanies. */
 export type MentorRequest = { [M in MentorMethod]: RequestFrame<M> }[MentorMethod];

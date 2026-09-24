@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
+import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -43,7 +44,7 @@ public class AgentJobController {
     @Operation(summary = "List agent jobs for a workspace")
     @ApiResponse(responseCode = "200", description = "Paginated job list")
     @RequireAtLeastWorkspaceAdmin
-    public ResponseEntity<Page<AgentJobDTO>> listAgentJobs(
+    public ResponseEntity<PageResponseDTO<AgentJobDTO>> listAgentJobs(
             WorkspaceContext workspaceContext,
             @Parameter(description = "Filter by job status") @RequestParam(required = false) AgentJobStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -54,7 +55,7 @@ public class AgentJobController {
                 PageRequest.of(safePage, pageSize, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
         Page<AgentJobDTO> jobs =
                 agentJobService.getJobs(workspaceContext.id(), status, pageable).map(AgentJobDTO::from);
-        return ResponseEntity.ok(jobs);
+        return ResponseEntity.ok(PageResponseDTO.from(jobs));
     }
 
     @GetMapping("/{jobId}")

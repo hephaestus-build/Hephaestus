@@ -23,6 +23,7 @@ const meta = {
 		},
 	},
 	args: {
+		organization: "AET",
 		onToggleResearch: fn(),
 		isLoading: false,
 	},

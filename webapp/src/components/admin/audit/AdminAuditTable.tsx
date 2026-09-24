@@ -1,10 +1,10 @@
 import { ScrollText } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import type { AuthEventView } from "@/api/types.gen";
-import { ElevationBadge } from "@/components/admin/audit-shared/ElevationBadge";
-import { FilterLink } from "@/components/admin/audit-shared/FilterLink";
-import { refLabel } from "@/components/admin/audit-shared/ref-label";
+import { ElevationBadge } from "@/components/admin/audit/ElevationBadge";
+import { FilterLink } from "@/components/admin/audit/FilterLink";
+import { refLabel } from "@/components/admin/audit/ref-label";
 import { TableRowsSkeleton } from "@/components/admin/integrations/TableRowsSkeleton";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { hasText } from "@/lib/text";
 
 import {
 	eventLabel,
@@ -71,7 +72,7 @@ export function AdminAuditTable({
 
 	if (isError) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<ScrollText />
@@ -91,7 +92,7 @@ export function AdminAuditTable({
 
 	if (events.length === 0 && !isLoading) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<ScrollText />
@@ -99,7 +100,7 @@ export function AdminAuditTable({
 					<EmptyTitle>{hasFilter ? "No events match your filters" : "No events yet"}</EmptyTitle>
 					{!hasFilter && (
 						<EmptyDescription>
-							Sign-ins, impersonation, role changes, and account deletions will appear here.
+							Sign-ins, user views, role changes, and account deletions will appear here.
 						</EmptyDescription>
 					)}
 				</EmptyHeader>
@@ -116,7 +117,7 @@ export function AdminAuditTable({
 
 	return (
 		<div className="space-y-4">
-			<Table containerClassName="rounded-md border">
+			<Table bordered>
 				<TableCaption className="sr-only">Sign-in and account events, newest first</TableCaption>
 				<TableHeader>
 					<TableRow>
@@ -139,9 +140,22 @@ export function AdminAuditTable({
 							const { accountId, actingAccountId } = e;
 							const account = refLabel(e.account, accountId);
 							const actor = refLabel(e.actor, actingAccountId);
+							let accountCell: ReactNode = "—";
+							if (hasText(account)) {
+								accountCell =
+									onFilterAccount && accountId != null ? (
+										<FilterLink
+											label={account}
+											title={e.account?.email ?? `Filter by ${account}`}
+											onSelect={() => onFilterAccount(accountId)}
+										/>
+									) : (
+										<span title={e.account?.email ?? undefined}>{account}</span>
+									);
+							}
 							return (
 								<TableRow key={e.id}>
-									<TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+									<TableCell className="text-sm whitespace-nowrap text-muted-foreground">
 										<RelativeTime value={e.occurredAt} />
 									</TableCell>
 									<TableCell>
@@ -150,7 +164,9 @@ export function AdminAuditTable({
 												className={`size-1.5 shrink-0 rounded-full ${severityDotClass(severity)}`}
 												aria-hidden
 											/>
-											{screenReaderPrefix && <span className="sr-only">{screenReaderPrefix}</span>}
+											{hasText(screenReaderPrefix) && (
+												<span className="sr-only">{screenReaderPrefix}</span>
+											)}
 											<span className="text-sm">{eventLabel(e.eventType)}</span>
 											<ElevationBadge elevated={e.elevatedViaInstanceAdmin} />
 										</span>
@@ -161,24 +177,10 @@ export function AdminAuditTable({
 										</Badge>
 									</TableCell>
 									<TableCell className="max-w-[12rem]">
-										<span className="block truncate">
-											{account ? (
-												onFilterAccount && accountId != null ? (
-													<FilterLink
-														label={account}
-														title={e.account?.email ?? `Filter by ${account}`}
-														onSelect={() => onFilterAccount(accountId)}
-													/>
-												) : (
-													<span title={e.account?.email ?? undefined}>{account}</span>
-												)
-											) : (
-												"—"
-											)}
-										</span>
-										{actor && (
+										<span className="block truncate">{accountCell}</span>
+										{hasText(actor) && (
 											<span className="block truncate text-xs text-muted-foreground">
-												impersonated by{" "}
+												by{" "}
 												{onFilterActor && actingAccountId != null ? (
 													<FilterLink
 														label={actor}
@@ -196,7 +198,7 @@ export function AdminAuditTable({
 											type="button"
 											variant="ghost"
 											size="sm"
-											aria-label={`View details: ${eventLabel(e.eventType)}${account ? ` — ${account}` : ""}`}
+											aria-label={`View details: ${eventLabel(e.eventType)}${hasText(account) ? ` — ${account}` : ""}`}
 											onClick={() => {
 												setDetail(e);
 												setDetailOpen(true);

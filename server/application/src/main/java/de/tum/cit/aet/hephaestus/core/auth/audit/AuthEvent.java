@@ -7,6 +7,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.Instant;
 import lombok.AllArgsConstructor;
@@ -20,9 +21,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Append-only auth-event log. Monthly RANGE-partitioned on {@code occurred_at} and self-managed
- * by pg_partman (create-ahead + 12-month retention, oldest dropped). Records the
- * {@code (account_id, acting_account_id)} pair for every impersonation so every action attributable
- * to an impersonator is reconstructible.
+ * by pg_partman (create-ahead + 12-month retention, oldest dropped).
  *
  * <h2>Append-only</h2>
  * Storage-layer append-only is enforced in prod by the {@code trg_auth_event_block_mutation} BEFORE
@@ -48,12 +47,15 @@ public class AuthEvent {
     @EmbeddedId
     private Id id;
 
-    /** Account that the event is about (the target of impersonation, the deleted user, …). */
     @Column(name = "account_id")
     @Nullable
     private Long accountId;
 
-    /** Impersonator account id (the {@code act} claim), if the event was performed under impersonation. */
+    /** The SCM user a {@code USER_VIEW} disclosed, who may have no account. */
+    @Column(name = "viewed_user_id")
+    @Nullable
+    private Long viewedUserId;
+
     @Column(name = "acting_account_id")
     @Nullable
     private Long actingAccountId;
@@ -112,6 +114,7 @@ public class AuthEvent {
     private boolean elevatedViaInstanceAdmin;
 
     public enum EventType {
+        USER_VIEW,
         LOGIN,
         LOGIN_FAILED,
         LOGOUT,
@@ -164,6 +167,7 @@ public class AuthEvent {
         e.eventType = data.type();
         e.result = data.result();
         e.accountId = data.accountId();
+        e.viewedUserId = data.viewedUserId();
         e.actingAccountId = data.actingAccountId();
         e.failureReason = data.failureReason();
         e.providerId = data.gitProviderId();
@@ -182,6 +186,9 @@ public class AuthEvent {
     @AllArgsConstructor
     @EqualsAndHashCode
     public static class Id implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         @Column(name = "id", nullable = false)
         private Long id;

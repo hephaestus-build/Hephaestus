@@ -1,26 +1,23 @@
 name: Version PR
 
-# Maintains the changesets Version PR; release.yml handles merged version bumps.
-#
-# The changesets action pushes with GITHUB_TOKEN, and a push made with that token starts no workflow
-# run — so the Version PR used to carry no checks at all and merged through a ruleset bypass.
-# workflow_dispatch is one of the two documented exceptions to that rule, so the same token starts
-# CI/CD on the Version PR's own branch instead; scripts/dispatch-version-pr-ci.ts has the reasoning.
-#
-# Contributor guide: docs/contributor/release-management.mdx
-
+# Versioning contract: docs/contributor/release-management.mdx.
 on:
-  push:
+  workflow_run: # zizmor: ignore[dangerous-triggers] Only successful same-repository main pushes can mutate the Version PR.
+    workflows: ["CI/CD"]
+    types: [completed]
     branches: [main]
-
-concurrency:
-  group: version-pr
-  cancel-in-progress: false
 
 permissions: {}
 
 jobs:
   version-pr:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success'
+        && github.event.workflow_run.event == 'push'
+        && github.event.workflow_run.head_repository.full_name == github.repository }}
+    concurrency:
+      group: version-pr
+      cancel-in-progress: false
     timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
@@ -30,12 +27,26 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
-      - uses: ./.github/actions/setup-toolchain
+      - name: Select the validated default-branch tip
+        id: current
+        shell: bash
+        env:
+          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ "$(git rev-parse HEAD)" = "$VALIDATED_SHA" ]; then
+            echo "validated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Default branch has advanced; its successful CI run will maintain the Version PR."
+          fi
+      - if: steps.current.outputs.validated == 'true'
+        uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
 
       - name: Maintain Version PR
+        if: steps.current.outputs.validated == 'true'
         uses: changesets/action@8488615a623b1b9c987934bb89eae8af6a946ac1 # v2.1.1
         with:
           version-script: vp run release:version
@@ -43,9 +54,8 @@ jobs:
           commit-message: "chore(release): version packages"
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Every Version PR head commit gets a CI/CD run, so the commit whose merge cuts a release is
-      # validated before it lands rather than after.
       - name: Run CI on the Version PR
+        if: steps.current.outputs.validated == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/dispatch-version-pr-ci.ts

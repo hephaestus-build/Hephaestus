@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
@@ -41,6 +42,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.PullRequ
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcomment.GitHubPullRequestReviewCommentSyncService;
+import java.io.Serial;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -1460,6 +1462,7 @@ public class GitHubHistoricalBackfillService {
     private void clearFailureState(Long syncTargetId) {
         repositoryCooldowns.remove(syncTargetId);
         consecutiveFailures.remove(syncTargetId);
+        syncTargetProvider.updateSyncError(syncTargetId, SyncPass.HISTORICAL_BACKFILL, null);
     }
 
     /**
@@ -1470,6 +1473,10 @@ public class GitHubHistoricalBackfillService {
      */
     private void handleBackfillFailure(SyncTarget target, Exception e) {
         String safeRepoName = Objects.requireNonNull(sanitizeForLog(target.repositoryNameWithOwner()));
+        syncTargetProvider.updateSyncError(
+                target.id(),
+                SyncPass.HISTORICAL_BACKFILL,
+                "Historical backfill failed (" + e.getClass().getSimpleName() + ")");
 
         // BackfillTransientException is explicitly marked as transient - always cooldown
         if (e instanceof BackfillTransientException) {
@@ -1619,6 +1626,9 @@ public class GitHubHistoricalBackfillService {
      * transport-level retries, so the caller should apply repository-level cooldown.
      */
     static class BackfillTransientException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         BackfillTransientException(String message, @Nullable Throwable cause) {
             super(message, cause);

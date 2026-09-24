@@ -9,11 +9,27 @@
  */
 import { appendFileSync } from "node:fs";
 import { text } from "node:stream/consumers";
+import { isSet } from "./lib/env.ts";
 
-/** Task names the report marks with a cross, from lines shaped `[n] package#task: $ command ✗`. */
+/**
+ * SGR escapes, which the runner emits whenever colour is forced on — `FORCE_COLOR` is set in some
+ * terminals and agent harnesses — even though nothing here is a terminal. Stripping them is what
+ * keeps this a text parser rather than a guess about how the report was rendered.
+ */
+// ESC is the character being stripped, so the rule is reporting the thing this line is for.
+// oxlint-disable-next-line eslint/no-control-regex -- deliberate: this matches SGR escapes
+const ANSI = /\u001B\[[0-9;]*m/gu;
+
+/**
+ * Task names the report marks with a cross, from lines shaped `[n] package#task: $ command ✗`.
+ *
+ * A coloured report used to match nothing, so a failed run produced no annotations and exited 0 —
+ * the one failure mode a gate must not have.
+ */
 export function unpassedTasks(report: string): string[] {
-	const names = [...report.matchAll(/^\s*\[\d+\] [^#\n]+#(\S+): \$ [^\n]*✗/gmu)].flatMap(
-		([, task]) => (task === undefined ? [] : [task]),
+	const plain = report.replaceAll(ANSI, "");
+	const names = [...plain.matchAll(/^\s*\[\d+\] [^#\n]+#(?<task>\S+): \$ [^\n]*✗/gmu)].flatMap(
+		({ groups }) => (groups?.task === undefined ? [] : [groups.task]),
 	);
 	return [...new Set(names)];
 }
@@ -21,9 +37,12 @@ export function unpassedTasks(report: string): string[] {
 if (import.meta.main) {
 	const report = await text(process.stdin);
 	const unpassed = unpassedTasks(report);
-	for (const task of unpassed)
+	for (const task of unpassed) {
 		console.log(`::error::${task} did not pass. Reproduce with: vp run ${task}`);
+	}
 	const summary = process.env.GITHUB_STEP_SUMMARY;
-	if (summary) appendFileSync(summary, `\n\`\`\`text\n${report.trim()}\n\`\`\`\n`);
+	if (isSet(summary)) {
+		appendFileSync(summary, `\n\`\`\`text\n${report.trim()}\n\`\`\`\n`);
+	}
 	process.exitCode = unpassed.length === 0 ? 0 : 1;
 }

@@ -13,6 +13,7 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { hasText } from "@/lib/text";
 
 export interface ChangeRoleDialogProps {
 	/** The user whose role is being changed; `null` keeps the dialog closed. */
@@ -60,7 +61,7 @@ export function ChangeRoleDialog({
 						{granting ? (
 							<>
 								This gives <strong>{name}</strong> full application-admin access, including managing
-								other users and impersonation. Continue?
+								other users and read-only user views. Continue?
 							</>
 						) : (
 							<>
@@ -70,7 +71,7 @@ export function ChangeRoleDialog({
 						)}
 					</AlertDialogDescription>
 				</AlertDialogHeader>
-				{errorMessage && (
+				{hasText(errorMessage) && (
 					<p
 						role="alert"
 						className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -83,7 +84,11 @@ export function ChangeRoleDialog({
 					<AlertDialogAction
 						variant={granting ? "destructive" : "default"}
 						disabled={isPending}
-						onClick={() => user && onConfirm(user, nextRole)}
+						onClick={() => {
+							if (user !== null) {
+								onConfirm(user, nextRole);
+							}
+						}}
 					>
 						{isPending ? <Spinner className="size-4" /> : null}
 						{granting ? "Grant admin" : "Revoke admin"}

@@ -1,21 +1,15 @@
-import * as fs from "node:fs";
-import path, { resolve } from "node:path";
+import path from "node:path";
 
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
-import { parse } from "jsonc-parser";
-import type { OxfmtConfig } from "oxfmt";
-import type { OxlintConfig } from "oxlint";
 import Terminal from "vite-plugin-terminal";
-import type { ViteDevServer } from "vite-plus";
 import { configDefaults } from "vitest/config";
 
+import { readJsonc } from "./tools/jsonc.ts";
+import { loadLintConfig } from "./tools/oxlint/load-config.ts";
 import { appSourcePlugins } from "./vite.shared.ts";
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const formatConfig = parse(
-	fs.readFileSync(new URL("../.oxfmtrc.json", import.meta.url), "utf8"),
-) as OxfmtConfig;
+const formatConfig = readJsonc(new URL("../.oxfmtrc.json", import.meta.url));
 const fmt = {
 	...formatConfig,
 	ignorePatterns: [
@@ -27,14 +21,7 @@ const fmt = {
 	],
 };
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const lintConfig = parse(
-	fs.readFileSync(new URL(".oxlintrc.json", import.meta.url), "utf8"),
-) as OxlintConfig;
-const lint = {
-	...lintConfig,
-	options: { ...lintConfig.options, typeAware: true, typeCheck: true },
-};
+const lint = loadLintConfig(new URL(".oxlintrc.json", import.meta.url));
 
 const sentryUploadValues = [
 	process.env.SENTRY_AUTH_TOKEN,
@@ -61,54 +48,28 @@ const viteConfig = {
 			disable: !sentryUploadConfigured,
 			telemetry: false,
 		}),
-		...Terminal({ output: ["terminal", "console"] }).map(
-			(plugin) => plugin && { ...plugin, apply: "serve" as const },
+		...Terminal({ output: ["terminal", "console"] }).map((plugin) =>
+			plugin === false ? false : { ...plugin, apply: "serve" as const },
 		),
-		{
-			name: "save-achievement-layout",
-			apply: "serve" as const,
-			configureServer(server: ViteDevServer) {
-				server.middlewares.use("/__save-coordinates", (req, res) => {
-					if (req.method !== "POST") {
-						res.statusCode = 405;
-						res.end("Method Not Allowed");
-						return;
-					}
-
-					let body = "";
-					req.on("data", (chunk: Buffer) => {
-						body += chunk.toString();
-					});
-
-					req.on("end", () => {
-						try {
-							JSON.parse(body);
-							const filePath = path.resolve(
-								import.meta.dirname,
-								"src/components/achievements/coordinates.json",
-							);
-							fs.writeFileSync(filePath, body);
-							res.statusCode = 200;
-							res.end("Layout saved successfully");
-						} catch {
-							res.statusCode = 400;
-							res.end("Invalid JSON");
-						}
-					});
-				});
-			},
-		},
 	],
 	build: {
 		sourcemap: "hidden" as const,
-	},
-	optimizeDeps: {
-		exclude: ["storybook-static"],
+		rolldownOptions: {
+			output: {
+				codeSplitting: {
+					// Keep the shared renderer cacheable across application releases. Do not collect all
+					// dependencies: feature libraries belong to the routes that actually use them.
+					groups: [
+						{ name: "react-runtime", test: /[/]node_modules[/](?:react|react-dom|scheduler)[/]/u },
+					],
+				},
+			},
+		},
 	},
 	test: {
 		globals: true,
 		environment: "jsdom",
-		exclude: [...configDefaults.exclude, "e2e/**"],
+		exclude: [...configDefaults.exclude, "e2e/**/*.spec.ts"],
 		setupFiles: ["./src/test/setup-msw.ts"],
 		reporters: ["default", "junit"],
 		outputFile: {
@@ -117,14 +78,16 @@ const viteConfig = {
 	},
 	resolve: {
 		alias: {
-			"@": resolve(import.meta.dirname, "./src"),
+			"@": path.resolve(import.meta.dirname, "./src"),
 		},
 	},
 	server: {
 		port: Number.parseInt(process.env.WEBAPP_PORT ?? "", 10) || 4200,
 		strictPort: true,
+		// Storybook writes a separate site inside this root; rebuilding it must not reload the app.
+		watch: { ignored: ["**/storybook-static/**"] },
 		fs: {
-			allow: [resolve(import.meta.dirname, "..")],
+			allow: [path.resolve(import.meta.dirname, "..")],
 		},
 	},
 };

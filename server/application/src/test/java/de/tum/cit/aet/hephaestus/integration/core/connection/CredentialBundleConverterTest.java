@@ -28,7 +28,7 @@ class CredentialBundleConverterTest extends BaseUnitTest {
             new EncryptionContext(42L, IntegrationKind.GITHUB, "installation-999", "connection.credentials_encrypted");
 
     private static CredentialBundleConverter enabled() {
-        return new CredentialBundleConverter(KEY, "dev");
+        return new CredentialBundleConverter(KEY, false);
     }
 
     @Nested
@@ -156,7 +156,7 @@ class CredentialBundleConverterTest extends BaseUnitTest {
         @Test
         void wrongKey_throws() {
             CredentialBundleConverter writer = enabled();
-            CredentialBundleConverter reader = new CredentialBundleConverter(OTHER_KEY, "dev");
+            CredentialBundleConverter reader = new CredentialBundleConverter(OTHER_KEY, false);
             byte[] ciphertext = writer.encrypt(new BearerToken("secret", null), CTX_A);
 
             assertThatThrownBy(() -> reader.decrypt(ciphertext, CTX_A)).isInstanceOf(EncryptionException.class);
@@ -223,9 +223,9 @@ class CredentialBundleConverterTest extends BaseUnitTest {
 
         @Test
         void keyVersionColumnSelectsPriorAndActiveKeysDuringRotation() {
-            CredentialBundleConverter old = new CredentialBundleConverter(KEY, 7, null, null, "dev");
+            CredentialBundleConverter old = new CredentialBundleConverter(KEY, 7, null, null, false);
             byte[] oldBlob = old.encrypt(new BearerToken("secret", null), CTX_A);
-            CredentialBundleConverter rotating = new CredentialBundleConverter(OTHER_KEY, 8, KEY, 7, "dev");
+            CredentialBundleConverter rotating = new CredentialBundleConverter(OTHER_KEY, 8, KEY, 7, false);
 
             assertThat(rotating.decrypt(oldBlob, CTX_A, 7)).isEqualTo(new BearerToken("secret", null));
             byte[] newBlob = rotating.encrypt(new BearerToken("new", null), CTX_A);
@@ -247,7 +247,7 @@ class CredentialBundleConverterTest extends BaseUnitTest {
 
         @Test
         void disabled_writeThrows() {
-            CredentialBundleConverter disabled = new CredentialBundleConverter("", "dev");
+            CredentialBundleConverter disabled = new CredentialBundleConverter("", false);
             assertThat(disabled.isEnabled()).isFalse();
 
             assertThatThrownBy(() -> disabled.encrypt(new BearerToken("x", null), CTX_A))
@@ -257,7 +257,7 @@ class CredentialBundleConverterTest extends BaseUnitTest {
 
         @Test
         void disabled_readThrows() {
-            CredentialBundleConverter disabled = new CredentialBundleConverter("", "dev");
+            CredentialBundleConverter disabled = new CredentialBundleConverter("", false);
             byte[] anyBytes = new byte[32];
             anyBytes[0] = CredentialBundleConverter.FORMAT_VERSION_V2;
 
@@ -266,14 +266,14 @@ class CredentialBundleConverterTest extends BaseUnitTest {
 
         @Test
         void prodProfile_missingKey_failsFast() {
-            assertThatThrownBy(() -> new CredentialBundleConverter("", "prod"))
+            assertThatThrownBy(() -> new CredentialBundleConverter("", true))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("required in production");
         }
 
         @Test
         void wrongLengthKey_failsFast() {
-            assertThatThrownBy(() -> new CredentialBundleConverter("short", "dev"))
+            assertThatThrownBy(() -> new CredentialBundleConverter("short", false))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("exactly 32");
         }

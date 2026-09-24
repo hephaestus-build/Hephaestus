@@ -5,10 +5,12 @@
 // per-language SOURCE table + a SINK table keyed off the file extension. Adding a language = adding rows,
 // no engine change. The taint flow spans lines, so we pair each source to nearby sinks and hand the LLM
 // the exact span to trace.
+import { isCommentLine } from "../lib/declarations.ts";
+import { languageOf } from "../lib/languages.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 /** A label -> pattern table row. The label is what a hint reports, so it is rendered verbatim. */
-type PatternRows = Array<[string, RegExp]>;
+type PatternRows = [string, RegExp][];
 
 /**
  * `all` is checked for every file whatever its language; `byLanguage` refines it for the languages
@@ -24,58 +26,61 @@ interface PatternTable {
 // checked for every file; language-specific rows refine the common web/runtime surfaces.
 const SOURCES: PatternTable = {
 	all: [
-		["request/req param", /\b(request|req)\b\s*[.[]/i],
+		["request/req param", /\b(?:request|req)\b\s*[.[]/iu],
 		[
 			"params/query/body/headers/cookies",
-			/\b(params|query|queryString|body|headers|cookies)\b\s*[.[]/,
+			/\b(?:params|query|queryString|body|headers|cookies)\b\s*[.[]/u,
 		],
-		["env var", /\b(process\.env|os\.environ|System\.getenv|getenv|std::env::var|ENV)\b/],
+		["env var", /\b(?:process\.env|os\.environ|System\.getenv|getenv|std::env::var|ENV)\b/u],
 		[
 			"argv / CLI args",
-			/\b(argv|sys\.args|os\.Args|process\.argv|CommandLine\.arguments|args\[)\b/,
+			/\b(?:argv|sys\.args|os\.Args|process\.argv|CommandLine\.arguments|args\[)\b/u,
 		],
-		["stdin / scanner read", /\b(stdin|readLine|Scanner|BufferedReader|input\s*\(|gets\b)\b/],
+		["stdin / scanner read", /\b(?:stdin|readLine|Scanner|BufferedReader|input\s*\(|gets\b)\b/u],
 	],
 	byLanguage: {
 		java: [
 			[
 				"servlet getParameter/getHeader",
-				/\.get(Parameter|Header|QueryString|Cookies|InputStream|Reader)\s*\(/,
+				/\.get(?:Parameter|Header|QueryString|Cookies|InputStream|Reader)\s*\(/u,
 			],
 			[
 				"@RequestParam/@PathVariable/@RequestBody",
-				/@(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue)\b/,
+				/@(?:RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue)\b/u,
 			],
-			["file read", /\bnew\s+(FileReader|FileInputStream)\s*\(|Files\.(read|newInputStream)\b/],
+			[
+				"file read",
+				/\bnew\s+(?:FileReader|FileInputStream)\s*\(|Files\.(?:read|newInputStream)\b/u,
+			],
 		],
-		ts: [
-			["express/koa req", /\breq\.(params|query|body|headers|cookies|get)\b/],
-			["fs read", /\bfs\.(readFile|readFileSync|createReadStream)\b/],
-			["URL/searchParams", /\b(searchParams|URLSearchParams|location\.(search|hash|href))\b/],
+		typescript: [
+			["express/koa req", /\breq\.(?:params|query|body|headers|cookies|get)\b/u],
+			["fs read", /\bfs\.(?:readFile|readFileSync|createReadStream)\b/u],
+			["URL/searchParams", /\b(?:searchParams|URLSearchParams|location\.(?:search|hash|href))\b/u],
 		],
 		python: [
 			[
 				"flask/django request",
-				/\brequest\.(args|form|values|json|GET|POST|data|files|headers|cookies)\b/,
+				/\brequest\.(?:args|form|values|json|GET|POST|data|files|headers|cookies)\b/u,
 			],
-			["open() read", /\bopen\s*\([^)]*['"]r/],
+			["open() read", /\bopen\s*\([^)]*['"]r/u],
 		],
 		go: [
-			["http.Request fields", /\br\.(URL|Form|PostForm|Body|Header|Cookie)\b/],
-			["FormValue/Query", /\.(FormValue|Query|PathValue)\s*\(/],
+			["http.Request fields", /\br\.(?:URL|Form|PostForm|Body|Header|Cookie)\b/u],
+			["FormValue/Query", /\.(?:FormValue|Query|PathValue)\s*\(/u],
 		],
-		ruby: [["rails params", /\bparams\[/]],
-		php: [["superglobals", /\$_(GET|POST|REQUEST|COOKIE|SERVER|FILES)\b/]],
-		csharp: [["Request fields", /\bRequest\.(Query|Form|Headers|Cookies|Body|QueryString)\b/]],
+		ruby: [["rails params", /\bparams\[/u]],
+		php: [["superglobals", /\$_(?:GET|POST|REQUEST|COOKIE|SERVER|FILES)\b/u]],
+		csharp: [["Request fields", /\bRequest\.(?:Query|Form|Headers|Cookies|Body|QueryString)\b/u]],
 		swift: [
-			["URLSession / response data", /\bURLSession\b|\.dataTask\b|\bdata\s*\(\s*for\s*:/],
+			["URLSession / response data", /\bURLSession\b|\.dataTask\b|\bdata\s*\(\s*for\s*:/u],
 			[
 				"request header / URL component",
-				/\.value\s*\(\s*forHTTPHeaderField|\bURLComponents\b|\.queryItems\b/,
+				/\.value\s*\(\s*forHTTPHeaderField|\bURLComponents\b|\.queryItems\b/u,
 			],
 			[
 				"UserDefaults / FileManager / env",
-				/\b(UserDefaults\.standard|FileManager\.default|ProcessInfo\.processInfo\.environment)\b/,
+				/\b(?:UserDefaults\.standard|FileManager\.default|ProcessInfo\.processInfo\.environment)\b/u,
 			],
 		],
 	},
@@ -87,92 +92,66 @@ const SINKS: PatternTable = {
 	all: [
 		[
 			"raw SQL string-concat",
-			/\b(SELECT|INSERT|UPDATE|DELETE|WHERE|FROM)\b[^;]*(\+|\$\{|%s|f["']|`|\|\||\.\.)/i,
+			/\b(?:SELECT|INSERT|UPDATE|DELETE|WHERE|FROM)\b[^;]*(?:\+|\$\{|%s|f["']|`|\|\||\.\.)/iu,
 		],
-		["eval", /\beval\s*\(/],
+		["eval", /\beval\s*\(/u],
 		[
 			"exec / shell",
-			/\b(exec|execSync|execve|spawn|popen|os\.system|subprocess\.(call|run|Popen)|shell_exec)\s*\(|(?<![.\w])system\s*\(/,
+			/\b(?:exec|execSync|execve|spawn|popen|os\.system|subprocess\.(?:call|run|Popen)|shell_exec)\s*\(|(?<![.\w])system\s*\(/u,
 		],
 		[
 			"deserialize",
-			/\b(pickle\.loads|yaml\.load\b|Marshal\.load|unserialize|JSON\.parse|deserialize)\s*\(/i,
+			/\b(?:pickle\.loads|yaml\.load\b|Marshal\.load|unserialize|JSON\.parse|deserialize)\s*\(/iu,
 		],
-		["template render", /\b(render(_template)?|template|Mustache|Handlebars|Jinja|ejs)\b/i],
-		["path join with input", /\b(path\.join|os\.path\.join|filepath\.Join|Paths\.get|File\s*\()/],
+		["template render", /\b(?:render(?:_template)?|template|Mustache|Handlebars|Jinja|ejs)\b/iu],
+		[
+			"path join with input",
+			/\b(?:path\.join|os\.path\.join|filepath\.Join|Paths\.get|File\s*\()/u,
+		],
 	],
 	byLanguage: {
 		java: [
-			["Runtime.exec / ProcessBuilder", /\b(Runtime\.getRuntime\(\)\.exec|ProcessBuilder)\b/],
+			["Runtime.exec / ProcessBuilder", /\b(?:Runtime\.getRuntime\(\)\.exec|ProcessBuilder)\b/u],
 			[
 				"Statement.execute (no prepare)",
-				/\b(createStatement|Statement)\b[^;]*\.(execute|executeQuery|executeUpdate)\b/,
+				/\b(?:createStatement|Statement)\b[^;]*\.(?:execute|executeQuery|executeUpdate)\b/u,
 			],
-			["ObjectInputStream", /\bObjectInputStream\b/],
+			["ObjectInputStream", /\bObjectInputStream\b/u],
 		],
-		ts: [
+		typescript: [
 			[
 				"innerHTML / dangerouslySetInnerHTML",
-				/\b(innerHTML|outerHTML|dangerouslySetInnerHTML|insertAdjacentHTML|document\.write)\b/,
+				/\b(?:innerHTML|outerHTML|dangerouslySetInnerHTML|insertAdjacentHTML|document\.write)\b/u,
 			],
-			["new Function", /\bnew\s+Function\s*\(/],
+			["new Function", /\bnew\s+Function\s*\(/u],
 		],
 		python: [
-			["cursor.execute concat", /\bcursor\.execute\b/],
-			["os.system / subprocess shell=True", /shell\s*=\s*True/],
+			["cursor.execute concat", /\bcursor\.execute\b/u],
+			["os.system / subprocess shell=True", /shell\s*=\s*True/u],
 		],
-		php: [["echo/print to HTML", /\b(echo|print)\b/]],
+		php: [["echo/print to HTML", /\b(?:echo|print)\b/u]],
 		csharp: [
-			["SqlCommand concat", /\bnew\s+SqlCommand\b/],
-			["Html.Raw", /\bHtml\.Raw\s*\(/],
+			["SqlCommand concat", /\bnew\s+SqlCommand\b/u],
+			["Html.Raw", /\bHtml\.Raw\s*\(/u],
 		],
 		swift: [
 			[
 				"WKWebView loadHTMLString / evaluateJavaScript",
-				/\b(loadHTMLString|evaluateJavaScript)\s*\(/,
+				/\b(?:loadHTMLString|evaluateJavaScript)\s*\(/u,
 			],
-			["sqlite3 exec/prepare", /\bsqlite3_(exec|prepare(_v2)?)\s*\(/],
-			["Process / shell launch", /\bProcess\s*\(\)|\.launchPath\b|\blaunch\s*\(\)/],
-			["NSExpression / String(format:)", /\bNSExpression\b|\bString\s*\(\s*format\s*:/],
+			["sqlite3 exec/prepare", /\bsqlite3_(?:exec|prepare(?:_v2)?)\s*\(/u],
+			["Process / shell launch", /\bProcess\s*\(\)|\.launchPath\b|\blaunch\s*\(\)/u],
+			["NSExpression / String(format:)", /\bNSExpression\b|\bString\s*\(\s*format\s*:/u],
 		],
 	},
-};
-
-// extension -> language key (drives which SOURCES/SINKS rows refine the "all" set).
-const EXT_LANG: Record<string, string> = {
-	ts: "ts",
-	tsx: "ts",
-	mts: "ts",
-	cts: "ts",
-	js: "ts",
-	jsx: "ts",
-	mjs: "ts",
-	cjs: "ts",
-	py: "python",
-	java: "java",
-	go: "go",
-	rb: "ruby",
-	php: "php",
-	cs: "csharp",
-	swift: "swift",
 };
 
 // Sources and sinks co-occurring within this many added lines are surfaced as a candidate flow.
 const WINDOW = 25;
 
-function langOf(path: string): string | null {
-	const ext = path.split(".").pop()?.toLowerCase() ?? "";
-	return EXT_LANG[ext] ?? null;
-}
-
-function isComment(t: string): boolean {
-	return (
-		t.startsWith("//") ||
-		t.startsWith("#") ||
-		t.startsWith("*") ||
-		t.startsWith("/*") ||
-		t.startsWith("--")
-	);
+/** JavaScript shares TypeScript's surfaces; the lib names the two apart. */
+function rowsLanguage(lang: string | null): string | null {
+	return lang === "javascript" ? "typescript" : lang;
 }
 
 /** Cross-language rows first, then the rows for this file's language (none when it is unrecognised). */
@@ -182,7 +161,9 @@ function rowsFor(table: PatternTable, lang: string | null): PatternRows {
 
 function firstMatch(rows: PatternRows, content: string): string | null {
 	for (const [label, re] of rows) {
-		if (re.test(content)) return label;
+		if (re.test(content)) {
+			return label;
+		}
 	}
 	return null;
 }
@@ -194,30 +175,41 @@ export default function validatesAndEscapesUntrustedInput(
 ) {
 	const hints: Hint[] = [];
 	let flowCount = 0;
+	let linesAdded = 0;
 
 	for (const [path, df] of diffFiles) {
-		const lang = langOf(path);
-		const sourceRows = rowsFor(SOURCES, lang);
-		const sinkRows = rowsFor(SINKS, lang);
+		const lang = languageOf(path);
+		const sourceRows = rowsFor(SOURCES, rowsLanguage(lang));
+		const sinkRows = rowsFor(SINKS, rowsLanguage(lang));
 
 		// Collect source / sink positions on ADDED lines only.
-		const srcLines: Array<{ line: number; label: string; content: string }> = [];
-		const sinkLines: Array<{ line: number; label: string; content: string }> = [];
+		const srcLines: { line: number; label: string; content: string }[] = [];
+		const sinkLines: { line: number; label: string; content: string }[] = [];
 		for (const [line, content] of df.addedLines) {
-			const trimmed = content.trimStart();
-			if (isComment(trimmed)) continue;
+			if (isCommentLine(content, lang ?? "")) {
+				continue;
+			}
+			linesAdded += 1;
 			const s = firstMatch(sourceRows, content);
-			if (s) srcLines.push({ line, label: s, content });
+			if (s !== null) {
+				srcLines.push({ line, label: s, content });
+			}
 			const k = firstMatch(sinkRows, content);
-			if (k) sinkLines.push({ line, label: k, content });
+			if (k !== null) {
+				sinkLines.push({ line, label: k, content });
+			}
 		}
-		if (srcLines.length === 0 || sinkLines.length === 0) continue;
+		if (srcLines.length === 0 || sinkLines.length === 0) {
+			continue;
+		}
 
 		// Surface each sink that has a source within WINDOW lines — that pairing is the flow to trace.
 		for (const sink of sinkLines) {
 			const near = srcLines.find((s) => Math.abs(s.line - sink.line) <= WINDOW);
-			if (!near) continue;
-			flowCount++;
+			if (!near) {
+				continue;
+			}
+			flowCount += 1;
 			hints.push({
 				file: path,
 				line: sink.line,
@@ -241,5 +233,9 @@ export default function validatesAndEscapesUntrustedInput(
 				]
 			: [];
 
-	return { hints: hints.slice(0, 40), metrics: { sourceSinkFlows: flowCount }, directions };
+	return {
+		hints: hints.slice(0, 40),
+		metrics: { sourceSinkFlows: flowCount, filesScanned: diffFiles.size, linesAdded },
+		directions,
+	};
 }

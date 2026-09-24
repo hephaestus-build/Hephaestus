@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.core.auth.export;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Job;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Outcome;
-import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
@@ -13,7 +12,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -36,60 +36,81 @@ public class ExportGenerationWorker {
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final PrivacyJobMetrics metrics;
+    private final TransactionTemplate transaction;
 
     public ExportGenerationWorker(
             AccountExportRepository accountExportRepository,
             ExportBundleAssembler assembler,
             ObjectMapper objectMapper,
             Clock clock,
-            PrivacyJobMetrics metrics) {
+            PrivacyJobMetrics metrics,
+            PlatformTransactionManager transactionManager) {
         this.accountExportRepository = accountExportRepository;
         this.assembler = assembler;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.metrics = metrics;
+        this.transaction = new TransactionTemplate(transactionManager);
     }
 
-    /**
-     * Generate the bundle for {@code exportId} (owned by {@code accountId}) and persist the outcome.
-     * PROCESSING → READY on success (payload + expiry set), → FAILED on any error. Never throws to the
-     * caller (it's fire-and-forget); failures are recorded on the row and on the privacy-job counters.
-     */
+    /** Generate the export atomically; record a failure only after the failed transaction rolls back. */
     @Async
-    @Transactional
     public void generate(Long exportId, Long accountId) {
+        boolean generated;
+        try {
+            generated = Boolean.TRUE.equals(transaction.execute(status -> assemble(exportId, accountId)));
+        } catch (JacksonException e) {
+            recordFailure(exportId, accountId, "serialization_failed", e);
+            return;
+        } catch (RuntimeException e) {
+            recordFailure(exportId, accountId, "assembly_failed", e);
+            return;
+        }
+        metrics.record(Job.EXPORT_GENERATION, generated ? Outcome.SUCCESS : Outcome.FAILURE);
+        if (generated) {
+            metrics.recordAffected(Job.EXPORT_GENERATION, 1);
+            log.info("auth.export: export {} for account {} READY", exportId, accountId);
+        }
+    }
+
+    private boolean assemble(Long exportId, Long accountId) {
         AccountExport export = accountExportRepository
                 .findByIdAndAccountId(exportId, accountId)
                 .orElse(null);
         if (export == null) {
-            // Row vanished (e.g. account hard-deleted between request and pickup). Nothing to do.
             log.warn("auth.export: generation skipped, export {} for account {} not found", exportId, accountId);
-            recordAfterCommit(Outcome.FAILURE);
-            return;
+            return false;
         }
         export.setStatus(AccountExport.Status.PROCESSING);
         accountExportRepository.save(export);
 
+        ExportBundle bundle = assembler.assemble(accountId);
+        byte[] payload = objectMapper.writeValueAsBytes(bundle);
+        Instant now = Instant.now(clock);
+        export.setPayload(payload);
+        export.setCompletedAt(now);
+        export.setExpiresAt(now.plus(RETENTION));
+        export.setStatus(AccountExport.Status.READY);
+        accountExportRepository.save(export);
+        return true;
+    }
+
+    private void recordFailure(Long exportId, Long accountId, String reason, RuntimeException failure) {
+        log.error("auth.export: generation failed for export {} account {}", exportId, accountId, failure);
+        metrics.record(Job.EXPORT_GENERATION, Outcome.FAILURE);
         try {
-            ExportBundle bundle = assembler.assemble(accountId);
-            byte[] payload = objectMapper.writeValueAsBytes(bundle);
-            Instant now = Instant.now(clock);
-            export.setPayload(payload);
-            export.setCompletedAt(now);
-            export.setExpiresAt(now.plus(RETENTION));
-            export.setStatus(AccountExport.Status.READY);
-            accountExportRepository.save(export);
-            TransactionCallbacks.afterCommit(() -> {
-                metrics.record(Job.EXPORT_GENERATION, Outcome.SUCCESS);
-                metrics.recordAffected(Job.EXPORT_GENERATION, 1);
+            // Repository errors can mark a transaction rollback-only; recovery needs a fresh transaction.
+            transaction.executeWithoutResult(status -> {
+                accountExportRepository
+                        .findByIdAndAccountId(exportId, accountId)
+                        .ifPresent(export -> fail(export, reason));
             });
-            log.info("auth.export: export {} for account {} READY ({} bytes)", exportId, accountId, payload.length);
-        } catch (JacksonException e) {
-            fail(export, "serialization_failed");
-            log.error("auth.export: serialization failed for export {} account {}", exportId, accountId, e);
-        } catch (RuntimeException e) {
-            fail(export, "assembly_failed");
-            log.error("auth.export: assembly failed for export {} account {}", exportId, accountId, e);
+        } catch (RuntimeException recoveryFailure) {
+            log.error(
+                    "auth.export: could not record failure for export {} account {}",
+                    exportId,
+                    accountId,
+                    recoveryFailure);
         }
     }
 
@@ -97,12 +118,8 @@ public class ExportGenerationWorker {
         export.setStatus(AccountExport.Status.FAILED);
         export.setFailureReason(reason);
         export.setPayload(null);
+        export.setCompletedAt(null);
+        export.setExpiresAt(null);
         accountExportRepository.save(export);
-        recordAfterCommit(Outcome.FAILURE);
-    }
-
-    /** A counter an operator alerts on must not claim an outcome for a row the commit could still lose. */
-    private void recordAfterCommit(Outcome outcome) {
-        TransactionCallbacks.afterCommit(() -> metrics.record(Job.EXPORT_GENERATION, outcome));
     }
 }

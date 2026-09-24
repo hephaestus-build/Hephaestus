@@ -48,6 +48,17 @@ class CatalogOriginTest extends BaseUnitTest {
     }
 
     @Test
+    void aDeclinedOfferDoesNotStillReadAsAvailable() {
+        Practice copy = practice("Seed criteria", fingerprintOf("Seed criteria"));
+        copy.setAdoptedBase(definition("Seed criteria"));
+        copy.setAdoptedBaseSource(AdoptedBaseSource.EXACT_ADOPTION);
+        copy.setDeclinedOfferedDigest(definition("Instance criteria").exactFingerprint(SLUG));
+
+        assertThat(origin(copy, catalog("Instance criteria")).link()).isEqualTo(CatalogLink.DECLINED);
+        assertThat(origin(copy, catalog("Later criteria")).link()).isEqualTo(CatalogLink.UPDATE_AVAILABLE);
+    }
+
+    @Test
     void aCopyEditedAwayAndBackIsInSyncAgain() {
         Practice copy = practice("Our own criteria", fingerprintOf("Seed criteria"));
         assertThat(origin(copy, catalog("Seed criteria")).link()).isEqualTo(CatalogLink.LOCALLY_EDITED);

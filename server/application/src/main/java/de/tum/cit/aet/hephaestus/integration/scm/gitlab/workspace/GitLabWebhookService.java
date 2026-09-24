@@ -252,7 +252,7 @@ public class GitLabWebhookService {
                     true, // confidential_note_events
                     true, // push_events
                     true, // tag_push_events
-                    false, // pipeline_events
+                    true, // pipeline_events
                     true, // milestone_events
                     true, // member_events
                     true, // subgroup_events
@@ -279,11 +279,13 @@ public class GitLabWebhookService {
             }
             int status = e.getStatusCode().value();
             String apiReason = String.format("GitLab API error: %d", status);
-            log.warn(
-                    "Webhook registration failed: workspaceId={}, reason={}, body={}",
-                    scopeId,
-                    apiReason,
-                    e.getResponseBodyAsString());
+            // A provider error response can echo the webhook secret or private request data.
+            log.atWarn()
+                    .addKeyValue("event.name", "integration.webhook.registration.failed")
+                    .addKeyValue("integration.kind", IntegrationKind.GITLAB)
+                    .addKeyValue("workspace.id", scopeId)
+                    .addKeyValue("http.response.status_code", status)
+                    .log("GitLab webhook registration failed");
             return WebhookSetupResult.failed(apiReason);
         }
     }

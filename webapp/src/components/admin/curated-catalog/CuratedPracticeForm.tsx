@@ -9,8 +9,8 @@ import type {
 import {
 	PracticeDefinitionForm,
 	type PracticeDefinitionValue,
-} from "@/components/admin/practice-catalog/PracticeDefinitionForm";
-import { PracticeAutomatedReviewValidationSummary } from "@/components/admin/practice-catalog/PracticeEvidenceSummary";
+} from "@/components/admin/practice-editor/PracticeDefinitionForm";
+import { PracticeAutomatedReviewValidationSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
 	AlertDialog,
@@ -46,6 +46,7 @@ interface CuratedPracticeFormBaseProps {
 	isKeepPending?: boolean;
 	onUseHephaestusVersion?: () => void;
 	onKeepCurrentDefinition?: () => void;
+	releaseReview?: React.ReactNode;
 	definitionOptions: PracticeDefinitionOptions;
 	/** What "leave without saving" does. The host owns it, because only the host knows where back is. */
 	cancel: React.ReactNode;
@@ -80,17 +81,20 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 		initialData,
 		definitionOptions,
 		onKeepCurrentDefinition,
+		releaseReview,
 		cancel,
 	} = props;
 	const [resetOpen, setResetOpen] = useState(false);
 	const canReset =
-		mode === "edit" && canUseHephaestusVersion(initialData.status) && onUseHephaestusVersion;
-	const updateAvailable = mode === "edit" && initialData.status.state === "UPDATE_WAITING";
+		mode === "edit" &&
+		canUseHephaestusVersion(initialData.status) &&
+		onUseHephaestusVersion !== undefined;
 	const formDisabled = isResetPending || isKeepPending;
 	/** The host's own banners, handed to the form so they land inside its padded, scrolling body. */
 	const banners = (
 		<>
-			{mode === "edit" && (
+			{mode === "edit" && initialData.status.state === "UPDATE_WAITING" && releaseReview}
+			{mode === "edit" && initialData.status.state !== "UPDATE_WAITING" && (
 				<HephaestusVersionPanel
 					status={initialData.status}
 					kind="practice"
@@ -105,7 +109,7 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 				/>
 			)}
 
-			{conflict && (
+			{conflict === true && (
 				<div className="space-y-2">
 					<Alert variant="warning" role="alert">
 						<RotateCcw />
@@ -125,7 +129,7 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 		</>
 	);
 
-	const resetLabel = updateAvailable ? "Apply Hephaestus update" : "Restore Hephaestus default";
+	const resetLabel = "Restore Hephaestus default";
 
 	return (
 		<>
@@ -184,7 +188,7 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 								<div>
 									<h2 className="text-lg font-semibold">What the author declared</h2>
 									<p className="text-sm text-muted-foreground">
-										The evidence requirements above are the author's own claim about this practice.
+										The evidence requirements above are the author’s own claim about this practice.
 										Nobody has checked them independently. The digests record the exact rules that
 										were declared, so a later change to them is visible rather than silent.
 									</p>

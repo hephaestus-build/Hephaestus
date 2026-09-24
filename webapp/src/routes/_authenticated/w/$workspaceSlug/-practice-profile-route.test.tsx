@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { detailObservation, detailRun } from "@/stories/practice-detail-story-mock-data";
 import {
@@ -19,7 +20,9 @@ vi.setConfig({ testTimeout: 15_000 });
 const PAGE = "/w/acme/practice-profile";
 
 const [first] = practiceStandings;
-if (!first) throw new Error("The fixtures carry at least one practice with a standing");
+if (!first) {
+	throw new Error("The fixtures carry at least one practice with a standing");
+}
 /** Narrowed once, so the helpers below can read it without a guard each. */
 const practice = first;
 
@@ -33,6 +36,11 @@ const run = { ...detailRun, observations: [observation] };
 
 beforeEach(() => {
 	server.use(
+		// The surface exists only where practices review the work, and the shared fixture has them
+		// off, so every case below has to say that this workspace reviews.
+		http.get("*/workspaces", () =>
+			HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]),
+		),
 		// A plain MEMBER: the profile is the developer's own page, not an admin surface.
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json({ role: "MEMBER", userId: 1, userLogin: "ada", userName: "Ada" }),
@@ -95,6 +103,19 @@ async function openPractice(router: Awaited<ReturnType<typeof renderProfile>>) {
  * silent at their defaults so the address a reader shares is the shortest one that means the same.
  */
 describe("practice profile route", () => {
+	it("sends a reader away when this workspace does not review practices", async () => {
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([workspaceListItem("acme", { practicesEnabled: false })]),
+			),
+		);
+		const { router } = renderRouteAtWithRouter(PAGE);
+
+		// With practices off the page does not exist here, so the reader lands on the workspace home
+		// rather than on a profile with nothing to be about.
+		await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme"), ROUTE_RENDER_WAIT);
+	});
+
 	it("stacks the list, a group and a practice in the detail param, one history entry each", async () => {
 		const router = await renderProfile();
 		const entries = router.history.length;
@@ -132,7 +153,7 @@ describe("practice profile route", () => {
 		const before = searchStr();
 
 		// The observation arrives open, with what the feed carries; a press closes it in place.
-		const rowName = { name: new RegExp(observation.summary) };
+		const rowName = { name: new RegExp(observation.summary, "u") };
 		const row = () => screen.getByRole("button", rowName);
 		// The feed is its own request: under load it lands after the level does.
 		await screen.findByRole("button", rowName, ROUTE_RENDER_WAIT);
@@ -173,11 +194,11 @@ describe("practice profile route", () => {
 	it("keeps the URL silent on the default feedback tab and spells every other one", async () => {
 		const router = await renderProfile();
 
-		fireEvent.click(await screen.findByRole("tab", { name: /^Resolved/ }));
+		fireEvent.click(await screen.findByRole("tab", { name: /^Resolved/u }));
 		await waitFor(() => expect(router.state.location.search.feedback).toBe("resolved"));
 		// The tab is selected once the page has read it back from the URL; a press on a tab that is
 		// still selected in the DOM is not a change.
-		fireEvent.click(await screen.findByRole("tab", { name: /^Newest/, selected: false }));
+		fireEvent.click(await screen.findByRole("tab", { name: /^Newest/u, selected: false }));
 
 		await waitFor(() => expect(router.state.location.search.feedback).toBeUndefined());
 		expect(router.state.location.searchStr).toBe("");
@@ -190,7 +211,7 @@ describe("practice profile route", () => {
 			await screen.findByRole("button", { name: "See all practices" }, ROUTE_RENDER_WAIT),
 		);
 		const table = await screen.findByRole("table", { name: "All practices" });
-		const standing = () => within(table).getByRole("button", { name: /Standing/ });
+		const standing = () => within(table).getByRole("button", { name: /Standing/u });
 		// One press flips the sort away from the default, the next lands back on it — once the
 		// header has read the first press back from the URL.
 		fireEvent.click(standing());

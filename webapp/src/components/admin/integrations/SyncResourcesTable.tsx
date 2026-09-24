@@ -2,10 +2,12 @@ import { format } from "date-fns";
 import { AlertCircleIcon, DatabaseIcon, SearchIcon, TriangleAlertIcon } from "lucide-react";
 import { Fragment, useState } from "react";
 
+import { cn } from "cn";
 import type { SyncResourceCount, SyncResourceState } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { SortButton } from "@/components/common/SortButton";
+import { useNow } from "@/components/common/use-now";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -15,7 +17,7 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Progress } from "@/components/ui/progress";
 import {
 	Table,
@@ -29,27 +31,21 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { asDate } from "@/lib/dates";
-import { cn } from "@/lib/utils";
+import { hasText } from "@/lib/text";
 
 import { freshnessTone, stateLabel } from "./sync-format";
 import { TableRowsSkeleton } from "./TableRowsSkeleton";
 
 type ClassKey = SyncResourceCount["key"];
 
-interface ClassColumn {
-	key: string;
-	label: string;
-	/**
-	 * The wire classes this column reports. More than one only for Comments, where the issue/review
-	 * split is an implementation detail of the mirror rather than a distinction an admin acts on — the
-	 * two are the same pipeline in the same repository, and the split is still spelled out in the cell's
-	 * tooltip so a stalled half is never hidden.
-	 */
-	sourceKeys: ClassKey[];
-}
-
-/** The count columns, in reading order, and the fold from wire classes to them. */
-const CLASS_COLUMNS: ClassColumn[] = [
+/**
+ * The count columns, in reading order, and the fold from wire classes to them. A column folds more
+ * than one class only for Comments, where the issue/review split is an implementation detail of the
+ * mirror rather than a distinction an admin acts on — the two are the same pipeline in the same
+ * repository, and the split is still spelled out in the cell's tooltip so a stalled half is never
+ * hidden.
+ */
+const CLASS_COLUMNS = [
 	{ key: "issues", label: "Issues", sourceKeys: ["issues"] },
 	{ key: "pullRequests", label: "PRs", sourceKeys: ["pullRequests"] },
 	{ key: "reviews", label: "Reviews", sourceKeys: ["reviews"] },
@@ -57,7 +53,9 @@ const CLASS_COLUMNS: ClassColumn[] = [
 	{ key: "commits", label: "Commits", sourceKeys: ["commits"] },
 	{ key: "messages", label: "Messages", sourceKeys: ["messages"] },
 	{ key: "documents", label: "Documents", sourceKeys: ["documents"] },
-];
+] as const satisfies readonly { key: string; label: string; sourceKeys: readonly ClassKey[] }[];
+
+type ClassColumn = (typeof CLASS_COLUMNS)[number];
 
 /** The classes an SCM repository mirrors — see {@link SyncResourcesTableProps.expectedClassKeys}. */
 export const SCM_CLASS_KEYS: ClassKey[] = [
@@ -110,8 +108,10 @@ function untrackedLabelsOf(resource: SyncResourceState): string[] {
 
 function joinLabels(labels: string[]): string {
 	const lower = labels.map((label) => label.toLowerCase());
-	if (lower.length <= 1) return lower[0] ?? "";
-	return `${lower.slice(0, -1).join(", ")} and ${lower[lower.length - 1]}`;
+	if (lower.length <= 1) {
+		return lower[0] ?? "";
+	}
+	return `${lower.slice(0, -1).join(", ")} and ${lower.at(-1)}`;
 }
 
 /**
@@ -124,9 +124,12 @@ function joinLabels(labels: string[]): string {
 function hasWatermarkDivergence(
 	resource: SyncResourceState,
 	syncIntervalSeconds: number | undefined,
+	now: number,
 ): boolean {
-	if (syncIntervalSeconds == null || syncIntervalSeconds <= 0) return false;
-	const tones = watermarksOf(resource).map((w) => freshnessTone(w.date, syncIntervalSeconds));
+	if (syncIntervalSeconds == null || syncIntervalSeconds <= 0) {
+		return false;
+	}
+	const tones = watermarksOf(resource).map((w) => freshnessTone(w.date, syncIntervalSeconds, now));
 	const healthy = tones.some((tone) => tone === "fresh");
 	const atRisk = tones.some((tone) => tone === "stale" || tone === "veryStale");
 	return healthy && atRisk;
@@ -144,9 +147,12 @@ function isBackfilling(resource: SyncResourceState): boolean {
 function isAttention(
 	resource: SyncResourceState,
 	syncIntervalSeconds: number | undefined,
+	now: number,
 ): boolean {
-	if (isErrorState(resource)) return true;
-	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds);
+	if (isErrorState(resource)) {
+		return true;
+	}
+	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds, now);
 	return tone === "stale" || tone === "veryStale" || tone === "never";
 }
 
@@ -154,17 +160,31 @@ function isAttention(
  * The triage tier that puts the one broken repository among seventy at the top by default:
  * error → veryStale → stale → never → backfilling → fresh/unknown. A user-clicked column sort overrides.
  */
-function triageRank(resource: SyncResourceState, syncIntervalSeconds: number | undefined): number {
-	if (isErrorState(resource)) return 0;
-	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds);
-	if (tone === "veryStale") return 1;
-	if (tone === "stale") return 2;
-	if (tone === "never") return 3;
-	if (isBackfilling(resource)) return 4;
+function triageRank(
+	resource: SyncResourceState,
+	syncIntervalSeconds: number | undefined,
+	now: number,
+): number {
+	if (isErrorState(resource)) {
+		return 0;
+	}
+	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds, now);
+	if (tone === "veryStale") {
+		return 1;
+	}
+	if (tone === "stale") {
+		return 2;
+	}
+	if (tone === "never") {
+		return 3;
+	}
+	if (isBackfilling(resource)) {
+		return 4;
+	}
 	return 5;
 }
 
-type SortKey = "name" | "lastSynced" | (string & {});
+type SortKey = "name" | "lastSynced" | ClassColumn["key"];
 interface SortState {
 	key: SortKey;
 	dir: "asc" | "desc";
@@ -182,12 +202,14 @@ function compareResources(
 	sortState: SortState | null,
 	columns: ClassColumn[],
 	syncIntervalSeconds: number | undefined,
+	now: number,
 ): number {
 	if (!sortState) {
-		const rankDelta = triageRank(a, syncIntervalSeconds) - triageRank(b, syncIntervalSeconds);
-		return rankDelta !== 0 ? rankDelta : a.name.localeCompare(b.name);
+		const rankDelta =
+			triageRank(a, syncIntervalSeconds, now) - triageRank(b, syncIntervalSeconds, now);
+		return rankDelta === 0 ? a.name.localeCompare(b.name) : rankDelta;
 	}
-	let delta = 0;
+	let delta: number;
 	if (sortState.key === "name") {
 		delta = a.name.localeCompare(b.name);
 	} else if (sortState.key === "lastSynced") {
@@ -199,7 +221,9 @@ function compareResources(
 		const column = columns.find((c) => c.key === sortState.key);
 		delta = column ? columnTotal(a, column) - columnTotal(b, column) : 0;
 	}
-	if (delta === 0) delta = a.name.localeCompare(b.name);
+	if (delta === 0) {
+		delta = a.name.localeCompare(b.name);
+	}
 	return sortState.dir === "asc" ? delta : -delta;
 }
 
@@ -223,7 +247,10 @@ function SortableHeadCell({
 	onSort?: (key: SortKey) => void;
 }) {
 	const active = sortState?.key === sortKey;
-	const ariaSort = active ? (sortState.dir === "asc" ? "ascending" : "descending") : "none";
+	let ariaSort: "ascending" | "descending" | "none" = "none";
+	if (active) {
+		ariaSort = sortState.dir === "asc" ? "ascending" : "descending";
+	}
 
 	if (!onSort) {
 		return (
@@ -258,7 +285,7 @@ function ResourcesTableHeader({
 	onSort?: (key: SortKey) => void;
 }) {
 	return (
-		<TableHeader className="sticky top-0 z-10 bg-card">
+		<TableHeader sticky>
 			<TableRow>
 				<SortableHeadCell
 					label={resourceNoun}
@@ -316,7 +343,7 @@ function ResourceNameCell({
 					render={
 						<button
 							type="button"
-							className="block min-w-0 cursor-help rounded-sm text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+							className="block min-w-0 cursor-help rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 						/>
 					}
 				>
@@ -325,7 +352,7 @@ function ResourceNameCell({
 						<span className="max-w-[26ch] truncate font-medium">{resource.name}</span>
 					</span>
 					{showExternalId && (
-						<span className="block max-w-[26ch] truncate text-muted-foreground font-mono text-xs">
+						<span className="block max-w-[26ch] truncate font-mono text-xs text-muted-foreground">
 							{resource.externalId}
 						</span>
 					)}
@@ -333,7 +360,7 @@ function ResourceNameCell({
 				<HoverCardContent className="w-80 space-y-1.5">
 					<p className="font-medium wrap-anywhere">{resource.name}</p>
 					{showExternalId && (
-						<p className="text-muted-foreground font-mono text-xs wrap-anywhere">
+						<p className="font-mono text-xs wrap-anywhere text-muted-foreground">
 							{resource.externalId}
 						</p>
 					)}
@@ -364,7 +391,7 @@ function ResourceNameCell({
 						)}
 					</dl>
 					{!completedThrough && !isBackfillingRow && (
-						<p className="text-muted-foreground text-xs">
+						<p className="text-xs text-muted-foreground">
 							No backfill has run for this {resourceNoun}.
 						</p>
 					)}
@@ -377,7 +404,7 @@ function ResourceNameCell({
 						className="h-1 w-24"
 						aria-label={`Backfill progress for ${resource.name}`}
 					/>
-					<span className="text-muted-foreground text-xs tabular-nums">
+					<span className="text-xs text-muted-foreground tabular-nums">
 						Backfilling · {percent}%
 					</span>
 				</div>
@@ -386,19 +413,20 @@ function ResourceNameCell({
 	);
 }
 
+const STATUS_DOT_TONE: Record<string, string> = {
+	ERROR: "bg-destructive",
+	PENDING: "bg-muted-foreground",
+};
+
 /**
  * The row's status marker. Only the states that qualify the row's numbers get a mark; the word itself
  * stays available to a screen reader, which cannot see a coloured dot.
  */
 function StatusDot({ state }: { state: string }) {
-	const normalized = state.toUpperCase();
-	const tone =
-		normalized === "ERROR"
-			? "bg-destructive"
-			: normalized === "PENDING"
-				? "bg-muted-foreground"
-				: undefined;
-	if (!tone) return null;
+	const tone = STATUS_DOT_TONE[state.toUpperCase()];
+	if (tone === undefined) {
+		return null;
+	}
 	return (
 		<>
 			<span className={cn("size-1.5 shrink-0 rounded-full", tone)} aria-hidden />
@@ -419,15 +447,17 @@ function LastSyncedCell({
 	resource,
 	resourceNoun,
 	syncIntervalSeconds,
+	now,
 }: {
 	resource: SyncResourceState;
 	resourceNoun: string;
 	syncIntervalSeconds?: number;
+	now: number;
 }) {
-	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds);
+	const tone = freshnessTone(resource.lastSyncedAt, syncIntervalSeconds, now);
 	const watermarks = watermarksOf(resource);
 	const untracked = untrackedLabelsOf(resource);
-	const divergent = hasWatermarkDivergence(resource, syncIntervalSeconds);
+	const divergent = hasWatermarkDivergence(resource, syncIntervalSeconds, now);
 
 	return (
 		<TableCell>
@@ -436,7 +466,7 @@ function LastSyncedCell({
 					render={
 						<button
 							type="button"
-							className="inline-flex cursor-help items-center gap-1 rounded-sm text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+							className="inline-flex cursor-help items-center gap-1 rounded-sm text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 						/>
 					}
 				>
@@ -468,7 +498,7 @@ function LastSyncedCell({
 						</dl>
 					)}
 					{untracked.length > 0 && (
-						<p className="text-muted-foreground text-xs">
+						<p className="text-xs text-muted-foreground">
 							No separate watermark is kept for {joinLabels(untracked)} — they are written by the
 							same sync pass.
 						</p>
@@ -525,21 +555,25 @@ function ClassCountCell({
 		);
 	}
 
-	return <TableCell className="text-right tabular-nums">{total.toLocaleString()}</TableCell>;
+	return (
+		<TableCell numeric className="text-right">
+			{total.toLocaleString()}
+		</TableCell>
+	);
 }
 
 /** The last error, as a read-only peek: it reveals, it does not act, and it traps no focus. */
 function ResourceErrorCell({ resource }: { resource: SyncResourceState }) {
 	return (
 		<TableCell className="text-right">
-			{resource.lastError && (
+			{hasText(resource.lastError) && (
 				<HoverCard>
 					<HoverCardTrigger
 						render={
 							<button
 								type="button"
 								aria-label={`Error for ${resource.name}`}
-								className="inline-flex cursor-help rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+								className="inline-flex cursor-help rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
 							/>
 						}
 					>
@@ -578,8 +612,8 @@ function TotalsFooter({
 	// as a summary rather than one more data row, while staying opaque enough that scrolling rows don't
 	// bleed through the sticky footer (the `bg-muted/50` default would). `border-t-2` sets it apart.
 	return (
-		<TableFooter className="sticky bottom-0 z-10 border-t-2 bg-muted">
-			<TableRow className="hover:bg-transparent">
+		<TableFooter sticky>
+			<TableRow variant="static">
 				<TableCell className="font-medium capitalize">All {resourceNounPlural}</TableCell>
 				<TableCell />
 				{sums.map(({ column, sum }) => {
@@ -606,7 +640,7 @@ function TotalsFooter({
 						);
 					}
 					return (
-						<TableCell key={column.key} className="text-right tabular-nums">
+						<TableCell key={column.key} numeric className="text-right">
 							{sum.toLocaleString()}
 						</TableCell>
 					);
@@ -660,6 +694,7 @@ export function SyncResourcesTable({
 	syncIntervalSeconds,
 	expectedClassKeys,
 }: SyncResourcesTableProps) {
+	const now = useNow();
 	const [query, setQuery] = useState("");
 	const [facet, setFacet] = useState<"all" | "attention" | "fresh">("all");
 	const [sortState, setSortState] = useState<SortState | null>(null);
@@ -689,7 +724,7 @@ export function SyncResourcesTable({
 
 	if (resources.length === 0) {
 		return (
-			<Empty className="border border-dashed">
+			<Empty variant="outlined">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">
 						<DatabaseIcon />
@@ -706,7 +741,7 @@ export function SyncResourcesTable({
 	const columns = columnsFor([...(expectedClassKeys ?? []), ...classKeysOf(resources)]);
 	const colSpan = columns.length + 3;
 
-	const attentionCount = resources.filter((r) => isAttention(r, syncIntervalSeconds)).length;
+	const attentionCount = resources.filter((r) => isAttention(r, syncIntervalSeconds, now)).length;
 	const freshCount = resources.length - attentionCount;
 	const totalItems = resources.reduce((sum, r) => sum + (r.itemCount ?? 0), 0);
 
@@ -724,14 +759,14 @@ export function SyncResourcesTable({
 					r.externalId.toLowerCase().includes(normalizedQuery),
 			)
 		: resources;
-	const faceted =
-		effectiveFacet === "attention"
-			? searched.filter((r) => isAttention(r, syncIntervalSeconds))
-			: effectiveFacet === "fresh"
-				? searched.filter((r) => !isAttention(r, syncIntervalSeconds))
-				: searched;
+	let faceted = searched;
+	if (effectiveFacet === "attention") {
+		faceted = searched.filter((r) => isAttention(r, syncIntervalSeconds, now));
+	} else if (effectiveFacet === "fresh") {
+		faceted = searched.filter((r) => !isAttention(r, syncIntervalSeconds, now));
+	}
 	const visible = [...faceted].sort((a, b) =>
-		compareResources(a, b, sortState, columns, syncIntervalSeconds),
+		compareResources(a, b, sortState, columns, syncIntervalSeconds, now),
 	);
 
 	const clearFilters = () => {
@@ -741,8 +776,12 @@ export function SyncResourcesTable({
 
 	const onSort = (key: SortKey) => {
 		setSortState((prev) => {
-			if (!prev || prev.key !== key) return { key, dir: defaultDir(key) };
-			if (prev.dir === defaultDir(key)) return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
+			if (!prev || prev.key !== key) {
+				return { key, dir: defaultDir(key) };
+			}
+			if (prev.dir === defaultDir(key)) {
+				return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
+			}
 			return null;
 		});
 	};
@@ -750,26 +789,24 @@ export function SyncResourcesTable({
 	return (
 		<div className="space-y-3">
 			<div className="flex flex-wrap items-center gap-3">
-				<div className="relative min-w-56 max-w-xs flex-1">
-					<SearchIcon
-						className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-						aria-hidden
-					/>
-					<Input
+				<InputGroup className="max-w-xs min-w-56 flex-1">
+					<InputGroupAddon>
+						<SearchIcon aria-hidden />
+					</InputGroupAddon>
+					<InputGroupInput
 						type="search"
 						value={query}
 						onChange={(event) => setQuery(event.target.value)}
 						placeholder={`Search ${resourceNounPlural}…`}
 						aria-label={`Search ${resourceNounPlural}`}
-						className="pl-8"
 					/>
-				</div>
+				</InputGroup>
 
 				{attentionCount > 0 && (
 					<ToggleGroup
 						value={[facet]}
 						onValueChange={(value) => {
-							const next = value.length > 0 ? value[value.length - 1] : "all";
+							const next = value.length > 0 ? value.at(-1) : "all";
 							setFacet(next === "attention" || next === "fresh" ? next : "all");
 						}}
 						variant="outline"
@@ -788,7 +825,7 @@ export function SyncResourcesTable({
 				<p
 					role="status"
 					aria-live="polite"
-					className="ml-auto text-muted-foreground text-sm tabular-nums"
+					className="ml-auto text-sm text-muted-foreground tabular-nums"
 				>
 					{normalizedQuery ? (
 						<>
@@ -804,7 +841,7 @@ export function SyncResourcesTable({
 
 			{/* The cap and vertical scroll go on the table's own scroll container (see Table's
 			    containerClassName), so the sticky header and totals footer clip and stick against it. */}
-			<Table containerClassName="max-h-[70vh] overflow-y-auto rounded-md border">
+			<Table bordered containerClassName="max-h-[70vh] overflow-y-auto">
 				<ResourcesTableHeader
 					columns={columns}
 					resourceNoun={resourceNoun}
@@ -813,7 +850,7 @@ export function SyncResourcesTable({
 				/>
 				<TableBody>
 					{visible.length === 0 ? (
-						<TableRow className="hover:bg-transparent">
+						<TableRow variant="static">
 							<TableCell colSpan={colSpan} className="h-24 text-center text-muted-foreground">
 								{normalizedQuery ? (
 									<>
@@ -835,6 +872,7 @@ export function SyncResourcesTable({
 									resource={resource}
 									resourceNoun={resourceNoun}
 									syncIntervalSeconds={syncIntervalSeconds}
+									now={now}
 								/>
 								{columns.map((column) => (
 									<ClassCountCell key={column.key} resource={resource} column={column} />

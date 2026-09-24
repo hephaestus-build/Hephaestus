@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -23,15 +24,23 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
 
     List<RepositoryToMonitor> findByWorkspaceId(Long workspaceId);
 
+    @Modifying
+    @Transactional
+    @Query("UPDATE RepositoryToMonitor m SET m.recentSyncError = :error WHERE m.id = :id")
+    int updateRecentSyncError(@Param("id") Long id, @Param("error") @Nullable String error);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE RepositoryToMonitor m SET m.historicalBackfillSyncError = :error WHERE m.id = :id")
+    int updateHistoricalBackfillSyncError(@Param("id") Long id, @Param("error") @Nullable String error);
+
     /** Resolves which workspace a repository belongs to during sync, by full name (owner/name). */
     Optional<RepositoryToMonitor> findByNameWithOwner(String nameWithOwner);
 
-    /**
-     * The same lookup, but with the workspace fetched eagerly rather than as a lazy proxy — needed by
-     * {@link WorkspaceResolver}, whose callers read the workspace outside the loading session.
-     */
-    @Query("SELECT m FROM RepositoryToMonitor m JOIN FETCH m.workspace WHERE m.nameWithOwner = :nameWithOwner")
-    Optional<RepositoryToMonitor> findWithWorkspaceByNameWithOwner(@Param("nameWithOwner") String nameWithOwner);
+    /** Every workspace monitoring this repository, with workspace data ready for callers. */
+    @Query(
+            "SELECT m FROM RepositoryToMonitor m JOIN FETCH m.workspace WHERE m.nameWithOwner = :nameWithOwner ORDER BY m.workspace.id")
+    List<RepositoryToMonitor> findAllWithWorkspaceByNameWithOwner(@Param("nameWithOwner") String nameWithOwner);
 
     /**
      * Finds every monitor tracking the repository with the given provider-stable id — across all

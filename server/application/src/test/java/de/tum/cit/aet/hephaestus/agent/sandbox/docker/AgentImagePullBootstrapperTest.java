@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -11,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Map;
 import java.util.Optional;
@@ -19,6 +19,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class AgentImagePullBootstrapperTest extends BaseUnitTest {
 
@@ -33,6 +34,22 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
                 new AgentImageProperties(IMAGE, policy),
                 registry,
                 new AgentImageContractVerifier(imageOps, registry));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"default,true,true", "specs,true,false", "cds-training,true,false", "default,false,false"})
+    void shouldOnlyBootstrapImagesForWorkersOutsideArtifactGeneration(
+            String profile, boolean workerEnabled, boolean expected) {
+        new ApplicationContextRunner()
+                .withPropertyValues(
+                        "spring.profiles.active=" + profile, "hephaestus.runtime.worker.enabled=" + workerEnabled)
+                .withUserConfiguration(AgentImagePullBootstrapper.class)
+                .withBean(DockerImageOperations.class, () -> imageOps)
+                .withBean(AgentImageProperties.class, () -> new AgentImageProperties(IMAGE, ImagePullPolicy.ALWAYS))
+                .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
+                .withBean(AgentImageContractVerifier.class)
+                .run(context -> assertThat(context.getBeansOfType(AgentImagePullBootstrapper.class))
+                        .hasSize(expected ? 1 : 0));
     }
 
     @Test
@@ -73,7 +90,7 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
             assertThat(registry.find("agent.image.pull.failure").counter()).isNull();
         } else {
             assertThat(registry.get("agent.image.pull.failure").counter().count())
-                    .isEqualTo(expectedFailureCount);
+                    .isEqualTo((double) expectedFailureCount);
         }
     }
 
@@ -114,7 +131,7 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
     void shouldOnlyProbePresenceWhenPolicyIsNever() {
         bootstrapperWith(ImagePullPolicy.NEVER, new SimpleMeterRegistry()).pullOnStartup();
 
-        verify(imageOps).imageIsPresent(any());
+        verify(imageOps).imageIsPresent(IMAGE);
         verify(imageOps).imageLabels(IMAGE);
         verifyNoMoreInteractions(imageOps);
     }

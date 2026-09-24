@@ -3,8 +3,8 @@ import { delay, HttpResponse, http } from "msw";
 import { expect, fn, screen, within } from "storybook/test";
 
 import type { SlackChannelConsentEvent, SlackMonitoredChannel } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
-import { expectSettledVisible } from "@/test/overlay";
+import { expectSettledVisible } from "@/stories/overlay";
+import { daysBefore } from "@/stories/story-clock";
 
 import { ChannelHistorySheet } from "./ChannelHistorySheet";
 
@@ -86,7 +86,7 @@ export const EmptyHistory: Story = {
 	},
 	play: async () => {
 		const sheet = within(await screen.findByRole("dialog"));
-		await expectSettledVisible(await sheet.findByText(/no consent changes recorded yet/i));
+		await expectSettledVisible(await sheet.findByText(/no consent changes recorded yet/iu));
 	},
 };
 
@@ -111,8 +111,8 @@ export const LoadError: Story = {
 	},
 	play: async () => {
 		const sheet = within(await screen.findByRole("dialog"));
-		await expectSettledVisible(await sheet.findByText(/could not load the consent history/i));
-		sheet.getByRole("button", { name: /^retry$/i });
+		await expectSettledVisible(await sheet.findByText(/could not load the consent history/iu));
+		sheet.getByRole("button", { name: /^retry$/iu });
 	},
 };
 

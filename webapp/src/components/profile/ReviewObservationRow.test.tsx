@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { EvidenceCitation, ObservationDetail } from "@/api/types.gen";
 import { detailObservation } from "@/stories/practice-detail-story-mock-data";
 
-import { ReviewObservationRow } from "./ReviewObservationRow";
+import { ReviewObservationRow, type ReviewObservationRowProps } from "./ReviewObservationRow";
 
 const observation: ObservationDetail = {
 	...detailObservation,
@@ -13,12 +13,15 @@ const observation: ObservationDetail = {
 	practiceSlug: "explain-decisions",
 	practiceName: "Explain significant decisions",
 	summary: "The reason for the timeout is missing",
+	assessmentStatus: "ASSESSED",
+	presence: "PRESENT",
+	assessment: "BAD",
 	severity: "MINOR",
 	feedbackUsefulness: "HELPFUL",
 };
 
 /** The row as a review run's card mounts it: under the work's own head, so it links no work. */
-function renderOpen(props: Partial<Parameters<typeof ReviewObservationRow>[0]> = {}) {
+function renderOpen(props: Partial<ReviewObservationRowProps> = {}) {
 	return render(
 		<ul>
 			<ReviewObservationRow
@@ -31,18 +34,19 @@ function renderOpen(props: Partial<Parameters<typeof ReviewObservationRow>[0]> =
 	);
 }
 
+const citation = (path: string): EvidenceCitation => ({
+	sourceKind: "scm.pull-request.diff",
+	artifactPath: "owner/repo#1",
+	path,
+	side: "NEW",
+	startLine: 1,
+	endLine: 1,
+	quote: "return null;",
+	quoteRedacted: false,
+});
+
 describe("ReviewObservationRow", () => {
 	it("arrives open with every quote shown and the capturing scanner named once", () => {
-		const citation = (path: string): EvidenceCitation => ({
-			sourceKind: "scm.pull-request.diff",
-			artifactPath: "owner/repo#1",
-			path,
-			side: "NEW",
-			startLine: 1,
-			endLine: 1,
-			quote: "return null;",
-			quoteRedacted: false,
-		});
 		renderOpen({
 			observation: {
 				...observation,
@@ -55,7 +59,7 @@ describe("ReviewObservationRow", () => {
 
 		expect(
 			screen
-				.getByRole("button", { name: /The reason for the timeout/ })
+				.getByRole("button", { name: /The reason for the timeout/u })
 				.getAttribute("aria-expanded"),
 		).toBe("true");
 		screen.getByText("first.ts");
@@ -67,10 +71,10 @@ describe("ReviewObservationRow", () => {
 		const { rerender } = renderOpen();
 
 		screen.getByText("Why it was noted");
-		screen.getByText(/renames the loader's package and changes its caching/);
+		screen.getByText(/renames the loader's package and changes its caching/u);
 		screen.getByText("Evidence");
 		screen.getByText("Next step");
-		screen.getByText(/Land the rename on its own first/);
+		screen.getByText(/Land the rename on its own first/u);
 		screen.getByText("Your response");
 		// Inside the work's own card, the row does not link the work again.
 		expect(screen.queryByRole("link")).toBeNull();
@@ -104,7 +108,7 @@ describe("ReviewObservationRow", () => {
 		});
 
 		screen.getByText("Split the commit so the rename can be reverted on its own.");
-		expect(screen.queryByText(/Land the rename on its own first/)).toBeNull();
+		expect(screen.queryByText(/Land the rename on its own first/u)).toBeNull();
 	});
 
 	it("opens a row whose only body is the warrant behind it, under its own label", () => {
@@ -126,7 +130,7 @@ describe("ReviewObservationRow", () => {
 
 		expect(
 			screen
-				.getByRole("button", { name: /The reason for the timeout/ })
+				.getByRole("button", { name: /The reason for the timeout/u })
 				.getAttribute("aria-expanded"),
 		).toBe("true");
 		screen.getByText("What was checked");
@@ -138,7 +142,7 @@ describe("ReviewObservationRow", () => {
 	it("links the reviewed work where the row stands outside its card", () => {
 		renderOpen({ showWorkLink: true });
 		expect(
-			screen.getByRole("link", { name: /Open the pull or merge request/ }).getAttribute("href"),
+			screen.getByRole("link", { name: /Open the pull or merge request/u }).getAttribute("href"),
 		).toBe(observation.artifactUrl);
 	});
 
@@ -152,7 +156,7 @@ describe("ReviewObservationRow", () => {
 
 	it("closes on a press", () => {
 		renderOpen();
-		const row = screen.getByRole("button", { name: /The reason for the timeout/ });
+		const row = screen.getByRole("button", { name: /The reason for the timeout/u });
 		fireEvent.click(row);
 		expect(row.getAttribute("aria-expanded")).toBe("false");
 		expect(screen.queryByText("Why it was noted")).toBeNull();
@@ -185,7 +189,7 @@ describe("ReviewObservationRow", () => {
 	});
 
 	it("records a response without a comment through Skip, with the usefulness intact", () => {
-		const onRespond = vi.fn();
+		const onRespond = vi.fn<NonNullable<ReviewObservationRowProps["onRespond"]>>();
 		renderOpen({ onRespond });
 
 		fireEvent.click(screen.getByRole("button", { name: "Addressed" }));
@@ -205,7 +209,7 @@ describe("ReviewObservationRow", () => {
 	});
 
 	it("holds a dispute until its sentence is sent", () => {
-		const onRespond = vi.fn();
+		const onRespond = vi.fn<NonNullable<ReviewObservationRowProps["onRespond"]>>();
 		renderOpen({ onRespond });
 
 		fireEvent.click(screen.getByRole("button", { name: "Disputed" }));
@@ -224,7 +228,7 @@ describe("ReviewObservationRow", () => {
 	});
 
 	it("refuses a dispute made of blanks through the field rather than in silence", () => {
-		const onRespond = vi.fn();
+		const onRespond = vi.fn<NonNullable<ReviewObservationRowProps["onRespond"]>>();
 		renderOpen({ onRespond });
 
 		fireEvent.click(screen.getByRole("button", { name: "Disputed" }));
@@ -240,7 +244,7 @@ describe("ReviewObservationRow", () => {
 	});
 
 	it("closes a dispute's band on Skip without recording it", () => {
-		const onRespond = vi.fn();
+		const onRespond = vi.fn<NonNullable<ReviewObservationRowProps["onRespond"]>>();
 		renderOpen({ onRespond });
 
 		fireEvent.click(screen.getByRole("button", { name: "Disputed" }));
@@ -254,7 +258,7 @@ describe("ReviewObservationRow", () => {
 	});
 
 	it("sends a comment with the chosen response", () => {
-		const onRespond = vi.fn();
+		const onRespond = vi.fn<NonNullable<ReviewObservationRowProps["onRespond"]>>();
 		renderOpen({ onRespond });
 
 		fireEvent.click(screen.getByRole("button", { name: "Not applicable" }));
@@ -271,7 +275,7 @@ describe("ReviewObservationRow", () => {
 	});
 
 	it("withdraws a recorded response, comment and all, when its button is pressed again", () => {
-		const onRespond = vi.fn();
+		const onRespond = vi.fn<NonNullable<ReviewObservationRowProps["onRespond"]>>();
 		renderOpen({
 			observation: {
 				...observation,

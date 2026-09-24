@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices.dto;
 
+import de.tum.cit.aet.hephaestus.practices.BindingChange;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
@@ -24,13 +26,12 @@ public record UpdatePracticeRequestDTO(
                 max = 1,
                 message = "A practice is reviewed on one occasion. To read different evidence at a different moment, "
                         + "split this into two practices.")
-        @Valid
         @Schema(description = "Replacement occasion and its evidence; omit to leave it unchanged")
         @Nullable
-        List<PracticeBinding> bindings,
+        List<@Valid PracticeBinding> bindings,
 
         @Size(max = 50000, message = "Criteria must be at most 50000 characters")
-        @Pattern(regexp = ".*\\S.*", message = "Criteria must not be blank")
+        @Pattern(regexp = "[\\s\\S]*\\S[\\s\\S]*", message = "Criteria must not be blank")
         @Schema(description = "Practice review criteria")
         @Nullable
         String criteria,
@@ -50,13 +51,13 @@ public record UpdatePracticeRequestDTO(
         PracticeAutomatedReviewPolicy automatedReviewPolicy,
 
         @Size(max = 2000, message = "Why-it-matters must be at most 2000 characters")
-        @Pattern(regexp = ".*\\S.*", message = "Why-it-matters must not be blank")
+        @Pattern(regexp = "[\\s\\S]*\\S[\\s\\S]*", message = "Why-it-matters must not be blank")
         @Schema(description = "Plain-language rationale shown to the developer")
         @Nullable
         String whyItMatters,
 
         @Size(max = 2000, message = "What-good-looks-like must be at most 2000 characters")
-        @Pattern(regexp = ".*\\S.*", message = "What-good-looks-like must not be blank")
+        @Pattern(regexp = "[\\s\\S]*\\S[\\s\\S]*", message = "What-good-looks-like must not be blank")
         @Schema(description = "Concrete example shown to the developer; not review criteria")
         @Nullable
         String whatGoodLooksLike,
@@ -67,4 +68,34 @@ public record UpdatePracticeRequestDTO(
         BindPracticeGroupRequestDTO group,
 
         @Schema(description = "Optional fields to clear before applying supplied values") @Nullable
-        Set<ClearablePracticeField> clear) {}
+        Set<ClearablePracticeField> clear,
+
+        @Schema(description = "Explicit intent to change the gate or the person judged") @Nullable
+        Set<BindingChange> bindingChanges,
+
+        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior) {
+    public UpdatePracticeRequestDTO(
+            @Nullable String name,
+            @Nullable List<PracticeBinding> bindings,
+            @Nullable String criteria,
+            @Nullable String precomputeScript,
+            @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy,
+            @Nullable String whyItMatters,
+            @Nullable String whatGoodLooksLike,
+            @Nullable BindPracticeGroupRequestDTO group,
+            @Nullable Set<ClearablePracticeField> clear,
+            @Nullable Set<BindingChange> bindingChanges) {
+        this(
+                name,
+                bindings,
+                criteria,
+                precomputeScript,
+                automatedReviewPolicy,
+                whyItMatters,
+                whatGoodLooksLike,
+                group,
+                clear,
+                bindingChanges,
+                null);
+    }
+}

@@ -1,20 +1,19 @@
 import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import path from "node:path";
 
 import { XMLParser } from "fast-xml-parser";
 
-type TestCase = {
+interface TestCase {
 	className: string;
 	name: string;
 	timeSeconds: number;
 	failed: boolean;
 	errored: boolean;
 	skipped: boolean;
-};
+}
 
-export type TestSummary = {
-	schemaVersion: 2;
+export interface TestSummary {
+	schemaVersion: 3;
 	name: string;
 	files: number;
 	tests: number;
@@ -22,16 +21,14 @@ export type TestSummary = {
 	errors: number;
 	skipped: number;
 	testTimeSeconds: number;
-	slowest: Array<{ test: string; seconds: number }>;
+	slowest: { test: string; seconds: number }[];
 	performance?: {
 		wallTimeSeconds: number;
-		cpuTimeSeconds: number;
-		maxRssKilobytes: number;
 		contextStarts: number;
 		contextStartupSeconds: number;
 		contextCacheMisses: number;
 	};
-};
+}
 
 const xmlParser = new XMLParser({
 	ignoreAttributes: false,
@@ -45,13 +42,19 @@ const isJUnitNode = (value: unknown): value is JUnitNode =>
 	typeof value === "object" && value !== null && !Array.isArray(value);
 
 const asArray = (value: unknown): JUnitNode[] => {
-	if (Array.isArray(value)) return value.filter(isJUnitNode);
+	if (Array.isArray(value)) {
+		return value.filter(isJUnitNode);
+	}
 	return isJUnitNode(value) ? [value] : [];
 };
 
 function testCases(node: unknown): JUnitNode[] {
-	if (Array.isArray(node)) return node.flatMap(testCases);
-	if (!isJUnitNode(node)) return [];
+	if (Array.isArray(node)) {
+		return node.flatMap(testCases);
+	}
+	if (!isJUnitNode(node)) {
+		return [];
+	}
 	return [
 		...asArray(node.testcase),
 		...Object.entries(node)
@@ -61,21 +64,27 @@ function testCases(node: unknown): JUnitNode[] {
 }
 
 export function parseJUnit(xml: string): TestCase[] {
-	return testCases(xmlParser.parse(xml)).map((testCase) => ({
-		className: typeof testCase.classname === "string" ? testCase.classname : "unknown class",
-		name: typeof testCase.name === "string" ? testCase.name : "unnamed test",
-		timeSeconds:
-			typeof testCase.time === "number" && Number.isFinite(testCase.time) ? testCase.time : 0,
-		failed: "failure" in testCase,
-		errored: "error" in testCase,
-		skipped: "skipped" in testCase,
-	}));
+	return testCases(xmlParser.parse(xml)).map((testCase) => {
+		const skipped = "skipped" in testCase;
+		const time = testCase.time === undefined && skipped ? 0 : testCase.time;
+		if (typeof time !== "number" || !Number.isFinite(time) || time < 0) {
+			throw new Error(`Invalid JUnit testcase time: ${String(testCase.time)}`);
+		}
+		return {
+			className: typeof testCase.classname === "string" ? testCase.classname : "unknown class",
+			name: typeof testCase.name === "string" ? testCase.name : "unnamed test",
+			timeSeconds: time,
+			failed: "failure" in testCase,
+			errored: "error" in testCase,
+			skipped,
+		};
+	});
 }
 
 export function summarize(name: string, documents: string[]): TestSummary {
 	const cases = documents.flatMap(parseJUnit);
 	return {
-		schemaVersion: 2,
+		schemaVersion: 3,
 		name,
 		files: documents.length,
 		tests: cases.length,
@@ -94,35 +103,74 @@ export function parsePerformance(
 	log: string,
 	resourceUsage: string,
 ): NonNullable<TestSummary["performance"]> {
-	const starts = [...log.matchAll(/Started .+? in ([0-9.]+) seconds/g)].map((match) =>
-		Number(match[1]),
+	const starts = [...log.matchAll(/Started .+? in (?<seconds>[0-9.]+) seconds/gu)].map((match) =>
+		Number(match.groups?.seconds),
 	);
 	const cacheMisses = new Map<string, number>();
-	for (const match of log.matchAll(/DefaultContextCache@(\w+).*missCount = (\d+)/g)) {
-		const cache = match[1];
+	for (const match of log.matchAll(
+		/DefaultContextCache@(?<cache>\w+).*missCount = (?<misses>\d+)/gu,
+	)) {
+		const cache = match.groups?.cache;
 		if (cache !== undefined) {
-			const misses = Number(match[2]);
+			const misses = Number(match.groups?.misses);
 			cacheMisses.set(cache, Math.max(cacheMisses.get(cache) ?? 0, misses));
 		}
 	}
-	const elapsed = resourceUsage.match(
-		/Elapsed \(wall clock\) time .*: (?:(\d+):)?(\d+):(\d+(?:\.\d+)?)/,
-	);
-	const value = (label: string): number => {
-		const match = resourceUsage.match(new RegExp(`${label}: (\\d+(?:\\.\\d+)?)`));
-		return match === null ? 0 : Number(match[1]);
-	};
+	const elapsed =
+		/Elapsed \(wall clock\) time .*: (?:(?<hours>\d+):)?(?<minutes>\d+):(?<seconds>\d+(?:\.\d+)?)/u.exec(
+			resourceUsage,
+		);
+	if (elapsed === null) {
+		throw new Error("Missing or invalid elapsed resource time");
+	}
+	const clock = elapsed.groups ?? {};
+
 	return {
 		wallTimeSeconds:
-			elapsed === null
-				? 0
-				: Number(elapsed[1] ?? 0) * 3600 + Number(elapsed[2]) * 60 + Number(elapsed[3]),
-		cpuTimeSeconds: value("User time \\(seconds\\)") + value("System time \\(seconds\\)"),
-		maxRssKilobytes: value("Maximum resident set size \\(kbytes\\)"),
+			Number(clock.hours ?? 0) * 3600 + Number(clock.minutes) * 60 + Number(clock.seconds),
 		contextStarts: starts.length,
 		contextStartupSeconds: starts.reduce((total, seconds) => total + seconds, 0),
 		contextCacheMisses: [...cacheMisses.values()].reduce((total, misses) => total + misses, 0),
 	};
+}
+
+export function validateProfile(
+	summary: TestSummary,
+	kind: "integration" | "verification" = "integration",
+): void {
+	const counts = [summary.files, summary.tests, summary.failures, summary.errors, summary.skipped];
+	if (counts.some((value) => !Number.isSafeInteger(value) || value < 0)) {
+		throw new Error("Invalid profile test counts");
+	}
+	if (summary.files === 0 || summary.tests <= summary.skipped) {
+		throw new Error("Profile contains no executed tests");
+	}
+	if (summary.failures !== 0 || summary.errors !== 0) {
+		throw new Error("Failed tests cannot enter performance history");
+	}
+	const { performance } = summary;
+	if (performance === undefined) {
+		throw new Error("Performance metrics are missing");
+	}
+	if (
+		[summary.testTimeSeconds, ...Object.values(performance)].some(
+			(value) => !Number.isFinite(value) || value < 0,
+		)
+	) {
+		throw new Error("Profile metrics must be finite and nonnegative");
+	}
+	if (performance.wallTimeSeconds === 0) {
+		throw new Error("Profile wall time must be positive");
+	}
+	if (
+		kind === "integration" &&
+		(performance.contextStarts === 0 || performance.contextCacheMisses === 0)
+	) {
+		throw new Error("Profile contains no Spring context measurements");
+	}
+	if (![performance.contextStarts, performance.contextCacheMisses].every(Number.isSafeInteger)) {
+		throw new Error("Invalid profile context counts");
+	}
 }
 
 export function markdown(summary: TestSummary): string {
@@ -134,25 +182,27 @@ export function markdown(summary: TestSummary): string {
 	if (summary.slowest.length > 0) {
 		lines.push("", "| Slowest tests | Time |", "|---|---:|");
 		for (const test of summary.slowest) {
-			lines.push(`| ${test.test.replaceAll("|", "\\|")} | ${test.seconds.toFixed(2)}s |`);
+			lines.push(`| ${test.test.replaceAll("|", String.raw`\|`)} | ${test.seconds.toFixed(2)}s |`);
 		}
 	}
 	if (summary.performance !== undefined) {
-		const performance = summary.performance;
+		const { performance } = summary;
 		lines.push(
 			"",
-			`**Wall:** ${performance.wallTimeSeconds.toFixed(1)}s · **CPU:** ${performance.cpuTimeSeconds.toFixed(1)}s · **Max RSS:** ${(performance.maxRssKilobytes / 1024).toFixed(0)} MiB · **Contexts:** ${performance.contextStarts} starts / ${performance.contextCacheMisses} misses / ${performance.contextStartupSeconds.toFixed(1)}s startup`,
+			`**Wall:** ${performance.wallTimeSeconds.toFixed(1)}s · **Contexts:** ${performance.contextStarts} starts / ${performance.contextCacheMisses} misses / ${performance.contextStartupSeconds.toFixed(1)}s startup`,
 		);
 	}
 	return `${lines.join("\n")}\n`;
 }
 
-async function xmlFiles(path: string): Promise<string[]> {
-	const entries = await readdir(path, { withFileTypes: true });
+async function xmlFiles(directory: string): Promise<string[]> {
+	const entries = await readdir(directory, { withFileTypes: true });
 	const nested = await Promise.all(
 		entries.map(async (entry) => {
-			const child = resolve(path, entry.name);
-			if (entry.isDirectory()) return xmlFiles(child);
+			const child = path.resolve(directory, entry.name);
+			if (entry.isDirectory()) {
+				return xmlFiles(child);
+			}
 			return entry.isFile() && entry.name.endsWith(".xml") ? [child] : [];
 		}),
 	);
@@ -160,31 +210,40 @@ async function xmlFiles(path: string): Promise<string[]> {
 }
 
 async function main(): Promise<void> {
-	const [name, input, output, logPath, resourcePath] = process.argv.slice(2);
+	const [name, input, output, logPath, resourcePath, kind = "integration"] = process.argv.slice(2);
+	if (kind !== "integration" && kind !== "verification") {
+		throw new Error(`Unknown profile kind: ${kind}`);
+	}
 	if (name === undefined || input === undefined || output === undefined) {
 		throw new Error("Usage: summarize-test-results <name> <report-directory> <output-json>");
 	}
-	const files = await xmlFiles(resolve(input));
-	const documents = await Promise.all(files.map((file) => readFile(file, "utf8")));
+	const files = await xmlFiles(path.resolve(input));
+	const documents = await Promise.all(files.map(async (file) => readFile(file, "utf8")));
 	const summary = summarize(name, documents);
+	if ((logPath === undefined) !== (resourcePath === undefined)) {
+		throw new Error("Profiling requires both log and resource usage files");
+	}
 	if (logPath !== undefined && resourcePath !== undefined) {
 		summary.performance = parsePerformance(
 			await readFile(logPath, "utf8"),
 			await readFile(resourcePath, "utf8"),
 		);
 	}
-	await mkdir(dirname(output), { recursive: true });
+	await mkdir(path.dirname(output), { recursive: true });
 	await writeFile(output, `${JSON.stringify(summary, null, 2)}\n`);
 	const rendered = markdown(summary);
 	if (process.env.GITHUB_STEP_SUMMARY !== undefined) {
 		await appendFile(process.env.GITHUB_STEP_SUMMARY, rendered);
 	}
 	process.stdout.write(rendered);
+	if (summary.performance !== undefined) {
+		validateProfile(summary, kind);
+	}
 	if (files.length === 0) {
 		process.stderr.write(`No JUnit XML reports found below ${input}\n`);
 	}
 }
 
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.main) {
 	await main();
 }

@@ -1,5 +1,0 @@
-# security/semgrep/ is a Semgrep rule pack: its fixtures deliberately carry unused parameters and
-# other patterns the rules exist to flag, which CodeQL's own queries (e.g. "useless parameter")
-# otherwise report as findings in code that is never shipped.
-paths-ignore:
-  - security/semgrep/**

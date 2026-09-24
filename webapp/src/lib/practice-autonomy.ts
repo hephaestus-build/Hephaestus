@@ -23,8 +23,9 @@ export const PRACTICE_AUTONOMY_DESCRIPTIONS: Record<PracticeAutonomy, string> = 
 export const PRACTICE_AUTONOMY_ADDS: Record<PracticeAutonomy, string> = {
 	OFF: "Nothing runs. No review, no record, nothing said.",
 	HUMAN_APPROVAL:
-		"Adds assisted delivery. Feedback waits for an authorized reviewer to approve or reject it.",
-	AUTOMATIC: "Adds automatic delivery. Eligible feedback is sent without waiting for approval.",
+		"Adds assisted delivery. Feedback on the work waits for an authorized reviewer to approve or reject it; practice pages and the mentor are written regardless.",
+	AUTOMATIC:
+		"Adds automatic delivery. Eligible feedback is sent onto the work without waiting for approval.",
 };
 
 export const WORKSPACE_DEFAULT_SOURCE = "the workspace default";
@@ -38,9 +39,12 @@ export function autonomySourceOf(
 	assignment: AutonomyAssignment,
 	inheritedFrom: string | null,
 ): AutonomySource {
-	if (!assignment.inherited) return { kind: "chosen" };
-	if (assignment.source === "WORKSPACE")
+	if (!assignment.inherited) {
+		return { kind: "chosen" };
+	}
+	if (assignment.source === "WORKSPACE") {
 		return { kind: "inherited", from: WORKSPACE_DEFAULT_SOURCE };
+	}
 	return { kind: "inherited", from: inheritedFrom ?? "its group" };
 }
 
@@ -68,7 +72,9 @@ export function autonomyDistributionSentence(counts: Record<string, number>): st
 	const parts = autonomyDistribution(counts).map(
 		({ autonomy, count }) => `${count} ${PRACTICE_AUTONOMY_LABELS[autonomy].toLowerCase()}`,
 	);
-	if (parts.length === 0) return "No practices yet.";
+	if (parts.length === 0) {
+		return "No practices yet.";
+	}
 	const total = autonomyTotal(counts);
 	const listed =
 		parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;

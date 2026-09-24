@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import type { ReviewRunFeedState } from "@/components/profile/review-runs";
 import {
 	detailObservation,
@@ -92,7 +92,7 @@ describe("PracticeDetailLevel", () => {
 		expect(screen.queryByText("The description names the motivation")).toBeNull();
 		// Open on arrival, with everything the feed carries; nothing was loaded to open it.
 		screen.getByText("Why it was noted");
-		screen.getByText(/renames the loader's package and changes its caching/);
+		screen.getByText(/renames the loader's package and changes its caching/u);
 		screen.getByText("Next step");
 		// The rows are this practice's own, so none repeats its name under the summary.
 		expect(screen.getAllByText(focusedChanges.name)).toHaveLength(1);
@@ -101,10 +101,10 @@ describe("PracticeDetailLevel", () => {
 	it("opens the newest observation alone and leaves the earlier ones to a press", async () => {
 		renderLevel({ feed: { ...emptyFeed, runs: detailRuns } });
 		const newest = await screen.findByRole("button", {
-			name: new RegExp(detailObservation.summary),
+			name: new RegExp(detailObservation.summary, "u"),
 		});
 		const earlier = screen.getByRole("button", {
-			name: /A dependency bump was carried alongside a behaviour change/,
+			name: /A dependency bump was carried alongside a behaviour change/u,
 		});
 		expect(newest.getAttribute("aria-expanded")).toBe("true");
 		expect(earlier.getAttribute("aria-expanded")).toBe("false");
@@ -133,7 +133,7 @@ describe("PracticeDetailLevel", () => {
 	it("explains the practice on its own tab", async () => {
 		renderLevel({ tab: "about" });
 		await screen.findByText("Why it matters");
-		screen.getByText(/A change that does one thing is faster to understand/);
+		screen.getByText(/A change that does one thing is faster to understand/u);
 		screen.getByText("What good looks like");
 		expect(screen.queryByText("Next step")).toBeNull();
 	});
@@ -165,9 +165,9 @@ describe("PracticeDetailLevel", () => {
 		within(section).getByText("More positive recently");
 		expect(within(section).queryByRole("button")).toBeNull();
 		// Both lines sit in one bordered box under the label.
-		const box = within(section).getByText(/^Recent reviews found/).parentElement;
+		const box = within(section).getByText(/^Recent reviews found/u).parentElement;
 		expect(box?.classList.contains("border")).toBe(true);
-		expect(within(section).getByText(/^Recent reviewed work carried/).parentElement).toBe(box);
+		expect(within(section).getByText(/^Recent reviewed work carried/u).parentElement).toBe(box);
 	});
 
 	it("claims no basis and no direction for a practice no review has settled", async () => {
@@ -181,7 +181,7 @@ describe("PracticeDetailLevel", () => {
 			},
 		});
 		await screen.findByText("This practice has no current verdict for you yet.");
-		expect(screen.queryByText(/Based on your latest/)).toBeNull();
+		expect(screen.queryByText(/Based on your latest/u)).toBeNull();
 		// The header's chip is the only one.
 		expect(screen.getAllByText("Not enough to compare yet")).toHaveLength(1);
 	});
@@ -241,7 +241,7 @@ describe("PracticeDetailLevel", () => {
 	it("closes an observation on a press, on its own, without writing anything", async () => {
 		renderLevel({ feed: readyFeed });
 		const row = await screen.findByRole("button", {
-			name: new RegExp(detailObservation.summary),
+			name: new RegExp(detailObservation.summary, "u"),
 		});
 		expect(row.getAttribute("aria-expanded")).toBe("true");
 		fireEvent.click(row);
@@ -272,7 +272,7 @@ describe("PracticeDetailLevel", () => {
 	it("offers a retry when the feed itself failed", async () => {
 		const onRetry = vi.fn();
 		renderLevel({ feed: { status: "error", error: new Error("Gateway timeout"), onRetry } });
-		fireEvent.click(await screen.findByRole("button", { name: /retry/i }));
+		fireEvent.click(await screen.findByRole("button", { name: /retry/iu }));
 		expect(onRetry).toHaveBeenCalledOnce();
 	});
 

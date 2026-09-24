@@ -6,11 +6,14 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMes
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
+import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -38,10 +41,13 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
 
     private final GitLabMergeRequestProcessor mergeRequestProcessor;
     private final GitLabWebhookContextResolver contextResolver;
+    private final GitLabClosingIssueClient closingIssueClient;
+    private final TransactionTemplate transactionTemplate;
 
     GitLabMergeRequestMessageHandler(
             GitLabMergeRequestProcessor mergeRequestProcessor,
             GitLabWebhookContextResolver contextResolver,
+            GitLabClosingIssueClient closingIssueClient,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -52,31 +58,68 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
                 transactionTemplate);
         this.mergeRequestProcessor = mergeRequestProcessor;
         this.contextResolver = contextResolver;
+        this.closingIssueClient = closingIssueClient;
+        this.transactionTemplate = transactionTemplate;
+    }
+
+    /**
+     * The event is stored in the short transaction; an opened or updated merge request then has the
+     * issues it closes read from GitLab outside it — the webhook stores the {@code updated_at} the sync
+     * later compares against, so the sync would not read them for this change.
+     */
+    @Override
+    protected void dispatchEvent(GitLabMergeRequestEventDTO event) {
+        ProcessingContext context = transactionTemplate.execute(status -> handleEventAndReturnContext(event));
+        Repository repository = context == null ? null : context.repository();
+        Long scopeId = context == null ? null : context.scopeId();
+        var attributes = event.objectAttributes();
+        var project = event.project();
+        if (repository == null
+                || scopeId == null
+                || attributes == null
+                || attributes.iid() == null
+                || project == null
+                || project.id() == null) {
+            return;
+        }
+        if (event.actionType() != GitLabEventAction.OPEN && event.actionType() != GitLabEventAction.UPDATE) {
+            return;
+        }
+        int iid = attributes.iid();
+        List<Integer> closing = closingIssueClient.closesIssues(scopeId, project.id(), iid);
+        if (closing != null) {
+            transactionTemplate.executeWithoutResult(
+                    status -> mergeRequestProcessor.replaceClosingIssues(repository, iid, closing));
+        }
     }
 
     @Override
     protected void handleEvent(GitLabMergeRequestEventDTO event) {
+        handleEventAndReturnContext(event);
+    }
+
+    private @Nullable ProcessingContext handleEventAndReturnContext(GitLabMergeRequestEventDTO event) {
         if (event.objectAttributes() == null) {
             log.warn("Received merge request event with missing object_attributes");
-            return;
+            return null;
         }
 
         if (event.project() == null) {
             log.warn("Received merge request event with missing project data");
-            return;
+            return null;
         }
 
         if (event.isConfidential()) {
             log.debug(
                     "Skipped confidential merge request event: iid={}",
                     event.objectAttributes().iid());
-            return;
+            return null;
         }
 
         String projectPath = event.project().pathWithNamespace();
         if (projectPath == null || projectPath.isBlank()) {
             log.warn("Received merge request event with missing project path");
-            return;
+            return null;
         }
         String safeProjectPath = Objects.requireNonNullElse(sanitizeForLog(projectPath), "<unknown>");
         GitLabEventAction action = event.actionType();
@@ -89,7 +132,7 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
 
         ProcessingContext context = contextResolver.resolve(projectPath, action.getValue(), "merge request");
         if (context == null) {
-            return;
+            return null;
         }
 
         switch (action) {
@@ -104,5 +147,6 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
                         "Skipped group-level approval rule event: projectPath={}, action={}", safeProjectPath, action);
             default -> log.debug("Unhandled merge request action: projectPath={}, action={}", safeProjectPath, action);
         }
+        return context;
     }
 }

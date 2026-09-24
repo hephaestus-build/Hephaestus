@@ -65,7 +65,6 @@ services:
       - staging-shared
     environment:
       SERVICE_NAME_POSTGRES: ${SERVICE_NAME_POSTGRES:-postgres}
-      SERVICE_FQDN_APPSERVER: ${SERVICE_FQDN_APPSERVER:-}
       SERVICE_FQDN_WEBAPP: ${SERVICE_FQDN_WEBAPP:-}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       PREVIEW_SEED_SOURCE_HOST: ${PREVIEW_SEED_SOURCE_HOST:-app-postgres-1}
@@ -79,8 +78,7 @@ services:
         set -eu
         trap 'rm -f /tmp/seed.dump' EXIT
 
-        APP_FQDN="$${SERVICE_FQDN_APPSERVER:-$${SERVICE_FQDN_WEBAPP:-}}"
-        if ! echo "$$APP_FQDN" | grep -Eq "^pr[0-9]+"; then
+        if ! echo "$${SERVICE_FQDN_WEBAPP:-}" | grep -Eq "^pr[0-9]+"; then
           echo "Skipping seed-loader: non-PR deployment detected"
           exit 0
         fi
@@ -249,7 +247,16 @@ services:
 
   appserver:
     image: ghcr.io/hephaestus-build/application-server:${SOURCE_COMMIT:?Coolify supplies the deployed commit}
-    restart: unless-stopped
+    # Bounded automatic retries, unlike the reference stack, because restarting this image is not
+    # free: the buildpack adds the container's CA certificates to the JRE truststore on every start,
+    # that truststore is in the container's writable layer, and the additions accumulate, so each
+    # restart enlarges the file the next one parses. A container that keeps failing therefore
+    # becomes unable to start for a reason unrelated to why it first did, and it does so on a host
+    # shared with staging. Stopping bounds both.
+    #
+    # Uptime resets the retry delay, not the count, so five is a budget for the container's whole
+    # life rather than per incident; a preview is re-created on the next push, which clears it.
+    restart: on-failure:5
     expose:
       - "8080"
     environment:
@@ -272,7 +279,6 @@ services:
       # 172.(1[6-9]|2[0-9]|3[01]).[0-9]{1,3}.[0-9]{1,3}
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES}
       APPLICATION_HOST_URL: https://${SERVICE_FQDN_WEBAPP}
-      HEPHAESTUS_AUTH_API_BASE_PATH: ""
       # Coolify renames each service to `<service>-pr-<id>` and publishes the renamed hosts as
       # SERVICE_NAME_*, so the bare service name resolves to nothing inside a preview. The defaults
       # keep this file runnable on its own.
@@ -301,6 +307,10 @@ services:
       HEPHAESTUS_AUTH_ISSUER: https://${SERVICE_FQDN_WEBAPP}
       HEPHAESTUS_AUTH_STATE_COOKIE_KEY: ${HEPHAESTUS_AUTH_STATE_COOKIE_KEY:?Set HEPHAESTUS_AUTH_STATE_COOKIE_KEY to a Base64-encoded 32-byte key}
       HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS: ${HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS:-}
+      # Naming an organisation is what makes setup ask about the study, so a preview names one to
+      # show the question a reviewer is here to read. A preview runs no study: its answers land in a
+      # clone that is discarded, and only collaborators can reach one.
+      HEPHAESTUS_RESEARCH_ORGANIZATION: ${HEPHAESTUS_RESEARCH_ORGANIZATION:-}
       HEPHAESTUS_SECURITY_ENCRYPTION_KEY: ${HEPHAESTUS_SECURITY_ENCRYPTION_KEY:?Set HEPHAESTUS_SECURITY_ENCRYPTION_KEY to exactly 32 printable ASCII characters}
       HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: ${HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY:?Set HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY to exactly 32 printable ASCII characters}
       HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION: ${HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION:-1}
@@ -369,7 +379,12 @@ services:
       APPLICATION_VERSION: preview
       APPLICATION_CLIENT_URL: https://${SERVICE_FQDN_WEBAPP}
       GIT_BRANCH: ${COOLIFY_BRANCH:-}
-      APPLICATION_SERVER_URL: https://${SERVICE_FQDN_APPSERVER}
+      # One origin, as production has: the API answers under the app's own hostname at /api, and
+      # Coolify strips the prefix before the container sees it. The session and CSRF cookies carry
+      # the `__Host-` prefix, which forbids a Domain attribute and so binds them to exactly one
+      # host — on sibling hostnames the page cannot read the CSRF cookie it has to send back, and
+      # every request that changes something is refused.
+      APPLICATION_SERVER_URL: https://${SERVICE_FQDN_WEBAPP}/api
       TANSTACK_DEVTOOLS_ENABLED: "true"
       SENTRY_ENVIRONMENT: preview
       SENTRY_DSN: ""

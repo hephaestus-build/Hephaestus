@@ -5,6 +5,7 @@ import type { TracedArtifact } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { artifactKindIcon, artifactKindLabel } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 import { signalCountsLabel } from "./trace-format";
 
@@ -38,7 +39,7 @@ export function TracedArtifactRow({ workspaceSlug, artifact }: TracedArtifactRow
 					<span className="sr-only">{artifactKindLabel(artifact.artifactKind)}</span>
 				</span>
 				<ItemContent className="min-w-0">
-					<ItemTitle className="w-full min-w-0 line-clamp-none break-words">
+					<ItemTitle className="line-clamp-none w-full min-w-0 break-words">
 						{artifact.title}
 						{artifact.number != null && (
 							<span className="ml-1 font-normal text-muted-foreground tabular-nums">
@@ -46,7 +47,7 @@ export function TracedArtifactRow({ workspaceSlug, artifact }: TracedArtifactRow
 							</span>
 						)}
 					</ItemTitle>
-					{artifact.container && (
+					{hasText(artifact.container) && (
 						<ItemDescription className="break-words">{artifact.container}</ItemDescription>
 					)}
 					<div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">

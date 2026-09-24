@@ -16,10 +16,10 @@ only transport policy — retries, rate-limit accounting, pagination bounds, ten
 
 | Integration | Contract | Generated from |
 | --- | --- | --- |
-| GitHub | GraphQL schema | `graphql-codegen-maven-plugin` → `…scm.github.graphql` |
-| GitLab | GraphQL schema | `graphql-codegen-maven-plugin` → `…scm.gitlab.graphql` |
+| GitHub | GraphQL schema | GraphQL Codegen Gradle plugin → `…scm.github.graphql` |
+| GitLab | GraphQL schema | GraphQL Codegen Gradle plugin → `…scm.gitlab.graphql` |
 | Slack | Official SDK | `com.slack.api:bolt` |
-| Outline | OpenAPI spec | `openapi-generator-maven-plugin` → `spec3.yml` + `outline-supplement.yaml` |
+| Outline | OpenAPI spec | OpenAPI Generator Gradle plugin → `spec3.yml` + `outline-supplement.yaml` |
 
 Schemas and specs are refreshed by `vp run schema:github`, `schema:gitlab`, and `schema:outline`.
 No integration hand-rolls a vendor DTO.

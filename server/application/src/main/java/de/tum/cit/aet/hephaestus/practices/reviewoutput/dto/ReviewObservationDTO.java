@@ -2,7 +2,9 @@ package de.tum.cit.aet.hephaestus.practices.reviewoutput.dto;
 
 import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.ObservationFeedbackDisposition;
@@ -32,12 +34,16 @@ public record ReviewObservationDTO(
         ReviewSubjectDTO subject,
 
         @NonNull String summary,
-        @NonNull Presence presence,
+        @NonNull AssessmentStatus assessmentStatus,
+        @Nullable Presence presence,
 
-        @Schema(description = "Assessment: GOOD or BAD (null when NOT_APPLICABLE)") @Nullable
+        @Schema(
+                description =
+                        "Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)")
+        @Nullable
         Assessment assessment,
 
-        @Schema(description = "Severity band (null unless assessment is BAD)") @Nullable
+        @Schema(description = "Severity band (null unless outcome is NEGATIVE)") @Nullable
         Severity severity,
 
         @Schema(description = "Cross-run locus key; null when continuity is unavailable") @Nullable
@@ -54,6 +60,14 @@ public record ReviewObservationDTO(
 
         @NonNull @Schema(description = "Counts of linked feedback by delivery state")
         ReviewFeedbackDispositionDTO feedbackDisposition) {
+    @com.fasterxml.jackson.annotation.JsonProperty("outcome")
+    @Schema(
+            description = "Derived from presence and contextual behavior assessment; null unless assessed",
+            accessMode = Schema.AccessMode.READ_ONLY)
+    public @Nullable Outcome getOutcome() {
+        return Outcome.of(presence, assessment);
+    }
+
     public static ReviewObservationDTO from(
             OperatorObservationRow row,
             @Nullable ObservationFeedbackDisposition disposition,
@@ -69,13 +83,16 @@ public record ReviewObservationDTO(
                 artifact,
                 subjects.get(row.getAboutUserId()),
                 row.getSummary(),
+                row.getAssessmentStatus(),
                 row.getPresence(),
                 row.getAssessment(),
                 row.getSeverity(),
                 row.getRecurrenceKey(),
                 row.getOrigin(),
                 ReviewClaimCurrentness.of(
-                        row.getPracticeRevisionFingerprint(), row.getCurrentPracticeRevisionFingerprint()),
+                        row.getPracticeRevisionFingerprint(),
+                        row.getCurrentPracticeRevisionFingerprint(),
+                        row.getSupersededAt()),
                 row.getObservedAt(),
                 disposition == null
                         ? ReviewFeedbackDispositionDTO.empty()

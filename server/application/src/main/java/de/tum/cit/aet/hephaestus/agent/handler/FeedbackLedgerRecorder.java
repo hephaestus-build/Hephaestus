@@ -28,8 +28,9 @@ import de.tum.cit.aet.hephaestus.practices.feedback.PlacementAnchorSide;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.feedback.ProposedPlacement;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.time.Instant;
 import java.util.HashSet;
@@ -266,12 +267,12 @@ public class FeedbackLedgerRecorder {
         // Bind every DELIVERED observation: BAD (the problems surfaced) lead as PRIMARY, GOOD
         // strengths as SUPPORTING; observations that carry no valence and withheld observations are excluded —
         // feedback is an intervention, and there is nothing in either to intervene about.
-        // Severity is null for a GOOD strength (ADR 0022) — sort it after any problem (least severe).
+        // Severity is null for a positive observation (ADR 0022) — sort it after any problem (least severe).
         Set<String> deliveredInlineKeys = deliveredKeys(inlineSignals);
         List<Observation> assessed = observations.stream()
-                .filter(f -> f.getPresence().carriesValence())
+                .filter(f -> (f.getAssessmentStatus() == AssessmentStatus.ASSESSED))
                 .filter(f -> !excludedIds.contains(f.getId()))
-                .filter(f -> summaryDelivered || deliveredInlineKeys.contains(f.getRecurrenceKey()))
+                .filter(f -> summaryDelivered || deliveredInlineKeys.contains("observation:" + f.getOccurrenceKey()))
                 // Stable order matching the composer's prioritisation, and the same ObservationOrder it uses:
                 // severity, then how much of the work the observation's citations span, then id — so the persisted
                 // PRIMARY ordinal of equal-severity problems is reproducible across re-runs rather than flapping
@@ -280,7 +281,7 @@ public class FeedbackLedgerRecorder {
                 .toList();
         int ordinal = 0;
         for (Observation f : assessed) {
-            EvidenceRole role = f.getAssessment() == Assessment.BAD ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
+            EvidenceRole role = f.getOutcome() == Outcome.NEGATIVE ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
             feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal++);
         }
 
@@ -331,7 +332,7 @@ public class FeedbackLedgerRecorder {
     private static Set<String> deliveredKeys(List<DeliveredSignal> signals) {
         return signals.stream()
                 .filter(signal -> signal.disposition() != Disposition.FAILED)
-                .map(DeliveredSignal::recurrenceKey)
+                .map(DeliveredSignal::deliveryKey)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
     }
@@ -435,7 +436,7 @@ public class FeedbackLedgerRecorder {
             AgentJob job,
             DeliveryContent delivery,
             FeedbackSuppressionReason reason,
-            List<String> suppressedRecurrenceKeys) {
+            List<String> suppressedDeliveryKeys) {
         if (delivery == null || job.getWorkspace() == null) {
             return;
         }
@@ -447,9 +448,9 @@ public class FeedbackLedgerRecorder {
         if (observations.isEmpty()) {
             return;
         }
-        Set<String> suppressedKeys = Set.copyOf(suppressedRecurrenceKeys);
+        Set<String> suppressedKeys = Set.copyOf(suppressedDeliveryKeys);
         List<Observation> suppressedObservations = observations.stream()
-                .filter(f -> suppressedKeys.contains(f.getRecurrenceKey()))
+                .filter(f -> suppressedKeys.contains("observation:" + f.getOccurrenceKey()))
                 .toList();
         saveSuppressedUnit(job, delivery, reason, observations, suppressedObservations);
     }
@@ -486,11 +487,11 @@ public class FeedbackLedgerRecorder {
                 .build());
         int ordinal = 0;
         List<Observation> assessed = evidence.stream()
-                .filter(f -> f.getPresence().carriesValence())
+                .filter(f -> (f.getAssessmentStatus() == AssessmentStatus.ASSESSED))
                 .sorted(ObservationOrder.worstFirst())
                 .toList();
         for (Observation f : assessed) {
-            EvidenceRole role = f.getAssessment() == Assessment.BAD ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
+            EvidenceRole role = f.getOutcome() == Outcome.NEGATIVE ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
             feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal++);
         }
         log.info(
@@ -534,6 +535,7 @@ public class FeedbackLedgerRecorder {
     /** Stores the exact separately composed human-approval body before any provider side effect. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordProposal(AgentJob job, @Nullable DeliveryContent delivery, List<ValidatedObservation> proposed) {
+        publishFeedbackLaneTrigger(job);
         final int position = APPROVAL_UNIT_ORDINAL;
         if (delivery == null || delivery.mrNote() == null) return;
         String body = PullRequestCommentPoster.sanitize(delivery.mrNote());
@@ -602,7 +604,7 @@ public class FeedbackLedgerRecorder {
                         note.filePath(),
                         note.startLine(),
                         note.endLine(),
-                        note.recurrenceKey()));
+                        note.deliveryKey()));
             }
         }
         return List.copyOf(placements);
@@ -705,11 +707,11 @@ public class FeedbackLedgerRecorder {
         // observations.
         int ordinal = 0;
         List<Observation> assessed = observations.stream()
-                .filter(f -> f.getPresence().carriesValence())
+                .filter(f -> (f.getAssessmentStatus() == AssessmentStatus.ASSESSED))
                 .sorted(ObservationOrder.worstFirst())
                 .toList();
         for (Observation f : assessed) {
-            EvidenceRole role = f.getAssessment() == Assessment.BAD ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
+            EvidenceRole role = f.getOutcome() == Outcome.NEGATIVE ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
             feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal++);
         }
         log.info(
@@ -719,32 +721,13 @@ public class FeedbackLedgerRecorder {
                 assessed.size());
     }
 
-    /**
-     * Find the delivery signal for a posted note. Primary match is the stable {@code recurrenceKey} (the
-     * cross-run identity); when it is absent on either side (legacy / unkeyed notes) we fall back to the diff
-     * coordinates the signal anchored at — path + the note's terminal line, which for a single-line note is its
-     * start and for a range its end. Returns {@code null} when nothing matches (no signal was emitted).
-     */
+    /** Match a placement only by its exact delivery identity. Shared coordinates do not establish identity. */
     private static @Nullable DeliveredSignal matchSignal(DiffNote note, List<DeliveredSignal> signals) {
-        if (signals.isEmpty()) {
-            return null;
-        }
-        if (note.recurrenceKey() != null) {
-            for (DeliveredSignal s : signals) {
-                if (note.recurrenceKey().equals(s.recurrenceKey())) {
-                    return s;
-                }
-            }
-        }
-        int terminalLine = note.endLine() != null ? note.endLine() : note.startLine();
-        for (DeliveredSignal s : signals) {
-            if (s.anchor() instanceof DiffAnchor anchor
-                    && note.filePath().equals(anchor.filePath())
-                    && anchor.newLineNumber() == terminalLine) {
-                return s;
-            }
-        }
-        return null;
+        if (note.deliveryKey() == null) return null;
+        return signals.stream()
+                .filter(signal -> note.deliveryKey().equals(signal.deliveryKey()))
+                .findFirst()
+                .orElse(null);
     }
 
     /**

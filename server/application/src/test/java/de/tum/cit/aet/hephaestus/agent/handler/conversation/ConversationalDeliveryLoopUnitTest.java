@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
@@ -112,7 +113,8 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
                             .toList();
                 });
         lenient()
-                .when(visibilityPolicy.permitsAll(anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
+                .when(visibilityPolicy.permitsForNewDelivery(
+                        anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
                 .thenAnswer(invocation -> {
                     Collection<Observation> observations = invocation.getArgument(1);
                     return observations.stream().map(Observation::getId).collect(Collectors.toSet());
@@ -203,13 +205,29 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
                     case STRENGTH -> strength();
                     case NOT_APPLICABLE -> notApplicable();
                     case ALREADY_DELIVERED -> {
-                        when(feedbackRepository.existsDeliveredInContextForRecurrenceKey(WS, RECIPIENT, "rk-1"))
+                        Observation delivered = problem(null, "rk-1");
+                        when(feedbackRepository.existsDeliveredInContextForObservation(
+                                        WS, RECIPIENT, delivered.getId()))
                                 .thenReturn(true);
-                        yield problem(null, "rk-1");
+                        yield delivered;
                     }
                 };
 
         assertThat(router().route(obs, PracticeAutonomy.AUTOMATIC, WS, ctx)).isEqualTo(expected);
+    }
+
+    @Test
+    void shouldAdmitDifferentObservationWhenItsLocationWasAlreadyDelivered() {
+        Observation delivered = problem(null, "shared-location");
+        Observation otherBehavior = problem(null, "shared-location");
+        when(feedbackRepository.existsDeliveredInContextForObservation(WS, RECIPIENT, delivered.getId()))
+                .thenReturn(true);
+        when(feedbackRepository.existsDeliveredInContextForObservation(WS, RECIPIENT, otherBehavior.getId()))
+                .thenReturn(false);
+        assertThat(router().route(delivered, PracticeAutonomy.AUTOMATIC, WS, RoutingContext.author()))
+                .isEqualTo(ConversationRoutingDecision.ALREADY_DELIVERED_IN_CONTEXT);
+        assertThat(router().route(otherBehavior, PracticeAutonomy.AUTOMATIC, WS, RoutingContext.author()))
+                .isEqualTo(ConversationRoutingDecision.ADMIT);
     }
 
     /**
@@ -304,7 +322,7 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
         // Withheld = absent from the permitted set. Nothing else in the batch says so.
         doReturn(Set.of())
                 .when(visibilityPolicy)
-                .permitsAll(anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING));
+                .permitsForNewDelivery(anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING));
 
         int flips = reconciler().reconcile(WS, RECIPIENT, UUID.randomUUID(), List.of(observationId));
 
@@ -330,7 +348,7 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
         doReturn(List.of(observation)).when(observationRepository).findAllByIdInAndWorkspaceId(any(), anyLong());
         doReturn(Set.of())
                 .when(visibilityPolicy)
-                .permitsAll(anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING));
+                .permitsForNewDelivery(anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING));
 
         int suppressed = reconciler().suppressForSilentMode(WS, RECIPIENT, List.of(observationId));
 
@@ -358,15 +376,15 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     @Test
     void reconcilerSkipsFlip_whenLocusWasSinceDeliveredInContext() {
-        // A PREPARED unit seeded by a FAILED direct delivery: if a later re-review has since delivered the SAME
-        // recurrence_key in-context, the flip must be skipped (no double-delivery) — the stale unit ages out.
+        // A PREPARED unit seeded by a FAILED direct delivery: if this exact observation was delivered
+        // in-context, the flip must be skipped (no double-delivery) — the stale unit ages out.
         UUID a = UUID.randomUUID();
         UUID fidA = UUID.randomUUID();
         when(feedbackObservationRepository.findPreparedConversationFeedbackIdsByObservation(WS, RECIPIENT, a))
                 .thenReturn(List.of(fidA));
         Observation obs = problem(null, "rk-delivered", a);
         doReturn(List.of(obs)).when(observationRepository).findAllByIdInAndWorkspaceId(any(), anyLong());
-        when(feedbackRepository.existsDeliveredInContextForRecurrenceKey(WS, RECIPIENT, "rk-delivered"))
+        when(feedbackRepository.existsDeliveredInContextForObservation(WS, RECIPIENT, a))
                 .thenReturn(true);
 
         int flips = reconciler().reconcile(WS, RECIPIENT, UUID.randomUUID(), List.of(a));
@@ -383,7 +401,7 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
                 .thenReturn(List.of(fidA));
         Observation obs = problem(null, "rk-fresh", a);
         doReturn(List.of(obs)).when(observationRepository).findAllByIdInAndWorkspaceId(any(), anyLong());
-        when(feedbackRepository.existsDeliveredInContextForRecurrenceKey(WS, RECIPIENT, "rk-fresh"))
+        when(feedbackRepository.existsDeliveredInContextForObservation(WS, RECIPIENT, a))
                 .thenReturn(false);
         when(feedbackRepository.markConversationDelivered(eq(fidA), any())).thenReturn(1);
         when(feedbackRepository.getReferenceById(fidA)).thenReturn(mock(Feedback.class));
@@ -404,9 +422,10 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
     }
 
     static Stream<Arguments> autonomyRoutingCases() {
+        // A chat turn is read on request, so approval gates only what is pushed: HUMAN_APPROVAL delivers here.
         return Stream.of(
                 arguments(PracticeAutonomy.OFF, ConversationRoutingDecision.PRACTICE_REQUIRES_APPROVAL),
-                arguments(PracticeAutonomy.HUMAN_APPROVAL, ConversationRoutingDecision.PRACTICE_REQUIRES_APPROVAL),
+                arguments(PracticeAutonomy.HUMAN_APPROVAL, ConversationRoutingDecision.ADMIT),
                 arguments(PracticeAutonomy.AUTOMATIC, ConversationRoutingDecision.ADMIT));
     }
 
@@ -414,8 +433,10 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
     void autonomyIsAppliedBeforeReviewerDeferral() {
         Observation observation = problem(null, null);
 
-        assertThat(router().route(observation, PracticeAutonomy.HUMAN_APPROVAL, WS, RoutingContext.reviewer()))
+        assertThat(router().route(observation, PracticeAutonomy.OFF, WS, RoutingContext.reviewer()))
                 .isEqualTo(ConversationRoutingDecision.PRACTICE_REQUIRES_APPROVAL);
+        assertThat(router().route(observation, PracticeAutonomy.HUMAN_APPROVAL, WS, RoutingContext.reviewer()))
+                .isEqualTo(ConversationRoutingDecision.REVIEWER_DEFERRED);
     }
 
     @Test
@@ -432,9 +453,14 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     private Observation problem(@Nullable ObjectNode evidence, @Nullable String recurrenceKey, UUID id) {
         Observation o = mock(Observation.class);
+        lenient()
+                .when(o.getOutcome())
+                .thenAnswer(invocation ->
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(o.getPresence(), o.getAssessment()));
         lenient().when(o.getId()).thenReturn(id);
         lenient().when(o.getPresence()).thenReturn(Presence.ABSENT);
-        lenient().when(o.getAssessment()).thenReturn(Assessment.BAD);
+        org.mockito.Mockito.lenient().when(o.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
+        lenient().when(o.getAssessment()).thenReturn(Assessment.GOOD);
         lenient().when(o.getSeverity()).thenReturn(Severity.MAJOR);
         lenient().when(o.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
         lenient().when(o.getArtifactId()).thenReturn(100L);
@@ -447,8 +473,13 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     private Observation strength() {
         Observation o = mock(Observation.class);
+        lenient()
+                .when(o.getOutcome())
+                .thenAnswer(invocation ->
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(o.getPresence(), o.getAssessment()));
         lenient().when(o.getId()).thenReturn(UUID.randomUUID());
         lenient().when(o.getPresence()).thenReturn(Presence.PRESENT);
+        org.mockito.Mockito.lenient().when(o.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
         lenient().when(o.getAssessment()).thenReturn(Assessment.GOOD);
         lenient().when(o.getAboutUserId()).thenReturn(RECIPIENT);
         lenient().when(o.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
@@ -458,8 +489,12 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     private Observation notApplicable() {
         Observation o = mock(Observation.class);
+        lenient()
+                .when(o.getOutcome())
+                .thenAnswer(invocation ->
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(o.getPresence(), o.getAssessment()));
         lenient().when(o.getId()).thenReturn(UUID.randomUUID());
-        lenient().when(o.getPresence()).thenReturn(Presence.NOT_APPLICABLE);
+        lenient().when(o.getAssessmentStatus()).thenReturn(AssessmentStatus.NOT_APPLICABLE);
         lenient().when(o.getAssessment()).thenReturn(null);
         lenient().when(o.getAboutUserId()).thenReturn(RECIPIENT);
         lenient().when(o.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);

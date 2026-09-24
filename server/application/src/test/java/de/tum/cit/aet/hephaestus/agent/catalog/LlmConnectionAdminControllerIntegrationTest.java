@@ -28,7 +28,7 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
         var request = new CreateLlmConnectionRequestDTO(
                 slug,
                 "Test Connection",
-                "https://api.openai.com",
+                LlmCatalogTestFixtures.PUBLIC_BASE_URL,
                 "openai-completions",
                 LlmAuthMode.BEARER,
                 "sk-test-secret-1234",
@@ -102,7 +102,8 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -110,7 +111,8 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -123,7 +125,7 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .bodyValue(new CreateLlmConnectionRequestDTO(
                         "redaction-test",
                         "Redaction Test",
-                        "https://api.openai.com",
+                        LlmCatalogTestFixtures.PUBLIC_BASE_URL,
                         "openai-completions",
                         LlmAuthMode.BEARER,
                         "sk-super-secret-value",
@@ -153,7 +155,8 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isEqualTo(409);
+                .isEqualTo(409)
+                .expectBody(Void.class);
     }
 
     @Test
@@ -164,6 +167,7 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 }

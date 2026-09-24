@@ -1,11 +1,14 @@
 import { type DefaultError, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
 import {
 	getConsentStatusOptions,
 	getConsentStatusQueryKey,
 	getCurrentUserQueryKey,
+	getNotificationPreferencesOptions,
+	getNotificationPreferencesQueryKey,
 	getSlackUserPreferencesOptions,
 	getSlackUserPreferencesQueryKey,
 	getUserSettingsOptions,
@@ -15,6 +18,7 @@ import {
 	listLinkedIdentitiesQueryKey,
 	unlinkIdentityMutation,
 	updateResearchConsentMutation,
+	updateNotificationPreferencesMutation,
 	updateSlackUserPreferencesMutation,
 	updateUserSettingsMutation,
 } from "@/api/@tanstack/react-query.gen";
@@ -25,12 +29,14 @@ import type {
 	UpdateUserSettingsResponse,
 	UserSettings,
 } from "@/api/types.gen";
+import type { EmailPreferencesSectionProps } from "@/components/settings/EmailPreferencesSection";
 import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAccountsSection";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { problemDetailOf } from "@/lib/problem-detail";
+import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
+import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/settings")({
 	component: RouteComponent,
@@ -38,10 +44,20 @@ export const Route = createFileRoute("/_authenticated/settings")({
 
 function RouteComponent() {
 	const queryClient = useQueryClient();
-	const { logout, linkAccount } = useAuth();
+	const { logout, linkAccount, isAppAdmin } = useAuth();
 	const userSettingsQueryKey = getUserSettingsQueryKey();
 	const consentQuery = useQuery(getConsentStatusOptions({}));
 	const accountConsent = consentQuery.data;
+	const navigate = useNavigate();
+
+	// Setup can fall due again while this page is open — a renamed research organisation asks its
+	// question afresh. The parent guard only runs on navigation, so without this the reader is left on
+	// a page whose controls have quietly gone and whose writes the server has started refusing.
+	useEffect(() => {
+		if (accountConsent?.completed === false) {
+			void navigate({ to: "/consent", search: { returnTo: "/settings" }, replace: true });
+		}
+	}, [accountConsent?.completed, navigate]);
 
 	const {
 		data: settings,
@@ -52,6 +68,57 @@ function RouteComponent() {
 		...getUserSettingsOptions({}),
 		retry: 1,
 	});
+
+	const emailPreferencesQuery = useQuery(getNotificationPreferencesOptions());
+	const emailPreferencesMutation = useMutation({
+		...updateNotificationPreferencesMutation(),
+		onMutate: async () => {
+			await queryClient.cancelQueries({ queryKey: getNotificationPreferencesQueryKey() });
+		},
+		onSuccess: async (preferences) => {
+			await queryClient.cancelQueries({ queryKey: getNotificationPreferencesQueryKey() });
+			queryClient.setQueryData(getNotificationPreferencesQueryKey(), preferences);
+		},
+		onError: async (error) => {
+			await queryClient.invalidateQueries({ queryKey: getNotificationPreferencesQueryKey() });
+			toast.error(
+				problemStatusOf(error) === 412
+					? "Email choices changed elsewhere. Review the updated choices and try again."
+					: problemDetailOf(error, "Could not update your email choices. Please try again."),
+			);
+		},
+	});
+	const preferences = emailPreferencesQuery.data;
+	let emailPreferencesState: EmailPreferencesSectionProps["state"] = { status: "loading" };
+	if (emailPreferencesQuery.isError) {
+		emailPreferencesState = {
+			status: "error",
+			error: emailPreferencesQuery.error,
+			onRetry: () => {
+				void emailPreferencesQuery.refetch();
+			},
+		};
+	} else if (preferences !== undefined) {
+		emailPreferencesState = {
+			status: "ready",
+			preferences,
+			isPending: emailPreferencesMutation.isPending,
+			onChange: (choices) => {
+				if (emailPreferencesMutation.isPending) {
+					return;
+				}
+				emailPreferencesMutation.mutate({
+					headers: { "If-Match": preferences.etag },
+					body: choices,
+				});
+			},
+		};
+	}
+	const emailPreferencesProps: EmailPreferencesSectionProps = {
+		researchAvailable: hasText(accountConsent?.researchOrganization),
+		isAppAdmin,
+		state: emailPreferencesState,
+	};
 
 	const linkedIdentitiesQuery = useQuery({
 		...listLinkedIdentitiesOptions({}),
@@ -95,7 +162,9 @@ function RouteComponent() {
 	// Spread-based helper: reads latest cache to avoid stale-closure race under rapid toggling
 	const updateSetting = (patch: Partial<UserSettings>) => {
 		const current = queryClient.getQueryData<UserSettings>(userSettingsQueryKey);
-		if (!current) return;
+		if (!current) {
+			return;
+		}
 		updateSettingsMutation.mutate({
 			body: { ...current, ...patch },
 		});
@@ -108,12 +177,27 @@ function RouteComponent() {
 		...updateResearchConsentMutation(),
 		onSuccess: (status) => {
 			queryClient.setQueryData(getConsentStatusQueryKey({}), status);
+			// Research surveys are offered on the strength of this answer, so the menu must follow it.
+			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
 		},
-		onError: () => toast.error("Failed to update research participation. Please try again."),
+		onError: () => {
+			// The refusal may be the notice moving on — a renamed research organisation, or setup owed
+			// again. Re-read it so the control reflects what this instance is now asking.
+			void queryClient.invalidateQueries({ queryKey: getConsentStatusQueryKey({}) });
+			toast.error("Failed to update research participation. Please try again.");
+		},
 	});
 
+	// Echo the notice and organisation this page rendered: a settings tab left open across a change of
+	// research organisation would otherwise record a decision about one the reader never saw.
 	const handleResearchToggle = (checked: boolean) =>
-		researchConsentMutation.mutate({ body: { granted: checked } });
+		researchConsentMutation.mutate({
+			body: {
+				granted: checked,
+				noticeVersion: accountConsent?.noticeVersion ?? "",
+				researchOrganization: accountConsent?.researchOrganization,
+			},
+		});
 
 	// After deletion: end the session. `logout()` performs a full reload to "/",
 	// so no further navigation is needed here.
@@ -157,7 +241,7 @@ function RouteComponent() {
 			});
 			void queryClient.invalidateQueries({ queryKey: slackPreferencesQueryKey });
 			toast.success(
-				updatedWorkspace.channelMessagesAllowed
+				updatedWorkspace.channelMessagesAllowed === true
 					? "Slack channel-message use is on."
 					: "Slack channel-message use is off.",
 			);
@@ -208,7 +292,7 @@ function RouteComponent() {
 		isSlackLinked: Boolean(slackIdentity),
 		canConnectSlack: Boolean(slackProvider?.registrationId),
 		onConnectSlack: () => {
-			if (slackProvider?.registrationId) {
+			if (hasText(slackProvider?.registrationId)) {
 				linkAccount(slackProvider.registrationId, "/settings");
 			}
 		},
@@ -227,27 +311,43 @@ function RouteComponent() {
 			(slackAvailable && slackPreferencesQuery.isLoading),
 		isError: slackAvailable && slackPreferencesQuery.isError,
 		error: slackPreferencesQuery.error,
-		onRetry: () => void slackPreferencesQuery.refetch(),
+		onRetry: () => {
+			void slackPreferencesQuery.refetch();
+		},
 	};
 
 	return (
 		<SettingsPage
+			emailPreferencesProps={emailPreferencesProps}
 			isLoading={isLoading}
 			settingsError={settingsError}
-			onRetrySettings={() => void refetchSettings()}
+			onRetrySettings={() => {
+				void refetchSettings();
+			}}
 			practiceFeedbackProps={{
 				practiceFeedbackDeliveryEnabled: settings?.practiceFeedbackDeliveryEnabled ?? true,
 				onTogglePracticeFeedback: handlePracticeFeedbackToggle,
 				isLoading: updateSettingsMutation.isPending,
 			}}
-			showResearchSection
+			// No configured organisation means no study on this deployment, and a switch for a study
+			// nobody runs is a promise the instance cannot keep.
+			// Setup owns the question until it is answered for the organisation currently named; a switch
+			// before that would stand in for a consent this account has not given. A failed read still
+			// shows the section, because its Retry is the only way to find out whether there is one.
+			showResearchSection={
+				consentQuery.isError ||
+				(accountConsent?.researchOrganization !== undefined && accountConsent.completed)
+			}
 			researchProps={{
+				organization: accountConsent?.researchOrganization ?? "",
 				participateInResearch: accountConsent?.participateInResearch ?? false,
 				onToggleResearch: handleResearchToggle,
 				isLoading: consentQuery.isLoading || researchConsentMutation.isPending,
 				isError: consentQuery.isError,
 				error: consentQuery.error,
-				onRetry: () => void consentQuery.refetch(),
+				onRetry: () => {
+					void consentQuery.refetch();
+				},
 			}}
 			linkedAccountsProps={linkedAccountsProps}
 			showSlackPreferencesSection={slackAvailable}

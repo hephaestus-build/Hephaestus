@@ -21,6 +21,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineClientModels;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineContentClient;
+import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookClient;
+import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookTestFixtures;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineDocumentModel;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineNavigationNode;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineUser;
@@ -70,6 +72,9 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
     private OutlineContentClient outlineApiClient;
 
     @Autowired
+    private OutlineWebhookClient outlineWebhookClient;
+
+    @Autowired
     private OutlineDocumentSyncScheduler scheduler;
 
     @Autowired
@@ -92,12 +97,13 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
 
     @AfterEach
     void resetOutlineClient() {
-        reset(outlineApiClient);
+        reset(outlineApiClient, outlineWebhookClient);
     }
 
     @BeforeEach
     void setUp() {
-        reset(outlineApiClient);
+        reset(outlineApiClient, outlineWebhookClient);
+        OutlineWebhookTestFixtures.acceptsSubscriptions(outlineWebhookClient);
         databaseTestUtils.cleanDatabase();
         Workspace workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("outline-sync"));
         workspaceId = workspace.getId();

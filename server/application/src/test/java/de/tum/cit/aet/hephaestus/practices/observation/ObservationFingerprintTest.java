@@ -58,20 +58,14 @@ class ObservationFingerprintTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("anchor normalization: surrounding whitespace + casing do not split identity")
-    void pathNormalizationEquivalence() {
-        // The anchor is locale-fixed lower-cased and whitespace-collapsed, so trivial path
-        // casing/spacing differences across runs must NOT produce a different recurrence key.
+    void shouldKeepDistinctPathsSeparateWhenCaseOrWhitespaceDiffers() {
         String canonical = ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "src/foo.swift");
-        assertThat(ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "  SRC/Foo.swift  "))
-                .as("leading/trailing whitespace + upper-case folds to the same key")
-                .isEqualTo(canonical);
-        assertThat(ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "src/foo.swift\t"))
-                .as("trailing whitespace folds to the same key")
-                .isEqualTo(canonical);
+        assertThat(ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "SRC/Foo.swift"))
+                .isNotEqualTo(canonical);
+        assertThat(ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "src/foo.swift "))
+                .isNotEqualTo(canonical);
         assertThat(ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "src/  foo.swift"))
-                .as("internal whitespace collapses (the replaceAll(\\s+,' ') branch) to the same key")
-                .isEqualTo(ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "src/ foo.swift"));
+                .isNotEqualTo(ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "src/ foo.swift"));
     }
 
     @Test
@@ -89,15 +83,10 @@ class ObservationFingerprintTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("an embedded separator/control byte in the path cannot split or collapse identity")
-    void controlCharsInPathAreStripped() {
-        // The path is the only LLM-influenced field; stripping control chars (incl. the SEP byte 0x1F)
-        // removes the lone canonicalization ambiguity — two paths differing only by an embedded 0x1F
-        // must canonicalize to one locus rather than two distinct recurrence keys.
+    void shouldPreserveControlCharactersWhenTheyDistinguishPaths() {
         String canonical = ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "src/foo.swift");
-        assertThat(ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "src/foo.swift"))
-                .as("an embedded unit-separator byte is stripped, not preserved")
-                .isEqualTo(canonical);
+        assertThat(ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "src/foo\u001f.swift"))
+                .isNotEqualTo(canonical);
     }
 
     @Test
@@ -114,12 +103,8 @@ class ObservationFingerprintTest extends BaseUnitTest {
     @Test
     @DisplayName("golden vector: the canonical digest is pinned so the wire identity never drifts silently")
     void goldenVector() {
-        // A change to the field set, separator, normalization, or hash algorithm would silently
-        // re-identify EVERY historical observation (breaking cross-run supersession). Pin one vector so
-        // such a change must be a deliberate, reviewed edit to this expectation. The cost of making it
-        // is that observations recorded under the old key stop correlating with new ones — at most one
-        // re-posted piece of feedback per open artifact.
+        // Pin the exact path bytes and typed-field boundaries.
         assertThat(ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "Foo.swift"))
-                .isEqualTo("a8b20bf6e20b28b3315420a241577853676ceed52e7be2976f94d3978cfa830d");
+                .isEqualTo("1cdf7c6a4a56d0199870d49a49ea7e9da77eee3de5ed811f69221bed788107c2");
     }
 }

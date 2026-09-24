@@ -189,6 +189,27 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldKeepTheOldLineAsTheLineWhenTheNoteSitsOnARemovedLine() {
+            when(commentRepository.findByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
+                    .thenReturn(Optional.empty());
+            when(commentRepository.save(any(PullRequestReviewComment.class)))
+                    .thenAnswer(inv -> inv.getArgument(0, PullRequestReviewComment.class));
+
+            // A deletion: GitLab gives old_line only, and the note is anchored on the base side.
+            var data =
+                    buildDiffNoteData("src/Foo.ts", "src/Foo.ts", "src/Foo.ts", null, 17, "head-sha", "base-sha", null);
+            var context = new GitLabPullRequestReviewCommentProcessor.CommentContext(
+                    thread, pr, null, provider, null, null, SCOPE_ID);
+
+            PullRequestReviewComment saved = processor.findOrCreateComment(data, context);
+
+            assertThat(saved).isNotNull();
+            assertThat(saved.getLine()).isEqualTo(17);
+            assertThat(saved.getOriginalLine()).isEqualTo(17);
+            assertThat(saved.getSide()).isEqualTo(PullRequestReviewComment.Side.LEFT);
+        }
+
+        @Test
         void shouldFallBackToStartShaWhenBaseShaIsNull() {
             when(commentRepository.findByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
                     .thenReturn(Optional.empty());

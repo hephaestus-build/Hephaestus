@@ -1,18 +1,17 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent } from "storybook/test";
 
-import { settledPopup } from "@/test/overlay";
+import { settledPopup } from "@/stories/overlay";
 
+import { statusValues } from "@/components/common/status-def";
 import { PRACTICE_GROUP_STANDING_DEFS } from "./practice-group-standing-defs";
 import { StandingBadge } from "./StandingBadge";
-import { statusValues } from "./status-def";
 
 /**
  * A standing is the registry's badge made focusable, so the sentence behind it is reachable by
  * keyboard as well as pointer. The badge itself is `StatusBadge`, as every enum's is.
  */
 const meta = {
-	title: "Shared/Practice vocabulary/Standing badge",
 	component: StandingBadge,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],

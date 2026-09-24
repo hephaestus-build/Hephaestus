@@ -193,7 +193,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         }
         if (!changedFields.isEmpty()) {
             eventPublisher.publishEvent(new ScmDomainEvent.IssueUpdated(
-                    ScmEventPayload.IssueData.from(issue), changedFields, EventContext.from(context)));
+                    ScmEventPayload.IssueData.from(issue), changedFields, actorContext(event, context)));
         }
         for (GitLabWebhookLabel labelDto : addedLabels) {
             Label label = findOrCreateLabel(labelDto, Objects.requireNonNull(context.repository()));
@@ -290,6 +290,8 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         // Check if existing
         Optional<Issue> existingOpt = issueRepository.findByRepositoryIdAndNumber(repository.getId(), issueNumber);
         boolean isNew = existingOpt.isEmpty();
+        ScmEventPayload.@Nullable IssueData previous =
+                existingOpt.map(ScmEventPayload.IssueData::from).orElse(null);
 
         // Resolve author
         User author = findOrCreateUser(
@@ -364,6 +366,13 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
             eventPublisher.publishEvent(
                     new ScmDomainEvent.IssueCreated(ScmEventPayload.IssueData.from(issue), EventContext.from(ctx)));
             log.debug("Created issue from sync: issueId={}, iid={}", nativeId, data.iid());
+        } else if (previous != null && issueState == Issue.State.OPEN) {
+            ScmEventPayload.IssueData current = ScmEventPayload.IssueData.from(issue);
+            Set<String> changedFields = changedReviewFields(previous, current);
+            if (!changedFields.isEmpty()) {
+                eventPublisher.publishEvent(
+                        new ScmDomainEvent.IssueUpdated(current, changedFields, EventContext.from(ctx)));
+            }
         }
 
         // Emit the close event for CLOSED issues on every sync, not just on create, so a sync backfills
@@ -377,6 +386,22 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         }
 
         return issue;
+    }
+
+    private static Set<String> changedReviewFields(
+            ScmEventPayload.IssueData previous, ScmEventPayload.IssueData current) {
+        Set<String> changed = new HashSet<>();
+        if (!previous.title().equals(current.title())) changed.add("title");
+        if (!Objects.equals(previous.body(), current.body())) changed.add("body");
+        if (previous.state() != current.state()) changed.add("state");
+        if (!Objects.equals(previous.stateReason(), current.stateReason())) changed.add("stateReason");
+        if (!Objects.equals(previous.issueType(), current.issueType())) changed.add("issueType");
+        if (!Objects.equals(previous.milestone(), current.milestone())) changed.add("milestone");
+        if (!new HashSet<>(previous.labels()).equals(new HashSet<>(current.labels()))
+                || !new HashSet<>(previous.assignees()).equals(new HashSet<>(current.assignees()))) {
+            changed.add("relationships");
+        }
+        return changed;
     }
 
     @Transactional
@@ -398,7 +423,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         if (issue != null) {
             ScmEventPayload.IssueData issueData = ScmEventPayload.IssueData.from(issue);
             eventPublisher.publishEvent(
-                    new ScmDomainEvent.IssueUpdated(issueData, Set.of("state"), EventContext.from(context)));
+                    new ScmDomainEvent.IssueUpdated(issueData, Set.of("state"), actorContext(event, context)));
             eventPublisher.publishEvent(new ScmDomainEvent.IssueReopened(issueData, EventContext.from(context)));
             log.debug("Reopened issue: issueId={}", issue.getId());
         }
@@ -406,6 +431,13 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
     }
 
     // Private helpers
+
+    private EventContext actorContext(GitLabIssueEventDTO event, ProcessingContext context) {
+        User actor = event.user() != null && context.providerId() != null
+                ? findOrCreateUser(event.user(), context.providerId())
+                : null;
+        return EventContext.from(context.withActorUserId(actor != null ? actor.getId() : null));
+    }
 
     /**
      * Resolves the issue author from a webhook event.

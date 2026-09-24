@@ -12,7 +12,9 @@ import org.springframework.test.context.DynamicPropertySource;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-@AutoConfigureWebTestClient
+// A hang guard, not a latency budget: the 5s default failed whole suites whenever one request
+// crossed it under CI load, reported as "Timeout on blocking read" with no failing assertion.
+@AutoConfigureWebTestClient(timeout = "30s")
 @Tag("integration")
 public abstract class RealAuthIntegrationTest {
 

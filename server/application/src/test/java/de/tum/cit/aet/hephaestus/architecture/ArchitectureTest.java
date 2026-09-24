@@ -76,7 +76,7 @@ class ArchitectureTest extends HephaestusArchitectureTest {
          *
          * <p>No frozen baseline — the rule passes cleanly and still fails on any NEW cycle that
          * pulls a genuinely-independent module (agent, mentor, practices, account, notification,
-         * achievement, analytics, …) into the platform or into each other. Finer boundaries inside
+         * activity, analytics, …) into the platform or into each other. Finer boundaries inside
          * the platform stay policed by {@code ModuleBoundaryTest},
          * {@code CrossCuttingModuleBoundaryTest}, {@code IntegrationCoreVendorNeutralityTest}, and
          * {@code ExternalVendorImportAllowlistTest}.

@@ -53,8 +53,10 @@ class SyncPushServiceNatsIntegrationTest extends BaseIntegrationTest {
         secondHub.subscribe(WORKSPACE_ID);
         firstService = new SyncPushService(
                 firstHub, mapper, objectProviderReturning(firstConnection), new SimpleMeterRegistry());
+        firstService.subscribeIfNatsAvailable();
         secondService = new SyncPushService(
                 secondHub, mapper, objectProviderReturning(secondConnection), new SimpleMeterRegistry());
+        secondService.subscribeIfNatsAvailable();
         firstConnection.flush(Duration.ofSeconds(2));
         secondConnection.flush(Duration.ofSeconds(2));
     }

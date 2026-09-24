@@ -300,7 +300,7 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
                         101L,
                         developer,
                         "ABSENT",
-                        "BAD",
+                        "GOOD",
                         "MAJOR",
                         Instant.now(),
                         "{\"citations\":[{\"sourceKind\":\"scm.pull-request.withdrawn\",\"quote\":\"example\"}]}"));
@@ -325,7 +325,7 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
     }
 
     private UUID persistObservation(Practice about, AgentJob agentJob, User subject, long artifactId) {
-        return observe(about, agentJob, artifactId, subject, "ABSENT", "BAD", "MAJOR", Instant.now());
+        return observe(about, agentJob, artifactId, subject, "ABSENT", "GOOD", "MAJOR", Instant.now());
     }
 
     private Feedback persistInAppCard(

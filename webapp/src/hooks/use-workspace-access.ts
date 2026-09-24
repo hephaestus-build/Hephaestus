@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { useAuth } from "@/integrations/auth/AuthContext";
-import { workspaceMembershipQueryOptions } from "@/integrations/auth/guard";
 import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
 
 import { useActiveWorkspaceSlug } from "./use-active-workspace";
 
@@ -10,6 +10,7 @@ import { useActiveWorkspaceSlug } from "./use-active-workspace";
 export function useWorkspaceAccess() {
 	const {
 		chromeWorkspaceSlug,
+		chromeWorkspace,
 		workspaces,
 		isLoading: workspacesLoading,
 	} = useActiveWorkspaceSlug();
@@ -24,6 +25,7 @@ export function useWorkspaceAccess() {
 
 	return {
 		chromeWorkspaceSlug,
+		chromeWorkspace,
 		workspaces,
 		role,
 		isAdmin: hasMinimumWorkspaceRole(role, "ADMIN"),

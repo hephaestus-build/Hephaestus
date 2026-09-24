@@ -5,14 +5,32 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
 import { createContext, useContext } from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
-type DrawerContextProps = {
+/**
+ * ⚠️ Diverges from the shadcn registry — `shadcn add drawer` drops the following; re-apply them.
+ *
+ * 1. `DrawerContent` takes `size`: `default` is upstream's width, `detail` a panel that replaces a
+ *    page, `detailWide` that panel for a surface that needs most of the viewport, `panel` a fixed
+ *    tool column beside one. Each owns its width and `--peek`.
+ * 2. `DrawerContent` takes `dimWhenNested`, documented at its definition.
+ * 3. `DrawerBody`, the scrollable middle, keyboard-focusable so a submitting form's disabled
+ *    controls do not strand the overflow. `DrawerHeader` and `DrawerFooter` are sized for it: the
+ *    footer is bordered and reverses to a row at `sm`, and neither centres on the y axis.
+ * 4. The motion tokens in `webapp/AGENTS.md` § Motion: 280ms in on a decelerate curve
+ *    (`--drawer-enter`, `--drawer-ease`), 200ms out on a standard curve (`--drawer-exit`), and a
+ *    `motion-reduce:` block that zeroes the scale, the peek and the travel and keeps the fade.
+ *    Upstream is 450ms both ways on one curve with no reduced-motion branch.
+ * 5. `height` is transitioned only on the y axis, for the reason at the popup's class list.
+ * 6. The overlay dims (`bg-black/25`) and never blurs; the viewport is `overflow-hidden` so the
+ *    bleed pseudo-element stays off the page's scroll width.
+ */
+interface DrawerContextProps {
 	hasSnapPoints: boolean;
 	modal: DrawerPrimitive.Root.Props["modal"];
 	showSwipeHandle: boolean;
 	swipeDirection: NonNullable<DrawerPrimitive.Root.Props["swipeDirection"]>;
-};
+}
 
 const DrawerContext = createContext<DrawerContextProps | null>(null);
 
@@ -68,7 +86,7 @@ function DrawerOverlay({ className, ...props }: DrawerPrimitive.Backdrop.Props) 
 			// Dimmed but never blurred. A side panel earns its place over a page transition because
 			// the page behind stays legible; blurring it removes the only advantage.
 			className={cn(
-				"fixed inset-0 z-50 min-h-dvh bg-black/25 opacity-[max(var(--drawer-overlay-min-opacity,0),calc(1-var(--drawer-swipe-progress)))] transition-opacity duration-450 ease-[cubic-bezier(0.32,0.72,0,1)] select-none data-ending-style:pointer-events-none data-ending-style:opacity-0 data-ending-style:duration-[calc(var(--drawer-swipe-strength)*400ms)] data-snap-points:[--drawer-overlay-min-opacity:0.5] data-starting-style:opacity-0 data-swiping:duration-0 supports-[-webkit-touch-callout:none]:absolute",
+				"fixed inset-0 z-50 min-h-dvh bg-black/25 opacity-[max(var(--drawer-overlay-min-opacity,0),calc(1-var(--drawer-swipe-progress)))] transition-opacity duration-450 ease-drawer select-none data-ending-style:pointer-events-none data-ending-style:opacity-0 data-ending-style:duration-[calc(var(--drawer-swipe-strength)*400ms)] data-snap-points:[--drawer-overlay-min-opacity:0.5] data-starting-style:opacity-0 data-swiping:duration-0 supports-[-webkit-touch-callout:none]:absolute",
 				className,
 			)}
 			{...props}
@@ -83,8 +101,8 @@ function DrawerSwipeHandle({ className, ...props }: React.ComponentProps<"div">)
 			aria-hidden="true"
 			className={cn(
 				"relative z-10 flex shrink-0 cursor-grab items-center justify-center transition-opacity duration-200 group-data-nested-drawer-open/drawer-popup:opacity-0 group-data-nested-drawer-swiping/drawer-popup:opacity-100 group-data-[swipe-direction=left]/drawer-popup:order-last group-data-[swipe-direction=up]/drawer-popup:order-last active:cursor-grabbing",
-				"group-data-[swipe-axis=y]/drawer-popup:h-5 group-data-[swipe-axis=x]/drawer-popup:w-5",
-				"before:rounded-full before:bg-border group-data-[swipe-axis=y]/drawer-popup:before:h-1 group-data-[swipe-axis=y]/drawer-popup:before:w-10 group-data-[swipe-axis=x]/drawer-popup:before:h-10 group-data-[swipe-axis=x]/drawer-popup:before:w-1",
+				"group-data-[swipe-axis=x]/drawer-popup:w-5 group-data-[swipe-axis=y]/drawer-popup:h-5",
+				"before:rounded-full before:bg-border group-data-[swipe-axis=x]/drawer-popup:before:h-10 group-data-[swipe-axis=x]/drawer-popup:before:w-1 group-data-[swipe-axis=y]/drawer-popup:before:h-1 group-data-[swipe-axis=y]/drawer-popup:before:w-10",
 				className,
 			)}
 			{...props}
@@ -98,32 +116,34 @@ const drawerContentVariants = cva("", {
 			default:
 				"[--peek:1rem] data-[swipe-axis=x]:[--drawer-content-width:75%] data-[swipe-axis=x]:sm:[--drawer-content-width:24rem]",
 			/**
-			 * ⚠️ Diverges from the shadcn registry: a panel that replaces a page, so it has to hold
-			 * what that page held. Full width below `sm`, where a partial cover is unreadable. `--peek`
-			 * is far above the default: the column a covered panel keeps on screen is the reason to
-			 * stack rather than replace.
+			 * A panel that replaces a page, so it has to hold what that page held. Full width below
+			 * `sm`, where a partial cover is unreadable. `--peek` is far above the default: the column
+			 * a covered panel keeps on screen is the reason to stack rather than replace.
 			 */
 			detail:
 				"[--peek:6rem] data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:min(44rem,92vw)] data-[swipe-axis=x]:xl:[--drawer-content-width:min(62rem,75vw)]",
 			/**
-			 * ⚠️ Diverges from the shadcn registry: `detail` for a surface whose content needs most of
-			 * the viewport, e.g. a two-column standing with a run feed. Same peek; from `sm` the width
-			 * is 60rem where `detail` is 44rem, and from `xl` it holds 75vw instead of capping at
-			 * 62rem. Both widths are rounded to a whole pixel, and `will-change-auto` replaces the base
-			 * `will-change-transform`: at these widths the panel edge is rarely on a whole pixel, and a
-			 * panel kept on a GPU layer at rest rasterises its text soft, so demoting the layer after
-			 * the animation lets the text snap back to the pixel grid.
+			 * `detail` for a surface whose content needs most of the viewport, e.g. a two-column
+			 * standing with a run feed. Same peek; from `sm` the width is 60rem where `detail` is 44rem,
+			 * and from `xl` it holds 75vw instead of capping at 62rem. Both widths are rounded to a
+			 * whole pixel, and `will-change-auto` replaces the base `will-change-transform`: at these
+			 * widths the panel edge is rarely on a whole pixel, and a panel kept on a GPU layer at rest
+			 * rasterises its text soft, so demoting the layer after the animation lets the text snap
+			 * back to the pixel grid.
 			 */
 			detailWide:
-				"[--peek:6rem] will-change-auto data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:round(min(60rem,92vw),1px)] data-[swipe-axis=x]:xl:[--drawer-content-width:round(75vw,1px)]",
+				"will-change-auto [--peek:6rem] data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:round(min(60rem,92vw),1px)] data-[swipe-axis=x]:xl:[--drawer-content-width:round(75vw,1px)]",
+			/** A tool beside the page rather than a page over it: one fixed column, the page keeps the rest. */
+			panel:
+				"[--peek:1rem] data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:28rem]",
 		},
 	},
 	defaultVariants: { size: "default" },
 });
 
 /**
- * `dimWhenNested` is the one deliberate departure from the upstream shadcn drawer, which fades a
- * covered drawer's content to nothing. That reads correctly for a bottom sheet, where only a sliver
+ * `dimWhenNested` is a deliberate departure from the upstream shadcn drawer, which fades a covered
+ * drawer's content to nothing. That reads correctly for a bottom sheet, where only a sliver
  * of the parent shows; a wide side panel leaves a real column of the parent on screen, and an empty
  * column is worse than a readable one.
  */
@@ -166,10 +186,12 @@ function DrawerContent({
 						drawerContentVariants({ size }),
 						// Reduced motion: keep the panel, drop what triggers vestibular symptoms. The scale and
 						// the step-back go to zero and the panel fades instead of travelling its own width.
-						"motion-reduce:[--stack-step:0] motion-reduce:[--peek:0px] motion-reduce:[--closed-transform:none] motion-reduce:data-ending-style:opacity-0 motion-reduce:data-starting-style:opacity-0",
+						"motion-reduce:[--closed-transform:none] motion-reduce:[--peek:0px] motion-reduce:[--stack-step:0] motion-reduce:data-ending-style:opacity-0 motion-reduce:data-starting-style:opacity-0",
 						// Stack — each nested drawer steps the ones behind it back by `--stack-step`.
 						"[--bleed:3rem] [--stack-height:var(--drawer-frontmost-height,var(--drawer-height,0px))] [--stack-peek-offset:max(0px,calc((var(--nested-drawers)-var(--stack-progress))*var(--peek)))] [--stack-progress:clamp(0,var(--drawer-swipe-progress),1)] [--stack-scale-base:max(0,calc(1-(var(--nested-drawers)*var(--stack-step))))] [--stack-scale:clamp(0,calc(var(--stack-scale-base)+(var(--stack-step)*var(--stack-progress))),1)] [--stack-shrink:calc(1-var(--stack-scale))] [--stack-step:0.05]",
-						"[--drawer-ease:cubic-bezier(0.05,0.7,0.1,1)] [--drawer-enter:280ms] [--drawer-exit:calc(var(--drawer-swipe-strength)*200ms)] duration-(--drawer-enter)",
+						"duration-(--drawer-enter) [--drawer-ease:cubic-bezier(0.05,0.7,0.1,1)] [--drawer-enter:280ms] [--drawer-exit:calc(var(--drawer-swipe-strength)*200ms)]",
+						// `opacity-[0.9999]`: Base UI waits for `element.getAnimations()` before unmounting, and a
+						// transform-only exit is not in that list, so the exit also animates opacity to just under 1.
 						"data-ending-style:transform-(--closed-transform) data-ending-style:opacity-[0.9999] data-ending-style:duration-(--drawer-exit) data-ending-style:[--drawer-ease:cubic-bezier(0.2,0,0.38,0.9)] data-nested-drawer-swiping:duration-0 data-ending-style:data-nested-drawer-swiping:duration-(--drawer-exit) data-starting-style:transform-(--closed-transform) data-swiping:duration-0 data-ending-style:data-swiping:duration-(--drawer-exit)",
 						"data-[swipe-axis=y]:inset-x-0 data-[swipe-axis=y]:data-nested-drawer-open:h-(--stack-height)",
 						"data-[swipe-axis=x]:inset-y-0 data-[swipe-axis=x]:flex-row",
@@ -185,7 +207,7 @@ function DrawerContent({
 					<DrawerPrimitive.Content
 						data-slot="drawer-content"
 						className={cn(
-							"flex min-h-0 flex-1 flex-col overflow-hidden overscroll-contain rounded-[inherit] transition-opacity duration-300 ease-[cubic-bezier(0.45,1.005,0,1.005)] select-text group-data-swiping/drawer-popup:select-none",
+							"flex min-h-0 flex-1 flex-col overflow-hidden overscroll-contain rounded-[inherit] transition-opacity duration-300 ease-drawer-panel select-text group-data-swiping/drawer-popup:select-none",
 							dimWhenNested &&
 								"group-data-nested-drawer-open/drawer-popup:opacity-0 group-data-nested-drawer-swiping/drawer-popup:opacity-100",
 						)}

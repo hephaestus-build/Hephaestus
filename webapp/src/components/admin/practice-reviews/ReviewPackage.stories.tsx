@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
+import { reviewFeedbackDetail } from "./fixtures";
 import { ReviewPackage } from "./ReviewPackage";
-import { reviewFeedbackDetail } from "./story-mock-data";
 
 const longPath =
 	"server/src/main/java/de/tum/cit/aet/hephaestus/integration/provider/gitlab/WorkspaceMembershipReconciliationService.java";
@@ -24,7 +24,6 @@ const feedback = {
 };
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Review package",
 	component: ReviewPackage,
 	parameters: {
 		layout: "padded",

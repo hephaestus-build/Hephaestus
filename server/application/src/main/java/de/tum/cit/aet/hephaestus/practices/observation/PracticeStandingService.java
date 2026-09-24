@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.ObservationFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationOutcome;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
@@ -73,9 +73,14 @@ public class PracticeStandingService {
     public StandingSnapshot getStandingSnapshot(Long workspaceId) {
         return currentDeveloperLookup
                 .currentDeveloperId()
-                .map(developerId -> getStandingSnapshots(developerId, workspaceId, List.of(clock.instant()))
-                        .getFirst())
+                .map(developerId -> getStandingSnapshot(workspaceId, developerId))
                 .orElse(StandingSnapshot.EMPTY);
+    }
+
+    /** One developer's standings as they stand now. */
+    public StandingSnapshot getStandingSnapshot(Long workspaceId, Long developerId) {
+        return getStandingSnapshots(developerId, workspaceId, List.of(clock.instant()))
+                .getFirst();
     }
 
     /**
@@ -178,14 +183,12 @@ public class PracticeStandingService {
      * A practice with nothing to report, carrying WHICH silence it is.
      *
      * <p>{@code NO_OPPORTUNITY} outranks {@code NOT_OBSERVED}: a review that ran and found nothing to say is a
-     * working instrument, not an unconfigured one. Suppressed strengths count for the same reason. A
-     * defect-detector's silence is no demonstrated behaviour, but it does prove the detector ran.
+     * working instrument, not an unconfigured one.
      *
      * <p>No trend either: a direction over evidence that produced no verdict would be a claim about nothing.
      */
     private static PracticeStandingDTO silentStanding(Practice practice, @Nullable PracticeEvidence evidence) {
-        boolean exercised =
-                evidence != null && (!evidence.withoutVerdict().isEmpty() || evidence.suppressedStrengths() > 0);
+        boolean exercised = evidence != null && !evidence.withoutVerdict().isEmpty();
         PracticeGroup group = practice.getGroup();
         return new PracticeStandingDTO(
                 practice.getSlug(),
@@ -254,45 +257,34 @@ public class PracticeStandingService {
             Practice practice,
             List<Observation> problems,
             List<Observation> strengths,
-            int suppressedStrengths,
             List<Observation> withoutVerdict) {
         /**
-         * Sorts one practice's window into the buckets every downstream reader needs, reading
-         * {@link ObservationOutcome} exactly once per observation. Grouping on the outcome is what makes the
-         * split visibly exhaustive: the five outcomes are the five keys, and every row lands under one of them.
-         *
-         * <p>Every problem is kept, worst severity first. Nothing is withheld for lack of corroboration:
-         * {@code recurrenceKey} hashes the artifact, so a locus is single-artifact by construction.
-         *
-         * <p>A defect-detector's {@code DEMONSTRATED_STRENGTH} rows are counted, not discarded. What would be
-         * demonstrated is the defect, so they are no strength to show, but they do prove the detector ran. The
-         * rule is applied once to the bucket rather than once per row.
+         * Partitions each observation by its own kind; both positive shapes support the standing. Every problem
+         * is kept, worst severity first: {@code recurrenceKey} hashes the artifact, so a locus is single-artifact
+         * by construction and nothing is withheld for lack of corroboration.
          */
         static PracticeEvidence classify(List<Observation> group) {
             Practice practice = group.get(0).getPractice();
-            Map<ObservationOutcome, List<Observation>> byOutcome =
-                    group.stream().collect(Collectors.groupingBy(ObservationOutcome::of));
-            List<Observation> demonstrated = bucket(byOutcome, ObservationOutcome.DEMONSTRATED_STRENGTH);
-            List<Observation> avoided = bucket(byOutcome, ObservationOutcome.SAFE_AVOIDANCE);
-            boolean detectorStrengthIsIncoherent =
-                    !ObservationOutcome.DEMONSTRATED_STRENGTH.isCoherentStrengthFor(practice.isDefectDetector());
+            Map<ObservationKind, List<Observation>> byOutcome =
+                    group.stream().collect(Collectors.groupingBy(ObservationKind::of));
+            List<Observation> demonstrated = bucket(byOutcome, ObservationKind.DEMONSTRATED_STRENGTH);
+            List<Observation> avoided = bucket(byOutcome, ObservationKind.SAFE_AVOIDANCE);
             return new PracticeEvidence(
                     practice,
                     Stream.concat(
-                                    bucket(byOutcome, ObservationOutcome.COMMISSION_PROBLEM).stream(),
-                                    bucket(byOutcome, ObservationOutcome.OMISSION_GAP).stream())
+                                    bucket(byOutcome, ObservationKind.COMMISSION_PROBLEM).stream(),
+                                    bucket(byOutcome, ObservationKind.OMISSION_GAP).stream())
                             .sorted(Comparator.comparingInt(PracticeStandingService::severityOrdinal))
                             .toList(),
-                    detectorStrengthIsIncoherent
-                            ? avoided
-                            : Stream.concat(demonstrated.stream(), avoided.stream())
-                                    .toList(),
-                    detectorStrengthIsIncoherent ? demonstrated.size() : 0,
-                    bucket(byOutcome, ObservationOutcome.NOT_APPLICABLE));
+                    Stream.concat(demonstrated.stream(), avoided.stream()).toList(),
+                    Stream.concat(
+                                    bucket(byOutcome, ObservationKind.NOT_APPLICABLE).stream(),
+                                    bucket(byOutcome, ObservationKind.UNDETERMINED).stream())
+                            .toList());
         }
 
         private static List<Observation> bucket(
-                Map<ObservationOutcome, List<Observation>> byOutcome, ObservationOutcome outcome) {
+                Map<ObservationKind, List<Observation>> byOutcome, ObservationKind outcome) {
             return byOutcome.getOrDefault(outcome, List.of());
         }
 

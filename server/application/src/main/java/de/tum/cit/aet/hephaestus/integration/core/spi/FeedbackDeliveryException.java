@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.spi;
 
+import java.io.Serial;
+
 /**
  * Thrown by {@link SummaryChannel}, {@link InlineFeedbackChannel}, and
  * {@link ApprovalChannel} implementations when posting fails irrecoverably.
@@ -12,6 +14,9 @@ package de.tum.cit.aet.hephaestus.integration.core.spi;
  * signatures without forcing a {@code throws} declaration.
  */
 public class FeedbackDeliveryException extends RuntimeException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     public FeedbackDeliveryException(String message) {
         super(message);

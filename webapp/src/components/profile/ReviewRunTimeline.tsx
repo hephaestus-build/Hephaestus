@@ -35,10 +35,21 @@ export function ReviewRunTimeline({
 					run={run}
 					observations={observations}
 					showPracticeName={showPracticeName}
-					initiallyOpen={initiallyOpen === "all" ? "all" : index === 0 ? "first" : "none"}
+					initiallyOpen={cardInitiallyOpen(initiallyOpen, index)}
 					tailContinues={continues && index === runs.length - 1}
 				/>
 			))}
 		</ol>
 	);
+}
+
+/** Every card open, or only the newest card's first observation. */
+function cardInitiallyOpen(
+	initiallyOpen: "all" | "newest",
+	index: number,
+): "all" | "first" | "none" {
+	if (initiallyOpen === "all") {
+		return "all";
+	}
+	return index === 0 ? "first" : "none";
 }

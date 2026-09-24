@@ -4,7 +4,6 @@ import { expect, fn, userEvent, within } from "storybook/test";
 import { ResponseCommentBand } from "./ResponseCommentBand";
 
 const meta = {
-	title: "Common/Response comment band",
 	component: ResponseCommentBand,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

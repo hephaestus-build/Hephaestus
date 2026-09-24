@@ -130,6 +130,7 @@ public class ManualReviewRequests {
                         pullRequest.getHeadRefName(),
                         headRefOid,
                         pullRequest.getBaseRefName(),
+                        pullRequest.getBaseRefOid(),
                         null,
                         ObservationOrigin.MANUAL));
     }
@@ -156,8 +157,8 @@ public class ManualReviewRequests {
                 workspace,
                 issue,
                 new Asker(requester, identityIds(requesters)),
-                signal -> gate.evaluateIssue(issue, signal, TriggerMode.MANUAL),
-                signal -> gate.evaluateIssueAdministrative(issue, signal),
+                signal -> gate.evaluateIssue(issue, workspace, signal, TriggerMode.MANUAL),
+                signal -> gate.evaluateIssueAdministrative(issue, workspace, signal),
                 AgentJobType.ISSUE_REVIEW,
                 () -> new IssueReviewSubmissionRequest(
                         issue.getId(),
@@ -170,7 +171,9 @@ public class ManualReviewRequests {
                         issue.getHtmlUrl(),
                         issue.getUpdatedAt(),
                         null,
-                        ObservationOrigin.MANUAL));
+                        ObservationOrigin.MANUAL,
+                        null,
+                        issue.getReviewSnapshotId()));
     }
 
     /**

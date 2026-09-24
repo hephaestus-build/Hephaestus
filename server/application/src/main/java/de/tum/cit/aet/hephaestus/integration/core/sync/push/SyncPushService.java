@@ -71,15 +71,15 @@ public class SyncPushService {
         this.natsPublishFailure = counter(meterRegistry, "nats_publish", "failure");
         this.natsReceiveSuccess = counter(meterRegistry, "nats_receive", "success");
         this.natsReceiveFailure = counter(meterRegistry, "nats_receive", "failure");
-        subscribeIfNatsAvailable();
     }
 
     /**
-     * Subscribes once, at construction: the {@link Connection} bean (when present and non-null) is
+     * Subscribes once, after construction: the {@link Connection} bean (when present and non-null) is
      * already connected by the time Spring finishes constructing it (its {@code @Bean} method blocks
      * on {@code Nats.connect}), so there is no readiness race to wait out here.
      */
-    private void subscribeIfNatsAvailable() {
+    @jakarta.annotation.PostConstruct
+    void subscribeIfNatsAvailable() {
         Connection connection = natsConnectionProvider.getIfAvailable();
         if (connection == null) {
             log.info("Sync push: NATS unavailable, using in-process delivery only");

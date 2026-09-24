@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static de.tum.cit.aet.hephaestus.practices.review.GateDecisionTestFixtures.automaticDetection;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -99,7 +100,8 @@ class DevTriggerControllerTest extends BaseUnitTest {
         Issue issue = issue();
         when(artifactLoader.findIssueForGate(WORKSPACE_ID, ISSUE_ID)).thenReturn(Optional.of(issue));
         when(agentJobService.buildIssueRequest(any(), any())).thenReturn(issueRequest());
-        when(detectionGate.evaluateIssue(any(), any(), any())).thenReturn(new GateDecision.Skip("no assignee"));
+        when(detectionGate.evaluateIssue(any(), anyLong(), any(), any()))
+                .thenReturn(new GateDecision.Skip("no assignee"));
 
         String response = controller.triggerReview(null, ISSUE_ID, WORKSPACE_ID, "scm.issue.closed");
 
@@ -153,6 +155,7 @@ class DevTriggerControllerTest extends BaseUnitTest {
         pr.setHeadRefOid("abc123");
         pr.setHeadRefName("feature/thing");
         pr.setBaseRefName("main");
+        pr.setBaseRefOid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         Repository repository = new Repository();
         repository.setId(100L);
         repository.setNameWithOwner("owner/repo");
@@ -175,7 +178,7 @@ class DevTriggerControllerTest extends BaseUnitTest {
         String response = controller.triggerReview(null, ISSUE_ID, WORKSPACE_ID, "scm.issue.closed");
 
         assertThat(response).contains("Issue missing repository");
-        verify(detectionGate, never()).evaluateIssue(any(), any(), any());
+        verify(detectionGate, never()).evaluateIssue(any(), anyLong(), any(), any());
         verifyNoInteractions(signalRecorder);
     }
 

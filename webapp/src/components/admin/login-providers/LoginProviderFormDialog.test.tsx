@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { LoginProviderView } from "@/api/types.gen";
@@ -13,7 +14,7 @@ const slackProvider: LoginProviderView = {
 	scopes: "openid profile email",
 	enabled: true,
 	seededFromEnv: true,
-	redirectUri: "https://hephaestus-test.felixdietrich.com/api/login/oauth2/code/slack",
+	redirectUri: "https://hephaestus.example.com/api/login/oauth2/code/slack",
 	createdAt: new Date("2026-05-02T00:00:00Z"),
 	updatedAt: new Date("2026-05-02T00:00:00Z"),
 };
@@ -26,14 +27,14 @@ const outlineProvider: LoginProviderView = {
 	scopes: "read",
 	enabled: true,
 	seededFromEnv: false,
-	redirectUri: "https://hephaestus-test.felixdietrich.com/api/login/oauth2/code/outline-acme",
+	redirectUri: "https://hephaestus.example.com/api/login/oauth2/code/outline-acme",
 	createdAt: new Date("2026-07-02T00:00:00Z"),
 	updatedAt: new Date("2026-07-02T00:00:00Z"),
 };
 
 describe("LoginProviderFormDialog", () => {
 	it("edits Slack identity providers without requiring a base URL", () => {
-		const onUpdate = vi.fn();
+		const onUpdate = vi.fn<ComponentProps<typeof LoginProviderFormDialog>["onUpdate"]>();
 		render(
 			<LoginProviderFormDialog
 				open
@@ -46,7 +47,7 @@ describe("LoginProviderFormDialog", () => {
 		);
 
 		expect(screen.queryByLabelText("Instance base URL")).toBeNull();
-		screen.getByText(/Use the same Slack app client ID and secret/);
+		screen.getByText(/Use the same Slack app client ID and secret/u);
 		fireEvent.change(screen.getByLabelText("Client ID"), { target: { value: "slack-client" } });
 		fireEvent.change(screen.getByLabelText("Client secret"), {
 			target: { value: "slack-secret" },
@@ -76,11 +77,11 @@ describe("LoginProviderFormDialog", () => {
 
 		// The type select must expose OUTLINE; without it the Outline login provider is uncreatable.
 		fireEvent.click(screen.getByRole("combobox", { name: "Provider type" }));
-		screen.getByRole("option", { name: /Outline/i });
+		screen.getByRole("option", { name: /Outline/iu });
 	});
 
 	it("treats Outline like GitLab: it carries an instance base URL, and submits it", () => {
-		const onUpdate = vi.fn();
+		const onUpdate = vi.fn<ComponentProps<typeof LoginProviderFormDialog>["onUpdate"]>();
 		render(
 			<LoginProviderFormDialog
 				open
@@ -123,8 +124,8 @@ describe("LoginProviderFormDialog", () => {
 			/>,
 		);
 
-		screen.getByText(/nobody signs in to Hephaestus with it/i);
-		screen.getByText(/Settings → Applications/);
+		screen.getByText(/nobody signs in to Hephaestus with it/iu);
+		screen.getByText(/Settings → Applications/u);
 		screen.getByText(outlineProvider.redirectUri);
 	});
 });

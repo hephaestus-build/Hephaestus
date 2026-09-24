@@ -42,16 +42,6 @@ configuration and install dependencies. It is not a general contributor command.
 | `POSTGRES_USER`     | `root`       | PostgreSQL user     |
 | `POSTGRES_PASSWORD` | `root`       | PostgreSQL password |
 
-### Achievement Formatting
-
-Rewrite `server/application/src/main/resources/achievements/achievements.yml` into the property order
-`PREFERRED_ORDER` defines. The fields themselves are documented in
-[Achievements](../docs/contributor/achievements.mdx).
-
-```bash
-vp run format:achievements
-```
-
 ### NATS Webhook Example Extraction
 
 Extract webhook payloads from NATS JetStream for test fixtures:

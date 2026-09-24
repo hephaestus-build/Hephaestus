@@ -1,4 +1,5 @@
 import { SlidersHorizontal } from "lucide-react";
+import type { LeaderboardSchedule } from "@/lib/timeframe";
 
 import type { LeaderboardVariant } from "@/components/leaderboard/LeaderboardPage";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,14 +17,9 @@ export interface LeaderboardFilterProps {
 	onTimeframeChange?: (afterDate: string, beforeDate?: string, timeframe?: string) => void;
 	selectedTeam?: string;
 	selectedSort?: LeaderboardSortType;
-	initialAfterDate?: string;
-	initialBeforeDate?: string;
-	leaderboardSchedule?: {
-		day: number;
-		hour: number;
-		minute: number;
-		formatted: string;
-	};
+	afterDate?: string;
+	beforeDate?: string;
+	leaderboardSchedule?: LeaderboardSchedule;
 	selectedMode: LeaderboardVariant;
 	onModeChange?: (mode: LeaderboardVariant) => void;
 	leaguesEnabled?: boolean;
@@ -36,33 +32,25 @@ export function LeaderboardFilter({
 	onTimeframeChange,
 	selectedTeam,
 	selectedSort,
-	initialAfterDate,
-	initialBeforeDate,
+	afterDate,
+	beforeDate,
 	leaderboardSchedule,
 	selectedMode,
 	onModeChange,
 	leaguesEnabled = true,
-}: LeaderboardFilterProps & {
-	initialAfterDate?: string;
-	initialBeforeDate?: string;
-	leaderboardSchedule?: {
-		day: number;
-		hour: number;
-		minute: number;
-	};
-}) {
+}: LeaderboardFilterProps) {
 	return (
 		<Card>
 			<CardHeader>
 				<CardTitle>
-					<SlidersHorizontal className="inline mr-2 h-4 w-4" /> Leaderboard Options
+					<SlidersHorizontal className="mr-2 inline h-4 w-4" /> Leaderboard Options
 				</CardTitle>
 				<CardDescription>
 					Customize the leaderboard view by filtering and sorting the data.
 				</CardDescription>
 			</CardHeader>
 			<CardContent>
-				<div className="flex items-center space-x-2 mb-4">
+				<div className="mb-4 flex items-center space-x-2">
 					<Switch
 						id="mode-switch"
 						checked={selectedMode === "TEAM"}
@@ -87,8 +75,8 @@ export function LeaderboardFilter({
 					)}
 					<TimeframeFilter
 						onTimeframeChange={onTimeframeChange}
-						initialAfterDate={initialAfterDate}
-						initialBeforeDate={initialBeforeDate}
+						afterDate={afterDate}
+						beforeDate={beforeDate}
 						leaderboardSchedule={leaderboardSchedule}
 					/>
 				</div>

@@ -1,29 +1,56 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.installation;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.dto.GitHubInstallationEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
-/**
- * Integration tests for GitHubInstallationMessageHandler.
- * <p>
- * Tests use JSON fixtures parsed directly into DTOs using JSON fixtures for complete isolation.
- */
+/** Real provisioning and persistence, with the installation-status API controlled at its provider boundary. */
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
-    @Autowired
     private GitHubInstallationMessageHandler handler;
+
+    @Mock
+    private GitHubAppTokenService appTokens;
+
+    @Autowired
+    private ProvisioningListener provisioningListener;
+
+    @Autowired
+    private OrganizationService organizationService;
+
+    @Autowired
+    private NatsMessageDeserializer deserializer;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -31,14 +58,25 @@ class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTes
     @Autowired
     private IdentityProviderRepository gitProviderRepository;
 
+    @Autowired
+    private WorkspaceRepository workspaceRepository;
+
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
-        // Ensure GitHub IdentityProvider exists - required by GithubLifecycleListener
         gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseGet(() -> gitProviderRepository.save(
                         new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+        // A local provider boundary keeps the shared Spring context and all transactional
+        // provisioning collaborators real, without requiring an App private key or network.
+        handler = new GitHubInstallationMessageHandler(
+                provisioningListener,
+                organizationService,
+                appTokens,
+                gitProviderRepository,
+                deserializer,
+                transactionTemplate);
     }
 
     @Test
@@ -47,66 +85,132 @@ class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTes
     }
 
     @Test
-    void shouldHandleCreatedEvent() throws Exception {
+    void shouldPersistActiveWorkspaceWhenCreated(CapturedOutput output) throws IOException {
         GitHubInstallationEventDTO event = loadPayload("installation.created");
+        when(appTokens.isInstallationSuspended(installationId(event))).thenReturn(false);
 
         handler.handleEvent(event);
 
-        // Then - handler processes without error
-        // Full workspace creation is tested in live integration tests
-        assertThat(event.action()).isEqualTo("created");
+        Workspace workspace = persistedWorkspace(event);
+        assertThat(workspace.getStatus()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
+        assertThat(workspace.getAccountLogin()).isEqualTo("HephaestusTest");
+        assertThat(workspace.getRepositorySelection()).isEqualTo(RepositorySelection.ALL);
+        assertThat(output)
+                .doesNotContain("Could not verify installation status", "GitHub App credentials not configured");
     }
 
     @Test
-    void shouldHandleDeletedEvent() throws Exception {
+    void shouldPurgeExistingWorkspaceWhenDeleted() throws IOException {
         GitHubInstallationEventDTO event = loadPayload("installation.deleted");
+        Workspace workspace = createWorkspaceFor(event);
 
         handler.handleEvent(event);
 
-        // Then - handler processes without error
-        assertThat(event.action()).isEqualTo("deleted");
+        assertThat(workspaceRepository.findById(Objects.requireNonNull(workspace.getId())))
+                .hasValueSatisfying(
+                        persisted -> assertThat(persisted.getStatus()).isEqualTo(Workspace.WorkspaceStatus.PURGED));
     }
 
     @Test
-    void shouldHandleSuspendedEvent() throws Exception {
+    void shouldSuspendExistingWorkspaceWhenProviderConfirmsSuspension() throws IOException {
         GitHubInstallationEventDTO event = loadPayload("installation.suspend");
+        createWorkspaceFor(event);
+        when(appTokens.isInstallationSuspended(installationId(event))).thenReturn(true);
 
         handler.handleEvent(event);
 
-        // Then - handler processes without error
-        assertThat(event.action()).isEqualTo("suspend");
+        assertThat(persistedWorkspace(event).getStatus()).isEqualTo(Workspace.WorkspaceStatus.SUSPENDED);
     }
 
     @Test
-    void shouldHandleUnsuspendedEvent() throws Exception {
+    void shouldReactivateSuspendedWorkspaceWhenProviderConfirmsActivation() throws IOException {
         GitHubInstallationEventDTO event = loadPayload("installation.unsuspend");
+        Workspace workspace = createWorkspaceFor(event);
+        workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+        workspaceRepository.saveAndFlush(workspace);
+        when(appTokens.isInstallationSuspended(installationId(event))).thenReturn(false);
 
         handler.handleEvent(event);
 
-        // Then - handler processes without error
-        assertThat(event.action()).isEqualTo("unsuspend");
+        assertThat(persistedWorkspace(event).getStatus()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
     }
 
     @Test
-    void shouldHandleNullInstallationGracefully() {
-        // Given - event with null installation
-        GitHubInstallationEventDTO event = new GitHubInstallationEventDTO("created", null, null, null);
+    void shouldActivateWorkspaceWhenSuspendEventIsStale() throws IOException {
+        GitHubInstallationEventDTO event = loadPayload("installation.suspend");
+        Workspace workspace = createWorkspaceFor(event);
+        workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+        workspaceRepository.saveAndFlush(workspace);
+        when(appTokens.isInstallationSuspended(installationId(event))).thenReturn(false);
 
-        // When - should not throw
         handler.handleEvent(event);
-        // Then - handler logs warning but doesn't crash
+
+        assertThat(persistedWorkspace(event).getStatus()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
     }
 
     @Test
-    void shouldHandleUnknownActionGracefully() throws Exception {
-        // Given - load a valid event and parse to get structure, then create with unknown action
-        GitHubInstallationEventDTO baseEvent = loadPayload("installation.created");
-        GitHubInstallationEventDTO event = new GitHubInstallationEventDTO(
-                "unknown_action", baseEvent.installation(), baseEvent.repositories(), baseEvent.sender());
+    void shouldSuspendWorkspaceWhenUnsuspendEventIsStale() throws IOException {
+        GitHubInstallationEventDTO event = loadPayload("installation.unsuspend");
+        createWorkspaceFor(event);
+        when(appTokens.isInstallationSuspended(installationId(event))).thenReturn(true);
 
-        // When - should not throw
         handler.handleEvent(event);
-        // Then - handler logs debug message for unhandled action
+
+        assertThat(persistedWorkspace(event).getStatus()).isEqualTo(Workspace.WorkspaceStatus.SUSPENDED);
+    }
+
+    @Test
+    void shouldPreserveStatusAndExplainWhenProviderVerificationFails(CapturedOutput output) throws IOException {
+        GitHubInstallationEventDTO event = loadPayload("installation.suspend");
+        createWorkspaceFor(event);
+        when(appTokens.isInstallationSuspended(installationId(event)))
+                .thenThrow(new IllegalStateException("fixture provider unavailable"));
+
+        handler.handleEvent(event);
+
+        assertThat(persistedWorkspace(event).getStatus()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
+        assertThat(output)
+                .contains(
+                        "Failed to verify installation status via API, skipping status update: installationId=78181208, error=fixture provider unavailable");
+    }
+
+    @Test
+    void shouldNotProvisionWorkspaceWhenCreatedInstallationNoLongerExists() throws IOException {
+        GitHubInstallationEventDTO event = loadPayload("installation.created");
+        when(appTokens.isInstallationSuspended(installationId(event)))
+                .thenThrow(new InstallationNotFoundException(installationId(event)));
+
+        handler.handleEvent(event);
+
+        assertThat(workspaceRepository.findByInstallationId(installationId(event)))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldExplainMissingInstallationWithoutChangingExistingWorkspace(CapturedOutput output) throws IOException {
+        GitHubInstallationEventDTO existing = loadPayload("installation.created");
+        Workspace workspace = createWorkspaceFor(existing);
+
+        handler.handleEvent(new GitHubInstallationEventDTO("created", null, null, null));
+
+        assertThat(persistedWorkspace(existing).getId()).isEqualTo(workspace.getId());
+        assertThat(persistedWorkspace(existing).getStatus()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
+        assertThat(output).contains("Received installation event with missing data: action=created");
+    }
+
+    private Workspace createWorkspaceFor(GitHubInstallationEventDTO event) {
+        when(appTokens.isInstallationSuspended(installationId(event))).thenReturn(false);
+        handler.handleEvent(
+                new GitHubInstallationEventDTO("created", event.installation(), event.repositories(), event.sender()));
+        return persistedWorkspace(event);
+    }
+
+    private Workspace persistedWorkspace(GitHubInstallationEventDTO event) {
+        return workspaceRepository.findByInstallationId(installationId(event)).orElseThrow();
+    }
+
+    private static long installationId(GitHubInstallationEventDTO event) {
+        return Objects.requireNonNull(event.installation()).id();
     }
 
     private GitHubInstallationEventDTO loadPayload(String filename) throws IOException {

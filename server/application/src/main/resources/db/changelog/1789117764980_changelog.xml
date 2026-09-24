@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+        product_survey_submission is copied into product_survey_participation, not renamed: a table
+        that shipped in a release is dropped only in the release after the one that stopped writing
+        it (docs/contributor/database-migration.mdx, Changelog immutability policy, rule 3). The drop
+        is listed there under pending contractions.
+    -->
+    <changeSet id="1789117764980-1" author="hephaestus">
+        <createTable tableName="product_survey_participation">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="product_survey_participation_pkey"/>
+            </column>
+            <column name="survey_id" type="UUID">
+                <constraints nullable="false" foreignKeyName="sfk_survey_participation_survey" references="product_survey(id)" deleteCascade="true"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="sfk_survey_participation_account" references="account(id)" deleteCascade="true"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints foreignKeyName="sfk_survey_participation_workspace" references="workspace(id)" deleteCascade="true"/>
+            </column>
+            <column name="status" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="answers_json" type="JSONB"/>
+            <column name="invited_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="decided_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </createTable>
+        <rollback>
+            <dropTable tableName="product_survey_participation"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1789117764980-2" author="hephaestus">
+        <addUniqueConstraint columnNames="survey_id, account_id" constraintName="uk_survey_participation_account" tableName="product_survey_participation"/>
+        <rollback>
+            <dropUniqueConstraint constraintName="uk_survey_participation_account" tableName="product_survey_participation"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1789117764980-3" author="hephaestus">
+        <createIndex indexName="idx_survey_participation_account" tableName="product_survey_participation">
+            <column name="account_id"/>
+        </createIndex>
+        <rollback>
+            <dropIndex indexName="idx_survey_participation_account" tableName="product_survey_participation"/>
+        </rollback>
+    </changeSet>
+    <!--
+        Reshaped per question type so copied rows read through the same code as new ones; blank
+        answers are dropped as the application drops them.
+    -->
+    <changeSet id="1789117764980-4" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="product_survey_submission"/>
+        </preConditions>
+        <sql><![CDATA[
+INSERT INTO product_survey_participation (id, survey_id, account_id, workspace_id, status, answers_json, invited_at, decided_at)
+SELECT s.id, s.survey_id, s.account_id, s.workspace_id,
+       CASE s.disposition WHEN 'DISMISSED' THEN 'DECLINED' ELSE s.disposition END,
+       CASE WHEN s.answers_json IS NULL THEN NULL ELSE COALESCE((
+           SELECT jsonb_agg(
+               CASE question.node ->> 'type'
+                   WHEN 'RATING' THEN jsonb_build_object('questionId', question.node ->> 'id', 'rating', btrim(answer.value)::int)
+                   WHEN 'SINGLE_CHOICE' THEN jsonb_build_object('questionId', question.node ->> 'id', 'choices', jsonb_build_array(answer.value))
+                   ELSE jsonb_build_object('questionId', question.node ->> 'id', 'text', btrim(answer.value))
+               END
+               ORDER BY question.position)
+           FROM jsonb_array_elements(v.questions_json) WITH ORDINALITY AS question(node, position)
+           JOIN jsonb_each_text(s.answers_json) AS answer(key, value) ON answer.key = question.node ->> 'id'
+           WHERE btrim(answer.value) <> ''
+       ), '[]'::jsonb) END,
+       s.created_at, s.created_at
+FROM product_survey_submission s
+JOIN product_survey v ON v.id = s.survey_id
+ON CONFLICT (survey_id, account_id) DO NOTHING;
+]]></sql>
+        <rollback/>
+    </changeSet>
+    <changeSet id="1789117764980-5" author="hephaestus">
+        <addColumn tableName="product_feedback">
+            <column name="app_version" type="VARCHAR(64)"/>
+            <column name="user_agent" type="VARCHAR(500)"/>
+            <column name="resolved_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="resolved_by_account_id" type="BIGINT"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="product_feedback" columnName="resolved_by_account_id"/>
+            <dropColumn tableName="product_feedback" columnName="resolved_at"/>
+            <dropColumn tableName="product_feedback" columnName="user_agent"/>
+            <dropColumn tableName="product_feedback" columnName="app_version"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1789117764980-6" author="hephaestus">
+        <addForeignKeyConstraint baseTableName="product_feedback" baseColumnNames="resolved_by_account_id" constraintName="sfk_product_feedback_resolver" referencedTableName="account" referencedColumnNames="id" onDelete="SET NULL"/>
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="product_feedback" constraintName="sfk_product_feedback_resolver"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1789117764980-7" author="hephaestus">
+        <addColumn tableName="product_survey">
+            <column name="research_organization" type="VARCHAR(200)"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

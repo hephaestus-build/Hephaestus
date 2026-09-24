@@ -1,6 +1,6 @@
 # ADR 0008: Webhook as a third runtime role (`webhook-server` container)
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-08-22 — webhook ingestion cannot fail silently; 2026-09-17 — receiver surface corrected)
 **Date:** 2026-05-20
 **Authors:** Webhook substrate epic (#1110)
 
@@ -23,7 +23,7 @@ operational requirement, not a nice-to-have. ADR 0005 anticipated this and liste
 - **Single artifact:** ADR 0005's principle was *"single JAR ships as either role; deploy config
   selects which."* A third role must compose with the existing two without forking the artifact.
 - **Default-on monolith:** ADR 0005's DX invariant — zero env vars boots the full stack — must
-  hold. `bun run dev` starts one process that handles everything.
+  hold. `vp run dev` starts one process that handles everything.
 - **No multi-Maven-module split:** ADR 0005 rejected this. We honour that.
 - **Cycle through NATS, not direct coupling:** the publisher and the sync consumer agree on the
   subject grammar; nothing else couples them.
@@ -93,7 +93,8 @@ Option 1. Concretely:
 - **Restart independence achieved.** Restarting `application-server` no longer interrupts
   webhook reception; the sync consumer catches up on the buffered JetStream messages once it
   comes back. Webhook drops during an `application-server` restart are zero.
-- **Single-artifact CI/build cost.** One Maven build, one Docker image, no separate pipeline.
+- **Single-artifact CI/build cost.** One Gradle build, one Docker image, no separate pipeline
+  ([ADR 0043](0043-gradle-java-build.md) owns the build-tool cutover).
 - **Schedulers cannot duplicate.** `@EnableScheduling` is extracted into
   `ServerSchedulingConfig` gated by `SERVER_PROPERTY=true`. The `webhook-server` container sets
   `server.enabled=false` and consequently fires no `@Scheduled` methods — preventing GitHub and
@@ -415,3 +416,33 @@ The metric roster, the destructive-update decision table and the recovery proced
 broker are published for self-hosters at
 [Webhook ingestion operations](https://docs.hephaestus.build/admin/webhook-ingestion-operations).
 This ADR records why; that page records what to do.
+
+Spring Modulith Moments is disabled: its auto-configuration enables scheduling independently of
+`ServerSchedulingConfig`, and Hephaestus does not consume its calendar events. The runtime-role
+switch remains the single owner of scheduled work; API contract introspection disables it as well.
+
+## Update — 2026-09-17
+
+Corrects § Decision and § Consequences on the receiver's code and routes; the role, the gates and the
+2026-08-22 decisions stand.
+
+- The routes are one `WebhookController` at `POST /webhooks/{kind}` (`integration/core/webhook/`),
+  the shape [ADR 0015](0015-unified-integration-framework.md) decided; Traefik forwards
+  `PathPrefix(/webhooks)` to `webhook-server` without strip-prefix (`docker/compose.core.yaml`), and
+  `IntegrationCutoverPinsTest` (`server/application/src/test/java/de/tum/cit/aet/hephaestus/architecture/`)
+  fails the build when `/github`, `/gitlab`, `/slack` or `/outline` is a route. This supersedes the
+  "Endpoints `/gitlab` and `/github`" bullet of § Consequences.
+- `HmacVerifier`, `GitLabTokenVerifier`, `GitLabSubjectBuilder`, `GitHubSubjectBuilder` and
+  `DedupIdResolver` exist nowhere under `server/application/src/main`: signature checks are the
+  per-vendor `WebhookSignatureVerifier` implementations (`GithubWebhookSignatureVerifier`,
+  `GitlabWebhookSignatureVerifier`, `SlackWebhookSignatureVerifier`,
+  `OutlineWebhookSignatureVerifier`, each under its adapter's `webhook/` package), subject grammar is
+  the `SubjectParser` / `SubjectKeyDeriver` SPI in `integration/core/spi/`, and the pipeline is
+  `WebhookIngestPipeline` and `JetStreamPublisher` in `integration/core/webhook/`.
+- `workspace.GitLabWebhookService` is `integration.scm.gitlab.workspace.GitLabWebhookService`.
+- `HexEncodingArchTest` and `LocaleSafetyArchTest` scope `..integration.core.webhook..`.
+- The JaCoCo rule in `server/application/build.gradle.kts` requires 0.70 branch coverage on
+  `integration.core.webhook` and the GitHub, GitLab and Outline `webhook` packages and 0.60 on
+  `integration.slack.webhook`, not 0.95.
+- The container runs `ghcr.io/hephaestus-build/application-server`, pinned by the release lock as
+  `HEPHAESTUS_IMAGE_APPLICATION_SERVER` ([ADR 0034](0034-signed-release-image-lock.md)).

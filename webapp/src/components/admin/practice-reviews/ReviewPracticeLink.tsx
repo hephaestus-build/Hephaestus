@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
 
+import { cn } from "cn";
 import type { Practice, ReviewPracticeGroup } from "@/api/types.gen";
-import { GroupPill } from "@/components/admin/practice-catalog/GroupPill";
-import { PracticeDetailHoverCard } from "@/components/admin/practice-catalog/PracticeDetailHoverCard";
-import { cn } from "@/lib/utils";
+import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
+import { PracticeDetailHoverCard } from "@/components/admin/practice-editor/PracticeDetailHoverCard";
 
 export interface ReviewPracticeLinkProps {
 	workspaceSlug: string;
@@ -29,7 +29,7 @@ export function ReviewPracticeLink({
 			to="/w/$workspaceSlug/admin/practices/$practiceSlug"
 			params={{ workspaceSlug, practiceSlug }}
 			className={cn(
-				"relative inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md hover:underline",
+				"relative inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md hover:underline",
 				className,
 			)}
 		>
@@ -46,7 +46,9 @@ export function ReviewPracticeLink({
 }
 
 function PracticeGroupMark({ group }: { group: ReviewPracticeGroup | undefined }) {
-	if (!group) return null;
+	if (!group) {
+		return null;
+	}
 	return (
 		<GroupPill
 			size="sm"

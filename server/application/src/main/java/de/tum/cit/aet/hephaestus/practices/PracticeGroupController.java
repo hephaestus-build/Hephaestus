@@ -139,8 +139,10 @@ public class PracticeGroupController {
             summary = "Set how much autonomy the system has over one group",
             description = "Applies to every practice in the group that holds no autonomy of its own; practices that "
                     + "set their own are left alone. OFF stops their reviews entirely. HUMAN_APPROVAL runs them and records "
-                    + "every observation, and holds feedback for an authorized reviewer. AUTOMATIC sends feedback without asking. Send a null "
-                    + "autonomy to clear the group's own setting so it follows the workspace default.")
+                    + "every observation, holds feedback on the work for an authorized reviewer, and still writes the "
+                    + "developer's practice pages and the mentor, which are read on request. AUTOMATIC sends feedback on "
+                    + "the work without asking. Send a null autonomy to clear the group's own setting so it follows the "
+                    + "workspace default.")
     @ApiResponse(
             responseCode = "200",
             description = "Autonomy updated; the response carries the autonomy now in force and where it came from",

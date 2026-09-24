@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn } from "storybook/test";
 
 import type { PracticeGroupReviewRun } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
 import { detailRun } from "@/stories/practice-detail-story-mock-data";
+import { daysBefore } from "@/stories/story-clock";
 
 import { ReviewRunTimeline } from "./ReviewRunTimeline";
 
@@ -24,6 +24,7 @@ const runs: PracticeGroupReviewRun[] = [
 				practiceSlug: "asks-answerable-questions",
 				practiceName: "Ask questions a teammate can answer",
 				summary: "The question includes the attempted fix",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				observedAt: daysBefore(5),
@@ -39,7 +40,6 @@ const runs: PracticeGroupReviewRun[] = [
 ];
 
 const meta = {
-	title: "Profile/Review runs/Timeline",
 	component: ReviewRunTimeline,
 	tags: ["autodocs"],
 	parameters: { layout: "padded" },
@@ -57,7 +57,7 @@ export const Default: Story = {
 	play: async ({ canvas, userEvent }) => {
 		const summaries = runs.flatMap((run) => run.observations.map(({ summary }) => summary));
 		for (const summary of summaries) {
-			await expect(canvas.getByRole("button", { name: new RegExp(summary) })).toHaveAttribute(
+			await expect(canvas.getByRole("button", { name: new RegExp(summary, "u") })).toHaveAttribute(
 				"aria-expanded",
 				"true",
 			);
@@ -66,7 +66,7 @@ export const Default: Story = {
 		await expect(
 			canvas.getByText("Ask questions a teammate can answer").closest('[data-slot="badge"]'),
 		).not.toBeNull();
-		const question = canvas.getByRole("button", { name: /The question includes/ });
+		const question = canvas.getByRole("button", { name: /The question includes/u });
 		await userEvent.click(question);
 		await expect(question).toHaveAttribute("aria-expanded", "false");
 		await expect(canvas.getAllByText("Why it was noted")).toHaveLength(summaries.length - 1);
@@ -83,8 +83,8 @@ export const OnThePracticeLevel: Story = {
 		await expect(canvas.queryByText("Ask questions a teammate can answer")).not.toBeInTheDocument();
 		await expect(canvas.getByText("The question includes the attempted fix")).toBeVisible();
 
-		const newest = canvas.getByRole("button", { name: /The refactor and the fix/ });
-		const earlier = canvas.getByRole("button", { name: /The question includes/ });
+		const newest = canvas.getByRole("button", { name: /The refactor and the fix/u });
+		const earlier = canvas.getByRole("button", { name: /The question includes/u });
 		await expect(newest).toHaveAttribute("aria-expanded", "true");
 		await expect(earlier).toHaveAttribute("aria-expanded", "false");
 		await expect(canvas.getAllByText("Why it was noted")).toHaveLength(1);

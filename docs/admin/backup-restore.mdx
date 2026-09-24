@@ -4,8 +4,9 @@ title: Backup & Restore
 description: What to back up on a self-hosted instance, and how to restore it.
 ---
 
-For the [self-host compose stack](./install). PostgreSQL holds application state. The Context Fabric
-holds bounded evidence copies that may become irreproducible after upstream content changes or erasure.
+For the [self-host compose stack](./install). PostgreSQL holds application state. What the server and
+worker keep on disk — repository mirrors and the inputs of attempts in flight — is disposable and is
+rebuilt from PostgreSQL and the upstream provider.
 
 ## What to back up
 
@@ -13,151 +14,204 @@ holds bounded evidence copies that may become irreproducible after upstream cont
 | --- | --- | --- |
 | PostgreSQL database | Compose-managed `postgresql-data` volume mounted by `postgres` | **Everything.** Accounts, workspaces, observations, feedback, encrypted provider tokens, JWT signing keys. |
 | `.env` | `/opt/hephaestus/docker/self-host/.env` | **Equal priority.** Its encryption keys protect values inside the database backup. Without them, provider credentials and signing material are unreadable. |
-| TLS certificates | `./letsencrypt/` | Optional — Let's Encrypt re-issues on first boot (rate limits permitting). |
-| Context Fabric | `git-repos` volume | Back up when replayable evidence is required. Skipping it discards repository clones and bounded replay/CAS content; durable job provenance remains in PostgreSQL, but the exact source bytes may be unrecoverable. |
-| NATS JetStream | `nats-data` volume | Skip — a transient event buffer, not a source of truth. |
+| Signed release lock and deployment overrides | `release-lock.env` and any operator-owned Compose/configuration files | Restore the exact release and configuration associated with the database, not the latest release. |
+| TLS certificates | `letsencrypt` volume mounted by `reverse-proxy` | Optional — Let's Encrypt re-issues when permitted to connect (rate limits permitting). |
+| Repository mirrors and attempt folders | `git-repos` volume (server) and `worker-git-repos` volume (worker), both mounted at `/data/git-repos` | Disposable; do not back up as review evidence. A missing mirror is cloned again on the next sync or review. Restoring PostgreSQL preserves admitted observations and citation verdicts. In-flight reviews must be retried, not resumed from copied folders. |
+| NATS JetStream | `nats-data` volume | Preserve broker snapshots or cold copies when event-gap recovery/forensics requires them. Never replay a store divergent from PostgreSQL without the runbook recovery checks. |
+
+For production backup automation and recovery gates, start with the
+[production operations runbook](./production-operations-runbook#backup-restore-and-postgresql--jetstream).
+The logical dump below is the minimal fallback, not arbitrary point-in-time recovery.
+
+## Automated off-host backup (self-host Compose)
+
+The optional [pgBackRest](https://pgbackrest.org/user-guide.html) overlay archives WAL to one
+operator-owned S3-compatible bucket, encrypts repository content with AES-256-CBC, and keeps two
+full backup chains with their dependent differential backups. The host's systemd timers run a full backup
+each Sunday and a differential backup Monday through Saturday at 02:15 UTC. PostgreSQL also
+forces a WAL segment switch after 60 seconds of unarchived activity. This is a **target**, not a
+guaranteed RPO: repository failure, a stalled archiver, or a missing key can make the usable
+recovery point older. The [operations runbook](./production-operations-runbook#backup-restore-and-postgresql--jetstream)
+defines the release gate and broker procedure.
+
+1. Name a backup owner and a separate restore approver. Create a private bucket for **one
+   instance** on a separate failure domain. Give the scheduled backup identity only the
+   read/write/delete rights pgBackRest
+   needs within that bucket; give a rehearsal clone a separate read-only identity. Require TLS and
+   restrict deletion with a destination policy that is independent of
+   the database host. Test that the policy still permits pgBackRest to expire old backup chains;
+   blanket object locks can make expiration fail. Set the six `BACKUP_*` values in `/opt/hephaestus/docker/self-host/.env`.
+   `BACKUP_S3_ENDPOINT` is a host name without `https://`; TLS verification stays enabled.
+   Keep `.env` mode `0600` and never print `docker compose config` into shared logs: it contains
+   the repository key and passphrase.
+   Generate `BACKUP_CIPHER_PASS` independently with `openssl rand -base64 48`; store it outside
+   the host with the release lock and application encryption keys. A lost passphrase makes the
+   repository unusable. Do not place credentials in `pgbackrest.conf` or the systemd units.
+2. From `/opt/hephaestus/docker/self-host`, use this exact Compose command for all backup actions:
+
+   ```bash
+   dc() { docker compose --env-file .env --env-file release-lock.env -f compose.yaml -f compose.backup.yaml "$@"; }
+   dc up -d postgres
+   dc run --rm --no-deps pgbackrest --stanza=hephaestus stanza-create
+   dc run --rm --no-deps pgbackrest --stanza=hephaestus check
+   dc run --rm --no-deps pgbackrest --stanza=hephaestus --type=full backup
+   dc run --rm --no-deps pgbackrest --stanza=hephaestus verify
+   dc run --rm --no-deps pgbackrest --stanza=hephaestus --output=json info
+   ```
+
+   Enable the overlay only after the destination and all credentials are ready. PostgreSQL can
+   retain WAL while `stanza-create` has not yet succeeded, but it cannot complete archival then.
+   Stop and investigate if `check`, the first backup, or `verify` fails. `verify` checks repository
+   contents; it does **not** prove that a clean instance boots or that delivery stays silent.
+   A failed archive command keeps WAL on the database host until it fills the disk: alert on archive
+   failures and free space, not only on the next scheduled backup.
+3. Install `docker/self-host/systemd/hephaestus-backup@.service` and the two timer files into
+   `/etc/systemd/system/`, then run `systemctl daemon-reload` and
+   `systemctl enable --now hephaestus-backup-full.timer hephaestus-backup-diff.timer`.
+   Check `systemctl list-timers 'hephaestus-backup*'` and the journal of each service. A failed
+   service must alert through the operator alert channel; until [operator alerting](https://github.com/hephaestus-build/Hephaestus/issues/1369)
+   owns that path, install a host-level failed-unit alert and test it. **Do not count a configured
+   timer as a completed backup.** Run and observe one scheduled execution and a deliberately
+   failed execution against an isolated destination before relying on it.
+
+Keep `.env`, `release-lock.env`, operator overrides and any active/prior application credential
+keys in a **separate encrypted off-host** custody path; the pgBackRest repository contains only
+PostgreSQL and WAL. Restrict bucket and key access to backup operators, audit reads and deletion,
+and test retrieval without the production host. A count-based pgBackRest retention is not a legal
+or time-based erasure policy; set destination lifecycle and hold rules to your data-retention policy
+without deleting WAL needed by the oldest retained full backup. Rehearse after each policy change.
+
+For a clean PITR rehearsal, isolate the clone **before** restoring secrets, as the runbook requires.
+Use the backup's signed PostgreSQL image and configuration, a new empty PostgreSQL data volume,
+the same repository and cipher passphrase, and no running PostgreSQL process on that volume.
+Set `BACKUP_RESTORE_S3_KEY` and `BACKUP_RESTORE_S3_KEY_SECRET` to a **read-only** bucket identity
+on the clone. The restore overlay requires them for both the restore service and PostgreSQL WAL
+replay; it never passes `BACKUP_S3_KEY` or `BACKUP_S3_KEY_SECRET` to either container. **Do not combine
+the backup and restore overlays.** A plain `up` with the restore overlay starts only PostgreSQL;
+application, broker and public ingress services are profiled out. From the
+isolated self-host directory, run:
+
+```bash
+(
+set -eu
+dr() { docker compose --env-file .env --env-file release-lock.env -f compose.yaml -f compose.restore.yaml "$@"; }
+dr run --rm --no-deps pgbackrest-restore --stanza=hephaestus --type=time \
+  --target='YYYY-MM-DD HH:MM:SS+00' --target-action=promote restore
+dr up -d --wait postgres
+for attempt in $(seq 1 360); do
+  recovery=$(dr exec -T postgres psql -U root -d hephaestus -Atc 'SELECT pg_is_in_recovery()')
+  [ "$recovery" = f ] && break
+  sleep 5
+done
+[ "$recovery" = f ] || { printf 'PostgreSQL did not promote within 30 minutes\n' >&2; exit 1; }
+dr exec -T postgres psql -U root -d hephaestus -v ON_ERROR_STOP=1 \
+  < restore-clone-lockdown.sql
+)
+```
+
+Choose a recorded UTC target covered by a full backup and uninterrupted archived WAL. Keep the clone's
+provider egress denied, `AGENT_ENABLED=false` on server **and** worker, and Silent Mode engaged
+before any application role starts. The PostgreSQL health check alone does not show that recovery
+has finished; the command above waits for promotion before it changes restored data. The lockdown
+transaction engages Silent Mode, pauses every workspace's feedback delivery, disables
+automatic/manual reviews and mentors, and advances the rollout revision so prepared work cannot
+use an earlier policy. It changes the **clone only**;
+never pipe this file into the production database. The restore overlay also refuses direct starts
+of the server, worker and webhook roles. An operator who later inspects application health must
+use a separately reviewed isolated override; removing this brake is an explicit release step,
+not part of the restore command. Record the selected WAL timeline, data fingerprint, recovery
+point, measured restore time, application health, and every manual step. Preserve broker evidence
+separately; [choose the JetStream strategy](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers)
+before starting consumers. Never point a rehearsal at the production Compose project or volumes.
 
 ## Backup
 
-Logical dump while everything runs (safe — Postgres MVCC gives a consistent snapshot):
+A logical dump can run while the application runs: PostgreSQL supplies a consistent database snapshot,
+not a coordinated snapshot of external writes, JetStream or rotating secrets. For a deployment rollback
+point, first stop application writers and key rotation as the runbook requires. Do not deploy or rotate
+keys until the database, configuration and release lock have all been captured.
+
+Run each shell block as a unit and **stop on any failure**. Do not enable shell tracing around secrets.
 
 ```bash
+(
+set -eu
+umask 077
 cd /opt/hephaestus/docker/self-host
 dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
-dc exec -T postgres pg_dump -U root -Fc hephaestus \
-  > hephaestus-$(date +%F).dump
-cp .env hephaestus-$(date +%F).env
+backup_dir=$(mktemp -d "/var/tmp/hephaestus-backup-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
+dc exec -T postgres pg_dump -U root -Fc hephaestus > "$backup_dir/hephaestus.dump"
+test -s "$backup_dir/hephaestus.dump"
+dc exec -T postgres pg_restore --list < "$backup_dir/hephaestus.dump" >/dev/null
+cp .env release-lock.env "$backup_dir/"
+(cd "$backup_dir" && sha256sum hephaestus.dump .env release-lock.env > SHA256SUMS)
+printf 'Backup directory: %s\n' "$backup_dir"
+)
 ```
 
-Ship both files **off the host**, encrypted. Cron it daily; test-restore it at least once (below).
+Include operator-owned overrides and every active/prior credential key version the snapshot needs;
+see [credential key rotation](./credential-key-rotation). Ship the complete directory **off the host**,
+encrypted, and verify its checksums there. Treat checksums as corruption detection, not authenticity: use
+a trusted backup destination. Perform an isolated restore; `pg_restore --list` reads the archive inventory,
+not every data block, and is not proof of recoverability. Set schedule, retention and freshness alerts
+against your recovery objectives. The private `/var/tmp` directory is temporary staging, not the backup
+repository: after verification and any ongoing recovery, remove its plaintext copies according to retention.
 
 ## Restore
 
-On a fresh host, complete install steps 1–2 first, restoring the saved `.env` (same
-`POSTGRES_PASSWORD` and both `HEPHAESTUS_SECURITY_*ENCRYPTION_KEY` values). Then:
+**Before any application startup**, complete the runbook
+[pre-boot isolation](./production-operations-runbook#pre-boot-isolation--mandatory-for-every-restore).
+
+On a fresh host, prepare the supported prerequisites, then check out **the backup's release**, verify
+its published signed lock, and restore the matching `.env` and operator overrides before starting
+PostgreSQL. Do not follow the install guide's latest-release selection for recovery. Preserve the general
+encryption key and all active/prior credential keys **and version numbers** needed by this snapshot;
+keep credential rotation disabled. Apply isolation settings to the restored configuration.
+
+The commands below replace the named database. Preserve the failed database separately if it is needed
+for investigation; do not run them until the instance, backup and permitted data loss are confirmed.
+Set `BACKUP_DIR` to the absolute path printed by the backup command (or its restored off-host copy):
 
 ```bash
+(
+set -eu
 cd /opt/hephaestus/docker/self-host
+BACKUP_DIR=/absolute/path/to/backup-directory
 dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
-dc up -d postgres
+(cd "$BACKUP_DIR" && sha256sum -c SHA256SUMS)
+cmp "$BACKUP_DIR/release-lock.env" release-lock.env
+test -s "$BACKUP_DIR/hephaestus.dump"
 dc stop application-server webhook-server
-
-test -s hephaestus-YYYY-MM-DD.dump
-dc exec -T postgres pg_restore --list < hephaestus-YYYY-MM-DD.dump >/dev/null
+dc up -d --wait --wait-timeout 120 postgres
+dc exec -T postgres pg_restore --list < "$BACKUP_DIR/hephaestus.dump" >/dev/null
 dc exec -T postgres dropdb -U root --if-exists hephaestus
 dc exec -T postgres createdb -U root hephaestus
 dc exec -T postgres pg_restore -U root -d hephaestus --no-owner --no-acl --single-transaction \
-  < hephaestus-YYYY-MM-DD.dump
-
-dc up -d --wait
+  < "$BACKUP_DIR/hephaestus.dump"
+)
 ```
 
-Verify: sign in, open a workspace, check recent activity is present up to the backup
-timestamp.
+Complete [broker recovery](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers)
+then complete **Prove silence**, **Inspect and decide**, and **Release deliberately** in the
+[silent checklist](./production-operations-runbook#silent-deployment-checklist) before restoring normal access.
+Verify sign-in, workspace relationships and activity up to the recovery timestamp.
 
-## PostgreSQL 17 to 18
+### Before restarting services
 
-PostgreSQL major-version data directories are not binary compatible, and the PostgreSQL 18 image
-stores `PGDATA` under `/var/lib/postgresql/18/docker`. The Compose volume keeps its stable
-`postgresql-data` name across the upgrade, so the move is: dump, destroy the volume, let
-PostgreSQL 18 initialize a fresh empty cluster under the same name, restore.
-
-Skipping the procedure fails loudly, not silently: a PostgreSQL 18 container attached to the volume
-still holding PostgreSQL 17 data refuses to start (the entrypoint reports the old data and exits),
-so nothing is lost by starting the new release too early — the container just stays down until the
-steps below are completed.
-
-**Step (c) destroys the PostgreSQL 17 data.** From that point on, the dump is the only copy. Do not
-remove the volume before the dump has passed `pg_restore --list`, and copy the dump (and its
-checksum) off the host first.
-
-**(a)** From the running PostgreSQL 17 release, stop application writes and take a verified
-custom-format dump:
-
-```bash
-cd /opt/hephaestus/docker/self-host
-dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
-dc stop application-server webhook-server
-dc exec -T postgres pg_dump -U root -Fc hephaestus > /var/tmp/hephaestus-pg17.dump
-test -s /var/tmp/hephaestus-pg17.dump
-dc exec -T postgres pg_restore --list < /var/tmp/hephaestus-pg17.dump >/dev/null
-sha256sum /var/tmp/hephaestus-pg17.dump > /var/tmp/hephaestus-pg17.dump.sha256
-```
-
-Copy `/var/tmp/hephaestus-pg17.dump` and its `.sha256` off the host now.
-
-**(b)** Stop and remove the database container:
-
-```bash
-dc down postgres
-```
-
-**(c)** Remove the PostgreSQL 17 volume. Docker prefixes the Compose project name, so the exact
-name is `<project>_postgresql-data` — list the volumes and use the one ending in
-`_postgresql-data`:
-
-```bash
-docker volume ls --format '{{.Name}}' | grep '_postgresql-data$'
-docker volume rm <project>_postgresql-data
-```
-
-This deletes the PostgreSQL 17 cluster permanently.
-
-**(d)** Check out the new release and prepare its signed release lock as described in
-[Upgrades](./install#upgrades), then start the database alone. PostgreSQL 18 initializes a fresh,
-empty cluster in the recreated volume:
-
-```bash
-dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
-dc up -d postgres
-until dc exec -T postgres pg_isready -U root -d hephaestus; do sleep 2; done
-test "$(dc exec -T postgres psql -U root -d hephaestus -Atc \
-  "SELECT current_setting('server_version_num')::int / 10000 || ':' || (to_regclass('public.databasechangelog') IS NULL)")" = "18:true"
-```
-
-**(e)** Restore the dump. The supported self-host stack creates no custom roles or tablespaces;
-operators who added either must migrate those cluster-global objects separately:
-
-```bash
-sha256sum -c /var/tmp/hephaestus-pg17.dump.sha256
-dc exec -T postgres dropdb -U root hephaestus
-dc exec -T postgres createdb -U root hephaestus
-dc exec -T postgres pg_restore -U root -d hephaestus --no-owner --no-acl \
-  --single-transaction < /var/tmp/hephaestus-pg17.dump
-```
-
-**(f)** Update the pg_partman extension to the version bundled with the new image, then start the
-stack:
-
-```bash
-dc exec -T postgres psql -U root -d hephaestus -v ON_ERROR_STOP=1 \
-  -c 'ALTER EXTENSION pg_partman UPDATE'
-dc up -d --wait
-```
-
-**(g)** Verify application health, sign in, and inspect recent workspace activity. Then verify the
-database major, extension, partition policy, and that row counts in the tables you know best match
-the pre-upgrade state:
-
-```bash
-dc exec -T postgres psql -U root -d hephaestus -Atc \
-  "SELECT current_setting('server_version_num')::int / 10000 = 18; SELECT extversion = '5.5.0' FROM pg_extension WHERE extname = 'pg_partman'; SELECT count(*) = 1 FROM partman.part_config WHERE parent_table = 'public.auth_event';"
-```
-
-Keep the dump until acceptance checks pass and backup policy permits its deletion. Rollback means
-checking out the prior release, removing the volume again, starting its PostgreSQL 17 container
-against the recreated empty volume, and restoring the same dump; never run the prior application
-against the PostgreSQL 18 database.
-
-### After a point-in-time restore
-
-- **Sessions:** users signed in after the backup was taken must sign in again. If the
-  restored `jwt_signing_key` table is unusable, truncate it and restart — a fresh key is
-  auto-seeded and everyone re-logs-in. No data loss beyond sessions.
-- **NATS JetStream:** the stream on `nats-data` may hold events the restored database has
-  already processed (or never saw). Webhook ingest deduplicates by delivery id and
-  idempotency keys, so replays are absorbed on ingest. The conservative option after a restore
-  from an old backup: `dc down`, `docker volume rm <project>_nats-data` (named like the
-  `_postgresql-data` volume above), `dc up -d` — events in the gap are re-fetched by the
-  scheduled sync.
+- **Access and erasure:** a restore rewinds account suspensions, session revocations, recipient consent
+  and deletions as well as application data. Reapply post-backup security/privacy decisions from the
+  restricted incident record before reopening access or delivery. Sessions issued after the snapshot
+  must sign in again, but sessions revoked after it can become valid again. Do not erase signing keys
+  as a generic restore step; diagnose missing encryption keys separately from corrupt signing data.
+- **NATS JetStream:** follow the [runbook broker recovery procedure](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers) before starting consumers.
+  Ingest deduplication cannot prevent external duplicates after PostgreSQL loses delivery history;
+  scheduled sync cannot recover every event in the gap.
 - **Restore into an older app version:** don't. Restore with the same signed release lock the backup was taken from, then upgrade.
+
+## Unsupported PostgreSQL versions
+
+Only PostgreSQL 18 is supported. For an existing PostgreSQL 17 installation, follow the
+[PostgreSQL 17 to 18 migration procedure from v0.77.4](https://github.com/hephaestus-build/Hephaestus/blob/v0.77.4/docs/admin/backup-restore.mdx#postgresql-17-to-18).
+Do not attach an older data directory to PostgreSQL 18 or change the image tag as an upgrade.
+Keep an encrypted, off-host backup and successfully rehearse its restore before removing any data
+volume; `pg_restore --list` checks the archive contents, not recoverability.

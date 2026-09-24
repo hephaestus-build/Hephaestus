@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import java.time.Instant;
@@ -82,28 +83,37 @@ class PracticeTrendTest {
     }
 
     private static Observation clean(long artifactId, String observedAt, ArtifactKind kind) {
-        return observation(artifactId, observedAt, kind, Presence.PRESENT, Assessment.GOOD);
+        return observation(artifactId, observedAt, kind, AssessmentStatus.ASSESSED, Presence.PRESENT, Assessment.GOOD);
     }
 
     private static Observation problem(long artifactId, String observedAt) {
-        return observation(artifactId, observedAt, ArtifactKinds.PULL_REQUEST, Presence.ABSENT, Assessment.BAD);
+        return observation(
+                artifactId,
+                observedAt,
+                ArtifactKinds.PULL_REQUEST,
+                AssessmentStatus.ASSESSED,
+                Presence.ABSENT,
+                Assessment.GOOD);
     }
 
     private static Observation noVerdict(long artifactId, String observedAt) {
-        return observation(artifactId, observedAt, ArtifactKinds.PULL_REQUEST, Presence.NOT_APPLICABLE, null);
+        return observation(
+                artifactId, observedAt, ArtifactKinds.PULL_REQUEST, AssessmentStatus.NOT_APPLICABLE, null, null);
     }
 
     private static Observation observation(
             long artifactId,
             String observedAt,
             ArtifactKind kind,
-            Presence presence,
+            AssessmentStatus status,
+            @org.jspecify.annotations.Nullable Presence presence,
             @org.jspecify.annotations.Nullable Assessment assessment) {
         return Observation.builder()
                 .id(UUID.randomUUID())
                 .agentJobId(UUID.randomUUID())
                 .artifactKind(kind)
                 .artifactId(artifactId)
+                .assessmentStatus(status)
                 .presence(presence)
                 .assessment(assessment)
                 .observedAt(Instant.parse(observedAt))

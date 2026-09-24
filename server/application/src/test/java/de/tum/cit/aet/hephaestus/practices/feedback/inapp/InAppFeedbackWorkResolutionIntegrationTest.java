@@ -70,7 +70,7 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
         // The slip the feedback was written from, reviewed shortly before the feedback was prepared.
         AgentJob run = persistPullRequestReview(workspace, 10, PREPARED_AT.minus(Duration.ofHours(1)));
         UUID problem = observe(
-                practice, run, 10L, developer, "ABSENT", "BAD", "MAJOR", PREPARED_AT.minus(Duration.ofHours(1)));
+                practice, run, 10L, developer, "ABSENT", "GOOD", "MAJOR", PREPARED_AT.minus(Duration.ofHours(1)));
         feedback = persistInAppFeedback(
                 run,
                 developer,
@@ -133,7 +133,7 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
         cleanReview(11, daysAfterPreparation(1));
         cleanReview(12, daysAfterPreparation(2));
         AgentJob slip = persistPullRequestReview(workspace, 13, daysAfterPreparation(3));
-        observe(practice, slip, 13L, developer, "ABSENT", "BAD", "MAJOR", daysAfterPreparation(3));
+        observe(practice, slip, 13L, developer, "ABSENT", "GOOD", "MAJOR", daysAfterPreparation(3));
         cleanReview(14, daysAfterPreparation(4));
 
         card().jsonPath("$[0].cleanWork[*].label")
@@ -151,7 +151,7 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
         cleanReview(12, daysAfterPreparation(2));
         cleanReview(13, daysAfterPreparation(3));
         AgentJob later = persistPullRequestReview(workspace, 14, daysAfterPreparation(4));
-        observe(practice, later, 14L, developer, "ABSENT", "BAD", "MAJOR", daysAfterPreparation(4));
+        observe(practice, later, 14L, developer, "ABSENT", "GOOD", "MAJOR", daysAfterPreparation(4));
 
         card().jsonPath("$[0].resolvedByWorkAt")
                 .isEqualTo(daysAfterPreparation(3).toString())

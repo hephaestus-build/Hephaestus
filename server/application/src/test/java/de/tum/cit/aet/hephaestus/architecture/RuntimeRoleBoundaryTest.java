@@ -93,11 +93,74 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             // Server-only so the worker and webhook pods never acquire an outbound dependency on
             // ecb.europa.eu — this fetcher is the only egress the display-currency feature has.
             Map.entry("de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateFetchScheduler", RuntimeRole.SERVER_PROPERTY),
+            // Email leaves the instance from the server role only: the gateway, the listeners that feed it,
+            // the redelivery sweep and the admin verification surface all boot with it.
+            Map.entry("de.tum.cit.aet.hephaestus.notification.email.EmailGateway", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.email.EmailAdminController", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.AccountDeletionEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.NotificationRedeliveryJob", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.NotificationPublicationConfiguration",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.AccountSecurityEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEmailDeliveryAdapter", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.email.EmailUnsubscribeController",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.email.EmailRateLimiter", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationPreferencesController",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.ProductFeedbackEmailPreparation",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.ProductFeedbackEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEndedSummaryListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.WorkspaceAlertEmailListener", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.WorkspaceAlertEmailPreparation",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationPreferencesControllerAdvice",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationPreferencesExportAdapter",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.notification.preferences.NotificationAccountErasureAdapter",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackNotificationQueryService",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.productfeedback.SurveyEmailInvitationService",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.productfeedback.SurveyEmailSchedulingJob", RuntimeRole.SERVER_PROPERTY),
+
             // ServerSchedulingConfig silences the @Scheduled tick off-server, but an ungated BEAN still
             // registers its gauges — permanent zeros in agent.queue.* / mentor.in_flight.* from pods that
             // never sample. Gate the bean, not just the tick.
             Map.entry("de.tum.cit.aet.hephaestus.agent.job.AgentQueueHealthSampler", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.job.AgentJobRetentionService", RuntimeRole.SERVER_PROPERTY),
+            // Product feedback is a member- and admin-facing web surface, and SurveyService reads research
+            // consent through a port only the server role implements.
+            Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackController", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.productfeedback.InstanceFeedbackController",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackAdminController", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.productfeedback.SurveyAdminController", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackService", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.productfeedback.SurveyService", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorInFlightReaper", RuntimeRole.SERVER_PROPERTY),
             // ADR 0006: the LLM proxy runs beside the sandbox on the WORKER, and only there.
             Map.entry("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxyController", RuntimeRole.WORKER_PROPERTY),
@@ -293,14 +356,16 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     }
 
     /**
-     * The two {@code core.auth.spi} read-only query impls are the cross-role data-access part of auth
-     * (account identity/role lookups), consumed by the connection-identity service and the workspace /
-     * notification modules on every role. They carry no hard prod env and must stay ungated — unlike the
-     * web/OAuth/issuance layer.
+     * The {@code core.auth.spi} read-only query impls are the cross-role data-access part of auth
+     * (account identity/role/name lookups), consumed by the connection-identity service, the
+     * workspace and practices modules, and product feedback's name resolution and erasure adapters
+     * on every role. They carry no hard prod env and must stay ungated — unlike the web/OAuth/issuance
+     * layer.
      */
     private static final List<String> CROSS_ROLE_AUTH_SPI_IMPLS = List.of(
             "de.tum.cit.aet.hephaestus.core.auth.AccountIdentityQueryService",
-            "de.tum.cit.aet.hephaestus.core.auth.AccountRoleQueryService");
+            "de.tum.cit.aet.hephaestus.core.auth.AccountRoleQueryService",
+            "de.tum.cit.aet.hephaestus.core.auth.AccountSummaryQueryService");
 
     @Test
     void allAuthStereotypeBeansAreServerGated() {

@@ -12,11 +12,11 @@ public enum ConversationRoutingDecision {
     NOT_DELIVERABLE,
     /** Has a natural inline anchor (a diff location on a PR) - it belongs in-context, not in the conversation. */
     HAS_INLINE_ANCHOR,
-    /** The same locus (recurrence_key) was already DELIVERED in-context to this recipient - do not re-raise it. */
+    /** This exact observation was already delivered in-context to this recipient. */
     ALREADY_DELIVERED_IN_CONTEXT,
     /** Reviewer-targeted - deferred (ADR 0021). */
     REVIEWER_DEFERRED,
-    /** The practice's autonomy (OFF or HUMAN_APPROVAL) does not admit the conversation channel. */
+    /** The practice's autonomy is OFF: a chat turn is read on request, so approval never gates it. */
     PRACTICE_REQUIRES_APPROVAL,
     /**
      * From a backfill campaign - coaching on a decision made months ago would present retrospective

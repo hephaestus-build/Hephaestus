@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "@sentry/react";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
@@ -9,35 +10,57 @@ import {
 	useNavigate,
 	useRouter,
 } from "@tanstack/react-router";
-import type React from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstack/react-query.gen";
-import { ImpersonationBanner } from "@/components/auth/ImpersonationBanner";
-import { CookieConsentBanner } from "@/components/consent/CookieConsentBanner";
-import Footer from "@/components/core/Footer";
-import Header from "@/components/core/Header";
-import { AppSidebar, type SidebarContext } from "@/components/core/sidebar/AppSidebar";
-import { SkipToContent } from "@/components/core/SkipToContent";
-import { StandardPageSurface } from "@/components/core/StandardPageSurface";
-import { ActiveSurveyDialog } from "@/components/feedback/ActiveSurveyDialog";
-import { ProductFeedbackDialog } from "@/components/feedback/ProductFeedbackDialog";
-import { Chat } from "@/components/mentor/Chat";
-import { Copilot } from "@/components/mentor/Copilot";
-import { defaultPartRenderers } from "@/components/mentor/renderers";
+import type { SurveyInvitation } from "@/api/types.gen";
+import { LoginDialog } from "@/components/auth/LoginDialog";
+import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { CookieConsentBanner } from "@/components/layout/CookieConsentBanner";
+import Footer from "@/components/layout/Footer";
+import Header from "@/components/layout/Header";
+import { AppSidebar, type SidebarContext } from "@/components/layout/sidebar/AppSidebar";
+import { SkipToContent } from "@/components/layout/SkipToContent";
+import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
+import type { FeedbackKind } from "@/components/product-feedback/feedback-copy";
+import {
+	PAGE_PATH_MAX_LENGTH,
+	ProductFeedbackDialog,
+	USER_AGENT_MAX_LENGTH,
+} from "@/components/product-feedback/ProductFeedbackDialog";
+import { ProductFeedbackMenu } from "@/components/product-feedback/ProductFeedbackMenu";
+import { ProductSurveyDialog } from "@/components/product-feedback/ProductSurveyDialog";
+import {
+	EMPTY_SURVEY_RESPONSE_DRAFT,
+	type SurveyResponseDraft,
+	surveyEstimate,
+} from "@/components/product-feedback/survey-questions";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogDescription,
+} from "@/components/ui/dialog";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { useMentorChat } from "@/hooks/use-mentor-chat";
-import { useActiveSurvey, useSubmitProductFeedback } from "@/hooks/use-product-feedback";
+import { useLoginNavigation } from "@/hooks/use-login-navigation";
+import { useProductSurveys, useSubmitProductFeedback } from "@/hooks/use-product-feedback";
+import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
-import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
-import { type AuthContextType, useAuth } from "@/integrations/auth/AuthContext";
-import { FeatureFlagDevTools, useFeatureFlag } from "@/integrations/feature-flags";
-import { isCopilotExcludedRoute } from "@/lib/copilot-route";
-import { getProviderSlug } from "@/lib/provider";
+import { getProviderSlug } from "@/lib/provider/provider-terms";
+import { useSearchState } from "@/lib/search-params";
+import { type AuthContextType, useAuth } from "@/runtime/auth/AuthContext";
+import { safeReturnTo } from "@/runtime/auth/guard";
+import { FeatureFlagDevTools } from "@/runtime/feature-flags/FeatureFlagDevTools";
+import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
+import { isCopilotExcludedRoute } from "./-copilot-route";
+
+const GlobalCopilot = lazy(async () => import("./-GlobalCopilot"));
 
 interface MyRouterContext {
 	queryClient: QueryClient;
@@ -51,12 +74,15 @@ declare module "@tanstack/react-router" {
 }
 
 function RootLayout() {
+	const { login: loginOpen } = Route.useSearch();
 	const { pathname } = useLocation();
 	const surface = useMatches({
 		select: (matches) => {
 			for (let index = matches.length - 1; index >= 0; index -= 1) {
 				const matchSurface = matches[index]?.staticData.surface;
-				if (matchSurface) return matchSurface;
+				if (matchSurface) {
+					return matchSurface;
+				}
 			}
 			return "standard";
 		},
@@ -71,12 +97,9 @@ function RootLayout() {
 			<>
 				<HeadContent />
 				<SkipToContent />
-				<CookieConsentBanner />
-				<ProviderColorScope>
-					<main id="main-content" tabIndex={-1}>
-						<Outlet />
-					</main>
-				</ProviderColorScope>
+				<main id="main-content" tabIndex={-1}>
+					<Outlet />
+				</main>
 				<Toaster />
 			</>
 		);
@@ -86,16 +109,11 @@ function RootLayout() {
 		<>
 			<HeadContent />
 			<SkipToContent />
-			{/* Rendered early so keyboard/AT users reach the consent region before the app chrome. */}
-			<CookieConsentBanner />
-			<ImpersonationBanner />
+			{loginOpen !== true && <CookieConsentBanner />}
 			<ProviderColorScope>
 				<SidebarProvider>
 					<AppSidebarContainer />
-					<SidebarInset
-						className="min-w-0"
-						style={{ marginRight: "var(--right-sidebar-width, 0)" }}
-					>
+					<SidebarInset className="mr-[var(--right-sidebar-width,0)] min-w-0">
 						<HeaderContainer />
 						<main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col">
 							{surface === "standard" ? (
@@ -122,136 +140,194 @@ function RootLayout() {
 				</SidebarProvider>
 			</ProviderColorScope>
 			<Toaster />
-			{showCopilot && <GlobalCopilot />}
+			<PublicLoginOverlay />
+			{showCopilot && (
+				<ErrorBoundary handled>
+					<Suspense fallback={null}>
+						<GlobalCopilot />
+					</Suspense>
+				</ErrorBoundary>
+			)}
 			<FeatureFlagDevTools />
-			{!isLoading && isAuthenticated ? <GlobalSurvey /> : null}
 		</>
 	);
 }
 
-function GlobalSurvey() {
-	const { workspaceSlug } = useActiveWorkspaceSlug();
-	const survey = useActiveSurvey(workspaceSlug);
+function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) {
+	const { pathname } = useLocation();
+	const feedback = useSubmitProductFeedback(workspaceSlug);
+	const surveys = useProductSurveys(workspaceSlug);
+	const [feedbackOpen, setFeedbackOpen] = useState(false);
+	const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>("FEEDBACK");
+	const { survey: selectedSurveyId } = Route.useSearch();
+	const updateSearch = useSearchState();
+	const [drafts, setDrafts] = useState(() => new Map<string, SurveyResponseDraft>());
+	const nudged = useRef(false);
+	const invitations = surveys.query.data ?? [];
+	const survey = invitations.find((candidate) => candidate.id === selectedSurveyId);
+	const openSurvey = (surveyId: string) => {
+		if (invitations.some((candidate) => candidate.id === surveyId)) {
+			void updateSearch((previous) => ({ ...previous, survey: surveyId }));
+		}
+	};
+	const closeSurvey = () => {
+		surveys.reset();
+		void updateSearch((previous) => ({ ...previous, survey: undefined }));
+	};
+	// The server remembers the acknowledgement, so a reload never nudges twice for one survey; the
+	// ref keeps a second unseen invitation from nudging in the same visit.
+	const unseen = invitations.find((candidate) => !candidate.seen);
+	const nudge = useEffectEvent((invitation: SurveyInvitation) => {
+		surveys.acknowledge(invitation.id);
+		toast(
+			invitation.purpose === "RESEARCH"
+				? `New research survey: ${invitation.title}`
+				: `New survey: ${invitation.title}`,
+			{
+				description: `${surveyEstimate(invitation.questions)}. It waits in the feedback menu.`,
+				duration: 12_000,
+				action: { label: "Take survey", onClick: () => openSurvey(invitation.id) },
+			},
+		);
+	});
+	useEffect(() => {
+		if (selectedSurveyId !== undefined) {
+			nudged.current = true;
+			return;
+		}
+		if (!unseen || nudged.current) {
+			return;
+		}
+		nudged.current = true;
+		nudge(unseen);
+	}, [unseen, selectedSurveyId]);
 	return (
-		<ActiveSurveyDialog
-			key={survey.survey?.id}
-			survey={survey.survey}
-			isSubmitting={survey.isSubmitting}
-			isDismissing={survey.isDismissing}
-			onSubmit={survey.submit}
-			onDismiss={survey.dismiss}
-		/>
+		<>
+			<ProductFeedbackMenu
+				invitations={invitations}
+				onSendFeedback={(kind) => {
+					setFeedbackKind(kind);
+					setFeedbackOpen(true);
+				}}
+				onOpenSurvey={openSurvey}
+			/>
+			<ProductFeedbackDialog
+				open={feedbackOpen}
+				onOpenChange={(open) => {
+					if (!open) {
+						feedback.reset();
+					}
+					setFeedbackOpen(open);
+				}}
+				kind={feedbackKind}
+				onKindChange={setFeedbackKind}
+				context={{
+					pagePath: pathname.slice(0, PAGE_PATH_MAX_LENGTH),
+					userAgent: navigator.userAgent.slice(0, USER_AGENT_MAX_LENGTH),
+				}}
+				isSubmitting={feedback.isPending}
+				error={feedback.error}
+				onSubmit={feedback.submit}
+			/>
+			{selectedSurveyId !== undefined &&
+				(surveys.query.isError || (surveys.query.isSuccess && !survey)) && (
+					<Dialog
+						open
+						onOpenChange={(open) => {
+							if (!open) {
+								closeSurvey();
+							}
+						}}
+					>
+						<DialogContent>
+							<DialogHeader>
+								<DialogTitle>
+									{surveys.query.isError ? "Could not load survey" : "Survey unavailable"}
+								</DialogTitle>
+								<DialogDescription>
+									{surveys.query.isError
+										? "Your invitation could not be checked. Try again when the connection is available."
+										: "This survey is no longer offered to your account. It may have ended or already been answered or declined."}
+								</DialogDescription>
+							</DialogHeader>
+							{surveys.query.isError && (
+								<QueryErrorAlert
+									title="Invitation unavailable"
+									error={surveys.query.error}
+									onRetry={() => {
+										void surveys.query.refetch();
+									}}
+								/>
+							)}
+						</DialogContent>
+					</Dialog>
+				)}
+			{survey && (
+				<ProductSurveyDialog
+					survey={survey}
+					open
+					onOpenChange={(open) => {
+						if (!open) {
+							closeSurvey();
+						}
+					}}
+					draft={drafts.get(survey.id) ?? EMPTY_SURVEY_RESPONSE_DRAFT}
+					onDraftChange={(draft) => setDrafts((current) => new Map(current).set(survey.id, draft))}
+					isSubmitting={surveys.isPending}
+					error={surveys.error}
+					onSubmit={async (answers) => {
+						if (await surveys.submit(survey, answers)) {
+							setDrafts((current) => {
+								const next = new Map(current);
+								next.delete(survey.id);
+								return next;
+							});
+							closeSurvey();
+						}
+					}}
+					onDecline={async () => {
+						if (await surveys.decline(survey.id)) {
+							closeSurvey();
+						}
+					}}
+				/>
+			)}
+		</>
 	);
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
+	validateSearch: (search): { login?: boolean; survey?: string } => ({
+		survey:
+			typeof search.survey === "string" && search.survey.length > 0 ? search.survey : undefined,
+		login: search.login === true || search.login === "true" ? true : undefined,
+	}),
 	// Fallback tab title; the deepest match that sets its own `head` wins.
 	head: () => ({ meta: [{ title: "Hephaestus" }] }),
 	component: RootLayout,
 	notFoundComponent: () => (
 		<div className="mx-auto flex w-full max-w-2xl flex-col items-center justify-center py-16 text-center">
-			<h1 className="text-3xl font-bold mb-4">Page Not Found</h1>
-			<p className="text-muted-foreground mb-8">
-				The page you're looking for doesn't exist or you don't have permission to view it.
+			<h1 className="mb-4 text-3xl font-bold">Page Not Found</h1>
+			<p className="mb-8 text-muted-foreground">
+				The page you’re looking for doesn’t exist or you don’t have permission to view it.
 			</p>
-			<Link to="/" className="text-primary hover:underline font-medium">
+			<Link to="/" className="font-medium text-primary hover:underline">
 				Return to Home
 			</Link>
 		</div>
 	),
 });
 
-function GlobalCopilot() {
-	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
-	// already is, rather than as a toast away from the conversation that failed.
-	const mentorChat = useMentorChat({});
-
-	const router = useRouter();
-	const { isAuthenticated, isLoading } = useAuth();
-	const { enabled: hasMentorAccess } = useFeatureFlag("MENTOR_ACCESS");
-	const { workspaceSlug } = useActiveWorkspaceSlug();
-	const { features, isLoading: featuresLoading } = useWorkspaceFeatures(workspaceSlug);
-
-	const handleMessageSubmit = ({ text }: { text: string }) => {
-		if (!text.trim()) return;
-		mentorChat.sendMessage(text);
-	};
-
-	const handleVote = (messageId: string, isUpvote: boolean) => {
-		mentorChat.voteMessage(messageId, isUpvote);
-	};
-
-	const handleMessageEdit = (messageId: string, content: string) => {
-		const messageIndex = mentorChat.messages.findIndex((message) => message.id === messageId);
-		if (messageIndex === -1) return;
-		mentorChat.setMessages(mentorChat.messages.slice(0, messageIndex));
-		mentorChat.sendMessage(content);
-	};
-
-	const handleCopy = (content: string) => {
-		navigator.clipboard.writeText(content).catch(() => {
-			toast.error("Couldn't copy that to the clipboard.");
-		});
-	};
-
-	if (
-		isLoading ||
-		featuresLoading ||
-		!isAuthenticated ||
-		!workspaceSlug ||
-		!hasMentorAccess ||
-		!features?.mentorEnabled
-	) {
-		return null;
-	}
-
-	return (
-		<Copilot
-			hasMessages={mentorChat.messages.length > 0}
-			onNewChat={() => {
-				mentorChat.setMessages([]);
-			}}
-			onOpenFullChat={() => {
-				const threadId = mentorChat.currentThreadId ?? mentorChat.id;
-				if (threadId && workspaceSlug) {
-					void router.navigate({
-						to: "/w/$workspaceSlug/mentor/$threadId",
-						params: { threadId, workspaceSlug },
-					});
-				}
-			}}
-		>
-			<Chat
-				messages={mentorChat.messages}
-				votes={mentorChat.votes}
-				status={mentorChat.status}
-				readonly={false}
-				attachments={[]}
-				onMessageSubmit={handleMessageSubmit}
-				onMessageEdit={handleMessageEdit}
-				onStop={() => void mentorChat.stop()}
-				onFileUpload={() => Promise.resolve([])}
-				onAttachmentsChange={() => {}}
-				onCopy={handleCopy}
-				onVote={handleVote}
-				inputPlaceholder="Ask me anything..."
-				disableAttachments
-				className="h-full max-h-none"
-				partRenderers={defaultPartRenderers}
-			/>
-		</Copilot>
-	);
-}
-
 function HeaderContainer() {
+	const openLogin = useLoginNavigation();
 	const {
 		isAuthenticated,
 		isLoading,
 		username,
 		userProfile,
-		login,
 		logout,
 		getUserProfilePictureUrl,
+		getUserId,
 	} = useAuth();
 	const {
 		chromeWorkspaceSlug,
@@ -262,16 +338,13 @@ function HeaderContainer() {
 	const effectiveUsername = workspaceUserLogin ?? username;
 	const effectiveName =
 		workspaceUserName ?? (userProfile && `${userProfile.firstName} ${userProfile.lastName}`);
-	// Feedback about the product reaches instance administrators either way; carrying the chrome's
-	// workspace lets them answer a member in context, and the instance-only path is for an account
-	// that belongs to no workspace at all.
-	const feedback = useSubmitProductFeedback(chromeWorkspaceSlug);
 
 	return (
 		<Header
 			sidebarTrigger={isAuthenticated && <SidebarTrigger className="-ml-1" />}
 			version={environment.version}
 			environmentName={environment.deployment.name}
+			pullRequest={environment.deployment.pullRequest}
 			isProduction={environment.deployment.isProduction}
 			isAuthenticated={isAuthenticated}
 			isLoading={isLoading}
@@ -280,22 +353,42 @@ function HeaderContainer() {
 			avatarUrl={getUserProfilePictureUrl()}
 			workspaceSlug={chromeWorkspaceSlug}
 			feedbackDialog={
-				<ProductFeedbackDialog
-					isSubmitting={feedback.isPending}
-					onSubmit={(kind, message) =>
-						feedback.submit({ kind, message, pagePath: window.location.pathname })
-					}
-				/>
+				!isLoading && isAuthenticated ? (
+					<ProductFeedbackControls
+						key={`${getUserId()}:${chromeWorkspaceSlug}`}
+						workspaceSlug={chromeWorkspaceSlug}
+					/>
+				) : null
 			}
-			onLogin={(idpHint) => login(idpHint)}
-			onLogout={() => void logout()}
+			onLogin={openLogin}
+			onLogout={() => {
+				void logout();
+			}}
 		/>
 	);
 }
 
-function ProviderColorScope({ children }: { children: React.ReactNode }) {
+function ProviderColorScope({ children }: { children: ReactNode }) {
 	const { providerType } = useActiveWorkspaceSlug();
 	return <div data-provider={getProviderSlug(providerType)}>{children}</div>;
+}
+
+/** The workspace's own source-control provider, as the integration kind the sidebar lists it under. */
+function scmKindOf(providerType: string | undefined): ("GITHUB" | "GITLAB")[] {
+	if (providerType === "GITLAB" || providerType === "GITHUB") {
+		return [providerType];
+	}
+	return [];
+}
+
+function sidebarContextOf(pathname: string): SidebarContext {
+	if (pathname.startsWith("/admin")) {
+		return "admin";
+	}
+	if (pathname === "/mentor" || /^\/w\/[^/]+\/mentor/u.test(pathname)) {
+		return "mentor";
+	}
+	return "main";
 }
 
 function AppSidebarContainer() {
@@ -305,10 +398,8 @@ function AppSidebarContainer() {
 	const navigate = useNavigate();
 	const switchWorkspace = useWorkspaceSwitcher();
 	const workspaceAccess = useWorkspaceAccess();
-	const { chromeWorkspaceSlug, workspaces } = workspaceAccess;
+	const { chromeWorkspaceSlug, chromeWorkspace, workspaces } = workspaceAccess;
 	const hasWorkspace = Boolean(chromeWorkspaceSlug);
-	const workspaceList = Array.isArray(workspaces) ? workspaces : [];
-	const activeWorkspace = workspaceList.find((ws) => ws.workspaceSlug === chromeWorkspaceSlug);
 	const integrationCatalogQuery = useQuery({
 		...getIntegrationCatalogOptions({ path: { workspaceSlug: chromeWorkspaceSlug ?? "" } }),
 		enabled: workspaceAccess.isAdmin && Boolean(chromeWorkspaceSlug),
@@ -320,19 +411,11 @@ function AppSidebarContainer() {
 	const integrationKinds = [
 		...new Set([
 			...integrationCatalog.map((entry) => entry.kind),
-			...(activeWorkspace?.providerType === "GITLAB"
-				? (["GITLAB"] as const)
-				: activeWorkspace?.providerType === "GITHUB"
-					? (["GITHUB"] as const)
-					: []),
+			...scmKindOf(chromeWorkspace?.providerType),
 		]),
 	];
 
-	const sidebarContext: SidebarContext = pathname.startsWith("/admin")
-		? "admin"
-		: pathname === "/mentor" || /^\/w\/[^/]+\/mentor/.test(pathname)
-			? "mentor"
-			: "main";
+	const sidebarContext = sidebarContextOf(pathname);
 
 	const {
 		data: mentorThreads,
@@ -349,8 +432,10 @@ function AppSidebarContainer() {
 		return null;
 	}
 
-	const handleWorkspaceChange = (ws: typeof activeWorkspace) => {
-		if (!ws) return;
+	const handleWorkspaceChange = (ws: typeof chromeWorkspace) => {
+		if (!ws) {
+			return;
+		}
 		void switchWorkspace(ws);
 	};
 
@@ -366,8 +451,8 @@ function AppSidebarContainer() {
 			hasMentorAccess={hasMentorAccess}
 			integrationKinds={integrationKinds}
 			context={sidebarContext}
-			workspaces={workspaceList}
-			activeWorkspace={activeWorkspace}
+			workspaces={workspaces}
+			activeWorkspace={chromeWorkspace}
 			onWorkspaceChange={handleWorkspaceChange}
 			onAddWorkspace={handleAddWorkspace}
 			workspacesLoading={workspaceAccess.isLoading}
@@ -376,6 +461,43 @@ function AppSidebarContainer() {
 			mentorThreadsError={
 				sidebarContext === "mentor" && mentorThreadsError ? "Failed to load threads" : undefined
 			}
+		/>
+	);
+}
+
+function PublicLoginOverlay() {
+	const { login: open } = Route.useSearch();
+	const { isAuthenticated, login } = useAuth();
+	const location = useLocation();
+	const router = useRouter();
+	const providers = useSignInProviders(Boolean(open) && !isAuthenticated);
+	const returnTo = safeReturnTo(
+		location.maskedLocation?.search.returnTo ??
+			router.buildLocation({
+				to: ".",
+				search: (previous) => ({ ...previous, login: undefined }),
+				hash: true,
+			}).href,
+	);
+	return (
+		<LoginDialog
+			open={Boolean(open) && !isAuthenticated}
+			options={providers}
+			onSignIn={(registrationId) => login(registrationId, returnTo)}
+			devReturnTo={returnTo}
+			onClose={() => {
+				if (location.maskedLocation) {
+					router.history.back();
+				} else {
+					void router.navigate({
+						to: ".",
+						search: (previous) => ({ ...previous, login: undefined }),
+						hash: true,
+						replace: true,
+						resetScroll: false,
+					});
+				}
+			}}
 		/>
 	);
 }

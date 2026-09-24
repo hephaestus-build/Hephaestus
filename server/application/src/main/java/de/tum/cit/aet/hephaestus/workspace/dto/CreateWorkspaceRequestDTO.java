@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.workspace.dto;
 
-import de.tum.cit.aet.hephaestus.core.security.ServerUrlValidator;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.validation.ScmServerUrl;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
@@ -45,9 +45,9 @@ public record CreateWorkspaceRequestDTO(
         @NotNull(message = "Account type is required") @Schema(description = "Type of account (USER or ORG)") @Nullable
         AccountType accountType,
 
-        @Deprecated(forRemoval = true)
         @Schema(
                 description = "Deprecated: ignored by the server. The authenticated user always becomes the owner.",
+                deprecated = true,
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         Long ownerUserId,
@@ -73,7 +73,13 @@ public record CreateWorkspaceRequestDTO(
                         "Custom server URL for self-hosted GitLab instances. Must use HTTPS. Defaults to https://gitlab.com if not specified.",
                 example = "https://gitlab.example.com")
         @Nullable
+        @ScmServerUrl
         String serverUrl) {
+    @Deprecated(forRemoval = true)
+    public @Nullable Long ownerUserId() {
+        return ownerUserId;
+    }
+
     @AssertTrue(message = "Personal access token is required")
     @Schema(hidden = true)
     @SuppressWarnings("PMD.UnusedPrivateMethod")
@@ -86,20 +92,5 @@ public record CreateWorkspaceRequestDTO(
     @SuppressWarnings("PMD.UnusedPrivateMethod")
     private boolean isKindSupported() {
         return kind == IntegrationKind.GITHUB || kind == IntegrationKind.GITLAB;
-    }
-
-    @AssertTrue(message = "Server URL must use HTTPS and must not point to private/reserved addresses")
-    @Schema(hidden = true)
-    @SuppressWarnings("PMD.UnusedPrivateMethod")
-    private boolean isServerUrlSafe() {
-        if (serverUrl == null || serverUrl.isBlank()) {
-            return true;
-        }
-        try {
-            ServerUrlValidator.validate(serverUrl);
-            return true;
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 }

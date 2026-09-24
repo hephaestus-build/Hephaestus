@@ -2,13 +2,14 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn } from "storybook/test";
 
 import type { ObservationDetail, PracticeGroupReviewRun } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
+import { daysBefore } from "@/stories/story-clock";
 
 import { ReviewRunCard } from "./ReviewRunCard";
 
 /** What every observation of the run below shares: the work, the moment, the ordinary origin. */
 const onTheRun = {
+	assessmentStatus: "ASSESSED",
 	observedAt: daysBefore(2),
 	origin: "LIVE",
 	claimCurrentness: "CURRENT",
@@ -47,7 +48,7 @@ const run: PracticeGroupReviewRun = {
 			practiceName: "Keep linked documentation current",
 			summary: "A linked page still uses the old component name",
 			presence: "ABSENT",
-			assessment: "BAD",
+			assessment: "GOOD",
 			severity: "MINOR",
 			evidenceRationale:
 				"The page the description links still calls the component by the name this change retires.",
@@ -57,7 +58,6 @@ const run: PracticeGroupReviewRun = {
 };
 
 const meta = {
-	title: "Profile/Review runs/Review run card",
 	component: ReviewRunCard,
 	tags: ["autodocs"],
 	parameters: { layout: "padded" },
@@ -82,7 +82,7 @@ export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getAllByRole("link")).toHaveLength(1);
 		for (const { summary } of run.observations) {
-			await expect(canvas.getByRole("button", { name: new RegExp(summary) })).toHaveAttribute(
+			await expect(canvas.getByRole("button", { name: new RegExp(summary, "u") })).toHaveAttribute(
 				"aria-expanded",
 				"true",
 			);
@@ -176,21 +176,21 @@ export const OneObservation: Story = {
 	args: { run: soleRun },
 	play: async ({ canvas }) => {
 		const [, observationRow] = canvas.getAllByRole("listitem");
-		if (!observationRow) throw new Error("Expected the card's one observation row.");
+		if (!observationRow) {
+			throw new Error("Expected the card's one observation row.");
+		}
 		// The row is the first thing in the card, so no head is divided off above it.
 		const rows = observationRow.closest("ul");
 		await expect(rows?.parentElement?.firstElementChild).toBe(rows);
 
 		// The work the head used to name is inside the observation's own row, still linked.
 		const summary = canvas.getByText("The refactor and the fix arrived together");
-		const work = canvas.getByRole("link", { name: /^#902/ });
+		const work = canvas.getByRole("link", { name: /^#902/u });
 		await expect(observationRow).toContainElement(summary);
 		await expect(observationRow).toContainElement(work);
 		await expect(canvas.getByText("HephaestusTest/practice-validation")).toBeVisible();
 		// The summary is the anchor, so it comes first and the work reads as the note beneath it.
-		await expect(
-			Boolean(summary.compareDocumentPosition(work) & Node.DOCUMENT_POSITION_FOLLOWING),
-		).toBe(true);
+		await expect(summary.compareDocumentPosition(work)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 		await expect(canvas.getByText("Next step")).toBeVisible();
 	},
 };
@@ -217,7 +217,7 @@ const denseRun: PracticeGroupReviewRun = {
 			practiceName: "Cover new behavior with a test",
 			summary: "The new branch has no test exercising it",
 			presence: "ABSENT",
-			assessment: "BAD",
+			assessment: "GOOD",
 			severity: "CRITICAL",
 		},
 	],

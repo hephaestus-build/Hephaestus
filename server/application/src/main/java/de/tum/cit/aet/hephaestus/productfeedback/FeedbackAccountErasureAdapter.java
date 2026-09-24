@@ -8,13 +8,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 class FeedbackAccountErasureAdapter implements AccountErasureContributor {
-    private final SurveySubmissionRepository submissions;
+    private final SurveyParticipationRepository participations;
     private final ProductFeedbackRepository feedback;
+    private final SurveyEmailInvitationRepository emailInvitations;
 
     @Override
     @Transactional
     public void eraseAccount(long accountId) {
-        submissions.deleteAllByAccountId(accountId);
+        participations.deleteAllByAccountId(accountId);
         feedback.deleteAllByAccountId(accountId);
+        emailInvitations.deleteAllByAccountId(accountId);
+        emailInvitations.eraseRequester(accountId);
     }
 }

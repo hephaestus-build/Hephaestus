@@ -1,0 +1,365 @@
+import { act, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { HttpResponse, http } from "msw";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	listPracticeGroupReviewRunsInfiniteQueryKey,
+	listWorkspacesQueryKey,
+} from "@/api/@tanstack/react-query.gen";
+import type { PracticeGroupTrend, ProfileActivityMonitor } from "@/api/types.gen";
+import { currentUser } from "@/mocks/fixtures/auth";
+import { workspaceListItem } from "@/mocks/fixtures/workspaces";
+import { server } from "@/mocks/server";
+import { type Deferred, deferred } from "@/test/async";
+import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+
+vi.setConfig({ testTimeout: 40_000 });
+const path = "/w/acme/user/ada/practice-groups/review-ready-work";
+
+/** Answers each request with its own copy of a response the test releases later. */
+async function copyOf(held: Deferred<Response>) {
+	const response = await held.promise;
+	return response.clone();
+}
+const group = {
+	id: 1,
+	slug: "review-ready-work",
+	name: "Packaging work for review",
+	visibleInPracticeDashboards: true,
+	displayOrder: 0,
+	autonomy: { effective: "AUTOMATIC", inherited: true, source: "WORKSPACE" },
+};
+const profile = (login: string) => ({
+	userInfo: {
+		id: 1,
+		login,
+		name: `Developer ${login}`,
+		htmlUrl: `https://github.com/${login}`,
+		leaguePoints: 0,
+	},
+	contributedRepositories: [],
+	xpRecord: { currentLevel: 1, currentLevelXP: 0, totalXP: 0, xpNeeded: 150 },
+});
+
+const activityMonitor = {
+	authoredPullRequests: [],
+	repositories: [],
+	reviewActivity: [],
+	totalAuthoredPullRequestCount: 0,
+	totalReviewActivityCount: 0,
+	activityStats: {
+		numberOfApprovals: 0,
+		numberOfChangeRequests: 0,
+		numberOfClosedIssues: 0,
+		numberOfClosedPullRequests: 0,
+		numberOfCodeComments: 0,
+		numberOfComments: 0,
+		numberOfMergedPullRequests: 0,
+		numberOfOpenPullRequests: 0,
+		numberOfOpenedIssues: 0,
+		numberOfOwnReplies: 0,
+		numberOfReviewedPRs: 0,
+		numberOfUnknowns: 0,
+		score: 0,
+	},
+} satisfies ProfileActivityMonitor;
+
+let practiceReads = 0;
+beforeEach(() => {
+	practiceReads = 0;
+	server.use(
+		http.get("*/user", () => HttpResponse.json({ ...currentUser, username: "ada" })),
+		http.get("*/workspaces", () =>
+			HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]),
+		),
+		http.get("*/workspaces/:workspaceSlug", () => HttpResponse.json(workspaceListItem("acme"))),
+		http.get("*/workspaces/:workspaceSlug/members/me", () =>
+			HttpResponse.json({ role: "MEMBER", userId: 1, userLogin: "ada", userName: "Ada" }),
+		),
+		http.get("*/workspaces/:workspaceSlug/practice-groups", () => {
+			practiceReads += 1;
+			return HttpResponse.json([group]);
+		}),
+		http.get("*/workspaces/:workspaceSlug/practice-groups/standings", () => HttpResponse.json([])),
+		http.get("*/workspaces/:workspaceSlug/practices/standings", () => HttpResponse.json([])),
+		http.get("*/workspaces/:workspaceSlug/practices/reviewed", () =>
+			HttpResponse.json([
+				{ slug: "small-changes", name: "Keep changes focused", groupSlug: group.slug },
+			]),
+		),
+		http.get("*/workspaces/:workspaceSlug/practice-groups/:groupSlug/trend", () =>
+			HttpResponse.json({
+				group: {
+					scope: "GROUP",
+					slug: group.slug,
+					direction: "INSUFFICIENT_EVIDENCE",
+					opportunities: [],
+					support: {
+						bundleSize: 5,
+						credibilityThreshold: 0.95,
+						currentOpportunities: 0,
+						previousOpportunities: 0,
+						opportunitiesUntilComparable: 10,
+						ropeHalfWidth: 0.1,
+					},
+				},
+				practices: [],
+			} satisfies PracticeGroupTrend),
+		),
+		http.get("*/workspaces/:workspaceSlug/practice-groups/:groupSlug/review-runs", () =>
+			HttpResponse.json({ content: [], page: 0, hasNext: false }),
+		),
+		http.get(
+			"*/workspaces/:workspaceSlug/profile/:login",
+			() => new HttpResponse(null, { status: 404 }),
+		),
+		http.get("*/workspaces/:workspaceSlug/profile/:login/activity-monitor", () =>
+			HttpResponse.json(activityMonitor),
+		),
+	);
+});
+describe("practice-group routes", () => {
+	it("redirects a disabled workspace's bookmark without querying practices", async () => {
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([workspaceListItem("acme", { practicesEnabled: false })]),
+			),
+		);
+		const { router } = renderRouteAtWithRouter(path);
+		await waitFor(
+			() => expect(router.state.location.pathname).toBe("/w/acme/user/ada"),
+			ROUTE_RENDER_WAIT,
+		);
+		expect(practiceReads).toBe(0);
+	});
+	it("waits for features without redirecting, then loads the enabled surface", async () => {
+		const response = deferred<Response>();
+		server.use(http.get("*/workspaces", async () => copyOf(response)));
+		const { router, queryClient } = renderRouteAtWithRouter(path);
+		await waitFor(() =>
+			expect(queryClient.getQueryState(listWorkspacesQueryKey())?.fetchStatus).toBe("fetching"),
+		);
+		expect(router.state.location.pathname).toBe(path);
+		expect(practiceReads).toBe(0);
+		await act(async () => {
+			response.resolve(HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]));
+		});
+		await screen.findByRole("heading", { name: group.name }, ROUTE_RENDER_WAIT);
+		expect(practiceReads).toBeGreaterThan(0);
+	});
+	it("keeps a feature failure recoverable instead of redirecting", async () => {
+		server.use(http.get("*/workspaces", () => new HttpResponse(null, { status: 500 })));
+		const { router } = renderRouteAtWithRouter(path);
+		await vi.waitFor(() => expect(router.state.isLoading).toBe(false), ROUTE_RENDER_WAIT);
+		await screen.findByRole("button", { name: "Retry" }, ROUTE_RENDER_WAIT);
+		expect(router.state.location.pathname).toBe(path);
+		expect(practiceReads).toBe(0);
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]),
+			),
+		);
+		await userEvent.click(screen.getByRole("button", { name: /retry/iu }));
+		await screen.findByRole("heading", { name: group.name }, ROUTE_RENDER_WAIT);
+	});
+	it("filters and clears review runs without resetting scroll", async () => {
+		const { router } = renderRouteAtWithRouter(path);
+		const main = await screen.findByRole("main");
+		const filter = await within(main).findByRole(
+			"button",
+			{
+				name: "Show review runs for Keep changes focused",
+			},
+			ROUTE_RENDER_WAIT,
+		);
+		const scroll = vi.spyOn(window, "scrollTo").mockReturnValue(undefined);
+		await userEvent.click(filter);
+		await waitFor(() =>
+			expect(router.state.location.search).toMatchObject({ practice: "small-changes" }),
+		);
+		await userEvent.click(
+			screen.getByRole("button", { name: "Clear review-run filter for Keep changes focused" }),
+		);
+		await waitFor(() => expect(router.state.location.search).not.toHaveProperty("practice"));
+		expect(scroll).not.toHaveBeenCalled();
+		scroll.mockRestore();
+	});
+});
+
+it("does not label another developer's profile with the previous developer's data", async () => {
+	const pendingProfile = deferred<Response>();
+	server.use(
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+		http.get("*/workspaces/:workspaceSlug/profile/ada", () => HttpResponse.json(profile("ada"))),
+		http.get("*/workspaces/:workspaceSlug/profile/bob", async () => copyOf(pendingProfile)),
+	);
+	const { router } = renderRouteAtWithRouter("/w/acme/user/ada");
+	await screen.findByRole("heading", { name: "Developer ada" }, ROUTE_RENDER_WAIT);
+	await act(async () =>
+		router.navigate({
+			to: "/w/$workspaceSlug/user/$username",
+			params: { workspaceSlug: "acme", username: "bob" },
+		}),
+	);
+	expect(screen.queryByRole("heading", { name: "Developer ada" })).toBeNull();
+	await act(async () => {
+		pendingProfile.resolve(HttpResponse.json(profile("bob")));
+	});
+	await screen.findByRole("heading", { name: "Developer bob" }, ROUTE_RENDER_WAIT);
+});
+
+it("refreshes every cached filter of the group after responding to feedback", async () => {
+	let resolution: "ADDRESSED" | undefined;
+	server.use(
+		// The feed carries each observation in full, so the row opens with nothing more to load.
+		http.get("*/workspaces/:workspaceSlug/practice-groups/:groupSlug/review-runs", () =>
+			HttpResponse.json({
+				content: [
+					{
+						reviewId: "00000000-0000-0000-0000-000000000003",
+						reviewedAt: "2026-09-01T10:00:00Z",
+						reviewedWork: {
+							id: "1",
+							kind: "scm.pull_request",
+							label: "#1",
+							title: "A focused change",
+						},
+						observations: [
+							{
+								id: "00000000-0000-0000-0000-000000000001",
+								feedbackId: "00000000-0000-0000-0000-000000000002",
+								practiceSlug: "small-changes",
+								practiceName: "Keep changes focused",
+								summary: "Two concerns in one change",
+								assessmentStatus: "ASSESSED",
+								presence: "PRESENT",
+								assessment: "BAD",
+								claimCurrentness: "CURRENT",
+								origin: "LIVE",
+								observedAt: "2026-09-01T10:00:00Z",
+								artifactId: 1,
+								artifactKind: "scm.pull_request",
+								feedbackResolution: resolution,
+							},
+						],
+					},
+				],
+				hasNext: false,
+				page: 0,
+			}),
+		),
+		http.put("*/workspaces/:workspaceSlug/practices/feedback/:feedbackId/response", () => {
+			resolution = "ADDRESSED";
+			return HttpResponse.json({ resolution: "ADDRESSED" });
+		}),
+	);
+	const { queryClient } = renderRouteAtWithRouter(path);
+	const main = await screen.findByRole("main");
+	const addressed = await within(main).findByRole(
+		"button",
+		{ name: "Addressed" },
+		ROUTE_RENDER_WAIT,
+	);
+	const filtered = listPracticeGroupReviewRunsInfiniteQueryKey({
+		path: { workspaceSlug: "acme", groupSlug: group.slug },
+		query: { size: 10, practiceSlug: "small-changes" },
+	});
+	queryClient.setQueryData(filtered, { pages: [{ content: [], hasNext: false }], pageParams: [0] });
+	// A resolution is recorded once its comment band is sent, with or without a comment.
+	await userEvent.click(addressed);
+	await userEvent.click(within(main).getByRole("button", { name: "Send" }));
+	await waitFor(() => expect(addressed.getAttribute("aria-pressed")).toBe("true"));
+	expect(queryClient.getQueryState(filtered)?.isInvalidated).toBe(true);
+});
+
+it("restores the bookmarked custom timeframe on Back without scrolling on selection", async () => {
+	const after = "2026-06-02T00:00:00Z";
+	const before = "2026-06-07T00:00:00Z";
+	server.use(
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+		http.get("*/workspaces/:workspaceSlug/profile/ada", () => HttpResponse.json(profile("ada"))),
+	);
+	const { router } = renderRouteAtWithRouter(`/w/acme/user/ada?after=${after}&before=${before}`);
+	await screen.findByRole("heading", { name: "Developer ada" }, ROUTE_RENDER_WAIT);
+	const scroll = vi.spyOn(window, "scrollTo").mockReturnValue(undefined);
+	await userEvent.click(screen.getByRole("combobox", { name: "Timeframe" }));
+	await userEvent.click(await screen.findByRole("option", { name: "Last week" }));
+	await waitFor(() => expect(router.state.location.search.after).not.toBe(after));
+	expect(scroll).not.toHaveBeenCalled();
+	scroll.mockRestore();
+	act(() => router.history.back());
+	await waitFor(() => expect(router.state.location.search).toMatchObject({ after, before }));
+	await waitFor(() =>
+		expect(screen.getByRole("combobox", { name: "Timeframe" }).textContent).toContain(
+			"Custom range",
+		),
+	);
+	expect(screen.getByRole("button", { name: "Choose custom dates" }).textContent).toContain(
+		"Jun 2 – 6",
+	);
+	act(() => router.history.forward());
+	await waitFor(() =>
+		expect(screen.getByRole("combobox", { name: "Timeframe" }).textContent).toContain("Last week"),
+	);
+	expect(screen.queryByRole("button", { name: "Choose custom dates" })).toBeNull();
+});
+
+it.each([
+	{
+		subject: "workspace",
+		endpoint: "*/workspaces/:workspaceSlug",
+		response: workspaceListItem("acme"),
+	},
+	{
+		subject: "activity",
+		endpoint: "*/workspaces/:workspaceSlug/profile/:login/activity-monitor",
+		response: activityMonitor,
+	},
+])(
+	"retries a failed $subject query without discarding the loaded profile",
+	async ({ endpoint, response }) => {
+		server.use(
+			http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+			http.get("*/workspaces/:workspaceSlug/profile/ada", () => HttpResponse.json(profile("ada"))),
+			http.get(endpoint, () => HttpResponse.json({ status: 503 }, { status: 503 })),
+		);
+		renderRouteAtWithRouter("/w/acme/user/ada");
+		await screen.findByText("Could not load activity", {}, ROUTE_RENDER_WAIT);
+		screen.getByRole("heading", { name: "Developer ada" });
+		server.use(http.get(endpoint, () => HttpResponse.json(response)));
+		await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+		await waitFor(() => expect(screen.queryByText("Could not load activity")).toBeNull());
+		screen.getByRole("combobox", { name: "Timeframe" });
+		screen.getByRole("heading", { name: "Developer ada" });
+	},
+);
+
+it("does not present the previous timeframe's activity as the newly selected range", async () => {
+	const pendingActivity = deferred<Response>();
+	let activityReads = 0;
+	server.use(
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+		http.get("*/workspaces/:workspaceSlug/profile/ada", () => HttpResponse.json(profile("ada"))),
+		http.get("*/workspaces/:workspaceSlug/profile/:login/activity-monitor", () =>
+			HttpResponse.json(activityMonitor),
+		),
+	);
+	renderRouteAtWithRouter("/w/acme/user/ada?after=2026-06-02T00:00:00Z");
+	await screen.findByRole("heading", { name: "No review activity" }, ROUTE_RENDER_WAIT);
+	server.use(
+		http.get("*/workspaces/:workspaceSlug/profile/:login/activity-monitor", async () => {
+			activityReads += 1;
+			return copyOf(pendingActivity);
+		}),
+	);
+	await userEvent.click(screen.getByRole("combobox", { name: "Timeframe" }));
+	await userEvent.click(await screen.findByRole("option", { name: "Last week" }));
+	await waitFor(() => expect(activityReads).toBe(1));
+	expect(screen.queryByRole("heading", { name: "No review activity" })).toBeNull();
+	screen.getByRole("heading", { name: "Developer ada" });
+	screen.getByRole("combobox", { name: "Timeframe" });
+	await act(async () => {
+		pendingActivity.resolve(HttpResponse.json(activityMonitor));
+	});
+	await screen.findByRole("heading", { name: "No review activity" }, ROUTE_RENDER_WAIT);
+});

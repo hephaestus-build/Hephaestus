@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler.spi;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Domain-specific handler for a single {@link AgentJobType}.
@@ -14,6 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
  * <ol>
  *   <li>{@link #createSubmission} — event listener extracts metadata + idempotency key</li>
  *   <li>{@link #prepareInputs} — populate workspace files (including {@code task.json}) before container start</li>
+ *   <li>{@link #prepareObservations} — verify what the run submits, while it waits for the answer</li>
  *   <li>{@link #deliver} — post-execution result delivery</li>
  * </ol>
  */
@@ -45,6 +47,19 @@ public interface JobTypeHandler {
      * @throws JobPreparationException if context preparation fails
      */
     PreparedJobInputs prepareInputs(AgentJob job);
+
+    /**
+     * Verify the observations a run submitted against the evidence captured for {@code job}, and hand
+     * back what to record once the admission fence confirms the attempt still owns the job.
+     *
+     * <p>Runs outside any transaction and may take as long as verifying the citations needs; the
+     * admission service lets one preparation run per attempt at a time.
+     *
+     * @param observations the submitted observations array, unvalidated
+     * @throws ObservationsRefusedException when the submission does not support a claim about the work
+     * @throws JobDeliveryException when the submission is inadmissible for a reason that will not change
+     */
+    PreparedObservations prepareObservations(AgentJob job, JsonNode observations);
 
     /**
      * Deliver results after successful execution.

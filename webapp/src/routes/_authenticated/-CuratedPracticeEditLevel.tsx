@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -8,6 +8,9 @@ import {
 	adminGetCuratedCatalogQueryKey,
 	adminGetCuratedPracticeOptions,
 	adminGetCuratedPracticeQueryKey,
+	adminGetPracticeReleaseOptions,
+	adminAcceptPracticeReleaseMutation,
+	adminDeclinePracticeReleaseMutation,
 	adminGetPracticeDefinitionOptionsOptions,
 	adminKeepCuratedPracticeMutation,
 	adminUpdateCuratedPracticeMutation,
@@ -18,11 +21,13 @@ import {
 	CuratedPracticeForm,
 	type CuratedPracticeFormValue,
 } from "@/components/admin/curated-catalog/CuratedPracticeForm";
-import { soleBinding } from "@/components/admin/practice-catalog/bindings";
+import { soleBinding } from "@/components/admin/practice-editor/bindings";
+import { PracticeReleaseReview } from "@/components/admin/practices/PracticeReleaseReview";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { DrawerBody } from "@/components/ui/drawer";
+import { Spinner } from "@/components/ui/spinner";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 
 export interface CuratedPracticeEditLevelProps {
@@ -42,34 +47,43 @@ export function CuratedPracticeEditLevel({
 	const catalogQuery = useQuery({ ...adminGetCuratedCatalogOptions() });
 	const definitionOptionsQuery = useQuery({ ...adminGetPracticeDefinitionOptionsOptions() });
 
+	let body: ReactNode;
+	if (practiceQuery.isPending || catalogQuery.isPending || definitionOptionsQuery.isPending) {
+		body = (
+			<DrawerBody>
+				<PracticeDefinitionSkeleton />
+			</DrawerBody>
+		);
+	} else if (practiceQuery.isError || catalogQuery.isError || definitionOptionsQuery.isError) {
+		body = (
+			<DrawerBody>
+				<QueryErrorAlert
+					error={practiceQuery.error ?? catalogQuery.error ?? definitionOptionsQuery.error}
+					title="Couldn't load the practice"
+					onRetry={() => {
+						void practiceQuery.refetch();
+						void catalogQuery.refetch();
+						void definitionOptionsQuery.refetch();
+					}}
+				/>
+			</DrawerBody>
+		);
+	} else {
+		body = (
+			<LoadedCuratedPracticeEditor
+				key={practiceSlug}
+				practiceSlug={practiceSlug}
+				initialPractice={practiceQuery.data}
+				groups={catalogQuery.data.groups}
+				definitionOptions={definitionOptionsQuery.data}
+				onDone={onDone}
+			/>
+		);
+	}
+
 	return (
 		<CuratedFormLevel kind="practice-edit" nested={nested}>
-			{practiceQuery.isPending || catalogQuery.isPending || definitionOptionsQuery.isPending ? (
-				<DrawerBody>
-					<PracticeDefinitionSkeleton />
-				</DrawerBody>
-			) : practiceQuery.isError || catalogQuery.isError || definitionOptionsQuery.isError ? (
-				<DrawerBody>
-					<QueryErrorAlert
-						error={practiceQuery.error ?? catalogQuery.error ?? definitionOptionsQuery.error}
-						title="Couldn't load the practice"
-						onRetry={() => {
-							void practiceQuery.refetch();
-							void catalogQuery.refetch();
-							void definitionOptionsQuery.refetch();
-						}}
-					/>
-				</DrawerBody>
-			) : (
-				<LoadedCuratedPracticeEditor
-					key={practiceSlug}
-					practiceSlug={practiceSlug}
-					initialPractice={practiceQuery.data}
-					groups={catalogQuery.data.groups}
-					definitionOptions={definitionOptionsQuery.data}
-					onDone={onDone}
-				/>
-			)}
+			{body}
 		</CuratedFormLevel>
 	);
 }
@@ -95,6 +109,45 @@ function LoadedCuratedPracticeEditor({
 	const [formGeneration, setFormGeneration] = useState(0);
 	const detailOptions = adminGetCuratedPracticeOptions({ path: { slug: practiceSlug } });
 	const detailQueryKey = adminGetCuratedPracticeQueryKey({ path: { slug: practiceSlug } });
+	const releaseQuery = useQuery({
+		...adminGetPracticeReleaseOptions({ path: { slug: practiceSlug } }),
+		enabled: basePractice.status.state === "UPDATE_WAITING",
+	});
+	const acceptRelease = useMutation({
+		...adminAcceptPracticeReleaseMutation(),
+		onSuccess: (updated) => {
+			queryClient.setQueryData(detailQueryKey, updated);
+			void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
+			setBasePractice(updated);
+			setFormGeneration((generation) => generation + 1);
+			toast.success("Selected practice changes accepted");
+		},
+		onError: (error) => {
+			if (problemStatusOf(error) === 412) {
+				void continueWithDraft();
+				void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
+				void releaseQuery.refetch();
+			}
+			toast.error("Couldn't accept the update", { description: problemDetailOf(error) });
+		},
+	});
+	const declineRelease = useMutation({
+		...adminDeclinePracticeReleaseMutation(),
+		onSuccess: (updated) => {
+			queryClient.setQueryData(detailQueryKey, updated);
+			void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
+			setBasePractice(updated);
+			toast.success("This update was declined");
+		},
+		onError: (error) => {
+			if (problemStatusOf(error) === 412) {
+				void continueWithDraft();
+				void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
+				void releaseQuery.refetch();
+			}
+			toast.error("Couldn't decline the update", { description: problemDetailOf(error) });
+		},
+	});
 	const updatePractice = useMutation({
 		...adminUpdateCuratedPracticeMutation(),
 		onSuccess: (updated) => {
@@ -177,6 +230,46 @@ function LoadedCuratedPracticeEditor({
 			toast.error("Couldn't refresh the latest version", { description: problemDetailOf(error) });
 		}
 	};
+	let releaseReview: ReactNode;
+	if (releaseQuery.isPending) {
+		releaseReview = (
+			<div className="flex items-center gap-2 text-sm text-muted-foreground">
+				<Spinner /> Loading update…
+			</div>
+		);
+	} else if (releaseQuery.isError) {
+		releaseReview = (
+			<QueryErrorAlert
+				error={releaseQuery.error}
+				title="Couldn't load the update"
+				onRetry={() => {
+					void releaseQuery.refetch();
+				}}
+			/>
+		);
+	} else {
+		const release = releaseQuery.data;
+		releaseReview = (
+			<PracticeReleaseReview
+				key={release.etag}
+				proposal={release}
+				pending={acceptRelease.isPending || declineRelease.isPending}
+				onAccept={(choices) =>
+					acceptRelease.mutate({
+						path: { slug: practiceSlug },
+						headers: { "If-Match": `"${release.etag}"` },
+						body: { choices },
+					})
+				}
+				onDecline={() =>
+					declineRelease.mutate({
+						path: { slug: practiceSlug },
+						headers: { "If-Match": `"${release.etag}"` },
+					})
+				}
+			/>
+		);
+	}
 
 	return (
 		<CuratedPracticeForm
@@ -191,6 +284,7 @@ function LoadedCuratedPracticeEditor({
 				whyItMatters: basePractice.definition.whyItMatters ?? undefined,
 				whatGoodLooksLike: basePractice.definition.whatGoodLooksLike ?? undefined,
 				groupSlug: basePractice.definition.groupSlug ?? undefined,
+				deliveryBehavior: basePractice.definition.deliveryBehavior,
 				status: basePractice.status,
 				shipped: basePractice.shipped,
 			}}
@@ -199,8 +293,11 @@ function LoadedCuratedPracticeEditor({
 			isPending={updatePractice.isPending}
 			isResetPending={deleteOverride.isPending}
 			isKeepPending={keepCurrentDefinition.isPending}
+			releaseReview={releaseReview}
 			conflict={conflict}
-			onContinueWithDraft={() => void continueWithDraft()}
+			onContinueWithDraft={() => {
+				void continueWithDraft();
+			}}
 			onUseHephaestusVersion={() => {
 				setConflict(false);
 				deleteOverride.mutate({

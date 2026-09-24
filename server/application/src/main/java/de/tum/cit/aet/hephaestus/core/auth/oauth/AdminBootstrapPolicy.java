@@ -56,7 +56,7 @@ public class AdminBootstrapPolicy {
         parse(properties.bootstrapAdmins(), subjects, usernames);
         this.subjectKeys = Set.copyOf(subjects);
         this.usernameKeys = Set.copyOf(usernames);
-        if (isConfigured()) {
+        if (!subjects.isEmpty() || !usernames.isEmpty()) {
             log.info(
                     "auth.bootstrap: instance-admin allowlist configured ({} by-username, {} by-subject)",
                     usernameKeys.size(),

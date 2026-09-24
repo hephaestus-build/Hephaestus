@@ -23,32 +23,8 @@ public interface SlackParticipantConsentRepository
     boolean existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(Long workspaceId, String slackUserId);
 
     /**
-     * Idempotent upsert of a person's consent decision, keyed by {@code (workspace_id, slack_user_id)}. Creates the
-     * row on first decision and, on the composite-key conflict, overwrites the two consent bits, the source, and
-     * {@code decided_at}. Native because the composite {@code ON CONFLICT} target has no Spring Data derived form.
-     */
-    @Modifying
-    @Transactional
-    @Query(value = """
-        INSERT INTO slack_participant_consent (workspace_id, slack_user_id, ingestion_opted_out, research_opted_out, source, decided_at)
-        VALUES (:workspaceId, :slackUserId, :ingestionOptedOut, :researchOptedOut, :source, now())
-        ON CONFLICT (workspace_id, slack_user_id) DO UPDATE SET
-            ingestion_opted_out = EXCLUDED.ingestion_opted_out,
-            research_opted_out = EXCLUDED.research_opted_out,
-            source = EXCLUDED.source,
-            decided_at = now()
-        """, nativeQuery = true)
-    void upsert(
-            @Param("workspaceId") long workspaceId,
-            @Param("slackUserId") String slackUserId,
-            @Param("ingestionOptedOut") boolean ingestionOptedOut,
-            @Param("researchOptedOut") boolean researchOptedOut,
-            @Param("source") @Nullable String source);
-
-    /**
-     * Idempotently records a channel-message ingestion opt-out without silently changing the research bit. New rows
-     * default {@code research_opted_out} to {@code false}; existing rows keep whatever research decision was already
-     * recorded elsewhere.
+     * Idempotently records channel-message ingestion opt-out while preserving the historical research column.
+     * Research eligibility is determined by the native-account consent ledger, not this row.
      */
     @Modifying
     @Transactional
@@ -78,22 +54,6 @@ public interface SlackParticipantConsentRepository
     void optInToIngestion(
             @Param("workspaceId") long workspaceId,
             @Param("slackUserId") String slackUserId,
-            @Param("source") @Nullable String source);
-
-    @Modifying
-    @Transactional
-    @Query(value = """
-        INSERT INTO slack_participant_consent (workspace_id, slack_user_id, ingestion_opted_out, research_opted_out, source, decided_at)
-        VALUES (:workspaceId, :slackUserId, false, :researchOptedOut, :source, now())
-        ON CONFLICT (workspace_id, slack_user_id) DO UPDATE SET
-            research_opted_out = EXCLUDED.research_opted_out,
-            source = EXCLUDED.source,
-            decided_at = now()
-        """, nativeQuery = true)
-    void setResearchOptOut(
-            @Param("workspaceId") long workspaceId,
-            @Param("slackUserId") String slackUserId,
-            @Param("researchOptedOut") boolean researchOptedOut,
             @Param("source") @Nullable String source);
 
     /**

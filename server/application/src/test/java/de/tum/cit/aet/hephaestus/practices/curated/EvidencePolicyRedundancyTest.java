@@ -63,15 +63,10 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
      * with "nobody raised it" and "the raising was in the part we did not fetch", so the whole capture is
      * what makes the gap assertable at all.
      *
-     * <p>The eight defect detectors are here for the mirror-image reason: to assert a <em>clean</em> result.
-     * Their target signal is the undesirable behaviour, so their strength has the shape "the defect could have
-     * appeared in this change and did not" — a universal over the corpus, admissible only where the corpus is
-     * closed and was covered whole. Each was already scoped to the added and changed lines of the diff, and
-     * {@code scm.pull-request.diff} is a source the contract can only report {@code COMPLETE} (it does not
-     * support {@code PARTIAL}) and already demands {@code COMPLETE_AND_NON_EMPTY}, so holding it
-     * {@code EXHAUSTIVE} costs no readiness and buys the verdict. Without it these practices had to answer a
-     * clean surface with {@code NOT_APPLICABLE} — "this work had no subject for this practice" — which is
-     * false of a change they read, and which reads to a developer as "you touched nothing relevant".
+     * <p>The changed-code practices can also assert bounded absence of an undesirable behaviour.
+     * The diff contract demands complete capture, including a verified empty range. Exhaustive coverage
+     * does not establish an occasion: each practice must still establish its subject before assessing
+     * an absence, and must not turn an empty change into automatic praise.
      */
     @Test
     void onlyThePracticesThatAssertAnAbsenceDemandAWholeCapture() {
@@ -93,7 +88,10 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
                         "engaging-with-inline-review-comments",
                         "issue-closed-with-unmet-outcome",
                         "ready-and-traceable-handoff",
-                        // Clean-shaped absences over the diff: the eight defect detectors.
+                        // Positive absence claims over the complete changed-file diff.
+                        "keeps-the-test-suite-honest",
+                        "change-keeps-linked-docs-consistent",
+                        "excludes-generated-and-build-artifacts",
                         "removes-duplication-instead-of-copy-pasting",
                         "keeps-functions-small-and-single-purpose",
                         "leaves-the-code-clean-with-intent-revealing-comments",
@@ -101,7 +99,8 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
                         "validates-inputs-and-edge-cases-at-the-boundary",
                         "avoids-unsafe-panics-and-chosen-crashes",
                         "validates-and-escapes-untrusted-input",
-                        "avoids-insecure-defaults-and-over-broad-permissions");
+                        "avoids-insecure-defaults-and-over-broad-permissions",
+                        "keeps-views-free-of-networking-and-persistence");
         assertThat(exhaustive.get("merged-past-unresolved-review-threads"))
                 .containsExactly(new SourceKind("scm.review-threads"));
         assertThat(exhaustive.get("issue-closed-with-unmet-outcome"))
@@ -111,6 +110,8 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
         assertThat(exhaustive.get("handles-errors-instead-of-swallowing-them"))
                 .containsExactly(new SourceKind("scm.pull-request.diff"));
         assertThat(exhaustive.get("validates-and-escapes-untrusted-input"))
+                .containsExactly(new SourceKind("scm.pull-request.diff"));
+        assertThat(exhaustive.get("keeps-views-free-of-networking-and-persistence"))
                 .containsExactly(new SourceKind("scm.pull-request.diff"));
     }
 }

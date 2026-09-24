@@ -96,7 +96,12 @@ public class SyncEventHub {
         this.eventsDelivered = counter(meterRegistry, IntegrationCoreMetrics.INTEGRATION_SYNC_SSE_EVENTS, "delivered");
         this.eventsDropped = counter(meterRegistry, IntegrationCoreMetrics.INTEGRATION_SYNC_SSE_EVENTS, "dropped");
         this.eventsFailed = counter(meterRegistry, IntegrationCoreMetrics.INTEGRATION_SYNC_SSE_EVENTS, "error");
-        Gauge.builder(IntegrationCoreMetrics.INTEGRATION_SYNC_SSE_SUBSCRIBERS, this, SyncEventHub::totalSubscriberCount)
+        Gauge.builder(
+                        IntegrationCoreMetrics.INTEGRATION_SYNC_SSE_SUBSCRIBERS,
+                        subscribersByWorkspace,
+                        subscribers -> subscribers.values().stream()
+                                .mapToInt(Set::size)
+                                .sum())
                 .description("Currently active sync-observability SSE subscribers on this server replica")
                 .register(meterRegistry);
     }
@@ -330,10 +335,6 @@ public class SyncEventHub {
     int subscriberCount(long workspaceId) {
         Set<Subscriber> subscribers = subscribersByWorkspace.get(workspaceId);
         return subscribers == null ? 0 : subscribers.size();
-    }
-
-    private double totalSubscriberCount() {
-        return subscribersByWorkspace.values().stream().mapToInt(Set::size).sum();
     }
 
     private static Counter counter(MeterRegistry meterRegistry, String name, String outcome) {

@@ -26,16 +26,29 @@ import {
 const exportPolls = new Map<string, number>();
 
 /** Body of `PATCH /admin/users/:id` — the only field the admin table sends. */
-type AdminUserPatch = { appRole?: string };
+interface AdminUserPatch {
+	appRole?: string;
+}
 
 export const handlers = [
 	// --- current user -------------------------------------------------------
 	http.get("*/user", () => HttpResponse.json(currentUser)),
+	http.get("*/user/notification-preferences", () =>
+		HttpResponse.json({
+			productFeedback: false,
+			workspaceAlerts: false,
+			surveySummaries: false,
+			productSurveys: false,
+			researchSurveys: false,
+			emailAvailable: true,
+			deliveryConfigured: true,
+			etag: '"0-0-0"',
+		}),
+	),
 	http.get("*/user/consent", () =>
 		HttpResponse.json({
 			completed: true,
-			noticeText: "Current transparency notice",
-			noticeVersion: "2026-08-30",
+			noticeVersion: "2026-09-11",
 			participateInResearch: false,
 		}),
 	),
@@ -48,6 +61,8 @@ export const handlers = [
 			: new HttpResponse(null, { status: 400 }),
 	),
 
+	// --- product feedback --------------------------------------------------
+	http.get("*/workspaces/:workspaceSlug/product-feedback/surveys", () => HttpResponse.json([])),
 	// --- identity providers + linked identities -----------------------------
 	http.get("*/identity-providers", () => HttpResponse.json(identityProviders)),
 	http.get("*/user/identities", () => HttpResponse.json(linkedIdentities)),
@@ -84,14 +99,11 @@ export const handlers = [
 		// Any id echoes a user back, so a story can PATCH a row the fixture list does not carry.
 		const [fallback] = adminUsers;
 		const existing = adminUsers.find((u) => String(u.id) === String(params.id)) ?? fallback;
-		if (!existing) return new HttpResponse(null, { status: 404 });
+		if (!existing) {
+			return new HttpResponse(null, { status: 404 });
+		}
 		return HttpResponse.json({ ...existing, appRole: body.appRole ?? existing.appRole });
 	}),
-
-	// --- impersonation -------------------------------------------------------
-	http.post("*/auth/impersonate", () => new HttpResponse(null, { status: 204 })),
-	// `:exit` is a literal colon-suffix on the path, not an MSW path param.
-	http.post("*/auth/impersonate\\:exit", () => new HttpResponse(null, { status: 204 })),
 ];
 
 // ---------------------------------------------------------------------------
@@ -104,17 +116,6 @@ export const handlers = [
 export const unauthenticatedUser = http.get(
 	"*/user",
 	() => new HttpResponse(null, { status: 401 }),
-);
-
-/** `GET /user` reports the operator is currently impersonating another account. */
-export const impersonatingUser = http.get("*/user", () =>
-	HttpResponse.json({
-		...currentUser,
-		impersonating: true,
-		impersonatorId: 1,
-		displayName: "Ada Lovelace",
-		username: "ada",
-	}),
 );
 
 /** `GET /user/sessions` -> 500, for the sessions error state. */

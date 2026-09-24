@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDefinitionOptionsDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeEvidenceSourceOptionDTO;
@@ -52,6 +53,12 @@ class PracticeDefinitionOptionsServiceTest {
                     assertThat(option.displayName()).isEqualTo("Closed without merging");
                     assertThat(option.recommended()).isFalse();
                 });
+        assertThat(pullRequests.subjectRoles())
+                .containsExactly(ActorRole.AUTHOR, ActorRole.ASSIGNEE, ActorRole.REVIEWER, ActorRole.MERGER);
+        assertThat(workType(result, ArtifactKinds.ISSUE).subjectRoles())
+                .containsExactly(ActorRole.AUTHOR, ActorRole.ASSIGNEE);
+        assertThat(workType(result, ArtifactKinds.CONVERSATION_THREAD).subjectRoles())
+                .containsExactly(ActorRole.AUTHOR);
         assertThat(pullRequests.supportedAutomatedReviewModes())
                 .containsExactly(PracticeAutomatedReviewMode.LANGUAGE_MODEL);
         assertThat(pullRequests.recommendedNeeds())

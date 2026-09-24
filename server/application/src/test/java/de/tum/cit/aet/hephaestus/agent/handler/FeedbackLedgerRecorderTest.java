@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -341,8 +342,9 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         List.of(new PracticeDetectionResultParser.ValidatedObservation(
                                 "practice",
                                 "summary",
+                                AssessmentStatus.ASSESSED,
                                 Presence.ABSENT,
-                                Assessment.BAD,
+                                Assessment.GOOD,
                                 Severity.MAJOR,
                                 null,
                                 "reasoning",
@@ -352,6 +354,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         verify(feedbackRepository).save(saved.capture());
         assertThat(saved.getValue().getThreadKey()).isNotBlank();
         assertThat(saved.getValue().getReviewedRevision()).isEqualTo("abc123");
+        assertThat(saved.getValue().getDeliveryState()).isEqualTo(FeedbackDeliveryState.AWAITING_APPROVAL);
+        verify(eventPublisher)
+                .publishEvent(new de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent(
+                        job.getId(), job.getWorkspace().getId()));
         assertThat(saved.getValue().getProposedPracticeSlugs()).containsExactly("practice");
         assertThat(saved.getValue().getProposedPlacements())
                 .extracting(placement -> placement.type().name())
@@ -710,18 +716,20 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     void shouldRecordOnlyLandedPlacementAndFindingWhenInlineDeliveryIsPartiallySuppressed() {
         Observation landed = problem();
         Observation suppressed = problem();
-        when(landed.getRecurrenceKey()).thenReturn("key-1");
-        when(suppressed.getRecurrenceKey()).thenReturn("key-2");
+        when(landed.getOccurrenceKey()).thenReturn("key-1");
+        lenient().when(landed.getRecurrenceKey()).thenReturn("shared-location");
+        when(suppressed.getOccurrenceKey()).thenReturn("key-2");
+        lenient().when(suppressed.getRecurrenceKey()).thenReturn("shared-location");
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(landed, suppressed));
         DeliveryContent delivery = new DeliveryContent(
                 "summary",
                 List.of(
-                        new DiffNote("src/Foo.java", 10, null, "landed", "key-1"),
-                        new DiffNote("src/Bar.java", 20, null, "suppressed", "key-2")),
+                        new DiffNote("src/Foo.java", 10, null, "landed", "observation:key-1"),
+                        new DiffNote("src/Foo.java", 10, null, "suppressed", "observation:key-2")),
                 List.of());
         InlineFeedbackChannel.DeliveredSignal signal = new InlineFeedbackChannel.DeliveredSignal(
-                "key-1",
+                "observation:key-1",
                 new FeedbackAnchor.DiffAnchor("src/Foo.java", 10, null),
                 InlineFeedbackChannel.Disposition.POSTED,
                 "note-1",
@@ -731,7 +739,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
         recorder.record(job, delivery, ArtifactKinds.PULL_REQUEST, List.of(signal), null, true);
         recorder.recordSuppressedRemainder(
-                job, delivery, FeedbackSuppressionReason.INSTANCE_SILENCED, List.of("key-2"));
+                job, delivery, FeedbackSuppressionReason.INSTANCE_SILENCED, List.of("observation:key-2"));
 
         ArgumentCaptor<FeedbackPlacement> placement = ArgumentCaptor.forClass(FeedbackPlacement.class);
         verify(feedbackPlacementRepository).save(placement.capture());
@@ -819,8 +827,13 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
     private Observation strength() {
         Observation pf = mock(Observation.class);
+        lenient()
+                .when(pf.getOutcome())
+                .thenAnswer(invocation ->
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(pf.getPresence(), pf.getAssessment()));
         lenient().when(pf.getId()).thenReturn(UUID.randomUUID());
         lenient().when(pf.getPresence()).thenReturn(Presence.PRESENT);
+        org.mockito.Mockito.lenient().when(pf.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
         lenient().when(pf.getAssessment()).thenReturn(Assessment.GOOD);
         lenient().when(pf.getSeverity()).thenReturn(null); // GOOD strengths carry no severity (ADR 0022)
         lenient().when(pf.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
@@ -831,8 +844,12 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
     private Observation notApplicable() {
         Observation pf = mock(Observation.class);
+        lenient()
+                .when(pf.getOutcome())
+                .thenAnswer(invocation ->
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(pf.getPresence(), pf.getAssessment()));
         lenient().when(pf.getId()).thenReturn(UUID.randomUUID());
-        lenient().when(pf.getPresence()).thenReturn(Presence.NOT_APPLICABLE);
+        lenient().when(pf.getAssessmentStatus()).thenReturn(AssessmentStatus.NOT_APPLICABLE);
         lenient().when(pf.getAssessment()).thenReturn(null); // NA carries no valence (ADR 0022)
         lenient().when(pf.getSeverity()).thenReturn(null);
         lenient().when(pf.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
@@ -843,11 +860,16 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
     private Observation problem() {
         Observation pf = mock(Observation.class);
+        lenient()
+                .when(pf.getOutcome())
+                .thenAnswer(invocation ->
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(pf.getPresence(), pf.getAssessment()));
         UUID id = UUID.randomUUID();
         lenient().when(pf.getId()).thenReturn(id);
         lenient().when(pf.getOccurrenceKey()).thenReturn("occ-" + id);
         lenient().when(pf.getPresence()).thenReturn(Presence.ABSENT);
-        lenient().when(pf.getAssessment()).thenReturn(Assessment.BAD);
+        org.mockito.Mockito.lenient().when(pf.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
+        lenient().when(pf.getAssessment()).thenReturn(Assessment.GOOD);
         lenient().when(pf.getSeverity()).thenReturn(Severity.MINOR);
         lenient().when(pf.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
         lenient().when(pf.getArtifactId()).thenReturn(100L);

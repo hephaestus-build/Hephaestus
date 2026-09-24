@@ -1,10 +1,10 @@
 BEGIN;
 
 INSERT INTO workspace (id, account_login, account_type, created_at, display_name, is_publicly_viewable, slug, status,
-  practices_enabled, achievements_enabled, leaderboard_enabled, progression_enabled, leagues_enabled,
+  practices_enabled, leaderboard_enabled, progression_enabled, leagues_enabled,
   practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled, mentor_enabled)
 VALUES (1, 'hephaestustest', 'ORG', now(), 'E2E Practice Review', false, 'e2e', 'ACTIVE',
-  true, false, false, false, false, true, true, true)
+  true, false, false, false, true, true, true)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO llm_connection (id, slug, display_name, base_url, api_protocol, auth_mode, enabled, created_at)

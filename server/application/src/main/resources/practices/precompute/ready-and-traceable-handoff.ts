@@ -1,85 +1,55 @@
-// Precompute HINTS for ready-and-traceable-handoff: (1) traceability references to a motivating issue
-// (closing OR non-closing — traceability does not require a closing keyword), and (2) the repo-wide
-// test-absence negative (expensive for a model to prove). FACTS only — the LLM judges readiness.
-import { findFiles } from "../lib/grep.ts";
+// Precompute traceability hints; the model judges readiness from the captured handoff.
+import { readCommits } from "../lib/change.ts";
+import { branchIssueReferences, issueNumberReferences } from "../lib/references.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
-const isTest = (p: string) =>
-	/(^|\/)(tests?|specs?|__tests__)(\/)|[._-](test|tests|spec|specs)\.[a-z]+$|Tests?\.[a-z0-9]+$|Spec\.[a-z0-9]+$/i.test(
-		p,
-	);
-
-/** Bare `#N` mention (group 1 = number), rejecting `#1a2b` colours / `#1.2` versions / `#42px` units. */
-const BARE_REF = /#(\d+)(?![\w.])/g;
-/** Issue id at the start of a branch-slug segment, e.g. `1313-foo` or `feat/1313-foo`. */
-const BRANCH_REF = /(?:^|\/)(\d{1,7})-/g;
-
-export default function readyAndTraceableHandoff(
-	repoPath: string,
+export default async function readyAndTraceableHandoff(
+	_repoPath: string,
 	_d: Map<string, DiffFile>,
 	m: PullRequestMetadata,
+	contextDir?: string,
 ) {
 	const directions: string[] = [];
 
 	// --- Traceability: does the handoff reference a motivating issue at all? ---
-	const body = `${m.body ?? ""}\n${(m.commits ?? []).map((c) => c.message ?? "").join("\n")}`;
+	const commits = await readCommits(contextDir);
+	const body = `${m.body ?? ""}\n${commits.map((c) => c.message).join("\n")}`;
 	const branch = m.source_branch;
-	const bodyRefs = new Set<string>();
-	for (const mt of body.matchAll(BARE_REF)) bodyRefs.add(`#${mt[1]}`);
-	const branchRefs = new Set<string>();
-	for (const mt of branch.matchAll(BRANCH_REF)) branchRefs.add(`#${mt[1]}`);
+	const bodyRefs = new Set(issueNumberReferences(body).map((n) => `#${n}`));
+	const branchRefs = new Set(branchIssueReferences(branch).map((n) => `#${n}`));
 	const allRefs = new Set<string>([...bodyRefs, ...branchRefs]);
 	if (allRefs.size > 0) {
 		directions.push(
-			`Traceability fact: a motivating-issue reference IS present — ${[...allRefs].join(", ")}${branchRefs.size ? ` (branch '${branch}' encodes ${[...branchRefs].join(", ")})` : ""}. Traceability does NOT require a closing keyword: 'Refs #N', a bare '#N', or an issue-number branch prefix all establish the link, so do not read a closingRefCount of 0 as "untraceable".`,
+			`Issue-mention syntax candidates: ${[...allRefs].join(", ")}${branchRefs.size > 0 ? ` (branch '${branch}' encodes ${[...branchRefs].join(", ")})` : ""}. Inspect each mention in context before treating it as the author's motivating issue: templates, examples and branch numbers may be unrelated. A genuine reference need not contain a closing keyword.`,
 		);
 	} else {
 		directions.push(
-			`Traceability fact: no issue reference (#N, 'Refs #N', closing keyword, or issue-number branch prefix) was found in the body, commits, or branch '${branch}' — confirm in the body before concluding the handoff is untraceable.`,
+			`Traceability fact: no issue reference (#N, 'Refs #N', closing keyword, or issue-number branch prefix) was found in the body, the ${commits.length} commit message(s), or branch '${branch}' — confirm in the body before concluding the handoff is untraceable.`,
 		);
 	}
 
-	// --- Test-absence negative (worktree-reliability guarded) ---
-	let repoTestFileCount = 0;
-	let repoCodeFileCount = 0;
-	for (const ext of [
-		"swift",
-		"ts",
-		"tsx",
-		"js",
-		"jsx",
-		"py",
-		"java",
-		"kt",
-		"go",
-		"rb",
-		"cs",
-		"cpp",
-		"cc",
-		"cxx",
-		"c",
-		"m",
-		"mm",
-		"h",
-		"hpp",
-	]) {
-		const all = findFiles(repoPath, ext);
-		repoCodeFileCount += all.length;
-		repoTestFileCount += all.filter(isTest).length;
-	}
-	const worktreeVisible = repoCodeFileCount > 0;
-	if (worktreeVisible && repoTestFileCount === 0) {
+	// --- Readiness: the checklist as written, counted, so a tick is never guessed at. ---
+	const description = m.body ?? "";
+	const ticked = (description.match(/^\s*[-*]\s*\[[xX]\]/gmu) ?? []).length;
+	const unticked = (description.match(/^\s*[-*]\s*\[ \]/gmu) ?? []).length;
+	const draftMarker = /\b(?:wip|do not merge|draft)\b/iu.test(m.title ?? "");
+	if (ticked + unticked > 0) {
 		directions.push(
-			"The repository contains NO test files anywhere (worktree was readable). If the PR's Definition-of-Done checklist ticks an item asserting tests pass / are added, that tick is a vacuous done-claim — there is nothing to verify it against.",
+			`Checklist fact: the description carries ${ticked} ticked and ${unticked} unticked checkbox line(s)${draftMarker ? "; the title carries a draft-style word" : ""}. Read the lines in description.md to tell a real Definition of Done from a template that was left in place.`,
+		);
+	} else if (draftMarker) {
+		directions.push(
+			"Readiness fact: the title carries a draft-style word; check the draft flag in metadata.json.",
 		);
 	}
 
 	return {
 		hints: [],
 		metrics: {
-			traceabilityRefCount: allRefs.size,
-			repoTestFileCount,
-			worktreeVisible: worktreeVisible ? 1 : 0,
+			issueMentionSyntaxCandidateCount: allRefs.size,
+			commitCount: commits.length,
+			checklistTicked: ticked,
+			checklistUnticked: unticked,
 		},
 		directions,
 	};

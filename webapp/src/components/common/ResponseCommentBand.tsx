@@ -1,13 +1,13 @@
 import { type ComponentProps, useId, useState } from "react";
 
+import { cn } from "cn";
 import { PrimaryButton } from "@/components/common/PrimaryButton";
-import type { BadgeVariant } from "@/components/practice-vocabulary/status-def";
+import type { BadgeVariant } from "@/components/common/status-def";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { cn } from "@/lib/utils";
 
 /** `FeedbackResponseRequestDTO.comment` caps the comment; a dispute has to carry one. */
 const FEEDBACK_COMMENT_MAX_LENGTH = 2000;
@@ -22,13 +22,18 @@ export type ResponseTone = "positive" | "negative" | "neutral";
  */
 export function toneOf(variant: BadgeVariant): ResponseTone {
 	switch (variant) {
-		case "success":
+		case "success": {
 			return "positive";
+		}
 		case "destructive":
-		case "warning":
+		case "warning": {
 			return "negative";
-		default:
+		}
+		case "default":
+		case "outline":
+		case "secondary": {
 			return "neutral";
+		}
 	}
 }
 
@@ -87,7 +92,7 @@ export interface ResponseCommentBandProps<TReason extends string = string> {
 	/** A required sentence: Send does nothing until one is typed, and the field says so. */
 	required?: boolean;
 	/** One-of chips above the field; the chosen one travels with the comment. */
-	reasons?: ReadonlyArray<ResponseReason<TReason>>;
+	reasons?: readonly ResponseReason<TReason>[];
 	isPending?: boolean;
 	onSend?: (comment: ResponseComment<TReason>) => void;
 	onSkip?: () => void;
@@ -131,7 +136,7 @@ export function ResponseCommentBand<TReason extends string = string>({
 					variant="outline"
 					size="sm"
 					spacing={2}
-					value={reason ? [reason] : []}
+					value={reason === undefined ? [] : [reason]}
 					onValueChange={(next) => setReason(next[0])}
 					className="flex-wrap"
 				>
@@ -139,7 +144,7 @@ export function ResponseCommentBand<TReason extends string = string>({
 						<ToggleGroupItem
 							key={candidate.value}
 							value={candidate.value}
-							className="min-w-0 rounded-full bg-background px-2.5"
+							className="min-w-0 bg-background"
 						>
 							{candidate.label}
 						</ToggleGroupItem>
@@ -157,7 +162,6 @@ export function ResponseCommentBand<TReason extends string = string>({
 				maxLength={FEEDBACK_COMMENT_MAX_LENGTH}
 				placeholder={placeholder}
 				autoComplete="off"
-				className="bg-background"
 			/>
 			<div className="flex flex-wrap items-center justify-end gap-2">
 				<Button

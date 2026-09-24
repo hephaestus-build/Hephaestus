@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, it } from "node:test";
+
+import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
+import { isMap, isSeq, parseDocument } from "yaml";
 
 import {
 	assess,
@@ -9,6 +13,7 @@ import {
 	finalize,
 	inactivate,
 	PREVIEW_LABEL,
+	progress,
 	recheck,
 	type GitHubApi,
 	resolve,
@@ -45,55 +50,119 @@ const makeCore = () => {
 };
 
 const makeContext = () => ({
+	serverUrl: "https://github.com",
 	repo: { owner: "owner", repo: "repo" },
 	payload: { repository: { default_branch: "main" }, pull_request: { number: 7 } },
 });
 
-type Deployment = { environment: string; id: number; sha: string };
-type Status = { description?: string | null; state: string };
+interface Deployment {
+	environment: string;
+	id: number;
+	sha: string;
+}
+interface Status {
+	description?: string | null;
+	state: string;
+}
 
 interface GitHubOptions {
 	deployments?: Deployment[];
-	files?: { filename: string }[];
+	files?: { filename: string; sha?: string }[];
+	/** The tree both branches left. Only a fixture about a deletion or a rename needs it. */
+	baseFiles?: { filename: string; sha?: string }[];
 	resolvedPull?: typeof pull;
 	statuses?: Record<number, Status[]>;
+	behindFiles?: { filename: string; sha?: string }[];
+	branchBlobs?: Record<string, string>;
 	defaultStatuses?: Status[];
 }
+
+const MERGE_BASE_SHA = "merge-base-sha";
+const DEFAULT_BRANCH_SHA = "main-sha";
+
+const postedStatuses: Record<string, unknown>[] = [];
 
 const makeGitHub = ({
 	deployments = [{ environment: "preview/pr-7", id: 1, sha: "old-sha" }],
 	files = [],
+	baseFiles = [],
 	resolvedPull = pull,
 	statuses = {},
+	behindFiles = [],
+	branchBlobs = {},
 	defaultStatuses = [],
 }: GitHubOptions = {}): GitHubApi => ({
 	paginate: async <T>(
 		endpoint: (params: Record<string, unknown>) => Promise<{ data: T[] }>,
 		params: Record<string, unknown>,
-	) => (await endpoint(params)).data,
+	) => {
+		const page = await endpoint(params);
+		return page.data;
+	},
 	rest: {
 		pulls: {
-			get: () => Promise.resolve({ data: resolvedPull }),
+			get: async () => ({ data: resolvedPull }),
+		},
+		git: {
+			// The branches diverge from `baseFiles`, empty unless a test is about something leaving a
+			// tree, so `files` is what this head added and `behindFiles` what the default branch did.
+			getTree: async (params: Record<string, unknown>) => {
+				const trees: Record<string, { filename: string; sha?: string }[]> = {
+					[MERGE_BASE_SHA]: baseFiles,
+					[resolvedPull.head.sha]: files,
+					[DEFAULT_BRANCH_SHA]: behindFiles,
+				};
+				const entries = trees[String(params.tree_sha)];
+				assert.ok(entries, `unexpected tree ${String(params.tree_sha)}`);
+				assert.equal(params.recursive, "1");
+				return {
+					data: {
+						truncated: false,
+						tree: entries.map((entry) => ({
+							path: entry.filename,
+							type: "blob",
+							sha: entry.sha ?? `blob-of-${entry.filename}`,
+						})),
+					},
+				};
+			},
 		},
 		repos: {
-			compareCommitsWithBasehead: (params) => {
-				// The whole stack, not this layer's diff: always default branch to head SHA.
+			compareCommitsWithBasehead: async (params) => {
+				// The direction matters: `main...head` makes the merge base the point this branch left
+				// the default branch, which is what both checks are diffed from.
 				assert.equal(params.basehead, `main...${resolvedPull.head.sha}`);
-				return Promise.resolve({ data: { files } });
+				return {
+					data: {
+						base_commit: { sha: DEFAULT_BRANCH_SHA },
+						merge_base_commit: { sha: MERGE_BASE_SHA },
+					},
+				};
 			},
-			createDeployment: () =>
-				Promise.resolve({ data: { environment: "preview/pr-7", id: 2, sha: "head-sha" } }),
-			createDeploymentStatus: () => Promise.resolve({ data: {} }),
-			deleteDeployment: () => Promise.resolve({ data: {} }),
-			listDeployments: (params) =>
-				Promise.resolve({
-					data:
-						typeof params.environment === "string"
-							? deployments.filter((entry) => entry.environment === params.environment)
-							: deployments,
-				}),
-			listDeploymentStatuses: (params) =>
-				Promise.resolve({ data: statuses[Number(params.deployment_id)] ?? defaultStatuses }),
+			getContent: async (params: Record<string, unknown>) => {
+				const sha = branchBlobs[String(params.path)];
+				if (sha === undefined) {
+					throw new Error("404");
+				}
+				return { data: { sha } };
+			},
+			createDeployment: async () => ({
+				data: { environment: "preview/pr-7", id: 2, sha: "head-sha" },
+			}),
+			createDeploymentStatus: async (params: Record<string, unknown>) => {
+				postedStatuses.push(params);
+				return { data: {} };
+			},
+			deleteDeployment: async () => ({ data: {} }),
+			listDeployments: async (params) => ({
+				data:
+					typeof params.environment === "string"
+						? deployments.filter((entry) => entry.environment === params.environment)
+						: deployments,
+			}),
+			listDeploymentStatuses: async (params) => ({
+				data: statuses[Number(params.deployment_id)] ?? defaultStatuses,
+			}),
 		},
 	},
 });
@@ -144,10 +213,10 @@ void describe("preview controller admission", () => {
 
 		assert.equal(core.outputs.get("eligible"), "false");
 		assert.equal(core.outputs.get("announce"), "true");
-		assert.match(core.outputs.get("reason") ?? "", /fork/);
+		assert.match(core.outputs.get("reason") ?? "", /fork/u);
 	});
 
-	void it("waits for a draft to be marked ready for review", async () => {
+	void it("deploys a draft, which is usually the point of asking for a preview", async () => {
 		const core = makeCore();
 		await resolve({
 			github: makeGitHub({ resolvedPull: { ...pull, draft: true } }),
@@ -155,8 +224,7 @@ void describe("preview controller admission", () => {
 			core,
 		});
 
-		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /draft/);
+		assert.equal(core.outputs.get("eligible"), "true");
 	});
 
 	void it("refuses PR-controlled changes to any part of the deployment control plane", async () => {
@@ -174,22 +242,54 @@ void describe("preview controller admission", () => {
 			});
 
 			assert.equal(core.outputs.get("eligible"), "false", filename);
-			assert.match(core.outputs.get("reason") ?? "", /trusted deployment policy/, filename);
+			assert.match(core.outputs.get("reason") ?? "", /trusted deployment policy/u, filename);
 		}
 	});
 
-	void it("refuses a comparison too large for GitHub to report in full", async () => {
+	void it("admits a branch with more files than one comparison reports", async () => {
 		const core = makeCore();
 		await resolve({
 			github: makeGitHub({
-				files: Array.from({ length: 300 }, (_unused, index) => ({ filename: `src/f${index}.ts` })),
+				files: Array.from({ length: 1200 }, (_unused, index) => ({ filename: `src/f${index}.ts` })),
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "true");
+	});
+
+	void it("finds deployment policy changed past where a comparison stops reporting", async () => {
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				files: [
+					...Array.from({ length: 1200 }, (_unused, index) => ({ filename: `src/f${index}.ts` })),
+					{ filename: "docker/preview/compose.app.yaml" },
+				],
 			}),
 			context: makeContext(),
 			core,
 		});
 
 		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /deployment policy cannot be verified/);
+		assert.match(core.outputs.get("reason") ?? "", /trusted deployment policy/u);
+	});
+
+	void it("refuses a head that took a file out of the deployment control plane", async () => {
+		// A comparison counts a rename as one file and names only where it landed.
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				baseFiles: [{ filename: "docker/preview/compose.app.yaml" }],
+				files: [{ filename: "docker/compose.app.yaml" }],
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+		assert.match(core.outputs.get("reason") ?? "", /docker\/preview\/compose\.app\.yaml/u);
 	});
 
 	void it("deploys a stacked layer, whose base is another pull request's branch", async () => {
@@ -214,14 +314,14 @@ void describe("preview controller admission", () => {
 		});
 
 		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /not a repository collaborator/);
+		assert.match(core.outputs.get("reason") ?? "", /not a repository collaborator/u);
 	});
 
 	void it("refuses a preview URL template that cannot name the pull request", async () => {
 		process.env.COOLIFY_PREVIEW_URL_TEMPLATE = "https://preview.example";
 		await assert.rejects(
 			resolve({ github: makeGitHub(), context: makeContext(), core: makeCore() }),
-			/must contain \{pr\}/,
+			/must contain \{pr\}/u,
 		);
 	});
 
@@ -241,14 +341,15 @@ void describe("preview controller admission", () => {
 	});
 });
 
-void describe("preview host capacity", () => {
-	const occupants = (count: number): Deployment[] =>
-		Array.from({ length: count }, (_unused, index) => ({
-			environment: `preview/pr-${100 + index}`,
-			id: 100 + index,
-			sha: `head-${index}`,
-		}));
+function occupants(count: number): Deployment[] {
+	return Array.from({ length: count }, (_unused, index) => ({
+		environment: `preview/pr-${100 + index}`,
+		id: 100 + index,
+		sha: `head-${index}`,
+	}));
+}
 
+void describe("preview host capacity", () => {
 	void it("names the occupants when the host is full", async () => {
 		const core = makeCore();
 		await resolve({
@@ -259,7 +360,7 @@ void describe("preview host capacity", () => {
 
 		assert.equal(core.outputs.get("eligible"), "false");
 		assert.equal(core.outputs.get("announce"), "true");
-		assert.match(core.outputs.get("reason") ?? "", /#100, #101, #102/);
+		assert.match(core.outputs.get("reason") ?? "", /#100, #101, #102/u);
 	});
 
 	void it("keeps updating a preview that already holds a slot on a full host", async () => {
@@ -333,7 +434,7 @@ void describe("preview host capacity", () => {
 		});
 
 		assert.equal(core.outputs.get("eligible"), "false");
-		assert.match(core.outputs.get("reason") ?? "", /1\/1/);
+		assert.match(core.outputs.get("reason") ?? "", /1\/1/u);
 	});
 });
 
@@ -343,10 +444,14 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 		ENVIRONMENT: "preview/pr-7",
 		PR_NUMBER: "7",
 		PREVIEW_URL: "https://pr7.example",
+		PR_TITLE: "feat(webapp): a readable title",
+		PR_URL: "https://github.example/pull/7",
 		SOURCE_RUN_URL: "https://github.example/runs/50",
 	});
 	let deploymentRef = "";
 	let initialState = "";
+	let description = "";
+	let payload: unknown;
 	const baseGitHub = makeGitHub();
 	const github: GitHubApi = {
 		...baseGitHub,
@@ -354,17 +459,19 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 			...baseGitHub.rest,
 			repos: {
 				...baseGitHub.rest.repos,
-				createDeploymentStatus: (params: Record<string, unknown>) => {
+				createDeploymentStatus: async (params: Record<string, unknown>) => {
 					initialState = String(params.state);
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
-				createDeployment: (params: Record<string, unknown>) => {
+				createDeployment: async (params: Record<string, unknown>) => {
 					deploymentRef = String(params.ref);
+					description = String(params.description);
+					({ payload } = params);
 					assert.equal(params.task, "deploy:preview");
 					assert.equal(params.transient_environment, true);
-					return Promise.resolve({
+					return {
 						data: { environment: "preview/pr-7", id: 2, sha: "head-sha" },
-					});
+					};
 				},
 			},
 		},
@@ -376,6 +483,34 @@ void it("registers GitHub deployments against the immutable head SHA", async () 
 	assert.equal(deploymentRef, "head-sha");
 	assert.equal(initialState, "queued");
 	assert.equal(core.outputs.get("deployment_id"), "2");
+	// GitHub renders the environment name on the pull request and the description where every
+	// environment is listed together, so the description is what tells one preview from another.
+	assert.equal(description, "PR #7 · feat(webapp): a readable title");
+	assert.ok(typeof payload === "object" && payload !== null);
+	assert.equal(Reflect.get(payload, "pull_request_url"), "https://github.example/pull/7");
+	assert.equal(Reflect.get(payload, "title"), "feat(webapp): a readable title");
+});
+
+void it("refuses to open a deployment that would carry no title or pull request link", async () => {
+	// A deployment that describes itself as a bare number, or carries an empty link in the payload
+	// that rides on every status event, is worse than one that never opened: it reports success and
+	// identifies nothing.
+	for (const missing of ["PR_TITLE", "PR_URL"]) {
+		Object.assign(process.env, {
+			HEAD_SHA: "head-sha",
+			ENVIRONMENT: "preview/pr-7",
+			PR_NUMBER: "7",
+			PREVIEW_URL: "https://pr7.example",
+			PR_TITLE: "feat(webapp): a readable title",
+			PR_URL: "https://github.example/pull/7",
+			SOURCE_RUN_URL: "https://github.example/runs/50",
+		});
+		Reflect.deleteProperty(process.env, missing);
+		await assert.rejects(
+			async () => create({ github: makeGitHub(), context: makeContext(), core: makeCore() }),
+			new RegExp(missing, "u"),
+		);
+	}
 });
 
 void it("stands down without failing when the head moved during preflight", async () => {
@@ -460,13 +595,13 @@ void it("marks a successful deployment and explicitly inactivates its predecesso
 			...baseGitHub.rest,
 			repos: {
 				...baseGitHub.rest.repos,
-				createDeploymentStatus: (parameters) => {
+				createDeploymentStatus: async (parameters) => {
 					statuses.push(parameters);
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
-				deleteDeployment: (parameters) => {
+				deleteDeployment: async (parameters) => {
 					deleted.push(Number(parameters.deployment_id));
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
 			},
 		},
@@ -503,9 +638,9 @@ void it("lets cleanup own the final state when the preview opted out mid-deploym
 			...baseGitHub.rest,
 			repos: {
 				...baseGitHub.rest.repos,
-				createDeploymentStatus: (parameters) => {
+				createDeploymentStatus: async (parameters) => {
 					statuses.push(parameters);
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
 			},
 		},
@@ -530,13 +665,13 @@ void it("retires deployment records only after marking them inactive", async () 
 			...baseGitHub.rest,
 			repos: {
 				...baseGitHub.rest.repos,
-				createDeploymentStatus: () => {
+				createDeploymentStatus: async () => {
 					operations.push("inactive");
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
-				deleteDeployment: () => {
+				deleteDeployment: async () => {
 					operations.push("delete");
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
 			},
 		},
@@ -561,13 +696,13 @@ void it("keeps the verified tombstone record when cleanup inactivates a preview"
 			...baseGitHub.rest,
 			repos: {
 				...baseGitHub.rest.repos,
-				createDeploymentStatus: (parameters) => {
+				createDeploymentStatus: async (parameters) => {
 					descriptions.push(String(parameters.description));
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
-				deleteDeployment: () => {
+				deleteDeployment: async () => {
 					deletions += 1;
-					return Promise.resolve({ data: {} });
+					return { data: {} };
 				},
 			},
 		},
@@ -616,7 +751,7 @@ void describe("reconcile staleness", () => {
 		assert.equal(core.outputs.get("stale"), "true");
 	});
 
-	void it("reclaims a pull request that went back to draft", async () => {
+	void it("leaves a draft alone, since the label is what opts in", async () => {
 		const core = makeCore();
 		await assess({
 			github: makeGitHub({ resolvedPull: { ...pull, draft: true } }),
@@ -624,6 +759,329 @@ void describe("reconcile staleness", () => {
 			core,
 		});
 
+		// Reclaiming here would tear the preview down moments after the deploy that created it.
+		assert.equal(core.outputs.get("stale"), "false");
+	});
+});
+
+void describe("preview deployment lifecycle", () => {
+	beforeEach(() => {
+		postedStatuses.length = 0;
+	});
+
+	void it("moves the deployment while the run waits, so it is not silent for most of its life", async () => {
+		for (const [state, description] of [
+			["queued", "Waiting for CI to publish signed images for this commit."],
+			["in_progress", "Images are ready; Coolify is building the preview."],
+		] as const) {
+			process.env.DEPLOYMENT_ID = "42";
+			process.env.STATE = state;
+			process.env.DESCRIPTION = description;
+			process.env.ENVIRONMENT = "preview/pr-7";
+			process.env.PREVIEW_URL = "https://pr7.example/";
+			process.env.SOURCE_RUN_URL = "https://runs.example/1";
+
+			await progress({ github: makeGitHub({}), context: makeContext(), core: makeCore() });
+		}
+
+		assert.deepEqual(
+			postedStatuses.map((status) => status.state),
+			["queued", "in_progress"],
+		);
+		// The environment link is what makes GitHub render a destination rather than a bare record.
+		const [first] = postedStatuses;
+		assert.ok(first);
+		assert.equal(first.environment_url, "https://pr7.example/");
+		assert.equal(first.log_url, "https://runs.example/1");
+	});
+
+	void it("reports only states GitHub treats as still running", async () => {
+		process.env.DEPLOYMENT_ID = "42";
+		process.env.STATE = "success";
+		process.env.DESCRIPTION = "done";
+		process.env.ENVIRONMENT = "preview/pr-7";
+		process.env.PREVIEW_URL = "https://pr7.example/";
+		process.env.SOURCE_RUN_URL = "https://runs.example/1";
+
+		await assert.rejects(
+			async () => progress({ github: makeGitHub({}), context: makeContext(), core: makeCore() }),
+			/queued or in_progress/u,
+		);
+		assert.equal(postedStatuses.length, 0);
+	});
+});
+
+void describe("preview teardown reporting", () => {
+	void it("says a closed pull request is closed, which is what authorizes the delete", async () => {
+		process.env.PR_NUMBER = "2042";
+		const core = makeCore();
+		await assess({
+			github: makeGitHub({ resolvedPull: { ...pull, state: "closed" } }),
+			context: makeContext(),
+			core,
+		});
 		assert.equal(core.outputs.get("stale"), "true");
+		assert.equal(core.outputs.get("closed"), "true");
+	});
+
+	void it("keeps the environment of an open pull request that merely dropped the label", async () => {
+		process.env.PR_NUMBER = "2042";
+		const core = makeCore();
+		await assess({
+			github: makeGitHub({ resolvedPull: { ...pull, labels: [] } }),
+			context: makeContext(),
+			core,
+		});
+		assert.equal(core.outputs.get("stale"), "true");
+		assert.equal(core.outputs.get("closed"), "false");
+	});
+});
+
+void describe("preview schema drift", () => {
+	const migration = {
+		filename: "server/application/src/main/resources/db/changelog/0001_drop.xml",
+		sha: "blob-1",
+	};
+
+	void it("refuses a branch missing one of the default branch's migrations", async () => {
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({ behindFiles: [migration] }),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+		const reason = core.outputs.get("reason") ?? "";
+		// The three things the author needs: which file, what goes wrong, and what to do about it.
+		assert.match(reason, /0001_drop\.xml/u);
+		assert.match(reason, /have failed to start against it/u);
+		assert.match(reason, /Merge main in/u);
+		// Both mechanisms were reproduced against a restored database, so the reason names them, and
+		// names the step each one stops at: neither branch reaches a started application.
+		assert.match(reason, /Liquibase re-runs migrations/u);
+		assert.match(reason, /startup then fails on a column/u);
+		// It reports what has gone wrong, never what this branch is guaranteed to hit: a migration
+		// that only adds a table this branch never queries breaks nothing. Two causes it may not
+		// claim are Hibernate validation, which `prod` disables, and a schema mismatch that a
+		// differing blob does not prove.
+		assert.doesNotMatch(reason, /would fail|never produced|no longer match|cannot boot|Hibernate/u);
+		assert.equal(core.outputs.get("announce"), "true");
+	});
+
+	void it("deploys a branch that already carries the migration under another commit", async () => {
+		// A cherry-pick satisfies the schema while its ancestry still reports the file, so the blob
+		// decides. Refusing here would ground a branch whose schema is fine.
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [migration],
+				branchBlobs: { [migration.filename]: "blob-1" },
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "true");
+	});
+
+	void it("refuses when the branch carries an older revision of that file", async () => {
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [migration],
+				branchBlobs: { [migration.filename]: "an-older-blob" },
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+	});
+
+	void it("checks the schema of a branch further behind than a comparison reports", async () => {
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [
+					...Array.from({ length: 1200 }, (_unused, index) => ({
+						filename: `webapp/src/file-${index}.tsx`,
+					})),
+					migration,
+				],
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+		assert.match(core.outputs.get("reason") ?? "", /0001_drop\.xml/u);
+	});
+
+	void it("ignores prose under the schema directory", async () => {
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [{ filename: "server/application/src/main/resources/db/README.md" }],
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "true");
+	});
+
+	void it("leaves a live preview alone rather than replacing it with a refusal", async () => {
+		// Head H deploys, a migration then lands on the default branch, and something re-resolves H.
+		// No deployment is needed, so the working preview's comment must survive.
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [migration],
+				deployments: [{ environment: "preview/pr-7", id: 2, sha: pull.head.sha }],
+				statuses: { 2: [{ state: "success" }] },
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "false");
+		// Quiet: the reason is the live deployment, and it posts no comment.
+		assert.equal(core.outputs.get("announce"), "false");
+		assert.match(core.outputs.get("reason") ?? "", /already has a current preview/u);
+	});
+
+	void it("deploys a branch that is merely behind on code, which is almost every branch", async () => {
+		// Matching Java too would refuse a preview after any merge at all.
+		const core = makeCore();
+		await resolve({
+			github: makeGitHub({
+				behindFiles: [
+					{ filename: "server/application/src/main/java/de/tum/cit/aet/hephaestus/Foo.java" },
+					{ filename: "webapp/src/routes/index.tsx" },
+					{ filename: "docs/contributor/ci-cd.mdx" },
+				],
+			}),
+			context: makeContext(),
+			core,
+		});
+
+		assert.equal(core.outputs.get("eligible"), "true");
+	});
+});
+
+void describe("preview workflow reporting follows the finalized deployment", () => {
+	const workflow = parseDocument(readFileSync(".github/workflows/deploy-preview.yml", "utf8"));
+	function runs(name: string, outputs: Record<string, Record<string, string>>) {
+		const steps = workflow.getIn(["jobs", "deploy", "steps"]);
+		assert.ok(isSeq(steps));
+		const step = steps.items.find((item) => isMap(item) && item.get("name") === name);
+		assert.ok(isMap(step));
+		const condition = step.get("if");
+		assert.ok(typeof condition === "string");
+		const functions = new Map([
+			[
+				"always",
+				{ name: "always", minArgs: 0, maxArgs: 0, call: () => new data.BooleanData(true) },
+			],
+		]);
+		const expression = new Parser(
+			new Lexer(condition).lex().tokens,
+			["steps"],
+			[...functions.values()],
+		).parse();
+		const context: unknown = JSON.parse(
+			JSON.stringify({
+				steps: Object.fromEntries(
+					Object.entries(outputs).map(([id, values]) => [id, { outputs: values }]),
+				),
+			}),
+			data.reviver,
+		);
+		assert.ok(context instanceof data.Dictionary);
+		return new Evaluator(expression, context, functions).evaluate().coerceString() === "true";
+	}
+
+	for (const scenario of [
+		{ name: "ready preview", state: "success", pull, comment: false, fail: false, link: true },
+		{ name: "failed deployment", state: "failure", pull, comment: true, fail: true, link: false },
+		{ name: "deployment error", state: "error", pull, comment: true, fail: true, link: false },
+		{
+			name: "superseded preflight",
+			state: "inactive",
+			pull,
+			comment: false,
+			fail: false,
+			link: false,
+		},
+		{
+			name: "label removed before a failure",
+			state: "failure",
+			pull: unlabelled,
+			comment: false,
+			fail: false,
+			link: false,
+		},
+		{
+			name: "pull request closed before an error",
+			state: "error",
+			pull: { ...pull, state: "closed" },
+			comment: false,
+			fail: false,
+			link: false,
+		},
+	]) {
+		void it(scenario.name, async () => {
+			Object.assign(process.env, {
+				DEPLOYMENT_ID: "2",
+				DESCRIPTION: "Deployment finished",
+				ENVIRONMENT: "preview/pr-7",
+				FINAL_STATE: scenario.state,
+				LOG_URL: "https://coolify.example/logs/2",
+				PREVIEW_URL: "https://pr7.example",
+				PR_NUMBER: "7",
+				SOURCE_RUN_URL: "https://github.example/runs/50",
+			});
+			const core = makeCore();
+			await finalize({
+				github: makeGitHub({ resolvedPull: scenario.pull }),
+				context: makeContext(),
+				core,
+			});
+			const outputs = {
+				context: { eligible: "true" },
+				recheck: { proceed: scenario.state === "inactive" ? "false" : "true" },
+				queue: { deployment_uuid: scenario.state === "inactive" ? "" : "deployment" },
+				wait: { state: scenario.state === "inactive" ? "" : scenario.state },
+				finalize: Object.fromEntries(core.outputs),
+			};
+			assert.equal(runs("Report a failed preview", outputs), scenario.comment);
+			assert.equal(runs("Fail when the preview failed", outputs), scenario.fail);
+			assert.equal(runs("Publish the preview link", outputs), scenario.link);
+		});
+	}
+
+	void it("still reports a real failure before finalization or queueing completes", () => {
+		const outputs = {
+			context: { eligible: "true" },
+			recheck: {},
+			queue: {},
+			wait: {},
+			finalize: {},
+		};
+		assert.equal(runs("Report a failed preview", outputs), true);
+		assert.equal(runs("Publish the preview link", outputs), false);
+		assert.equal(runs("Fail when the preview failed", outputs), false);
+		assert.equal(
+			runs("Fail when the preview failed", {
+				...outputs,
+				queue: { deployment_uuid: "deployment" },
+			}),
+			true,
+		);
+		assert.equal(
+			runs("Report a failed preview", { ...outputs, context: { eligible: "false" } }),
+			false,
+		);
 	});
 });

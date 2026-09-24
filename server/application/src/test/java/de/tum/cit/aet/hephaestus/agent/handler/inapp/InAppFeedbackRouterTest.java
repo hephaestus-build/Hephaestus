@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
@@ -68,8 +69,16 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
 
     @Test
     void refusesAPracticeWhoseTierDoesNotAdmitTheLane() {
-        assertThat(route(problems(2, ObservationOrigin.LIVE), PracticeAutonomy.HUMAN_APPROVAL, ActorRole.AUTHOR, null))
+        assertThat(route(problems(2, ObservationOrigin.LIVE), PracticeAutonomy.OFF, ActorRole.AUTHOR, null))
                 .isEqualTo(InAppRoutingDecision.PRACTICE_REQUIRES_APPROVAL);
+    }
+
+    @Test
+    void admitsAHumanApprovalPracticeBecauseThePracticePageIsReadOnRequest() {
+        // Approval gates what is pushed onto the work; the developer's own page is pulled, so the default
+        // autonomy delivers here like AUTOMATIC does.
+        assertThat(route(problems(2, ObservationOrigin.LIVE), PracticeAutonomy.HUMAN_APPROVAL, ActorRole.AUTHOR, null))
+                .isEqualTo(InAppRoutingDecision.ADMIT);
     }
 
     /** The day-one bound: a sweep over a year of finished work does not become a wall of feedback. */
@@ -146,6 +155,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
                 .agentJobId(run)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(artifactId)
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.PRESENT)
                 .assessment(assessment)
                 .origin(origin)
@@ -189,7 +199,8 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
                 .agentJobId(UUID.randomUUID())
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(3L)
-                .presence(Presence.NOT_APPLICABLE)
+                .assessmentStatus(AssessmentStatus.NOT_APPLICABLE)
+                .presence(null)
                 .origin(ObservationOrigin.LIVE)
                 .observedAt(NOW)
                 .build();

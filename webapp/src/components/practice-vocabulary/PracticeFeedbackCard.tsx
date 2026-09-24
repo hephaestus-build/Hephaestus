@@ -1,8 +1,8 @@
 import { ArrowRightIcon, CheckIcon, ChevronRightIcon, ClockIcon, PackageIcon } from "lucide-react";
 import { type ComponentType, useId } from "react";
 
+import { cn } from "cn";
 import type { PracticeStandingObservation, ReviewedWorkRef } from "@/api/types.gen";
-import { pillClasses } from "@/components/admin/practice-catalog/group-visuals";
 import {
 	count,
 	countedWork,
@@ -20,13 +20,15 @@ import {
 	toneOf,
 } from "@/components/common/ResponseCommentBand";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
+import { pillClasses } from "@/components/practice-vocabulary/group-visuals";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { artifactKindIcon } from "@/lib/artifact-kinds";
 import { asDate, formatDay, formatDayTime, formatShortDay } from "@/lib/dates";
 import { hasText } from "@/lib/text";
-import { cn } from "@/lib/utils";
 
+import { statusValues } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { FEEDBACK_STATE_DEFS, type FeedbackState, isOpenFeedback } from "./feedback-state-defs";
 import { FEEDBACK_USEFULNESS_DEFS, type FeedbackUsefulness } from "./feedback-usefulness-defs";
 import { GroupName } from "./GroupName";
@@ -35,8 +37,6 @@ import {
 	OBSERVATION_OUTCOME_PRESENTATION,
 } from "./observation-outcome";
 import { PracticePill } from "./PracticePill";
-import { statusValues } from "./status-def";
-import { StatusBadge } from "./StatusBadge";
 import { StatusTooltip } from "./StatusTooltip";
 
 /** Why a piece of feedback was not helpful; the wire's dispute carries the comment beside it. */
@@ -71,7 +71,7 @@ export interface ReviewedWorkOutcome {
 	 * short day, "28 Aug".
 	 */
 	date: string;
-	outcome: PracticeStandingObservation["outcome"];
+	outcome: PracticeStandingObservation["kind"];
 }
 
 /**
@@ -165,12 +165,16 @@ export interface PracticeFeedbackCardProps extends FeedbackRatingProps {
  */
 function formatTimestamp(date: Date, state: FeedbackState): string {
 	switch (state) {
-		case "resolved":
+		case "resolved": {
 			return `Resolved ${formatDay(date)}`;
-		case "closed":
+		}
+		case "closed": {
 			return `Closed ${formatDay(date)}`;
-		default:
+		}
+		case "new":
+		case "open": {
 			return `Created ${formatDayTime(date)}`;
+		}
 	}
 }
 
@@ -244,10 +248,8 @@ export function PracticeFeedbackCard({
 			className={cn(
 				"flex flex-col overflow-hidden rounded-xl border bg-background",
 				// The accent's one wash: a new card is the thing the eye should land on.
-				state === "new" &&
-					"border-mentor/35 bg-[linear-gradient(160deg,color-mix(in_oklab,var(--color-mentor)_5%,var(--color-background))_0%,var(--color-background)_55%)]",
-				resolved &&
-					"border-success/35 bg-[linear-gradient(160deg,color-mix(in_oklab,var(--color-success)_5%,var(--color-background))_0%,var(--color-background)_55%)]",
+				state === "new" && "border-mentor/35 bg-linear-160 from-mentor/5 to-background to-55%",
+				resolved && "border-success/35 bg-linear-160 from-success/5 to-background to-55%",
 				className,
 			)}
 		>
@@ -291,7 +293,7 @@ export function PracticeFeedbackCard({
 						Seen on {stripLabel.text}
 					</span>
 					{strip.map((piece, index) => (
-						<span key={piece.key} className="whitespace-nowrap inline-flex items-center gap-2">
+						<span key={piece.key} className="inline-flex items-center gap-2 whitespace-nowrap">
 							{/* The arrow travels with the piece it leads to, so a wrapped line never ends on
 							    one. */}
 							{index > 0 && (
@@ -301,7 +303,7 @@ export function PracticeFeedbackCard({
 							<InlineLink href={piece.ref.url} external className="font-medium">
 								{piece.ref.label}
 							</InlineLink>
-							{piece.date && <WorkDate value={piece.date} />}
+							{hasText(piece.date) && <WorkDate value={piece.date} />}
 						</span>
 					))}
 				</div>
@@ -342,7 +344,7 @@ export function PracticeFeedbackCard({
 							/>
 						))}
 					</span>
-					<span className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
+					<span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
 						{cleanCount} of {cleanNeeded} clean
 					</span>
 				</div>
@@ -423,7 +425,9 @@ export function PracticeFeedbackCard({
 function countedStrip(refs: ReviewedWorkRef[]): { kind?: string; text: string } {
 	const [first] = refs;
 	const oneKind = first !== undefined && refs.every((ref) => ref.kind === first.kind);
-	if (!oneKind) return { text: count(refs.length, "piece of work", "pieces of work") };
+	if (!oneKind) {
+		return { text: count(refs.length, "piece of work", "pieces of work") };
+	}
 	const provider = refs.every((ref) => ref.provider === first.provider)
 		? first.provider
 		: undefined;
@@ -445,7 +449,7 @@ interface StripPiece extends Pick<ReviewedWorkOutcome, "ref" | "outcome"> {
  * name for a screen reader, since the icon is all that tells the good from the bad.
  */
 interface WorkOutcomeProps {
-	outcome: PracticeStandingObservation["outcome"];
+	outcome: PracticeStandingObservation["kind"];
 }
 
 function WorkOutcome({ outcome }: WorkOutcomeProps) {
@@ -458,7 +462,7 @@ function WorkOutcome({ outcome }: WorkOutcomeProps) {
 			// The icon is 14 px, so the hit area is widened a step beyond the constant's.
 			className={cn(
 				HIT_AREA_24,
-				"inline-flex cursor-help items-center rounded-sm before:-inset-1.5",
+				"inline-flex cursor-help items-center before:-inset-1.5",
 				FOCUS_RING,
 			)}
 		>

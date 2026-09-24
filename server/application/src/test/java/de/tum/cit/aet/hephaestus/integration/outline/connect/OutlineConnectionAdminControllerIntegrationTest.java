@@ -109,7 +109,7 @@ class OutlineConnectionAdminControllerIntegrationTest extends AbstractWorkspaceI
         User mentor = persistUser("mentor");
         ensureWorkspaceMembership(workspace, mentor, WorkspaceRole.MEMBER);
 
-        tokenRequest().expectStatus().isForbidden();
+        tokenRequest().expectStatus().isForbidden().expectBody(Void.class);
     }
 
     @Test
@@ -118,7 +118,7 @@ class OutlineConnectionAdminControllerIntegrationTest extends AbstractWorkspaceI
     void admin_admitted() {
         ensureAdminMembership(workspace);
 
-        tokenRequest().expectStatus().isOk();
+        tokenRequest().expectStatus().isOk().expectBody(Void.class);
     }
 
     // --- helpers ---

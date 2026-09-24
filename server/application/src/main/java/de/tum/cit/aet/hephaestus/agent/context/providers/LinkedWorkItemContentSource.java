@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -34,6 +35,10 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
+/**
+ * Captures provider closing links and same-repository issue references from the title,
+ * description, branch and commit messages. The review interprets textual references.
+ */
 @Component
 @Order(200)
 public class LinkedWorkItemContentSource implements EvidenceSource {
@@ -54,54 +59,44 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
 
     static final String OUTPUT_FILE = OUTPUT_PREFIX + "linked_work_items.json";
 
+    /** Title and unescaped body for line-based citations; the JSON projection escapes the same text. */
+    static final String ITEMS_PREFIX = OUTPUT_PREFIX + "linked_work_items/";
+
     static final int MAX_ITEMS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
-    static final int EXCERPT_CHARS = 2000;
-
-    private static final int MAX_COMMITS_SCANNED = 500;
-
     /**
-     * Closing-keyword reference, e.g. {@code closes #42} / {@code Fixes #7}. Case-insensitive.
-     * Group 2 captures the issue number.
+     * {@code #N} standing on its own. The leading boundary {@code (?<![\w/.-])} rejects a number that
+     * belongs to another name: {@code owner/repo#12} and {@code group/project#12} point at another
+     * repository, {@code v1.2#3} at a version, {@code GH-12} at a tracker key — none of them this
+     * repository's issue N. The trailing boundary {@code (?![\w]|\.[0-9])} rejects what looks like a
+     * reference but is not: a hex colour ({@code #1a2b}), a unit ({@code #42px}), a version
+     * ({@code #1.2}). A sentence period after the number is still a reference.
      */
-    private static final Pattern CLOSING_REF =
-            Pattern.compile("(?i)\\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\\b\\s*:?\\s*#(\\d+)");
+    private static final Pattern NUMBER_REF = Pattern.compile("(?<![\\w/.-])#(\\d+)(?![\\w]|\\.[0-9])");
 
-    /**
-     * Bare {@code #N} mention. Group 1 captures the issue number. The trailing boundary
-     * {@code (?![\w]|\.[0-9])} rejects false positives that look like {@code #N} but are not issue
-     * refs: a hex colour ({@code #1a2b}), a unit ({@code #42px}), or a version ({@code #1.2}, where the
-     * {@code .} is followed by another digit). It deliberately does NOT reject a trailing sentence
-     * period — {@code "relates to #42."} is a legitimate bare mention — by only vetoing {@code .}
-     * when a digit follows. The DB lookup is only a partial safety net here because low numbers
-     * (#1–#9) usually DO resolve to a real issue row, so the wrong work-item would otherwise be
-     * materialised.
-     */
-    private static final Pattern BARE_REF = Pattern.compile("#(\\d+)(?![\\w]|\\.[0-9])");
-
-    /**
-     * Issue id embedded at the start of a branch-slug segment, e.g. {@code 18-foo} or the
-     * {@code feat/18-foo} segment. Group 1 captures the issue number.
-     */
+    /** An issue number opening a branch-slug segment: {@code 18-foo}, {@code feat/18-foo}. */
     private static final Pattern BRANCH_REF = Pattern.compile("(?:^|/)(\\d{1,7})-");
+
+    /** Ignore template examples inside HTML comments when extracting issue references. */
+    private static final Pattern HTML_COMMENT = Pattern.compile("<!--.*?-->", Pattern.DOTALL);
 
     private final ObjectMapper objectMapper;
     private final PullRequestRepository pullRequestRepository;
     private final IssueRepository issueRepository;
     private final GitRepositoryManager gitRepositoryManager;
-    private final GitDiffOperations gitDiffOperations;
+    private final ReviewRepositoryPreparer repositoryPreparer;
 
     public LinkedWorkItemContentSource(
             ObjectMapper objectMapper,
             PullRequestRepository pullRequestRepository,
             IssueRepository issueRepository,
             GitRepositoryManager gitRepositoryManager,
-            GitDiffOperations gitDiffOperations) {
+            ReviewRepositoryPreparer repositoryPreparer) {
         this.objectMapper = objectMapper;
         this.pullRequestRepository = pullRequestRepository;
         this.issueRepository = issueRepository;
         this.gitRepositoryManager = gitRepositoryManager;
-        this.gitDiffOperations = gitDiffOperations;
+        this.repositoryPreparer = repositoryPreparer;
     }
 
     @Override
@@ -121,78 +116,87 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
 
     @Override
     public EvidenceContribution capture(ContextRequest request, Set<SourceKind> selectedKinds) {
-        if (!selectedKinds.contains(KIND)) {
-            return new EvidenceContribution(Map.of(), Map.of());
-        }
-        if (!(request instanceof ContextRequest.PracticeReviewRequest pr)) {
+        if (!selectedKinds.contains(KIND) || !(request instanceof ContextRequest.PracticeReviewRequest pr)) {
             return new EvidenceContribution(Map.of(), Map.of());
         }
         try {
             AgentJob job = pr.job();
+            ReviewRepositoryPreparer.PreparedReview prepared = null;
+            if (gitRepositoryManager.isEnabled()) {
+                prepared = pr.preparation().prepare(repositoryPreparer, job);
+            } else {
+                repositoryPreparer.authorize(job);
+            }
             JsonNode m = job.getMetadata();
             if (m == null || m.isNull() || m.isMissingNode()) {
                 throw new EvidenceCollectionException("Linked-work-item job metadata is missing", null);
             }
-
             Long repositoryId = MetaJson.optLong(m, "repository_id");
             Long pullRequestId = MetaJson.optLong(m, "pull_request_id");
             if (repositoryId == null) {
                 throw new EvidenceCollectionException("Linked-work-item repository id is missing", null);
             }
-
             PullRequest pullRequest = pullRequestId == null
                     ? null
                     : pullRequestRepository
                             .findByIdWithAllForGate(pullRequestId)
                             .orElse(null);
 
-            String body = pullRequest != null ? pullRequest.getBody() : null;
-            String sourceBranch = firstNonBlank(
-                    MetaJson.optString(m, "source_branch"), pullRequest != null ? pullRequest.getHeadRefName() : null);
-
-            Refs refs = new Refs();
-
-            collectFromText(body, refs, "body");
-            collectFromBranch(sourceBranch, refs);
-            collectFromCommits(m, repositoryId, sourceBranch, refs);
+            // What the provider records the pull request as closing, before what the text mentions: a
+            // link made in the provider's UI or through a cross-project reference matches no `#N`.
+            Map<Integer, Issue> closing = new LinkedHashMap<>();
+            if (pullRequest != null) {
+                for (Issue issue : pullRequestRepository.findClosingIssuesById(pullRequest.getId())) {
+                    closing.put(issue.getNumber(), issue);
+                }
+            }
+            Set<Integer> numbers = new LinkedHashSet<>(closing.keySet());
+            collect(NUMBER_REF, pullRequest == null ? null : pullRequest.getTitle(), numbers);
+            collect(NUMBER_REF, pullRequest == null ? null : withoutHtmlComments(pullRequest.getBody()), numbers);
+            collect(
+                    BRANCH_REF,
+                    firstNonBlank(
+                            MetaJson.optString(m, "source_branch"),
+                            pullRequest == null ? null : pullRequest.getHeadRefName()),
+                    numbers);
+            if (prepared != null) {
+                gitRepositoryManager.forEachCommitMessage(
+                        prepared.key(),
+                        prepared.target(),
+                        prepared.head(),
+                        message -> collect(NUMBER_REF, message, numbers));
+            }
 
             ArrayNode items = objectMapper.createArrayNode();
             List<Integer> unresolved = new ArrayList<>();
+            Map<String, byte[]> files = new LinkedHashMap<>();
             int examined = 0;
-            for (Map.Entry<Integer, Boolean> entry : refs.numbers.entrySet()) {
+            for (int number : numbers) {
                 if (examined++ >= MAX_ITEMS) break;
-                int number = entry.getKey();
-                Optional<Issue> resolved = issueRepository.findByRepositoryIdAndNumber(repositoryId, number);
+                Optional<Issue> resolved = closing.containsKey(number)
+                        ? Optional.of(closing.get(number))
+                        : issueRepository.findByRepositoryIdAndNumber(repositoryId, number);
                 if (resolved.isEmpty()) {
-                    // Not a gap: it was found, and points to an issue this repository does not mirror
-                    // (another repository, or an external tracker).
+                    // Found, and pointing at an issue this repository does not mirror: another repository
+                    // or an external tracker.
                     unresolved.add(number);
                     continue;
                 }
-                items.add(toItem(resolved.get(), entry.getValue()));
+                items.add(toItem(resolved.get(), closing.containsKey(number) ? "closes" : "mentions"));
+                files.put(ITEMS_PREFIX + number + ".md", asText(resolved.get()));
             }
-            boolean truncated = refs.numbers.size() > MAX_ITEMS;
 
             ObjectNode root = objectMapper.createObjectNode();
             root.set("workItems", items);
-            root.put("truncated", truncated);
-            ArrayNode from = objectMapper.createArrayNode();
-            for (String source : refs.resolvedFrom) {
-                from.add(source);
-            }
-            root.set("resolvedFrom", from);
-            // Reported explicitly so that a pull request linking no work is distinguishable from
-            // one linking work this repository does not mirror.
-            ArrayNode unresolvedRefs = objectMapper.createArrayNode();
+            ArrayNode unresolvedRefs = root.putArray("unresolvedReferences");
             unresolved.forEach(unresolvedRefs::add);
-            root.set("unresolvedReferences", unresolvedRefs);
+            root.put("truncated", numbers.size() > MAX_ITEMS);
 
-            Map<String, byte[]> files = Map.of(OUTPUT_FILE, objectMapper.writeValueAsBytes(root));
-            log.info("Linked work items: wrote {} item(s), resolvedFrom={}", items.size(), refs.resolvedFrom);
+            files.put(OUTPUT_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
+            log.info("Linked work items: wrote {} item(s), unresolved={}", items.size(), unresolved.size());
             return new EvidenceContribution(
                     files,
-                    // Always partial: links are scanned out of the description, branch name and commit
-                    // subjects, and no such scan can establish there is no link the work never mentioned.
+                    // Always partial: a number scan cannot establish there is no link the work never mentioned.
                     Map.of(KIND, SourceCompleteness.PARTIAL),
                     Map.of(),
                     Map.of(),
@@ -205,175 +209,76 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         }
     }
 
-    private ObjectNode toItem(Issue issue, boolean closingKeyword) {
+    private static byte[] asText(Issue issue) {
+        String body = issue.getBody() == null ? "" : issue.getBody();
+        // The dates as a quotable line, so a review can cite the opening or the close from the text it reads.
+        String dates = "Opened " + (issue.getCreatedAt() == null ? "at an unknown time" : issue.getCreatedAt())
+                + (issue.getClosedAt() == null ? "" : ", closed " + issue.getClosedAt())
+                + (issue.getState() == null ? "" : ", state " + issue.getState().name()) + ".";
+        return ("# " + issue.getTitle() + "\n\n" + dates + "\n\n" + body).getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * @param how {@code closes} when the provider records the pull request as closing the issue,
+     *     {@code mentions} when only the title, description, branch or a commit message names it
+     */
+    private ObjectNode toItem(Issue issue, String how) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("number", issue.getNumber());
+        node.put("how", how);
         node.put("title", issue.getTitle());
-        if (issue.getState() != null) {
-            node.put("state", issue.getState().name());
-        }
+        if (issue.getState() != null) node.put("state", issue.getState().name());
         node.put("url", issue.getHtmlUrl());
-        node.put("closingKeyword", closingKeyword);
-
-        ArrayNode labels = objectMapper.createArrayNode();
+        node.put("body", issue.getBody());
+        if (issue.getCreatedAt() != null)
+            node.put("createdAt", issue.getCreatedAt().toString());
+        if (issue.getClosedAt() != null)
+            node.put("closedAt", issue.getClosedAt().toString());
+        ArrayNode labels = node.putArray("labels");
         Set<Label> labelSet = issue.getLabels();
         if (labelSet != null) {
             for (Label label : labelSet) {
-                if (label != null && label.getName() != null) {
-                    labels.add(label.getName());
-                }
+                if (label != null && label.getName() != null) labels.add(label.getName());
             }
         }
-        node.set("labels", labels);
-
-        String issueBody = issue.getBody();
-        if (issueBody != null && !issueBody.isBlank()) {
-            String trimmed = issueBody.strip();
-            String excerpt;
-            if (trimmed.length() > EXCERPT_CHARS) {
-                // Don't split a UTF-16 surrogate pair: if the cut boundary lands on a high surrogate, back off
-                // one char so we never leave a lone surrogate that JSON UTF-8 encoding mangles to a replacement.
-                int end = EXCERPT_CHARS;
-                if (Character.isHighSurrogate(trimmed.charAt(end - 1))) {
-                    end--;
-                }
-                excerpt = trimmed.substring(0, end);
-            } else {
-                excerpt = trimmed;
-            }
-            node.put("bodyExcerpt", excerpt);
-        }
-
-        if (issue.getSubIssuesTotal() != null) {
+        // The provider's own rollup when it syncs one (GitHub); otherwise counted from the children this
+        // repository stores, since GitLab's sync links a child to its parent and never totals them.
+        // `subIssuesSource` says which, so a reader knows whether the count is the provider's word.
+        if (issue.getSubIssuesTotal() != null && issue.getSubIssuesCompleted() != null) {
             node.put("subIssuesTotal", issue.getSubIssuesTotal());
-        }
-        if (issue.getSubIssuesCompleted() != null) {
             node.put("subIssuesCompleted", issue.getSubIssuesCompleted());
+            node.put("subIssuesSource", "provider");
+        } else if (issue.getId() != null) {
+            IssueRepository.ChildRollup children =
+                    issueRepository.countChildrenByParentIssueId(issue.getId(), Issue.State.CLOSED);
+            if (children.getTotal() > 0) {
+                node.put("subIssuesTotal", children.getTotal());
+                node.put("subIssuesCompleted", children.getCompleted());
+                node.put("subIssuesSource", "children");
+            }
         }
         return node;
     }
 
-    private void collectFromText(@Nullable String text, Refs refs, String source) {
-        if (text == null || text.isBlank()) {
-            return;
-        }
-        boolean found = false;
-
-        Set<Integer> closingNumbers = new LinkedHashSet<>();
-        Matcher closing = CLOSING_REF.matcher(text);
-        while (closing.find()) {
-            Integer n = parseNumber(closing.group(3));
-            if (n != null) {
-                closingNumbers.add(n);
-                refs.add(n, true);
-                found = true;
-            }
-        }
-
-        Matcher bare = BARE_REF.matcher(text);
-        while (bare.find()) {
-            Integer n = parseNumber(bare.group(1));
-            // A closing-ref number already accounted for keeps its closing=true classification.
-            if (n != null && !closingNumbers.contains(n)) {
-                refs.add(n, false);
-                found = true;
-            }
-        }
-
-        if (found) {
-            refs.resolvedFrom.add(source);
-        }
+    private static @Nullable String withoutHtmlComments(@Nullable String text) {
+        return text == null ? null : HTML_COMMENT.matcher(text).replaceAll("");
     }
 
-    private void collectFromBranch(@Nullable String sourceBranch, Refs refs) {
-        if (sourceBranch == null || sourceBranch.isBlank()) {
-            return;
-        }
-        boolean found = false;
-        Matcher m = BRANCH_REF.matcher(sourceBranch);
-        while (m.find()) {
-            Integer n = parseNumber(m.group(1));
-            if (n != null) {
-                refs.add(n, false);
-                found = true;
+    private static void collect(Pattern pattern, @Nullable String text, Set<Integer> numbers) {
+        if (text == null || text.isBlank()) return;
+        Matcher matcher = pattern.matcher(text);
+        while (matcher.find()) {
+            try {
+                long value = Long.parseLong(matcher.group(1));
+                if (value > 0 && value <= Integer.MAX_VALUE) numbers.add((int) value);
+            } catch (NumberFormatException ignored) {
+                // Longer than any issue number: not a reference.
             }
-        }
-        if (found) {
-            refs.resolvedFrom.add("branch");
-        }
-    }
-
-    private void collectFromCommits(JsonNode metadata, long repositoryId, @Nullable String sourceBranch, Refs refs) {
-        if (!gitRepositoryManager.isEnabled() || !gitRepositoryManager.isRepositoryCloned(repositoryId)) {
-            return;
-        }
-        String targetBranch = MetaJson.optString(metadata, "target_branch");
-        String headSha = MetaJson.optString(metadata, "commit_sha");
-        if (sourceBranch == null || sourceBranch.isBlank() || targetBranch == null || headSha == null) {
-            return;
-        }
-
-        try {
-            var repoPath = gitRepositoryManager.getRepositoryPath(repositoryId);
-            String[] range = gitDiffOperations.resolveDiffRange(repoPath, targetBranch, sourceBranch, headSha);
-            if (range == null) {
-                return;
-            }
-            List<GitRepositoryManager.CommitInfo> ahead =
-                    gitRepositoryManager.walkCommits(repositoryId, range[0], range[1], MAX_COMMITS_SCANNED + 1);
-            for (GitRepositoryManager.CommitInfo commit :
-                    ahead.stream().limit(MAX_COMMITS_SCANNED).toList()) {
-                String subject = commit.message();
-                if (subject == null || subject.isBlank()) {
-                    continue;
-                }
-                collectFromText(subject, refs, "commits");
-            }
-        } catch (Exception e) {
-            log.debug("Commit-subject scan for linked work items skipped: {}", e.getMessage());
-        }
-    }
-
-    private static @Nullable Integer parseNumber(String raw) {
-        try {
-            long value = Long.parseLong(raw);
-            if (value <= 0 || value > Integer.MAX_VALUE) {
-                return null;
-            }
-            return (int) value;
-        } catch (NumberFormatException e) {
-            return null;
         }
     }
 
     private static @Nullable String firstNonBlank(@Nullable String a, @Nullable String b) {
-        if (a != null && !a.isBlank()) {
-            return a;
-        }
+        if (a != null && !a.isBlank()) return a;
         return (b != null && !b.isBlank()) ? b : null;
-    }
-
-    /**
-     * Accumulates distinct issue numbers with their closing/bare classification (closing wins on
-     * merge), preserving first-seen order, plus the ordered set of signals that produced at least
-     * one reference.
-     */
-    private static final class Refs {
-
-        private final LinkedHashMap<Integer, Boolean> numbers = new LinkedHashMap<>();
-        private final LinkedHashSet<String> resolvedFrom = new LinkedHashSet<>();
-
-        void add(int number, boolean closing) {
-            Boolean existing = numbers.get(number);
-            if (existing == null) {
-                numbers.put(number, closing);
-            } else if (closing && !existing) {
-                numbers.put(number, true);
-            }
-        }
-
-        boolean isEmpty() {
-            return numbers.isEmpty();
-        }
     }
 }

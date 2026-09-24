@@ -204,7 +204,8 @@ class DeferredSignalIntegrationTest extends BaseIntegrationTest {
     }
 
     private int insert(SignalKey key, Instant now) {
-        Integer inserted = transactions.execute(status -> signals.insertDeferred(key, UUID.randomUUID(), now, now));
+        Integer inserted =
+                transactions.execute(status -> signals.insertDeferred(key, UUID.randomUUID(), now, now, null));
         return java.util.Objects.requireNonNull(inserted);
     }
 

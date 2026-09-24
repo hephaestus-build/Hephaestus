@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
+import java.text.BreakIterator;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -20,8 +22,8 @@ public final class DeveloperTextSanitizer {
             + "\\b[≤<=>]*\\s*\\d+[\\s-]*(?:line|file)s?\\s+threshold\\b|"
             + "\\bthreshold\\s+for\\s+a\\s+\\w+\\s+(?:observation|finding)\\b|"
             + "\\braw\\s+bucket\\b|"
-            + "->\\s*(?:MAJOR|MINOR|INFO|CRITICAL|OBSERVED|NOT[_ ]OBSERVED|NOT[_ ]APPLICABLE|PRESENT|ABSENT|GOOD|BAD)\\b|"
-            + "\\b(?:presence|assessment)\\s+is\\s+(?:PRESENT|ABSENT|NOT[_ ]APPLICABLE|GOOD|BAD)\\b|"
+            + "->\\s*(?:MAJOR|MINOR|INFO|CRITICAL|OBSERVED|NOT[_ ]OBSERVED|NOT[_ ]APPLICABLE|PRESENT|ABSENT|GOOD|BAD|POSITIVE|NEGATIVE)\\b|"
+            + "\\b(?:presence|assessment|outcome)\\s+is\\s+(?:PRESENT|ABSENT|NOT[_ ]APPLICABLE|GOOD|BAD|POSITIVE|NEGATIVE)\\b|"
             + "\\((?:PRESENT|ABSENT|NOT[_ ]APPLICABLE)\\s*,\\s*(?:GOOD|BAD)\\)|"
             + "\\b(?:DEFECT-DETECTOR|OBSERVED\\s+DISCIPLINE|GROUNDING\\s+GATE|EPIC\\s+EXCEPTION|EPIC/CORE-REQUIREMENT)\\b|"
             + "\\benriched\\s*[=:]|"
@@ -40,7 +42,7 @@ public final class DeveloperTextSanitizer {
             + "\\bsuppress(?:ed|es|ing)\\s+its\\b|"
             + "\\b(?:team-wide\\s+)?standing\\s+nudge\\b|"
             + "\\bper-MR\\s+blocker\\b|"
-            + "→\\s*(?:MAJOR|MINOR|INFO|CRITICAL|OBSERVED|NOT[_ ]OBSERVED|NOT[_ ]APPLICABLE|PRESENT|ABSENT|GOOD|BAD)\\b|"
+            + "→\\s*(?:MAJOR|MINOR|INFO|CRITICAL|OBSERVED|NOT[_ ]OBSERVED|NOT[_ ]APPLICABLE|PRESENT|ABSENT|GOOD|BAD|POSITIVE|NEGATIVE)\\b|"
             + "\\bPer\\s+the\\s+(?:fixed\\s+)?(?:bucketing|criteria|severity\\s+rules?)\\b|"
             + "\\bunder\\s+the\\s+criteria\\b|"
             + "\\b(?:largeness|coherence|spread|epic|significance)\\s+gate\\b|"
@@ -69,8 +71,6 @@ public final class DeveloperTextSanitizer {
             + "\\bsatisf\\w+\\s+the\\s+[\\w-]+\\s+requirement\\b"
             + ")");
 
-    private static final Pattern SENTENCE_SEPARATOR = Pattern.compile("(?<=[.!?])\\s+");
-
     private static final Pattern ENVELOPE_TAIL = Pattern.compile("[\"'\\\\]*[}\\]][\"'\\\\]+\\s*$");
 
     public static boolean isGradingMeta(@Nullable String text) {
@@ -84,22 +84,21 @@ public final class DeveloperTextSanitizer {
         // Literal "\r\n"/"\n"/"\t" escapes survive a round trip through the runner's JSON envelope.
         String unescaped = text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "    ");
         StringBuilder kept = new StringBuilder(unescaped.length());
-        Matcher sep = SENTENCE_SEPARATOR.matcher(unescaped);
-        int pos = 0;
-        while (sep.find()) {
-            String sentence = unescaped.substring(pos, sep.start());
+        BreakIterator sentences = BreakIterator.getSentenceInstance(Locale.ROOT);
+        sentences.setText(unescaped);
+        for (int start = sentences.first(), end = sentences.next();
+                end != BreakIterator.DONE;
+                start = end, end = sentences.next()) {
+            String sentence = unescaped.substring(start, end);
             if (!GRADING_SENTENCE.matcher(sentence).find()) {
-                kept.append(sentence).append(unescaped, sep.start(), sep.end());
+                kept.append(sentence);
             }
-            pos = sep.end();
-        }
-        String tail = unescaped.substring(pos);
-        if (!GRADING_SENTENCE.matcher(tail).find()) {
-            kept.append(tail);
         }
         String out = kept.toString();
         out = out.replaceAll("[ \\t]{2,}", " ")
-                .replaceAll("[ \\t]+([.,;])", "$1")
+                // Only a punctuation mark left dangling by a removed sentence: a leading-dot name such as
+                // `.task`, `.onAppear` or `.gitignore` keeps the space before it.
+                .replaceAll("[ \\t]+([.,;])(?=\\s|$)", "$1")
                 .replaceAll("\\n{3,}", "\n\n");
         return stripEnvelopeCorruption(out.strip());
     }

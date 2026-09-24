@@ -1,3 +1,5 @@
+import type { UseQueryResult } from "@tanstack/react-query";
+
 /**
  * What a region shows while its data is in flight, failed, or in.
  *
@@ -8,6 +10,26 @@ export type PanelState<TReady> =
 	| { status: "loading" }
 	| { status: "error"; error: unknown; onRetry: () => void }
 	| ({ status: "ready" } & TReady);
+
+/** One query's state, with `settled` shaping its data into the ready branch. */
+export function panelState<TData, TSettled>(
+	query: UseQueryResult<TData>,
+	settled: (data: TData) => TSettled,
+): PanelState<never> | TSettled {
+	if (query.isError) {
+		return {
+			status: "error",
+			error: query.error,
+			onRetry: () => {
+				void query.refetch();
+			},
+		};
+	}
+	if (query.isPending) {
+		return { status: "loading" };
+	}
+	return settled(query.data);
+}
 
 /**
  * A panel's state with nothing in its ready branch: what a hook reports beside data it hands back
@@ -26,7 +48,13 @@ interface QueryLike {
 /** One query's state; a failed query retries itself. */
 export function queryLoadState(query: QueryLike): LoadState {
 	if (query.isError) {
-		return { status: "error", error: query.error, onRetry: () => void query.refetch() };
+		return {
+			status: "error",
+			error: query.error,
+			onRetry: () => {
+				void query.refetch();
+			},
+		};
 	}
 	return query.isPending ? { status: "loading" } : { status: "ready" };
 }
@@ -43,7 +71,9 @@ export function combinePanelStates(states: readonly LoadState[]): LoadState {
 			status: "error",
 			error: first.error,
 			onRetry: () => {
-				for (const state of failed) state.onRetry();
+				for (const state of failed) {
+					state.onRetry();
+				}
 			},
 		};
 	}

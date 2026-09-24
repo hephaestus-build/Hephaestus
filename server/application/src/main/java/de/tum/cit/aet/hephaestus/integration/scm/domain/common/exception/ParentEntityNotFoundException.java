@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception;
 
+import java.io.Serial;
+
 /**
  * Exception thrown when a parent entity required for processing is not found.
  * <p>
@@ -18,6 +20,9 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception;
  * to handle event ordering issues that occur in distributed systems.
  */
 public class ParentEntityNotFoundException extends RuntimeException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     public ParentEntityNotFoundException(String message) {
         super(message);

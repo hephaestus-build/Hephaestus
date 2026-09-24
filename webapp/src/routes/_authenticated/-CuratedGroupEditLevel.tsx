@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -15,7 +15,7 @@ import { CuratedFormLevel } from "@/components/admin/curated-catalog/CuratedForm
 import { CuratedGroupForm } from "@/components/admin/curated-catalog/CuratedGroupForm";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { LevelCancel } from "@/components/core/detail-drawer/LevelCancel";
+import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { DrawerBody } from "@/components/ui/drawer";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 
@@ -28,28 +28,39 @@ export interface CuratedGroupEditLevelProps {
 export function CuratedGroupEditLevel({ groupSlug, nested, onDone }: CuratedGroupEditLevelProps) {
 	const groupQuery = useQuery({ ...adminGetCuratedGroupOptions({ path: { slug: groupSlug } }) });
 
+	let body: ReactNode;
+	if (groupQuery.isPending) {
+		body = (
+			<DrawerBody>
+				<PracticeDefinitionSkeleton />
+			</DrawerBody>
+		);
+	} else if (groupQuery.isError) {
+		body = (
+			<DrawerBody>
+				<QueryErrorAlert
+					error={groupQuery.error}
+					title="Couldn't load the group"
+					onRetry={() => {
+						void groupQuery.refetch();
+					}}
+				/>
+			</DrawerBody>
+		);
+	} else {
+		body = (
+			<LoadedCuratedGroupEditor
+				key={groupSlug}
+				groupSlug={groupSlug}
+				initialGroup={groupQuery.data}
+				onDone={onDone}
+			/>
+		);
+	}
+
 	return (
 		<CuratedFormLevel kind="group-edit" nested={nested}>
-			{groupQuery.isPending ? (
-				<DrawerBody>
-					<PracticeDefinitionSkeleton />
-				</DrawerBody>
-			) : groupQuery.isError ? (
-				<DrawerBody>
-					<QueryErrorAlert
-						error={groupQuery.error}
-						title="Couldn't load the group"
-						onRetry={() => void groupQuery.refetch()}
-					/>
-				</DrawerBody>
-			) : (
-				<LoadedCuratedGroupEditor
-					key={groupSlug}
-					groupSlug={groupSlug}
-					initialGroup={groupQuery.data}
-					onDone={onDone}
-				/>
-			)}
+			{body}
 		</CuratedFormLevel>
 	);
 }
@@ -89,8 +100,9 @@ function LoadedCuratedGroupEditor({
 		}
 	};
 
-	const invalidateCatalog = () =>
+	const invalidateCatalog = () => {
 		void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
+	};
 
 	const updateGroup = useMutation({
 		...adminUpdateCuratedGroupMutation(),
@@ -178,7 +190,9 @@ function LoadedCuratedGroupEditor({
 			isResetPending={deleteOverride.isPending}
 			isKeepPending={keepCurrentDefinition.isPending}
 			conflict={conflict}
-			onContinueWithDraft={() => void continueWithDraft()}
+			onContinueWithDraft={() => {
+				void continueWithDraft();
+			}}
 			onUseHephaestusVersion={() => {
 				setConflict(false);
 				deleteOverride.mutate({

@@ -1,5 +1,11 @@
 # Composing the feedback
 
+## Input locations
+
+Read `task.json.paths`. `<compositionRequest>`, `<practiceIndex>` and
+`<preparedFeedback>` refer to its fields, not literal filenames. `<practiceRoot>` is the directory
+containing `practiceIndex`; `<historyRoot>` is the directory containing `preparedFeedback`.
+
 You have one job in this turn, and it is not the job you just did.
 
 The review is over. Every measurement it took is already recorded and nothing you write here can add to,
@@ -42,7 +48,7 @@ You are never told whether this change is ready to merge, so the opening rules o
 **What you write stays as you wrote it.** A comment on a merge request is posted once and never edited
 afterwards. When the same change is looked at again, a new comment goes beside the old one — the way a
 person leaves a second note rather than going back and rewriting the first. So write for the moment you
-are in. `inputs/history/feedback.json` tells you what you already said and where: open on what has moved
+are in. `<historyRoot>/feedback.json` tells you what you already said and where: open on what has moved
 since, say the thing you have not said yet, and never repeat a point in the same words because it is still
 true. Nothing you write should refer to itself being updated, and nothing should be phrased as though the
 reader has not seen your earlier comment.
@@ -104,9 +110,11 @@ task-level note wearing a costume — rewrite it or drop it.
   points at a line inside this change, and therefore that a note can be placed on it. An observation that
   is not anchorable is not less true — use `ARTIFACT` placement when it belongs on the issue or
   whole-artifact summary instead of inventing a line.
-- `inputs/history/observations.json` — what earlier reviews recorded about **this developer**, newest
+- `<historyRoot>/observations.json` — what earlier reviews recorded about **this developer**, newest
   first, with the practice, the piece of work, and when it was observed. A **partial** window: the file
-  says so itself, and absence from it is not evidence that something never happened.
+  says so itself, and absence from it is not evidence that something never happened. Different observations at the same
+  practice or location can concern different behaviors. A missing record or changed outcome does not
+  establish resolution or regression; ground any comparison in the specific behavior and its evidence.
 
     The piece of work is the entry's `artifact` object: its `title`, its `container`, its `url`, and — when
     the provider gives work a number a person can type — its `number`. Those four are the only way you may
@@ -114,37 +122,36 @@ task-level note wearing a costume — rewrite it or drop it.
     and describe it by title. Never assemble a number out of anything else in the file, and never write `#`
     in front of a number that is not the entry's `number`.
 
-- `inputs/history/delta.json` — a **pre-run** comparison snapshot. It can help you find history worth
-  reading, but it cannot establish the state after this run's observations. Do not use its labels to
-  claim that a practice is new, recurring, unchanged, improving, or resolved.
-- `inputs/history/feedback.json` — what has already been **said** to this developer, and on which
+- `<historyRoot>/feedback.json` — what has already been **said** to this developer, and on which
   surface. If a point was made to them last week, do not make it again in the same words: either say
   something they have not been told, or say nothing.
-- `inputs/history/prepared.json` — what has been written for them and is **still waiting to be read**,
+- `<preparedFeedback>` — what has been written for them and is **still waiting to be read**,
   with a `threadKey` and a `practiceSlug` for each. This is the only place a supersession target may come
   from. If you are about to write to the conversation about a practice that already has an entry here on
   that channel, replace it: emit `action: "SUPERSEDE"` with that entry's `threadKey`, so they are left
   with one current message about the habit rather than two. The practice pages do this on their own: a
   new card about a practice replaces the card still open about it, so write the card and name no target.
-- `inputs/practices/index.json` and `inputs/practices/<slug>.md` — the practices, by slug.
-- `inputs/feedback-composition.json` — the bounds for this turn: which lanes are open, how many units
+- `<practiceIndex>` and `<practiceRoot>/<slug>.md` — the practices, by slug.
+- `<compositionRequest>` — the bounds for this turn: which lanes are open, how many units
   each may carry, and how many separate pieces of work a pattern needs.
 
-You may `read` and `grep` these files. You have nothing else, and you need nothing else.
+The admitted observations are in this turn already, and the evidence you read while measuring is
+still in your context; read the history files with `read`. This turn writes nothing but feedback.
+Compose only from the admitted observations.
 
 ---
 
 ## What makes a pattern (the practice pages and the conversation only)
 
-A pattern is **the same practice going wrong on several separate pieces of work**. Not the same problem
+A pattern is **the same evidenced behavioral concern under a practice on several separate pieces of work**. Not the same problem
 twice on one merge request — that is one occurrence. Not one striking problem on one merge request — that
 is a task-level note, and it belongs on the work.
 
 Before you write a pattern claim, satisfy yourself of all of these:
 
 1. There are entries for it on **at least as many distinct pieces of work** as `minDistinctArtifacts` in
-   `inputs/feedback-composition.json` says.
-2. They are problems (`assessment: "BAD"`), not strengths and not `NOT_APPLICABLE`.
+   `<compositionRequest>` says.
+2. They are problems (`outcome: "NEGATIVE"`), not strengths and not `NOT_APPLICABLE`.
 3. You can name what the occurrences have **in common as a way of working** — an ordering, a habit, a
    default the person falls back on. If the only thing they share is the practice's name, you have a
    list, not a pattern, and a list is not worth a message.
@@ -255,10 +262,10 @@ saw and stops — so these live here, and nowhere else in the system.
   the file, side and line come from that citation. A non-anchorable citation cannot carry a diff note.
   Use `ARTIFACT` for an issue or whole-artifact concern; it takes no coordinates.
 - **Never invent a supersession target.** `supersedesThreadKey` must be a `threadKey` you read in
-  `inputs/history/prepared.json`, on the **same channel and the same practice** as the unit you are
+  `<preparedFeedback>`, on the **same channel and the same practice** as the unit you are
   writing — replacing a queued message about a different habit would leave that habit unsaid. A message
   that has already been read in the conversation cannot be un-said.
-- **Never repeat what has already been said.** Check `inputs/history/feedback.json` first.
+- **Never repeat what has already been said.** Check `<historyRoot>/feedback.json` first.
 - **One unit per practice per channel.** Two messages about one habit read as two problems.
 - **Describe the work, never the intent.** "This thread is still open", not "you ignored the reviewer".
   You can see what was recorded; you cannot see why.
@@ -270,10 +277,11 @@ saw and stops — so these live here, and nowhere else in the system.
 
 ## Persisting
 
-Call `report_feedback` once per unit, as soon as it is ready. Do not batch, and do not print a message as
-text — text is not persisted and the turn will end having produced nothing.
+Call `report_feedback` with every unit you have ready — it takes a list and stores or skips each one,
+with the reason — and call it again if more become ready. Do not print a message as text — text is not
+persisted and the turn will end having produced nothing.
 
-The tool takes `channel`, `practiceSlug`, `basedOn`, `action`, the words, and — for `IN_CONTEXT` — a
+Each unit carries `channel`, `practiceSlug`, `basedOn`, `action`, the words, and — for `IN_CONTEXT` — a
 `placement`. It takes no presence, no assessment, no severity and no confidence, and that is deliberate:
 this is an intervention, not a measurement, and a message that could carry a verdict would eventually be
 read back as one.
@@ -285,7 +293,7 @@ read back as one.
   understanding or behaviour the conversation should support. `evidenceSummary` tells the mentor why the note
   is grounded; the original observation evidence is staged separately so it can verify and re-compose.
   `alreadySaid` is where this has already been put to them and what has moved without help, read from
-  `inputs/history/feedback.json` — the surface, roughly when, and whether the record shows it improving on
+  `<historyRoot>/feedback.json` — the surface, roughly when, and whether the record shows it improving on
   its own. Write it whenever that file has anything on this practice, and leave it out when it has nothing:
   a mentor that raises a point already made twice is the one thing this lane can prevent and currently
   cannot. It is not a verdict on whether to raise it; the mentor decides that with the live turn in front

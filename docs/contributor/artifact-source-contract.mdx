@@ -7,12 +7,12 @@ description: Versioned evidence sources, explicit absence states, per-binding ev
 
 # Artifact-source contract
 
-Hephaestus may review work against a practice only from evidence with explicit semantics. Contract `1.0.0` defines the
+Hephaestus may review work against a practice only from evidence with explicit semantics. Contract `1.2.0` defines the
 logical source catalog, its capture states, and how well each source must be captured. A capture manifest records
 what was supplied to one run; it does not prove that a practice is empirically observable.
 
 > If any required evidence clause is unsatisfied, refuse the review and create no observation.
-> A source failure is never `NO_REVIEW_OCCASION`, a strength, or evidence that desired behaviour is absent.
+> A source failure is never `NOT_APPLICABLE`, a strength, or evidence that desired behaviour is absent.
 
 ## Contract boundary
 
@@ -94,9 +94,9 @@ Each catalog source references separate source-use decisions whose purposes are 
 requires `OPERATOR_EVIDENCE_REVIEW`. Processor, region, transfer, and model-egress controls remain separate
 deployment obligations. A source allowed in an internal mirror is not thereby allowed in an external model request.
 
-## Source catalog (`1.0.0`)
+## Source catalog (`1.2.0`)
 
-The machine-readable [catalog](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/artifact-source/1.0.0/catalog.json),
+The machine-readable [catalog](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/artifact-source/1.2.0/catalog.json),
 its adjacent JSON Schemas, and the checks in
 [`gate:contracts`](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/validate-artifact-source-contracts.ts)
 jointly define conformance. Schema validation alone is insufficient because standard JSON Schema `uniqueItems`
@@ -119,11 +119,12 @@ The constraints with direct authoring consequences are:
   subject, so it cannot answer "is all of it here?" — which is exactly what an author asserting an absence is
   asking. Outline documents and linked work items are both retrieved by heuristics that cannot establish they
   found everything, and neither reports `COMPLETE`.
-- Three `1.0.0` sources cannot be logically empty — the pull-request, issue, and document core records.
+- Three `1.2.0` sources cannot be logically empty — the pull-request, issue, and document core records.
   Every other source may be validly empty.
 - Two cannot be partial: the pull-request diff and the document core record. An available diff is
-  additionally pinned. It may be captured empty, but its `requiredQuality` is `COMPLETE_AND_NON_EMPTY`, so
-  a practice that reads it is refused rather than left to grade the title and description instead.
+  additionally pinned. Its `requiredQuality` is `COMPLETE`: a verified empty range is available evidence.
+  Each practice still needs its own occasion and supported observation; capture readiness assigns neither
+  applicability nor an outcome. Missing, failed or incomplete required captures remain unready.
 
 `ENGINEERING_BASELINE` with `ENGINEERING_APPROVED` records maintainer approval of the shipped, minimized product
 scope. It is not controller or DPO approval and cannot cover an expanded source, purpose, audience, processor,
@@ -137,8 +138,12 @@ default deployment reviews pull requests, issues and conversations without furth
 class does not gate collection — it records what treatment a source needs.
 
 Changing a source's meaning, selection scope, limit, mapping, identity policy, required capture quality,
-dependency, or normalization requires a new contract version. Repository history is not part of
-`scm.repository.tree` and requires its own source and governance decision.
+dependency, or normalization requires a new contract version. Contract `1.2.0` expands
+`scm.repository.tree` from a `.git`-free tree to a checkout with the Git history reachable from the
+reviewed commit and the mirrored branches and tags, under the source's governance and retention
+policies. The reviewed commit and tree identify the checkout; the manifest additionally digests the
+`inputs/sources/scm/repo/.git/HEAD` and captured-refs witnesses, which pin the exported refs — those can change between two
+captures of the same commit.
 
 ## Capture state
 
@@ -230,7 +235,7 @@ Each entry in `needs` names a source and the stance the practice takes towards i
 review threads is consistent both with "nobody resolved this one" and with "the resolution was in the part we
 did not fetch", and a review that cannot tell those apart still tells a developer they merged past an
 unresolved thread. Where the corpus was not whole, the honest answer is `INSUFFICIENT_EVIDENCE`, never a
-quiet `NO_REVIEW_OCCASION`.
+quiet `NOT_APPLICABLE`.
 
 ```json
 {
@@ -245,7 +250,7 @@ quiet `NO_REVIEW_OCCASION`.
     }
   ],
   "automatedReviewPolicy": {
-    "sourceContractVersion": "1.0.0",
+    "sourceContractVersion": "1.2.0",
     "automatedReview": {
       "mode": "LANGUAGE_MODEL",
       "evidenceSufficiency": "SUFFICIENT_WHEN_REQUIREMENTS_MET"
@@ -283,10 +288,10 @@ carry. `insufficiencyReason` is separate and is present only when `evidenceSuffi
 evidence cannot show. Folded into the limitation list it stops being answerable, since a limitation on a
 practice nobody reviews reads as one more caveat rather than the reason there is no review.
 
-Every bundled practice that requires the pull-request diff lists `scm.repository.tree` as `CONTEXTUAL`. A diff
-shows the changed lines and not the code they call into, so a reviewer restricted to it either guesses at the
-surrounding contract or abstains. The tree is contextual rather than required deliberately: a deployment that
-keeps no working copy, or a repository not yet mirrored, loses the surrounding code and still gets the review.
+Every bundled practice that requires the pull-request diff lists `scm.repository.tree` as `CONTEXTUAL`.
+The tree supplies surrounding code that the diff may not show. This binding does not remove the
+repository requirement for capturing the pinned diff: if that required capture fails, the practice
+cannot proceed. A missing local mirror can be cloned during review preparation.
 
 `automatedReview` is explicitly relative to Hephaestus, the pinned source contract, the declared bindings, and
 the governed integrations. It does not claim that a practice is universally observable. A developer, peer, or human mentor may have different context for a particular practice. This contract makes no claim that human review is always possible.
@@ -308,7 +313,7 @@ edited. The [glossary](./practice-review-glossary.mdx#machine-names) maps each p
 an author sees. A skipped practice is omitted from that review request. Source readiness checks contain only
 source-quality reasons — `SOURCE_NOT_AVAILABLE`, `SOURCE_INCOMPLETE`, `SOURCE_EMPTY` — so review-mode
 limitations are never misreported as defective sources. Missing evidence never becomes a fabricated
-`NO_REVIEW_OCCASION` observation.
+`NOT_APPLICABLE` observation.
 
 Human review is outside this contract. A self-review, peer-review, or human-mentor channel carries its own
 review target, reviewer relationship, rubric, evidence provenance, consent, access, retention, result
@@ -332,7 +337,7 @@ in [When a workspace goes quiet](/admin/practice-review#when-a-workspace-goes-qu
   Work with no identifiable author is refused with retryable `SUBJECT_UNLINKED` instead, because an
   identity can still arrive later.
 - **Practice autonomy.** A practice at `OFF` admits no review; `HUMAN_APPROVAL` and `AUTOMATIC` both run it
-  and differ only in whether a person must authorize release. When every practice bound to a signal sits at
+  and differ only in whether a person must authorize release onto the work. When every practice bound to a signal sits at
   `OFF`, the signal is refused with retryable `PRACTICE_AUTONOMY_OFF`, so turning a practice back on lets
   the waiting occurrence through.
 
@@ -347,7 +352,7 @@ concern — they decide whether evidence is collected at all.
 binding requires `scm.pull-request.core` and `scm.pull-request.diff` and reads `scm.repository.tree`
 contextually. The diff's contract demands a complete, non-empty capture. If the diff cannot be read, or the
 pinned commit is gone from the mirror, readiness refuses the practice and no observation is created. The
-runtime makes no claim that the change is focused, sprawling, or `NO_REVIEW_OCCASION`. No stance can demand
+runtime makes no claim that the change is focused, sprawling, or `NOT_APPLICABLE`. No stance can demand
 a currentness the pull-request record cannot demonstrate; nothing available could substantiate one.
 
 ### Empty evidence is valid
@@ -371,11 +376,26 @@ One invocation may contain the governed union needed by several practices. The m
 union; this runtime uses an attribution boundary rather than process isolation. The practice index lists each
 practice's admissible logical source kinds. Every model-authored observation must cite an exact quote and artifact path.
 The sandbox and server independently verify that the source is declared and available, the path belongs to that
-source in the pinned manifest, and the quote occurs in the digest-addressed artifact. Deterministic secret-scanner
-observations are the deliberate exception: the transient secret quote is verified by digest, then only its redacted
-location is persisted. Delivery fails atomically on any mismatch.
+source in the pinned manifest, and the quote occurs in the digest-addressed artifact. Delivery fails atomically on
+any mismatch.
 This proves traceable grounding, not model causality; evaluations requiring non-interference must still run
 practices in isolated evidence views.
+
+A quote of code is verified against the captured repository, whichever of its two sources it names. A
+repository citation names `scm.repository.tree`, the captured `inputs/sources/scm/repo/.git/HEAD` witness as its
+`artifactPath`, a repository-relative `path`, the exact quote and line range, and optionally a
+`revision` — a full commit id from the captured history; omitted, it means the reviewed commit. A change
+citation names `scm.pull-request.diff`, the pinned `inputs/context/change.json` as its `artifactPath`, the
+`OLD` or `NEW` side, and the same path, quote and lines; its revision is the side's commit of the pinned
+range, and a path the change does not touch withholds the observation. The server never stages a diff:
+the container derives `work/change/diff.patch` from the checkout with `git`, and the line annotations it
+carries are the coordinates a change citation names. The
+server answers every code citation of a review by opening, with JGit, the snapshot it pins by the
+`inputs/sources/scm/repo/.git/HEAD` and captured-refs digests: an object the snapshot never captured, a path that does not exist at that revision, or a
+quote that does not match those lines, withholds that observation and records
+`QUOTE_LOCATION_MISMATCH` against the citation. Shell output is not an artifact — a
+quote is verified against the Git object, never against what a command printed — and only
+`scm.repository.tree` citations may select a revision, only `scm.pull-request.diff` citations a side.
 
 The internal readiness report records whether each practice is ready or skipped, and it is the one document
 that stays server-side: it is persisted to `agent_job.review_readiness` and never staged. The **manifest is

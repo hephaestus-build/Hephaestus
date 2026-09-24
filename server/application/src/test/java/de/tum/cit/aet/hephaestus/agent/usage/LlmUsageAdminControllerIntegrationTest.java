@@ -160,7 +160,8 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .bodyValue(Map.of("monthlyBudgetUsd", "25.00"))
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
         assertThat(workspaceRepository.findById(workspace.getId()).orElseThrow().getMonthlyLlmBudgetUsd())
                 .isEqualByComparingTo("25.00");
 
@@ -172,7 +173,8 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .bodyValue(Map.of())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
         assertThat(workspaceRepository.findById(workspace.getId()).orElseThrow().getMonthlyLlmBudgetUsd())
                 .isNull();
     }
@@ -191,7 +193,8 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .bodyValue(Map.of("monthlyBudgetUsd", "25.00"))
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -206,7 +209,8 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .bodyValue(Map.of("monthlyBudgetUsd", "-1.00"))
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 
     /**
@@ -249,7 +253,8 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -257,7 +262,13 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         // 401, not 403: an unauthenticated caller must be told to authenticate. The two are answered
         // by different layers (the entry point vs. @PreAuthorize), so passing the 403 case above says
         // nothing about this one.
-        webTestClient.get().uri("/admin/llm/usage").exchange().expectStatus().isUnauthorized();
+        webTestClient
+                .get()
+                .uri("/admin/llm/usage")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -270,7 +281,8 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .bodyValue(Map.of("monthlyBudgetUsd", 1))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         // 403, not the 401 the anonymous *read* above returns: a state-changing request with no
         // `Authorization: Bearer` header is cookie-shaped, so SecurityConfig#requiresCsrf refuses it
@@ -283,6 +295,7 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .bodyValue(Map.of("monthlyBudgetUsd", 1))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 }

@@ -458,7 +458,6 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
         return client;
     }
 
-    @SafeVarargs
     private HttpGraphQlClient.RequestSpec mockSequentialExecute(
             HttpGraphQlClient client, ClientGraphQlResponse first, ClientGraphQlResponse... rest) {
         HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
@@ -479,7 +478,7 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
         lenient().when(resp.isValid()).thenReturn(true);
 
         ClientResponseField nodesField = mock(ClientResponseField.class);
-        lenient().when(nodesField.<Map>toEntityList(any(Class.class))).thenReturn((List) nodes);
+        lenient().doReturn(nodes).when(nodesField).toEntityList(Map.class);
         lenient().when(resp.field("project.mergeRequests.nodes")).thenReturn(nodesField);
 
         ClientResponseField pageInfoField = mock(ClientResponseField.class);
@@ -513,7 +512,7 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
         assertVendorCouldReturn(GITLAB, "GetMergeRequestAllCommits", "project.mergeRequests.nodes", List.of(mrNode));
 
         ClientResponseField nodesField = mock(ClientResponseField.class);
-        when(nodesField.<Map>toEntityList(any(Class.class))).thenReturn((List) List.of(mrNode));
+        org.mockito.Mockito.doReturn(List.of(mrNode)).when(nodesField).toEntityList(Map.class);
         when(resp.field("project.mergeRequests.nodes")).thenReturn(nodesField);
 
         return resp;
@@ -543,7 +542,7 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
         assertVendorCouldReturn(GITLAB, "GetMergeRequestCommits", "project.mergeRequests.nodes", List.of(mrNode));
 
         ClientResponseField nodesField = mock(ClientResponseField.class);
-        when(nodesField.<Map>toEntityList(any(Class.class))).thenReturn((List) List.of(mrNode));
+        org.mockito.Mockito.doReturn(List.of(mrNode)).when(nodesField).toEntityList(Map.class);
         when(resp.field("project.mergeRequests.nodes")).thenReturn(nodesField);
 
         return resp;

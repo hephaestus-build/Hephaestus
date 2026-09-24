@@ -87,9 +87,6 @@ public record WorkspaceDTO(
         @NonNull @Schema(description = "Whether the Pi mentor chat feature is enabled")
         Boolean mentorEnabled,
 
-        @NonNull @Schema(description = "Whether the achievements system is enabled")
-        Boolean achievementsEnabled,
-
         @NonNull @Schema(description = "Whether the leaderboard is enabled")
         Boolean leaderboardEnabled,
 
@@ -174,7 +171,6 @@ public record WorkspaceDTO(
                 gitlabWebhookRegistered,
                 workspace.getFeatures().getPracticesEnabled(),
                 workspace.getFeatures().getMentorEnabled(),
-                workspace.getFeatures().getAchievementsEnabled(),
                 workspace.getFeatures().getLeaderboardEnabled(),
                 workspace.getFeatures().getProgressionEnabled(),
                 workspace.getFeatures().getLeaguesEnabled(),

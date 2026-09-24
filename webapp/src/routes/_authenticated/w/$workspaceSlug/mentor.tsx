@@ -1,12 +1,13 @@
 import { createFileRoute, Navigate, Outlet } from "@tanstack/react-router";
 
+import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { StandardPageSurface } from "@/components/core/StandardPageSurface";
+import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import { Spinner } from "@/components/ui/spinner";
-import { NoWorkspace } from "@/components/workspace/NoWorkspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { useFeatureFlag } from "@/integrations/feature-flags";
+import { hasText } from "@/lib/text";
+import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor")({
 	staticData: { surface: "fullscreen" },
@@ -19,7 +20,7 @@ function MentorLayout() {
 	const mentorEnabled = featureState.features?.mentorEnabled;
 	const { enabled: hasMentorAccess, isLoading: accessLoading } = useFeatureFlag("MENTOR_ACCESS");
 
-	if (!workspaceSlug && !isWorkspaceLoading) {
+	if (!hasText(workspaceSlug) && !isWorkspaceLoading) {
 		return (
 			<StandardPageSurface className="h-full overflow-auto">
 				<NoWorkspace />
@@ -32,7 +33,7 @@ function MentorLayout() {
 		!featureState.isError &&
 		!accessLoading &&
 		(mentorEnabled === false || !hasMentorAccess) &&
-		workspaceSlug
+		hasText(workspaceSlug)
 	) {
 		return <Navigate to="/w/$workspaceSlug" params={{ workspaceSlug }} replace />;
 	}

@@ -1,17 +1,24 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Building2, Gauge, Users } from "lucide-react";
 
 import {
 	adminGetInstanceSettingsOptions,
+	adminCheckReleaseMutation,
+	adminGetReleaseOptions,
+	adminGetReleaseQueryKey,
 	adminListAuthEventsOptions,
 	adminListWorkspacesOptions,
 } from "@/api/@tanstack/react-query.gen";
+import {
+	InstanceReleaseCard,
+	type InstanceReleaseCardState,
+} from "@/components/admin/instance/InstanceReleaseCard";
 import { OverviewStatCard } from "@/components/admin/instance/OverviewStatCard";
 import { RecentAuthActivityCard } from "@/components/admin/instance/RecentAuthActivityCard";
 import { SilentModeStatusCard } from "@/components/admin/instance/SilentModeStatusCard";
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { instanceAdminHead } from "@/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
@@ -20,6 +27,12 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 });
 
 function AdminOverviewPage() {
+	const queryClient = useQueryClient();
+	const releaseQuery = useQuery(adminGetReleaseOptions());
+	const releaseCheck = useMutation({
+		...adminCheckReleaseMutation(),
+		onSuccess: (data) => queryClient.setQueryData(adminGetReleaseQueryKey(), data),
+	});
 	const settingsQuery = useQuery(adminGetInstanceSettingsOptions());
 	const workspacesQuery = useQuery(adminListWorkspacesOptions());
 	const eventsQuery = useQuery(adminListAuthEventsOptions({ query: { page: 0, size: 8 } }));
@@ -27,6 +40,28 @@ function AdminOverviewPage() {
 	const workspaces = workspacesQuery.data ?? [];
 	const activeWorkspaces = workspaces.filter((ws) => ws.status === "ACTIVE").length;
 	const memberships = workspaces.reduce((sum, ws) => sum + ws.memberCount, 0);
+
+	let releaseState: InstanceReleaseCardState;
+	if (releaseQuery.data) {
+		releaseState = {
+			status: "ready",
+			release: releaseQuery.data,
+			check: releaseCheck.isError
+				? { status: "error", error: releaseCheck.error }
+				: { status: releaseCheck.status },
+			onCheck: () => releaseCheck.mutate({}),
+		};
+	} else if (releaseQuery.isPending) {
+		releaseState = { status: "loading" };
+	} else {
+		releaseState = {
+			status: "error",
+			error: releaseQuery.error,
+			onRetry: () => {
+				void releaseQuery.refetch();
+			},
+		};
+	}
 
 	return (
 		<PageLayout>
@@ -41,6 +76,8 @@ function AdminOverviewPage() {
 				isLoading={settingsQuery.isLoading}
 				isError={settingsQuery.isError}
 			/>
+
+			<InstanceReleaseCard state={releaseState} />
 
 			<div className="grid gap-4 sm:grid-cols-2">
 				<OverviewStatCard
@@ -67,7 +104,9 @@ function AdminOverviewPage() {
 				events={eventsQuery.data?.content ?? []}
 				isLoading={eventsQuery.isLoading}
 				error={eventsQuery.isError ? eventsQuery.error : undefined}
-				onRetry={() => void eventsQuery.refetch()}
+				onRetry={() => {
+					void eventsQuery.refetch();
+				}}
 			/>
 		</PageLayout>
 	);

@@ -9,7 +9,8 @@ public record OutcomeVectorDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int safeAvoidances,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int commissionProblems,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int omissionGaps,
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int notApplicable) {
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int notApplicable,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int undetermined) {
     public static @Nullable OutcomeVectorDTO from(@Nullable OutcomeVector vector) {
         return vector == null
                 ? null
@@ -18,6 +19,7 @@ public record OutcomeVectorDTO(
                         vector.safeAvoidances(),
                         vector.commissionProblems(),
                         vector.omissionGaps(),
-                        vector.notApplicable());
+                        vector.notApplicable(),
+                        vector.undetermined());
     }
 }

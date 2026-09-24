@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { PracticeGroup } from "@/api/types.gen";
 import { count } from "@/components/common/feedback-text";
 import { FeedbackText } from "@/components/common/FeedbackText";
-import { Section } from "@/components/core/Section";
+import { Section } from "@/components/layout/Section";
 import {
 	type FeedbackBlock,
 	HephFeedbackCard,
@@ -99,7 +99,7 @@ function ChangedContent({
 				className="max-w-3xl text-sm"
 			/>
 			{rest.length > 0 && (
-				<Collapsible open={open} onOpenChange={setOpen} className="flex flex-col gap-2 pt-1">
+				<Collapsible open={open} onOpenChange={setOpen} className="mt-1">
 					<CollapsibleTrigger
 						render={<Button variant="link" size="inline" className="group w-fit text-sm" />}
 					>
@@ -109,7 +109,7 @@ function ChangedContent({
 							aria-hidden
 						/>
 					</CollapsibleTrigger>
-					<CollapsibleContent className="flex flex-col gap-2">
+					<CollapsibleContent className="mt-2 flex flex-col gap-2">
 						{rest.map((paragraph) => (
 							<p key={paragraph.title} className="max-w-3xl text-sm">
 								<span className="font-semibold">{paragraph.title}.</span>{" "}

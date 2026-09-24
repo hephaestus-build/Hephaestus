@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewSubmissionReques
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.AgentJobListRow;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
@@ -102,11 +103,8 @@ public class AgentJobService {
     }
 
     @Transactional(readOnly = true)
-    public Page<AgentJob> getJobs(Long workspaceId, AgentJobStatus status, Pageable pageable) {
-        if (status != null) {
-            return agentJobRepository.findByWorkspaceIdAndStatus(workspaceId, status, pageable);
-        }
-        return agentJobRepository.findByWorkspaceId(workspaceId, pageable);
+    public Page<AgentJobListRow> getJobs(Long workspaceId, @Nullable AgentJobStatus status, Pageable pageable) {
+        return agentJobRepository.findListRows(workspaceId, status, pageable);
     }
 
     @Transactional(readOnly = true)
@@ -139,6 +137,7 @@ public class AgentJobService {
                 pr.getHeadRefName(),
                 pr.getHeadRefOid(),
                 pr.getBaseRefName(),
+                pr.getBaseRefOid(),
                 triggerSignal,
                 ObservationOrigin.MANUAL);
     }
@@ -161,7 +160,9 @@ public class AgentJobService {
                 issue.getHtmlUrl(),
                 issue.getUpdatedAt(),
                 triggerSignal,
-                ObservationOrigin.MANUAL);
+                ObservationOrigin.MANUAL,
+                null,
+                issue.getReviewSnapshotId());
     }
 
     /**

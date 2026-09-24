@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 
 import type { TeamInfo } from "@/api/types.gen";
 import { withStandardPage } from "@/stories/decorators";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { TeamsPage } from "./TeamsPage";
 
@@ -123,17 +123,17 @@ const mockTeams: TeamInfo[] = [
 	},
 ];
 
-const meta: Meta<typeof TeamsPage> = {
+const meta = {
 	component: TeamsPage,
 	tags: ["autodocs"],
 	parameters: {
 		layout: "fullscreen",
 	},
 	decorators: [withStandardPage],
-};
+} satisfies Meta<typeof TeamsPage>;
 
 export default meta;
-type Story = StoryObj<typeof TeamsPage>;
+type Story = StoryObj<typeof meta>;
 
 export const WithTeams: Story = {
 	args: {

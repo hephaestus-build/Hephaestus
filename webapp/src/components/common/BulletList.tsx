@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 /**
  * The bulleted list every practice surface draws the same way: a disc marker in the muted grey,

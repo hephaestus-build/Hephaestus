@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -73,6 +74,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
     private Workspace workspace;
     private User adminUser;
     private Feedback feedbackUnit;
+    private UUID observationId;
 
     @BeforeEach
     void setUpTestData() {
@@ -106,12 +108,14 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .artifactId(42L)
                 .aboutUserId(adminUser.getId())
                 .summary("Missing error handling")
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.ABSENT)
-                .assessment(Assessment.BAD)
+                .assessment(Assessment.GOOD)
                 .severity(Severity.MAJOR)
                 .observedAt(Instant.now())
                 .build();
         finding = observationRepository.save(finding);
+        observationId = finding.getId();
 
         feedbackUnit = feedbackRepository.save(Feedback.builder()
                 .agentJobId(agentJob.getId())
@@ -228,12 +232,36 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
-            var resolutions = reactionRepository.findCurrentResolutionByRecurrenceKeys(
-                    List.of(RECURRENCE_KEY), adminUser.getId(), workspace.getId());
+            Observation original = observationRepository.findById(observationId).orElseThrow();
+            Observation sibling = observationRepository.save(Observation.builder()
+                    .occurrenceKey("sibling-" + UUID.randomUUID())
+                    .recurrenceKey(RECURRENCE_KEY)
+                    .agentJobId(original.getAgentJobId())
+                    .workspaceId(workspace.getId())
+                    .practice(original.getPractice())
+                    .artifactKind(ArtifactKinds.PULL_REQUEST)
+                    .artifactId(42L)
+                    .aboutUserId(adminUser.getId())
+                    .summary("Different behavior at the same location")
+                    .assessmentStatus(AssessmentStatus.ASSESSED)
+                    .presence(Presence.PRESENT)
+                    .assessment(Assessment.BAD)
+                    .severity(Severity.MINOR)
+                    .observedAt(Instant.now())
+                    .build());
+            var resolutions = reactionRepository.findCurrentResolutionByObservationIds(
+                    List.of(observationId, sibling.getId()), adminUser.getId(), workspace.getId());
+            assertThat(feedbackRepository.existsDeliveredInContextForObservation(
+                            workspace.getId(), adminUser.getId(), observationId))
+                    .isTrue();
+            assertThat(feedbackRepository.existsDeliveredInContextForObservation(
+                            workspace.getId(), adminUser.getId(), sibling.getId()))
+                    .isFalse();
             assertThat(resolutions).singleElement().satisfies(resolution -> {
-                assertThat(resolution.getRecurrenceKey()).isEqualTo(RECURRENCE_KEY);
+                assertThat(resolution.getObservationId()).isEqualTo(observationId);
                 assertThat(resolution.getResolution()).isEqualTo(FeedbackResolution.DISPUTED.name());
             });
         }
@@ -251,7 +279,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -268,7 +297,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(request1)
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             webTestClient
                     .put()
@@ -278,7 +308,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(request2)
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             assertThat(reactionRepository.findAll()).hasSize(2);
         }
@@ -296,7 +327,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -315,7 +347,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -349,7 +382,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -363,7 +397,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
     }
 
@@ -380,7 +415,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNoContent();
+                    .isNoContent()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -392,7 +428,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -409,7 +446,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(request1)
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             webTestClient
                     .put()
@@ -419,7 +457,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(request2)
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             FeedbackResponseDTO response = webTestClient
                     .get()
@@ -504,7 +543,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNoContent();
+                    .isNoContent()
+                    .expectBody(Void.class);
 
             webTestClient
                     .get()
@@ -512,7 +552,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNoContent();
+                    .isNoContent()
+                    .expectBody(Void.class);
 
             submit(new FeedbackResponseRequestDTO(FeedbackUsefulness.UNHELPFUL, null, null));
             FeedbackResponseDTO response = current();
@@ -531,7 +572,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
         }
 
         private @org.jspecify.annotations.Nullable FeedbackResponseDTO current() {
@@ -563,7 +605,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(new FeedbackResponseRequestDTO(null, FeedbackResolution.ADDRESSED, null))
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             User owner2 = persistUser("other-ws-owner");
             Workspace otherWorkspace = createWorkspace("other-ws", "Other WS", "other-org", AccountType.ORG, owner2);
@@ -621,7 +664,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(new FeedbackResponseRequestDTO(null, FeedbackResolution.ADDRESSED, null))
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             webTestClient
                     .put()
@@ -631,7 +675,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(new FeedbackResponseRequestDTO(null, FeedbackResolution.DISPUTED, "Wrong detection"))
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             FeedbackResolutionCountsDTO response = webTestClient
                     .get()
@@ -676,7 +721,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(new FeedbackResponseRequestDTO(null, FeedbackResolution.ADDRESSED, null))
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
             webTestClient
                     .put()
                     .uri(FEEDBACK_URI, workspace.getWorkspaceSlug(), secondFeedbackUnit.getId())
@@ -685,7 +731,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .bodyValue(new FeedbackResponseRequestDTO(null, FeedbackResolution.ADDRESSED, null))
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             FeedbackResolutionCountsDTO response = webTestClient
                     .get()

@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
@@ -20,6 +22,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationDetailDTO;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -29,6 +32,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -92,7 +96,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         agentJob.setWorkspace(workspace);
         agentJob.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         agentJob.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
-        agentJob.setEvidenceSnapshot(OBJECT_MAPPER.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.0.0"))));
+        agentJob.setEvidenceSnapshot(OBJECT_MAPPER.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.2.0"))));
         agentJob = agentJobRepository.save(agentJob);
     }
 
@@ -133,9 +137,10 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 artifactId,
                 user.getId(),
                 title,
-                presence,
+                "NOT_APPLICABLE".equals(presence) ? "NOT_APPLICABLE" : "ASSESSED",
+                "NOT_APPLICABLE".equals(presence) ? null : presence,
                 assessmentFor(presence),
-                severity,
+                "ABSENT".equals(presence) ? severity : null,
                 DIFF_EVIDENCE_JSON,
                 "Test reasoning for " + title,
                 null,
@@ -149,7 +154,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         if ("NOT_APPLICABLE".equals(presence)) {
             return null;
         }
-        return "PRESENT".equals(presence) ? "GOOD" : "BAD";
+        return "GOOD";
     }
 
     /** Binds delivered guidance because observations do not own advice. */
@@ -170,6 +175,74 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 .build());
         feedbackObservationRepository.insertIfAbsent(feedback.getId(), findingId, "PRIMARY", 0);
         return feedback;
+    }
+
+    @Test
+    @WithUser
+    void shouldGiveAnInstanceAdminTheSameObservationProjectionAsTheDeveloper() {
+        Long accountId = Objects.requireNonNull(
+                persistInstanceAdmin("Observation view operator").getId());
+        UUID own = insertFinding(
+                practiceA,
+                developer,
+                "Missing context",
+                "ABSENT",
+                "MINOR",
+                0.9f,
+                "scm.pull_request",
+                1L,
+                Instant.now());
+        deliverFeedbackFor(own, "Explain the motivation.", Instant.now());
+        var self = webTestClient
+                .get()
+                .uri(BASE_URI + "/" + own, workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(ObservationDetailDTO.class)
+                .returnResult()
+                .getResponseBody();
+        var viewed = webTestClient
+                .get()
+                .uri("/workspaces/" + workspace.getWorkspaceSlug() + "/user-view/users/" + developer.getId()
+                        + "/practices/observations/" + own)
+                .headers(h -> h.setBearerAuth("mock-jwt-sub-" + accountId))
+                .header("X-User-View-Reason", "Verify practice feedback")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(ObservationDetailDTO.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(viewed).isEqualTo(self);
+    }
+
+    @Test
+    @WithUser
+    void shouldNotDiscloseAnotherDevelopersObservationThroughAUserView() {
+        Long accountId = Objects.requireNonNull(
+                persistInstanceAdmin("Observation view operator").getId());
+        UUID foreign = insertFinding(
+                practiceA,
+                persistUser("someone-else"),
+                "Other person's feedback",
+                "ABSENT",
+                "MINOR",
+                0.9f,
+                "scm.pull_request",
+                2L,
+                Instant.now());
+        webTestClient
+                .get()
+                .uri("/workspaces/" + workspace.getWorkspaceSlug() + "/user-view/users/" + developer.getId()
+                        + "/practices/observations/" + foreign)
+                .headers(h -> h.setBearerAuth("mock-jwt-sub-" + accountId))
+                .header("X-User-View-Reason", "Verify practice feedback")
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     // GET /practices/observations
@@ -529,7 +602,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -542,7 +616,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isBadRequest();
+                    .isBadRequest()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -598,7 +673,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .uri(BASE_URI, workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -684,8 +760,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     2L,
                     developer.getId(),
                     "Other WS finding",
+                    "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     null,
                     "reasoning",
@@ -776,9 +853,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("Code Review Thoroughness")
                     .jsonPath("$[0].totalObservations")
                     .isEqualTo(1)
-                    .jsonPath("$[0].goodCount")
+                    .jsonPath("$[0].positiveCount")
                     .isEqualTo(0)
-                    .jsonPath("$[0].badCount")
+                    .jsonPath("$[0].negativeCount")
                     .isEqualTo(1)
                     .jsonPath("$[0].lastObservedAt")
                     .isNotEmpty()
@@ -788,9 +865,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("PR Description Quality")
                     .jsonPath("$[1].totalObservations")
                     .isEqualTo(3)
-                    .jsonPath("$[1].goodCount")
+                    .jsonPath("$[1].positiveCount")
                     .isEqualTo(2)
-                    .jsonPath("$[1].badCount")
+                    .jsonPath("$[1].negativeCount")
                     .isEqualTo(1)
                     .jsonPath("$[1].lastObservedAt")
                     .isNotEmpty();
@@ -803,7 +880,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .uri(BASE_URI + "/summary", workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -827,7 +905,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo(1)
                     .jsonPath("$[0].totalObservations")
                     .isEqualTo(1)
-                    .jsonPath("$[0].goodCount")
+                    .jsonPath("$[0].positiveCount")
                     .isEqualTo(1);
         }
     }
@@ -901,7 +979,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -911,7 +990,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .uri(BASE_URI + "/{findingId}", workspace.getWorkspaceSlug(), UUID.randomUUID())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -923,7 +1003,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -943,8 +1024,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     50L,
                     developer.getId(),
                     "Evidence finding",
+                    "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     evidenceJson,
                     "reasoning",
@@ -988,8 +1070,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     51L,
                     developer.getId(),
                     "Array evidence finding",
+                    "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     arrayEvidenceJson,
                     "reasoning",
@@ -1039,7 +1122,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
     }
 
@@ -1130,7 +1214,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .uri(BASE_URI + "/pull-request/{prId}", workspace.getWorkspaceSlug(), 999L)
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -1219,8 +1304,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     100L,
                     developer.getId(),
                     "WS2 PR finding",
+                    "ASSESSED",
                     "ABSENT",
-                    "BAD",
+                    "GOOD",
                     "MAJOR",
                     null,
                     "reasoning",
@@ -1337,7 +1423,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .uri("/workspaces/{workspaceSlug}/practices/standings", workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 }

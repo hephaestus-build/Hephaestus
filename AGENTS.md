@@ -191,7 +191,6 @@ first word says what kind of task it is, and only these prefixes are allowed:
 | `gate` | Produce one verdict that CI can annotate; every gate belongs to `quality` unless explicitly CI-only in the task contract test |
 | `generate` | Regenerate a committed artifact from its authoritative source |
 | `lint` | Run a linter; a final `fix` segment applies safe fixes and `report` writes a report |
-| `prepare` | Produce an uncommitted prerequisite needed by another task |
 | `quality` | Internal graph containing every local quality gate; use `check` at the command line |
 | `release` | Prepare or publish a release version |
 | `report` | Turn existing results into a human- or machine-readable report |
@@ -208,18 +207,26 @@ only `format` and `lint`, and the Java leg of `check` is `gate:server`.
 
 ### Lint and format
 
-Oxlint lints; oxfmt formats and sorts imports. Each tree states its rule set in full —
-`webapp/.oxlintrc.json`, `docs/.oxlintrc.json`, and the root `.oxlintrc.json` for the agent trees,
-`scripts/**` and tooling config — and each config carries the reasoning for its own deltas.
+Oxlint lints; oxfmt formats, sorts imports and sorts Tailwind classes. One rule set, layered:
+the root `.oxlintrc.json` is the base for every TypeScript file and the config for the Node trees
+(agent runner, precompute, `scripts/**`, `load-tests/**`, the task graph); `oxlint.react.jsonc` is
+the React layer; `webapp/.oxlintrc.json` and `docs/.oxlintrc.json` `extends` those two and hold
+only what their tree adds or decides differently, each with its reason. A rule is written once.
 `gate:docs-lint` type-checks the docs tree and runs `markdownlint-cli2` (`docs/.markdownlint-cli2.jsonc`);
 `docs:lint` is its alias.
 
-- **Start every oxlint run from the repo root.** A nested config *replaces* the root's rules rather
-  than merging, and `options` — `typeAware`, `reportUnusedDisableDirectives` — is honoured only from
-  the config oxlint discovers as the root. Started inside `webapp/`, every type-aware rule reads as
-  enabled and checks nothing.
+- **Run oxlint through `vp` from the repo root** — `vp -C webapp lint .`, `vp -C docs lint .`,
+  `vp run gate:agents-lint` — which is what CI runs; the `options` block (`typeAware`, `typeCheck`,
+  `reportUnusedDisableDirectives`) travels through `extends`, so a bare `oxlint` started inside a
+  tree sees the same rules, but resolves `tsconfig.json` from where it started.
+- **`extends` carries `categories`, `rules`, `plugins`, `overrides` and `options`.** `env`,
+  `settings` and `ignorePatterns` are each tree's own. Vite+ takes the config as an object and
+  accepts only objects in `extends`, so `webapp/tools/oxlint/load-config.ts` inlines the files for
+  both Vite configs and drops their `jsPlugins`, which that path rejects when relative; the file on
+  disk keeps the paths for the CLI and editors.
 - **Type-aware rules need a file named exactly `tsconfig.json`.** The root stub exists so the Node
-  trees, configured by `tsconfig.agents.json`, have one.
+  trees, configured by `tsconfig.agents.json`, have one; `load-tests/tsconfig.json` types the k6
+  scripts the same way.
 - **The house rules are one oxlint plugin under `webapp/tools/oxlint/`.** All three configs load it
   and each chooses which rules to turn on, so adding a rule there enables it nowhere.
   `webapp/AGENTS.md` § Linting has the rest.
@@ -242,7 +249,6 @@ Oxlint lints; oxfmt formats and sorts imports. Each tree states its rule set in 
   attribution to pull request titles or bodies.
 - UI changes need before/after images; motion or timing needs a short video. Never commit PR-only
   evidence; `/land-pr` owns its preparation and upload.
-- One concern per PR. If the description says "also", split it.
 - A PR that changes shipped code ships a changeset — `.changeset/README.md` is the contract. With no
   TTY, hand-write `.changeset/<slug>.md` in the shape shown there; `verify-changesets` fails the PR
   without one and rejects `major` before 1.0. The summary is a release note in the operator's or
@@ -281,8 +287,7 @@ change that ships, never a measurement or a verdict alone.
 - Comments say what the code cannot — a constraint, a platform behaviour, a rejected alternative —
   and move when the code moves. Nothing in them is a run number, a measured duration or an
   incident. Deleting one of these needs the same justification as adding one: either the code now
-  says it, or it moved to its one home. A pass that strips comments across files is its own pull
-  request, never a rider on a fix.
+  says it, or it moved to its one home.
 - Our users read feedback about their own work. A wrong claim, a stale label or a lying spinner
   costs trust that a fast fix does not buy back.
 
@@ -294,10 +299,10 @@ change that ships, never a measurement or a verdict alone.
 | `webapp/src/api/**` | `vp run generate:api:client` |
 | `docs/contributor/erd/schema.mmd` | `vp run db:generate-erd-docs` |
 | `webapp/src/routeTree.gen.ts` | TanStack Router Vite plugin |
-| `server/generated-clients/target/generated-sources/**` | GraphQL and Outline codegen, owned by the generated-clients Maven module |
+| `server/generated-clients/build/generated/sources/**` | GraphQL and Outline codegen, owned by the generated-clients Gradle module |
 
 Never hand-edit these. `generate:api:client` empties `webapp/src/api/` first;
-Maven-generated sources live under `target/` and are never committed. Commit `server/openapi.yaml`
+Gradle-generated sources live under `build/` and are never committed. Commit `server/openapi.yaml`
 and `webapp/src/api/**` with the API change that produced them.
 
 ## Database changes
@@ -306,7 +311,9 @@ Procedure: `docs/contributor/database-migration.mdx`. Entity conventions the dri
 `server/AGENTS.md` § Schema changes. `vp run db:draft-changelog` writes the drift into this
 branch's single changelog and wires it into `master.xml`; a branch never hand-writes one or adds a
 second. A file under `db/changelog/` that reached `main` is never edited, renamed or deleted, and
-`master.xml` is append-only.
+`master.xml` is append-only. The verified v0.77.4 archival transition is documented in the migration
+procedure; it is not permission for future history rewrites. Existing developer databases must follow
+the baseline runbook or be discarded with `vp run dev:reset` before `vp run dev`.
 
 ## Command caveats
 
@@ -314,10 +321,10 @@ Each of these reports success and leaves a stale or wrong result.
 
 - **`generate:api:specs` honours `HEPHAESTUS_APPLICATION_JAR`.** With it set, the
   spec is scraped from that JAR, not from your checkout. Unset it after a CI-style run. Without it
-  the script packages the reactor with tests skipped and boots the JAR under the `specs` profile on
-  a free port.
-- **`surefire:test` as a bare goal runs whatever `target/test-classes` holds.** After editing a
-  test, run a lifecycle phase (`test-compile`) first, or use the `vp run test:server:*` tasks,
-  which do.
-- **One Maven process per checkout**, and `server/.env` leaks into test JVMs — `server/AGENTS.md`
+  the script packages the server without running tests and boots the JAR under the `specs` profile
+  with isolated HTTP ports.
+- **`-PpackagedServer=true` consumes restored compiled classes.** It is reserved for CI artifact
+  consumers. Local Gradle test tasks compile their inputs automatically; never use packaged mode
+  after changing source.
+- **One Gradle invocation per checkout**, and `server/.env` can affect test JVMs — `server/AGENTS.md`
   § Build traps.

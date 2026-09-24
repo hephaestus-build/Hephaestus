@@ -8,12 +8,10 @@ import java.util.Base64;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,7 +20,7 @@ import org.springframework.stereotype.Component;
  * Apply via {@code @Convert(converter = EncryptedStringConverter.class)}.
  *
  * <p>Configuration: set {@code hephaestus.security.encryption-key} to a
- * 32-character (256-bit) secret key.
+ * 32-byte (256-bit) secret key.
  */
 @Component
 @Converter
@@ -50,59 +48,11 @@ public class EncryptedStringConverter implements AttributeConverter<String, Stri
         log.debug("Instantiated EncryptedStringConverter: enabled=false, reason=no_spring_context");
     }
 
-    /**
-     * Spring-wired constructor. The key is bound via {@link SecurityProperties}; the active
-     * profile string still comes through {@code @Value} so the prod fail-fast check is identical.
-     */
+    /** The Spring-wired path shares key validation; standalone schema tooling uses the no-arg path. */
     @Autowired
-    public EncryptedStringConverter(
-            SecurityProperties securityProperties, @Value("${spring.profiles.active:}") String activeProfiles) {
-        this(securityProperties.encryptionKey(), activeProfiles);
-    }
-
-    /**
-     * Canonical constructor (also the unit-test seam): builds the cipher key directly from the
-     * raw inputs. Missing key fails fast in prod, warns elsewhere; a key that is not 32 bytes is
-     * rejected.
-     */
-    public EncryptedStringConverter(@Nullable String encryptionKey, @Nullable String activeProfiles) {
-        if (encryptionKey == null || encryptionKey.isBlank()) {
-            if (activeProfiles != null && activeProfiles.contains("prod")) {
-                throw new IllegalStateException(
-                        "Encryption key is required in production! Set hephaestus.security.encryption-key");
-            }
-            log.warn("Skipped encryption configuration: reason=missing_key, "
-                    + "action=set_hephaestus_security_encryption_key_in_production");
-            this.secretKey = null;
-            this.enabled = false;
-        } else {
-            // Validate the actual AES key length in BYTES (not chars): a 32-char key with multibyte
-            // characters is >32 UTF-8 bytes and would otherwise construct fine here and only throw
-            // InvalidKeyException on the first encrypt. Fail fast at startup instead.
-            byte[] keyBytes = encryptionKey.getBytes(StandardCharsets.UTF_8);
-            if (keyBytes.length != 32) {
-                // Report BOTH counts. "32 bytes" alone sends an operator who pasted a 32-character
-                // passphrase with an umlaut in it looking for a 34-character key; "32 characters"
-                // alone is a lie for exactly that operator. Never echo the key itself.
-                int characters = encryptionKey.length();
-                String howToFix = keyBytes.length == characters
-                        ? "For ASCII, bytes and characters are the same, so that is 32 characters: "
-                        : "This key contains non-ASCII characters, and those cost more than one byte each. "
-                                + "Use ASCII only, exactly 32 characters: ";
-                throw new IllegalArgumentException(
-                        "hephaestus.security.encryption-key (HEPHAESTUS_SECURITY_ENCRYPTION_KEY) must be a "
-                                + "32-byte AES-256 key. Got "
-                                + keyBytes.length
-                                + " bytes from "
-                                + characters
-                                + " characters. "
-                                + howToFix
-                                + "openssl rand -base64 24 | cut -c1-32");
-            }
-            this.secretKey = new SecretKeySpec(keyBytes, "AES");
-            this.enabled = true;
-            log.info("Enabled encryption for sensitive database fields");
-        }
+    public EncryptedStringConverter(SystemEncryptionKey systemEncryptionKey) {
+        this.secretKey = systemEncryptionKey.key();
+        this.enabled = secretKey != null;
     }
 
     @Override

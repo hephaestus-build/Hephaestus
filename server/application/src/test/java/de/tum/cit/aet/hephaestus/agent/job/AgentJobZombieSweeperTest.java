@@ -22,8 +22,10 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -94,7 +96,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                 lifecycleService,
                 usageRecorder,
                 meterRegistry,
-                new AgentJobTelemetry(meterRegistry));
+                new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP));
     }
 
     private ConfigSnapshot admittedSnapshot(int timeoutSeconds) {
@@ -106,7 +108,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                         null,
                         null,
                         null,
-                        false,
+                        null,
                         FundingSource.INSTANCE,
                         1L,
                         1L,
@@ -243,7 +245,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                             snapshot.modelVersion(),
                             snapshot.contextWindow(),
                             snapshot.maxOutputTokens(),
-                            snapshot.supportsReasoning(),
+                            snapshot.reasoningEffort(),
                             snapshot.connectionScope(),
                             snapshot.connectionId(),
                             snapshot.modelId(),
@@ -325,11 +327,41 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
             return job;
         }
 
+        /**
+         * The sweep decides from three columns and reads the job itself only for the attempt it wins,
+         * so a candidate is staged as the row the query returns plus the job behind it.
+         */
+        private void stagedAsStuck(AgentJob job) {
+            when(jobRepository.findStuckPendingDeliveries(any(), any())).thenReturn(List.of(rowFor(job)));
+            lenient()
+                    .when(jobRepository.findDeliveryRecoveryCandidate(job.getId()))
+                    .thenReturn(Optional.of(job));
+        }
+
+        private AgentJobRepository.StuckDeliveryRow rowFor(AgentJob job) {
+            return new AgentJobRepository.StuckDeliveryRow() {
+                @Override
+                public UUID getId() {
+                    return job.getId();
+                }
+
+                @Override
+                public short getDeliveryAttempts() {
+                    return job.getDeliveryAttempts();
+                }
+
+                @Override
+                public @Nullable String getDeliveryCommentId() {
+                    return job.getDeliveryCommentId();
+                }
+            };
+        }
+
         @Test
         @DisplayName("claims the attempt CAS, delegates to the lifecycle service, and counts a successful recovery")
         void claimsAndDelegatesOnSuccess() {
             AgentJob job = stuckJob((short) 0);
-            when(jobRepository.findStuckPendingDeliveries(any(), any())).thenReturn(List.of(job));
+            stagedAsStuck(job);
             when(jobRepository.claimDeliveryRecoveryAttempt(job.getId(), (short) 0))
                     .thenReturn(1);
             when(lifecycleService.recoverStuckDelivery(job, (short) 1)).thenReturn(true);
@@ -348,7 +380,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                 "a lost attempt-CAS (a concurrent sweeper replica already claimed it) skips the delivery attempt entirely")
         void skipsWhenAttemptCasLost() {
             AgentJob job = stuckJob((short) 0);
-            when(jobRepository.findStuckPendingDeliveries(any(), any())).thenReturn(List.of(job));
+            stagedAsStuck(job);
             when(jobRepository.claimDeliveryRecoveryAttempt(job.getId(), (short) 0))
                     .thenReturn(0);
 
@@ -363,7 +395,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("a delivery attempt that itself fails is not counted as recovered")
         void failedAttemptIsNotCounted() {
             AgentJob job = stuckJob((short) 1);
-            when(jobRepository.findStuckPendingDeliveries(any(), any())).thenReturn(List.of(job));
+            stagedAsStuck(job);
             when(jobRepository.claimDeliveryRecoveryAttempt(job.getId(), (short) 1))
                     .thenReturn(1);
             when(lifecycleService.recoverStuckDelivery(job, (short) 2)).thenReturn(false);
@@ -380,7 +412,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         void exhaustedAttemptsMarksFailedDirectlyKeepingTheCommentId() {
             AgentJob job = stuckJob((short) AgentJobZombieSweeper.MAX_DELIVERY_RECOVERY_ATTEMPTS);
             job.setDeliveryCommentId("comment-1");
-            when(jobRepository.findStuckPendingDeliveries(any(), any())).thenReturn(List.of(job));
+            stagedAsStuck(job);
 
             sweeper.recoverStuckDeliveries();
 
@@ -404,10 +436,8 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("bills the reaped attempt's proxy-recorded tokens at its frozen price")
         void billsTheReapedAttemptsProxyRecordedTokensAtItsFrozenPrice() {
             UUID jobId = UUID.randomUUID();
-            // Started 20 minutes ago with 600s (10min) timeout + 5min buffer = 15min
-            // 20 min > 15 min → stale
-            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1200), 600);
-            job.setExecutionStartedAt(Instant.now().minusSeconds(1190));
+            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1800), 600);
+            job.setExecutionStartedAt(Instant.now().minusSeconds(1790));
             job.setRetryCount(2);
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
@@ -441,7 +471,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("a job that never started executing is reaped without any ledger event")
         void shouldReapAJobStillInPreparationWithoutAttributingUsage() {
             UUID jobId = UUID.randomUUID();
-            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1200), 600);
+            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1800), 600);
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
             when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(job));
@@ -466,8 +496,6 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("a job inside its own timeout is left RUNNING")
         void shouldSkipRunningJobsNotYetStale() {
             UUID jobId = UUID.randomUUID();
-            // Started 5 minutes ago with 600s (10min) timeout + 5min buffer = 15min
-            // 5 min < 15 min → not stale yet
             AgentJob job = runningJob(jobId, Instant.now().minusSeconds(300), 600);
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
@@ -480,6 +508,19 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
             verifyNoInteractions(usageRecorder);
         }
 
+        @Test
+        void shouldNotReapAnAttemptDuringResultUploadGrace() {
+            UUID jobId = UUID.randomUUID();
+            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1200), 600);
+            job.setExecutionStartedAt(Instant.now().minusSeconds(1190));
+            when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(job));
+
+            sweeper.reapStaleRunningJobs();
+
+            verify(jobRepository, never()).transitionStatus(any(), any(), any(), any(), any());
+        }
+
         /**
          * The wedge this guards: a snapshot written by a NEWER schema version — the reverted-canary
          * case {@link ConfigSnapshot#fromJson} rejects by design. Accounting runs inside the same
@@ -490,8 +531,8 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("a snapshot this server cannot read still terminalises the job, billed UNPRICED")
         void unreadableSnapshotStillTerminalisesTheJob() {
             UUID jobId = UUID.randomUUID();
-            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1200), 600);
-            job.setExecutionStartedAt(Instant.now().minusSeconds(1190));
+            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1800), 600);
+            job.setExecutionStartedAt(Instant.now().minusSeconds(1790));
             job.setConfigSnapshot(snapshotFromTheFuture());
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
@@ -523,7 +564,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("an unreadable snapshot falls back to the default timeout rather than skipping the job")
         void unreadableSnapshotFallsBackToTheDefaultTimeout() {
             UUID jobId = UUID.randomUUID();
-            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1200), 600);
+            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1800), 600);
             job.setConfigSnapshot(snapshotFromTheFuture());
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));

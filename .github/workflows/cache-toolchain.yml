@@ -1,0 +1,38 @@
+name: Warm toolchain caches
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .npmrc
+      - .github/actions/setup-toolchain/**
+      - .github/workflows/cache-toolchain.yml
+
+permissions: {}
+
+# Cache warming is independent of release validation; a cold cache remains a valid install.
+concurrency:
+  group: cache-toolchain-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: Frozen install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"

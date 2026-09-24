@@ -20,12 +20,12 @@ export default function breaksLargeWorkIntoTrackableSubtasks(
 	const body = (m.body ?? "").trim();
 	const labels = (m.labels ?? []).map((l) => l.toLowerCase());
 
-	const checkboxes = (body.match(/^[\s>]*[-*]\s+\[[ xX]\]/gm) ?? []).length;
-	const childRefs = new Set((body.match(/(^|\s)#\d+\b/g) ?? []).map((s) => s.trim())).size;
+	const checkboxes = (body.match(/^[\s>]*[-*]\s+\[[ xX]\]/gmu) ?? []).length;
+	const childRefs = new Set((body.match(/(?:^|\s)#\d+\b/gu) ?? []).map((s) => s.trim())).size;
 	const subTotal = m.sub_issues_total ?? 0;
 	const subDone = m.sub_issues_completed ?? 0;
-	const headingSections = (body.match(/^#{1,4}\s+\S/gm) ?? []).length;
-	const isEpic = labels.some((l) => /epic|meta|tracking|umbrella/.test(l));
+	const headingSections = (body.match(/^#{1,4}\s+\S/gmu) ?? []).length;
+	const isEpic = labels.some((l) => /epic|meta|tracking|umbrella/u.test(l));
 	const bigBody = body.length > 1200;
 
 	const hasBreakdown = checkboxes > 0 || childRefs > 0 || subTotal > 0;
@@ -35,14 +35,16 @@ export default function breaksLargeWorkIntoTrackableSubtasks(
 		`Largeness signals: epicLabel=${isEpic}, bodyChars=${body.length}, headingSections=${headingSections}, childIssueRefs=${childRefs}. This practice only applies to LEGITIMATELY large/multi-part work — confirm largeness before judging decomposition.`,
 		`Breakdown facts: taskCheckboxes=${checkboxes}, childIssueRefs=${childRefs}, subIssuesTotal=${subTotal} (completed=${subDone}). hasAnyBreakdown=${hasBreakdown}.`,
 	];
-	if (looksLarge && !hasBreakdown)
+	if (looksLarge && !hasBreakdown) {
 		directions.push(
 			`Signals suggest large work with NO explicit breakdown — a strong candidate for a decomposition finding; verify the body really bundles multiple trackable parts.`,
 		);
-	if (!looksLarge)
+	}
+	if (!looksLarge) {
 		directions.push(
 			`Does not look large/multi-part (no epic label, small body, few heading sections and child refs) — a single small ask carries little large-work-decomposition surface.`,
 		);
+	}
 
 	const hints: Hint[] = [];
 	return {

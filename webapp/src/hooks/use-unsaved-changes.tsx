@@ -54,7 +54,9 @@ export function useUnsavedChanges({
 
 	return {
 		track: (submission) => {
-			if (!(submission instanceof Promise)) return;
+			if (!(submission instanceof Promise)) {
+				return;
+			}
 			setSaving(true);
 			submission.catch(() => setSaving(false));
 		},
@@ -62,7 +64,9 @@ export function useUnsavedChanges({
 			<AlertDialog
 				open={blocker.status === "blocked"}
 				onOpenChange={(open, eventDetails) => {
-					if (!open && eventDetails.reason === "escape-key") blocker.reset?.();
+					if (!open && eventDetails.reason === "escape-key") {
+						blocker.reset?.();
+					}
 				}}
 			>
 				<AlertDialogContent>

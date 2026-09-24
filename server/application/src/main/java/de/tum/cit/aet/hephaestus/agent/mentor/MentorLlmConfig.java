@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelBindingSource;
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.AdmittedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
@@ -18,7 +19,7 @@ public record MentorLlmConfig(
         String upstreamModelId,
         @Nullable Integer contextWindow,
         @Nullable Integer maxOutputTokens,
-        boolean supportsReasoning,
+        @Nullable ReasoningEffort reasoningEffort,
         @Nullable FundingSource connectionScope,
         @Nullable Long connectionId,
         @Nullable Long modelId,
@@ -35,7 +36,7 @@ public record MentorLlmConfig(
                 resolved.upstreamModelId(),
                 resolved.contextWindow(),
                 resolved.maxOutputTokens(),
-                resolved.supportsReasoning(),
+                resolved.reasoningEffort(),
                 ref.scope(),
                 ref.connectionId(),
                 ref.modelId(),

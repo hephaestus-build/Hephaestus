@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
-import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -44,9 +43,6 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Autowired
     private WorkspaceLifecycleService workspaceLifecycleService;
-
-    @Autowired
-    private AccountRepository accountRepository;
 
     @Autowired
     private IdentityLinkRepository identityLinkRepository;
@@ -250,7 +246,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
         assertNotNull(problem.getProperties());
         assertThat(problem.getProperties().get("errors"))
                 .asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class))
-                .containsKey("serverUrlSafe");
+                .containsKey("serverUrl");
 
         assertThat(workspaceRepository.findByWorkspaceSlug("gitlab-http")).isEmpty();
     }
@@ -350,7 +346,8 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 .bodyValue(gitlabRequest)
                 .exchange()
                 .expectStatus()
-                .isCreated();
+                .isCreated()
+                .expectBody(Void.class);
 
         List<WorkspaceListItemDTO> workspaces = webTestClient
                 .get()

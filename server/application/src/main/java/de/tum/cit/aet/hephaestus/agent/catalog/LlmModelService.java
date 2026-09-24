@@ -108,9 +108,7 @@ public class LlmModelService {
         model.setUpstreamModelId(request.upstreamModelId());
         model.setContextWindow(request.contextWindow());
         model.setMaxOutputTokens(request.maxOutputTokens());
-        if (request.supportsReasoning() != null) {
-            model.setSupportsReasoning(request.supportsReasoning());
-        }
+        model.setReasoningEffort(request.reasoningEffort());
         if (request.enabled() != null) {
             if (request.enabled()) {
                 requireActivatable(model);
@@ -163,8 +161,10 @@ public class LlmModelService {
         if (request.maxOutputTokens() != null) {
             model.setMaxOutputTokens(request.maxOutputTokens());
         }
-        if (request.supportsReasoning() != null) {
-            model.setSupportsReasoning(request.supportsReasoning());
+        if (Boolean.TRUE.equals(request.clearReasoningEffort())) {
+            model.setReasoningEffort(null);
+        } else if (request.reasoningEffort() != null) {
+            model.setReasoningEffort(request.reasoningEffort());
         }
         if (request.enabled() != null) {
             model.setEnabled(request.enabled());

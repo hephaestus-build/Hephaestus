@@ -62,7 +62,7 @@ class WorkspaceSettingsServiceTest extends BaseUnitTest {
         Workspace workspace = TestEntities.workspace(7L);
         Connection connection = new Connection(
                 workspace, IntegrationKind.GITHUB, "acme", new ConnectionConfig.GitHubPatConfig("x", "x", Set.of()));
-        connection.setCredentials(new BearerToken("ghp-old", null), new CredentialBundleConverter(KEY, "test"));
+        connection.setCredentials(new BearerToken("ghp-old", null), new CredentialBundleConverter(KEY, false));
         when(workspaceRepository.findById(7L)).thenReturn(Optional.of(workspace));
         when(connectionService.findActiveProviderKind(7L)).thenReturn(Optional.of(IntegrationKind.GITHUB));
         when(connectionService.rotateBearerToken(eq(7L), eq(IntegrationKind.GITHUB), any(BearerToken.class)))

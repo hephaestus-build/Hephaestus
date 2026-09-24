@@ -1,32 +1,31 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { describe, test } from "node:test";
 
 import { duplicatePorts } from "./check-ports.ts";
 import { withDisposableDatabase } from "./db-utils.ts";
 import { loadConfig } from "./e2e-setup.ts";
-import { isHostname } from "./jean-public-test.ts";
 import { updateEnv } from "./jean-setup.ts";
-import { positivePort, readEnvFile } from "./lib/env.ts";
+import { isHostname, isSet, positivePort, readEnvFile } from "./lib/env.ts";
 
 await describe("environment parsing", async () => {
 	await test("parses data without evaluating shell syntax", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "hephaestus-env-"));
+		const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-env-"));
 		try {
-			const path = join(directory, ".env");
-			await writeFile(path, "PORT=5432\nSECRET=$(echo leaked)\nexport BAD=ignored\n");
-			assert.deepEqual(await readEnvFile(path), { PORT: "5432", SECRET: "$(echo leaked)" });
+			const envFile = path.join(directory, ".env");
+			await writeFile(envFile, "PORT=5432\nSECRET=$(echo leaked)\nexport BAD=ignored\n");
+			assert.deepEqual(await readEnvFile(envFile), { PORT: "5432", SECRET: "$(echo leaked)" });
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
 	});
 
 	await test("rejects invalid ports", () => {
-		assert.throws(() => positivePort("0", "PORT"), /1 to 65535/);
-		assert.throws(() => positivePort("65536", "PORT"), /1 to 65535/);
+		assert.throws(() => positivePort("0", "PORT"), /1 to 65535/u);
+		assert.throws(() => positivePort("65536", "PORT"), /1 to 65535/u);
 	});
 });
 
@@ -37,14 +36,15 @@ await test("duplicate port reporting identifies the conflicting pair", () => {
 });
 
 await test("duplicate configured ports fail the preflight", async () => {
-	const child = spawn(process.execPath, [join(import.meta.dirname, "check-ports.ts"), "--quiet"], {
-		env: { ...process.env, POSTGRES_PORT: "65431", SERVER_PORT: "65431", WEBAPP_PORT: "65431" },
-		stdio: "ignore",
-	});
-	const [exitCode] = await new Promise<[number | null]>((resolve) => {
-		child.once("exit", (code) => resolve([code]));
-	});
-	assert.equal(exitCode, 1);
+	const result = spawnSync(
+		process.execPath,
+		[path.join(import.meta.dirname, "check-ports.ts"), "--quiet"],
+		{
+			env: { ...process.env, POSTGRES_PORT: "65431", SERVER_PORT: "65431", WEBAPP_PORT: "65431" },
+			stdio: "ignore",
+		},
+	);
+	assert.equal(result.status, 1);
 });
 
 await test("public host validation rejects Traefik rule syntax", () => {
@@ -63,11 +63,11 @@ await test("Jean setup updates only GitLab bootstrap settings and remains idempo
 });
 
 await test("database drafting restores planted state after external-command failure", async () => {
-	const directory = await mkdtemp(join(tmpdir(), "hephaestus-db-"));
-	const data = join(directory, "postgres-data");
-	const backup = join(directory, "backup");
+	const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-db-"));
+	const data = path.join(directory, "postgres-data");
+	const backup = path.join(directory, "backup");
 	await mkdir(data);
-	await writeFile(join(data, "sentinel"), "original");
+	await writeFile(path.join(data, "sentinel"), "original");
 	let stops = 0;
 	try {
 		let failure: unknown;
@@ -75,13 +75,12 @@ await test("database drafting restores planted state after external-command fail
 			await withDisposableDatabase(
 				data,
 				backup,
-				() => {
+				async () => {
 					stops += 1;
-					return Promise.resolve();
 				},
 				async () => {
 					await mkdir(data);
-					await writeFile(join(data, "sentinel"), "disposable");
+					await writeFile(path.join(data, "sentinel"), "disposable");
 					throw new Error("planted migration failure");
 				},
 			);
@@ -90,7 +89,7 @@ await test("database drafting restores planted state after external-command fail
 		}
 		assert.ok(failure instanceof Error);
 		assert.equal(failure instanceof Error ? failure.message : "", "planted migration failure");
-		assert.equal(await readFile(join(data, "sentinel"), "utf8"), "original");
+		assert.equal(await readFile(path.join(data, "sentinel"), "utf8"), "original");
 		assert.equal(stops, 2);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
@@ -98,11 +97,11 @@ await test("database drafting restores planted state after external-command fail
 });
 
 await test("database drafting does not move data after shutdown failure", async () => {
-	const directory = await mkdtemp(join(tmpdir(), "hephaestus-db-stop-"));
-	const data = join(directory, "postgres-data");
-	const backup = join(directory, "backup");
+	const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-db-stop-"));
+	const data = path.join(directory, "postgres-data");
+	const backup = path.join(directory, "backup");
 	await mkdir(data);
-	await writeFile(join(data, "sentinel"), "original");
+	await writeFile(path.join(data, "sentinel"), "original");
 	let stops = 0;
 	try {
 		let failure: unknown;
@@ -110,23 +109,23 @@ await test("database drafting does not move data after shutdown failure", async 
 			await withDisposableDatabase(
 				data,
 				backup,
-				() => {
+				async () => {
 					stops += 1;
-					return stops === 1
-						? Promise.resolve()
-						: Promise.reject(new Error("postgres still running"));
+					if (stops !== 1) {
+						throw new Error("postgres still running");
+					}
 				},
 				async () => {
 					await mkdir(data);
-					await writeFile(join(data, "sentinel"), "disposable");
+					await writeFile(path.join(data, "sentinel"), "disposable");
 				},
 			);
 		} catch (error) {
 			failure = error;
 		}
 		assert.equal(failure instanceof Error ? failure.message : "", "postgres still running");
-		assert.equal(await readFile(join(backup, "sentinel"), "utf8"), "original");
-		assert.equal(await readFile(join(data, "sentinel"), "utf8"), "disposable");
+		assert.equal(await readFile(path.join(backup, "sentinel"), "utf8"), "original");
+		assert.equal(await readFile(path.join(data, "sentinel"), "utf8"), "disposable");
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
@@ -135,7 +134,7 @@ await test("database drafting does not move data after shutdown failure", async 
 await test("scripts contains no shell implementation", async () => {
 	const entries = await readdir(import.meta.dirname, { recursive: true });
 	assert.deepEqual(
-		entries.filter((path) => path.endsWith(".sh")),
+		entries.filter((entry) => entry.endsWith(".sh")),
 		[],
 	);
 });
@@ -154,17 +153,17 @@ await describe("E2E setup trust boundaries", async () => {
 		const config = loadConfig(valid, []);
 		assert.equal(config.pat, "pat-secret");
 		assert.equal(config.llmKey, "llm-secret");
-		assert.throws(() => loadConfig(valid, ["--llm-key", "leak"]), /invalid argument/);
+		assert.throws(() => loadConfig(valid, ["--llm-key", "leak"]), /invalid argument/u);
 	});
 
 	await test("rejects non-loopback app and database endpoints", () => {
 		assert.throws(
 			() => loadConfig({ ...valid, E2E_APP_URL: "https://public.example" }, []),
-			/loopback/,
+			/loopback/u,
 		);
 		assert.throws(
 			() => loadConfig({ ...valid, E2E_DB_URL: "postgresql://secret@db.example/app" }, []),
-			/loopback/,
+			/loopback/u,
 		);
 	});
 
@@ -179,7 +178,7 @@ await describe("E2E setup trust boundaries", async () => {
 			} catch (error) {
 				diagnostic = error instanceof Error ? error.message : String(error);
 			}
-			assert.ok(diagnostic);
+			assert.ok(isSet(diagnostic));
 			assert.ok(!diagnostic.includes("pat-secret"));
 			assert.ok(!diagnostic.includes("llm-secret"));
 		}

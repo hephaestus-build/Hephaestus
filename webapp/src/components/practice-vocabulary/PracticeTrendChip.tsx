@@ -1,14 +1,14 @@
 import { useRender } from "@base-ui/react/use-render";
+import { cn } from "cn";
 import type { ReactElement } from "react";
 
 import type { PracticeTrend, TrendSupport } from "@/api/types.gen";
 import { FOCUS_RING } from "@/components/common/focus";
+import { statusToneClass } from "@/components/common/status-def";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 import { PRACTICE_TREND_DEFS } from "./practice-trend-defs";
 import { formatTrendProvenance, type TrendScope } from "./practice-trend-presentation";
-import { statusToneClass } from "./status-def";
 
 export interface PracticeTrendChipProps {
 	direction: PracticeTrend["direction"];
@@ -54,7 +54,9 @@ export function PracticeTrendChip({
 			),
 		},
 	});
-	if (render) return chip;
+	if (render) {
+		return chip;
+	}
 	return (
 		<Tooltip>
 			<TooltipTrigger render={chip} />

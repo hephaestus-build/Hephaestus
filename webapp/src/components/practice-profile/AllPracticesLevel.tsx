@@ -1,5 +1,5 @@
-import { DetailDrawerHeader } from "@/components/core/detail-drawer/DetailDrawerHeader";
-import { DetailPath, type LevelPath } from "@/components/core/detail-drawer/DetailPath";
+import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
+import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { DrawerBody, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 
 import { AllPracticesTable, type AllPracticesTableProps } from "./AllPracticesTable";
@@ -24,7 +24,7 @@ export function AllPracticesLevel({ nested, path, ...table }: AllPracticesLevelP
 			<DetailDrawerHeader nested={nested}>
 				<div className="flex min-w-0 flex-1 flex-col gap-2">
 					<DetailPath {...path} current="All practices" />
-					<DrawerTitle className="break-words text-2xl font-semibold tracking-tight">
+					<DrawerTitle className="text-2xl font-semibold tracking-tight break-words">
 						All practices
 					</DrawerTitle>
 					<DrawerDescription className="max-w-2xl">

@@ -15,6 +15,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MapsId;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.UUID;
 import lombok.EqualsAndHashCode;
@@ -28,9 +29,9 @@ import org.hibernate.annotations.OnDeleteAction;
  * Immutable many-to-many join binding a synthesized {@code Feedback} unit to the
  * {@link Observation}s it was composed from.
  *
- * <p>A single feedback unit can fuse several observations: each problem ({@code BAD}) leads as a
+ * <p>A single feedback unit can fuse several observations: each negative observation leads as a
  * {@link EvidenceRole#PRIMARY} row (so a unit routinely carries several PRIMARYs, one per problem),
- * and each strength ({@code GOOD}) is bound as a {@link EvidenceRole#SUPPORTING} row. A single
+ * and each positive observation is bound as a {@link EvidenceRole#SUPPORTING} row. A single
  * observation can be reused across feedback units that target different surfaces. The composite primary
  * key {@code (feedback_id, observation_id)} makes the binding idempotent.
  *
@@ -125,6 +126,9 @@ public class FeedbackObservation {
     @NoArgsConstructor
     @EqualsAndHashCode
     public static class Id implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         @Column(name = "feedback_id", columnDefinition = "UUID")
         private UUID feedbackId;

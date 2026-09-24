@@ -3,7 +3,7 @@ import { expect } from "storybook/test";
 
 import type { EvidenceCitation } from "@/api/types.gen";
 import { knownEvidenceSourceKinds } from "@/components/practice-vocabulary/evidence-source-defs";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { ObservationEvidence } from "./ObservationEvidence";
 
@@ -78,7 +78,9 @@ const CITATION_BY_KIND: Record<string, { path: string; quote: string }> = {
 
 function citation(sourceKind: string, overrides: Partial<EvidenceCitation> = {}): EvidenceCitation {
 	const sample = CITATION_BY_KIND[sourceKind];
-	if (!sample) throw new Error(`No sample passage is written for evidence source ${sourceKind}`);
+	if (!sample) {
+		throw new Error(`No sample passage is written for evidence source ${sourceKind}`);
+	}
 	const { path, quote } = sample;
 	const isDiff = sourceKind === "scm.pull-request.diff";
 	return {
@@ -96,7 +98,6 @@ function citation(sourceKind: string, overrides: Partial<EvidenceCitation> = {})
 }
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Observation evidence",
 	component: ObservationEvidence,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],
@@ -132,12 +133,7 @@ export const Default: Story = {
 	},
 };
 
-/**
- * The citations are built by walking the registry, so a kind added to the catalog is rendered here
- * the day it lands. The expected headings are written out rather than read back from the registry,
- * which falls back to the raw contract id for a kind it has no words for — asking it what the
- * heading should say would make a missing label agree with itself.
- */
+// Keep expected labels independent of the registry so missing labels cannot agree with themselves.
 export const EverySource: Story = {
 	args: {
 		evidence: { citations: knownEvidenceSourceKinds().map((kind) => citation(kind)) },
@@ -155,7 +151,7 @@ export const EverySource: Story = {
 				"The pull request itself",
 				"The code changes",
 				"Comments on the pull request",
-				"Files in the repository",
+				"Files and history in the repository",
 				"The issue itself",
 				"Comments on the issue",
 				"The document itself",
@@ -170,16 +166,11 @@ export const EverySource: Story = {
 			].sort(),
 		);
 		// Only a `code` locator has trustworthy line numbers, so no other source prints one.
-		await expect(canvas.queryByText(/Message from Ada Lovelace:\d/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/Message from Ada Lovelace:\d/u)).not.toBeInTheDocument();
 	},
 };
 
-/**
- * Outside a `code` locator the line range is an offset into the serialised context file the quote
- * was pulled from — a line of a JSON blob, not a message of a Slack thread — and the server never
- * checks that it points at the quote. Both citations here claim the same lines; only one of them is
- * a location a reader could open.
- */
+/** Only code locators expose source coordinates; object coordinates refer to serialized context. */
 export const LineNumbersOnlyWhereTheyAreReal: Story = {
 	args: {
 		evidence: {
@@ -189,7 +180,7 @@ export const LineNumbersOnlyWhereTheyAreReal: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("webapp/src/lib/artifact-kinds.ts:12–13");
 		canvas.getByText("Message from Ada Lovelace");
-		await expect(canvas.queryByText(/Message from Ada Lovelace:12/)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/Message from Ada Lovelace:12/u)).not.toBeInTheDocument();
 	},
 };
 
@@ -206,7 +197,7 @@ export const RedactedQuote: Story = {
 		},
 	},
 	play: async ({ canvas, canvasElement }) => {
-		canvas.getByText(/This looked like a credential/);
+		canvas.getByText(/This looked like a credential/u);
 		canvas.getByText("webapp/src/components/admin/practice-reviews/ReviewRow.tsx:12–13");
 		await expect(canvasElement.querySelector("pre")).toBeNull();
 	},
@@ -237,7 +228,7 @@ export const UnknownSource: Story = {
 export const NoEvidence: Story = {
 	args: { evidence: null },
 	play: async ({ canvas }) => {
-		canvas.getByText(/Nothing was quoted for this observation/);
+		canvas.getByText(/Nothing was quoted for this observation/u);
 	},
 };
 
@@ -261,5 +252,16 @@ export const Mobile: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByRole("heading", { name: "The code changes", level: 4 });
 		await expectNoPageOverflow();
+	},
+};
+
+export const HistoricalSource: Story = {
+	args: {
+		evidence: {
+			citations: [citation("scm.repository.tree", { revision: "b".repeat(40) })],
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("b".repeat(40))).toBeVisible();
 	},
 };

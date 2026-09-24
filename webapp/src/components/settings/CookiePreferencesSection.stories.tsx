@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, screen, userEvent } from "storybook/test";
 
-import { CookieConsentBanner } from "@/components/consent/CookieConsentBanner";
-import { CONSENT_STORAGE_KEY, closeConsentReopen, setStoredConsent } from "@/integrations/consent";
+import { CookieConsentBanner } from "@/components/layout/CookieConsentBanner";
+import { CONSENT_STORAGE_KEY, closeConsentReopen, setStoredConsent } from "@/runtime/consent";
 
 import { CookiePreferencesSection } from "./CookiePreferencesSection";
 
@@ -38,13 +38,13 @@ type Story = StoryObj<typeof meta>;
 /** Shows the current choice and re-opens the consent banner on demand. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		canvas.getByRole("heading", { name: /^privacy$/i });
+		canvas.getByRole("heading", { name: /^privacy$/iu });
 		// The banner is hidden while a decision is stored.
-		await expect(screen.queryByRole("region", { name: /your privacy/i })).not.toBeInTheDocument();
+		await expect(screen.queryByRole("region", { name: /your privacy/iu })).not.toBeInTheDocument();
 
-		await userEvent.click(canvas.getByRole("button", { name: /change cookie choices/i }));
+		await userEvent.click(canvas.getByRole("button", { name: /change cookie choices/iu }));
 		// A user-initiated reopen surfaces the banner and moves focus to it (keyboard/AT parity).
-		await expect(await screen.findByRole("region", { name: /your privacy/i })).toBeVisible();
-		await expect(screen.getByRole("region", { name: /your privacy/i })).toHaveFocus();
+		await expect(await screen.findByRole("region", { name: /your privacy/iu })).toBeVisible();
+		await expect(screen.getByRole("region", { name: /your privacy/iu })).toHaveFocus();
 	},
 };

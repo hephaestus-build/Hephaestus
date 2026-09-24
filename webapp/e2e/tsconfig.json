@@ -1,0 +1,12 @@
+{
+	"extends": "../tsconfig.json",
+	"include": ["**/*.ts"],
+	// Inherited as-is, the SPA's exclusion of this tree would leave the project with no inputs.
+	"exclude": [],
+	"compilerOptions": {
+		// Playwright runs on Node, whose promise API is past the browser lib the SPA targets; the page
+		// is reached through locators, never through DOM globals.
+		"lib": ["ES2024"],
+		"types": ["node"]
+	}
+}

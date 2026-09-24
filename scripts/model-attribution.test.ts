@@ -37,3 +37,8 @@ void test("every pattern has a name unique enough to report on its own", () => {
 	const names = MODEL_ATTRIBUTION_PATTERNS.map(({ name }) => name);
 	assert.equal(new Set(names).size, names.length);
 });
+
+void test("does not treat artifact regeneration as attribution", () => {
+	assert.deepEqual(findModelAttribution("Both API artifacts were regenerated with zero diff."), []);
+	assert.deepEqual(findModelAttribution("The client was REGENERATED WITH the updated spec."), []);
+});

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { AuthEventView } from "@/api/types.gen";
-import { expectSettledVisible } from "@/test/overlay";
+import { expectSettledVisible } from "@/stories/overlay";
 
 import { AdminAuditTable } from "./AdminAuditTable";
 
@@ -72,7 +72,7 @@ const meta = {
 		hasFilter: false,
 		hasNextPage: false,
 		isFetchingNextPage: false,
-		onLoadMore: () => {},
+		onLoadMore: fn(),
 		onFilterAccount: fn(),
 		onFilterActor: fn(),
 	},
@@ -109,8 +109,10 @@ export const DeletedAccountFallback: Story = {
 
 export const RowDetail: Story = {
 	play: async ({ canvas }) => {
-		const [firstDetails] = canvas.getAllByRole("button", { name: /View details/i });
-		if (!firstDetails) throw new Error("The table rendered no rows to open");
+		const [firstDetails] = canvas.getAllByRole("button", { name: /View details/iu });
+		if (!firstDetails) {
+			throw new Error("The table rendered no rows to open");
+		}
 		await userEvent.click(firstDetails);
 		await expectSettledVisible(await screen.findByText("User agent"));
 		screen.getByText("Workspace");
@@ -128,11 +130,13 @@ export const ElevatedWorkspaceAccess: Story = {
 export const ElevatedRowDetail: Story = {
 	args: { events: [elevatedAccess] },
 	play: async ({ canvas }) => {
-		const [details] = canvas.getAllByRole("button", { name: /View details/i });
-		if (!details) throw new Error("The table rendered no rows to open");
+		const [details] = canvas.getAllByRole("button", { name: /View details/iu });
+		if (!details) {
+			throw new Error("The table rendered no rows to open");
+		}
 		await userEvent.click(details);
 		await expectSettledVisible(await screen.findByText("Access"));
-		screen.getByText(/not a member of/i);
+		screen.getByText(/not a member of/iu);
 	},
 };
 
@@ -147,7 +151,7 @@ export const EmptyInitial: Story = {
 	args: { events: [], hasFilter: false },
 	play: async ({ canvas }) => {
 		canvas.getByText("No events yet");
-		canvas.getByText(/Sign-ins, impersonation, role changes/i);
+		canvas.getByText(/Sign-ins, user views, role changes/iu);
 	},
 };
 
@@ -161,7 +165,7 @@ export const EmptyWithFilter: Story = {
 export const ErrorState: Story = {
 	args: { events: [], isError: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/Couldn’t load the audit log/i);
+		canvas.getByText(/Couldn’t load the audit log/iu);
 	},
 };
 
@@ -177,8 +181,41 @@ export const ColumnCountMatchesHeader: Story = {
 	play: async ({ canvas }) => {
 		const headers = canvas.getAllByRole("columnheader");
 		const [, firstBodyRow] = canvas.getAllByRole("row");
-		if (!firstBodyRow) throw new Error("The table rendered no body rows");
+		if (!firstBodyRow) {
+			throw new Error("The table rendered no body rows");
+		}
 		const cells = within(firstBodyRow).getAllByRole("cell");
 		await expect(headers).toHaveLength(cells.length);
+	},
+};
+
+/** An accountless viewed user is attributable without pretending that they were signed in. */
+export const AccountlessUserView: Story = {
+	args: {
+		events: [
+			{
+				id: 20,
+				occurredAt: new Date("2026-09-11T12:00:00Z"),
+				eventType: "USER_VIEW",
+				result: "SUCCESS",
+				elevatedViaInstanceAdmin: true,
+				accountId: 7,
+				viewedUserId: 99,
+				workspaceId: 12,
+				account: { id: 7, displayName: "Grace Hopper" },
+				details:
+					'{"phase":"AUTHORIZED","reason":"Investigate missing feedback","surface":"practices"}',
+			},
+		],
+	},
+	play: async ({ canvas }) => {
+		canvas.getByText("High-risk event:");
+		await expect(canvas.getByText("Elevated")).toBeVisible();
+		await expect(
+			canvas.getByRole("button", { name: "View details: User view authorized — Grace Hopper" }),
+		).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: /View details/u }));
+		await expectSettledVisible(await screen.findByText("Viewed user"));
+		screen.getByText("#99");
 	},
 };

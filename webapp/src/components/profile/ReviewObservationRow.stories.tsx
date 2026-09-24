@@ -2,16 +2,16 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, within } from "storybook/test";
 
 import type { ObservationDetail } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
 import { formatDay } from "@/lib/dates";
+import { expectSettledVisible } from "@/stories/overlay";
 import {
 	couldNotSettleIt,
 	nextStepWithoutDelivery,
 	nothingToJudge,
 	searchedAndFoundNothing,
 } from "@/stories/practice-detail-story-mock-data";
-import { expectSettledVisible } from "@/test/overlay";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
+import { daysBefore } from "@/stories/story-clock";
 
 import { ReviewObservationRow } from "./ReviewObservationRow";
 
@@ -29,6 +29,7 @@ const strength = {
 	practiceSlug: "explains-decisions",
 	practiceName: "Explain significant decisions",
 	summary: "The reasoning is recorded next to the changed behavior",
+	assessmentStatus: "ASSESSED",
 	presence: "PRESENT",
 	assessment: "GOOD",
 	observedAt: daysBefore(2),
@@ -74,6 +75,7 @@ const problemSeen = {
 	practiceSlug: "does-not-swallow-errors",
 	practiceName: "Do not swallow recoverable errors",
 	summary: "The exception is caught and discarded",
+	assessmentStatus: "ASSESSED",
 	presence: "PRESENT",
 	assessment: "BAD",
 	severity: "MAJOR",
@@ -83,7 +85,11 @@ const problemSeen = {
 	...reviewedWork,
 } satisfies ObservationDetail;
 
-/** One row per outcome the registry can name, with nothing to open under any of them. */
+/**
+ * One row per outcome the registry can name, with nothing to open under any of them. The
+ * assessment is the behaviour's desirability, so the two absent rows read against the grain: an
+ * undesirable behaviour absent is the risk avoided, a desirable one absent is the gap.
+ */
 const outcomes: ObservationDetail[] = [
 	problemSeen,
 	{
@@ -91,8 +97,9 @@ const outcomes: ObservationDetail[] = [
 		practiceSlug: "avoids-unsafe-defaults",
 		practiceName: "Avoid unsafe defaults",
 		summary: "The boundary does not fall back to an unsafe value",
+		assessmentStatus: "ASSESSED",
 		presence: "ABSENT",
-		assessment: "GOOD",
+		assessment: "BAD",
 		observedAt: daysBefore(2),
 		origin: "LIVE",
 		claimCurrentness: "CURRENT",
@@ -103,8 +110,9 @@ const outcomes: ObservationDetail[] = [
 		practiceSlug: "covers-new-behavior",
 		practiceName: "Cover new behavior with a test",
 		summary: "The new branch has no test exercising it",
+		assessmentStatus: "ASSESSED",
 		presence: "ABSENT",
-		assessment: "BAD",
+		assessment: "GOOD",
 		severity: "CRITICAL",
 		observedAt: daysBefore(2),
 		origin: "LIVE",
@@ -116,7 +124,7 @@ const outcomes: ObservationDetail[] = [
 		practiceSlug: "network-timeouts",
 		practiceName: "Document network timeout behavior",
 		summary: "This change performs no network request",
-		presence: "NOT_APPLICABLE",
+		assessmentStatus: "NOT_APPLICABLE",
 		observedAt: daysBefore(2),
 		origin: "LIVE",
 		claimCurrentness: "CURRENT",
@@ -127,7 +135,7 @@ const outcomes: ObservationDetail[] = [
 		practiceSlug: "keeps-docs-current",
 		practiceName: "Keep documentation current",
 		summary: "The evidence does not settle whether the page is current",
-		presence: "INCONCLUSIVE",
+		assessmentStatus: "UNDETERMINED",
 		observedAt: daysBefore(2),
 		origin: "LIVE",
 		claimCurrentness: "CURRENT",
@@ -141,7 +149,6 @@ const outcomes: ObservationDetail[] = [
  * that shows the row standing alone.
  */
 const meta = {
-	title: "Profile/Review runs/Observation row",
 	component: ReviewObservationRow,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
@@ -166,7 +173,7 @@ type Story = StoryObj<typeof meta>;
  */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		const row = canvas.getByRole("button", { name: new RegExp(strength.summary) });
+		const row = canvas.getByRole("button", { name: new RegExp(strength.summary, "u") });
 		await expect(row).toHaveAttribute("aria-expanded", "true");
 		await expect(
 			canvas.getByText(strength.practiceName).closest('[data-slot="badge"]'),
@@ -194,7 +201,7 @@ export const Default: Story = {
 export const Collapsed: Story = {
 	args: { defaultOpen: false },
 	play: async ({ canvas, userEvent }) => {
-		const row = canvas.getByRole("button", { name: new RegExp(strength.summary) });
+		const row = canvas.getByRole("button", { name: new RegExp(strength.summary, "u") });
 		await expect(row).toHaveAttribute("aria-expanded", "false");
 		await expect(canvas.queryByText("Why it was noted")).not.toBeInTheDocument();
 		await userEvent.click(row);
@@ -248,7 +255,7 @@ export const WithWorkLink: Story = {
 	args: { showWorkLink: true },
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByRole("link", { name: /Open the pull or merge request/ }),
+			canvas.getByRole("link", { name: /Open the pull or merge request/u }),
 		).toHaveAttribute("href", reviewedWork.artifactUrl);
 	},
 };
@@ -390,7 +397,7 @@ export const RecordsAComment: Story = {
 export const OutcomeExplained: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.hover(canvas.getByText("Strength shown"));
-		await expectSettledVisible(await screen.findByText(/the author is told so/));
+		await expectSettledVisible(await screen.findByText(/worth keeping/u));
 	},
 };
 
@@ -420,16 +427,18 @@ export const SearchedAndFoundNothing: Story = {
 			canvas.getByText("a test exercising the new caching branch of the loader"),
 		).toBeVisible();
 		// The sources are named as the registry names them, never by their wire kind.
-		await expect(canvas.getByText("The code changes and Files in the repository")).toBeVisible();
+		await expect(
+			canvas.getByText("The code changes and Files and history in the repository"),
+		).toBeVisible();
 		// The boundary says how far the search reached, so the term says the same.
 		await expect(canvas.getByText("How far it reached:")).toBeVisible();
 		await expect(
-			canvas.getByText(/^every test file the diff touches/, { selector: "p" }),
+			canvas.getByText(/^every test file the diff touches/u, { selector: "p" }),
 		).toBeVisible();
 		// The reviewer writes Markdown: what it quotes is code, not a line of stray backticks.
-		const rationale = canvas.getByText(/^The branch is new in this change/, { selector: "p" });
+		const rationale = canvas.getByText(/^The branch is new in this change/u, { selector: "p" });
 		await expect(within(rationale).getByText("loadFromCache").tagName).toBe("CODE");
-		await expect(canvas.queryByText(/`/)).toBeNull();
+		await expect(canvas.queryByText(/`/u)).toBeNull();
 	},
 };
 

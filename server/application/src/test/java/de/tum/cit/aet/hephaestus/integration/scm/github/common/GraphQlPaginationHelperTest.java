@@ -223,7 +223,7 @@ class GraphQlPaginationHelperTest {
                     .connectionFieldPath(FIELD_PATH)
                     .connectionType(TestConnection.class)
                     .pageInfoExtractor(TestConnection::getPageInfo)
-                    .pageProcessor(conn -> {
+                    .pageProcessorWhile(conn -> {
                         pageCount.incrementAndGet();
                         return true;
                     })
@@ -254,7 +254,7 @@ class GraphQlPaginationHelperTest {
                     .connectionFieldPath(FIELD_PATH)
                     .connectionType(TestConnection.class)
                     .pageInfoExtractor(TestConnection::getPageInfo)
-                    .pageProcessor(conn -> true)
+                    .pageProcessorWhile(conn -> true)
                     .contextDescription("test")
                     .initialCursor(initialCursor)
                     .build());
@@ -396,7 +396,7 @@ class GraphQlPaginationHelperTest {
                 .connectionFieldPath(FIELD_PATH)
                 .connectionType(TestConnection.class)
                 .pageInfoExtractor(TestConnection::getPageInfo)
-                .pageProcessor(processor)
+                .pageProcessorWhile(processor)
                 .contextDescription("test")
                 .build();
     }
@@ -422,14 +422,10 @@ class GraphQlPaginationHelperTest {
         when(client.documentName(DOCUMENT_NAME)).thenReturn(requestSpec);
         when(requestSpec.variable(any(), any())).thenReturn(requestSpec);
 
-        // Set up sequential responses
-        Mono<ClientGraphQlResponse> first = Mono.just(responses[0]);
-        @SuppressWarnings("unchecked")
-        Mono<ClientGraphQlResponse>[] rest = new Mono[responses.length - 1];
+        var execution = when(requestSpec.execute()).thenReturn(Mono.just(responses[0]));
         for (int i = 1; i < responses.length; i++) {
-            rest[i - 1] = Mono.just(responses[i]);
+            execution = execution.thenReturn(Mono.just(responses[i]));
         }
-        when(requestSpec.execute()).thenReturn(first, rest);
     }
 
     private static GHPageInfo pageInfo(@Nullable String endCursor, boolean hasNextPage) {

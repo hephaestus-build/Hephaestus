@@ -146,7 +146,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .uri("/workspaces/{slug}/teams/{teamId}/settings", workspace.getWorkspaceSlug(), team.getId())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -195,7 +196,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -214,7 +216,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
     }
 
@@ -261,7 +264,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                             repository.getId())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -319,7 +323,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -342,7 +347,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .bodyValue(request)
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
     }
 
@@ -390,7 +396,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isCreated();
+                    .isCreated()
+                    .expectBody(Void.class);
 
             // Assert: Verify database state
             var filters = labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), team.getId());
@@ -416,7 +423,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -435,7 +443,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isCreated();
+                    .isCreated()
+                    .expectBody(Void.class);
 
             // Act: Try to add the same filter again
             webTestClient
@@ -448,7 +457,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isCreated();
+                    .isCreated()
+                    .expectBody(Void.class);
 
             // Assert: Only one filter exists
             var filters = labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), team.getId());
@@ -471,7 +481,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isCreated();
+                    .isCreated()
+                    .expectBody(Void.class);
 
             // Verify filter exists
             var filtersBefore = labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), team.getId());
@@ -487,7 +498,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNoContent();
+                    .isNoContent()
+                    .expectBody(Void.class);
 
             // Assert: Verify database state
             var filtersAfter = labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), team.getId());
@@ -511,7 +523,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -531,7 +544,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isCreated();
+                    .isCreated()
+                    .expectBody(Void.class);
 
             webTestClient
                     .post()
@@ -543,7 +557,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isCreated();
+                    .isCreated()
+                    .expectBody(Void.class);
 
             List<LabelInfoDTO> result = webTestClient
                     .get()
@@ -584,7 +599,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .bodyValue(new UpdateTeamSettingsRequestDTO(true))
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             // Assert: Verify the team is hidden when fetching settings
             WorkspaceTeamSettingsDTO result = webTestClient
@@ -620,7 +636,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .bodyValue(new UpdateRepositorySettingsRequestDTO(true))
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             // Assert: Verify the repository is hidden when fetching settings
             WorkspaceTeamRepositorySettingsDTO result = webTestClient
@@ -656,7 +673,8 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .bodyValue(new UpdateTeamSettingsRequestDTO(true))
                     .exchange()
                     .expectStatus()
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
 
             // Act: Unhide the team
             WorkspaceTeamSettingsDTO result = webTestClient

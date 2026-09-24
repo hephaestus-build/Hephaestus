@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackThreadKey;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -432,6 +433,7 @@ class ConversationalFeedbackPreparerTest extends BaseUnitTest {
         UUID id = UUID.randomUUID();
         lenient().when(observation.getId()).thenReturn(id);
         lenient().when(observation.getPresence()).thenReturn(Presence.ABSENT);
+        org.mockito.Mockito.lenient().when(observation.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
         lenient().when(observation.getAssessment()).thenReturn(Assessment.BAD);
         lenient().when(observation.getSeverity()).thenReturn(severity);
         lenient().when(observation.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);

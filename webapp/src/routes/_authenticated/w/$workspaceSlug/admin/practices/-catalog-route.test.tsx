@@ -24,7 +24,6 @@ describe("practice catalog route", () => {
 						status: "ACTIVE",
 						practicesEnabled: false,
 						mentorEnabled: false,
-						achievementsEnabled: false,
 						leaderboardEnabled: false,
 						progressionEnabled: false,
 						leaguesEnabled: false,

@@ -15,14 +15,14 @@ const subject = {
 	reference: "ghcr.io/hephaestus-build/webapp:run-1-1",
 	repository: "ghcr.io/hephaestus-build/webapp",
 };
-const noSleep = (): Promise<void> => {
+const noSleep = async (): Promise<void> => {
 	throw new Error("the resolver must not sleep on a first-attempt success");
 };
 
 void describe("resolveReleaseImages", () => {
 	void test("resolves each image to the index digest the run published", async () => {
 		const images = await resolveReleaseImages([subject], {
-			inspect: () => Promise.resolve(`${DIGEST}\n`),
+			inspect: async () => `${DIGEST}\n`,
 			sleep: noSleep,
 		});
 		assert.deepEqual(images, [
@@ -35,11 +35,12 @@ void describe("resolveReleaseImages", () => {
 		const images = await resolveReleaseImages([subject], {
 			attempts: 3,
 			delayMs: 0,
-			inspect: () => {
+			inspect: async () => {
 				attempts += 1;
-				return attempts < 3
-					? Promise.reject(new Error("MANIFEST_UNKNOWN"))
-					: Promise.resolve(DIGEST);
+				if (attempts < 3) {
+					throw new Error("MANIFEST_UNKNOWN");
+				}
+				return DIGEST;
 			},
 		});
 		assert.equal(attempts, 3);
@@ -53,17 +54,19 @@ void describe("resolveReleaseImages", () => {
 			resolveReleaseImages([subject], {
 				attempts: 2,
 				delayMs: 0,
-				inspect: () => Promise.resolve("latest"),
+				inspect: async () => "latest",
 			}),
-			/could not resolve an index digest/,
+			/could not resolve an index digest/u,
 		);
 		await assert.rejects(
 			resolveReleaseImages([subject], {
 				attempts: 2,
 				delayMs: 0,
-				inspect: () => Promise.reject(new Error("unauthorized")),
+				inspect: async () => {
+					throw new Error("unauthorized");
+				},
 			}),
-			/could not resolve an index digest/,
+			/could not resolve an index digest/u,
 		);
 	});
 });
@@ -84,8 +87,9 @@ void describe("the resolver's hand-off to the evidence generator", () => {
 			`webapp\t\t${DIGEST}\n`,
 			"webapp\tghcr.io/hephaestus-build/webapp\tlatest\n",
 			`webapp\tghcr.io/hephaestus-build/webapp\t${DIGEST.toUpperCase()}\n`,
-		])
-			assert.throws(() => parseResolvedImages(line), /malformed resolved release image/);
+		]) {
+			assert.throws(() => parseResolvedImages(line), /malformed resolved release image/u);
+		}
 	});
 
 	void test("names a step output for every image, not only the ones a job reads today", () => {

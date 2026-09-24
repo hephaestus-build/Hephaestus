@@ -1,8 +1,8 @@
 import type { ComponentProps } from "react";
 
+import { cn } from "cn";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
 
 /**
  * The tab row the practice surfaces draw over a list — the profile page over its feedback cards,
@@ -52,7 +52,7 @@ export function PracticeTabsTrigger({
 	return (
 		<TabsTrigger
 			className={cn(
-				"h-auto flex-none gap-1.5 rounded-none px-0 pt-0 pb-2 text-sm text-muted-foreground group-data-[orientation=horizontal]/tabs:after:bottom-[-0.5px] data-active:font-semibold",
+				"h-auto flex-none gap-1.5 px-0 pt-0 pb-2 text-sm group-data-[orientation=horizontal]/tabs:after:bottom-[-0.5px] data-active:font-semibold",
 				className,
 			)}
 			{...props}

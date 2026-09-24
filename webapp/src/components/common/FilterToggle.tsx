@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import {
 	Select,
 	SelectContent,
@@ -6,7 +7,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { cn } from "@/lib/utils";
+import { hasText } from "@/lib/text";
 
 export interface FilterOption<TValue extends string> {
 	value: TValue;
@@ -48,7 +49,11 @@ export function FilterToggle<TValue extends string>({
 					label: optionLabel,
 				}))}
 				value={value}
-				onValueChange={(next) => next && onChange(next)}
+				onValueChange={(next) => {
+					if (hasText(next)) {
+						onChange(next);
+					}
+				}}
 			>
 				<SelectTrigger className="w-full sm:hidden" aria-label={label}>
 					<SelectValue />
@@ -66,7 +71,9 @@ export function FilterToggle<TValue extends string>({
 				value={[value]}
 				onValueChange={(next) => {
 					const chosen = next[0];
-					if (chosen) onChange(chosen);
+					if (hasText(chosen)) {
+						onChange(chosen);
+					}
 				}}
 				variant="outline"
 				size="sm"
@@ -76,7 +83,7 @@ export function FilterToggle<TValue extends string>({
 				{options.map((option) => (
 					<ToggleGroupItem key={option.value} value={option.value} className="min-w-0">
 						{option.shortLabel ?? option.label}
-						{option.srSuffix && <span className="sr-only"> {option.srSuffix}</span>}
+						{hasText(option.srSuffix) && <span className="sr-only"> {option.srSuffix}</span>}
 					</ToggleGroupItem>
 				))}
 			</ToggleGroup>

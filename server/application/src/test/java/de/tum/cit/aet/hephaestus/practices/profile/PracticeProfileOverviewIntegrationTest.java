@@ -94,12 +94,12 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
 
         // Descriptions held on every pull request; the diff slipped on #20, recovered on #21 and slipped again on #22.
         observe(describeWhatAndWhy, firstRun, 20L, developer, "PRESENT", "GOOD", null, FIRST_RUN_AT);
-        olderProblem = observe(reviewableDiffSize, firstRun, 20L, developer, "ABSENT", "BAD", "MINOR", FIRST_RUN_AT);
+        olderProblem = observe(reviewableDiffSize, firstRun, 20L, developer, "ABSENT", "GOOD", "MINOR", FIRST_RUN_AT);
         observe(describeWhatAndWhy, previousRun, 21L, developer, "PRESENT", "GOOD", null, PREVIOUS_RUN_AT);
         observe(reviewableDiffSize, previousRun, 21L, developer, "PRESENT", "GOOD", null, PREVIOUS_RUN_AT);
         observe(describeWhatAndWhy, latestRun, 22L, developer, "PRESENT", "GOOD", null, LATEST_RUN_AT);
         UUID latestProblem =
-                observe(reviewableDiffSize, latestRun, 22L, developer, "ABSENT", "BAD", "MAJOR", LATEST_RUN_AT);
+                observe(reviewableDiffSize, latestRun, 22L, developer, "ABSENT", "GOOD", "MAJOR", LATEST_RUN_AT);
 
         olderFeedback = persistInAppFeedback(
                 firstRun, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, FIRST_RUN_AT.plusSeconds(30));
@@ -491,7 +491,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
 
     private Feedback describingFeedbackPreparedAt(int number, Instant preparedAt) {
         AgentJob run = persistPullRequestReview(workspace, number, preparedAt);
-        UUID problem = observe(describeWhatAndWhy, run, number, developer, "ABSENT", "BAD", "MINOR", preparedAt);
+        UUID problem = observe(describeWhatAndWhy, run, number, developer, "ABSENT", "GOOD", "MINOR", preparedAt);
         Feedback feedback = persistInAppFeedback(
                 run, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, preparedAt.plusSeconds(30));
         bind(feedback, problem);

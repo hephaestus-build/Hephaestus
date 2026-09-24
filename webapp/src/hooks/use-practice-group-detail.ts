@@ -13,8 +13,9 @@ import {
 	type ReviewRunFeedState,
 } from "@/components/profile/review-runs";
 import { invalidateFeedbackResponses } from "@/hooks/use-in-app-feedback";
-import { loadedPages } from "@/integrations/tanstack-query/spring-page";
 import { problemDetailOf } from "@/lib/problem-detail";
+import { hasText } from "@/lib/text";
+import { loadedPages } from "@/runtime/tanstack-query/spring-page";
 
 /** Review runs per page of the feed; also the skeleton's row count while the first page loads. */
 export const REVIEW_RUN_PAGE_SIZE = 10;
@@ -67,7 +68,8 @@ export function usePracticeGroupDetail({
 			query: { size: REVIEW_RUN_PAGE_SIZE, practiceSlug },
 		}),
 		initialPageParam: 0,
-		getNextPageParam: (lastPage) => (lastPage.hasNext ? (lastPage.page ?? 0) + 1 : undefined),
+		getNextPageParam: (lastPage) =>
+			lastPage.hasNext === true ? (lastPage.page ?? 0) + 1 : undefined,
 		enabled: practiceOpen,
 	});
 	const written = () => invalidateFeedbackResponses(queryClient, workspaceSlug, groupSlug);
@@ -85,17 +87,28 @@ export function usePracticeGroupDetail({
 	});
 
 	const practices = practiceStandings.filter((practice) => practice.groupSlug === groupSlug);
-	const feed: ReviewRunFeedState = activityQuery.isError
-		? { status: "error", error: activityQuery.error, onRetry: () => void activityQuery.refetch() }
-		: activityQuery.isPending
-			? { status: "loading" }
-			: {
-					status: "ready",
-					runs: loadedPages(activityQuery.data).flatMap((page) => page.content),
-					hasMore: activityQuery.hasNextPage,
-					isLoadingMore: activityQuery.isFetchingNextPage,
-					onLoadMore: () => void activityQuery.fetchNextPage(),
-				};
+	let feed: ReviewRunFeedState;
+	if (activityQuery.isError) {
+		feed = {
+			status: "error",
+			error: activityQuery.error,
+			onRetry: () => {
+				void activityQuery.refetch();
+			},
+		};
+	} else if (activityQuery.isPending) {
+		feed = { status: "loading" };
+	} else {
+		feed = {
+			status: "ready",
+			runs: loadedPages(activityQuery.data).flatMap((page) => page.content),
+			hasMore: activityQuery.hasNextPage,
+			isLoadingMore: activityQuery.isFetchingNextPage,
+			onLoadMore: () => {
+				void activityQuery.fetchNextPage();
+			},
+		};
+	}
 	return {
 		practices,
 		practice: practiceOpen
@@ -103,8 +116,10 @@ export function usePracticeGroupDetail({
 			: undefined,
 		feed,
 		respond: (observation, response) => {
-			const feedbackId = observation.feedbackId;
-			if (!feedbackId) return;
+			const { feedbackId } = observation;
+			if (!hasText(feedbackId)) {
+				return;
+			}
 			if (isEmptyFeedbackResponse(response)) {
 				deleteResponseMutation.mutate({ path: { workspaceSlug, feedbackId } });
 				return;

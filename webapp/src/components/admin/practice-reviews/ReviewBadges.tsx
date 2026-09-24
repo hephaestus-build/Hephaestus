@@ -1,53 +1,22 @@
-import { CircleHelp, ClockAlert } from "lucide-react";
-
+import { cn } from "cn";
 import type {
 	ReviewFeedbackCounts,
 	ReviewFeedbackDisposition,
 	ReviewObservation,
 	ReviewObservationCounts,
 } from "@/api/types.gen";
+import type { StatusDef } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import {
 	type ObservationResultFacts,
 	observationResult,
 } from "@/components/practice-vocabulary/observation-result";
-import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
+import { derivedOutcome } from "@/components/practice-vocabulary/outcome-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import type { StatusDef } from "@/components/practice-vocabulary/status-def";
-import { StatusBadge } from "@/components/practice-vocabulary/StatusBadge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-
-type NonCurrentClaimCurrentness = Exclude<ReviewObservation["claimCurrentness"], "CURRENT">;
-
-const CLAIM_CURRENTNESS_CONFIG = {
-	STALE: {
-		badge: "Uses older review rules",
-		badgeVariant: "warning",
-		Icon: ClockAlert,
-		title: "This was judged against an older version of the practice",
-		description:
-			"The practice has been edited since. What it says may no longer be what the practice asks for.",
-	},
-	UNVERIFIABLE: {
-		badge: "Rules version unknown",
-		badgeVariant: "outline",
-		Icon: CircleHelp,
-		title: "We can't tell which version of the practice this was judged against",
-		description:
-			"The record of which practice text the review read was not kept, so there is no way to say whether the practice has changed since. Treat it as you would any observation you have not checked.",
-	},
-} as const satisfies Record<
-	NonCurrentClaimCurrentness,
-	{
-		badge: string;
-		badgeVariant: "warning" | "outline";
-		Icon: typeof ClockAlert;
-		title: string;
-		description: string;
-	}
->;
+import { hasText } from "@/lib/text";
 
 export function ObservationResultBadge({
 	observation,
@@ -70,7 +39,11 @@ export function ObservationResultBadge({
 export function observationSeverity(
 	observation: ObservationResultFacts & Pick<ReviewObservation, "severity">,
 ): StatusDef | undefined {
-	return observation.assessment === "BAD" && observation.severity
+	return observation.assessmentStatus === "ASSESSED" &&
+		observation.presence &&
+		observation.assessment &&
+		derivedOutcome(observation.presence, observation.assessment) === "NEGATIVE" &&
+		observation.severity
 		? SEVERITY_DEFS[observation.severity]
 		: undefined;
 }
@@ -81,37 +54,13 @@ export function observationSeverity(
  * LIVE renders nothing: badging the ordinary case buries the exceptions.
  */
 export function ObservationOriginBadge({ origin }: { origin: ReviewObservation["origin"] }) {
-	if (origin === "LIVE") return null;
+	if (origin === "LIVE") {
+		return null;
+	}
 	return (
 		<Badge variant="outline">
 			{origin === "BACKFILL" ? "From a review of past work" : "Requested by hand"}
 		</Badge>
-	);
-}
-
-export function ClaimCurrentnessBadge({
-	currentness,
-}: {
-	currentness: ReviewObservation["claimCurrentness"];
-}) {
-	if (currentness === "CURRENT") return null;
-	const config = CLAIM_CURRENTNESS_CONFIG[currentness];
-	return <Badge variant={config.badgeVariant}>{config.badge}</Badge>;
-}
-
-export function ClaimCurrentnessAlert({
-	currentness,
-}: {
-	currentness: ReviewObservation["claimCurrentness"];
-}) {
-	if (currentness === "CURRENT") return null;
-	const { Icon, title, description } = CLAIM_CURRENTNESS_CONFIG[currentness];
-	return (
-		<Alert variant="warning">
-			<Icon />
-			<AlertTitle>{title}</AlertTitle>
-			<AlertDescription>{description}</AlertDescription>
-		</Alert>
 	);
 }
 
@@ -165,13 +114,13 @@ export function observationCountSlots(counts: ReviewObservationCounts): ReviewCo
 		},
 		{
 			key: "notApplicable",
-			label: PRESENCE_DEFS.NOT_APPLICABLE.label.toLowerCase(),
+			label: ASSESSMENT_STATUS_DEFS.NOT_APPLICABLE.label.toLowerCase(),
 			count: counts.notApplicable,
 		},
 		{
-			key: "inconclusive",
-			label: PRESENCE_DEFS.INCONCLUSIVE.label.toLowerCase(),
-			count: counts.inconclusive,
+			key: "undetermined",
+			label: ASSESSMENT_STATUS_DEFS.UNDETERMINED.label.toLowerCase(),
+			count: counts.undetermined,
 		},
 	];
 }
@@ -198,9 +147,12 @@ export function ReviewCountStrip({ slots, label }: { slots: ReviewCountSlot[]; l
 					>
 						{slot.count}
 					</span>
-					{/* A real space, so the pair reads "0 improvements" to a screen reader and in a test.
-					    Flex drops whitespace-only children, so the visible gap is still the one `gap-1`
-					    sets and this adds nothing to the layout. */}{" "}
+					{
+						// A real space, so the pair reads "0 improvements" to a screen reader and in a test.
+						// Flex drops whitespace-only children, so the visible gap is still the one `gap-1`
+						// sets and this adds nothing to the layout.
+						" "
+					}
 					<span className="min-w-0 break-words">{slot.label}</span>
 				</li>
 			))}
@@ -220,10 +172,12 @@ export function FeedbackCountsSummary({
 	const parts = feedbackCountSlots(counts)
 		.filter((slot) => slot.count > 0)
 		.map((slot) => `${slot.count} ${slot.label}`);
-	if (parts.length === 0) return <span>No feedback composed</span>;
+	if (parts.length === 0) {
+		return <span>No feedback composed</span>;
+	}
 	return (
 		<span>
-			{prefix && `${prefix} `}
+			{hasText(prefix) && `${prefix} `}
 			{parts.join(" · ")}
 		</span>
 	);

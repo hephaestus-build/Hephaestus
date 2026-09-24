@@ -252,7 +252,8 @@ class AutonomyRollupIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -263,7 +264,8 @@ class AutonomyRollupIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .uri(URI, workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
-                    .isUnauthorized();
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
     }
 

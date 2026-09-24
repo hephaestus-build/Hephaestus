@@ -1,7 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.slack.messaging;
 
+import java.io.Serial;
+
 /** Raised by {@link SlackMessageService#sendForWorkspace}; carries the Slack error code. */
 public class SlackSendException extends RuntimeException {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     /** Sentinel for {@link #retryAfterMillis}: this failure is not a rate-limit (HTTP 429). */
     public static final long NOT_RATE_LIMITED = -1L;

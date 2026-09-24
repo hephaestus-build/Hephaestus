@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineWebhook
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.retry.Retry;
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -440,7 +441,14 @@ public class OutlineApiClient implements OutlineTokenClient, OutlineContentClien
             throw new OutlineRateLimitedException(parseRetryAfter(e), e);
         } catch (WebClientResponseException e) {
             int status = e.getStatusCode().value();
-            log.debug("Outline {} failed: status={}, serverUrl={}", path, status, resolvedUrl);
+            log.atDebug()
+                    .addKeyValue("event.name", "integration.request.failed")
+                    .addKeyValue("integration.kind", "OUTLINE")
+                    .addKeyValue("integration.operation", path)
+                    .addKeyValue("server.address", URI.create(resolvedUrl).getHost())
+                    .addKeyValue("http.response.status_code", status)
+                    .addKeyValue("error.type", e.getClass().getName())
+                    .log("Outline API request failed");
             throw new OutlineApiException(
                     "Outline " + path + " failed (HTTP " + status + ")",
                     e,
@@ -450,7 +458,14 @@ public class OutlineApiClient implements OutlineTokenClient, OutlineContentClien
         } catch (OutlineApiException e) {
             throw e;
         } catch (Exception e) {
-            log.debug("Outline {} failed: serverUrl={}, error={}", path, resolvedUrl, e.getMessage());
+            // Decoding and transport exception text can contain private response or request data.
+            log.atDebug()
+                    .addKeyValue("event.name", "integration.request.failed")
+                    .addKeyValue("integration.kind", "OUTLINE")
+                    .addKeyValue("integration.operation", path)
+                    .addKeyValue("server.address", URI.create(resolvedUrl).getHost())
+                    .addKeyValue("error.type", e.getClass().getName())
+                    .log("Outline API request failed");
             throw new OutlineApiException("Could not reach the Outline server", e, /* retryable */ true);
         }
     }

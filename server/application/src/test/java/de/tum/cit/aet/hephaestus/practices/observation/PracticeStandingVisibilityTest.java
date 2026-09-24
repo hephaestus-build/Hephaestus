@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -31,6 +32,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -102,8 +104,9 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
                 .observedAt(NOW.minusSeconds(3600))
                 .agentJobId(new UUID(0L, 42L))
                 .summary("a problem")
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.ABSENT)
-                .assessment(Assessment.BAD)
+                .assessment(Assessment.GOOD)
                 .severity(severity)
                 .build();
     }
@@ -154,21 +157,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
         assertThat(order).containsExactly(Severity.CRITICAL, null);
     }
 
-    // ── A defect detector's strength reaches the standing ─────────────────────────
-    //
-    // The point of making (ABSENT, GOOD) reachable at all. Suppressing every GOOD row for a defect detector
-    // was the read-time half of a rule that turned "you wrote clean error handling" into "this work had no
-    // subject for this practice" — a claim that is false and that reads identically to "you touched nothing
-    // relevant". The refusal that survives is the one that was always the real one: a (PRESENT, GOOD) for a
-    // defect detector would praise a good act nobody observed, because what would be PRESENT is the defect.
-
-    private static Practice defectDetector(String slug) {
-        Practice practice = practice(slug);
-        practice.setCriteria("DEFECT-DETECTOR DISCIPLINE: this practice hunts one specific defect.");
-        return practice;
-    }
-
-    private Observation strength(Practice practice, Presence presence) {
+    private Observation strength(Practice practice, @Nullable Presence presence) {
         return Observation.builder()
                 .id(UUID.randomUUID())
                 .practice(practice)
@@ -177,8 +166,9 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
                 .observedAt(NOW.minusSeconds(3600))
                 .agentJobId(new UUID(0L, 42L))
                 .summary("nothing swallowed on the paths you added")
+                .assessmentStatus(presence == null ? AssessmentStatus.NOT_APPLICABLE : AssessmentStatus.ASSESSED)
                 .presence(presence)
-                .assessment(Assessment.GOOD)
+                .assessment(presence == null ? null : presence == Presence.PRESENT ? Assessment.GOOD : Assessment.BAD)
                 .build();
     }
 
@@ -191,9 +181,9 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("a defect detector's (ABSENT, GOOD) is shown as a strength — the clean result they earned")
-    void defectDetectorAbsentGoodIsShownAsAStrength() {
-        Practice practice = defectDetector("handles-errors-instead-of-swallowing-them");
+    @DisplayName("ABSENT/BAD is shown as a strength")
+    void shouldShowAbsentBadAsStrength() {
+        Practice practice = practice("handles-errors-instead-of-swallowing-them");
         feeds(strength(practice, Presence.ABSENT));
 
         List<PracticeStandingDTO> standings = practiceStandingService.getStandings(WORKSPACE_ID);
@@ -204,27 +194,21 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("a defect detector's (PRESENT, GOOD) is still withheld, but the standing says the detector ran")
-    void defectDetectorPresentGoodIsStillWithheld() {
-        Practice practice = defectDetector("handles-errors-instead-of-swallowing-them");
+    @DisplayName("PRESENT/GOOD supports the standing for an error-handling practice")
+    void shouldShowPresentGoodAsStrengthForErrorHandling() {
+        Practice practice = practice("handles-errors-instead-of-swallowing-them");
         feeds(strength(practice, Presence.PRESENT));
 
         List<PracticeStandingDTO> standings = practiceStandingService.getStandings(WORKSPACE_ID);
 
-        // The suppression holds: an incoherent strength never becomes one. But the run is still evidence that
-        // the practice was exercised, so the standing reports NO_OPPORTUNITY rather than vanishing — silently
-        // dropping it would make a working detector read exactly like one that was never configured.
         assertThat(standings).hasSize(1);
-        assertThat(standings.get(0).standing()).isEqualTo(PracticeStandingDTO.Standing.NO_OPPORTUNITY);
-        assertThat(standings.get(0).strengths()).isEmpty();
+        assertThat(standings.get(0).strengths()).hasSize(1);
         assertThat(standings.get(0).toWorkOn()).isEmpty();
     }
 
     @Test
     @DisplayName("an ordinary practice keeps both shapes of strength")
     void ordinaryPracticeKeepsBothShapesOfStrength() {
-        // The suppression is keyed to the defect-detector marker, not to presence in general: narrowing it
-        // must not have narrowed anything for the rest of the catalogue.
         Practice practice = practice("robust-error-handling");
         feeds(strength(practice, Presence.PRESENT), strength(practice, Presence.ABSENT));
 

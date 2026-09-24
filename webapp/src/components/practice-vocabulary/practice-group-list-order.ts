@@ -1,7 +1,7 @@
 import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
 
+import { statusValues } from "@/components/common/status-def";
 import { PRACTICE_GROUP_STANDING_DEFS } from "./practice-group-standing-defs";
-import { statusValues } from "./status-def";
 
 export type SortDirection = "asc" | "desc";
 

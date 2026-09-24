@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.observation;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -13,6 +14,7 @@ import org.jspecify.annotations.Nullable;
 public record ObservationQueryFilter(
         @Nullable List<String> practiceSlugs,
         @Nullable List<String> groupSlugs,
+        @Nullable List<AssessmentStatus> assessmentStatuses,
         @Nullable List<Presence> presences,
         @Nullable List<Assessment> assessments,
         @Nullable List<Severity> severities,
@@ -35,6 +37,10 @@ public record ObservationQueryFilter(
             return null;
         }
         return groupSlugs.toArray(String[]::new);
+    }
+
+    public String @Nullable [] assessmentStatusNames() {
+        return names(assessmentStatuses);
     }
 
     public String @Nullable [] presenceNames() {

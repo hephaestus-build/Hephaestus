@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 
+import { cn } from "cn";
 import type { ReviewedWorkRef } from "@/api/types.gen";
 import { HephIcon } from "@/components/brand/HephIcon";
 import type { FeedbackTextSegment } from "@/components/common/feedback-text";
@@ -14,7 +15,7 @@ import {
 	artifactKindNoun,
 	type WorkProvider,
 } from "@/lib/artifact-kinds";
-import { cn } from "@/lib/utils";
+import { hasText } from "@/lib/text";
 
 import { ASSESSMENT_DEFS } from "./assessment-defs";
 import { PracticePill } from "./PracticePill";
@@ -98,17 +99,21 @@ export interface HephFeedbackCardProps {
  * left out rather than filled with a sentence saying so, and with nothing to say at all the card
  * is not drawn.
  */
+const NO_BLOCKS: FeedbackBlock[] = [];
+
 export function HephFeedbackCard({
 	holdingUp,
 	holdingUpNote,
 	reviewedWork,
 	onOpenPractice,
-	blocks = [],
+	blocks = NO_BLOCKS,
 	isLoading = false,
 	className,
 }: HephFeedbackCardProps) {
 	const hasBody = holdingUp.length > 0 || blocks.length > 0;
-	if (!isLoading && !hasBody && reviewedWork.length === 0) return null;
+	if (!isLoading && !hasBody && reviewedWork.length === 0) {
+		return null;
+	}
 	return (
 		<div className={cn("flex items-start gap-3", className)}>
 			<div className="flex w-15 shrink-0 flex-col items-center gap-2 pt-1">
@@ -138,7 +143,7 @@ export function HephFeedbackCard({
 														/>
 													))}
 												</ul>
-												{holdingUpNote && (
+												{hasText(holdingUpNote) && (
 													<p className="text-xs text-muted-foreground">{holdingUpNote}</p>
 												)}
 											</>
@@ -181,11 +186,7 @@ function HeldPractice({ row, onOpenPractice }: HeldPracticeProps) {
 				def={ASSESSMENT_DEFS.GOOD}
 				render={<button type="button" />}
 				// The icon is 14 px, so the hit area is widened a step beyond the constant's.
-				className={cn(
-					HIT_AREA_24,
-					"top-0.5 inline-flex cursor-help rounded-sm before:-inset-1.5",
-					FOCUS_RING,
-				)}
+				className={cn(HIT_AREA_24, "top-0.5 inline-flex cursor-help before:-inset-1.5", FOCUS_RING)}
 			>
 				<HeldIcon className="size-3.5 text-success" aria-hidden />
 				<span className="sr-only">{ASSESSMENT_DEFS.GOOD.label}: </span>

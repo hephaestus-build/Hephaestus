@@ -81,6 +81,8 @@ class MentorLiveLlmTest {
     private @Nullable Path workspaceDir;
     private @Nullable StdioAttachedSandbox sandbox;
 
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     @BeforeAll
     static void installPiSdk() throws Exception {
         // The marker avoids repeat installs; the sibling lock serializes concurrent JVMs.
@@ -579,7 +581,7 @@ class MentorLiveLlmTest {
                 creds.model(),
                 null,
                 null,
-                false,
+                null,
                 "live-test-token",
                 // never actually checked — no real proxy sits in front of this test
                 true,

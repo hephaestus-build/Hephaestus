@@ -8,12 +8,14 @@ import {
 import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
+import { statusFacetOptions } from "@/components/common/status-def";
 import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
+import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import { statusFacetOptions } from "@/components/practice-vocabulary/status-def";
 import { fromDateRange, toDateRange } from "@/lib/date-range-search";
 import { nonEmpty } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
 
 import { AppliedFacetPills, facetPills } from "./AppliedFacetPills";
 import { ObservationSortSelect } from "./ObservationSortSelect";
@@ -23,6 +25,7 @@ import { type ReviewPeople, ReviewPersonFacet } from "./ReviewPersonFacet";
 
 /** Every option wears the badge its rows wear; see the note on `FeedbackFilters`' facets. */
 const ASSESSMENT_OPTIONS = statusFacetOptions(ASSESSMENT_DEFS);
+const ASSESSMENT_STATUS_OPTIONS = statusFacetOptions(ASSESSMENT_STATUS_DEFS);
 const PRESENCE_OPTIONS = statusFacetOptions(PRESENCE_DEFS);
 const SEVERITY_OPTIONS = statusFacetOptions(SEVERITY_DEFS);
 
@@ -36,6 +39,7 @@ export function clearedObservationFilters(): Partial<ObservationsSearch> {
 		page: 0,
 		groupSlug: undefined,
 		practiceSlug: undefined,
+		assessmentStatus: undefined,
 		presence: undefined,
 		assessment: undefined,
 		severity: undefined,
@@ -52,6 +56,7 @@ export function hasObservationFilter(search: ObservationsSearch): boolean {
 	return (
 		(search.groupSlug?.length ?? 0) > 0 ||
 		(search.practiceSlug?.length ?? 0) > 0 ||
+		(search.assessmentStatus?.length ?? 0) > 0 ||
 		(search.presence?.length ?? 0) > 0 ||
 		(search.assessment?.length ?? 0) > 0 ||
 		(search.severity?.length ?? 0) > 0 ||
@@ -63,7 +68,10 @@ export function hasObservationFilter(search: ObservationsSearch): boolean {
 	);
 }
 
-type NamedGroup = { slug: string; name: string };
+interface NamedGroup {
+	slug: string;
+	name: string;
+}
 
 export function groupFacetOptions(groups: readonly NamedGroup[] | undefined): FacetOption[] {
 	return (groups ?? []).map((group) => ({ value: group.slug, label: group.name }));
@@ -157,7 +165,13 @@ export function ObservationFilters({
 					onChange={(values) => onPatch({ severity: nonEmpty(values) })}
 				/>
 				<FacetMultiSelect
-					title="Practice status"
+					title="Assessment status"
+					options={ASSESSMENT_STATUS_OPTIONS}
+					selected={search.assessmentStatus ?? []}
+					onChange={(values) => onPatch({ assessmentStatus: nonEmpty(values) })}
+				/>
+				<FacetMultiSelect
+					title="Presence"
 					options={PRESENCE_OPTIONS}
 					selected={search.presence ?? []}
 					onChange={(values) => onPatch({ presence: nonEmpty(values) })}
@@ -191,12 +205,18 @@ export function ObservationFilters({
 					...facetPills("Severity", SEVERITY_OPTIONS, search.severity, (values) =>
 						onPatch({ severity: nonEmpty(values) }),
 					),
-					...facetPills("Practice status", PRESENCE_OPTIONS, search.presence, (values) =>
+					...facetPills(
+						"Assessment status",
+						ASSESSMENT_STATUS_OPTIONS,
+						search.assessmentStatus,
+						(values) => onPatch({ assessmentStatus: nonEmpty(values) }),
+					),
+					...facetPills("Presence", PRESENCE_OPTIONS, search.presence, (values) =>
 						onPatch({ presence: nonEmpty(values) }),
 					),
 				]}
 			/>
-			{search.agentJobId && (
+			{hasText(search.agentJobId) && (
 				<ReferenceFilterPill
 					label="Review"
 					value={search.agentJobId}

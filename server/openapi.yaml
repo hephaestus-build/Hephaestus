@@ -26,8 +26,6 @@ servers:
 security:
 - bearerAuth: []
 tags:
-- description: User achievement progress and unlocks
-  name: Achievements
 - description: The current developer's practice profile
   name: Practice Profile
 - description: Per-workspace LLM spend rollup and budget status
@@ -36,6 +34,8 @@ tags:
   name: Practice Group Detail
 - description: Workspace-scoped mentor chat threads
   name: Mentor Threads
+- description: Running release identity and update checks
+  name: Instance Release
 - description: The current developer's standing in each practice
   name: Practice Standings
 - description: Recipient responses to delivered practice feedback
@@ -60,6 +60,8 @@ tags:
   name: Auth
 - description: Workspace-scoped practice-review policy
   name: Practice Review Settings
+- description: Instance-admin-only read-only access to users
+  name: User view
 - description: Workspace integration connection management
   name: Connections
 - description: Up/down votes on mentor assistant messages
@@ -119,6 +121,8 @@ tags:
   name: Teams
 - description: The developer's own prepared practice feedback
   name: In-App Feedback
+- description: Instance-wide email transport verification
+  name: Instance Email
 - description: "Workspace-scoped \"bring your own\" AI provider connections, models\
     \ and settings"
   name: Workspace LLM
@@ -133,6 +137,8 @@ tags:
     GitLab-specific REST endpoints used during the workspace creation wizard. Gated on the
      <code>GITLAB_WORKSPACE_CREATION</code> feature flag.
   name: git-lab-preflight-controller
+- description: Review catalogue changes before they affect a workspace
+  name: Practice Catalog
 - description: Instance-admin LLM connection and settings management
   name: Admin LLM
 - description: Manage practice groups
@@ -200,6 +206,7 @@ paths:
           items:
             type: string
             enum:
+            - USER_VIEW
             - LOGIN
             - LOGIN_FAILED
             - LOGOUT
@@ -254,7 +261,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageAuthEventView"
+                $ref: "#/components/schemas/PageResponseDTOAuthEventView"
           description: OK
       summary: "List auth audit events (paged, newest first)"
       tags:
@@ -283,6 +290,7 @@ paths:
           items:
             type: string
             enum:
+            - USER_VIEW
             - LOGIN
             - LOGIN_FAILED
             - LOGOUT
@@ -441,7 +449,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageConfigAuditEntryView"
+                $ref: "#/components/schemas/PageResponseDTOConfigAuditEntryView"
           description: OK
       summary: "List admin configuration changes across workspaces (paged, newest\
         \ first)"
@@ -462,6 +470,32 @@ paths:
       summary: Get redacted configuration readiness
       tags:
       - Configuration Readiness
+  /admin/email/test:
+    post:
+      description: "Sends a test email through the configured relay to the given address,\
+        \ or to the caller's verified address when none is given."
+      operationId: adminSendTestEmail
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailTestRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailTestResponse"
+          description: Email delivery outcome
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Malformed request or invalid recipient address
+      summary: Send a test email
+      tags:
+      - Instance Email
   /admin/llm/connections:
     get:
       operationId: adminListLlmConnections
@@ -1338,8 +1372,8 @@ paths:
       - Admin Practice Catalog
   /admin/practice-catalog/practices/{slug}/override/acknowledgement:
     put:
-      description: Records that the Hephaestus update was reviewed and keeps the saved
-        definition.
+      description: Acknowledges that a saved custom practice is no longer shipped.
+        Changed bundled practices use the release endpoint.
       operationId: adminKeepCuratedPractice
       parameters:
       - in: path
@@ -1404,6 +1438,77 @@ paths:
       summary: Move a practice to another catalog group
       tags:
       - Admin Practice Catalog
+  /admin/practice-catalog/practices/{slug}/release:
+    delete:
+      operationId: adminDeclinePracticeRelease
+      parameters:
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CuratedPractice"
+          description: OK
+      summary: Decline this bundled practice update
+      tags:
+      - Admin Practice Catalog
+    get:
+      operationId: adminGetPracticeRelease
+      parameters:
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeReleaseProposal"
+          description: OK
+      summary: Compare a bundled practice update with the instance version
+      tags:
+      - Admin Practice Catalog
+    put:
+      operationId: adminAcceptPracticeRelease
+      parameters:
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptPracticeReleaseRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CuratedPractice"
+          description: OK
+      summary: Accept selected fields from a bundled practice update
+      tags:
+      - Admin Practice Catalog
   /admin/practice-catalog/practices/{slug}/status:
     patch:
       operationId: adminUpdateCuratedPracticeStatus
@@ -1450,6 +1555,16 @@ paths:
     get:
       operationId: adminListProductFeedback
       parameters:
+      - in: query
+        name: status
+        required: false
+        schema:
+          type: string
+          default: OPEN
+          enum:
+          - OPEN
+          - RESOLVED
+          - ALL
       - description: Zero-based page index (0..N)
         in: query
         name: page
@@ -1482,46 +1597,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PagedModelFeedbackItem"
           description: OK
-      summary: List recent free-text product feedback
-      tags:
-      - feedback-admin
-  /admin/product-feedback/responses:
-    get:
-      operationId: adminListProductSurveyResponses
-      parameters:
-      - description: Zero-based page index (0..N)
-        in: query
-        name: page
-        required: false
-        schema:
-          type: integer
-          default: 0
-          minimum: 0
-      - description: The size of the page to be returned
-        in: query
-        name: size
-        required: false
-        schema:
-          type: integer
-          default: 50
-          minimum: 1
-      - description: "Sorting criteria in the format: property,(asc|desc). Default\
-          \ sort order is ascending. Multiple sort criteria are supported."
-        in: query
-        name: sort
-        required: false
-        schema:
-          type: array
-          items:
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PagedModelSubmission"
-          description: OK
-      summary: List recent survey responses
+      summary: "List product feedback, newest first"
       tags:
       - feedback-admin
   /admin/product-feedback/surveys:
@@ -1562,9 +1638,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/PagedModelSurvey"
           description: OK
-      summary: List authored product surveys
+      summary: List product surveys with participation counts
       tags:
-      - feedback-admin
+      - survey-admin
     post:
       operationId: adminCreateProductSurvey
       requestBody:
@@ -1582,7 +1658,254 @@ paths:
           description: OK
       summary: Publish a product survey
       tags:
+      - survey-admin
+  /admin/product-feedback/surveys/{surveyId}:
+    delete:
+      operationId: adminDeleteProductSurvey
+      parameters:
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+      summary: Delete a survey and every response to it
+      tags:
+      - survey-admin
+    get:
+      operationId: adminGetProductSurvey
+      parameters:
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Survey"
+          description: OK
+      summary: Read one product survey
+      tags:
+      - survey-admin
+    put:
+      operationId: adminUpdateProductSurvey
+      parameters:
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyEdit"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Survey"
+          description: OK
+      summary: "Edit a survey's title, purpose, schedule or pause state"
+      tags:
+      - survey-admin
+  /admin/product-feedback/surveys/{surveyId}/email-invitations:
+    get:
+      operationId: adminPreviewSurveyEmailInvitations
+      parameters:
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SurveyEmailInvitationSummary"
+          description: OK
+      summary: Preview eligible survey email recipients and relay acceptance counts
+      tags:
+      - survey-admin
+    post:
+      operationId: adminSendSurveyEmailInvitations
+      parameters:
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyEmailInvitationRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SurveyEmailInvitationSummary"
+          description: Invitation request summary
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Email delivery is not configured; no invitations were requested
+      summary: Queue up to 1000 new or explicitly retried cancelled survey email invitations
+      tags:
+      - survey-admin
+  /admin/product-feedback/surveys/{surveyId}/responses:
+    get:
+      operationId: adminListProductSurveyResponses
+      parameters:
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          default: 50
+          minimum: 1
+      - description: "Sorting criteria in the format: property,(asc|desc). Default\
+          \ sort order is ascending. Multiple sort criteria are supported."
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedModelSurveyResponse"
+          description: OK
+      summary: "List responses and declines, newest first"
+      tags:
+      - survey-admin
+  /admin/product-feedback/surveys/{surveyId}/responses/export:
+    get:
+      operationId: adminExportProductSurveyResponses
+      parameters:
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            text/csv:
+              schema:
+                type: string
+          description: OK
+      summary: Export responses and declines as CSV
+      tags:
+      - survey-admin
+  /admin/product-feedback/surveys/{surveyId}/summary:
+    get:
+      operationId: adminGetProductSurveySummary
+      parameters:
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SurveySummary"
+          description: OK
+      summary: Aggregate the responses per question
+      tags:
+      - survey-admin
+  /admin/product-feedback/{feedbackId}:
+    patch:
+      operationId: adminTriageProductFeedback
+      parameters:
+      - in: path
+        name: feedbackId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackTriage"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackItem"
+          description: OK
+      summary: Mark product feedback as resolved or reopen it
+      tags:
       - feedback-admin
+  /admin/release:
+    get:
+      operationId: adminGetRelease
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseStatus"
+          description: OK
+      summary: Get the running release and the last update check
+      tags:
+      - Instance Release
+  /admin/release/checks:
+    post:
+      operationId: adminCheckRelease
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseStatus"
+          description: OK
+      summary: Check GitHub for a newer release now
+      tags:
+      - Instance Release
   /admin/settings:
     get:
       operationId: adminGetInstanceSettings
@@ -1746,30 +2069,6 @@ paths:
       summary: Set or clear a workspace's monthly cap on host-funded LLM spend
       tags:
       - Admin
-  /auth/impersonate:
-    post:
-      operationId: impersonate
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ImpersonateRequest"
-        required: true
-      responses:
-        "200":
-          description: OK
-      summary: Begin impersonating another account
-      tags:
-      - Auth
-  /auth/impersonate:exit:
-    post:
-      operationId: exitImpersonation
-      responses:
-        "200":
-          description: OK
-      summary: "Exit impersonation, restore operator session"
-      tags:
-      - Auth
   /auth/logout:
     post:
       operationId: logout
@@ -1783,8 +2082,10 @@ paths:
     post:
       operationId: refresh
       responses:
-        "200":
-          description: OK
+        "204":
+          description: Session renewal completed
+        "401":
+          description: Session has ended
       summary: "Rotate the access token (new jti, old revoked)"
       tags:
       - Auth
@@ -1820,6 +2121,40 @@ paths:
       summary: List available identity providers
       tags:
       - Auth discovery
+  /notifications/unsubscribe/{token}:
+    post:
+      operationId: unsubscribeEmail
+      parameters:
+      - in: path
+        name: token
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                List-Unsubscribe:
+                  type: string
+              required:
+              - List-Unsubscribe
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                List-Unsubscribe:
+                  type: string
+              required:
+              - List-Unsubscribe
+      responses:
+        "204":
+          description: "Subscription disabled, or token no longer applicable"
+      security: []
+      summary: Unsubscribe from one optional email subscription
+      tags:
+      - Notification preferences
   /oauth/callback/{kind}:
     get:
       operationId: callbackGet
@@ -2095,6 +2430,86 @@ paths:
       summary: Unlink one of the current user's linked identity providers
       tags:
       - Account
+  /user/notification-preferences:
+    get:
+      operationId: getNotificationPreferences
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferences"
+          description: Your current email subscriptions
+          headers:
+            ETag:
+              description: Strong validator for If-Match
+              schema:
+                type: string
+              style: simple
+      summary: Get your email subscriptions
+      tags:
+      - notification-preferences
+    put:
+      operationId: updateNotificationPreferences
+      parameters:
+      - description: Current preferences ETag
+        in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationPreferences"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferences"
+          description: Email subscriptions updated
+          headers:
+            ETag:
+              description: Strong validator for the updated preferences
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Invalid preferences or If-Match header
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Enabling this subscription requires instance administration
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Enabling email requires a verified contact on an active account
+        "412":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The supplied ETag is stale
+        "428":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: If-Match is required
+      summary: Update your email subscriptions
+      tags:
+      - notification-preferences
   /user/sessions:
     delete:
       operationId: revokeOtherSessions
@@ -2371,7 +2786,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageAgentJob"
+                $ref: "#/components/schemas/PageResponseDTOAgentJob"
           description: Paginated job list
       summary: List agent jobs for a workspace
       tags:
@@ -2628,7 +3043,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageConfigAuditEntryView"
+                $ref: "#/components/schemas/PageResponseDTOConfigAuditEntryView"
           description: OK
       summary: "List this workspace's admin configuration changes (paged, newest first)"
       tags:
@@ -2828,7 +3243,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageSyncJob"
+                $ref: "#/components/schemas/PageResponseDTOSyncJob"
           description: OK
       summary: Paginated sync job history for one connection
       tags:
@@ -4664,9 +5079,10 @@ paths:
       description: "Applies to every practice in the group that holds no autonomy\
         \ of its own; practices that set their own are left alone. OFF stops their\
         \ reviews entirely. HUMAN_APPROVAL runs them and records every observation,\
-        \ and holds feedback for an authorized reviewer. AUTOMATIC sends feedback\
-        \ without asking. Send a null autonomy to clear the group's own setting so\
-        \ it follows the workspace default."
+        \ holds feedback on the work for an authorized reviewer, and still writes\
+        \ the developer's practice pages and the mentor, which are read on request.\
+        \ AUTOMATIC sends feedback on the work without asking. Send a null autonomy\
+        \ to clear the group's own setting so it follows the workspace default."
       operationId: setGroupAutonomy
       parameters:
       - description: Workspace slug
@@ -5275,8 +5691,15 @@ paths:
           enum:
           - PRESENT
           - ABSENT
+      - in: query
+        name: assessmentStatus
+        required: false
+        schema:
+          type: string
+          enum:
+          - ASSESSED
           - NOT_APPLICABLE
-          - INCONCLUSIVE
+          - UNDETERMINED
       - description: "Only observations on these kinds of reviewed work, e.g. scm.pull_request\
           \ (repeatable)"
         in: query
@@ -5349,7 +5772,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageObservationList"
+                $ref: "#/components/schemas/PageResponseDTOObservationList"
           description: Paginated observations returned
       summary: List observations for current user
       tags:
@@ -5437,6 +5860,117 @@ paths:
       summary: Get observation detail
       tags:
       - Practice Observations
+  /workspaces/{workspaceSlug}/practices/releases:
+    get:
+      operationId: listPracticeReleases
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PracticeReleaseProposal"
+          description: OK
+      summary: List pending practice releases
+      tags:
+      - Practice Catalog
+  /workspaces/{workspaceSlug}/practices/releases/{slug}:
+    delete:
+      operationId: declinePracticeRelease
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: The offered version was declined
+      summary: Decline this version of a practice release
+      tags:
+      - Practice Catalog
+    get:
+      operationId: getPracticeRelease
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeReleaseProposal"
+          description: OK
+      summary: "Compare the adopted, current, and offered practice"
+      tags:
+      - Practice Catalog
+    put:
+      operationId: acceptPracticeRelease
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptPracticeReleaseRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Practice"
+          description: OK
+      summary: Accept selected fields from a practice release
+      tags:
+      - Practice Catalog
   /workspaces/{workspaceSlug}/practices/reorder:
     patch:
       description: Sets each practice's display order to its index in the provided
@@ -5782,11 +6316,13 @@ paths:
             enum:
             - VOLUME_CAPPED
             - COMPOSER_DEDUPED
+            - COMPOSER_WITHHELD
             - REACTED_DISPUTED
             - REACTED_NOT_APPLICABLE
             - CONVERSATION_EXPIRED
             - ARTIFACT_GONE
             - ARTIFACT_CLOSED
+            - ISSUE_SNAPSHOT_CHANGED
             - ARTIFACT_MERGED
             - ARTIFACT_DRAFT
             - RECIPIENT_OPTED_OUT
@@ -6017,6 +6553,17 @@ paths:
           items:
             type: string
       - in: query
+        name: assessmentStatus
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - ASSESSED
+            - NOT_APPLICABLE
+            - UNDETERMINED
+      - in: query
         name: presence
         required: false
         schema:
@@ -6026,8 +6573,6 @@ paths:
             enum:
             - PRESENT
             - ABSENT
-            - NOT_APPLICABLE
-            - INCONCLUSIVE
       - in: query
         name: assessment
         required: false
@@ -6508,10 +7053,12 @@ paths:
   /workspaces/{workspaceSlug}/practices/{practiceSlug}/autonomy:
     patch:
       description: "OFF stops the review entirely. HUMAN_APPROVAL runs it and records\
-        \ every observation and holds feedback for an authorized reviewer. AUTOMATIC\
-        \ sends feedback without asking, as far as this workspace's reach allows.\
-        \ Send a null autonomy to clear the practice's own setting so it follows its\
-        \ group, and through the group the workspace default."
+        \ every observation, holds feedback on the work for an authorized reviewer,\
+        \ and still writes the developer's practice pages and the mentor, which are\
+        \ read on request. AUTOMATIC sends feedback on the work without asking, as\
+        \ far as this workspace's reach allows. Send a null autonomy to clear the\
+        \ practice's own setting so it follows its group, and through the group the\
+        \ workspace default."
       operationId: setAutonomy
       parameters:
       - description: Workspace slug
@@ -6669,7 +7216,7 @@ paths:
       - feedback
   /workspaces/{workspaceSlug}/product-feedback/surveys:
     get:
-      operationId: listAvailableProductSurveys
+      operationId: listProductSurveyInvitations
       parameters:
       - description: Workspace slug
         in: path
@@ -6685,14 +7232,15 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Survey"
+                  $ref: "#/components/schemas/SurveyInvitation"
           description: OK
-      summary: List surveys not yet handled by the current account
+      summary: List the open surveys the current account has neither answered nor
+        declined
       tags:
       - feedback
-  /workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/dismissal:
-    put:
-      operationId: dismissProductSurvey
+  /workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline:
+    delete:
+      operationId: undoProductSurveyDecline
       parameters:
       - description: Workspace slug
         in: path
@@ -6710,7 +7258,52 @@ paths:
       responses:
         "200":
           description: OK
-      summary: Permanently dismiss a survey for the current account
+      summary: Undo a decline; a submitted response is never touched
+      tags:
+      - feedback
+    put:
+      operationId: declineProductSurvey
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+      summary: Decline a survey for the current account
+      tags:
+      - feedback
+  /workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/invitation:
+    put:
+      operationId: acknowledgeProductSurveyInvitation
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+      summary: Record that the invitation was shown to the current account
       tags:
       - feedback
   /workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/responses:
@@ -7634,6 +8227,332 @@ paths:
       summary: Update workspace Personal Access Token
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/user-view/users:
+    get:
+      operationId: listUserViewUsers
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 25
+          maximum: 100
+          minimum: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageResponseDTOUserViewUser"
+          description: OK
+      summary: List workspace users and their linked account status
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/conversations:
+    get:
+      operationId: listUserViewConversations
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 25
+          maximum: 100
+          minimum: 1
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageResponseDTOChatThreadSummary"
+          description: OK
+      summary: View a user's existing private conversations
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/conversations/{threadId}:
+    get:
+      operationId: getUserViewConversation
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: threadId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatThreadDetail"
+          description: OK
+      summary: Read a user's private conversation without changing it
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices:
+    get:
+      operationId: getUserPracticeView
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPracticeSummary"
+          description: OK
+      summary: View a user's existing private practice profile without signing in
+        as them
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/runs:
+    get:
+      operationId: listUserViewRuns
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: groupSlug
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: practiceSlug
+        required: false
+        schema:
+          type: string
+      - description: "Only reviews of these artifact kinds, e.g. scm.pull_request\
+          \ (repeatable)"
+        in: query
+        name: artifactKinds
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+      - in: query
+        name: severities
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - CRITICAL
+            - MAJOR
+            - MINOR
+            - INFO
+      - description: "Zero-based page, at most 100"
+        in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 100
+          minimum: 0
+      - description: Page size from 1 to 50
+        in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 50
+          minimum: 1
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeGroupReviewRunsPage"
+          description: OK
+      summary: View a user's private practice review history
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/trend:
+    get:
+      operationId: getUserViewTrend
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: groupSlug
+        required: true
+        schema:
+          type: string
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeGroupTrend"
+          description: OK
+      summary: View a user's private practice group trend
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices/observations/{observationId}:
+    get:
+      operationId: getUserViewObservation
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: observationId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObservationDetail"
+          description: OK
+      summary: View a user's private observation and feedback
+      tags:
+      - User view
   /workspaces/{workspaceSlug}/users:
     get:
       operationId: getUsersWithTeams
@@ -7658,120 +8577,20 @@ paths:
       summary: List workspace users and the teams they belong to
       tags:
       - workspace
-  /workspaces/{workspaceSlug}/users/{login}/achievements:
-    get:
-      description: Returns all achievements with progress information for the specified
-        user
-      operationId: getUserAchievements
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: the user's GitHub login
-        in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Achievement"
-          description: list of all achievements with user-specific progress
-      security: []
-      summary: Get user achievements
-      tags:
-      - Achievements
-  /workspaces/{workspaceSlug}/users/{login}/achievements/definitions:
-    get:
-      description: Returns the master list of all available achievements. Restricted
-        to non-prod environments.
-      operationId: getAllAchievementDefinitions
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Achievement"
-          description: OK
-      security: []
-      summary: Get all achievement definitions
-      tags:
-      - Achievements
-  /workspaces/{workspaceSlug}/users/{login}/achievements/recalculate:
-    post:
-      description: Wipes and historically recalculates a user's achievement timeline.
-        Admin only.
-      operationId: recalculateUserAchievements
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: the user's GitHub login
-        in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      responses:
-        "202":
-          description: Recalculation task started successfully
-      summary: Recalculate user achievements
-      tags:
-      - Achievements
-  /workspaces/{workspaceSlug}/users/{login}/achievements/reload:
-    post:
-      description: Hot reloads the achievements.yml configuration without requiring
-        a restart. Admin only.
-      operationId: reloadAchievements
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          description: OK
-      summary: Reload achievements configuration
-      tags:
-      - Achievements
 components:
   schemas:
+    AcceptPracticeReleaseRequest:
+      type: object
+      properties:
+        choices:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+            - CURRENT
+            - OFFERED
+      required:
+      - choices
     AccountRef:
       type: object
       description: A human-readable account identity. <code>displayName</code>/<code>email</code>
@@ -7786,129 +8605,6 @@ components:
           format: int64
       required:
       - id
-    Achievement:
-      type: object
-      description: Achievement with user-specific progress information
-      properties:
-        category:
-          type: string
-          description: Category for grouping achievements
-          enum:
-          - pull_requests
-          - commits
-          - communication
-          - issues
-          - milestones
-          example: pull_requests
-        id:
-          type: string
-          $ref: "#/components/schemas/AchievementId"
-          description: Unique identifier for the achievement
-          example: pr.merged.common.1
-        isHidden:
-          type: boolean
-          description: Whether the achievement should be hidden until unlocked
-        parent:
-          type: string
-          description: Parent achievement in progression chain
-          example: first_pull
-        progressData:
-          description: The structured progress data based on the achievements evaluator
-          oneOf:
-          - $ref: "#/components/schemas/BinaryAchievementProgress"
-          - $ref: "#/components/schemas/LinearAchievementProgress"
-        rarity:
-          type: string
-          description: Visual level tier/rarity for badge styling
-          enum:
-          - common
-          - uncommon
-          - rare
-          - epic
-          - legendary
-          - mythic
-          example: common
-        status:
-          type: string
-          description: Current status of the achievement for this user
-          enum:
-          - locked
-          - available
-          - unlocked
-          - hidden
-          example: unlocked
-        unlockedAt:
-          type: string
-          format: date-time
-          description: "When the achievement was unlocked, absent while it is still\
-            \ locked"
-      required:
-      - category
-      - id
-      - progressData
-      - rarity
-      - status
-    AchievementId:
-      type: string
-      enum:
-      - commit.common.1
-      - commit.common.2
-      - commit.epic
-      - commit.legendary
-      - commit.mythic
-      - commit.rare
-      - commit.special.atomic_changes
-      - commit.special.brute_force
-      - commit.special.cross_boundary
-      - commit.special.itsy_bitsy
-      - commit.uncommon.1
-      - commit.uncommon.2
-      - issue.close.common.1
-      - issue.close.common.2
-      - issue.close.epic
-      - issue.close.legendary
-      - issue.close.rare
-      - issue.close.uncommon
-      - issue.open.common.1
-      - issue.open.common.2
-      - issue.open.epic
-      - issue.open.legendary
-      - issue.open.rare
-      - issue.open.uncommon
-      - issue.special.hive_mind
-      - issue.special.necromancer
-      - issue.special.oracle
-      - milestone.all_epic
-      - milestone.all_legendary
-      - milestone.all_rare
-      - milestone.first_action
-      - milestone.long_time_return
-      - milestone.night_owl
-      - milestone.polyglot
-      - pr.merged.common.1
-      - pr.merged.common.2
-      - pr.merged.epic
-      - pr.merged.legendary
-      - pr.merged.rare
-      - pr.merged.uncommon
-      - pr.special.speedster
-      - review.common.1
-      - review.common.2
-      - review.epic
-      - review.legendary
-      - review.mythic
-      - review.rare
-      - review.uncommon.1
-      - review.uncommon.2
-    AchievementProgress:
-      description: Polymorphic progress data
-      discriminator:
-        propertyName: type
-      properties:
-        type:
-          type: string
-      required:
-      - type
     AdminAccountView:
       type: object
       properties:
@@ -8032,9 +8728,6 @@ components:
         memberCount:
           type: integer
           format: int64
-        ownerAccountId:
-          type: integer
-          format: int64
         ownerLogin:
           type: string
         providerType:
@@ -8146,8 +8839,10 @@ components:
           description: Git provider comment/note ID for posted feedback
         deliveryStatus:
           type: string
-          description: "Delivery status: null = not applicable, PENDING = awaiting\
-            \ delivery, DELIVERED = posted, FAILED = delivery error"
+          description: "Result-processing status: null = not applicable, PENDING =\
+            \ awaiting processing, DELIVERED = processing finished, FAILED = processing\
+            \ error. Processing may include delivery; this status alone does not establish\
+            \ feedback publication."
           enum:
           - PENDING
           - DELIVERED
@@ -8259,6 +8954,33 @@ components:
       - reviewOutcome
       - status
       - target
+    Answer:
+      type: object
+      description: One answer; exactly the field matching the question's type is set.
+      properties:
+        choices:
+          type: array
+          items:
+            type: string
+            maxLength: 200
+            minLength: 0
+          maxItems: 20
+          minItems: 0
+        questionId:
+          type: string
+          maxLength: 80
+          minLength: 0
+        rating:
+          type: integer
+          format: int32
+          maximum: 10
+          minimum: 0
+        text:
+          type: string
+          maxLength: 4000
+          minLength: 0
+      required:
+      - questionId
     ArtifactTrace:
       type: object
       description: "Every practice's answer for one artifact, and the occurrences\
@@ -8354,6 +9076,9 @@ components:
           type: string
         userAgent:
           type: string
+        viewedUserId:
+          type: integer
+          format: int64
         workspaceId:
           type: integer
           format: int64
@@ -8457,22 +9182,30 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort requested of the model; null sends none,\
+            \ the provider's default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         scope:
           type: string
           description: SHARED (instance catalog) or WORKSPACE (your own provider)
           enum:
           - SHARED
           - WORKSPACE
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
       required:
       - connectionDisplayName
       - displayName
       - id
       - pricingMode
       - scope
-      - supportsReasoning
     BackfillSummary:
       type: object
       description: Connection-level backfill rollup
@@ -8486,16 +9219,6 @@ components:
           description: Integration-defined backfill state string
       required:
       - state
-    BinaryAchievementProgress:
-      allOf:
-      - $ref: "#/components/schemas/AchievementProgress"
-      - type: object
-        properties:
-          unlocked:
-            type: boolean
-      description: Binary progress indicating unlocked state
-      required:
-      - unlocked
     BindPracticeGroupRequest:
       type: object
       description: Request to move a practice to a group or Unassigned
@@ -8619,6 +9342,7 @@ components:
           - IN_SYNC
           - LOCALLY_EDITED
           - UPDATE_AVAILABLE
+          - DECLINED
         slug:
           type: string
           description: Slug of the catalog entry this copy was made from
@@ -9164,15 +9888,17 @@ components:
       properties:
         completed:
           type: boolean
-        noticeText:
-          type: string
         noticeVersion:
           type: string
+          description: Version of the first-login wording the client must be rendering
         participateInResearch:
           type: boolean
+        researchOrganization:
+          type: string
+          description: "Organisation running the optional research programme, or null\
+            \ when this instance runs none"
       required:
       - completed
-      - noticeText
       - noticeVersion
       - participateInResearch
     Contributor:
@@ -9246,7 +9972,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
           minLength: 1
           pattern: openai-completions|openai-responses
         authMode:
@@ -9299,14 +10025,23 @@ components:
           format: int32
           description: Maximum output tokens
           minimum: 1
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort to request; null sends none, so the provider's\
+            \ own default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         slug:
           type: string
           description: Optional internal slug; generated from displayName when omitted
           maxLength: 63
           minLength: 0
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
         upstreamModelId:
           type: string
           description: Upstream provider model id
@@ -9418,6 +10153,8 @@ components:
           description: Practice review criteria
           maxLength: 50000
           minLength: 0
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         groupSlug:
           type:
           - string
@@ -9492,7 +10229,7 @@ components:
           format: int64
           description: "The artifact's internal id, as the trace and review listings\
             \ report it"
-          minimum: 0
+          exclusiveMinimum: 0
         artifactKind:
           type: string
           description: "The artifact kind's wire id, e.g. scm.pull_request. A raw\
@@ -9550,6 +10287,11 @@ components:
         endsAt:
           type: string
           format: date-time
+        purpose:
+          type: string
+          enum:
+          - PRODUCT
+          - RESEARCH
         questions:
           type: array
           items:
@@ -9568,6 +10310,7 @@ components:
           format: int64
       required:
       - description
+      - purpose
       - questions
       - startsAt
       - title
@@ -9581,7 +10324,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
           minLength: 1
           pattern: openai-completions|openai-responses
         authMode:
@@ -9665,14 +10408,23 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort to request; null sends none, so the provider's\
+            \ own default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         slug:
           type: string
           description: Optional internal slug; generated from displayName when omitted
           maxLength: 63
           minLength: 0
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
         upstreamModelId:
           type: string
           description: Upstream provider model id
@@ -9879,6 +10631,8 @@ components:
             $ref: "#/components/schemas/PracticeBinding"
         criteria:
           type: string
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         groupSlug:
           type: string
         name:
@@ -9895,6 +10649,7 @@ components:
       - automatedReviewValidation
       - bindings
       - criteria
+      - deliveryBehavior
       - name
     CuratedPracticeRequest:
       type: object
@@ -9904,6 +10659,15 @@ components:
           $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
           description: Evidence requirements; omit to use the recommended requirements
             for the selected work type
+        bindingChanges:
+          type: array
+          description: Explicit intent to change the gate or the person judged
+          items:
+            type: string
+            enum:
+            - APPLIES_WHEN
+            - SUBJECT
+          uniqueItems: true
         bindings:
           type: array
           description: The one occasion this practice is reviewed on; the kind of
@@ -9916,6 +10680,8 @@ components:
           type: string
           maxLength: 50000
           minLength: 0
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         groupSlug:
           type: string
           maxLength: 64
@@ -9989,11 +10755,6 @@ components:
           format: int64
         identityProvider:
           type: string
-        impersonating:
-          type: boolean
-        impersonatorId:
-          type: integer
-          format: int64
         linkedProviders:
           type: array
           items:
@@ -10098,11 +10859,13 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
           - ARTIFACT_GONE
           - ARTIFACT_CLOSED
+          - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
@@ -10180,18 +10943,18 @@ components:
       type: object
       description: Per-practice observation summary for a developer
       properties:
-        badCount:
-          type: integer
-          format: int64
-          description: Number of BAD (problem) observations
-        goodCount:
-          type: integer
-          format: int64
-          description: Number of GOOD (strength) observations
         lastObservedAt:
           type: string
           format: date-time
           description: Timestamp of most recent observation
+        negativeCount:
+          type: integer
+          format: int64
+          description: Number of negative outcomes
+        positiveCount:
+          type: integer
+          format: int64
+          description: Number of positive outcomes
         practiceName:
           type: string
           description: Practice name
@@ -10203,11 +10966,49 @@ components:
           format: int64
           description: Total number of observations
       required:
-      - badCount
-      - goodCount
+      - negativeCount
+      - positiveCount
       - practiceName
       - practiceSlug
       - totalObservations
+    EmailTestRequest:
+      type: object
+      properties:
+        to:
+          type: string
+          format: email
+          description: the mailbox to send the test email to; blank means the caller's
+            own verified address
+          maxLength: 254
+          minLength: 0
+    EmailTestResponse:
+      type: object
+      properties:
+        messageId:
+          type: string
+          description: "the accepted <code>Message-ID</code>, only for <code>SENT</code>;\
+            \ search for it in the relay's log"
+        outcome:
+          type: string
+          description: what became of the test email; <code>SENT</code> is the only
+            success
+          enum:
+          - SENT
+          - EXPIRED
+          - NOT_CONFIGURED
+          - SILENT_MODE
+          - NO_RECIPIENT
+          - UNSUBSCRIBED
+          - INVALID_ADDRESS
+          - REJECTED
+          - UNAVAILABLE
+          - RATE_LIMITED
+        to:
+          type: string
+          description: "the address it went to, or <code>null</code> when there was\
+            \ no recipient to resolve"
+      required:
+      - outcome
     EvidenceCitation:
       type: object
       description: A verified quote and its exact source location
@@ -10223,6 +11024,8 @@ components:
           type: string
         quoteRedacted:
           type: boolean
+        revision:
+          type: string
         side:
           type: string
           enum:
@@ -10336,6 +11139,21 @@ components:
         NOTIFICATION_ACCESS:
           type: boolean
           description: User can receive notifications
+    FeedbackAccountRef:
+      type: object
+      description: "Who produced a record, as an administrator sees it; absent once\
+        \ the account is erased."
+      properties:
+        displayName:
+          type: string
+        email:
+          type: string
+        id:
+          type: integer
+          format: int64
+      required:
+      - displayName
+      - id
     FeedbackApproval:
       type: object
       properties:
@@ -10367,9 +11185,10 @@ components:
     FeedbackItem:
       type: object
       properties:
-        accountId:
-          type: integer
-          format: int64
+        account:
+          $ref: "#/components/schemas/FeedbackAccountRef"
+        appVersion:
+          type: string
         createdAt:
           type: string
           format: date-time
@@ -10379,17 +11198,24 @@ components:
         kind:
           type: string
           enum:
-          - FEEDBACK
+          - IDEA
           - BUG
+          - FEEDBACK
         message:
           type: string
         pagePath:
           type: string
-        workspaceId:
-          type: integer
-          format: int64
+        resolvedAt:
+          type: string
+          format: date-time
+        resolvedBy:
+          $ref: "#/components/schemas/FeedbackAccountRef"
+        userAgent:
+          type: string
+        workspace:
+          $ref: "#/components/schemas/FeedbackWorkspaceRef"
       required:
-      - accountId
+      - createdAt
       - id
       - kind
       - message
@@ -10399,8 +11225,9 @@ components:
         kind:
           type: string
           enum:
-          - FEEDBACK
+          - IDEA
           - BUG
+          - FEEDBACK
         message:
           type: string
           maxLength: 5000
@@ -10409,6 +11236,12 @@ components:
           type: string
           maxLength: 500
           minLength: 0
+          pattern: "/(?!/)[^?#\\p{Cc}]*"
+        userAgent:
+          type: string
+          maxLength: 500
+          minLength: 0
+          pattern: "[^\\p{Cc}]*"
       required:
       - kind
       - message
@@ -10487,6 +11320,29 @@ components:
       required:
       - count
       - workKind
+    FeedbackTriage:
+      type: object
+      properties:
+        resolved:
+          type: boolean
+      required:
+      - resolved
+    FeedbackWorkspaceRef:
+      type: object
+      description: The workspace a record was submitted from; absent for instance-level
+        submissions.
+      properties:
+        displayName:
+          type: string
+        id:
+          type: integer
+          format: int64
+        slug:
+          type: string
+      required:
+      - displayName
+      - id
+      - slug
     FirstLoginConsent:
       type: object
       properties:
@@ -10494,11 +11350,16 @@ components:
           type: string
         participateInResearch:
           type: boolean
+          description: "Required when the instance names a research organisation,\
+            \ omitted otherwise"
+        researchOrganization:
+          type: string
+          description: The organisation the research question named on screen; omitted
+            when it asked none
         termsAccepted:
           type: boolean
       required:
       - noticeVersion
-      - participateInResearch
       - termsAccepted
     FxRateInfo:
       type: object
@@ -10730,18 +11591,6 @@ components:
           type: string
         username:
           type: string
-    ImpersonateRequest:
-      type: object
-      properties:
-        reason:
-          type: string
-          minLength: 1
-        targetAccountId:
-          type: integer
-          format: int64
-      required:
-      - reason
-      - targetAccountId
     InAppEvidence:
       type: object
       description: One piece of work the pattern was observed on
@@ -11006,6 +11855,26 @@ components:
       - color
       - id
       - name
+    LatestRelease:
+      type: object
+      description: |-
+        A published release. <code>schemaMigrations</code> is the flag the release workflow publishes for
+         that one release and is absent when the notes carry none; it says nothing about releases
+         between the running one and this one.
+      properties:
+        notesUrl:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+        schemaMigrations:
+          type: boolean
+        version:
+          type: string
+      required:
+      - notesUrl
+      - publishedAt
+      - version
     LeaderboardEntry:
       type: object
       description: A ranked entry in the leaderboard (individual or team)
@@ -11122,23 +11991,6 @@ components:
       required:
       - leaguePointsChange
       - login
-    LinearAchievementProgress:
-      allOf:
-      - $ref: "#/components/schemas/AchievementProgress"
-      - type: object
-        properties:
-          current:
-            type: integer
-            format: int32
-            minimum: 0
-          target:
-            type: integer
-            format: int32
-            minimum: 0
-      description: Linear progress with current and target counts
-      required:
-      - current
-      - target
     LinkedProvider:
       type: object
       description: "A provider instance the current user is linked to: its type +\
@@ -11158,7 +12010,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
         authMode:
           type: string
           description: Credential shape
@@ -11246,12 +12098,21 @@ components:
           type: integer
           format: int32
           description: Maximum output tokens
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort requested of the model; null sends none,\
+            \ the provider's default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         slug:
           type: string
           description: Unique slug within the connection
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
         updatedAt:
           type: string
           format: date-time
@@ -11274,7 +12135,6 @@ components:
       - grantedWorkspaceIds
       - id
       - slug
-      - supportsReasoning
       - upstreamModelId
       - visibility
     LlmModelPrice:
@@ -11476,6 +12336,36 @@ components:
       - scopes
       - type
       - updatedAt
+    NotificationPreferences:
+      type: object
+      properties:
+        deliveryConfigured:
+          type: boolean
+          description: This instance has an email transport and sender configured
+        emailAvailable:
+          type: boolean
+          description: The account has an active verified email address
+        etag:
+          type: string
+        productFeedback:
+          type: boolean
+        productSurveys:
+          type: boolean
+        researchSurveys:
+          type: boolean
+        surveySummaries:
+          type: boolean
+        workspaceAlerts:
+          type: boolean
+      required:
+      - deliveryConfigured
+      - emailAvailable
+      - etag
+      - productFeedback
+      - productSurveys
+      - researchSurveys
+      - surveySummaries
+      - workspaceAlerts
     ObservationDetail:
       type: object
       description: Full practice observation detail including delivered feedback and
@@ -11494,15 +12384,21 @@ components:
             cannot be resolved)
         assessment:
           type: string
-          description: "Assessment: GOOD or BAD; null when the presence carries no\
-            \ direction (NOT_APPLICABLE, INCONCLUSIVE)"
+          description: "Contextual desirability of the specified behavior: GOOD or\
+            \ BAD; null unless assessmentStatus is ASSESSED"
           enum:
           - GOOD
           - BAD
+        assessmentStatus:
+          type: string
+          enum:
+          - ASSESSED
+          - NOT_APPLICABLE
+          - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -11558,6 +12454,14 @@ components:
           - LIVE
           - MANUAL
           - BACKFILL
+        outcome:
+          type: string
+          description: Derived from presence and contextual behavior assessment; null
+            unless assessed
+          enum:
+          - POSITIVE
+          - NEGATIVE
+          readOnly: true
         practiceName:
           type: string
           description: Practice name
@@ -11566,18 +12470,16 @@ components:
           description: Practice slug
         presence:
           type: string
-          description: "Presence: PRESENT, ABSENT, NOT_APPLICABLE, or INCONCLUSIVE"
+          description: PRESENT or ABSENT only when ASSESSED
           enum:
           - PRESENT
           - ABSENT
-          - NOT_APPLICABLE
-          - INCONCLUSIVE
         recurrenceKey:
           type: string
           description: Cross-run locus key; null when continuity is unavailable
         severity:
           type: string
-          description: Severity level (null unless assessment is BAD)
+          description: Severity level (null unless outcome is NEGATIVE)
           enum:
           - CRITICAL
           - MAJOR
@@ -11589,13 +12491,13 @@ components:
       required:
       - artifactId
       - artifactKind
+      - assessmentStatus
       - claimCurrentness
       - id
       - observedAt
       - origin
       - practiceName
       - practiceSlug
-      - presence
       - summary
     ObservationEvidence:
       type: object
@@ -11634,15 +12536,21 @@ components:
           description: Artifact type (e.g. PULL_REQUEST)
         assessment:
           type: string
-          description: "Assessment: GOOD or BAD; null when the presence carries no\
-            \ direction (NOT_APPLICABLE, INCONCLUSIVE)"
+          description: "Contextual desirability of the specified behavior: GOOD or\
+            \ BAD; null unless assessmentStatus is ASSESSED"
           enum:
           - GOOD
           - BAD
+        assessmentStatus:
+          type: string
+          enum:
+          - ASSESSED
+          - NOT_APPLICABLE
+          - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -11663,6 +12571,14 @@ components:
           - LIVE
           - MANUAL
           - BACKFILL
+        outcome:
+          type: string
+          description: Derived from presence and contextual behavior assessment; null
+            unless assessed
+          enum:
+          - POSITIVE
+          - NEGATIVE
+          readOnly: true
         practiceName:
           type: string
           description: Practice name
@@ -11671,15 +12587,13 @@ components:
           description: Practice slug
         presence:
           type: string
-          description: "Presence: PRESENT, ABSENT, NOT_APPLICABLE, or INCONCLUSIVE"
+          description: PRESENT or ABSENT only when ASSESSED
           enum:
           - PRESENT
           - ABSENT
-          - NOT_APPLICABLE
-          - INCONCLUSIVE
         severity:
           type: string
-          description: Severity level (null unless assessment is BAD)
+          description: Severity level (null unless outcome is NEGATIVE)
           enum:
           - CRITICAL
           - MAJOR
@@ -11691,14 +12605,25 @@ components:
       required:
       - artifactId
       - artifactKind
+      - assessmentStatus
       - claimCurrentness
       - id
       - observedAt
       - origin
       - practiceName
       - practiceSlug
-      - presence
       - summary
+    OptionCount:
+      type: object
+      properties:
+        count:
+          type: integer
+          format: int64
+        value:
+          type: string
+      required:
+      - count
+      - value
     OutcomeVector:
       type: object
       properties:
@@ -11717,12 +12642,16 @@ components:
         safeAvoidances:
           type: integer
           format: int32
+        undetermined:
+          type: integer
+          format: int32
       required:
       - commissionProblems
       - demonstratedStrengths
       - notApplicable
       - omissionGaps
       - safeAvoidances
+      - undetermined
     OutlineCollection:
       type: object
       description: A mirrored Outline collection with its sync state and live document
@@ -11870,8 +12799,26 @@ components:
       required:
       - since
       - until
-    PageAgentJob:
+    PageMetadata:
+      properties:
+        number:
+          type: integer
+          format: int64
+        size:
+          type: integer
+          format: int64
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int64
+    PageResponseDTOAgentJob:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -11890,20 +12837,24 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageAuthEventView:
+    PageResponseDTOAuthEventView:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -11922,20 +12873,60 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageConfigAuditEntryView:
+    PageResponseDTOChatThreadSummary:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatThreadSummary"
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          type: integer
+          format: int32
+        numberOfElements:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageable"
+        size:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/Sort"
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageResponseDTOConfigAuditEntryView:
+      type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -11954,34 +12945,24 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageMetadata:
-      properties:
-        number:
-          type: integer
-          format: int64
-        size:
-          type: integer
-          format: int64
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int64
-    PageObservationList:
+    PageResponseDTOObservationList:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -12000,20 +12981,24 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageSyncJob:
+    PageResponseDTOSyncJob:
       type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
       properties:
         content:
           type: array
@@ -12032,19 +13017,55 @@ components:
           type: integer
           format: int32
         pageable:
-          $ref: "#/components/schemas/PageableObject"
+          $ref: "#/components/schemas/Pageable"
         size:
           type: integer
           format: int32
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         totalElements:
           type: integer
           format: int64
         totalPages:
           type: integer
           format: int32
-    PageableObject:
+    PageResponseDTOUserViewUser:
+      type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserViewUser"
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          type: integer
+          format: int32
+        numberOfElements:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageable"
+        size:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/Sort"
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    Pageable:
       type: object
       properties:
         offset:
@@ -12059,7 +13080,7 @@ components:
         paged:
           type: boolean
         sort:
-          $ref: "#/components/schemas/SortObject"
+          $ref: "#/components/schemas/Sort"
         unpaged:
           type: boolean
     PagedModelFeedbackItem:
@@ -12098,15 +13119,6 @@ components:
             $ref: "#/components/schemas/ReviewRunSummary"
         page:
           $ref: "#/components/schemas/PageMetadata"
-    PagedModelSubmission:
-      type: object
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/Submission"
-        page:
-          $ref: "#/components/schemas/PageMetadata"
     PagedModelSurvey:
       type: object
       properties:
@@ -12114,6 +13126,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Survey"
+        page:
+          $ref: "#/components/schemas/PageMetadata"
+    PagedModelSurveyResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/SurveyResponse"
         page:
           $ref: "#/components/schemas/PageMetadata"
     PagedModelTracedArtifact:
@@ -12125,6 +13146,22 @@ components:
             $ref: "#/components/schemas/TracedArtifact"
         page:
           $ref: "#/components/schemas/PageMetadata"
+    ParticipationCounts:
+      type: object
+      properties:
+        declined:
+          type: integer
+          format: int64
+        invited:
+          type: integer
+          format: int64
+        responded:
+          type: integer
+          format: int64
+      required:
+      - declined
+      - invited
+      - responded
     PlacePracticeRequest:
       type: object
       description: A practice's position in the catalog
@@ -12173,6 +13210,8 @@ components:
         criteria:
           type: string
           description: Practice review criteria
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         displayOrder:
           type: integer
           format: int32
@@ -12212,6 +13251,7 @@ components:
       - bindings
       - createdAt
       - criteria
+      - deliveryBehavior
       - displayOrder
       - id
       - name
@@ -12329,9 +13369,44 @@ components:
           - AUTHOR
           - ASSIGNEE
           - REVIEWER
+          - MERGER
       required:
       - needs
       - signals
+    PracticeDefinition:
+      type: object
+      description: |-
+        A practice as its author wrote it.
+
+         <p><code>artifactKind</code> is not a field. It is read off {@link de.tum.cit.aet.hephaestus.practices.PracticeDefinition#bindings #bindings()}, whose signal names carry
+         it as a prefix, so there is nothing for a second statement of it to disagree with.
+      properties:
+        automatedReviewPolicy:
+          $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
+        bindings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeBinding"
+        criteria:
+          type: string
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
+        groupSlug:
+          type: string
+        name:
+          type: string
+        precomputeScript:
+          type: string
+        whatGoodLooksLike:
+          type: string
+        whyItMatters:
+          type: string
+      required:
+      - automatedReviewPolicy
+      - bindings
+      - criteria
+      - deliveryBehavior
+      - name
     PracticeDefinitionOptions:
       type: object
       description: "What a practice author may choose, per type of reviewed work"
@@ -12339,7 +13414,7 @@ components:
         sourceContractVersion:
           type: string
           description: Source contract these options describe
-          example: 1.0.0
+          example: 1.2.0
         workTypes:
           type: array
           items:
@@ -12347,6 +13422,19 @@ components:
       required:
       - sourceContractVersion
       - workTypes
+    PracticeDeliveryBehavior:
+      type: object
+      description: "Delivery choices declared by the practice author, not inferred\
+        \ from its slug."
+      properties:
+        overlapGroup:
+          type: string
+        redundantToSlug:
+          type: string
+        summaryOnly:
+          type: boolean
+      required:
+      - summaryOnly
     PracticeEvidenceBlocker:
       type: object
       description: "One thing that blocked automated review, and how many reviews\
@@ -12726,6 +13814,69 @@ components:
       - holdingUp
       - reviewedWork
       - window
+    PracticeReleaseField:
+      type: object
+      properties:
+        conflict:
+          type: boolean
+        field:
+          type: string
+          enum:
+          - NAME
+          - BINDINGS
+          - CRITERIA
+          - PRECOMPUTE_SCRIPT
+          - AUTOMATED_REVIEW_POLICY
+          - WHY_IT_MATTERS
+          - WHAT_GOOD_LOOKS_LIKE
+          - GROUP_SLUG
+          - DELIVERY_BEHAVIOR
+        offeredChanged:
+          type: boolean
+      required:
+      - conflict
+      - field
+      - offeredChanged
+    PracticeReleaseProposal:
+      type: object
+      description: One offer and the exact three versions an administrator reviews
+        before deciding.
+      properties:
+        base:
+          $ref: "#/components/schemas/PracticeDefinition"
+        baseSource:
+          type: string
+          enum:
+          - EXACT_ADOPTION
+          - BUNDLED_DIGEST_MATCH
+          - BUNDLED_FINGERPRINT_MATCH
+          - CURRENT_DEFINITION
+        current:
+          $ref: "#/components/schemas/PracticeDefinition"
+        currentRevision:
+          type: integer
+          format: int32
+        etag:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeReleaseField"
+        offered:
+          $ref: "#/components/schemas/PracticeDefinition"
+        offeredDigest:
+          type: string
+        slug:
+          type: string
+      required:
+      - base
+      - baseSource
+      - current
+      - etag
+      - fields
+      - offered
+      - offeredDigest
+      - slug
     PracticeReviewCoveragePreview:
       type: object
       properties:
@@ -12926,6 +14077,17 @@ components:
           type: string
           description: What to do — the delivered feedback for this observation (null
             if nothing was delivered)
+        kind:
+          type: string
+          description: "What this observation says about the developer: a behaviour\
+            \ demonstrated, a trap avoided, something harmful done, or something needed\
+            \ left out. The lists only separate positive from negative, so this is\
+            \ what tells the two kinds of each apart."
+          enum:
+          - DEMONSTRATED_STRENGTH
+          - SAFE_AVOIDANCE
+          - COMMISSION_PROBLEM
+          - OMISSION_GAP
         locator:
           type: string
           description: "Where in the work, e.g. \"FrameRecorder.swift:212\", when\
@@ -12945,15 +14107,11 @@ components:
           - BACKFILL
         outcome:
           type: string
-          description: "What this observation says about the developer: a behaviour\
-            \ demonstrated, a trap avoided, something harmful done, or something needed\
-            \ left out. The lists only separate positive from negative, so this is\
-            \ what tells the two kinds of each apart."
+          description: Positive or negative consequence of this assessed observation
           enum:
-          - DEMONSTRATED_STRENGTH
-          - SAFE_AVOIDANCE
-          - COMMISSION_PROBLEM
-          - OMISSION_GAP
+          - POSITIVE
+          - NEGATIVE
+          readOnly: true
         reviewedWorkId:
           type: integer
           format: int64
@@ -12973,9 +14131,9 @@ components:
           type: string
           description: The kind of reviewed work this is about
       required:
+      - kind
       - observationId
       - origin
-      - outcome
       - reviewedWorkId
       - title
       - workKind
@@ -13096,11 +14254,13 @@ components:
             enum:
             - VOLUME_CAPPED
             - COMPOSER_DEDUPED
+            - COMPOSER_WITHHELD
             - REACTED_DISPUTED
             - REACTED_NOT_APPLICABLE
             - CONVERSATION_EXPIRED
             - ARTIFACT_GONE
             - ARTIFACT_CLOSED
+            - ISSUE_SNAPSHOT_CHANGED
             - ARTIFACT_MERGED
             - ARTIFACT_DRAFT
             - RECIPIENT_OPTED_OUT
@@ -13188,6 +14348,15 @@ components:
             A review somebody asks for by hand is not among them — see manualReviewSignal.
           items:
             $ref: "#/components/schemas/PracticeSignalOption"
+        subjectRoles:
+          type: array
+          items:
+            type: string
+            enum:
+            - AUTHOR
+            - ASSIGNEE
+            - REVIEWER
+            - MERGER
         supportedAutomatedReviewModes:
           type: array
           items:
@@ -13203,6 +14372,7 @@ components:
       - recommendedNeeds
       - recommendedPolicy
       - signals
+      - subjectRoles
       - supportedAutomatedReviewModes
     ProbeLlmConnectionRequest:
       type: object
@@ -13671,11 +14841,21 @@ components:
     Question:
       type: object
       properties:
+        allowOther:
+          type: boolean
+        highLabel:
+          type: string
+          maxLength: 60
+          minLength: 0
         id:
           type: string
           maxLength: 80
           minLength: 0
           pattern: "[A-Za-z0-9_-]+"
+        lowLabel:
+          type: string
+          maxLength: 60
+          minLength: 0
         options:
           type: array
           items:
@@ -13695,12 +14875,41 @@ components:
           enum:
           - TEXT
           - SINGLE_CHOICE
+          - MULTIPLE_CHOICE
           - RATING
+          - NPS
       required:
+      - allowOther
       - id
       - options
       - prompt
+      - required
       - type
+    QuestionSummary:
+      type: object
+      properties:
+        answered:
+          type: integer
+          format: int64
+        average:
+          type: number
+          format: double
+        counts:
+          type: array
+          items:
+            $ref: "#/components/schemas/OptionCount"
+        other:
+          type: integer
+          format: int64
+        questionId:
+          type: string
+        score:
+          type: integer
+          format: int32
+      required:
+      - answered
+      - counts
+      - questionId
     RateLimitSnapshot:
       type: object
       description: "Vendor API rate-limit observation, read from in-memory trackers\
@@ -13762,6 +14971,57 @@ components:
           pattern: "^[CG][A-Z0-9]{8,}$"
       required:
       - slackChannelId
+    ReleaseStatus:
+      type: object
+      description: |-
+        The running release and what the last update check found. Discovery is advisory: nothing here
+         verifies an artifact or performs an upgrade.
+      properties:
+        failure:
+          type: string
+          description: "why the last attempt did not complete, when <code>status</code>\
+            \ is <code>FAILED</code>"
+          enum:
+          - RATE_LIMITED
+          - UNAVAILABLE
+          - MALFORMED
+        lastAttempt:
+          type: string
+          format: date-time
+          description: "when a check was last started, on any outcome"
+        lastSuccess:
+          type: string
+          format: date-time
+          description: "when a check last completed, which is when <code>latest</code>\
+            \ was observed"
+        latest:
+          $ref: "#/components/schemas/LatestRelease"
+          description: the newest published release as of <code>lastSuccess</code>
+        nextCheck:
+          type: string
+          format: date-time
+          description: when the next automatic check is due
+        retryUntil:
+          type: string
+          format: date-time
+          description: the wait GitHub named on a rate limit; a manual check before
+            it is refused
+        running:
+          $ref: "#/components/schemas/RunningRelease"
+          description: the identity this process reports
+        status:
+          type: string
+          description: the verdict an administrator reads first
+          enum:
+          - DISABLED
+          - NOT_APPLICABLE
+          - NEVER_CHECKED
+          - CURRENT
+          - UPDATE_AVAILABLE
+          - FAILED
+      required:
+      - running
+      - status
     RenameWorkspaceSlugRequest:
       type: object
       description: Request to rename a workspace's URL slug
@@ -13852,8 +15112,14 @@ components:
       properties:
         granted:
           type: boolean
+        noticeVersion:
+          type: string
+        researchOrganization:
+          type: string
+          description: The organisation this control named on screen
       required:
       - granted
+      - noticeVersion
     ResourceCounts:
       type: object
       description: Resource-level rollup for the connection overview badge
@@ -14032,11 +15298,13 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
           - ARTIFACT_GONE
           - ARTIFACT_CLOSED
+          - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
@@ -14063,14 +15331,21 @@ components:
       properties:
         assessment:
           type: string
-          description: "Assessment: GOOD or BAD (null when NOT_APPLICABLE)"
+          description: "Specified behavior in context: GOOD means desirable, BAD means\
+            \ undesirable (null unless ASSESSED)"
           enum:
           - GOOD
           - BAD
+        assessmentStatus:
+          type: string
+          enum:
+          - ASSESSED
+          - NOT_APPLICABLE
+          - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -14088,6 +15363,14 @@ components:
           type: integer
           format: int32
           description: Render order within the feedback (lower renders earlier)
+        outcome:
+          type: string
+          description: Derived from presence and contextual behavior assessment; null
+            unless assessed
+          enum:
+          - POSITIVE
+          - NEGATIVE
+          readOnly: true
         practiceName:
           type: string
         practiceSlug:
@@ -14097,8 +15380,6 @@ components:
           enum:
           - PRESENT
           - ABSENT
-          - NOT_APPLICABLE
-          - INCONCLUSIVE
         role:
           type: string
           description: Whether the observation leads the feedback or reinforces it
@@ -14107,7 +15388,7 @@ components:
           - SUPPORTING
         severity:
           type: string
-          description: Severity band (null unless assessment is BAD)
+          description: Severity band (null unless outcome is NEGATIVE)
           enum:
           - CRITICAL
           - MAJOR
@@ -14116,13 +15397,13 @@ components:
         summary:
           type: string
       required:
+      - assessmentStatus
       - claimCurrentness
       - observationId
       - observedAt
       - ordinal
       - practiceName
       - practiceSlug
-      - presence
       - role
       - summary
     ReviewFeedback:
@@ -14190,11 +15471,13 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
           - ARTIFACT_GONE
           - ARTIFACT_CLOSED
+          - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
@@ -14330,11 +15613,13 @@ components:
           enum:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
+          - COMPOSER_WITHHELD
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
           - ARTIFACT_GONE
           - ARTIFACT_CLOSED
+          - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
@@ -14402,14 +15687,21 @@ components:
           $ref: "#/components/schemas/ReviewedWorkRef"
         assessment:
           type: string
-          description: "Assessment: GOOD or BAD (null when NOT_APPLICABLE)"
+          description: "Specified behavior in context: GOOD means desirable, BAD means\
+            \ undesirable (null unless ASSESSED)"
           enum:
           - GOOD
           - BAD
+        assessmentStatus:
+          type: string
+          enum:
+          - ASSESSED
+          - NOT_APPLICABLE
+          - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -14435,6 +15727,14 @@ components:
           - LIVE
           - MANUAL
           - BACKFILL
+        outcome:
+          type: string
+          description: Derived from presence and contextual behavior assessment; null
+            unless assessed
+          enum:
+          - POSITIVE
+          - NEGATIVE
+          readOnly: true
         practiceName:
           type: string
         practiceSlug:
@@ -14444,14 +15744,12 @@ components:
           enum:
           - PRESENT
           - ABSENT
-          - NOT_APPLICABLE
-          - INCONCLUSIVE
         recurrenceKey:
           type: string
           description: Cross-run locus key; null when continuity is unavailable
         severity:
           type: string
-          description: Severity band (null unless assessment is BAD)
+          description: Severity band (null unless outcome is NEGATIVE)
           enum:
           - CRITICAL
           - MAJOR
@@ -14466,6 +15764,7 @@ components:
       required:
       - agentJobId
       - artifact
+      - assessmentStatus
       - claimCurrentness
       - feedbackDisposition
       - id
@@ -14473,18 +15772,11 @@ components:
       - origin
       - practiceName
       - practiceSlug
-      - presence
       - summary
     ReviewObservationCounts:
       type: object
       description: Counts of observations by assessment
       properties:
-        inconclusive:
-          type: integer
-          format: int64
-          description: Practices that looked at the evidence and could not settle
-            the question either way; reported apart from notApplicable because one
-            says there was nothing here to judge and the other says we could not tell
         notApplicable:
           type: integer
           format: int64
@@ -14495,11 +15787,17 @@ components:
         strengths:
           type: integer
           format: int64
+        undetermined:
+          type: integer
+          format: int64
+          description: Practices that looked at the evidence and could not settle
+            the question either way; reported apart from notApplicable because one
+            says there was nothing here to judge and the other says we could not tell
       required:
-      - inconclusive
       - notApplicable
       - problems
       - strengths
+      - undetermined
     ReviewObservationDetail:
       type: object
       description: An observation with evidence and linked feedback
@@ -14511,14 +15809,21 @@ components:
           $ref: "#/components/schemas/ReviewedWorkRef"
         assessment:
           type: string
-          description: "Assessment: GOOD or BAD (null when NOT_APPLICABLE)"
+          description: "Specified behavior in context: GOOD means desirable, BAD means\
+            \ undesirable (null unless ASSESSED)"
           enum:
           - GOOD
           - BAD
+        assessmentStatus:
+          type: string
+          enum:
+          - ASSESSED
+          - NOT_APPLICABLE
+          - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -14541,6 +15846,14 @@ components:
         observedAt:
           type: string
           format: date-time
+        outcome:
+          type: string
+          description: Derived from presence and contextual behavior assessment; null
+            unless assessed
+          enum:
+          - POSITIVE
+          - NEGATIVE
+          readOnly: true
         practiceName:
           type: string
         practiceRevisionId:
@@ -14554,14 +15867,12 @@ components:
           enum:
           - PRESENT
           - ABSENT
-          - NOT_APPLICABLE
-          - INCONCLUSIVE
         recurrenceKey:
           type: string
           description: Cross-run locus key; null when continuity is unavailable
         severity:
           type: string
-          description: Severity band (null unless assessment is BAD)
+          description: Severity band (null unless outcome is NEGATIVE)
           enum:
           - CRITICAL
           - MAJOR
@@ -14576,13 +15887,13 @@ components:
       required:
       - agentJobId
       - artifact
+      - assessmentStatus
       - claimCurrentness
       - feedback
       - id
       - observedAt
       - practiceName
       - practiceSlug
-      - presence
       - summary
     ReviewPlacement:
       type: object
@@ -14944,6 +16255,42 @@ components:
         revoked:
           type: integer
           format: int32
+    RunningRelease:
+      type: object
+      description: |-
+        Deployment-reported identity: the values the verified lock env handed this process, not an
+         observation of the container. <code>commit</code> and <code>image</code> are absent outside a lock-driven
+         deployment.
+      properties:
+        channel:
+          type: string
+          description: what kind of build that version names
+          enum:
+          - RELEASE
+          - COMMIT
+          - DEVELOPMENT
+        commit:
+          type: string
+          description: the source commit the lock names
+        image:
+          type: string
+          description: the digest reference this container was started from
+        roles:
+          type: array
+          description: the runtime roles this process booted with
+          items:
+            type: string
+            enum:
+            - SERVER
+            - WORKER
+            - WEBHOOK
+        version:
+          type: string
+          description: the version the deployment passed as <code>APP_VERSION</code>
+      required:
+      - channel
+      - roles
+      - version
     SessionView:
       type: object
       properties:
@@ -15136,7 +16483,7 @@ components:
       - slackUserId
       - workspaceName
       - workspaceSlug
-    SortObject:
+    Sort:
       type: object
       properties:
         empty:
@@ -15145,53 +16492,15 @@ components:
           type: boolean
         unsorted:
           type: boolean
-    Submission:
-      type: object
-      properties:
-        accountId:
-          type: integer
-          format: int64
-        answers:
-          type: object
-          additionalProperties:
-            type: string
-        createdAt:
-          type: string
-          format: date-time
-        disposition:
-          type: string
-          enum:
-          - RESPONDED
-          - DISMISSED
-        id:
-          type: string
-          format: uuid
-        questions:
-          type: array
-          items:
-            $ref: "#/components/schemas/Question"
-        surveyId:
-          type: string
-          format: uuid
-        surveyTitle:
-          type: string
-        workspaceId:
-          type: integer
-          format: int64
-      required:
-      - accountId
-      - disposition
-      - id
-      - questions
-      - surveyId
-      - surveyTitle
     SubmitSurvey:
       type: object
       properties:
         answers:
-          type: object
-          additionalProperties:
-            type: string
+          type: array
+          items:
+            $ref: "#/components/schemas/Answer"
+          maxItems: 20
+          minItems: 0
       required:
       - answers
     Survey:
@@ -15202,6 +16511,8 @@ components:
         createdAt:
           type: string
           format: date-time
+        createdBy:
+          $ref: "#/components/schemas/FeedbackAccountRef"
         description:
           type: string
         endsAt:
@@ -15210,25 +16521,166 @@ components:
         id:
           type: string
           format: uuid
+        participation:
+          $ref: "#/components/schemas/ParticipationCounts"
+        purpose:
+          type: string
+          enum:
+          - PRODUCT
+          - RESEARCH
         questions:
           type: array
           items:
             $ref: "#/components/schemas/Question"
+        researchOrganization:
+          type: string
         startsAt:
           type: string
           format: date-time
         title:
           type: string
-        workspaceId:
-          type: integer
-          format: int64
+        workspace:
+          $ref: "#/components/schemas/FeedbackWorkspaceRef"
       required:
       - active
+      - createdAt
       - description
       - id
+      - participation
+      - purpose
       - questions
       - startsAt
       - title
+    SurveyEdit:
+      type: object
+      properties:
+        active:
+          type: boolean
+        description:
+          type: string
+          maxLength: 500
+          minLength: 0
+        endsAt:
+          type: string
+          format: date-time
+        startsAt:
+          type: string
+          format: date-time
+        title:
+          type: string
+          maxLength: 160
+          minLength: 0
+      required:
+      - active
+      - description
+      - startsAt
+      - title
+    SurveyEmailInvitationRequest:
+      type: object
+      properties:
+        sendReminder:
+          type: boolean
+    SurveyEmailInvitationSummary:
+      type: object
+      description: "Counts refer to email requests, not in-app invitations or responses.\
+        \ Accepted means SMTP relay acceptance."
+      properties:
+        accepted:
+          type: integer
+          format: int32
+        alreadyRequested:
+          type: integer
+          format: int32
+        deliveryConfigured:
+          type: boolean
+        eligible:
+          type: integer
+          format: int32
+        queued:
+          type: integer
+          format: int32
+        remaining:
+          type: integer
+          format: int32
+      required:
+      - accepted
+      - alreadyRequested
+      - deliveryConfigured
+      - eligible
+      - queued
+      - remaining
+    SurveyInvitation:
+      type: object
+      properties:
+        description:
+          type: string
+        endsAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        purpose:
+          type: string
+          enum:
+          - PRODUCT
+          - RESEARCH
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Question"
+        researchOrganization:
+          type: string
+        seen:
+          type: boolean
+        title:
+          type: string
+      required:
+      - description
+      - id
+      - purpose
+      - questions
+      - seen
+      - title
+    SurveyResponse:
+      type: object
+      properties:
+        account:
+          $ref: "#/components/schemas/FeedbackAccountRef"
+        answers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Answer"
+        decidedAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - INVITED
+          - RESPONDED
+          - DECLINED
+        workspace:
+          $ref: "#/components/schemas/FeedbackWorkspaceRef"
+      required:
+      - decidedAt
+      - id
+      - status
+    SurveySummary:
+      type: object
+      properties:
+        participation:
+          $ref: "#/components/schemas/ParticipationCounts"
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestionSummary"
+      required:
+      - participation
+      - questions
     SyncJob:
       type: object
       description: One sync_job row — a single INITIAL/RECONCILIATION/BACKFILL pass
@@ -15861,6 +17313,10 @@ components:
       description: Update a model's metadata (all fields optional; pricing and sharing
         are separate)
       properties:
+        clearReasoningEffort:
+          type: boolean
+          description: "True clears the reasoning effort, so the provider's own default\
+            \ applies"
         contextWindow:
           type: integer
           format: int32
@@ -15879,9 +17335,18 @@ components:
           format: int32
           description: Maximum output tokens
           minimum: 1
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
+        reasoningEffort:
+          type: string
+          description: Reasoning effort to request; null keeps the current one (see
+            clearReasoningEffort)
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
     UpdateLlmModelSharingRequest:
       type: object
       description: "Share with: all workspaces, or a selected set"
@@ -15918,6 +17383,25 @@ components:
           type: boolean
         scopes:
           type: string
+    UpdateNotificationPreferences:
+      type: object
+      properties:
+        productFeedback:
+          type: boolean
+        productSurveys:
+          type: boolean
+        researchSurveys:
+          type: boolean
+        surveySummaries:
+          type: boolean
+        workspaceAlerts:
+          type: boolean
+      required:
+      - productFeedback
+      - productSurveys
+      - researchSurveys
+      - surveySummaries
+      - workspaceAlerts
     UpdateOutlineCollectionStateRequest:
       type: object
       description: Transition a mirrored Outline collection to a target mirror state
@@ -15988,6 +17472,15 @@ components:
           description: "Replacement review settings; omit to preserve them, or to\
             \ take the recommended ones when the bindings move the practice to a different\
             \ kind of work"
+        bindingChanges:
+          type: array
+          description: Explicit intent to change the gate or the person judged
+          items:
+            type: string
+            enum:
+            - APPLIES_WHEN
+            - SUBJECT
+          uniqueItems: true
         bindings:
           type: array
           description: Replacement occasion and its evidence; omit to leave it unchanged
@@ -16010,7 +17503,9 @@ components:
           description: Practice review criteria
           maxLength: 50000
           minLength: 0
-          pattern: .*\S.*
+          pattern: "[\\s\\S]*\\S[\\s\\S]*"
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         group:
           $ref: "#/components/schemas/BindPracticeGroupRequest"
           description: Catalog placement to apply with the definition update; omit
@@ -16032,13 +17527,13 @@ components:
           description: Concrete example shown to the developer; not review criteria
           maxLength: 2000
           minLength: 0
-          pattern: .*\S.*
+          pattern: "[\\s\\S]*\\S[\\s\\S]*"
         whyItMatters:
           type: string
           description: Plain-language rationale shown to the developer
           maxLength: 2000
           minLength: 0
-          pattern: .*\S.*
+          pattern: "[\\s\\S]*\\S[\\s\\S]*"
     UpdatePracticeReviewSettingsRequest:
       type: object
       description: Update per-workspace practice-review policy. Null fields unchanged;
@@ -16206,9 +17701,6 @@ components:
       description: Request to update workspace feature flags. Null fields are left
         unchanged.
       properties:
-        achievementsEnabled:
-          type: boolean
-          description: Enable the achievements system
         leaderboardEnabled:
           type: boolean
           description: Enable the leaderboard ranking page
@@ -16252,6 +17744,10 @@ components:
       type: object
       description: Update a model on your AI provider (all fields optional)
       properties:
+        clearReasoningEffort:
+          type: boolean
+          description: "True clears the reasoning effort, so the provider's own default\
+            \ applies"
         contextWindow:
           type: integer
           format: int32
@@ -16300,9 +17796,18 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
+        reasoningEffort:
+          type: string
+          description: Reasoning effort to request; null keeps the current one (see
+            clearReasoningEffort)
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
     UpdateWorkspaceNotificationsRequest:
       type: object
       description: Request to update leaderboard notification settings
@@ -16403,20 +17908,40 @@ components:
       - id
       - login
       - name
+    UserPracticeSummary:
+      type: object
+      properties:
+        groupStandings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeGroupStanding"
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeGroup"
+        practices:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewedPractice"
+        standings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeStanding"
+      required:
+      - groupStandings
+      - groups
+      - practices
+      - standings
     UserSettings:
       type: object
       description: User preferences and settings
       properties:
-        participateInResearch:
-          type: boolean
-          description: Whether the user consents to participate in research studies
         practiceFeedbackDeliveryEnabled:
           type: boolean
           description: "Whether new practice-feedback comments may be delivered on\
             \ issues, pull requests, and merge requests authored by the user, together\
             \ with related Slack reminders"
       required:
-      - participateInResearch
       - practiceFeedbackDeliveryEnabled
     UserTeams:
       type: object
@@ -16445,6 +17970,24 @@ components:
       - name
       - teams
       - url
+    UserViewUser:
+      type: object
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        accountStatus:
+          type: string
+        login:
+          type: string
+        name:
+          type: string
+        userId:
+          type: integer
+          format: int64
+      required:
+      - login
+      - userId
     Workspace:
       type: object
       description: Complete workspace information including configuration and settings
@@ -16452,9 +17995,6 @@ components:
         accountLogin:
           type: string
           description: Git provider account login associated with this workspace
-        achievementsEnabled:
-          type: boolean
-          description: Whether the achievements system is enabled
         createdAt:
           type: string
           format: date-time
@@ -16563,7 +18103,6 @@ components:
           example: my-workspace
       required:
       - accountLogin
-      - achievementsEnabled
       - createdAt
       - displayName
       - gitlabWebhookRegistered
@@ -16588,9 +18127,6 @@ components:
         accountLogin:
           type: string
           description: Git provider account login associated with this workspace
-        achievementsEnabled:
-          type: boolean
-          description: Whether the achievements system is enabled
         createdAt:
           type: string
           format: date-time
@@ -16636,7 +18172,6 @@ components:
           example: my-workspace
       required:
       - accountLogin
-      - achievementsEnabled
       - createdAt
       - displayName
       - id
@@ -16657,7 +18192,7 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          example: openai-completions
+          example: openai-responses
         authMode:
           type: string
           description: Credential shape
@@ -16764,12 +18299,21 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort requested of the model; null sends none,\
+            \ the provider's default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         slug:
           type: string
           description: Unique slug within the workspace
-        supportsReasoning:
-          type: boolean
-          description: Whether the model supports a reasoning mode
         updatedAt:
           type: string
           format: date-time
@@ -16787,7 +18331,6 @@ components:
       - id
       - pricingMode
       - slug
-      - supportsReasoning
       - upstreamModelId
     WorkspaceLlmProbeResult:
       type: object

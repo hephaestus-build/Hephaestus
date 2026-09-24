@@ -1,10 +1,10 @@
 import { format, formatDistance } from "date-fns";
 import { ClockAlertIcon, TriangleAlertIcon } from "lucide-react";
 
+import { cn } from "cn";
 import { useNow } from "@/components/common/use-now";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { asDate } from "@/lib/dates";
-import { cn } from "@/lib/utils";
 
 /** `unknown` is a timestamp with no known cadence; `never` is no timestamp at all. */
 export type FreshnessTone = "never" | "unknown" | "fresh" | "stale" | "veryStale";
@@ -70,11 +70,7 @@ export function RelativeTime({
 
 	return (
 		<Tooltip>
-			<TooltipTrigger
-				className={cn(
-					"cursor-help underline decoration-dotted decoration-muted-foreground/40 underline-offset-4",
-				)}
-			>
+			<TooltipTrigger className={cn("cursor-help underline decoration-dotted underline-offset-4")}>
 				{reading}
 			</TooltipTrigger>
 			<TooltipContent>

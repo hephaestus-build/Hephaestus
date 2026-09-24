@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -14,7 +14,7 @@ import {
 	withoutCode,
 } from "./check-agent-instructions.ts";
 
-const REPO_ROOT = resolve(import.meta.dirname, "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * The one failure a case produced. Most cases break exactly one thing, so a second failure is a
@@ -45,11 +45,17 @@ function snapshot(overrides: Record<string, Override> = {}): Snapshot {
 			"---\ndescription: Land a PR\n---\n\n@.claude/skills/land-pr/SKILL.md\n",
 	};
 	const files: TrackedFile[] = [];
-	for (const [path, content] of Object.entries({ ...base, ...overrides })) {
-		if (content === null) continue;
-		if (typeof content === "string") files.push({ path, kind: "text", content });
-		else if ("target" in content) files.push({ path, kind: "symlink", target: content.target });
-		else files.push({ path, kind: "opaque" });
+	for (const [file, content] of Object.entries({ ...base, ...overrides })) {
+		if (content === null) {
+			continue;
+		}
+		if (typeof content === "string") {
+			files.push({ path: file, kind: "text", content });
+		} else if ("target" in content) {
+			files.push({ path: file, kind: "symlink", target: content.target });
+		} else {
+			files.push({ path: file, kind: "opaque" });
+		}
 	}
 	return { files };
 }
@@ -64,23 +70,23 @@ await test("the repository this gate ships in passes it", async () => {
 
 await test("a nested AGENTS.md with no CLAUDE.md beside it is unreachable in Claude Code", () => {
 	const failure = only(analyse(snapshot({ "webapp/CLAUDE.md": null })));
-	assert.match(failure, /webapp\/AGENTS\.md is loaded by every agent except Claude Code/);
-	assert.match(failure, /Add webapp\/CLAUDE\.md/);
+	assert.match(failure, /webapp\/AGENTS\.md is loaded by every agent except Claude Code/u);
+	assert.match(failure, /Add webapp\/CLAUDE\.md/u);
 });
 
 await test("a CLAUDE.md that imports something else does not count as importing its sibling", () => {
 	assert.match(
 		only(analyse(snapshot({ "webapp/CLAUDE.md": "@../AGENTS.md\n" }))),
-		/does not import webapp\/AGENTS\.md/,
+		/does not import webapp\/AGENTS\.md/u,
 	);
 });
 
 await test("an AGENTS.md under an agent root is a skill's payload, not a tree that needs a guide", () => {
-	for (const path of [
+	for (const file of [
 		".claude/skills/react-best-practices/AGENTS.md",
 		".opencode/skill/x/AGENTS.md",
 	]) {
-		assert.deepEqual(analyse(snapshot({ [path]: "# Vendored\n" })), [], path);
+		assert.deepEqual(analyse(snapshot({ [file]: "# Vendored\n" })), [], file);
 	}
 	// Under `.agents/skills/` it is also a Codex mirror, so it needs its counterpart to be legal.
 	assert.deepEqual(
@@ -96,8 +102,8 @@ await test("an AGENTS.md under an agent root is a skill's payload, not a tree th
 
 await test("a symlinked CLAUDE.md is reported as a symlink and not also as a missing import", () => {
 	const failure = only(analyse(snapshot({ "webapp/CLAUDE.md": symlinkTo("AGENTS.md") })));
-	assert.match(failure, /webapp\/CLAUDE\.md is a committed symlink/);
-	assert.match(failure, /loads the target path as the entire instruction set/);
+	assert.match(failure, /webapp\/CLAUDE\.md is a committed symlink/u);
+	assert.match(failure, /loads the target path as the entire instruction set/u);
 });
 
 await test("a symlink's remedy is decided by what it points at, not by where it sits", () => {
@@ -107,12 +113,12 @@ await test("a symlink's remedy is decided by what it points at, not by where it 
 		only(
 			analyse(snapshot({ ".opencode/skill/land-pr": symlinkTo("../../.claude/skills/land-pr") })),
 		),
-		/It duplicates \.claude\/skills\/land-pr, which both agents already read\. Delete the link\./,
+		/It duplicates \.claude\/skills\/land-pr, which both agents already read\. Delete the link\./u,
 	);
-	for (const path of ["webapp/AGENTS.md", ".claude/skills/land-pr/SKILL.md"]) {
-		const failure = analyse(snapshot({ [path]: symlinkTo("../outside-the-checkout.md") }))[0] ?? "";
-		assert.match(failure, /is a committed symlink/, path);
-		assert.match(failure, /Replace it with a regular file/, path);
+	for (const file of ["webapp/AGENTS.md", ".claude/skills/land-pr/SKILL.md"]) {
+		const failure = analyse(snapshot({ [file]: symlinkTo("../outside-the-checkout.md") }))[0] ?? "";
+		assert.match(failure, /is a committed symlink/u, file);
+		assert.match(failure, /Replace it with a regular file/u, file);
 	}
 });
 
@@ -126,29 +132,29 @@ await test("a symlinked command is one defect, not also a second copy of itself"
 				}),
 			),
 		),
-		/is a committed symlink/,
+		/is a committed symlink/u,
 	);
 });
 
 await test("an agent file this gate did not read is reported, never counted as checked", () => {
 	// `opaque` absorbed into "empty" would pass every check that queries the file, silently.
-	for (const path of ["webapp/CLAUDE.md", "webapp/AGENTS.md", ".claude/skills/land-pr/SKILL.md"]) {
+	for (const file of ["webapp/CLAUDE.md", "webapp/AGENTS.md", ".claude/skills/land-pr/SKILL.md"]) {
 		assert.match(
-			only(analyse(snapshot({ [path]: { kind: "opaque" } }))),
-			/was not read, so every check that queries it saw an empty file/,
-			path,
+			only(analyse(snapshot({ [file]: { kind: "opaque" } }))),
+			/was not read, so every check that queries it saw an empty file/u,
+			file,
 		);
 	}
 });
 
 await test("an import resolving to nothing is reported against the file holding it", () => {
 	const failure = only(analyse(snapshot({ "CLAUDE.md": "@AGENTS.md\n@docs/missing.md\n" })));
-	assert.match(failure, /CLAUDE\.md references @docs\/missing\.md/);
+	assert.match(failure, /CLAUDE\.md references @docs\/missing\.md/u);
 });
 
 await test("a broken reference inside an AGENTS.md is reported — both tools load that file whole", () => {
 	const failure = only(analyse(snapshot({ "AGENTS.md": "# Hephaestus\n\nSee @docs/gone.mdx.\n" })));
-	assert.match(failure, /AGENTS\.md references @docs\/gone\.mdx/);
+	assert.match(failure, /AGENTS\.md references @docs\/gone\.mdx/u);
 });
 
 await test("an opencode command reference resolves from the repo root, not from the command file", () => {
@@ -160,7 +166,7 @@ await test("an opencode command reference resolves from the repo root, not from 
 			".opencode/commands/land-pr.md": "---\n---\n\n@skills/x.md\n",
 		}),
 	);
-	assert.match(only(failures), /resolves to skills\/x\.md/);
+	assert.match(only(failures), /resolves to skills\/x\.md/u);
 });
 
 await test("code is not prose: a reference inside a span, a fence or a comment is not a reference", () => {
@@ -219,9 +225,36 @@ await test("contributor docs reject missing repository paths and npm packages", 
 		}),
 	);
 	assert.equal(failures.length, 3, failures.join("\n"));
-	assert.match(failures[0] ?? "", /scripts\/missing\.ts/);
-	assert.match(failures[1] ?? "", /missing-plugin/);
-	assert.match(failures[2] ?? "", /@missing\/package/);
+	assert.match(failures[0] ?? "", /scripts\/missing\.ts/u);
+	assert.match(failures[1] ?? "", /missing-plugin/u);
+	assert.match(failures[2] ?? "", /@missing\/package/u);
+});
+
+await test("a renamed settings path is not read as a missing package", () => {
+	// A release note names both halves of a rename, and the old half is what a shape test bites on:
+	// `hephaestus.mentor.docker-cli` ends the way an npm CLI package does. It blocked a release.
+	assert.deepEqual(
+		analyse(
+			snapshot({
+				"package.json": JSON.stringify({ dependencies: {} }),
+				"MIGRATION.md":
+					"Rename `hephaestus.mentor.docker-cli` to `hephaestus.sandbox.docker.cli`.\n",
+			}),
+		),
+		[],
+	);
+	// A package name is still a package name: one dot is what npm's own dotted names have.
+	assert.match(
+		only(
+			analyse(
+				snapshot({
+					"package.json": JSON.stringify({ dependencies: {} }),
+					"docs/contributor/setup.md": "Install `lodash.merge-cli`.\n",
+				}),
+			),
+		),
+		/lodash\.merge-cli/u,
+	);
 });
 
 await test("an intentional non-checkout path is allowed only in the document that owns it", () => {
@@ -243,7 +276,7 @@ await test("an intentional non-checkout path is allowed only in the document tha
 				}),
 			),
 		),
-		/server\/.env/,
+		/server\/.env/u,
 	);
 });
 
@@ -263,7 +296,7 @@ await test("a unique shorthand directory resolves independently of its descendan
 await test("an invalid contributor MDX document is reported with its path", () => {
 	assert.throws(
 		() => analyse(snapshot({ "docs/contributor/broken.mdx": "<Component/ name>" })),
-		/docs\/contributor\/broken\.mdx:/,
+		/docs\/contributor\/broken\.mdx:/u,
 	);
 });
 
@@ -300,16 +333,16 @@ await test("path claims cannot escape through a typo, basename, or unrelated suf
 				}),
 			),
 		),
-		/src\/config\.ts/,
+		/src\/config\.ts/u,
 	);
 });
 
 await test("the contributor claim scope is root Markdown and contributor Markdown or MDX only", () => {
-	for (const path of ["README.md", "docs/contributor/setup.md", "docs/contributor/setup.mdx"]) {
-		assert.match(only(analyse(snapshot({ [path]: "Use `missing.md`.\n" }))), /missing\.md/, path);
+	for (const file of ["README.md", "docs/contributor/setup.md", "docs/contributor/setup.mdx"]) {
+		assert.match(only(analyse(snapshot({ [file]: "Use `missing.md`.\n" }))), /missing\.md/u, file);
 	}
-	for (const path of ["README.mdx", "docs/reader/setup.md"]) {
-		assert.deepEqual(analyse(snapshot({ [path]: "Use `missing.md`.\n" })), [], path);
+	for (const file of ["README.mdx", "docs/reader/setup.md"]) {
+		assert.deepEqual(analyse(snapshot({ [file]: "Use `missing.md`.\n" })), [], file);
 	}
 });
 
@@ -359,13 +392,15 @@ await test("a real reference survives the markup around it", () => {
 	}
 });
 
+/** A skill page whose frontmatter holds exactly `fields`. */
+const skillWithFrontmatter = (fields: string): string => `---\n${fields}\n---\n\n# Land PR\n`;
+
 await test("frontmatter is read through a BOM, CRLF and a trailing YAML comment", () => {
-	const skill = (fields: string): string => `---\n${fields}\n---\n\n# Land PR\n`;
 	for (const [label, content] of [
-		["plain", skill("disable-model-invocation: true")],
-		["yaml comment", skill("disable-model-invocation: true # typed only")],
-		["BOM", `﻿${skill("disable-model-invocation: true")}`],
-		["CRLF", skill("disable-model-invocation: true").replaceAll("\n", "\r\n")],
+		["plain", skillWithFrontmatter("disable-model-invocation: true")],
+		["yaml comment", skillWithFrontmatter("disable-model-invocation: true # typed only")],
+		["BOM", `﻿${skillWithFrontmatter("disable-model-invocation: true")}`],
+		["CRLF", skillWithFrontmatter("disable-model-invocation: true").replaceAll("\n", "\r\n")],
 	] as const) {
 		const failures = analyse(
 			snapshot({
@@ -373,13 +408,13 @@ await test("frontmatter is read through a BOM, CRLF and a trailing YAML comment"
 				".opencode/commands/land-pr.md": null,
 			}),
 		);
-		assert.match(only(failures), /sets disable-model-invocation/, label);
+		assert.match(only(failures), /sets disable-model-invocation/u, label);
 	}
 });
 
 await test("a YAML boolean is read the way YAML spells it, and a non-boolean is reported", () => {
 	const skill = (value: string): string =>
-		`---\ndisable-model-invocation: ${value}\n---\n\n# Land PR\n`;
+		skillWithFrontmatter(`disable-model-invocation: ${value}`);
 	for (const truthy of ["true", "yes", "on", "True", "YES"]) {
 		const failures = analyse(
 			snapshot({
@@ -387,7 +422,7 @@ await test("a YAML boolean is read the way YAML spells it, and a non-boolean is 
 				".opencode/commands/land-pr.md": null,
 			}),
 		);
-		assert.match(only(failures), /sets disable-model-invocation/, truthy);
+		assert.match(only(failures), /sets disable-model-invocation/u, truthy);
 	}
 	for (const falsy of ["false", "no", "off"]) {
 		assert.deepEqual(
@@ -403,7 +438,7 @@ await test("a YAML boolean is read the way YAML spells it, and a non-boolean is 
 	}
 	assert.match(
 		only(analyse(snapshot({ ".claude/skills/land-pr/SKILL.md": skill("maybe") }))),
-		/is not a YAML boolean/,
+		/is not a YAML boolean/u,
 	);
 });
 
@@ -425,7 +460,7 @@ await test("an instructions entry that matches no file loads nothing", () => {
 	const opencode = JSON.stringify({ instructions: ["AGENTS.md", "*/AGENTS.md", "MISSION.md"] });
 	assert.match(
 		only(analyse(snapshot({ "opencode.json": opencode }))),
-		/lists "MISSION\.md" under instructions/,
+		/lists "MISSION\.md" under instructions/u,
 	);
 });
 
@@ -433,7 +468,7 @@ await test("an AGENTS.md no instructions entry matches is invisible to opencode"
 	const opencode = JSON.stringify({ instructions: ["AGENTS.md"] });
 	assert.match(
 		only(analyse(snapshot({ "opencode.json": opencode }))),
-		/webapp\/AGENTS\.md is matched by no opencode\.json instructions entry/,
+		/webapp\/AGENTS\.md is matched by no opencode\.json instructions entry/u,
 	);
 });
 
@@ -445,11 +480,11 @@ await test("a remote instructions URL is not ours to resolve and is not reported
 });
 
 await test("an opencode.json that cannot be read is a failure, never a stack trace", () => {
-	assert.match(only(analyse(snapshot({ "opencode.json": null }))), /opencode\.json is missing/);
+	assert.match(only(analyse(snapshot({ "opencode.json": null }))), /opencode\.json is missing/u);
 	for (const broken of ["{ not json", JSON.stringify({ instructions: "AGENTS.md" })]) {
 		const failures = analyse(snapshot({ "opencode.json": broken }));
 		assert.ok(
-			failures.some((failure) => /could not be read as opencode's config/.test(failure)),
+			failures.some((failure) => failure.includes("could not be read as opencode's config")),
 			`${broken} -> ${failures.join("\n")}`,
 		);
 	}
@@ -457,8 +492,8 @@ await test("an opencode.json that cannot be read is a failure, never a stack tra
 
 await test("a skill only a typed slash command reaches needs a command in the other tool", () => {
 	const failure = only(analyse(snapshot({ ".opencode/commands/land-pr.md": null })));
-	assert.match(failure, /sets disable-model-invocation/);
-	assert.match(failure, /Add \.opencode\/commands\/land-pr\.md/);
+	assert.match(failure, /sets disable-model-invocation/u);
+	assert.match(failure, /Add \.opencode\/commands\/land-pr\.md/u);
 });
 
 await test("a model-invocable skill needs no command", () => {
@@ -480,7 +515,7 @@ await test("a command that copies the skill body instead of referencing it is tw
 	const copied = "---\ndescription: Land a PR\n---\n\n# Land PR\n";
 	assert.match(
 		only(analyse(snapshot({ ".opencode/commands/land-pr.md": copied }))),
-		/does not reference @\.claude\/skills\/land-pr\/SKILL\.md/,
+		/does not reference @\.claude\/skills\/land-pr\/SKILL\.md/u,
 	);
 });
 
@@ -488,7 +523,7 @@ await test("the same body in two agent directories is caught at the moment it is
 	const skill = "---\nname: land-pr\ndisable-model-invocation: true\n---\n\n# Land PR\n";
 	assert.match(
 		only(analyse(snapshot({ ".opencode/skill/land-pr/SKILL.md": skill }))),
-		/\.claude\/skills\/land-pr\/SKILL\.md and \.opencode\/skill\/land-pr\/SKILL\.md hold the same content/,
+		/\.claude\/skills\/land-pr\/SKILL\.md and \.opencode\/skill\/land-pr\/SKILL\.md hold the same content/u,
 	);
 });
 
@@ -498,7 +533,7 @@ await test("a copy is still a copy when it carries references of its own", () =>
 		only(
 			analyse(snapshot({ ".claude/skills/a/SKILL.md": body, ".opencode/skill/a/SKILL.md": body })),
 		),
-		/hold the same content/,
+		/hold the same content/u,
 	);
 });
 
@@ -524,7 +559,7 @@ await test("a skill mirrored for Codex is required to be identical, not forbidde
 				}),
 			),
 		),
-		/has drifted from \.claude\/skills\/gh-stack\/SKILL\.md/,
+		/has drifted from \.claude\/skills\/gh-stack\/SKILL\.md/u,
 	);
 });
 
@@ -540,7 +575,7 @@ await test("a skill Codex is meant to have cannot quietly become one copy", () =
 	for (const half of Object.keys(both)) {
 		assert.match(
 			only(analyse(snapshot({ ...both, [half]: null }), ["gh-stack"])),
-			/is missing, and gh-stack is listed as a skill Codex has/,
+			/is missing, and gh-stack is listed as a skill Codex has/u,
 			half,
 		);
 	}
@@ -549,7 +584,7 @@ await test("a skill Codex is meant to have cannot quietly become one copy", () =
 await test("a Codex skill with no Claude Code counterpart is reported", () => {
 	assert.match(
 		only(analyse(snapshot({ ".agents/skills/gh-stack/SKILL.md": "---\nname: gh-stack\n---\n" }))),
-		/has no counterpart at \.claude\/skills\/gh-stack\/SKILL\.md/,
+		/has no counterpart at \.claude\/skills\/gh-stack\/SKILL\.md/u,
 	);
 });
 
@@ -564,11 +599,15 @@ await test("failures arrive in the order analyse lists its checks", () => {
 	// The module docstring promises this ordering; without a multi-failure case nothing observes it.
 	const failures = analyse(
 		snapshot({
-			"server/AGENTS.md": { kind: "opaque" }, // unread
+			// unread
+			"server/AGENTS.md": { kind: "opaque" },
 			"server/CLAUDE.md": "@AGENTS.md\n",
-			"webapp/CLAUDE.md": null, // unreachable
-			"CLAUDE.md": "@AGENTS.md\n@docs/missing.md\n", // dangling
-			".opencode/commands/land-pr.md": null, // uncommanded
+			// unreachable
+			"webapp/CLAUDE.md": null,
+			// dangling
+			"CLAUDE.md": "@AGENTS.md\n@docs/missing.md\n",
+			// uncommanded
+			".opencode/commands/land-pr.md": null,
 		}),
 	);
 	assert.deepEqual(

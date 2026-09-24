@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { artifactKindIcon } from "@/lib/artifact-kinds";
 import { asDate, formatShortDay, formatTime } from "@/lib/dates";
+import { hasText } from "@/lib/text";
 
 import type { ObservationControls } from "./review-runs";
 import { ReviewObservationRow } from "./ReviewObservationRow";
@@ -40,10 +41,12 @@ export interface ReviewRunCardProps {
  * into one block: the observation's summary and outcome are the block's first line, and the work
  * the head would have named is the small line under it.
  */
+const NO_CONTROLS: ObservationControls = {};
+
 export function ReviewRunCard({
 	run,
 	initialObservationCount = 3,
-	observations = {},
+	observations = NO_CONTROLS,
 	showPracticeName = true,
 	initiallyOpen = "all",
 	tailContinues = false,
@@ -95,9 +98,9 @@ export function ReviewRunCard({
 					<div className="border-t px-4 py-2">
 						<Button
 							type="button"
-							variant="ghost"
+							variant="quiet"
 							size="sm"
-							className="h-8 px-2 text-muted-foreground hover:text-foreground"
+							className="h-8"
 							onClick={() => setShowAllObservations((current) => !current)}
 						>
 							{showAllObservations ? "Show less" : `Show more (${hiddenCount})`}
@@ -126,7 +129,7 @@ function ReviewedWorkHead({ work }: { work: ReviewedWorkRef }) {
 		<div className="flex min-w-0 items-start gap-2.5 border-b px-4 py-3">
 			<KindIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
 			<div className="flex min-w-0 flex-col gap-0.5">
-				{work.url ? (
+				{hasText(work.url) ? (
 					<Tooltip>
 						<TooltipTrigger
 							render={
@@ -140,7 +143,7 @@ function ReviewedWorkHead({ work }: { work: ReviewedWorkRef }) {
 				) : (
 					<p className="truncate text-sm font-medium">{identity}</p>
 				)}
-				{work.repositoryName && (
+				{hasText(work.repositoryName) && (
 					<p className="truncate text-xs text-muted-foreground">{work.repositoryName}</p>
 				)}
 			</div>
@@ -159,7 +162,7 @@ function ReviewedWorkLine({ work }: { work: ReviewedWorkRef }) {
 	return (
 		<span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
 			<KindIcon className="size-3.5 shrink-0" aria-hidden />
-			{work.url ? (
+			{hasText(work.url) ? (
 				<Tooltip>
 					<TooltipTrigger
 						render={
@@ -173,7 +176,7 @@ function ReviewedWorkLine({ work }: { work: ReviewedWorkRef }) {
 			) : (
 				<span className="truncate">{identity}</span>
 			)}
-			{work.repositoryName && (
+			{hasText(work.repositoryName) && (
 				<>
 					<span aria-hidden>·</span>
 					<span className="truncate">{work.repositoryName}</span>

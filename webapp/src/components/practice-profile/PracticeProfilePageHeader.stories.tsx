@@ -2,12 +2,11 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
 import { ARTIFACT_KIND } from "@/lib/artifact-kinds";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { PracticeProfilePageHeader } from "./PracticeProfilePageHeader";
 
 const meta = {
-	title: "Practice profile/Page header",
 	component: PracticeProfilePageHeader,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
@@ -37,7 +36,7 @@ export const Default: Story = {
 	play: async ({ canvas, args, userEvent }) => {
 		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent("Practice profile");
 		await expect(canvas.getByText("9 September, 2:10 pm")).toBeVisible();
-		await expect(canvas.getByRole("link", { name: /^#releases/ })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: /^#releases/u })).toBeVisible();
 		await expect(canvas.getByText("16 practices in 5 groups")).toBeVisible();
 
 		// Every standing with a count is listed, in the registry's order: what needs attention first,
@@ -82,7 +81,7 @@ export const LongWorkLabel: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		const link = canvas.getByRole("link", { name: /^Queue retry policy for the n…/ });
+		const link = canvas.getByRole("link", { name: /^Queue retry policy for the n…/u });
 		await expect(link).toHaveAttribute("title", "Queue retry policy for the notification pipeline");
 	},
 };

@@ -8,7 +8,7 @@ import {
 	PracticeTabsTrigger,
 } from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { Section } from "@/components/core/Section";
+import { Section } from "@/components/layout/Section";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
 import {
 	type FeedbackRatingProps,
@@ -138,13 +138,15 @@ export function PracticeProfilePage({
 }: PracticeProfilePageProps) {
 	const openGroupBySlug = (groupSlug: string) => {
 		const group = groups.find((candidate) => candidate.slug === groupSlug);
-		if (group) onOpenGroup?.(group);
+		if (group) {
+			onOpenGroup?.(group);
+		}
 	};
 	const cardsByTab = feedbackCardsByTab(feedbackCards);
 
 	// The alert alone, as `profile/ProfilePage` does: the header's "No practices set up yet" and a
 	// tab's "No feedback yet" are claims about the workspace, and a failed load has none to make.
-	if (error) {
+	if (error != null) {
 		return (
 			<div className="mx-auto w-full max-w-xl">
 				<QueryErrorAlert error={error} title="Could not load your practices" onRetry={onRetry} />
@@ -179,7 +181,9 @@ export function PracticeProfilePage({
 					value={feedbackTab}
 					onValueChange={(next) => {
 						const tab = FEEDBACK_TABS.find((candidate) => candidate === next);
-						if (tab) onFeedbackTabChange?.(tab);
+						if (tab) {
+							onFeedbackTabChange?.(tab);
+						}
 					}}
 					className="gap-4"
 				>
@@ -197,33 +201,35 @@ export function PracticeProfilePage({
 						</PracticeTabsList>
 						<span className="pb-2 text-sm text-muted-foreground">Newest first</span>
 					</PracticeTabsRail>
-					<TabsContent value={feedbackTab} className="flex flex-col gap-3">
-						{isLoading &&
-							// Two cards' worth, the "Newest" tab's count, so the list does not jump.
-							Array.from({ length: NEWEST_CARD_COUNT }, (_, index) => (
-								<Skeleton key={index} className="h-64 w-full rounded-xl" />
+					<TabsContent value={feedbackTab}>
+						<div className="flex flex-col gap-3">
+							{isLoading &&
+								// Two cards' worth, the "Newest" tab's count, so the list does not jump.
+								Array.from({ length: NEWEST_CARD_COUNT }, (_, index) => (
+									<Skeleton key={index} className="h-64 w-full rounded-xl" />
+								))}
+							{!isLoading && cardsByTab[feedbackTab].length === 0 && (
+								<Empty>
+									<EmptyHeader>
+										<EmptyMedia variant="icon">
+											<MessageSquareTextIcon />
+										</EmptyMedia>
+										<EmptyTitle>{EMPTY_TAB[feedbackTab].title}</EmptyTitle>
+										<EmptyDescription>{EMPTY_TAB[feedbackTab].description}</EmptyDescription>
+									</EmptyHeader>
+								</Empty>
+							)}
+							{cardsByTab[feedbackTab].map((card) => (
+								<PracticeFeedbackCard
+									key={card.feedbackId}
+									card={card}
+									{...ratingProps?.(card.feedbackId)}
+									onLearnMore={onOpenPractice && (() => onOpenPractice(card.practiceSlug, "about"))}
+									onOpenPractice={onOpenPractice}
+									onOpenGroup={onOpenGroup && openGroupBySlug}
+								/>
 							))}
-						{!isLoading && cardsByTab[feedbackTab].length === 0 && (
-							<Empty>
-								<EmptyHeader>
-									<EmptyMedia variant="icon">
-										<MessageSquareTextIcon />
-									</EmptyMedia>
-									<EmptyTitle>{EMPTY_TAB[feedbackTab].title}</EmptyTitle>
-									<EmptyDescription>{EMPTY_TAB[feedbackTab].description}</EmptyDescription>
-								</EmptyHeader>
-							</Empty>
-						)}
-						{cardsByTab[feedbackTab].map((card) => (
-							<PracticeFeedbackCard
-								key={card.feedbackId}
-								card={card}
-								{...ratingProps?.(card.feedbackId)}
-								onLearnMore={onOpenPractice && (() => onOpenPractice(card.practiceSlug, "about"))}
-								onOpenPractice={onOpenPractice}
-								onOpenGroup={onOpenGroup && openGroupBySlug}
-							/>
-						))}
+						</div>
 					</TabsContent>
 				</Tabs>
 			</Section>

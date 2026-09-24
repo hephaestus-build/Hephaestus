@@ -12,6 +12,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
@@ -147,6 +148,40 @@ public class PullRequest extends Issue {
     @ToString.Exclude
     private Set<User> requestedReviewers = new HashSet<>();
 
+    /**
+     * The issues the provider records this pull request as closing — GitHub's closing references,
+     * GitLab's "closes" issues — as far as they are issues of this repository. The set is the
+     * provider's current statement and is replaced whole on every sync that reads it.
+     */
+    @ManyToMany
+    @JoinTable(
+            name = "pull_request_closing_issue",
+            joinColumns =
+                    @JoinColumn(
+                            name = "pull_request_id",
+                            foreignKey = @ForeignKey(name = "fk_pull_request_closing_issue_pull_request")),
+            inverseJoinColumns =
+                    @JoinColumn(
+                            name = "issue_id",
+                            foreignKey = @ForeignKey(name = "fk_pull_request_closing_issue_issue")))
+    @BatchSize(size = 50)
+    @ToString.Exclude
+    private Set<Issue> closingIssues = new HashSet<>();
+
+    /**
+     * What the provider's checks said about the head, and for which head. Null until a sync or a
+     * check event observed one; {@link #headCheckSha} names the commit the state belongs to, so a
+     * state observed for an earlier head is not read as the current one.
+     */
+    @Nullable
+    @Enumerated(EnumType.STRING)
+    @Column(name = "head_check_state", length = 16)
+    private CheckState headCheckState;
+
+    @Nullable
+    @Column(name = "head_check_sha", length = 40)
+    private String headCheckSha;
+
     @OneToMany(mappedBy = "pullRequest", cascade = CascadeType.REMOVE, orphanRemoval = true)
     @BatchSize(size = 50)
     @ToString.Exclude
@@ -263,10 +298,59 @@ public class PullRequest extends Issue {
             this.requestedReviewers.remove(reviewer);
         }
     }
+    /**
+     * Replaces the closing-issue set with the provider's current statement.
+     *
+     * @return whether the set changed
+     */
+    public boolean replaceClosingIssues(Set<Issue> issues) {
+        if (this.closingIssues.equals(issues)) {
+            return false;
+        }
+        this.closingIssues.clear();
+        this.closingIssues.addAll(issues);
+        return true;
+    }
+
+    /**
+     * Records what the checks said about {@code sha}. A head observed for the first time takes the
+     * state as given; a further observation of the same head only worsens it — one failed suite or
+     * cancelled pipeline fails the head whatever the others report, and a success arriving after a
+     * failure is another suite's, not the rollup's — until a sync reads the provider's own rollup,
+     * which replaces the state outright.
+     *
+     * @return whether the observation changed anything
+     */
+    public boolean observeHeadChecks(String sha, CheckState state, boolean rollup) {
+        CheckState next = state;
+        if (!rollup && sha.equals(this.headCheckSha) && this.headCheckState != null) {
+            next = worse(this.headCheckState, state);
+        }
+        if (sha.equals(this.headCheckSha) && next == this.headCheckState) {
+            return false;
+        }
+        this.headCheckSha = sha;
+        this.headCheckState = next;
+        return true;
+    }
+
+    private static CheckState worse(CheckState recorded, CheckState observed) {
+        return rank(observed) > rank(recorded) ? observed : recorded;
+    }
+
+    /** FAILURE outranks CANCELLED outranks PENDING outranks SUCCESS outranks NONE. */
+    private static int rank(CheckState state) {
+        return switch (state) {
+            case NONE -> 0;
+            case SUCCESS -> 1;
+            case PENDING -> 2;
+            case CANCELLED -> 3;
+            case FAILURE -> 4;
+        };
+    }
+
     /*
      * Other fields intentionally not synced:
      * - MergeQueueEntry.position / MergeQueueEntry.estimatedTimeToMerge (GraphQL only)
-     * - PullRequest.closingIssuesReferences (GraphQL only)
-     * - PullRequest.commits.nodes.commit.statusCheckRollup (GraphQL only)
      */
 }

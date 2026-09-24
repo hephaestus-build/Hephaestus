@@ -174,9 +174,10 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                 1L,
                 overlapUser.getId(),
                 "Finding in " + ws.getWorkspaceSlug(),
+                "ASSESSED",
                 "PRESENT",
                 "GOOD",
-                "INFO",
+                null,
                 null,
                 "reasoning",
                 null,
@@ -255,8 +256,12 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         @Test
         @WithMentorUser
         void detailIsScopedToWorkspace() {
-            expectDetailStatus("/practices/{key}", tenantA.practiceSlug()).isOk();
-            expectDetailStatus("/practices/{key}", tenantB.practiceSlug()).isNotFound();
+            expectDetailStatus("/practices/{key}", tenantA.practiceSlug())
+                    .isOk()
+                    .expectBody(Void.class);
+            expectDetailStatus("/practices/{key}", tenantB.practiceSlug())
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
     }
 
@@ -285,9 +290,11 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         @WithMentorUser
         void detailIsScopedToWorkspace() {
             expectDetailStatus("/practices/observations/{key}", tenantA.observationId())
-                    .isOk();
+                    .isOk()
+                    .expectBody(Void.class);
             expectDetailStatus("/practices/observations/{key}", tenantB.observationId())
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -348,7 +355,8 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
             expectDetailStatus("/practices/feedback/{key}/response", tenantA.feedbackId())
                     .isNoContent();
             expectDetailStatus("/practices/feedback/{key}/response", tenantB.feedbackId())
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
     }
 
@@ -432,7 +440,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         job.setWorkspace(ws);
         job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
-        job.setEvidenceSnapshot(OBJECT_MAPPER.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.0.0"))));
+        job.setEvidenceSnapshot(OBJECT_MAPPER.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.2.0"))));
         job = agentJobRepository.save(job);
 
         UUID observationId = UUID.randomUUID();
@@ -447,8 +455,9 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                 2L,
                 overlapUser.getId(),
                 "In-app evidence in " + ws.getWorkspaceSlug(),
+                "ASSESSED",
                 "ABSENT",
-                "BAD",
+                "GOOD",
                 "MAJOR",
                 DIFF_EVIDENCE_JSON,
                 "reasoning",
@@ -497,8 +506,12 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         @Test
         @WithMentorUser
         void detailIsScopedToWorkspace() {
-            expectDetailStatus("/mentor/threads/{key}", tenantA.threadId()).isOk();
-            expectDetailStatus("/mentor/threads/{key}", tenantB.threadId()).isNotFound();
+            expectDetailStatus("/mentor/threads/{key}", tenantA.threadId())
+                    .isOk()
+                    .expectBody(Void.class);
+            expectDetailStatus("/mentor/threads/{key}", tenantB.threadId())
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
     }
 
@@ -540,16 +553,21 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         @Test
         @WithMentorUser
         void shouldReturnNotFoundWhenProfileUserOnlyBelongsToAnotherWorkspace() {
-            expectDetailStatus("/profile/{key}", "mentor").isOk();
-            expectDetailStatus("/profile/{key}", bobOnlyB.getLogin()).isNotFound();
+            expectDetailStatus("/profile/{key}", "mentor").isOk().expectBody(Void.class);
+            expectDetailStatus("/profile/{key}", bobOnlyB.getLogin())
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
         @WithMentorUser
         void shouldReturnNotFoundWhenActivityUserOnlyBelongsToAnotherWorkspace() {
-            expectDetailStatus("/profile/{key}/activity-monitor", "mentor").isOk();
+            expectDetailStatus("/profile/{key}/activity-monitor", "mentor")
+                    .isOk()
+                    .expectBody(Void.class);
             expectDetailStatus("/profile/{key}/activity-monitor", bobOnlyB.getLogin())
-                    .isNotFound();
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
     }
 
@@ -609,8 +627,8 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
             Team ownTeam = seedTeam("own-team", 900_300L, SHARED_LOGIN, ensureGitHubProvider());
             Team foreignTeam = seedTeam("foreign-team", 900_301L, SHARED_LOGIN, ensureGitLabProvider());
 
-            expectVisibilityWriteStatus(ownTeam.getId()).isOk();
-            expectVisibilityWriteStatus(foreignTeam.getId()).isNotFound();
+            expectVisibilityWriteStatus(ownTeam.getId()).isOk().expectBody(Void.class);
+            expectVisibilityWriteStatus(foreignTeam.getId()).isNotFound().expectBody(Void.class);
         }
     }
 
@@ -627,7 +645,8 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -639,7 +658,8 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
     }
 

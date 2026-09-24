@@ -43,3 +43,21 @@ gh attestation verify "release-$VERSION.json" --owner hephaestus-build
 Follow the [rollback procedure](./install#rollback). It selects an earlier published lock without
 reconstructing metadata or resolving image tags. Production startup independently rejects a
 non-digest `agent-pi` reference.
+
+## Runtime identity handoff
+
+Compose hands every server, worker and webhook container three lines of `release-lock.env`:
+`IMAGE_TAG` (as `APP_VERSION`), `HEPHAESTUS_RELEASE_COMMIT` and `HEPHAESTUS_IMAGE_APPLICATION_SERVER`.
+Each process reports them, with the runtime roles it booted, under `release` in `/actuator/info`.
+This is deployment metadata from the verified lock, not an observation of the container and not a
+second signature verification. A process without a lock reports the version it was given and no
+commit or image; a value that is present but malformed refuses startup.
+
+`/actuator/info` is unauthenticated, like the health probes beside it. The version was always visible
+in the web application, commit and digest are in the published lock, and the role list is the
+container topology this guide documents.
+
+After an upgrade, compare `release` on **each** role's management listener; the administration
+overview shows only the server it talks to. The instance-admin API adds the update check to the same
+identity: `GET /admin/release` reads it and `POST /admin/release/checks` asks GitHub now. See
+[Update checks](./install#update-checks) for cadence, privacy and offline operation.

@@ -52,6 +52,7 @@ class SyncPushServiceTest extends BaseUnitTest {
     void withoutNats_onSyncStateChanged_deliversDirectlyInProcess() {
         ObjectProvider<Connection> provider = objectProviderReturning(null);
         SyncPushService service = new SyncPushService(hub, MAPPER, provider, meters);
+        service.subscribeIfNatsAvailable();
 
         service.onSyncStateChanged(someEvent());
 
@@ -66,6 +67,7 @@ class SyncPushServiceTest extends BaseUnitTest {
     @Test
     void connectionLifecycle_deliversConnectionInvalidation() {
         SyncPushService service = new SyncPushService(hub, MAPPER, objectProviderReturning(null), meters);
+        service.subscribeIfNatsAvailable();
 
         service.onConnectionActivated(
                 new ConnectionLifecycleEvent.Activated(CONNECTION_ID, WORKSPACE_ID, IntegrationKind.GITHUB));
@@ -74,11 +76,13 @@ class SyncPushServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void withNats_subscribesToWildcardSubjectOnConstruction() {
+    void shouldSubscribeOnlyAfterConstructionWhenNatsIsAvailable() {
         when(connection.createDispatcher(any(MessageHandler.class))).thenReturn(dispatcher);
         ObjectProvider<Connection> provider = objectProviderReturning(connection);
 
-        new SyncPushService(hub, MAPPER, provider, meters);
+        SyncPushService service = new SyncPushService(hub, MAPPER, provider, meters);
+        org.mockito.Mockito.verifyNoInteractions(connection);
+        service.subscribeIfNatsAvailable();
 
         verify(dispatcher).subscribe("hephaestus.syncstatus.>");
     }
@@ -88,6 +92,7 @@ class SyncPushServiceTest extends BaseUnitTest {
         when(connection.createDispatcher(any(MessageHandler.class))).thenReturn(dispatcher);
         ObjectProvider<Connection> provider = objectProviderReturning(connection);
         SyncPushService service = new SyncPushService(hub, MAPPER, provider, meters);
+        service.subscribeIfNatsAvailable();
 
         service.onSyncStateChanged(someEvent());
 
@@ -108,6 +113,7 @@ class SyncPushServiceTest extends BaseUnitTest {
                 .when(connection)
                 .publish(anyString(), any(byte[].class));
         SyncPushService service = new SyncPushService(hub, MAPPER, objectProviderReturning(connection), meters);
+        service.subscribeIfNatsAvailable();
 
         service.onSyncStateChanged(someEvent());
 
@@ -121,6 +127,7 @@ class SyncPushServiceTest extends BaseUnitTest {
         when(connection.createDispatcher(any(MessageHandler.class))).thenReturn(dispatcher);
         ObjectProvider<Connection> provider = objectProviderReturning(connection);
         SyncPushService service = new SyncPushService(hub, MAPPER, provider, meters);
+        service.subscribeIfNatsAvailable();
 
         SyncEventHint hint = new SyncEventHint("resources", CONNECTION_ID);
         byte[] payload = MAPPER.writeValueAsBytes(hint);
@@ -138,6 +145,7 @@ class SyncPushServiceTest extends BaseUnitTest {
     void onMessage_malformedSubject_isLoggedNotThrown() {
         ObjectProvider<Connection> provider = objectProviderReturning(null);
         SyncPushService service = new SyncPushService(hub, MAPPER, provider, meters);
+        service.subscribeIfNatsAvailable();
 
         Message message = mock(Message.class);
         when(message.getSubject()).thenReturn("not.the.right.prefix");

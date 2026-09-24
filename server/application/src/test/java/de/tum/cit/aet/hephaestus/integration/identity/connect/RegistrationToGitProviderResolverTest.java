@@ -3,11 +3,14 @@ package de.tum.cit.aet.hephaestus.integration.identity.connect;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -22,12 +25,29 @@ import org.junit.jupiter.api.Test;
 class RegistrationToGitProviderResolverTest {
 
     private IdentityProviderRepository gitProviderRepository;
+    private UserRepository userRepository;
     private RegistrationToGitProviderResolver resolver;
 
     @BeforeEach
     void setup() {
         gitProviderRepository = mock(IdentityProviderRepository.class);
-        resolver = new RegistrationToGitProviderResolver(gitProviderRepository);
+        userRepository = mock(UserRepository.class);
+        resolver = new RegistrationToGitProviderResolver(gitProviderRepository, userRepository);
+    }
+
+    @Test
+    void shouldFindTheSyncedUserWhenTheSubjectIsTheProvidersNumericId() {
+        User synced = new User();
+        synced.setId(555L);
+        when(userRepository.findByNativeIdAndProviderId(777L, 7L)).thenReturn(Optional.of(synced));
+
+        assertThat(resolver.findActorId(7L, "777")).contains(555L);
+    }
+
+    @Test
+    void shouldFindNobodyWhenTheSubjectIsNotNumeric() {
+        assertThat(resolver.findActorId(7L, "U0777")).isEmpty();
+        verifyNoInteractions(userRepository);
     }
 
     private void stubSaveStampsId(long id) {

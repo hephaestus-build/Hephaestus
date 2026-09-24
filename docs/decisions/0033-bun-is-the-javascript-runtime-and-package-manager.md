@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md).
 
 ## Context
 

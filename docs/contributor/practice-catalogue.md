@@ -9,6 +9,11 @@ The practice catalog turns defined engineering practices into review criteria. P
 lives in the [practice feedback language guide](practice-feedback-language.md); this page covers how
 to maintain the catalog.
 
+[Writing effective practices](/admin/writing-practices) owns the authoring method, a worked example
+and the case-based review checklist for both custom and bundled practices. Apply it to the effective
+definition, including its shared preamble and any precompute output, rather than reading the criteria
+in isolation.
+
 ## Sources and ownership
 
 The effective catalog combines three scopes, and definitions only ever flow one way:
@@ -16,7 +21,7 @@ The effective catalog combines three scopes, and definitions only ever flow one 
 ```mermaid
 flowchart LR
     accTitle: The three scopes a practice definition passes through
-    accDescr: Bundled defaults in the repository upgrade the instance catalog unless an administrator customized the entry. The instance catalog decides what workspaces may adopt. Adoption produces an independent workspace copy that no later change rewrites.
+    accDescr: Bundled defaults in the repository upgrade the instance catalog unless an administrator customized the entry. The instance catalog decides what workspaces may adopt. Adoption produces an independent workspace copy that a later release only changes with its administrator's approval.
     Bundled[Bundled defaults<br/>default-catalog.json] -->|release upgrade,<br/>unless customized| Instance[Instance catalog<br/>bundled + sparse overrides]
     Instance -->|adoption,<br/>by an administrator| Workspace[Workspace practice<br/>independent copy]
 ```
@@ -114,7 +119,7 @@ such as whether a developer understood a trade-off discussed privately with a me
 **Human review needed** and name that missing context.
 
 The instance tables store only decisions that differ from the bundled catalog: a customized
-definition, inclusion policy, accepted bundled digest, or position. No override row means the
+definition and its complete adopted base, inclusion policy, accepted bundled digest, or position. No override row means the
 bundled definition and order apply. See
 [ADR 0028](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0028-source-synced-practice-catalog.md)
 for the architectural decision.
@@ -167,10 +172,12 @@ Each effective entry is resolved from the running bundled definition and any ins
 | Uncustomized default removed             | entry disappears               | —                                    |
 | Customized default removed               | saved customization            | **Removed from Hephaestus defaults** |
 
-An update never replaces a customization silently. Administrators can inspect the complete bundled
-definition and whether applying it changes review rules, guidance, or group appearance. Applying an
-update removes only the definition customization; inclusion policy and custom order remain. Keeping
-the saved version records the bundled digest that was reviewed.
+An update never replaces a customization silently. A customized entry compares its complete
+bundled base, current definition, and offered bundled definition. The administrator chooses current
+or offered for every upstream-changed field, including conflicting edits. Accepting advances the
+base to the offered version; declining acknowledges only that offered digest. A later different
+bundle is offered again. An entry with no customization continues to follow the bundle. Reset is a
+separate action that discards the whole customization; inclusion and custom order remain independent.
 
 Git versions bundled defaults. Content-derived ETags reject concurrent writes based on stale content,
 and the configuration audit records definition and inclusion changes. There is no separate catalog
@@ -186,15 +193,48 @@ comparison fingerprint captured at installation. The workspace UI derives drift 
 3. the current effective instance definition.
 
 The ordinary matching state has no badge. Exceptions say **Customized for this workspace**,
-**Instance catalog changed**, or **Not in the current instance catalog**. Drift is informational and
-never rewrites the workspace.
+**Instance catalog changed**, or **Not in the current instance catalog**. Drift never rewrites the
+workspace. A changed effective instance practice produces a proposal for each workspace that
+adopted it. Each workspace accepts or declines for itself, and no AI-authored change bypasses this
+path. Acceptance creates a new revision and advances the base; declining changes neither the
+definition nor its revision and suppresses that exact offered digest until the offer changes.
 
-A practice comparison covers the inputs that affect review behavior: slug, name, bindings (their
-signals, draft handling, and evidence needs with stances), criteria, precompute script, the
-automated-review policy, and group. The artifact kind is not compared separately — every signal name
-carries it, so digesting it too would only give a rename two places to be recorded. **Why it matters**
-and **What good looks like** are guidance and do not affect review-rule drift. A group comparison
-covers name, description, icon, and color; position is excluded.
+A release comparison covers every definition field, including guidance and delivery behavior.
+The artifact kind is not compared separately — every signal name carries it, so it is derived from
+bindings. The review-rule fingerprint has a narrower role: it tracks review-judgment inputs, not
+guidance or delivery presentation. A group comparison covers name, description, icon, and color;
+position is excluded.
+
+## Adopted definition bases
+
+Each new workspace adoption stores the complete instance definition it copied, including guidance,
+review policy and bindings, beside the source slug and review-rule fingerprint. Workspace edits and
+new revisions do not change that base. An instance customization likewise stores the complete
+bundled definition on which it was based. An uncustomized instance entry has no saved base: it still
+follows the bundle. Acknowledging a newer bundle updates the instance base; editing the customization
+does not.
+
+Older copies cannot recover a definition that was never saved. On upgrade, a workspace copy uses the
+current bundled definition only when its saved review-rule fingerprint matches; otherwise it uses its
+current definition. An older instance customization uses the current bundle only when its saved
+catalog digest matches; otherwise it uses its current definition. Each saved base records which route
+was used (`EXACT_ADOPTION`, `BUNDLED_DIGEST_MATCH`, `BUNDLED_FINGERPRINT_MATCH`, or
+`CURRENT_DEFINITION`). Neither historical match proves identical content: the review-rule fingerprint
+excludes guidance, and older catalog digests predate the binding subject field added in
+[#2160](https://github.com/hephaestus-build/Hephaestus/issues/2160). Release proposals carry the
+base source so an administrator can judge an approximate comparison rather than mistake it for
+the original adopted content.
+
+## Declared feedback delivery
+
+The definition stores whether negative feedback stays in the summary, which issue observations
+overlap, and which other practice takes priority when both produce feedback. A workspace-authored
+practice can use these fields. They are stored in revisions, shown in release proposals, and read
+from the revision that judged each observation. They do not depend on practice slugs in delivery
+code. The review-rule fingerprint excludes these delivery fields because they do not change the
+review judgment. A change to that fingerprint starts a new recurrence chain; accepting a
+guidance-only or delivery-only change keeps the current chain. Earlier observations retain their
+original revision and are never rewritten.
 
 ## Turning a practice down
 
@@ -209,14 +249,9 @@ operational choice changes the curated definition.
 
 ## Selecting a practice
 
-A practice must:
-
-1. identify who is expected to review the habit and from which context;
-2. distinguish evidence from inference and avoid claims that the code is correct;
-3. define applicability and the evidence required to report it;
-4. define false-positive exclusions and proportionate severity;
-5. use language useful to the developer doing the work; and
-6. cite research, a standard, or an explicitly identified practitioner norm.
+Use the [authoring checklist](/admin/writing-practices#challenge-the-draft-before-adopting-it) to review
+the occasion, named behavior, evidence, consequences and expected feedback. For bundled entries,
+also cite research, a standard or an explicitly identified practitioner norm.
 
 Evidence is declared per binding against the versioned
 [artifact-source contract](./artifact-source-contract) and the canonical
@@ -258,14 +293,65 @@ standard as an experiment or a convention as a proven outcome.
    editor completion and CI validation, and Git history is the bundled version history. Declare the one
    occasion as `on` — a bare signal name is shorthand for a binding on that signal reading the
    artifact kind's default evidence. Reference any precompute script explicitly; a script must be named
-   after the practice slug, and an unreferenced one fails validation. Give the practice a `holdsAs`
-   sentence: one present-tense line without dashes, within the length the schema
-   (`default-catalog.schema.json`) sets, naming what the developer keeps doing when the practice holds,
-   such as *Every comment got an answer before the next push*. The practice profile prints it beside a practice that stands as a strength. It is read from the
-   bundled catalog by slug and is not part of the definition a workspace copies, customizes or compares,
-   so a better sentence reaches every workspace with the next release.
+   after the practice slug, and an unreferenced one fails validation. What a script is and what the
+   library owns is in [Precompute scripts](#precompute-scripts) below. Give the practice a `holdsAs`
+   sentence — [Holds as](./practice-feedback-language.md) in the feedback language: one present-tense
+   line without dashes, within the length the schema (`default-catalog.schema.json`) sets, naming what
+   the developer keeps doing when the practice holds, such as *Every comment got an answer before the
+   next push*. It is read from the bundled catalog by slug and is not part of the definition a workspace
+   copies, customizes or compares, so a better sentence reaches every workspace with the next release.
 6. Add or update focused automated-review tests, including required-source skipping and valid-empty evidence.
 7. Review the admin presentation and a representative piece of delivered feedback.
+
+### Precompute scripts
+
+A precompute script extracts candidates inside the review container. It receives the parsed diff,
+artifact metadata, captured context and derived change directory (`work/change/`). Its output is
+hints, metrics and directions, not observations.
+
+- **Practice-specific predicates belong in the script.** Shared readers and scanning mechanics live
+  in `docker/agents/precompute/lib/`. Keep the predicates consistent with the practice criteria.
+- **A candidate is not a judgment.** A matched line or review thread directs inspection; the model
+  must check its context against the criteria. The purity test rejects observation vocabulary in
+  scripts, but does not establish that their output is complete or correct.
+- **Missing and empty differ.** Context readers return `null` when a capture file is absent and `[]`
+  when a captured list is empty. Scripts must preserve that distinction.
+- **Line scanning has limits.** Declaration placement uses syntax tables, not a full language parser.
+  Unsupported languages and unavailable files produce `unknown` placement. Directions must identify
+  relevant limits, such as constructs that span several lines.
+
+The runner renders a bounded `work/precompute-out/summary.md` for the review brief. It includes
+practice directions, candidate locations and record rows. When rows do not fit, it retains pointers
+to the full per-practice JSON. A summary is an entry point to the evidence, not proof that the model
+inspected every candidate.
+
+### Review the effective definition
+
+For every changed practice, compare its criteria with the work-type preamble, binding, precompute
+script, shared review instructions and developer guidance. Check these seams explicitly:
+
+- A preamble cannot declare a source unavailable when the binding captures it, or infer absence from
+  an unavailable quotation. The actual capture manifest establishes availability; practice criteria
+  establish permitted use.
+- A precompute candidate is a lead, not a judgment. A count or path match alone cannot establish a
+  developer's intent, a runtime outcome or the adequacy of a rationale.
+- An applicability exclusion and an assessed outcome cannot both describe the same case. Read all
+  exceptions together with the final decision instructions, not just the opening behavior statement.
+- Exceptions for deliberately generated files, version ranges or repository conventions must survive
+  the final outcome rules. Severity follows the evidenced consequence, not the number of matches.
+- Guidance and examples cannot silently add requirements absent from the criteria. Shared instructions
+  define the observation protocol; individual practices define the occasion and evidence needed for
+  their expectation.
+
+Keep the cases and evaluation evidence with the relevant test or benchmark, and explain the change
+in the pull request. Every bundled practice is written in the decision-procedure shape of
+[Writing effective practices](/admin/writing-practices#write-the-criteria-as-a-decision-procedure),
+and `CatalogCriteriaShapeTest` checks that shape (the sections, their order, the size bound). That
+test checks structure, not semantic quality. Schema and fixture tests prove loading and faithful presentation; evidence-based case review
+and model evaluation are separate checks. The shared preambles are one artifact-framing paragraph
+each; the grounding rules live once, in the shared review instructions. Changing a preamble affects
+every entry that uses it, so inspect all affected work types and preserve the existing
+workspace-adoption boundary.
 
 Create workspace-specific practices through the admin UI or API so validation, ordering, revisions,
 and audit behavior remain intact.

@@ -40,6 +40,7 @@ import {
 	refs,
 	text,
 } from "@/components/common/feedback-text";
+import { statusValues } from "@/components/common/status-def";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
 import type {
 	HeldPracticeRow,
@@ -54,7 +55,6 @@ import {
 	newestFirst,
 	type PracticeFeedbackCardEntry,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
-import { statusValues } from "@/components/practice-vocabulary/status-def";
 import { artifactKindRank } from "@/lib/artifact-kinds";
 import { asDate, formatDay } from "@/lib/dates";
 import { capitalise, hasText } from "@/lib/text";
@@ -215,7 +215,9 @@ function changeEvent(change: ProfileChange): ProfileEvent | undefined {
 	const group = change.type === "GROUP_MOVED";
 	const slug = group ? change.groupSlug : change.practiceSlug;
 	const name = group ? change.groupName : change.practiceName;
-	if (!hasText(slug) || !hasText(name)) return undefined;
+	if (!hasText(slug) || !hasText(name)) {
+		return undefined;
+	}
 	const base = {
 		level: group ? "group" : "practice",
 		slug,
@@ -226,23 +228,28 @@ function changeEvent(change: ProfileChange): ProfileEvent | undefined {
 		cleanWork: 0,
 	} satisfies Partial<ProfileEvent>;
 	switch (change.type) {
-		case "FEEDBACK_NEW":
+		case "FEEDBACK_NEW": {
 			return { ...base, kind: "new" };
-		case "FEEDBACK_RESOLVED":
+		}
+		case "FEEDBACK_RESOLVED": {
 			return { ...base, kind: "resolved", resolvedBy: change.resolvedBy };
+		}
 		case "STANDING_MOVED":
-		case "GROUP_MOVED":
+		case "GROUP_MOVED": {
 			return {
 				...base,
 				kind: isVerdictSlip(change.from, change.to) ? "down" : "up",
 				label: standingLabel(change.to),
 			};
+		}
 		// A first sighting says that the practice was seen, not where it landed: the standing it
 		// arrived at is the badge beside the sentence on every surface that shows one.
-		case "FIRST_OBSERVED":
+		case "FIRST_OBSERVED": {
 			return { ...base, kind: "first" };
-		case "TREND_TURNED":
+		}
+		case "TREND_TURNED": {
 			return { ...base, kind: "trend", label: trendLabel(change.to) };
+		}
 	}
 }
 
@@ -260,7 +267,9 @@ function dedupe(events: ProfileEvent[]): ProfileEvent[] {
 	for (const event of events) {
 		const key = `${subjectKey(event)}:${isGood(event) ? "good" : "change"}`;
 		const current = best.get(key);
-		if (current === undefined || rank(event) < rank(current)) best.set(key, event);
+		if (current === undefined || rank(event) < rank(current)) {
+			best.set(key, event);
+		}
 	}
 	const kept = new Set(best.values());
 	const surviving = events.filter((event) => kept.has(event));
@@ -281,8 +290,11 @@ function groupByTransition(
 	const groups = new Map<string, [ProfileEvent, ...ProfileEvent[]]>();
 	for (const event of events) {
 		const together = groups.get(keyOf(event));
-		if (together) together.push(event);
-		else groups.set(keyOf(event), [event]);
+		if (together) {
+			together.push(event);
+		} else {
+			groups.set(keyOf(event), [event]);
+		}
 	}
 	return groups;
 }
@@ -333,19 +345,24 @@ function fold(segments: FeedbackTextSegment[]): FeedbackTextSegment[] {
  */
 function capitaliseSegments(segments: FeedbackTextSegment[]): FeedbackTextSegment[] {
 	const [first, ...rest] = segments;
-	if (first?.type !== "text") return segments;
+	if (first?.type !== "text") {
+		return segments;
+	}
 	const opened = capitalise(first.text);
 	return opened === first.text ? segments : [text(opened), ...rest];
 }
 
+function asSegments(
+	part: string | FeedbackTextSegment | FeedbackTextSegment[],
+): FeedbackTextSegment[] {
+	if (typeof part === "string") {
+		return [text(part)];
+	}
+	return Array.isArray(part) ? part : [part];
+}
+
 const sentence = (...parts: (string | FeedbackTextSegment | FeedbackTextSegment[])[]) =>
-	capitaliseSegments(
-		fold(
-			parts.flatMap((part) =>
-				typeof part === "string" ? [text(part)] : Array.isArray(part) ? part : [part],
-			),
-		),
-	);
+	capitaliseSegments(fold(parts.flatMap(asSegments)));
 
 /** Sentences joined by a space into one paragraph. */
 const paragraph = (sentences: FeedbackTextSegment[][]) =>
@@ -374,22 +391,9 @@ function composeHeldRows(deduped: ProfileEvent[]): {
 		...resolved.map<HeldPracticeRow>((event) => ({
 			practiceSlug: event.slug,
 			practiceName: event.name,
-			// The glossary's two phrases for how feedback resolves, and no other.
-			statement:
-				event.resolvedBy === "WORK"
-					? "Resolved by the work"
-					: event.resolvedBy === "DEVELOPER"
-						? "Marked as addressed"
-						: "Resolved",
+			statement: resolvedStatement(event.resolvedBy),
 			resolved: true,
-			// The evidence on a piece of feedback the developer resolved is the work it was seen on,
-			// not work that met the next step, so the note names the day instead.
-			note:
-				event.resolvedBy === "WORK"
-					? cameBackClean(event)
-					: event.resolvedBy === "DEVELOPER" && event.at
-						? [text(`on ${formatDay(event.at)}`)]
-						: [],
+			note: resolvedNote(event),
 		})),
 		// The statement is the catalog's own sentence for the practice; a practice the catalog does
 		// not ship has none, and the row says only what the work showed.
@@ -413,15 +417,13 @@ function composeHeldRows(deduped: ProfileEvent[]): {
 		}),
 	];
 	const hidden = rows.length - HELD_ROW_LIMIT;
-	return {
-		rows: rows.slice(0, HELD_ROW_LIMIT),
-		note:
-			hidden === 1
-				? "Another practice held too."
-				: hidden > 1
-					? plainCapitalised(`another ${count(hidden, "practice", "practices")} held too.`)
-					: undefined,
-	};
+	let note: string | undefined;
+	if (hidden === 1) {
+		note = "Another practice held too.";
+	} else if (hidden > 1) {
+		note = plainCapitalised(`another ${count(hidden, "practice", "practices")} held too.`);
+	}
+	return { rows: rows.slice(0, HELD_ROW_LIMIT), note };
 }
 
 /**
@@ -431,10 +433,16 @@ function composeHeldRows(deduped: ProfileEvent[]): {
 function counted(practices: number, groups: number, adjective = ""): string {
 	const digits = Math.max(practices, groups) >= 10;
 	const parts = [];
-	if (practices > 0) parts.push(count(practices, "practice", "practices", digits));
-	if (groups > 0) parts.push(count(groups, "group", "groups", digits));
+	if (practices > 0) {
+		parts.push(count(practices, "practice", "practices", digits));
+	}
+	if (groups > 0) {
+		parts.push(count(groups, "group", "groups", digits));
+	}
 	const [first, ...rest] = parts;
-	if (first === undefined) return "";
+	if (first === undefined) {
+		return "";
+	}
 	return [adjective ? first.replace(" ", ` ${adjective}`) : first, ...rest].join(" and ");
 }
 
@@ -460,34 +468,39 @@ function movedSentence(
 	const [lead] = events;
 	const many = events.length > 1;
 	switch (kind) {
-		case "new":
+		case "new": {
 			return sentence(
 				"There is new feedback on ",
 				subjects(events),
 				seenOn(lead, ", seen on "),
 				".",
 			);
-		case "first":
+		}
+		case "first": {
 			return sentence(
 				subjects(events),
 				` ${many ? "were" : "was"} seen for the first time`,
 				seenOn(lead, " on "),
 				".",
 			);
-		case "trend":
+		}
+		case "trend": {
 			return sentence(
 				subjects(events),
 				` now show${many ? "" : "s"} ${lead.label}`,
 				seenOn(lead, " over "),
 				".",
 			);
-		default:
+		}
+		case "down":
+		case "up": {
 			return sentence(
 				subjects(events),
 				` ${many ? "are" : "is"} now ${lead.label}`,
 				seenOn(lead, " after "),
 				".",
 			);
+		}
 	}
 }
 
@@ -514,8 +527,9 @@ function composeChange(
 	const sentences: FeedbackTextSegment[][] = [];
 	// The limit counts the subjects named, not the sentences: two practices that got feedback on
 	// the same work are named together rather than in two sentences that differ only in the pill.
-	for (const together of groupByTransition(fresh.slice(0, NEW_NAMED_LIMIT), movedKey).values())
+	for (const together of groupByTransition(fresh.slice(0, NEW_NAMED_LIMIT), movedKey).values()) {
 		sentences.push(movedSentence("new", together));
+	}
 	const [slip] = down;
 	if (slip) {
 		sentences.push(
@@ -553,7 +567,9 @@ const restOverflow = (kind: RestKind, hiddenSubjects: string, hidden: number): s
 function composeRest(deduped: ProfileEvent[], named: ProfileEvent[]): RestParagraph[] {
 	return REST_KINDS.flatMap((kind) => {
 		const items = deduped.filter((event) => event.kind === kind && !named.includes(event));
-		if (items.length === 0) return [];
+		if (items.length === 0) {
+			return [];
+		}
 		// The limit counts the subjects the paragraph names, not the sentences it takes to name
 		// them, so the count that closes the paragraph stays the number of subjects left over.
 		const shown = items.slice(0, REST_NAMED_LIMIT);
@@ -583,8 +599,11 @@ function composeReviewedWork(refsOnWire: ReviewedWorkRef[]): ReviewedWorkGroup[]
 		const group = groups.find(
 			(candidate) => candidate.kind === ref.kind && candidate.provider === ref.provider,
 		);
-		if (group) group.items.push(ref);
-		else groups.push({ kind: ref.kind, provider: ref.provider, items: [ref] });
+		if (group) {
+			group.items.push(ref);
+		} else {
+			groups.push({ kind: ref.kind, provider: ref.provider, items: [ref] });
+		}
 	}
 	return groups.sort((a, b) => artifactKindRank(a.kind) - artifactKindRank(b.kind));
 }
@@ -605,27 +624,25 @@ const cameBackClean = (event: ProfileEvent): FeedbackTextSegment[] =>
  */
 function predicate(event: ProfileEvent, plural = false): FeedbackTextSegment[] {
 	switch (event.kind) {
-		case "resolved":
-			return event.resolvedBy === "WORK"
-				? fold([text("resolved by the work "), ...cameBackClean(event)])
-				: event.resolvedBy === "DEVELOPER"
-					? [
-							text(
-								event.at ? `marked as addressed on ${formatDay(event.at)}` : "marked as addressed",
-							),
-						]
-					: [text("resolved")];
+		case "resolved": {
+			return resolvedPredicate(event);
+		}
 		case "down":
-		case "up":
+		case "up": {
 			return [text(`moved to ${event.label}`)];
-		case "first":
+		}
+		case "first": {
 			return [text(`${plural ? "were" : "was"} seen for the first time`)];
-		case "trend":
+		}
+		case "trend": {
 			return [text(`now show${plural ? "" : "s"} ${event.label}`)];
-		case "held":
+		}
+		case "held": {
 			return [text("held")];
-		case "new":
+		}
+		case "new": {
 			return [text(`${plural ? "have" : "has"} new feedback`)];
+		}
 	}
 }
 
@@ -648,16 +665,7 @@ const groupSlugsOf = (overview: PracticeProfileOverview): string[] => [
  * say it once.
  */
 const transitionKey = (event: ProfileEvent): string =>
-	[
-		event.kind,
-		...predicate(event).map((segment) =>
-			segment.type === "text"
-				? segment.text
-				: segment.type === "work"
-					? `work:${segment.ref.id}`
-					: `${segment.type}:${segment.slug}`,
-		),
-	].join("\u0000");
+	[event.kind, ...predicate(event).map(segmentKey)].join("\u0000");
 
 /**
  * The transition as the card's own sentences tell it, which is the table's bullet plus the two
@@ -678,7 +686,9 @@ const movedKey = (event: ProfileEvent): string =>
  */
 function composeGroupSentences(changes: ProfileChange[]): FeedbackTextSegment[][] | undefined {
 	const deduped = dedupe(changes.map(changeEvent).filter((event) => event !== undefined));
-	if (deduped.length === 0) return undefined;
+	if (deduped.length === 0) {
+		return undefined;
+	}
 	return SENTENCE_ORDER.flatMap((kind) => {
 		const ofKind = deduped.filter((candidate) => candidate.kind === kind);
 		// The bullets in the order the events came, each holding the practices that share it.
@@ -694,8 +704,11 @@ function composeGroupSentences(changes: ProfileChange[]): FeedbackTextSegment[][
 		}
 		for (const event of ofKind.filter((candidate) => candidate.level === "group")) {
 			const together = shared.get(transitionKey(event));
-			if (together) together.group = event;
-			else bullets.push({ practices: [], group: event });
+			if (together) {
+				together.group = event;
+			} else {
+				bullets.push({ practices: [], group: event });
+			}
 		}
 		return bullets.flatMap(groupBullet);
 	});
@@ -714,7 +727,9 @@ interface GroupBullet {
  */
 function groupBullet({ practices, group }: GroupBullet): FeedbackTextSegment[][] {
 	const [lead] = practices;
-	if (!lead) return group ? [sentence(subjectInGroup(group), " ", predicate(group), ".")] : [];
+	if (!lead) {
+		return group ? [sentence(subjectInGroup(group), " ", predicate(group), ".")] : [];
+	}
 	return [
 		sentence(
 			practiceSegments(practices),
@@ -736,7 +751,9 @@ function composePracticeSentences(
 	const deduped = dedupe(changes.map(changeEvent).filter((event) => event !== undefined));
 	const sentences: Record<string, FeedbackTextSegment[] | undefined> = {};
 	for (const event of deduped) {
-		if (event.level !== "practice") continue;
+		if (event.level !== "practice") {
+			continue;
+		}
 		const own = practiceSentence(event);
 		const before = sentences[event.slug];
 		sentences[event.slug] = before ? paragraph([before, own]) : own;
@@ -747,14 +764,21 @@ function composePracticeSentences(
 /** One event as a practice's own sentence: the row names the practice, so the sentence does not. */
 function practiceSentence(event: ProfileEvent): FeedbackTextSegment[] {
 	switch (event.kind) {
-		case "new":
+		case "new": {
 			return sentence("There is new feedback", seenOn(event, ", seen on "), ".");
-		case "resolved":
+		}
+		case "resolved": {
 			return sentence("Feedback ", predicate(event), ".");
-		case "first":
+		}
+		case "first": {
 			return sentence("Seen for the first time", seenOn(event, " on "), ".");
-		default:
+		}
+		case "up":
+		case "down":
+		case "held":
+		case "trend": {
 			return sentence(predicate(event), seenOn(event, " after "), ".");
+		}
 	}
 }
 
@@ -773,7 +797,9 @@ export function composeNextStep(
 			isOpenFeedback(candidate.state) &&
 			hasText(candidate.nextStep),
 	);
-	if (!card) return undefined;
+	if (!card) {
+		return undefined;
+	}
 	const evidence = card.reviewedWork.map((work) => work.ref);
 	const seen = evidence.length === 0 ? [] : [text(", seen on "), ...refs(evidence)];
 	return sentence(
@@ -846,4 +872,43 @@ export function groupOverviewOf(
 			practiceSentences: {},
 		}
 	);
+}
+
+/** The glossary's two phrases for how feedback resolves, and no other. */
+function resolvedStatement(resolvedBy: ProfileEvent["resolvedBy"]): string {
+	if (resolvedBy === "WORK") {
+		return "Resolved by the work";
+	}
+	return resolvedBy === "DEVELOPER" ? "Marked as addressed" : "Resolved";
+}
+
+/**
+ * The evidence on a piece of feedback the developer resolved is the work it was seen on, not work
+ * that met the next step, so the note names the day instead.
+ */
+function resolvedNote(event: ProfileEvent): FeedbackTextSegment[] {
+	if (event.resolvedBy === "WORK") {
+		return cameBackClean(event);
+	}
+	return event.resolvedBy === "DEVELOPER" && event.at ? [text(`on ${formatDay(event.at)}`)] : [];
+}
+
+function resolvedPredicate(event: ProfileEvent): FeedbackTextSegment[] {
+	if (event.resolvedBy === "WORK") {
+		return fold([text("resolved by the work "), ...cameBackClean(event)]);
+	}
+	if (event.resolvedBy === "DEVELOPER") {
+		return [
+			text(event.at ? `marked as addressed on ${formatDay(event.at)}` : "marked as addressed"),
+		];
+	}
+	return [text("resolved")];
+}
+
+/** One segment's identity for a transition key: its words, or the work or practice it names. */
+function segmentKey(segment: FeedbackTextSegment): string {
+	if (segment.type === "text") {
+		return segment.text;
+	}
+	return segment.type === "work" ? `work:${segment.ref.id}` : `${segment.type}:${segment.slug}`;
 }

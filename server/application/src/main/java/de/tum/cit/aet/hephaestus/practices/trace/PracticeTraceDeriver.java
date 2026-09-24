@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.PracticeCoverageOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.PracticeReadinessOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.ReviewOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.ReviewRunState;
 import de.tum.cit.aet.hephaestus.practices.trace.TraceInputs.PracticeOutput;
 import de.tum.cit.aet.hephaestus.practices.trace.TraceInputs.SignalOccurrence;
 import de.tum.cit.aet.hephaestus.practices.trace.TraceInputs.TracedPractice;
@@ -92,17 +93,26 @@ final class PracticeTraceDeriver {
             if (review == null) {
                 continue;
             }
+            // Readiness is recorded before the sandbox starts, so a review that is still running or that
+            // never finished carries one too. Answering from it would tell a developer their practice was
+            // assessed and clean while the review was still under way, or after it had died — the run's
+            // own state is the only thing that makes an all-clear a statement about their work.
+            if (review.state() != ReviewRunState.COMPLETED) {
+                continue;
+            }
             PracticeReadinessOutcome readiness =
                     review.readinessByPracticeSlug().get(practice.slug());
             if (readiness == null) {
                 continue;
             }
-            if (readiness.ready()
-                    && review.coverageByPracticeSlug().get(practice.slug()) == PracticeCoverageOutcome.NOT_REACHED) {
+            PracticeCoverageOutcome coverage = review.coverageByPracticeSlug().get(practice.slug());
+            if (readiness.ready() && coverage != PracticeCoverageOutcome.EVALUATED) {
                 return entry(
                         practice,
                         PracticeTraceOutcome.NOT_REACHED,
-                        "The review ended before reaching this practice.",
+                        coverage == PracticeCoverageOutcome.NOT_REACHED
+                                ? "The review ended before reaching this practice."
+                                : "The review did not record whether it reached this practice.",
                         occurrence,
                         review.decidedAt(),
                         occurrence.reviewId(),

@@ -2,8 +2,8 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { DetailStackEntry } from "@/components/core/detail-drawer/detail-stack";
-import { DetailDrawerStack } from "@/components/core/detail-drawer/DetailDrawerStack";
+import type { DetailStackEntry } from "@/components/layout/detail-drawer/detail-stack";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { detailPractices } from "@/stories/practice-detail-story-mock-data";
 import { ALL_FEEDBACK_CARDS } from "@/stories/practice-feedback-cards-story-mock-data";
 import {
@@ -112,12 +112,12 @@ describe("PracticeGroupDetailLevel", () => {
 		const practices = await screen.findByRole("tab", { name: "Practices 3" });
 		expect(practices.getAttribute("aria-selected")).toBe("true");
 		const about = screen.getByRole("tab", { name: "About this group" });
-		expect(screen.queryByText(/one concern per change/)).toBeNull();
+		expect(screen.queryByText(/one concern per change/u)).toBeNull();
 		fireEvent.click(about);
 
 		expect(about.getAttribute("aria-selected")).toBe("true");
 		// The description has a heading over it, like every passage on the level.
-		await screen.findByText(/one concern per change/);
+		await screen.findByText(/one concern per change/u);
 		expect(screen.getByRole("region", { name: "About this group" }).textContent).toContain(
 			"one concern per change",
 		);
@@ -135,7 +135,7 @@ describe("PracticeGroupDetailLevel", () => {
 		within(stand).getByText(
 			"Recent reviews here were mostly problems. Of three practices, one shows mixed feedback, one is going well and one is not observed yet.",
 		);
-		within(stand).getByText(/^Recent reviewed work carried more problems/);
+		within(stand).getByText(/^Recent reviewed work carried more problems/u);
 		within(stand).getByText("Needs attention");
 		within(stand).getByText("More difficulties recently");
 	});
@@ -153,7 +153,7 @@ describe("PracticeGroupDetailLevel", () => {
 		fireEvent.click(await screen.findByRole("tab", { name: "About this group" }));
 		const stand = await screen.findByRole("region", { name: "Where you stand" });
 		within(stand).getByText("No practice in this group has a current verdict for you.");
-		expect(within(stand).queryByText(/^Of /)).toBeNull();
+		expect(within(stand).queryByText(/^Of /u)).toBeNull();
 		expect(within(stand).queryByText("Not enough to compare yet")).toBeNull();
 	});
 
@@ -170,7 +170,7 @@ describe("PracticeGroupDetailLevel", () => {
 		renderLevel();
 		await screen.findByText("What is holding up well");
 		screen.getByText("Next step");
-		screen.getByText(/That is the open next step on/);
+		screen.getByText(/That is the open next step on/u);
 	});
 
 	it("lists every practice with its standing, sorted needs attention first", async () => {
@@ -182,13 +182,13 @@ describe("PracticeGroupDetailLevel", () => {
 		expect(rows[0]?.textContent).toContain("Mixed feedback");
 		expect(rows[2]?.textContent).toContain("Link the issue the change resolves");
 		// A practice with a sentence carries it under its pill; the others show only the pill.
-		screen.getByText(/^Feedback resolved by the work after/);
+		screen.getByText(/^Feedback resolved by the work after/u);
 	});
 
 	it("marks the row of the practice whose level is open over this one", async () => {
 		renderLevel({ openPracticeSlug: "small-changes" });
 		await screen.findByText("Practices in this group");
-		const openRows = practiceRows().filter((row) => row.getAttribute("data-state") === "open");
+		const openRows = practiceRows().filter((row) => row.dataset.state === "open");
 		expect(openRows).toHaveLength(1);
 		expect(openRows[0]?.textContent).toContain("Keep changes focused");
 	});
@@ -225,7 +225,7 @@ describe("PracticeGroupDetailLevel", () => {
 	it("offers a retry when the standing failed to load", async () => {
 		const onRetry = vi.fn();
 		renderLevel({ error: new Error("Unavailable"), onRetry });
-		fireEvent.click(await screen.findByRole("button", { name: /retry/i }));
+		fireEvent.click(await screen.findByRole("button", { name: /retry/iu }));
 		expect(onRetry).toHaveBeenCalledOnce();
 	});
 });

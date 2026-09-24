@@ -40,6 +40,8 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
         this.propagator = propagatorProvider.getIfAvailable();
     }
 
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
@@ -60,6 +62,7 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
                 .kind(Span.Kind.SERVER)
                 .start();
         response.setHeader(HEADER_NAME, span.context().traceId());
+
         try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
             chain.doFilter(request, response);
         } catch (IOException | ServletException | RuntimeException error) {

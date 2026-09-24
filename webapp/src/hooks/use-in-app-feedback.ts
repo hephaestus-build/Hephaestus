@@ -20,6 +20,7 @@ import type {
 	PracticeFeedbackCardEntry,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { problemDetailOf } from "@/lib/problem-detail";
+import { hasText } from "@/lib/text";
 
 export interface InAppFeedbackRequest {
 	workspaceSlug: string;
@@ -53,7 +54,7 @@ export function invalidateFeedbackResponses(
 	void queryClient.invalidateQueries({
 		queryKey: getPracticeProfileOverviewQueryKey({ path: { workspaceSlug } }),
 	});
-	if (groupSlug) {
+	if (hasText(groupSlug)) {
 		void queryClient.invalidateQueries({
 			queryKey: listPracticeGroupReviewRunsInfiniteQueryKey({ path: { workspaceSlug, groupSlug } }),
 		});

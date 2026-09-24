@@ -4,6 +4,7 @@ import {
 	endOfMonth,
 	formatISO,
 	getISODay,
+	isEqual,
 	parseISO,
 	setHours,
 	setMilliseconds,
@@ -14,6 +15,8 @@ import {
 	subMonths,
 	subWeeks,
 } from "date-fns";
+
+import { hasText } from "@/lib/text";
 
 export type TimeframePreset =
 	| "all-activity"
@@ -31,7 +34,8 @@ export interface LeaderboardSchedule {
 }
 
 export const DEFAULT_SCHEDULE: LeaderboardSchedule = {
-	day: 1, // Monday
+	// Monday
+	day: 1,
 	hour: 9,
 	minute: 0,
 };
@@ -103,41 +107,30 @@ export function getDateRangeForPreset(
 	now.setSeconds(0, 0);
 
 	switch (preset) {
-		case "all-activity":
+		case "all-activity": {
 			return {
-				after: startOfDay(new Date(0)),
+				after: new Date(0),
 				before: undefined,
 			};
+		}
 
 		case "this-week": {
 			const weekStart = getLeaderboardWeekStart(now, schedule);
-			return {
-				after: weekStart,
-				before: undefined, // Open-ended to show activity "so far"
-			};
+			return { after: weekStart, before: undefined };
 		}
 
 		case "last-week": {
 			const lastWeekStart = getLastLeaderboardWeekStart(now, schedule);
 			const lastWeekEnd = getLeaderboardWeekEnd(lastWeekStart);
-			return {
-				after: lastWeekStart,
-				before: lastWeekEnd, // Bounded - it's a completed week
-			};
+			return { after: lastWeekStart, before: lastWeekEnd };
 		}
 
 		case "this-month": {
-			return {
-				after: startOfMonth(now),
-				before: undefined, // Open-ended
-			};
+			return { after: startOfMonth(now), before: undefined };
 		}
 
 		case "last-month": {
-			return {
-				after: startOfMonth(subMonths(now, 1)),
-				before: startOfMonth(now), // Bounded - completed month
-			};
+			return { after: startOfMonth(subMonths(now, 1)), before: startOfMonth(now) };
 		}
 
 		case "custom": {
@@ -149,9 +142,10 @@ export function getDateRangeForPreset(
 				};
 			}
 			if (customRange.to) {
+				// Exclusive end
 				return {
 					after: startOfDay(customRange.from),
-					before: addDays(startOfDay(customRange.to), 1), // Exclusive end
+					before: addDays(startOfDay(customRange.to), 1),
 				};
 			}
 			// Only start date provided - open-ended
@@ -182,18 +176,24 @@ export function formatDateRangeForApi(range: { after: Date; before: Date | undef
  */
 export function formatDropdownLabel(preset: TimeframePreset): string {
 	switch (preset) {
-		case "all-activity":
+		case "all-activity": {
 			return "All time";
-		case "this-week":
+		}
+		case "this-week": {
 			return "This week";
-		case "last-week":
+		}
+		case "last-week": {
 			return "Last week";
-		case "this-month":
+		}
+		case "this-month": {
 			return "This month";
-		case "last-month":
+		}
+		case "last-month": {
 			return "Last month";
-		case "custom":
+		}
+		case "custom": {
 			return "Custom range";
+		}
 	}
 }
 
@@ -207,57 +207,49 @@ export function detectPresetFromDates(
 	schedule: LeaderboardSchedule = DEFAULT_SCHEDULE,
 	enableAllActivity = false,
 ): TimeframePreset {
-	if (!afterStr) {
+	if (!hasText(afterStr)) {
+		if (hasText(beforeStr)) {
+			return "custom";
+		}
 		return enableAllActivity ? "all-activity" : "this-week";
 	}
 
 	const after = parseISO(afterStr);
-	const before = beforeStr ? parseISO(beforeStr) : undefined;
+	const before = hasText(beforeStr) ? parseISO(beforeStr) : undefined;
 
-	// Check for all-activity (epoch start)
-	if (enableAllActivity && after.getTime() <= new Date(0).getTime() + 86400000) {
+	// All time is open-ended; a bounded epoch range is still a custom selection.
+	if (enableAllActivity && !before && isEqual(after, new Date(0))) {
 		return "all-activity";
 	}
 
-	const datesAreClose = (d1: Date, d2: Date, hoursThreshold = 26): boolean => {
-		const msDiff = Math.abs(d1.getTime() - d2.getTime());
-		return msDiff < hoursThreshold * 60 * 60 * 1000;
-	};
-
-	// Check this week (open-ended)
 	const thisWeekStart = getLeaderboardWeekStart(now, schedule);
-	if (datesAreClose(after, thisWeekStart) && !before) {
+	if (isEqual(after, thisWeekStart) && !before) {
 		return "this-week";
 	}
 
-	// Check this week (bounded - for leaderboard)
 	const thisWeekEnd = getLeaderboardWeekEnd(thisWeekStart);
-	if (datesAreClose(after, thisWeekStart) && before && datesAreClose(before, thisWeekEnd)) {
+	if (isEqual(after, thisWeekStart) && before && isEqual(before, thisWeekEnd)) {
 		return "this-week";
 	}
 
-	// Check last week
 	const lastWeekStart = getLastLeaderboardWeekStart(now, schedule);
 	const lastWeekEnd = getLeaderboardWeekEnd(lastWeekStart);
-	if (datesAreClose(after, lastWeekStart) && before && datesAreClose(before, lastWeekEnd)) {
+	if (isEqual(after, lastWeekStart) && before && isEqual(before, lastWeekEnd)) {
 		return "last-week";
 	}
 
-	// Check this month (open-ended)
 	const thisMonthStart = startOfMonth(now);
-	if (datesAreClose(after, thisMonthStart) && !before) {
+	if (isEqual(after, thisMonthStart) && !before) {
 		return "this-month";
 	}
 
-	// Check this month (bounded)
 	const nextMonthStart = startOfMonth(addDays(endOfMonth(now), 1));
-	if (datesAreClose(after, thisMonthStart) && before && datesAreClose(before, nextMonthStart)) {
+	if (isEqual(after, thisMonthStart) && before && isEqual(before, nextMonthStart)) {
 		return "this-month";
 	}
 
-	// Check last month
 	const lastMonthStart = startOfMonth(subMonths(now, 1));
-	if (datesAreClose(after, lastMonthStart) && before && datesAreClose(before, thisMonthStart)) {
+	if (isEqual(after, lastMonthStart) && before && isEqual(before, thisMonthStart)) {
 		return "last-month";
 	}
 

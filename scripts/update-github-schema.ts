@@ -1,5 +1,5 @@
 /**
- * Refreshes the vendored GitHub GraphQL schema, which the Maven codegen turns into the client the
+ * Refreshes the vendored GitHub GraphQL schema, which the Gradle codegen turns into the client the
  * server compiles against. Vendoring makes each refresh a reviewable diff instead of a build that
  * changes under you.
  *
@@ -9,13 +9,13 @@
  */
 
 import { renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import path from "node:path";
 
-const SCHEMA_DIR = resolve(
+const SCHEMA_DIR = path.resolve(
 	import.meta.dirname,
 	"../server/generated-clients/src/main/resources/graphql/github",
 );
-const SCHEMA_FILE = join(SCHEMA_DIR, "schema.github.graphql");
+const SCHEMA_FILE = path.join(SCHEMA_DIR, "schema.github.graphql");
 const SCHEMA_URL = "https://docs.github.com/public/fpt/schema.docs.graphql";
 
 // An error page or a login wall is orders of magnitude smaller than the schema, so size alone
@@ -23,10 +23,10 @@ const SCHEMA_URL = "https://docs.github.com/public/fpt/schema.docs.graphql";
 const MIN_SIZE_BYTES = 1_000_000;
 const MAX_SIZE_BYTES = 50_000_000;
 
-const STARTS_WITH_DOC_COMMENT = /^\s*"""/;
-const HAS_DIRECTIVE = /directive\s+@/;
-const HAS_TYPE = /^type\s+\w+/m;
-const HAS_INPUT = /^input\s+\w+/m;
+const STARTS_WITH_DOC_COMMENT = /^\s*"""/u;
+const HAS_DIRECTIVE = /directive\s+@/u;
+const HAS_TYPE = /^type\s+\w+/mu;
+const HAS_INPUT = /^input\s+\w+/mu;
 
 /** Cheapest checks first: a wrong body is usually the wrong size, and never reaches the regexes. */
 function validateGraphQLSchema(content: string): { valid: boolean; reason?: string } {
@@ -94,7 +94,8 @@ async function main(): Promise<void> {
 	const acceptableContentTypes = [
 		"text/",
 		"application/graphql",
-		"application/octet-stream", // GitHub's default for file downloads
+		// GitHub's default for file downloads
+		"application/octet-stream",
 	];
 	if (!acceptableContentTypes.some((type) => contentType.includes(type))) {
 		console.error(`Unexpected Content-Type: ${contentType}`);
@@ -125,9 +126,7 @@ async function main(): Promise<void> {
 		renameSync(tempFile, SCHEMA_FILE);
 
 		console.log(`Schema updated successfully: ${SCHEMA_FILE}`);
-		console.log(
-			"\nTo regenerate types: cd server && ./mvnw -pl generated-clients -am compile -DskipTests",
-		);
+		console.log("\nTo regenerate types: cd server && ./gradlew :generated-clients:classes");
 	} catch (error) {
 		try {
 			unlinkSync(tempFile);
@@ -138,7 +137,9 @@ async function main(): Promise<void> {
 	}
 }
 
-main().catch((error) => {
+try {
+	await main();
+} catch (error) {
 	console.error("Error updating schema:", error);
 	process.exit(1);
-});
+}

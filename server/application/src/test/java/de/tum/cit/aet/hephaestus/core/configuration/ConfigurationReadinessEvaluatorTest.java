@@ -12,6 +12,8 @@ import java.util.Set;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -85,6 +87,24 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         assertStatus(facts, "agent.image-contract", ConfigurationStatus.NOT_APPLICABLE);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"NATS://broker:4222", "TLS://broker:4222"})
+    void shouldAcceptANatsSchemeInAnyCaseBecauseTheClientLowercasesIt(String server) {
+        Map<String, Object> properties = validProperties();
+        properties.put("hephaestus.sync.nats.server", server);
+
+        assertStatus(evaluateReadiness(properties, true), "nats.server", ConfigurationStatus.SATISFIED);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "nats", "//broker:4222", "broker:4222"})
+    void shouldReportANatsServerWithoutANatsSchemeInsteadOfFailingToEvaluate(String server) {
+        Map<String, Object> properties = validProperties();
+        properties.put("hephaestus.sync.nats.server", server);
+
+        assertStatus(evaluateReadiness(properties, true), "nats.server", ConfigurationStatus.ACTION_REQUIRED);
+    }
+
     @Test
     void shouldReportTheDockerRuntimeSettingAndDetectWhenItIsMissing() {
         Map<String, Object> properties = role(true, false);
@@ -144,7 +164,8 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
 
         worker.put("hephaestus.agent.image.reference", "ghcr.io/example/agent@sha256:" + "a".repeat(64));
         worker.put("hephaestus.agent.image.require-digest", false);
-        assertStatus(evaluateReadiness(worker, true), "agent.image-contract", ConfigurationStatus.ACTION_REQUIRED);
+        facts = evaluateReadiness(worker, true);
+        assertStatus(facts, "agent.image-contract", ConfigurationStatus.ACTION_REQUIRED);
     }
 
     @Test

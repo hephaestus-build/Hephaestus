@@ -13,33 +13,48 @@ void test("a short ASCII name is written where the collector looks for it", () =
 
 void test("a name the archive cannot hold fails here rather than at collection", () => {
 	const tooLong = `${"a".repeat(97)}.json`;
-	assert.throws(() => outputPath("/workspace/out", tooLong), /is 106 bytes; the limit is 100/);
+	assert.throws(() => outputPath("/workspace/out", tooLong), /is 106 bytes; the limit is 100/u);
 });
 
 void test("the limit counts the archive root the collector sees", () => {
 	assert.equal(outputPath("/workspace/out", "b".repeat(96)).length, "/workspace/out/".length + 96);
-	assert.throws(() => outputPath("/workspace/out", "b".repeat(97)), /the limit is 100/);
+	assert.throws(() => outputPath("/workspace/out", "b".repeat(97)), /the limit is 100/u);
 });
 
 void test("a non-ASCII name is refused because Docker would encode it as an extension record", () => {
 	assert.throws(
 		() => outputPath("/workspace/out", "résumé.json"),
-		/must start with an ASCII letter or digit/,
+		/must start with an ASCII letter or digit/u,
 	);
 	assert.throws(
 		() => outputPath("/workspace/out", "報告.json"),
-		/must start with an ASCII letter or digit/,
+		/must start with an ASCII letter or digit/u,
 	);
 });
 
 void test("a name that would escape or hide itself is refused", () => {
 	assert.throws(
 		() => outputPath("/workspace/out", "../result.json"),
-		/must start with an ASCII letter or digit/,
+		/must start with an ASCII letter or digit/u,
 	);
 	assert.throws(
 		() => outputPath("/workspace/out", "/etc/passwd"),
-		/must start with an ASCII letter or digit/,
+		/must start with an ASCII letter or digit/u,
 	);
-	assert.throws(() => outputPath("/workspace/out", ""), /must start with an ASCII letter or digit/);
+	assert.throws(
+		() => outputPath("/workspace/out", ""),
+		/must start with an ASCII letter or digit/u,
+	);
+});
+
+void test("nested traversal and noncanonical member names are refused", () => {
+	for (const name of [
+		"group/../../result.json",
+		"group/../result.json",
+		"group/./result.json",
+		"group//result.json",
+		"group/",
+	]) {
+		assert.throws(() => outputPath("/workspace/out", name), /non-empty, relative path segments/u);
+	}
 });

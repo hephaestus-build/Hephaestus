@@ -5,12 +5,11 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionRe
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.ContentAddressedStore;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
-import de.tum.cit.aet.hephaestus.practices.observation.ObservationTrendService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import java.util.List;
@@ -32,7 +31,6 @@ import tools.jackson.databind.json.JsonMapper;
 public class JobTypeHandlerConfiguration {
 
     private final JsonMapper objectMapper;
-    private final ContentAddressedStore contentAddressedStore;
     private final PracticeReviewProperties reviewProperties;
     private final WorkspaceContextBuilder workspaceContextBuilder;
     private final TaskEnvelopeWriter taskEnvelopeWriter;
@@ -40,13 +38,11 @@ public class JobTypeHandlerConfiguration {
 
     JobTypeHandlerConfiguration(
             JsonMapper objectMapper,
-            ContentAddressedStore contentAddressedStore,
             PracticeReviewProperties reviewProperties,
             WorkspaceContextBuilder workspaceContextBuilder,
             TaskEnvelopeWriter taskEnvelopeWriter,
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter) {
         this.objectMapper = objectMapper;
-        this.contentAddressedStore = contentAddressedStore;
         this.reviewProperties = reviewProperties;
         this.workspaceContextBuilder = workspaceContextBuilder;
         this.taskEnvelopeWriter = taskEnvelopeWriter;
@@ -76,16 +72,13 @@ public class JobTypeHandlerConfiguration {
             PullRequestCommentPoster commentPoster,
             PracticeFeedbackDeliveryPolicy deliveryPolicy,
             FeedbackLedgerRecorder feedbackLedgerRecorder,
-            ObservationTrendService observationTrendService,
             PracticeFeedbackCommentFormatter commentFormatter,
             PracticeFeedbackDispatchService dispatchService,
             AgentJobRepository agentJobRepository) {
         return new FeedbackDeliveryService(
                 commentPoster,
                 deliveryPolicy,
-                reviewProperties,
                 feedbackLedgerRecorder,
-                observationTrendService,
                 commentFormatter,
                 dispatchService,
                 agentJobRepository);
@@ -98,38 +91,40 @@ public class JobTypeHandlerConfiguration {
     }
 
     @Bean
-    SecretDiffScanner secretDiffScanner() {
-        return new SecretDiffScanner();
+    PracticeReviewPreparation practiceReviewPreparation(
+            PracticeCatalogInjector practiceCatalogInjector, GitRepositoryManager gitRepositoryManager) {
+        return new PracticeReviewPreparation(
+                workspaceContextBuilder, practiceCatalogInjector, taskEnvelopeWriter, gitRepositoryManager);
     }
 
     @Bean
     PullRequestReviewHandler pullRequestReviewHandler(
+            PracticeReviewPreparation preparation,
             PracticeCatalogInjector practiceCatalogInjector,
             PracticeDetectionResultParser resultParser,
             FeedbackCompositionResultParser compositionResultParser,
             PracticeDetectionDeliveryService deliveryService,
             FeedbackDeliveryService feedbackService,
-            SecretDiffScanner secretDiffScanner,
             InContextDeliveryGate inContextDeliveryGate,
-            ObservationRepository observationRepository) {
+            ObservationRepository observationRepository,
+            RecurringLapses recurringLapses) {
         return new PullRequestReviewHandler(
                 objectMapper,
-                contentAddressedStore,
                 practiceCatalogInjector,
-                workspaceContextBuilder,
-                taskEnvelopeWriter,
+                preparation,
                 resultParser,
                 compositionResultParser,
                 deliveryService,
                 feedbackService,
-                secretDiffScanner,
                 feedbackResponseSuppressionFilter,
                 inContextDeliveryGate,
-                observationRepository);
+                observationRepository,
+                recurringLapses);
     }
 
     @Bean
     IssueReviewHandler issueReviewHandler(
+            PracticeReviewPreparation preparation,
             PracticeCatalogInjector practiceCatalogInjector,
             PracticeDetectionResultParser resultParser,
             FeedbackCompositionResultParser compositionResultParser,
@@ -142,11 +137,11 @@ public class JobTypeHandlerConfiguration {
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter,
             ObservationRepository observationRepository,
             PracticeFeedbackDispatchService dispatchService,
-            FeedbackDeliveryService feedbackDeliveryService) {
+            FeedbackDeliveryService feedbackDeliveryService,
+            RecurringLapses recurringLapses) {
         return new IssueReviewHandler(
                 objectMapper,
-                workspaceContextBuilder,
-                taskEnvelopeWriter,
+                preparation,
                 practiceCatalogInjector,
                 resultParser,
                 compositionResultParser,
@@ -159,39 +154,27 @@ public class JobTypeHandlerConfiguration {
                 feedbackResponseSuppressionFilter,
                 observationRepository,
                 dispatchService,
-                feedbackDeliveryService);
+                feedbackDeliveryService,
+                recurringLapses);
     }
 
     @Bean
     JobTypeHandler conversationReviewHandler(
-            PracticeCatalogInjector practiceCatalogInjector,
+            PracticeReviewPreparation preparation,
             PracticeDetectionResultParser resultParser,
             PracticeDetectionDeliveryService deliveryService,
             ApplicationEventPublisher eventPublisher,
             TransactionTemplate transactionTemplate) {
         return new ConversationReviewHandler(
-                objectMapper,
-                workspaceContextBuilder,
-                taskEnvelopeWriter,
-                practiceCatalogInjector,
-                resultParser,
-                deliveryService,
-                eventPublisher,
-                transactionTemplate);
+                objectMapper, preparation, resultParser, deliveryService, eventPublisher, transactionTemplate);
     }
 
     @Bean
     JobTypeHandler documentReviewHandler(
-            PracticeCatalogInjector practiceCatalogInjector,
+            PracticeReviewPreparation preparation,
             PracticeDetectionResultParser resultParser,
             PracticeDetectionDeliveryService deliveryService) {
-        return new DocumentReviewHandler(
-                objectMapper,
-                workspaceContextBuilder,
-                taskEnvelopeWriter,
-                practiceCatalogInjector,
-                resultParser,
-                deliveryService);
+        return new DocumentReviewHandler(objectMapper, preparation, resultParser, deliveryService);
     }
 
     @Bean

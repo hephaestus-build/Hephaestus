@@ -25,11 +25,15 @@ export const noManualQueryKey = defineRule({
 	create(context) {
 		return {
 			Property(node) {
-				if (propertyName(node) !== "queryKey") return;
+				if (propertyName(node) !== "queryKey") {
+					return;
+				}
 				// A shorthand, an identifier or a call is already someone else's value; only an array
 				// literal is this file claiming to know the generated shape.
 				const value = unwrapStatedType(node.value);
-				if (value.type !== "ArrayExpression") return;
+				if (value.type !== "ArrayExpression") {
+					return;
+				}
 				context.report({ node: value, messageId: "handWritten" });
 			},
 		};

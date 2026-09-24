@@ -64,7 +64,8 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .bodyValue(Map.of("instanceModelId", model.getId(), "enabled", true))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         // A separate request, so the listing loads the binding fresh: the write above cannot have left
         // it hydrated in a session.
@@ -101,7 +102,8 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .bodyValue(Map.of("instanceModelId", model.getId(), "enabled", false))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -122,7 +124,8 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -153,7 +156,8 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .bodyValue(Map.of("instanceModelId", model.getId(), "enabled", true))
                 .exchange()
                 .expectStatus()
-                .isBadRequest();
+                .isBadRequest()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -171,7 +175,8 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .uri("/workspaces/{slug}/agents", workspace.getWorkspaceSlug())
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -196,7 +201,8 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                         true))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -213,7 +219,8 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -235,7 +242,8 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         webTestClient
                 .get()
@@ -243,6 +251,7 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
     }
 }

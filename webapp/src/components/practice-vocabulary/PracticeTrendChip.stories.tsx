@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, userEvent } from "storybook/test";
 
 import type { TrendSupport } from "@/api/types.gen";
+import { settledPopup } from "@/stories/overlay";
 import { wellSupported } from "@/stories/practice-profile-story-mock-data";
-import { settledPopup } from "@/test/overlay";
 
 import { PracticeTrendChip } from "./PracticeTrendChip";
 import { TrendNote } from "./StandingBadge";
@@ -16,7 +16,6 @@ const none: TrendSupport = {
 };
 
 const meta = {
-	title: "Shared/Practice vocabulary/Practice trend chip",
 	component: PracticeTrendChip,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
@@ -67,8 +66,7 @@ export const GroupScope: Story = {
  * yet", so the enum is drawn one way whichever branch a row lands on.
  */
 export const AsTrendNoteWithoutTrend: StoryObj<typeof TrendNote> = {
-	args: { scope: "practice" },
-	render: (args) => <TrendNote {...args} />,
+	render: () => <TrendNote scope="practice" />,
 	play: async ({ canvas }) => {
 		const chip = canvas.getByRole("button");
 		await expect(chip).toHaveTextContent("Not enough to compare yet");

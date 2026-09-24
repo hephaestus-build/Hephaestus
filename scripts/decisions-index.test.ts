@@ -6,8 +6,9 @@ const directory = "docs/decisions";
 
 // The template is the shape an ADR is copied from, not a decision: its `NNNN` is a placeholder, so
 // it is neither numbered nor listed in the index.
-const files = (await readdir(directory))
-	.filter((entry) => /^\d{4}-.+\.md$/.test(entry) && entry !== "0000-template.md")
+const entries = await readdir(directory);
+const files = entries
+	.filter((entry) => /^\d{4}-.+\.md$/u.test(entry) && entry !== "0000-template.md")
 	.toSorted();
 
 void test("ADR numbers are unique", () => {
@@ -19,15 +20,16 @@ void test("ADR numbers are unique", () => {
 
 void test("each ADR heading states its own number", async () => {
 	for (const file of files) {
-		const [heading = ""] = (await readFile(`${directory}/${file}`, "utf8")).split("\n", 1);
+		const content = await readFile(`${directory}/${file}`, "utf8");
+		const [heading = ""] = content.split("\n", 1);
 
-		assert.match(heading, new RegExp(`^# ADR ${file.slice(0, 4)}: \\S`), file);
+		assert.match(heading, new RegExp(`^# ADR ${file.slice(0, 4)}: \\S`, "u"), file);
 	}
 });
 
 void test("the ADR index lists exactly the ADR files, each under its own number", async () => {
 	const index = await readFile(`${directory}/README.md`, "utf8");
-	const rows = [...index.matchAll(/^\| \[\d{4}\]\(\d{4}-[^)]+\.md\)/gm)].map(([row]) => row);
+	const rows = [...index.matchAll(/^\| \[\d{4}\]\(\d{4}-[^)]+\.md\)/gmu)].map(([row]) => row);
 
 	assert.deepEqual(
 		new Set(rows),

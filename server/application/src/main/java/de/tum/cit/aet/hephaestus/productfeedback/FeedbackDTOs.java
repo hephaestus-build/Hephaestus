@@ -1,10 +1,10 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -12,65 +12,162 @@ import org.jspecify.annotations.Nullable;
 final class FeedbackDTOs {
     private FeedbackDTOs() {}
 
+    /** Who produced a record, as an administrator sees it; absent once the account is erased. */
+    record FeedbackAccountRefDTO(
+            @NonNull Long id,
+            @NonNull String displayName,
+            @Nullable String email) {}
+
+    /** The workspace a record was submitted from; absent for instance-level submissions. */
+    record FeedbackWorkspaceRefDTO(
+            @NonNull Long id, @NonNull String slug, @NonNull String displayName) {}
+
+    enum QuestionType {
+        TEXT,
+        SINGLE_CHOICE,
+        MULTIPLE_CHOICE,
+        RATING,
+        NPS
+    }
+
     record QuestionDTO(
             @NotBlank @Size(max = 80) @Pattern(regexp = "[A-Za-z0-9_-]+") @NonNull
             String id,
 
             @NotBlank @Size(max = 300) @NonNull String prompt,
             @NotNull @NonNull QuestionType type,
-            @Size(max = 20) @NonNull List<@NotBlank @Size(max = 200) String> options,
-            boolean required) {}
+            @NotNull @Size(max = 20) @NonNull List<@NotBlank @Size(max = 200) String> options,
+            @NonNull boolean required,
+            /** A choice question may also take one free-text answer; surveys stored before the flag existed omit it. */
+            @NonNull boolean allowOther,
+            @Size(max = 60) @Nullable String lowLabel,
+            @Size(max = 60) @Nullable String highLabel) {}
 
-    enum QuestionType {
-        TEXT,
-        SINGLE_CHOICE,
-        RATING
-    }
+    /** One answer; exactly the field matching the question's type is set. */
+    record AnswerDTO(
+            @NotBlank @Size(max = 80) @NonNull String questionId,
+            @Size(max = 4000) @Nullable String text,
+            @Size(max = 20) @Nullable List<@NotBlank @Size(max = 200) String> choices,
+            @Min(0) @Max(10) @Nullable Integer rating) {}
 
     record CreateSurveyDTO(
             @NotBlank @Size(max = 160) @NonNull String title,
             @NotBlank @Size(max = 500) @NonNull String description,
-            @NotEmpty @Size(max = 20) @NonNull List<@Valid QuestionDTO> questions,
+            @NotNull Survey.@NonNull Purpose purpose,
+            @NotEmpty @Size(max = 20) @NonNull List<@NotNull @Valid QuestionDTO> questions,
             @Nullable Long workspaceId,
             @NotNull @NonNull Instant startsAt,
-            @Nullable Instant endsAt) {}
+            @Nullable Instant endsAt) {
+        @AssertTrue(message = "endsAt must be after startsAt")
+        @Schema(hidden = true)
+        @SuppressWarnings("PMD.UnusedPrivateMethod")
+        private boolean isEndAfterStart() {
+            return endsAt == null || endsAt.isAfter(startsAt);
+        }
+    }
+
+    record SurveyEditDTO(
+            @NotBlank @Size(max = 160) @NonNull String title,
+            @NotBlank @Size(max = 500) @NonNull String description,
+            @NotNull @NonNull Instant startsAt,
+            @Nullable Instant endsAt,
+            @NonNull boolean active) {
+        @AssertTrue(message = "endsAt must be after startsAt")
+        @Schema(hidden = true)
+        @SuppressWarnings("PMD.UnusedPrivateMethod")
+        private boolean isEndAfterStart() {
+            return endsAt == null || endsAt.isAfter(startsAt);
+        }
+    }
 
     record SurveyDTO(
             @NonNull UUID id,
             @NonNull String title,
             @NonNull String description,
+            Survey.@NonNull Purpose purpose,
+            /** The organisation a research survey was published for; absent for a product survey. */
+            @Nullable String researchOrganization,
             @NonNull List<QuestionDTO> questions,
-            @Nullable Long workspaceId,
+            @Nullable FeedbackWorkspaceRefDTO workspace,
             @NonNull Instant startsAt,
             @Nullable Instant endsAt,
             @NonNull boolean active,
-            @Nullable Instant createdAt) {}
+            @Nullable FeedbackAccountRefDTO createdBy,
+            @NonNull Instant createdAt,
+            @NonNull ParticipationCountsDTO participation) {}
 
-    record SubmitSurveyDTO(
-            @NotNull @Size(max = 20) @NonNull Map<@Size(max = 80) String, @Size(max = 4000) String> answers) {}
+    record ParticipationCountsDTO(
+            /** Every account shown the invitation, including those who then responded or declined. */
+            @NonNull long invited,
+            @NonNull long responded,
+            @NonNull long declined) {}
+
+    record SurveyInvitationDTO(
+            @NonNull UUID id,
+            @NonNull String title,
+            @NonNull String description,
+            Survey.@NonNull Purpose purpose,
+            /** Set for a research survey: the organisation whose study the answers join. */
+            @Nullable String researchOrganization,
+            @NonNull List<QuestionDTO> questions,
+            @Nullable Instant endsAt,
+            /** The account has been shown this invitation; the webapp nudges only while false. */
+            @NonNull boolean seen) {}
+
+    record SubmitSurveyDTO(@NotNull @Size(max = 20) @NonNull List<@NotNull @Valid AnswerDTO> answers) {}
+
+    record OptionCountDTO(@NonNull String value, @NonNull long count) {}
+
+    record QuestionSummaryDTO(
+            @NonNull String questionId,
+            @NonNull long answered,
+            @NonNull List<OptionCountDTO> counts,
+            /** Responses whose choices include a free-text answer; present for choice questions only. */
+            @Nullable Long other,
+            @Nullable Double average,
+            /** Net Promoter Score, −100…100, for {@link QuestionType#NPS}. */
+            @Nullable Integer score) {}
+
+    record SurveySummaryDTO(
+            @NonNull ParticipationCountsDTO participation,
+            @NonNull List<QuestionSummaryDTO> questions) {}
+
+    record SurveyResponseDTO(
+            @NonNull UUID id,
+            @Nullable FeedbackAccountRefDTO account,
+            @Nullable FeedbackWorkspaceRefDTO workspace,
+            SurveyParticipation.@NonNull Status status,
+            @Nullable List<AnswerDTO> answers,
+            @NonNull Instant decidedAt) {}
 
     record FeedbackRequestDTO(
             @NotNull ProductFeedback.@NonNull Kind kind,
             @NotBlank @Size(max = 5000) @NonNull String message,
-            @Size(max = 500) @Nullable String pagePath) {}
+
+            @Size(max = 500) @Pattern(regexp = "/(?!/)[^?#\\p{Cc}]*") @Nullable
+            String pagePath,
+
+            @Size(max = 500) @Pattern(regexp = "[^\\p{Cc}]*") @Nullable
+            String userAgent) {}
+
+    record FeedbackTriageDTO(@NonNull boolean resolved) {}
+
+    enum FeedbackFilter {
+        OPEN,
+        RESOLVED,
+        ALL
+    }
 
     record FeedbackItemDTO(
             @NonNull UUID id,
-            @NonNull Long accountId,
-            @Nullable Long workspaceId,
+            @Nullable FeedbackAccountRefDTO account,
+            @Nullable FeedbackWorkspaceRefDTO workspace,
             ProductFeedback.@NonNull Kind kind,
             @NonNull String message,
             @Nullable String pagePath,
-            @Nullable Instant createdAt) {}
-
-    record SubmissionDTO(
-            @NonNull UUID id,
-            @NonNull UUID surveyId,
-            @NonNull String surveyTitle,
-            @NonNull List<QuestionDTO> questions,
-            @NonNull Long accountId,
-            @Nullable Long workspaceId,
-            SurveySubmission.@NonNull Disposition disposition,
-            @Nullable Map<String, String> answers,
-            @Nullable Instant createdAt) {}
+            @Nullable String userAgent,
+            @Nullable String appVersion,
+            @NonNull Instant createdAt,
+            @Nullable Instant resolvedAt,
+            @Nullable FeedbackAccountRefDTO resolvedBy) {}
 }

@@ -1,7 +1,7 @@
+import { cn } from "cn";
 import type { CatalogOrigin } from "@/api/types.gen";
 import { badgeVariants } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 export interface CatalogOriginBadgeProps {
 	origin?: CatalogOrigin | null;
@@ -10,17 +10,14 @@ export interface CatalogOriginBadgeProps {
 }
 
 /**
- * How a workspace copy stands against the catalog entry it came from. A copy never tracks its
- * source — `UPDATE_AVAILABLE` is computed for display and nothing applies it — so every label says
- * so explicitly: "the catalog changed" alone invites the reading that the copy is about to change
- * too. No provenance renders nothing, which is why the matching case is named rather than silent.
+ * A badge summarizes the relationship; the release inbox owns the field-by-field decision.
  */
 export function CatalogOriginBadge({ origin, kind, className }: CatalogOriginBadgeProps) {
 	if (!origin) {
 		return null;
 	}
 	// `kind` is the code word; these are the two words the reader sees.
-	const subject = kind === "practice" ? "review rules" : "group details";
+	const subject = kind === "practice" ? "practice definition" : "group details";
 	const noun = kind === "practice" ? "practice" : "group";
 
 	if (!origin.sourceOffered) {
@@ -37,7 +34,20 @@ export function CatalogOriginBadge({ origin, kind, className }: CatalogOriginBad
 			<OriginBadge
 				className={className}
 				label="Catalog changed, yours did not"
-				explanation={`The catalog now has different ${subject}. Your copy is untouched — bring anything you want across by editing it.`}
+				explanation={
+					kind === "practice"
+						? "The catalogue changed. Your copy is untouched. Review the proposed fields in Practice updates."
+						: `The catalog now has different ${subject}. Your copy is untouched — bring anything you want across by editing it.`
+				}
+			/>
+		);
+	}
+	if (origin.link === "DECLINED") {
+		return (
+			<OriginBadge
+				className={className}
+				label="Update declined"
+				explanation="You declined this catalogue version. Your copy is unchanged. A different version can be offered later."
 			/>
 		);
 	}
@@ -46,7 +56,7 @@ export function CatalogOriginBadge({ origin, kind, className }: CatalogOriginBad
 			<OriginBadge
 				className={className}
 				label="Same as the catalog"
-				explanation={`These ${subject} still match the entry this was copied from. It will stay that way: the catalog never edits your copy.`}
+				explanation={`These ${subject} match the catalog now. A later catalog change will not edit your copy without your decision.`}
 			/>
 		);
 	}
@@ -54,7 +64,11 @@ export function CatalogOriginBadge({ origin, kind, className }: CatalogOriginBad
 		<OriginBadge
 			className={className}
 			label="Edited here"
-			explanation={`The ${subject} differ from the version copied into this workspace.`}
+			explanation={
+				kind === "practice"
+					? "This workspace changed the practice. A separate catalogue update may also be waiting in Practice updates."
+					: `The ${subject} differ from the version copied into this workspace.`
+			}
 		/>
 	);
 }

@@ -3,8 +3,9 @@ import { useRender } from "@base-ui/react/use-render";
 import { ExternalLinkIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { cn } from "cn";
 import { FOCUS_RING } from "@/components/common/focus";
-import { cn } from "@/lib/utils";
+import { hasText } from "@/lib/text";
 
 export interface InlineLinkProps extends Omit<
 	useRender.ComponentProps<"a">,
@@ -39,7 +40,7 @@ export function InlineLink({
 	render,
 	...props
 }: InlineLinkProps) {
-	const defaultTagName = href ? "a" : onClick ? "button" : "span";
+	const defaultTagName = tagNameFor(href, onClick);
 	// A `render=` slot is a control of its own (a router link, say), so it takes the hover and ring
 	// too.
 	const interactive = defaultTagName !== "span" || render !== undefined;
@@ -56,7 +57,7 @@ export function InlineLink({
 			className,
 		),
 	};
-	if (href) {
+	if (hasText(href)) {
 		ownProps.href = href;
 		if (outbound) {
 			ownProps.target = "_blank";
@@ -81,4 +82,15 @@ export function InlineLink({
 			),
 		}),
 	});
+}
+
+/** An address makes it a link and a handler a button; with neither it is a word. */
+function tagNameFor(
+	href: string | undefined,
+	onClick: InlineLinkProps["onClick"],
+): "a" | "button" | "span" {
+	if (hasText(href)) {
+		return "a";
+	}
+	return onClick ? "button" : "span";
 }

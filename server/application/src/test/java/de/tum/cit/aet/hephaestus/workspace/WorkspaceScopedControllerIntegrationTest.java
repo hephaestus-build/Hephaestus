@@ -50,7 +50,8 @@ class WorkspaceScopedControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -62,6 +63,7 @@ class WorkspaceScopedControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 }

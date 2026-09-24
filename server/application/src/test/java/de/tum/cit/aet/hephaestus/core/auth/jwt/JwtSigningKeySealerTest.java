@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.jwt;
 
+import static de.tum.cit.aet.hephaestus.testconfig.TestSystemEncryptionKeys.systemKey;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -20,7 +21,7 @@ class JwtSigningKeySealerTest extends BaseUnitTest {
     private static final String KEY = "0123456789abcdef0123456789abcdef"; // exactly 32 chars
 
     private JwtSigningKeySealer enabledSealer() {
-        return new JwtSigningKeySealer(KEY, "dev");
+        return new JwtSigningKeySealer(systemKey(KEY, "dev"));
     }
 
     @Test
@@ -122,7 +123,7 @@ class JwtSigningKeySealerTest extends BaseUnitTest {
 
     @Test
     void disabled_whenNoKeyInNonProd() {
-        JwtSigningKeySealer sealer = new JwtSigningKeySealer((String) null, "dev");
+        JwtSigningKeySealer sealer = new JwtSigningKeySealer(systemKey(null, "dev"));
 
         assertThat(sealer.isEnabled()).isFalse();
         assertThatThrownBy(() -> sealer.seal(new byte[] {1}))
@@ -133,21 +134,7 @@ class JwtSigningKeySealerTest extends BaseUnitTest {
 
     @Test
     void disabled_whenBlankKeyInNonProd() {
-        assertThat(new JwtSigningKeySealer("   ", "").isEnabled()).isFalse();
-    }
-
-    @Test
-    void prod_missingKey_failsFast() {
-        assertThatThrownBy(() -> new JwtSigningKeySealer((String) null, "prod"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("required in production");
-    }
-
-    @Test
-    void rejectsNon32CharKey() {
-        assertThatThrownBy(() -> new JwtSigningKeySealer("too-short", "dev"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("32 characters");
+        assertThat(new JwtSigningKeySealer(systemKey("   ")).isEnabled()).isFalse();
     }
 
     @Test

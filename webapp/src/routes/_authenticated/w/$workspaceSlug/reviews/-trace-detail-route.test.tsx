@@ -1,11 +1,14 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { artifactTrace } from "@/components/practice-trace/story-mock-data";
+import { getArtifactTraceQueryKey } from "@/api/@tanstack/react-query.gen";
+import { artifactTrace } from "@/components/practice-trace/fixtures";
+import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { deferred } from "@/test/async";
+import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole app shell and its lazy modules.
 vi.setConfig({ testTimeout: 20_000 });
@@ -28,6 +31,10 @@ beforeEach(() => {
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json({ role: "MEMBER", userId: 1, userLogin: "ada", userName: "Ada" }),
 		),
+		// This surface exists only where practices review the work; the shared fixture has them off.
+		http.get("*/workspaces", () =>
+			HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]),
+		),
 		http.get(TRACE_PATH, () => {
 			traceReads += 1;
 			return HttpResponse.json(artifactTrace);
@@ -36,7 +43,7 @@ beforeEach(() => {
 });
 
 const clickAsk = async () =>
-	await userEvent.click(
+	userEvent.click(
 		await screen.findByRole("button", { name: "Review this now" }, ROUTE_RENDER_WAIT),
 	);
 
@@ -131,5 +138,69 @@ describe("asking for a review by hand", () => {
 			"Only the work's author or assignees, or a workspace admin, can ask for a review of it.",
 		);
 		expect(screen.queryByText("No review was started")).toBeNull();
+	});
+});
+
+describe("review requests belong to the reviewed work", () => {
+	it("does not carry a refusal to another artifact", async () => {
+		server.use(
+			http.post(REQUEST_PATH, () =>
+				HttpResponse.json({
+					status: "REFUSED",
+					reason: "REQUEST_COOLDOWN_ACTIVE",
+					reasonDescription: COOLDOWN_SENTENCE,
+				}),
+			),
+		);
+		const { router } = renderRouteAtWithRouter("/w/acme/reviews/scm.pull_request/1423");
+		await clickAsk();
+		await screen.findByText(COOLDOWN_SENTENCE);
+		await act(async () =>
+			router.navigate({
+				to: "/w/$workspaceSlug/reviews/$artifactKind/$artifactId",
+				params: { workspaceSlug: "acme", artifactKind: "scm.issue", artifactId: "1430" },
+			}),
+		);
+		await screen.findByRole("button", { name: "Review this now" }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByText(COOLDOWN_SENTENCE)).toBeNull();
+	});
+
+	it("finishes an outstanding request against its original artifact after navigation", async () => {
+		const response = deferred<Response>();
+		server.use(http.post(REQUEST_PATH, async () => response.promise));
+		const { router, queryClient } = renderRouteAtWithRouter(
+			"/w/acme/reviews/scm.pull_request/1423",
+		);
+		await clickAsk();
+		await act(async () =>
+			router.navigate({
+				to: "/w/$workspaceSlug/reviews/$artifactKind/$artifactId",
+				params: { workspaceSlug: "acme", artifactKind: "scm.issue", artifactId: "1430" },
+			}),
+		);
+		const ask = await screen.findByRole("button", { name: "Review this now" }, ROUTE_RENDER_WAIT);
+		expect(ask.hasAttribute("disabled")).toBe(false);
+		const otherReads = traceReads;
+		await act(async () => {
+			response.resolve(
+				HttpResponse.json({ status: "SUBMITTED", jobId: "0f2b7c1e-9a3d-4c5b-8e1f-2d6a7b8c9d01" }),
+			);
+		});
+		await screen.findByText("Review started");
+		expect(
+			queryClient.getQueryState(
+				getArtifactTraceQueryKey({
+					path: { workspaceSlug: "acme", artifactKind: "scm.pull_request", artifactId: 1423 },
+				}),
+			)?.isInvalidated,
+		).toBe(true);
+		expect(
+			queryClient.getQueryState(
+				getArtifactTraceQueryKey({
+					path: { workspaceSlug: "acme", artifactKind: "scm.issue", artifactId: 1430 },
+				}),
+			)?.isInvalidated,
+		).toBe(false);
+		expect(traceReads).toBe(otherReads);
 	});
 });

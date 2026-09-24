@@ -17,11 +17,11 @@ public record DeveloperPracticeSummaryDTO(
         @NonNull @Schema(description = "Total number of observations")
         Long totalObservations,
 
-        @NonNull @Schema(description = "Number of GOOD (strength) observations")
-        Long goodCount,
+        @NonNull @Schema(description = "Number of positive outcomes")
+        Long positiveCount,
 
-        @NonNull @Schema(description = "Number of BAD (problem) observations")
-        Long badCount,
+        @NonNull @Schema(description = "Number of negative outcomes")
+        Long negativeCount,
 
         @Nullable @Schema(description = "Timestamp of most recent observation")
         Instant lastObservedAt) {
@@ -30,8 +30,8 @@ public record DeveloperPracticeSummaryDTO(
                 p.getPracticeSlug(),
                 p.getPracticeName(),
                 p.getTotalObservations(),
-                p.getGoodCount(),
-                p.getBadCount(),
+                p.getPositiveCount(),
+                p.getNegativeCount(),
                 p.getLastObservedAt());
     }
 }

@@ -3,8 +3,8 @@ import { RotateCcw } from "lucide-react";
 import { useState } from "react";
 
 import type { CatalogEntryStatus, CuratedGroupRequest } from "@/api/types.gen";
-import { generateSlug, isValidSlug } from "@/components/admin/practice-catalog/constants";
-import { GroupVisualPicker } from "@/components/admin/practice-catalog/GroupVisualPicker";
+import { generateSlug, isValidSlug } from "@/components/admin/practice-editor/constants";
+import { GroupVisualPicker } from "@/components/admin/practice-editor/GroupVisualPicker";
 import { type FormError, FormErrorSummary } from "@/components/common/FormErrorSummary";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -67,6 +67,11 @@ export type CuratedGroupFormProps = CuratedGroupFormBaseProps &
 		| { mode: "create"; initialData?: never }
 		| { mode: "edit"; initialData: CuratedGroupFormInitialValue }
 	);
+
+const SUBMIT_LABELS = {
+	create: { idle: "Create group", pending: "Creating…" },
+	edit: { idle: "Save changes", pending: "Saving…" },
+} as const;
 
 function initialState(initialData?: CuratedGroupFormValue): FormState {
 	return {
@@ -132,13 +137,16 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 	const valid = errorSummary.length === 0;
 	const updateAvailable = mode === "edit" && initialData.status.state === "UPDATE_WAITING";
 	const resetLabel = updateAvailable ? "Apply Hephaestus update" : "Restore Hephaestus default";
+	const submitLabel = SUBMIT_LABELS[mode][isPending ? "pending" : "idle"];
 
 	const submit = (event: React.SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		if (!valid) {
 			setRefusals((count) => count + 1);
 			const [first] = errorSummary;
-			if (first) requestAnimationFrame(() => document.getElementById(first.fieldId)?.focus());
+			if (first) {
+				requestAnimationFrame(() => document.getElementById(first.fieldId)?.focus());
+			}
 			return;
 		}
 		onSubmit({
@@ -200,7 +208,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 						/>
 					)}
 
-					{conflict && (
+					{conflict === true && (
 						<div className="space-y-2">
 							<Alert variant="warning">
 								<RotateCcw />
@@ -221,12 +229,12 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 					<fieldset disabled={formDisabled} className="contents">
 						{/* See `PracticeDefinitionForm`: the panel is the measure, prose keeps its own. */}
 						<div className="space-y-8">
-							<p className="max-w-2xl text-muted-foreground text-sm">
+							<p className="max-w-2xl text-sm text-muted-foreground">
 								Fields marked <span aria-hidden>*</span> are required.
 							</p>
 
 							<section className="space-y-4">
-								<h2 className="font-semibold text-lg">General</h2>
+								<h2 className="text-lg font-semibold">General</h2>
 								<FieldGroup className="gap-4">
 									<Field data-invalid={nameError ? "true" : undefined}>
 										<FieldLabel htmlFor="group-name">Name *</FieldLabel>
@@ -284,7 +292,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 											)}
 										</div>
 										<FieldDescription id="group-slug-description">
-											Used in URLs and integrations. It can't be changed later.
+											Used in URLs and integrations. It can’t be changed later.
 										</FieldDescription>
 										{slugError && <FieldError id="group-slug-error">{slugError}</FieldError>}
 									</Field>
@@ -310,7 +318,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 							</section>
 
 							<section className="space-y-4">
-								<h2 className="font-semibold text-lg">Presentation</h2>
+								<h2 className="text-lg font-semibold">Presentation</h2>
 								<FieldGroup className="gap-4">
 									<Field>
 										<FieldLabel htmlFor="group-appearance">Appearance</FieldLabel>
@@ -323,8 +331,8 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 											onChange={(patch) =>
 												setForm((previous) => ({
 													...previous,
-													...(patch.icon !== undefined ? { icon: patch.icon } : {}),
-													...(patch.color !== undefined ? { color: patch.color } : {}),
+													...(patch.icon === undefined ? {} : { icon: patch.icon }),
+													...(patch.color === undefined ? {} : { color: patch.color }),
 												}))
 											}
 											disabled={formDisabled}
@@ -343,13 +351,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 					{cancel}
 					<Button type="submit" disabled={formDisabled || conflict}>
 						{isPending && <Spinner className="size-4" />}
-						{isPending
-							? mode === "create"
-								? "Creating…"
-								: "Saving…"
-							: mode === "create"
-								? "Create group"
-								: "Save changes"}
+						{submitLabel}
 					</Button>
 				</DrawerFooter>
 			</form>

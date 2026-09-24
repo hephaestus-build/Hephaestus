@@ -1,10 +1,10 @@
 import type { ReactElement, ReactNode } from "react";
 
+import { cn } from "cn";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
-import type { StatusDef } from "./status-def";
-import { StatusBadge } from "./StatusBadge";
+import type { StatusDef } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
 
 export interface StatusTooltipProps {
 	/** The registry entry the trigger stands for; the tooltip says its words and its sentence. */
@@ -24,6 +24,8 @@ export interface StatusTooltipProps {
  * The registry's label and one-line description over a status icon, so an icon that only its
  * colour and shape distinguish explains itself on hover or focus.
  */
+const DEFAULT_TRIGGER = <button type="button" />;
+
 export function StatusTooltip({ def, render, className, children }: StatusTooltipProps) {
 	return (
 		<Tooltip>
@@ -54,7 +56,7 @@ export interface StatusBadgeWithSentenceProps {
 
 export function StatusBadgeWithSentence({
 	def,
-	render = <button type="button" />,
+	render = DEFAULT_TRIGGER,
 	className,
 }: StatusBadgeWithSentenceProps) {
 	return (

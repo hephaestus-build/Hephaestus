@@ -2,7 +2,7 @@ import { ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
 
 import type { ObservationDetail } from "@/api/types.gen";
 
-import type { StatusDefs } from "./status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 export type FeedbackUsefulness = NonNullable<ObservationDetail["feedbackUsefulness"]>;
 export const FEEDBACK_USEFULNESS_DEFS: StatusDefs<FeedbackUsefulness> = {

@@ -3,8 +3,7 @@
 	"java.configuration.updateBuildConfiguration": "interactive",
 	"java.completion.importOrder": ["#"],
 	"[java]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode",
-		"editor.formatOnSave": true
+		"editor.formatOnSave": false
 	},
 	"[typescript]": {
 		"editor.defaultFormatter": "oxc.oxc-vscode",

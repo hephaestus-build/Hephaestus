@@ -42,11 +42,11 @@ public class AccountPurger {
         // Children carry ON DELETE CASCADE on account_id, but we keep the account tombstone, so the
         // cascade is not triggered — delete the personal/auth child rows explicitly.
         jdbcTemplate.update("DELETE FROM account_feature WHERE account_id = ?", accountId);
+        anonymizeAuditRows(accountId); // reads identity_link, so before it is deleted
         jdbcTemplate.update("DELETE FROM identity_link WHERE account_id = ?", accountId);
         jdbcTemplate.update("DELETE FROM issued_jwt WHERE account_id = ?", accountId);
         jdbcTemplate.update("DELETE FROM account_export WHERE account_id = ?", accountId);
         jdbcTemplate.update("UPDATE consent_decision SET account_id = NULL WHERE account_id = ?", accountId);
-        anonymizeAuditRows(accountId);
         // Rows another module owns are erased by that module, inside this transaction.
         erasureContributors.forEach(contributor -> contributor.eraseAccount(accountId));
 
@@ -65,15 +65,14 @@ public class AccountPurger {
     /**
      * {@code auth_event} and {@code config_audit_event} rows survive erasure: they are the security and
      * settings-change trail, and their non-identifying skeleton ({@code event_type}, {@code result},
-     * {@code occurred_at}) is what the trail is. Only the personal columns are nulled — {@code ip_inet},
-     * {@code user_agent}, and {@code details}, which carries the operator's free-text reason and a second
-     * account id on {@code IMPERSONATION_*} rows. The {@code WHERE} covers the erased subject in both
-     * roles: event subject ({@code account_id}) and impersonator ({@code acting_account_id}).
+     * {@code occurred_at}) is what the trail is. Only the personal columns are nulled.
      */
     private void anonymizeAuditRows(Long accountId) {
         int redacted = jdbcTemplate.update(
                 "UPDATE auth_event SET ip_inet = NULL, user_agent = NULL, details = NULL "
-                        + "WHERE account_id = ? OR acting_account_id = ?",
+                        + "WHERE account_id = ? OR acting_account_id = ? "
+                        + "OR viewed_user_id IN (SELECT external_actor_id FROM identity_link WHERE account_id = ?)",
+                accountId,
                 accountId,
                 accountId);
         if (redacted > 0) {

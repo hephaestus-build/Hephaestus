@@ -4,7 +4,6 @@ import { expect } from "storybook/test";
 import { BulletList } from "./BulletList";
 
 const meta = {
-	title: "Shared/Bullet list",
 	component: BulletList,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],

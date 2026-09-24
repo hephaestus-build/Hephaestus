@@ -127,6 +127,9 @@ class ReviewSweepSpendGuardIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private WorkspaceMembershipService workspaceMembershipService;
 
+    @Autowired
+    private de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository scmConnections;
+
     private Workspace workspace;
     private long pullRequestId;
 
@@ -142,7 +145,11 @@ class ReviewSweepSpendGuardIntegrationTest extends BaseIntegrationTest {
                 llmBudgetService,
                 backfillProperties);
 
-        workspace = WorkspaceTestFixtures.activeWorkspace("sweep-guard");
+        workspace = WorkspaceTestFixtures.persistInstallationWorkspace(
+                workspaceRepository,
+                scmConnections,
+                WorkspaceTestFixtures.installationWorkspace(42L, "sweep-guard").withSlug("sweep-guard"),
+                42L);
         workspace.setAccountLogin("sweeporg");
         workspace.getFeatures().setPracticesEnabled(true);
         workspace = workspaceRepository.save(workspace);

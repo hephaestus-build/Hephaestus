@@ -1,9 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
+import java.io.Serial;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -17,7 +21,7 @@ import tools.jackson.core.json.JsonReadFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Parses normalized agent output into validated observations without throwing on malformed entries. */
+/** Validates submitted observations into typed ones without throwing on malformed entries. */
 public class PracticeDetectionResultParser {
 
     private static final Logger log = LoggerFactory.getLogger(PracticeDetectionResultParser.class);
@@ -30,17 +34,15 @@ public class PracticeDetectionResultParser {
 
     static final int MAX_MR_NOTE_LENGTH = 60_000;
 
-    /** Only practices with correctness, security, or integrity consequences may block a merge. */
-    static final Set<String> BLOCKING_ELIGIBLE_PRACTICES = Set.of(
-            "handles-errors-instead-of-swallowing-them",
-            "validates-inputs-and-edge-cases-at-the-boundary",
-            "avoids-unsafe-panics-and-chosen-crashes",
-            "validates-and-escapes-untrusted-input",
-            "avoids-insecure-defaults-and-over-broad-permissions",
-            "keeps-the-test-suite-honest");
-
-    private static final Set<String> OBSERVATION_FIELDS =
-            Set.of("practiceSlug", "summary", "presence", "assessment", "severity", "evidence", "evidenceRationale");
+    private static final Set<String> OBSERVATION_FIELDS = Set.of(
+            "practiceSlug",
+            "summary",
+            "assessmentStatus",
+            "presence",
+            "assessment",
+            "severity",
+            "evidence",
+            "evidenceRationale");
 
     static final int MAX_DELIVERY_DIFF_NOTES = 30;
 
@@ -56,6 +58,7 @@ public class PracticeDetectionResultParser {
                 .build();
     }
 
+    /** Parses a raw model output whose {@code rawOutput} text carries the observations, leniently. */
     public ParseResult parse(@Nullable JsonNode jobOutput) {
         if (jobOutput == null || jobOutput.isNull() || jobOutput.isMissingNode()) {
             return ParseResult.empty("jobOutput is null or missing");
@@ -87,18 +90,22 @@ public class PracticeDetectionResultParser {
         if (root == null || root.isNull()) {
             return ParseResult.empty("rawOutput parsed to null");
         }
-        JsonNode observationsNode = extractObservationsNode(root);
-        if (observationsNode == null || !observationsNode.isArray()) {
+        return parseObservations(root.get("observations"));
+    }
+
+    /** Validates an already-structured observations array, as the runner submits it for admission. */
+    public ParseResult parseObservations(@Nullable JsonNode observations) {
+        if (observations == null || !observations.isArray()) {
             return ParseResult.empty("missing or non-array 'observations' field");
         }
-        if (observationsNode.isEmpty()) {
+        if (observations.isEmpty()) {
             return ParseResult.empty("observations array is empty");
         }
 
         List<ValidatedObservation> valid = new ArrayList<>();
         List<DiscardedEntry> discarded = new ArrayList<>();
-        for (int i = 0; i < observationsNode.size(); i++) {
-            JsonNode entry = observationsNode.get(i);
+        for (int i = 0; i < observations.size(); i++) {
+            JsonNode entry = observations.get(i);
             if (!entry.isObject()) {
                 discarded.add(new DiscardedEntry(i, "entry is not a JSON object"));
                 continue;
@@ -111,10 +118,6 @@ public class PracticeDetectionResultParser {
         }
 
         return new ParseResult(Collections.unmodifiableList(valid), Collections.unmodifiableList(discarded));
-    }
-
-    private JsonNode extractObservationsNode(JsonNode root) {
-        return root.get("observations");
     }
 
     private ValidatedObservation validateEntry(JsonNode entry, int index) {
@@ -139,10 +142,15 @@ public class PracticeDetectionResultParser {
             throw new EntryValidationException("summary exceeds " + MAX_SUMMARY_LENGTH + " characters");
         }
 
-        Presence presence = parseEnum(entry, "presence", Presence.class);
-
-        Assessment assessment = parseAssessment(entry, presence);
-        Severity severity = parseSeverityOrDefault(entry);
+        AssessmentStatus assessmentStatus = parseEnum(entry, "assessmentStatus", AssessmentStatus.class);
+        Presence presence = parseNullableEnum(entry, "presence", Presence.class);
+        Assessment assessment = parseNullableEnum(entry, "assessment", Assessment.class);
+        Severity severity = parseNullableEnum(entry, "severity", Severity.class);
+        try {
+            assessmentStatus.validate(presence, assessment, severity);
+        } catch (IllegalArgumentException e) {
+            throw new EntryValidationException("incoherent observation axes: " + e.getMessage(), e);
+        }
 
         JsonNode evidence = entry.get("evidence");
         if (evidence == null || !evidence.isObject()) {
@@ -166,15 +174,13 @@ public class PracticeDetectionResultParser {
         }
 
         return new ValidatedObservation(
-                practiceSlug, summary, presence, assessment, severity, evidence, evidenceRationale);
+                practiceSlug, summary, assessmentStatus, presence, assessment, severity, evidence, evidenceRationale);
     }
 
-    /** Assessment exists only for outcomes that carry valence. */
-    private static @Nullable Assessment parseAssessment(JsonNode entry, Presence presence) {
-        if (!presence.carriesValence()) {
-            return null;
-        }
-        return parseEnum(entry, "assessment", Assessment.class);
+    private static <E extends Enum<E>> @Nullable E parseNullableEnum(JsonNode entry, String field, Class<E> enumType) {
+        JsonNode node = entry.get(field);
+        if (node == null) throw new EntryValidationException("missing field: " + field);
+        return node.isNull() ? null : parseEnum(entry, field, enumType);
     }
 
     private static String textField(JsonNode entry, String field) {
@@ -183,19 +189,6 @@ public class PracticeDetectionResultParser {
             throw new EntryValidationException("missing or non-text field: " + field);
         }
         return node.asString();
-    }
-
-    /**
-     * A missing, null, or non-text value defaults to {@link Severity#INFO} rather than discarding the
-     * observation: {@link ValidatedObservation#coerceCoherence(boolean, boolean)} re-derives the real band anyway. A
-     * present but unrecognised value still fails the entry.
-     */
-    private static Severity parseSeverityOrDefault(JsonNode entry) {
-        JsonNode node = entry.get("severity");
-        if (node == null || node.isNull() || !node.isString()) {
-            return Severity.INFO;
-        }
-        return parseEnum(entry, "severity", Severity.class);
     }
 
     private static <E extends Enum<E>> E parseEnum(JsonNode entry, String field, Class<E> enumType) {
@@ -274,6 +267,9 @@ public class PracticeDetectionResultParser {
 
     private static class EntryValidationException extends RuntimeException {
 
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         EntryValidationException(String message) {
             super(message);
         }
@@ -302,27 +298,75 @@ public class PracticeDetectionResultParser {
     public record ValidatedObservation(
             String practiceSlug,
             String summary,
-            Presence presence,
+            AssessmentStatus assessmentStatus,
+            @Nullable Presence presence,
             @Nullable Assessment assessment,
             @Nullable Severity severity,
             @Nullable JsonNode evidence,
             @Nullable String evidenceRationale,
-            @Nullable ObservationKeys keys) {
+            @Nullable ObservationKeys keys,
+            PracticeDeliveryBehavior deliveryBehavior) {
+        public ValidatedObservation(
+                String practiceSlug,
+                String summary,
+                AssessmentStatus assessmentStatus,
+                @Nullable Presence presence,
+                @Nullable Assessment assessment,
+                @Nullable Severity severity,
+                @Nullable JsonNode evidence,
+                @Nullable String evidenceRationale,
+                @Nullable ObservationKeys keys) {
+            this(
+                    practiceSlug,
+                    summary,
+                    assessmentStatus,
+                    presence,
+                    assessment,
+                    severity,
+                    evidence,
+                    evidenceRationale,
+                    keys,
+                    PracticeDeliveryBehavior.DEFAULT);
+        }
         /** The parser's output shape: an observation not yet stamped with its persisted identities. */
         public ValidatedObservation(
                 String practiceSlug,
                 String summary,
-                Presence presence,
+                AssessmentStatus assessmentStatus,
+                @Nullable Presence presence,
                 @Nullable Assessment assessment,
                 @Nullable Severity severity,
                 @Nullable JsonNode evidence,
                 @Nullable String evidenceRationale) {
-            this(practiceSlug, summary, presence, assessment, severity, evidence, evidenceRationale, null);
+            this(
+                    practiceSlug,
+                    summary,
+                    assessmentStatus,
+                    presence,
+                    assessment,
+                    severity,
+                    evidence,
+                    evidenceRationale,
+                    null,
+                    PracticeDeliveryBehavior.DEFAULT);
         }
 
         public ValidatedObservation withKeys(@Nullable ObservationKeys keys) {
             return new ValidatedObservation(
-                    practiceSlug, summary, presence, assessment, severity, evidence, evidenceRationale, keys);
+                    practiceSlug,
+                    summary,
+                    assessmentStatus,
+                    presence,
+                    assessment,
+                    severity,
+                    evidence,
+                    evidenceRationale,
+                    keys,
+                    deliveryBehavior);
+        }
+
+        public @Nullable Outcome outcome() {
+            return Outcome.of(presence, assessment);
         }
 
         public @Nullable String recurrenceKey() {
@@ -332,46 +376,16 @@ public class PracticeDetectionResultParser {
         public @Nullable String occurrenceKey() {
             return keys == null ? null : keys.occurrenceKey();
         }
-
-        /** Enforces valence and severity invariants independently of model output. */
-        public ValidatedObservation coerceCoherence(boolean isDefectDetector, boolean advisoryOnly) {
-            Presence p = presence;
-            Assessment a = assessment;
-            String r = evidenceRationale;
-            if (isDefectDetector && a == Assessment.GOOD && p == Presence.PRESENT) {
-                p = Presence.NOT_APPLICABLE;
-                a = null;
-                r = "[auto-downgraded: defect-detector practice has no clean-bill-of-health observation] "
-                        + evidenceRationale;
-            }
-            if (!p.carriesValence()) {
-                a = null;
-            }
-            Severity s = a == Assessment.BAD
-                    ? (severity == null || severity == Severity.INFO ? Severity.MINOR : severity)
-                    : null;
-            if (advisoryOnly && a == Assessment.BAD && (s == Severity.CRITICAL || s == Severity.MAJOR)) {
-                s = Severity.MINOR;
-            }
-            if ("avoids-insecure-defaults-and-over-broad-permissions".equals(practiceSlug) && s == Severity.CRITICAL) {
-                s = Severity.MAJOR;
-            }
-            if (p == presence && a == assessment && s == severity) {
-                return this;
-            }
-            return new ValidatedObservation(practiceSlug, summary, p, a, s, evidence, r);
-        }
     }
 
-    /** Applies coherence rules to all observations and returns a mutable result. */
-    public static List<ValidatedObservation> coerceCoherence(
-            List<ValidatedObservation> observations, Set<String> defectDetectorSlugs) {
-        List<ValidatedObservation> out = new ArrayList<>(observations.size());
-        for (ValidatedObservation f : observations) {
-            boolean advisoryOnly = !BLOCKING_ELIGIBLE_PRACTICES.contains(f.practiceSlug());
-            out.add(f.coerceCoherence(defectDetectorSlugs.contains(f.practiceSlug()), advisoryOnly));
+    /** Validates axes without changing the practice's contextual judgment or severity. */
+    public static List<ValidatedObservation> validateCoherence(List<ValidatedObservation> observations) {
+        for (ValidatedObservation observation : observations) {
+            observation
+                    .assessmentStatus()
+                    .validate(observation.presence(), observation.assessment(), observation.severity());
         }
-        return out;
+        return new ArrayList<>(observations);
     }
 
     public record DiscardedEntry(int index, String reason) {}
@@ -401,16 +415,15 @@ public class PracticeDetectionResultParser {
      *
      * @param filePath path relative to repo root (new path, not old)
      * @param endLine  optional last line number for multi-line (GitHub only; GitLab ignores)
-     * @param recurrenceKey the stable cross-run identity inherited from the observation this note belongs to, so a
-     *     posted placement can be matched back across re-runs; {@code null} until {@link DeliveryComposer}
-     *     carries it over from the stamped observation.
+     * @param deliveryKey opaque receipt-correlation key for this exact observation, carried from its
+     *     occurrence identity by {@link DeliveryComposer}; null before server-side correlation.
      */
     public record DiffNote(
             String filePath,
             int startLine,
             @Nullable Integer endLine,
             String body,
-            @Nullable String recurrenceKey) {
+            @Nullable String deliveryKey) {
         /** The parser's pre-correlation output shape: a note with no correlation key yet. */
         public DiffNote(String filePath, int startLine, @Nullable Integer endLine, String body) {
             this(filePath, startLine, endLine, body, null);

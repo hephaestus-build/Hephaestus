@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { PracticeGroup, PracticeGroupReviewRun, PracticeGroupStanding } from "@/api/types.gen";
-import { daysBefore } from "@/components/common/story-clock";
+import { daysBefore } from "@/stories/story-clock";
 import { PracticeGroupDetailPage } from "./PracticeGroupDetailPage";
 
 const group: PracticeGroup = {
@@ -140,7 +140,7 @@ describe("PracticeGroupDetailPage", () => {
 				isLoading={false}
 			/>,
 		);
-		fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+		fireEvent.click(screen.getByRole("button", { name: /retry/iu }));
 		expect(onRetry).toHaveBeenCalledOnce();
 	});
 

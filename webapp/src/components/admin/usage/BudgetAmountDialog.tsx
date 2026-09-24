@@ -80,7 +80,7 @@ function BudgetAmountDialogContent({
 	const fieldId = useId();
 	const fxHintId = useId();
 	const errorId = useId();
-	const [value, setValue] = useState(currentValueUsd != null ? String(currentValueUsd) : "");
+	const [value, setValue] = useState(currentValueUsd == null ? "" : String(currentValueUsd));
 	// Withheld until the first submit so the field isn't red before anything was attempted.
 	const [showError, setShowError] = useState(false);
 	// The server error stays until the amount is edited, so it reads as "this value was rejected".
@@ -89,16 +89,17 @@ function BudgetAmountDialogContent({
 	const parsed = Number.parseFloat(value);
 	const isEmpty = value.trim() === "";
 	// At most two decimals: a cap is an amount of money, and the server column is NUMERIC(10,2).
-	const hasCentPrecision = /^\d*(\.\d{0,2})?$/.test(value.trim());
+	const hasCentPrecision = /^\d*(?:\.\d{0,2})?$/u.test(value.trim());
 	const isValid = !isEmpty && Number.isFinite(parsed) && parsed >= 0 && hasCentPrecision;
 	const canRemove = currentValueUsd != null;
 	// Names the remove button only when it is on screen; a subject with no cap yet has none.
 	const emptyError = canRemove ? `Enter an amount, or use ${removeLabel}.` : "Enter an amount.";
-	const localError = isEmpty
-		? emptyError
-		: !Number.isFinite(parsed) || parsed < 0
-			? "Enter an amount of $0 or more."
-			: "Use at most two decimal places.";
+	let localError = "Use at most two decimal places.";
+	if (isEmpty) {
+		localError = emptyError;
+	} else if (!Number.isFinite(parsed) || parsed < 0) {
+		localError = "Enter an amount of $0 or more.";
+	}
 	const liveServerError =
 		serverError != null && serverError !== dismissedServerError ? serverError : null;
 	const errorMessage = showError && !isValid ? localError : liveServerError;
@@ -137,7 +138,7 @@ function BudgetAmountDialogContent({
 								value={value}
 								aria-invalid={isInvalid}
 								aria-describedby={
-									[fxHint != null ? fxHintId : null, isInvalid ? errorId : null]
+									[fxHint == null ? null : fxHintId, isInvalid ? errorId : null]
 										.filter(Boolean)
 										.join(" ") || undefined
 								}

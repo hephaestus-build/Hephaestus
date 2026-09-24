@@ -136,7 +136,7 @@ public class LoginProviderService {
                 draft.registrationId() == null ? "" : draft.registrationId().trim();
         if (!registrationId.matches("^[a-z][a-z0-9-]{1,62}$")) {
             throw new ResponseStatusException(
-                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    HttpStatus.UNPROCESSABLE_CONTENT,
                     "registrationId must be 2-63 chars: lowercase letter then lowercase letters, digits, or hyphens");
         }
         if (repository.existsByRegistrationId(registrationId)) {
@@ -384,11 +384,11 @@ public class LoginProviderService {
             ServerUrlValidator.validate(value);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(
-                    HttpStatus.UNPROCESSABLE_ENTITY, "invalid base URL: " + e.getMessage(), e);
+                    HttpStatus.UNPROCESSABLE_CONTENT, "invalid base URL: " + e.getMessage(), e);
         }
         if (type == LoginProvider.ProviderType.OUTLINE && !outlineOriginPolicy.allows(value)) {
             throw new ResponseStatusException(
-                    HttpStatus.UNPROCESSABLE_ENTITY, "Outline origin is not approved by the instance operator");
+                    HttpStatus.UNPROCESSABLE_CONTENT, "Outline origin is not approved by the instance operator");
         }
         return value;
     }
@@ -424,7 +424,7 @@ public class LoginProviderService {
             for (String scope : trimmed.split("\\s+")) {
                 if (scope.equalsIgnoreCase("openid")) {
                     throw new ResponseStatusException(
-                            HttpStatus.UNPROCESSABLE_ENTITY,
+                            HttpStatus.UNPROCESSABLE_CONTENT,
                             type + " login uses the plain OAuth2 flow — the scope must not contain 'openid' (use "
                                     + replacement
                                     + ")");
@@ -460,7 +460,7 @@ public class LoginProviderService {
 
     private static String requireValue(@Nullable String value, String field) {
         if (value == null || value.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, field + " is required");
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, field + " is required");
         }
         return value.trim();
     }

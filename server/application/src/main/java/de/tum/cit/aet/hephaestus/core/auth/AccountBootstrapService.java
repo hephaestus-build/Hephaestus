@@ -4,11 +4,14 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,10 +41,18 @@ public class AccountBootstrapService {
     private final AccountRepository accountRepository;
     private final AuthEventLogger authEventLogger;
     private final String configuredToken;
+    private final Clock clock;
+    private final ApplicationEventPublisher eventPublisher;
 
     public AccountBootstrapService(
-            AccountRepository accountRepository, AuthEventLogger authEventLogger, AuthProperties authProperties) {
+            AccountRepository accountRepository,
+            AuthEventLogger authEventLogger,
+            AuthProperties authProperties,
+            Clock clock,
+            ApplicationEventPublisher eventPublisher) {
         this.accountRepository = accountRepository;
+        this.clock = clock;
+        this.eventPublisher = eventPublisher;
         this.authEventLogger = authEventLogger;
         this.configuredToken = authProperties.bootstrapToken();
         if (enabled()) {
@@ -84,6 +95,8 @@ public class AccountBootstrapService {
                 .actingAccount(accountId)
                 .details("{\"from\":\"USER\",\"to\":\"APP_ADMIN\",\"via\":\"bootstrap-token\"}")
                 .record();
+        eventPublisher.publishEvent(new AccountSecurityChangedEvent(
+                accountId, AccountSecurityChangedEvent.Kind.APP_ROLE_CHANGED, clock.instant()));
         log.warn("auth.bootstrap: accountId={} self-promoted to APP_ADMIN via break-glass token", accountId);
     }
 

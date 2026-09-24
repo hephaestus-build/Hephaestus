@@ -25,10 +25,21 @@ public class PracticeGroupTrendQueryService {
     @Transactional(readOnly = true)
     public PracticeGroupTrendDTO get(WorkspaceContext context, String groupSlug) {
         practiceGroupService.getGroup(context, groupSlug);
-        // Eligibility and the trends come from the snapshot rather than a second derivation: the group
-        // standings and this detail trend must agree on which practices count toward a group and on what
-        // each one's trend is, and two derivations would drift.
-        StandingSnapshot snapshot = standingService.getStandingSnapshot(context.id());
+        return get(groupSlug, standingService.getStandingSnapshot(context.id()));
+    }
+
+    @Transactional(readOnly = true)
+    public PracticeGroupTrendDTO get(WorkspaceContext context, Long developerId, String groupSlug) {
+        practiceGroupService.getGroup(context, groupSlug);
+        return get(groupSlug, standingService.getStandingSnapshot(context.id(), developerId));
+    }
+
+    /**
+     * Eligibility and the trends come from the snapshot rather than a second derivation: the group standings
+     * and this detail trend must agree on which practices count toward a group and on what each one's trend
+     * is, and two derivations would drift.
+     */
+    private PracticeGroupTrendDTO get(String groupSlug, StandingSnapshot snapshot) {
         List<String> eligible = snapshot.eligiblePracticesByGroup().getOrDefault(groupSlug, List.of());
         Set<String> eligibleSet = Set.copyOf(eligible);
         List<PracticeTrend> trends = snapshot.practices().values().stream()

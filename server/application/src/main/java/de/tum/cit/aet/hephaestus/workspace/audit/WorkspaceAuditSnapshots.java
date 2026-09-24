@@ -17,7 +17,6 @@ public final class WorkspaceAuditSnapshots {
     public record FeaturesSnapshot(
             @Nullable Boolean practicesEnabled,
             @Nullable Boolean mentorEnabled,
-            @Nullable Boolean achievementsEnabled,
             @Nullable Boolean leaderboardEnabled,
             @Nullable Boolean progressionEnabled,
             @Nullable Boolean leaguesEnabled,
@@ -28,7 +27,6 @@ public final class WorkspaceAuditSnapshots {
             return new FeaturesSnapshot(
                     f.getPracticesEnabled(),
                     f.getMentorEnabled(),
-                    f.getAchievementsEnabled(),
                     f.getLeaderboardEnabled(),
                     f.getProgressionEnabled(),
                     f.getLeaguesEnabled(),

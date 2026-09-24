@@ -92,13 +92,13 @@ machine-readably, and the two are kept identical. The tables say why each grant 
 | Members (`members`) | Organization | Read | Organization membership, teams, and member events |
 | Projects (`organization_projects`) | Organization | Read | Projects v2 sync and project event access; not classic repository projects |
 | Issue types (`issue_types`) | Organization | Read | Native issue-type sync, and the issue-type change that opens a practice review |
+| Checks (`checks`) | Repository | Read | The state of the checks on a pull request's head, read with the pull request and kept current by `check_suite` events |
+| Commit statuses (`statuses`) | Repository | Read | The same state from commit statuses, so non-Actions CI counts too, kept current by `status` events |
 
 #### Provisioned — read access ahead of features
 
 | Permission (manifest key) | Scope | Level | Why / roadmap |
 | --- | --- | --- | --- |
-| Checks (`checks`) | Repository | Read | Check outcomes as practice context and CI snapshots at merge: [#1403](https://github.com/hephaestus-build/Hephaestus/issues/1403), [#1338](https://github.com/hephaestus-build/Hephaestus/issues/1338) |
-| Commit statuses (`statuses`) | Repository | Read | Commit-level CI conclusions, including non-Actions CI: [#1403](https://github.com/hephaestus-build/Hephaestus/issues/1403), [#1338](https://github.com/hephaestus-build/Hephaestus/issues/1338) |
 | Actions (`actions`) | Repository | Read | Workflow/run/job signals; no workflow dispatch or cancellation: [#1403](https://github.com/hephaestus-build/Hephaestus/issues/1403), [#1338](https://github.com/hephaestus-build/Hephaestus/issues/1338) |
 | Deployments (`deployments`) | Repository | Read | Delivery cadence, outcomes, and approval history: [#1676](https://github.com/hephaestus-build/Hephaestus/issues/1676) |
 | Merge queues (`merge_queues`) | Repository | Read | Queue usage and ejection signals, never queue control: [#1677](https://github.com/hephaestus-build/Hephaestus/issues/1677) |
@@ -142,7 +142,9 @@ release that ships the feature reading it.
 | `pull_request` | Synchronize PR lifecycle and changes. |
 | `pull_request_review` | Synchronize submitted and updated reviews. |
 | `pull_request_review_comment` | Synchronize inline review comments. |
-| `pull_request_review_thread` | Track review-thread resolution. |
+| `pull_request_review_thread` | Track review-thread resolution, and when it happened. |
+| `check_suite` | Keep the head's check state current between syncs. |
+| `status` | Keep the head's check state current from commit statuses. |
 | `issues` | Synchronize issue lifecycle and content. |
 | `issue_comment` | Synchronize issue and PR conversation comments. |
 | `label` | Keep label metadata current. |
@@ -175,7 +177,7 @@ Everything GitHub offers that the table above omits. Three groups are worth nami
 
 | Not subscribed | Why |
 | --- | --- |
-| The provisioned families — `check_run`, `check_suite`, `status`, `workflow_run`, `workflow_job`, `deployment`, `deployment_status`, `deployment_review`, `merge_group`, `merge_queue_entry`, `release`, `commit_comment`, `create`, `delete`, `dependabot_alert`, `secret_scanning_alert`, `code_scanning_alert` | Their permissions are provisioned; their consumers are not built. Subscribe with the feature, not before it. |
+| The provisioned families — `check_run`, `workflow_run`, `workflow_job`, `deployment`, `deployment_status`, `deployment_review`, `merge_group`, `merge_queue_entry`, `release`, `commit_comment`, `create`, `delete`, `dependabot_alert`, `secret_scanning_alert`, `code_scanning_alert` | Their permissions are provisioned; their consumers are not built. Subscribe with the feature, not before it. `check_run` is not needed: the suite event reports its runs' conclusion. |
 | `deployment_protection_rule`, `exemption_request_push_ruleset` | Each asks Hephaestus for an approval decision, and Hephaestus observes work — it never gates it. `exemption_request_push_ruleset` also needs Administration read, which this app holds. |
 | `deploy_key`, `team_add` | Access plumbing, not practice context; team and membership sync use the events above. |
 
@@ -216,8 +218,8 @@ you have tooling for GitHub's manifest registration flow; Hephaestus does not im
   },
   "default_events": [
     "push", "pull_request", "pull_request_review", "pull_request_review_comment",
-    "pull_request_review_thread", "issues", "issue_comment", "label", "milestone",
-    "member", "repository", "discussion", "discussion_comment", "sub_issues",
+    "pull_request_review_thread", "check_suite", "status", "issues", "issue_comment", "label",
+    "milestone", "member", "repository", "discussion", "discussion_comment", "sub_issues",
     "issue_dependencies", "organization", "team", "membership", "projects_v2",
     "projects_v2_item", "projects_v2_status_update"
   ]
@@ -275,6 +277,12 @@ verify each installation's approval before enabling dependent features.
 
 Reductions and event changes apply immediately without approval. A new subscription cannot
 bypass a pending permission increase; recheck event availability after reducing permissions.
+
+An app created from an earlier manifest has to be brought up to the current one by hand under the
+app's **Permissions & events**: subscribe to `check_suite` and `status` (no approval round), and
+grant **Checks** and **Commit statuses** read if the app predates them (an approval round per
+installation). Until an installation grants them, the head's check state reaches Hephaestus only
+through the scheduled sync, which reads it with the pull request.
 
 ### Brand identity, instance routing, and consent
 

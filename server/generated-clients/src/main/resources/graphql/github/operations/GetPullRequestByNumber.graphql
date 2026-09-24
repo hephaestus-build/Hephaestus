@@ -1,0 +1,152 @@
+# One pull request by number, with the fields of the pull request node in
+# GetRepositoryPullRequests that need no pagination. Run after a webhook has stored the
+# event's own view of the pull request, so what only GraphQL carries — the closing
+# references, the head's check rollup, the review decision and merge state — is current
+# within seconds rather than at the next scheduled sync.
+
+query GetPullRequestByNumber($owner: String!, $name: String!, $number: Int!) {
+    rateLimit {
+        cost
+        limit
+        remaining
+        resetAt
+    }
+    repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+            __typename
+            id
+            fullDatabaseId
+            number
+            title
+            body
+            state
+            url
+            createdAt
+            updatedAt
+            closedAt
+            mergedAt
+            isDraft
+            locked
+            additions
+            deletions
+            changedFiles
+
+            # Review and merge state (GraphQL only)
+            reviewDecision
+            mergeStateStatus
+            mergeable
+            maintainerCanModify
+
+            # Commits count
+            # The head commit and what the checks said about it; totalCount is the commit count.
+            commits(last: 1) {
+                totalCount
+                nodes {
+                    commit {
+                        oid
+                        statusCheckRollup {
+                            state
+                        }
+                    }
+                }
+            }
+
+            # The issues GitHub records this pull request as closing; only those of this
+            # repository are stored, so each side's repository is read to tell them apart.
+            repository {
+                nameWithOwner
+            }
+            closingIssuesReferences(first: 50) {
+                nodes {
+                    number
+                    repository {
+                        nameWithOwner
+                    }
+                }
+            }
+
+            # Merge commit (available when PR is merged)
+            # All flat fields on the Commit type — zero additional rate limit cost
+            mergeCommit {
+                oid
+                message
+                messageHeadline
+                messageBody
+                url
+                authoredDate
+                committedDate
+                additions
+                deletions
+                changedFilesIfAvailable
+                author {
+                    email
+                    user {
+                        login
+                    }
+                }
+                committer {
+                    email
+                    user {
+                        login
+                    }
+                }
+            }
+
+            # Head and base refs
+            headRefName
+            baseRefName
+            headRefOid
+            baseRefOid
+
+            # Author
+            author {
+                ...ActorFields
+            }
+
+            # Merged by
+            mergedBy {
+                ...ActorFields
+            }
+
+            # Assignees
+            assignees(first: 20) {
+                totalCount
+                nodes {
+                    ...UserFields
+                }
+            }
+
+            # Requested reviewers (RequestedReviewer union: User, Team, Mannequin, Bot)
+            reviewRequests(first: 100) {
+                totalCount
+                nodes {
+                    requestedReviewer {
+                        ...RequestedReviewerFields
+                    }
+                }
+            }
+
+            # Labels
+            labels(first: 50) {
+                totalCount
+                nodes {
+                    id
+                    name
+                    description
+                    color
+                }
+            }
+
+            # Milestone
+            milestone {
+                id
+                number
+                title
+                description
+                state
+                dueOn
+                url
+            }
+        }
+    }
+}

@@ -92,18 +92,11 @@ public class TestAuthUtils {
         };
     }
 
-    /** The double-submit CSRF cookie/header pair the SPA echoes (see SpaCsrfTokenRequestHandler). */
     private static final String XSRF_COOKIE = "__Host-XSRF-TOKEN";
 
     private static final String XSRF_HEADER = "X-XSRF-TOKEN";
 
-    /**
-     * Fetches a valid double-submit CSRF token by issuing a safe GET on the public
-     * {@code /identity-providers} endpoint (resource-server chain), where {@code CsrfCookieFilter}
-     * renders the {@code XSRF-TOKEN} cookie. Replay it via {@link #withCsrf(String)} so a cookie-style
-     * state-changing request passes CSRF and is answered by the authentication layer (ADR 0017) — the
-     * canonical way to assert a protected endpoint returns 401, not the CSRF filter's 403.
-     */
+    /** Fetches a CSRF token for {@link #withCsrf(String)} without authenticating. */
     public static String fetchCsrfToken(WebTestClient client) {
         var result = client.get()
                 .uri("/identity-providers")

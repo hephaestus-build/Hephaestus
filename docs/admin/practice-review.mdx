@@ -137,9 +137,10 @@ Three independent controls answer different questions; confusing them is the mos
 
 - **Who authorizes release** — **Off**, **Review before sending**, or **Send automatically**. **Off** stops
   the review. **Review before sending** keeps measurement running and queues each new in-context feedback
-  item for a workspace owner or administrator to approve or reject. **Send automatically** lets new feedback
-  proceed without that decision, subject to the same delivery policy. Changing the setting never releases
-  an existing proposal.
+  item for a workspace owner or administrator to approve or reject; the developer's own practice pages and
+  the mentor are written regardless, because nobody but the developer reads them and only on request.
+  **Send automatically** lets new feedback onto the work proceed without that decision, subject to the same
+  delivery policy. Changing the setting never releases an existing proposal.
 - **Coverage**, under **What gets reviewed**, is one workspace-wide intersection: all or selected monitored
   repositories × all or selected people. A selected list left empty covers nobody, which is why the screen
   warns you when one is. The people side is linked human workspace membership — see
@@ -195,14 +196,16 @@ The exact refusal semantics of all three controls, and the order the delivery ga
 
 ## What costs money
 
-Every started review is a model call, and there are exactly four things standing between a
-misconfiguration and a bill.
+A review can make many model calls. These controls limit which reviews can start and what they can spend.
 
 1. **The monthly AI budget.** There are two, and they are never added together: the *instance* budget caps
    a workspace's spend on shared models you registered, and the *workspace's own* budget caps its spend on
    its own connected provider. Each pauses only the work it funds. Setting either to exactly `0` is the
    supported way to hard-stop that purse mid-month; clearing the field removes the cap.
-2. **The cooldown.** The minimum gap between reviews of the same pull or merge request.
+2. **The cooldown.** The minimum gap between reviews of the same work for the same occasion. New commits
+   become eligible for one review at the latest commit after ten quiet minutes, or after sixty minutes
+   from the first pending push. The cooldown can delay that review further. This is a grouping delay,
+   not an hourly rate cap; queue and concurrency limits also affect when a review starts.
 3. **The per-person hourly allowance** on hand-requested reviews.
 4. **Coverage and autonomy**, which decide how much work is eligible in the first place.
 

@@ -1,6 +1,6 @@
 # ADR 0003: Spring Modulith 2.0 adoption with two empirical shared kernels
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-09-17 — kernel and named-interface names corrected)
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -65,9 +65,9 @@ keep the default (CLOSED) and expose the narrow sub-package APIs via
   `practices::finding`
 - `activity` — `activity::scoring`
 
-Wire `ModulithVerificationTest` into the architecture surefire group; generate
-diagrams under `server/application/target/modulith-docs/` as CI artifacts (not committed to git —
-avoids review churn).
+The Gradle `architectureTest` tier runs the module-boundary verification. The
+[testing guide](../contributor/testing.mdx) owns the current commands;
+[ADR 0043](0043-gradle-java-build.md) supersedes the original Maven test wiring.
 
 ## Consequences
 
@@ -94,3 +94,26 @@ OPEN-or-named-interface choice; or a `@NamedInterface`-narrowed module accumulat
 enough cross-module imports to warrant flipping it to `Type.OPEN`; or Spring
 Modulith 2.x introduces a deployment-unit concept that supersedes the role-flag
 pattern in ADR 0005.
+
+## Update — 2026-09-17
+
+Corrects the names in § Decision and § Consequences; the shape decided there is unchanged.
+
+- The `gitprovider` kernel is `integration/scm` ([ADR 0015](0015-unified-integration-framework.md)).
+  `Type.OPEN` is declared on `config`, `integration`, `integration/core`, `integration/scm`,
+  `integration/scm/github`, `integration/scm/gitlab` and `integration/slack` (`package-info.java`
+  under `server/application/src/main/java/de/tum/cit/aet/hephaestus/`).
+- `practices::finding` is `practices::observation`
+  ([ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md) renamed the entity);
+  `practices` also exposes `feedback`, `feedback-approval`, `reaction` and `autonomy`.
+- `core` exposes `exception`, `security`, `proxy`, `runtime` and `event` as decided, plus `web`,
+  `webhook`, `release`, `settings-spi`, `config-audit-spi`, `auth-spi`, `auth-ratelimit`,
+  `current-account`, `worker-hub`, `worker-auth` and `worker-protocol`.
+- `workspace` exposes `context`, `authorization`, `spi` and `settings` as decided, plus `dto` and
+  `events`.
+- `activity` exposes `scoring` as decided, plus `spi`.
+- The verification entry point is `ApplicationModules.of(Application.class, …)` in
+  `server/application/src/test/java/de/tum/cit/aet/hephaestus/architecture/ModulithVerificationTest.java`;
+  there is no `HephaestusApplication` class. `Application.java`, `SecurityConfig.java`,
+  `WebConfig.java` and `OpenAPIConfiguration.java` are in the root package; `SecurityUtils` is in
+  `core/security/`.

@@ -1,7 +1,8 @@
 import type { ComponentType } from "react";
 
+import { cn } from "cn";
 import { InlineLink } from "@/components/common/InlineLink";
-import { cn } from "@/lib/utils";
+import { hasText } from "@/lib/text";
 
 export interface GroupNameProps {
 	name: string;
@@ -24,7 +25,7 @@ export function GroupName({ name, icon: Icon, pill, onOpen, className }: GroupNa
 		<span
 			className={cn(
 				"inline-flex items-center gap-1.5 font-medium",
-				pill ? [pill, "bg-transparent dark:bg-transparent"] : "text-muted-foreground",
+				hasText(pill) ? [pill, "bg-transparent dark:bg-transparent"] : "text-muted-foreground",
 				className,
 			)}
 		>

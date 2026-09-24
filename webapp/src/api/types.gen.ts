@@ -4,6 +4,12 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type AcceptPracticeReleaseRequest = {
+  choices: {
+    [key: string]: 'CURRENT' | 'OFFERED';
+  };
+};
+
 /**
  * A human-readable account identity. <code>displayName</code>/<code>email</code> are null for deleted accounts.
  */
@@ -11,53 +17,6 @@ export type AccountRef = {
   displayName?: string;
   email?: string;
   id: number;
-};
-
-/**
- * Achievement with user-specific progress information
- */
-export type Achievement = {
-  /**
-   * Category for grouping achievements
-   */
-  category: 'pull_requests' | 'commits' | 'communication' | 'issues' | 'milestones';
-  /**
-   * Unique identifier for the achievement
-   */
-  id: AchievementId;
-  /**
-   * Whether the achievement should be hidden until unlocked
-   */
-  isHidden?: boolean;
-  /**
-   * Parent achievement in progression chain
-   */
-  parent?: string;
-  /**
-   * The structured progress data based on the achievements evaluator
-   */
-  progressData: BinaryAchievementProgress | LinearAchievementProgress;
-  /**
-   * Visual level tier/rarity for badge styling
-   */
-  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic';
-  /**
-   * Current status of the achievement for this user
-   */
-  status: 'locked' | 'available' | 'unlocked' | 'hidden';
-  /**
-   * When the achievement was unlocked, absent while it is still locked
-   */
-  unlockedAt?: Date;
-};
-
-export type AchievementId = 'commit.common.1' | 'commit.common.2' | 'commit.epic' | 'commit.legendary' | 'commit.mythic' | 'commit.rare' | 'commit.special.atomic_changes' | 'commit.special.brute_force' | 'commit.special.cross_boundary' | 'commit.special.itsy_bitsy' | 'commit.uncommon.1' | 'commit.uncommon.2' | 'issue.close.common.1' | 'issue.close.common.2' | 'issue.close.epic' | 'issue.close.legendary' | 'issue.close.rare' | 'issue.close.uncommon' | 'issue.open.common.1' | 'issue.open.common.2' | 'issue.open.epic' | 'issue.open.legendary' | 'issue.open.rare' | 'issue.open.uncommon' | 'issue.special.hive_mind' | 'issue.special.necromancer' | 'issue.special.oracle' | 'milestone.all_epic' | 'milestone.all_legendary' | 'milestone.all_rare' | 'milestone.first_action' | 'milestone.long_time_return' | 'milestone.night_owl' | 'milestone.polyglot' | 'pr.merged.common.1' | 'pr.merged.common.2' | 'pr.merged.epic' | 'pr.merged.legendary' | 'pr.merged.rare' | 'pr.merged.uncommon' | 'pr.special.speedster' | 'review.common.1' | 'review.common.2' | 'review.epic' | 'review.legendary' | 'review.mythic' | 'review.rare' | 'review.uncommon.1' | 'review.uncommon.2';
-
-/**
- * Polymorphic progress data
- */
-export type AchievementProgress = {
-  type: string;
 };
 
 export type AdminAccountView = {
@@ -142,7 +101,6 @@ export type AdminWorkspaceView = {
   displayName: string;
   id: number;
   memberCount: number;
-  ownerAccountId?: number;
   ownerLogin?: string;
   providerType?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
   status: string;
@@ -221,7 +179,7 @@ export type AgentJob = {
    */
   deliveryCommentId?: string;
   /**
-   * Delivery status: null = not applicable, PENDING = awaiting delivery, DELIVERED = posted, FAILED = delivery error
+   * Result-processing status: null = not applicable, PENDING = awaiting processing, DELIVERED = processing finished, FAILED = processing error. Processing may include delivery; this status alone does not establish feedback publication.
    */
   deliveryStatus?: 'PENDING' | 'DELIVERED' | 'FAILED';
   /**
@@ -311,6 +269,16 @@ export type AgentJob = {
 };
 
 /**
+ * One answer; exactly the field matching the question's type is set.
+ */
+export type Answer = {
+  choices?: Array<string>;
+  questionId: string;
+  rating?: number;
+  text?: string;
+};
+
+/**
  * Every practice's answer for one artifact, and the occurrences those answers rest on
  */
 export type ArtifactTrace = {
@@ -373,6 +341,7 @@ export type AuthEventView = {
   occurredAt: Date;
   result: string;
   userAgent?: string;
+  viewedUserId?: number;
   workspaceId?: number;
 };
 
@@ -455,13 +424,13 @@ export type AvailableLlmModel = {
    */
   pricingMode: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
+   * Reasoning effort requested of the model; null sends none, the provider's default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * SHARED (instance catalog) or WORKSPACE (your own provider)
    */
   scope: 'SHARED' | 'WORKSPACE';
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning: boolean;
 };
 
 /**
@@ -476,14 +445,6 @@ export type BackfillSummary = {
    * Integration-defined backfill state string
    */
   state: string;
-};
-
-/**
- * Binary progress indicating unlocked state
- */
-export type BinaryAchievementProgress = Omit<AchievementProgress, 'type'> & {
-  unlocked: boolean;
-  type: 'BinaryAchievementProgress';
 };
 
 /**
@@ -535,7 +496,7 @@ export type CatalogGroupPracticeAction = {
  * The catalog entry a workspace copy came from and whether it differs now
  */
 export type CatalogOrigin = {
-  link: 'IN_SYNC' | 'LOCALLY_EDITED' | 'UPDATE_AVAILABLE';
+  link: 'IN_SYNC' | 'LOCALLY_EDITED' | 'UPDATE_AVAILABLE' | 'DECLINED';
   /**
    * Slug of the catalog entry this copy was made from
    */
@@ -822,9 +783,15 @@ export type ConnectionSyncStatus = {
 
 export type ConsentStatus = {
   completed: boolean;
-  noticeText: string;
+  /**
+   * Version of the first-login wording the client must be rendering
+   */
   noticeVersion: string;
   participateInResearch: boolean;
+  /**
+   * Organisation running the optional research programme, or null when this instance runs none
+   */
+  researchOrganization?: string;
 };
 
 /**
@@ -928,13 +895,13 @@ export type CreateLlmModelRequest = {
    */
   maxOutputTokens?: number;
   /**
+   * Reasoning effort to request; null sends none, so the provider's own default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * Optional internal slug; generated from displayName when omitted
    */
   slug?: string;
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning?: boolean;
   /**
    * Upstream provider model id
    */
@@ -1014,6 +981,7 @@ export type CreatePracticeRequest = {
    * Practice review criteria
    */
   criteria: string;
+  deliveryBehavior?: PracticeDeliveryBehavior;
   /**
    * Practice group to add the practice to. Omit or set to null for Unassigned.
    */
@@ -1101,6 +1069,7 @@ export type CreateReviewSweepScheduleRequest = {
 export type CreateSurvey = {
   description: string;
   endsAt?: Date;
+  purpose: 'PRODUCT' | 'RESEARCH';
   questions: Array<Question>;
   startsAt: Date;
   title: string;
@@ -1186,13 +1155,13 @@ export type CreateWorkspaceLlmModelRequest = {
    */
   pricingMode?: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
+   * Reasoning effort to request; null sends none, so the provider's own default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * Optional internal slug; generated from displayName when omitted
    */
   slug?: string;
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning?: boolean;
   /**
    * Upstream provider model id
    */
@@ -1296,6 +1265,7 @@ export type CuratedPracticeDefinition = {
   automatedReviewValidation: PracticeAutomatedReviewValidation;
   bindings: Array<PracticeBinding>;
   criteria: string;
+  deliveryBehavior: PracticeDeliveryBehavior;
   groupSlug?: string;
   name: string;
   precomputeScript?: string;
@@ -1312,12 +1282,17 @@ export type CuratedPracticeRequest = {
    */
   automatedReviewPolicy?: PracticeAutomatedReviewPolicy;
   /**
+   * Explicit intent to change the gate or the person judged
+   */
+  bindingChanges?: Array<'APPLIES_WHEN' | 'SUBJECT'>;
+  /**
    * The one occasion this practice is reviewed on; the kind of work is read off the signals
    */
   bindings: [
     PracticeBinding
   ];
   criteria: string;
+  deliveryBehavior?: PracticeDeliveryBehavior;
   groupSlug?: string;
   name: string;
   precomputeScript?: string;
@@ -1345,8 +1320,6 @@ export type CurrentUserView = {
   hasGitLabIdentity?: boolean;
   id?: number;
   identityProvider?: string;
-  impersonating?: boolean;
-  impersonatorId?: number;
   linkedProviders?: Array<LinkedProvider>;
   primaryEmail?: string;
   profileUrl?: string;
@@ -1381,7 +1354,7 @@ export type DeliveryPolicyTrace = {
   admittedRevision: number;
   allowed: boolean;
   checks: Array<DeliveryPolicyTraceCheck>;
-  decisiveReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  decisiveReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
   evaluatedAt: Date;
   evaluatedRevision?: number;
   facts: DeliveryPolicyFactsSnapshot;
@@ -1401,17 +1374,17 @@ export type DeliveryPolicyTraceCheck = {
  */
 export type DeveloperPracticeSummary = {
   /**
-   * Number of BAD (problem) observations
-   */
-  badCount: number;
-  /**
-   * Number of GOOD (strength) observations
-   */
-  goodCount: number;
-  /**
    * Timestamp of most recent observation
    */
   lastObservedAt?: Date;
+  /**
+   * Number of negative outcomes
+   */
+  negativeCount: number;
+  /**
+   * Number of positive outcomes
+   */
+  positiveCount: number;
   /**
    * Practice name
    */
@@ -1426,6 +1399,28 @@ export type DeveloperPracticeSummary = {
   totalObservations: number;
 };
 
+export type EmailTestRequest = {
+  /**
+   * the mailbox to send the test email to; blank means the caller's own verified address
+   */
+  to?: string;
+};
+
+export type EmailTestResponse = {
+  /**
+   * the accepted <code>Message-ID</code>, only for <code>SENT</code>; search for it in the relay's log
+   */
+  messageId?: string;
+  /**
+   * what became of the test email; <code>SENT</code> is the only success
+   */
+  outcome: 'SENT' | 'EXPIRED' | 'NOT_CONFIGURED' | 'SILENT_MODE' | 'NO_RECIPIENT' | 'UNSUBSCRIBED' | 'INVALID_ADDRESS' | 'REJECTED' | 'UNAVAILABLE' | 'RATE_LIMITED';
+  /**
+   * the address it went to, or <code>null</code> when there was no recipient to resolve
+   */
+  to?: string;
+};
+
 /**
  * A verified quote and its exact source location
  */
@@ -1435,6 +1430,7 @@ export type EvidenceCitation = {
   path: string;
   quote?: string;
   quoteRedacted: boolean;
+  revision?: string;
   side?: 'OLD' | 'NEW';
   sourceKind: string;
   startLine: number;
@@ -1531,6 +1527,15 @@ export type FeatureFlags = {
   NOTIFICATION_ACCESS?: boolean;
 };
 
+/**
+ * Who produced a record, as an administrator sees it; absent once the account is erased.
+ */
+export type FeedbackAccountRef = {
+  displayName: string;
+  email?: string;
+  id: number;
+};
+
 export type FeedbackApproval = {
   actorAccountId?: number;
   decidedAt?: Date;
@@ -1541,19 +1546,24 @@ export type FeedbackApproval = {
 };
 
 export type FeedbackItem = {
-  accountId: number;
-  createdAt?: Date;
+  account?: FeedbackAccountRef;
+  appVersion?: string;
+  createdAt: Date;
   id: string;
-  kind: 'FEEDBACK' | 'BUG';
+  kind: 'IDEA' | 'BUG' | 'FEEDBACK';
   message: string;
   pagePath?: string;
-  workspaceId?: number;
+  resolvedAt?: Date;
+  resolvedBy?: FeedbackAccountRef;
+  userAgent?: string;
+  workspace?: FeedbackWorkspaceRef;
 };
 
 export type FeedbackRequest = {
-  kind: 'FEEDBACK' | 'BUG';
+  kind: 'IDEA' | 'BUG' | 'FEEDBACK';
   message: string;
   pagePath?: string;
+  userAgent?: string;
 };
 
 /**
@@ -1608,9 +1618,29 @@ export type FeedbackSourceCount = {
   workKind: string;
 };
 
+export type FeedbackTriage = {
+  resolved: boolean;
+};
+
+/**
+ * The workspace a record was submitted from; absent for instance-level submissions.
+ */
+export type FeedbackWorkspaceRef = {
+  displayName: string;
+  id: number;
+  slug: string;
+};
+
 export type FirstLoginConsent = {
   noticeVersion: string;
-  participateInResearch: boolean;
+  /**
+   * Required when the instance names a research organisation, omitted otherwise
+   */
+  participateInResearch?: boolean;
+  /**
+   * The organisation the research question named on screen; omitted when it asked none
+   */
+  researchOrganization?: string;
   termsAccepted: boolean;
 };
 
@@ -1809,11 +1839,6 @@ export type IdentityView = {
   providerType?: string;
   subject?: string;
   username?: string;
-};
-
-export type ImpersonateRequest = {
-  reason: string;
-  targetAccountId: number;
 };
 
 /**
@@ -2026,6 +2051,18 @@ export type LabelInfo = {
 };
 
 /**
+ * A published release. <code>schemaMigrations</code> is the flag the release workflow publishes for
+ *  that one release and is absent when the notes carry none; it says nothing about releases
+ *  between the running one and this one.
+ */
+export type LatestRelease = {
+  notesUrl: string;
+  publishedAt: Date;
+  schemaMigrations?: boolean;
+  version: string;
+};
+
+/**
  * A ranked entry in the leaderboard (individual or team)
  */
 export type LeaderboardEntry = {
@@ -2102,15 +2139,6 @@ export type LeaderboardEntry = {
 export type LeagueChange = {
   leaguePointsChange: number;
   login: string;
-};
-
-/**
- * Linear progress with current and target counts
- */
-export type LinearAchievementProgress = Omit<AchievementProgress, 'type'> & {
-  current: number;
-  target: number;
-  type: 'LinearAchievementProgress';
 };
 
 /**
@@ -2216,13 +2244,13 @@ export type LlmModel = {
    */
   maxOutputTokens?: number;
   /**
+   * Reasoning effort requested of the model; null sends none, the provider's default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * Unique slug within the connection
    */
   slug: string;
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning: boolean;
   /**
    * Last update timestamp
    */
@@ -2375,6 +2403,23 @@ export type LoginProviderView = {
   updatedAt: Date;
 };
 
+export type NotificationPreferences = {
+  /**
+   * This instance has an email transport and sender configured
+   */
+  deliveryConfigured: boolean;
+  /**
+   * The account has an active verified email address
+   */
+  emailAvailable: boolean;
+  etag: string;
+  productFeedback: boolean;
+  productSurveys: boolean;
+  researchSurveys: boolean;
+  surveySummaries: boolean;
+  workspaceAlerts: boolean;
+};
+
 /**
  * Full practice observation detail including delivered feedback and evidence
  */
@@ -2392,11 +2437,12 @@ export type ObservationDetail = {
    */
   artifactUrl?: string;
   /**
-   * Assessment: GOOD or BAD; null when the presence carries no direction (NOT_APPLICABLE, INCONCLUSIVE)
+   * Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED
    */
   assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -2441,6 +2487,10 @@ export type ObservationDetail = {
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   /**
+   * Derived from presence and contextual behavior assessment; null unless assessed
+   */
+  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
+  /**
    * Practice name
    */
   practiceName: string;
@@ -2449,15 +2499,15 @@ export type ObservationDetail = {
    */
   practiceSlug: string;
   /**
-   * Presence: PRESENT, ABSENT, NOT_APPLICABLE, or INCONCLUSIVE
+   * PRESENT or ABSENT only when ASSESSED
    */
-  presence: 'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE';
+  presence?: 'PRESENT' | 'ABSENT';
   /**
    * Cross-run locus key; null when continuity is unavailable
    */
   recurrenceKey?: string;
   /**
-   * Severity level (null unless assessment is BAD)
+   * Severity level (null unless outcome is NEGATIVE)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   /**
@@ -2499,11 +2549,12 @@ export type ObservationList = {
    */
   artifactKind: string;
   /**
-   * Assessment: GOOD or BAD; null when the presence carries no direction (NOT_APPLICABLE, INCONCLUSIVE)
+   * Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED
    */
   assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -2519,6 +2570,10 @@ export type ObservationList = {
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   /**
+   * Derived from presence and contextual behavior assessment; null unless assessed
+   */
+  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
+  /**
    * Practice name
    */
   practiceName: string;
@@ -2527,11 +2582,11 @@ export type ObservationList = {
    */
   practiceSlug: string;
   /**
-   * Presence: PRESENT, ABSENT, NOT_APPLICABLE, or INCONCLUSIVE
+   * PRESENT or ABSENT only when ASSESSED
    */
-  presence: 'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE';
+  presence?: 'PRESENT' | 'ABSENT';
   /**
-   * Severity level (null unless assessment is BAD)
+   * Severity level (null unless outcome is NEGATIVE)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   /**
@@ -2540,12 +2595,18 @@ export type ObservationList = {
   summary: string;
 };
 
+export type OptionCount = {
+  count: number;
+  value: string;
+};
+
 export type OutcomeVector = {
   commissionProblems: number;
   demonstratedStrengths: number;
   notApplicable: number;
   omissionGaps: number;
   safeAvoidances: number;
+  undetermined: number;
 };
 
 /**
@@ -2688,48 +2749,6 @@ export type OverviewWindow = {
   until: Date;
 };
 
-export type PageAgentJob = {
-  content?: Array<AgentJob>;
-  empty?: boolean;
-  first?: boolean;
-  last?: boolean;
-  number?: number;
-  numberOfElements?: number;
-  pageable?: PageableObject;
-  size?: number;
-  sort?: SortObject;
-  totalElements?: number;
-  totalPages?: number;
-};
-
-export type PageAuthEventView = {
-  content?: Array<AuthEventView>;
-  empty?: boolean;
-  first?: boolean;
-  last?: boolean;
-  number?: number;
-  numberOfElements?: number;
-  pageable?: PageableObject;
-  size?: number;
-  sort?: SortObject;
-  totalElements?: number;
-  totalPages?: number;
-};
-
-export type PageConfigAuditEntryView = {
-  content?: Array<ConfigAuditEntryView>;
-  empty?: boolean;
-  first?: boolean;
-  last?: boolean;
-  number?: number;
-  numberOfElements?: number;
-  pageable?: PageableObject;
-  size?: number;
-  sort?: SortObject;
-  totalElements?: number;
-  totalPages?: number;
-};
-
 export type PageMetadata = {
   number?: number;
   size?: number;
@@ -2737,40 +2756,145 @@ export type PageMetadata = {
   totalPages?: number;
 };
 
-export type PageObservationList = {
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoAgentJob = {
+  content?: Array<AgentJob>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoAuthEventView = {
+  content?: Array<AuthEventView>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoChatThreadSummary = {
+  content?: Array<ChatThreadSummary>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoConfigAuditEntryView = {
+  content?: Array<ConfigAuditEntryView>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoObservationList = {
   content?: Array<ObservationList>;
   empty?: boolean;
   first?: boolean;
   last?: boolean;
   number?: number;
   numberOfElements?: number;
-  pageable?: PageableObject;
+  pageable?: Pageable;
   size?: number;
-  sort?: SortObject;
+  sort?: Sort;
   totalElements?: number;
   totalPages?: number;
 };
 
-export type PageSyncJob = {
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoSyncJob = {
   content?: Array<SyncJob>;
   empty?: boolean;
   first?: boolean;
   last?: boolean;
   number?: number;
   numberOfElements?: number;
-  pageable?: PageableObject;
+  pageable?: Pageable;
   size?: number;
-  sort?: SortObject;
+  sort?: Sort;
   totalElements?: number;
   totalPages?: number;
 };
 
-export type PageableObject = {
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoUserViewUser = {
+  content?: Array<UserViewUser>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+export type Pageable = {
   offset?: number;
   pageNumber?: number;
   pageSize?: number;
   paged?: boolean;
-  sort?: SortObject;
+  sort?: Sort;
   unpaged?: boolean;
 };
 
@@ -2794,19 +2918,25 @@ export type PagedModelReviewRunSummary = {
   page?: PageMetadata;
 };
 
-export type PagedModelSubmission = {
-  content?: Array<Submission>;
+export type PagedModelSurvey = {
+  content?: Array<Survey>;
   page?: PageMetadata;
 };
 
-export type PagedModelSurvey = {
-  content?: Array<Survey>;
+export type PagedModelSurveyResponse = {
+  content?: Array<SurveyResponse>;
   page?: PageMetadata;
 };
 
 export type PagedModelTracedArtifact = {
   content?: Array<TracedArtifact>;
   page?: PageMetadata;
+};
+
+export type ParticipationCounts = {
+  declined: number;
+  invited: number;
+  responded: number;
 };
 
 /**
@@ -2850,6 +2980,7 @@ export type Practice = {
    * Practice review criteria
    */
   criteria: string;
+  deliveryBehavior: PracticeDeliveryBehavior;
   /**
    * Position within its group (lowest first); ties broken by name
    */
@@ -2973,7 +3104,25 @@ export type PracticeBinding = {
   /**
    * Whose conduct this review judges; omit for AUTHOR
    */
-  subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER';
+  subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
+};
+
+/**
+ * A practice as its author wrote it.
+ *
+ *  <p><code>artifactKind</code> is not a field. It is read off {@link de.tum.cit.aet.hephaestus.practices.PracticeDefinition#bindings #bindings()}, whose signal names carry
+ *  it as a prefix, so there is nothing for a second statement of it to disagree with.
+ */
+export type PracticeDefinition = {
+  automatedReviewPolicy: PracticeAutomatedReviewPolicy;
+  bindings: Array<PracticeBinding>;
+  criteria: string;
+  deliveryBehavior: PracticeDeliveryBehavior;
+  groupSlug?: string;
+  name: string;
+  precomputeScript?: string;
+  whatGoodLooksLike?: string;
+  whyItMatters?: string;
 };
 
 /**
@@ -2985,6 +3134,15 @@ export type PracticeDefinitionOptions = {
    */
   sourceContractVersion: string;
   workTypes: Array<PracticeWorkTypeDefinitionOptions>;
+};
+
+/**
+ * Delivery choices declared by the practice author, not inferred from its slug.
+ */
+export type PracticeDeliveryBehavior = {
+  overlapGroup?: string;
+  redundantToSlug?: string;
+  summaryOnly: boolean;
 };
 
 /**
@@ -3261,6 +3419,27 @@ export type PracticeProfileOverview = {
   window: OverviewWindow;
 };
 
+export type PracticeReleaseField = {
+  conflict: boolean;
+  field: 'NAME' | 'BINDINGS' | 'CRITERIA' | 'PRECOMPUTE_SCRIPT' | 'AUTOMATED_REVIEW_POLICY' | 'WHY_IT_MATTERS' | 'WHAT_GOOD_LOOKS_LIKE' | 'GROUP_SLUG' | 'DELIVERY_BEHAVIOR';
+  offeredChanged: boolean;
+};
+
+/**
+ * One offer and the exact three versions an administrator reviews before deciding.
+ */
+export type PracticeReleaseProposal = {
+  base: PracticeDefinition;
+  baseSource: 'EXACT_ADOPTION' | 'BUNDLED_DIGEST_MATCH' | 'BUNDLED_FINGERPRINT_MATCH' | 'CURRENT_DEFINITION';
+  current: PracticeDefinition;
+  currentRevision?: number;
+  etag: string;
+  fields: Array<PracticeReleaseField>;
+  offered: PracticeDefinition;
+  offeredDigest: string;
+  slug: string;
+};
+
 export type PracticeReviewCoveragePreview = {
   /**
    * Effective coverage before the proposed change
@@ -3418,6 +3597,10 @@ export type PracticeStandingObservation = {
    */
   deliveredFeedback?: string;
   /**
+   * What this observation says about the developer: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out. The lists only separate positive from negative, so this is what tells the two kinds of each apart.
+   */
+  kind: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP';
+  /**
    * Where in the work, e.g. "FrameRecorder.swift:212", when known
    */
   locator?: string;
@@ -3430,9 +3613,9 @@ export type PracticeStandingObservation = {
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   /**
-   * What this observation says about the developer: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out. The lists only separate positive from negative, so this is what tells the two kinds of each apart.
+   * Positive or negative consequence of this assessed observation
    */
-  outcome: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP';
+  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   /**
    * Identifier of the reviewed work
    */
@@ -3529,7 +3712,7 @@ export type PracticeTraceEntry = {
   /**
    * Why prepared feedback was withheld. Non-empty with observations present means we measured and deliberately said nothing.
    */
-  withheldReasons: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
+  withheldReasons: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
 };
 
 export type PracticeTrend = {
@@ -3561,6 +3744,7 @@ export type PracticeWorkTypeDefinitionOptions = {
    * The occasions a practice on this work type can be bound to. A review somebody asks for by hand is not among them — see manualReviewSignal.
    */
   signals: Array<PracticeSignalOption>;
+  subjectRoles: Array<'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER'>;
   supportedAutomatedReviewModes: Array<'LANGUAGE_MODEL' | 'NONE'>;
 };
 
@@ -3926,11 +4110,23 @@ export type PullRequestInfo = {
 };
 
 export type Question = {
+  allowOther: boolean;
+  highLabel?: string;
   id: string;
+  lowLabel?: string;
   options: Array<string>;
   prompt: string;
-  required?: boolean;
-  type: 'TEXT' | 'SINGLE_CHOICE' | 'RATING';
+  required: boolean;
+  type: 'TEXT' | 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'RATING' | 'NPS';
+};
+
+export type QuestionSummary = {
+  answered: number;
+  average?: number;
+  counts: Array<OptionCount>;
+  other?: number;
+  questionId: string;
+  score?: number;
 };
 
 /**
@@ -3981,6 +4177,45 @@ export type RegisterSlackChannelRequest = {
    * Slack public/private channel id (stable C… or G… id)
    */
   slackChannelId: string;
+};
+
+/**
+ * The running release and what the last update check found. Discovery is advisory: nothing here
+ *  verifies an artifact or performs an upgrade.
+ */
+export type ReleaseStatus = {
+  /**
+   * why the last attempt did not complete, when <code>status</code> is <code>FAILED</code>
+   */
+  failure?: 'RATE_LIMITED' | 'UNAVAILABLE' | 'MALFORMED';
+  /**
+   * when a check was last started, on any outcome
+   */
+  lastAttempt?: Date;
+  /**
+   * when a check last completed, which is when <code>latest</code> was observed
+   */
+  lastSuccess?: Date;
+  /**
+   * the newest published release as of <code>lastSuccess</code>
+   */
+  latest?: LatestRelease;
+  /**
+   * when the next automatic check is due
+   */
+  nextCheck?: Date;
+  /**
+   * the wait GitHub named on a rate limit; a manual check before it is refused
+   */
+  retryUntil?: Date;
+  /**
+   * the identity this process reports
+   */
+  running: RunningRelease;
+  /**
+   * the verdict an administrator reads first
+   */
+  status: 'DISABLED' | 'NOT_APPLICABLE' | 'NEVER_CHECKED' | 'CURRENT' | 'UPDATE_AVAILABLE' | 'FAILED';
 };
 
 /**
@@ -4053,6 +4288,11 @@ export type RepositoryInfo = {
 
 export type ResearchConsent = {
   granted: boolean;
+  noticeVersion: string;
+  /**
+   * The organisation this control named on screen
+   */
+  researchOrganization?: string;
 };
 
 /**
@@ -4147,7 +4387,7 @@ export type ReviewBoundFeedback = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
 };
 
 /**
@@ -4155,11 +4395,12 @@ export type ReviewBoundFeedback = {
  */
 export type ReviewBoundObservation = {
   /**
-   * Assessment: GOOD or BAD (null when NOT_APPLICABLE)
+   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -4172,15 +4413,19 @@ export type ReviewBoundObservation = {
    * Render order within the feedback (lower renders earlier)
    */
   ordinal: number;
+  /**
+   * Derived from presence and contextual behavior assessment; null unless assessed
+   */
+  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   practiceName: string;
   practiceSlug: string;
-  presence: 'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE';
+  presence?: 'PRESENT' | 'ABSENT';
   /**
    * Whether the observation leads the feedback or reinforces it
    */
   role: 'PRIMARY' | 'SUPPORTING';
   /**
-   * Severity band (null unless assessment is BAD)
+   * Severity band (null unless outcome is NEGATIVE)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   summary: string;
@@ -4224,7 +4469,7 @@ export type ReviewFeedback = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
 };
 
 /**
@@ -4298,7 +4543,7 @@ export type ReviewFeedbackDetail = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
   /**
    * Cross-run continuity key tying successive deliveries together
    */
@@ -4338,11 +4583,12 @@ export type ReviewObservation = {
   agentJobId: string;
   artifact: ReviewedWorkRef;
   /**
-   * Assessment: GOOD or BAD (null when NOT_APPLICABLE)
+   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -4359,15 +4605,19 @@ export type ReviewObservation = {
    * What occasioned the measurement. BACKFILL came from a confirmed campaign over work that already existed, so it is not a point on the live trend line.
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
+  /**
+   * Derived from presence and contextual behavior assessment; null unless assessed
+   */
+  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   practiceName: string;
   practiceSlug: string;
-  presence: 'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE';
+  presence?: 'PRESENT' | 'ABSENT';
   /**
    * Cross-run locus key; null when continuity is unavailable
    */
   recurrenceKey?: string;
   /**
-   * Severity band (null unless assessment is BAD)
+   * Severity band (null unless outcome is NEGATIVE)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   /**
@@ -4382,15 +4632,15 @@ export type ReviewObservation = {
  */
 export type ReviewObservationCounts = {
   /**
-   * Practices that looked at the evidence and could not settle the question either way; reported apart from notApplicable because one says there was nothing here to judge and the other says we could not tell
-   */
-  inconclusive: number;
-  /**
    * Practices whose subject did not occur in this work
    */
   notApplicable: number;
   problems: number;
   strengths: number;
+  /**
+   * Practices that looked at the evidence and could not settle the question either way; reported apart from notApplicable because one says there was nothing here to judge and the other says we could not tell
+   */
+  undetermined: number;
 };
 
 /**
@@ -4400,11 +4650,12 @@ export type ReviewObservationDetail = {
   agentJobId: string;
   artifact: ReviewedWorkRef;
   /**
-   * Assessment: GOOD or BAD (null when NOT_APPLICABLE)
+   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
   assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   evidence?: ObservationEvidence;
@@ -4419,19 +4670,23 @@ export type ReviewObservationDetail = {
   group?: ReviewPracticeGroup;
   id: string;
   observedAt: Date;
+  /**
+   * Derived from presence and contextual behavior assessment; null unless assessed
+   */
+  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
   practiceName: string;
   /**
    * Criteria revision selected as of job start, when available
    */
   practiceRevisionId?: number;
   practiceSlug: string;
-  presence: 'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE';
+  presence?: 'PRESENT' | 'ABSENT';
   /**
    * Cross-run locus key; null when continuity is unavailable
    */
   recurrenceKey?: string;
   /**
-   * Severity band (null unless assessment is BAD)
+   * Severity band (null unless outcome is NEGATIVE)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   /**
@@ -4687,6 +4942,34 @@ export type RevokeSessionsResult = {
   revoked?: number;
 };
 
+/**
+ * Deployment-reported identity: the values the verified lock env handed this process, not an
+ *  observation of the container. <code>commit</code> and <code>image</code> are absent outside a lock-driven
+ *  deployment.
+ */
+export type RunningRelease = {
+  /**
+   * what kind of build that version names
+   */
+  channel: 'RELEASE' | 'COMMIT' | 'DEVELOPMENT';
+  /**
+   * the source commit the lock names
+   */
+  commit?: string;
+  /**
+   * the digest reference this container was started from
+   */
+  image?: string;
+  /**
+   * the runtime roles this process booted with
+   */
+  roles: Array<'SERVER' | 'WORKER' | 'WEBHOOK'>;
+  /**
+   * the version the deployment passed as <code>APP_VERSION</code>
+   */
+  version: string;
+};
+
 export type SessionView = {
   current?: boolean;
   expiresAt?: Date;
@@ -4831,42 +5114,79 @@ export type SlackUserWorkspacePreferences = {
   workspaceSlug: string;
 };
 
-export type SortObject = {
+export type Sort = {
   empty?: boolean;
   sorted?: boolean;
   unsorted?: boolean;
 };
 
-export type Submission = {
-  accountId: number;
-  answers?: {
-    [key: string]: string;
-  };
-  createdAt?: Date;
-  disposition: 'RESPONDED' | 'DISMISSED';
-  id: string;
-  questions: Array<Question>;
-  surveyId: string;
-  surveyTitle: string;
-  workspaceId?: number;
-};
-
 export type SubmitSurvey = {
-  answers: {
-    [key: string]: string;
-  };
+  answers: Array<Answer>;
 };
 
 export type Survey = {
   active: boolean;
-  createdAt?: Date;
+  createdAt: Date;
+  createdBy?: FeedbackAccountRef;
   description: string;
   endsAt?: Date;
   id: string;
+  participation: ParticipationCounts;
+  purpose: 'PRODUCT' | 'RESEARCH';
   questions: Array<Question>;
+  researchOrganization?: string;
   startsAt: Date;
   title: string;
-  workspaceId?: number;
+  workspace?: FeedbackWorkspaceRef;
+};
+
+export type SurveyEdit = {
+  active: boolean;
+  description: string;
+  endsAt?: Date;
+  startsAt: Date;
+  title: string;
+};
+
+export type SurveyEmailInvitationRequest = {
+  sendReminder?: boolean;
+};
+
+/**
+ * Counts refer to email requests, not in-app invitations or responses. Accepted means SMTP relay acceptance.
+ */
+export type SurveyEmailInvitationSummary = {
+  accepted: number;
+  alreadyRequested: number;
+  deliveryConfigured: boolean;
+  eligible: number;
+  queued: number;
+  remaining: number;
+};
+
+export type SurveyInvitation = {
+  description: string;
+  endsAt?: Date;
+  id: string;
+  purpose: 'PRODUCT' | 'RESEARCH';
+  questions: Array<Question>;
+  researchOrganization?: string;
+  seen: boolean;
+  title: string;
+};
+
+export type SurveyResponse = {
+  account?: FeedbackAccountRef;
+  answers?: Array<Answer>;
+  decidedAt: Date;
+  id: string;
+  status: 'INVITED' | 'RESPONDED' | 'DECLINED';
+  workspace?: FeedbackWorkspaceRef;
+};
+
+export type SurveySummary = {
+  participation: ParticipationCounts;
+  questions: Array<QuestionSummary>;
 };
 
 /**
@@ -5335,6 +5655,10 @@ export type UpdateLlmModelPriceRequest = {
  */
 export type UpdateLlmModelRequest = {
   /**
+   * True clears the reasoning effort, so the provider's own default applies
+   */
+  clearReasoningEffort?: boolean;
+  /**
    * Context window in tokens
    */
   contextWindow?: number;
@@ -5351,9 +5675,9 @@ export type UpdateLlmModelRequest = {
    */
   maxOutputTokens?: number;
   /**
-   * Whether the model supports a reasoning mode
+   * Reasoning effort to request; null keeps the current one (see clearReasoningEffort)
    */
-  supportsReasoning?: boolean;
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
 };
 
 /**
@@ -5380,6 +5704,14 @@ export type UpdateLoginProviderRequest = {
   displayName?: string;
   enabled?: boolean;
   scopes?: string;
+};
+
+export type UpdateNotificationPreferences = {
+  productFeedback: boolean;
+  productSurveys: boolean;
+  researchSurveys: boolean;
+  surveySummaries: boolean;
+  workspaceAlerts: boolean;
 };
 
 /**
@@ -5441,6 +5773,10 @@ export type UpdatePracticeRequest = {
    */
   automatedReviewPolicy?: PracticeAutomatedReviewPolicy;
   /**
+   * Explicit intent to change the gate or the person judged
+   */
+  bindingChanges?: Array<'APPLIES_WHEN' | 'SUBJECT'>;
+  /**
    * Replacement occasion and its evidence; omit to leave it unchanged
    */
   bindings?: [
@@ -5454,6 +5790,7 @@ export type UpdatePracticeRequest = {
    * Practice review criteria
    */
   criteria?: string;
+  deliveryBehavior?: PracticeDeliveryBehavior;
   /**
    * Catalog placement to apply with the definition update; omit to leave unchanged
    */
@@ -5596,10 +5933,6 @@ export type UpdateTeamSettingsRequest = {
  */
 export type UpdateWorkspaceFeaturesRequest = {
   /**
-   * Enable the achievements system
-   */
-  achievementsEnabled?: boolean;
-  /**
    * Enable the leaderboard ranking page
    */
   leaderboardEnabled?: boolean;
@@ -5656,6 +5989,10 @@ export type UpdateWorkspaceLlmConnectionRequest = {
  */
 export type UpdateWorkspaceLlmModelRequest = {
   /**
+   * True clears the reasoning effort, so the provider's own default applies
+   */
+  clearReasoningEffort?: boolean;
+  /**
    * Context window in tokens
    */
   contextWindow?: number;
@@ -5696,9 +6033,9 @@ export type UpdateWorkspaceLlmModelRequest = {
    */
   pricingMode?: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
-   * Whether the model supports a reasoning mode
+   * Reasoning effort to request; null keeps the current one (see clearReasoningEffort)
    */
-  supportsReasoning?: boolean;
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
 };
 
 /**
@@ -5797,14 +6134,17 @@ export type UserInfo = {
   name: string;
 };
 
+export type UserPracticeSummary = {
+  groupStandings: Array<PracticeGroupStanding>;
+  groups: Array<PracticeGroup>;
+  practices: Array<ReviewedPractice>;
+  standings: Array<PracticeStanding>;
+};
+
 /**
  * User preferences and settings
  */
 export type UserSettings = {
-  /**
-   * Whether the user consents to participate in research studies
-   */
-  participateInResearch: boolean;
   /**
    * Whether new practice-feedback comments may be delivered on issues, pull requests, and merge requests authored by the user, together with related Slack reminders
    */
@@ -5821,6 +6161,14 @@ export type UserTeams = {
   url: string;
 };
 
+export type UserViewUser = {
+  accountId?: number;
+  accountStatus?: string;
+  login: string;
+  name?: string;
+  userId: number;
+};
+
 /**
  * Complete workspace information including configuration and settings
  */
@@ -5829,10 +6177,6 @@ export type Workspace = {
    * Git provider account login associated with this workspace
    */
   accountLogin: string;
-  /**
-   * Whether the achievements system is enabled
-   */
-  achievementsEnabled: boolean;
   /**
    * Timestamp when the workspace was created
    */
@@ -5955,10 +6299,6 @@ export type WorkspaceListItem = {
    * Git provider account login associated with this workspace
    */
   accountLogin: string;
-  /**
-   * Whether the achievements system is enabled
-   */
-  achievementsEnabled: boolean;
   /**
    * Timestamp when the workspace was created
    */
@@ -6120,13 +6460,13 @@ export type WorkspaceLlmModel = {
    */
   pricingMode: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
   /**
+   * Reasoning effort requested of the model; null sends none, the provider's default applies
+   */
+  reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+  /**
    * Unique slug within the workspace
    */
   slug: string;
-  /**
-   * Whether the model supports a reasoning mode
-   */
-  supportsReasoning: boolean;
   /**
    * Last update timestamp
    */
@@ -6323,6 +6663,565 @@ export type WorkspaceTeamSettings = {
   workspaceId: number;
 };
 
+/**
+ * Full practice observation detail including delivered feedback and evidence
+ */
+export type ObservationDetailWritable = {
+  /**
+   * Artifact entity ID
+   */
+  artifactId: number;
+  /**
+   * Artifact type (e.g. PULL_REQUEST)
+   */
+  artifactKind: string;
+  /**
+   * Link to the reviewed artifact on its platform (null when it cannot be resolved)
+   */
+  artifactUrl?: string;
+  /**
+   * Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED
+   */
+  assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation still has current review rules and supporting work snapshot
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * What to do — the delivered feedback for this observation (null if nothing was delivered)
+   */
+  deliveredFeedback?: string;
+  evidence?: ObservationEvidence;
+  /**
+   * Evidence-based rationale for the observation
+   */
+  evidenceRationale?: string;
+  /**
+   * The newest delivered feedback that carried this observation to the developer; the handle for responding to it (null when none was delivered)
+   */
+  feedbackId?: string;
+  /**
+   * The developer's resolution response to that feedback
+   */
+  feedbackResolution?: 'ADDRESSED' | 'DISPUTED' | 'NOT_APPLICABLE';
+  /**
+   * The developer's comment on that feedback
+   */
+  feedbackResponseComment?: string;
+  /**
+   * The developer's usefulness response to that feedback
+   */
+  feedbackUsefulness?: 'HELPFUL' | 'UNHELPFUL';
+  /**
+   * Observation ID
+   */
+  id: string;
+  /**
+   * The next step the review wrote about this observation, whether or not the feedback carrying it was delivered (null when it wrote none)
+   */
+  nextStep?: string;
+  /**
+   * When the observation was made
+   */
+  observedAt: Date;
+  /**
+   * What occasioned the measurement; never mix origins in one trend line
+   */
+  origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
+  /**
+   * Practice name
+   */
+  practiceName: string;
+  /**
+   * Practice slug
+   */
+  practiceSlug: string;
+  /**
+   * PRESENT or ABSENT only when ASSESSED
+   */
+  presence?: 'PRESENT' | 'ABSENT';
+  /**
+   * Cross-run locus key; null when continuity is unavailable
+   */
+  recurrenceKey?: string;
+  /**
+   * Severity level (null unless outcome is NEGATIVE)
+   */
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  /**
+   * Observation summary
+   */
+  summary: string;
+};
+
+/**
+ * Practice observation summary for list views
+ */
+export type ObservationListWritable = {
+  /**
+   * Artifact entity ID
+   */
+  artifactId: number;
+  /**
+   * Artifact type (e.g. PULL_REQUEST)
+   */
+  artifactKind: string;
+  /**
+   * Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED
+   */
+  assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation still has current review rules and supporting work snapshot
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * Observation ID
+   */
+  id: string;
+  /**
+   * When the observation was made
+   */
+  observedAt: Date;
+  /**
+   * What occasioned the measurement; never mix origins in one trend line
+   */
+  origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
+  /**
+   * Practice name
+   */
+  practiceName: string;
+  /**
+   * Practice slug
+   */
+  practiceSlug: string;
+  /**
+   * PRESENT or ABSENT only when ASSESSED
+   */
+  presence?: 'PRESENT' | 'ABSENT';
+  /**
+   * Severity level (null unless outcome is NEGATIVE)
+   */
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  /**
+   * Observation summary
+   */
+  summary: string;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoObservationListWritable = {
+  content?: Array<ObservationListWritable>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+export type PagedModelReviewObservationWritable = {
+  content?: Array<ReviewObservationWritable>;
+  page?: PageMetadata;
+};
+
+/**
+ * A complete review run in a developer's practice-group history
+ */
+export type PracticeGroupReviewRunWritable = {
+  /**
+   * How long the run took, in seconds (null while it has not finished)
+   */
+  durationSeconds?: number;
+  /**
+   * The one sentence the review opened with about this piece of work (null when it wrote none)
+   */
+  lead?: string;
+  /**
+   * Every visible observation of the run, complete enough to open in place
+   */
+  observations: Array<ObservationDetailWritable>;
+  /**
+   * How many practices this run was eligible to review
+   */
+  practicesEligible?: number;
+  /**
+   * How many of the practices this run was eligible for it actually reached
+   */
+  practicesEvaluated?: number;
+  reviewId: string;
+  reviewedAt: Date;
+  reviewedWork: ReviewedWorkRef;
+};
+
+/**
+ * A page of visible review runs
+ */
+export type PracticeGroupReviewRunsPageWritable = {
+  content: Array<PracticeGroupReviewRunWritable>;
+  hasNext?: boolean;
+  page?: number;
+  size?: number;
+};
+
+/**
+ * A developer's derived qualitative standing for one Group including 1<=n<many practices
+ */
+export type PracticeGroupStandingWritable = {
+  /**
+   * Evidence-weighted, opportunity-indexed direction across the group's practices
+   */
+  direction?: 'IMPROVING' | 'DECLINING' | 'UNCERTAIN' | 'INSUFFICIENT_EVIDENCE';
+  /**
+   * Oldest contributing observation, for provenance only (null without a verdict)
+   */
+  feedbackSince?: Date;
+  /**
+   * Calendar span covered by the feedback, for provenance only; never a trend-analysis unit
+   */
+  feedbackSpanDays?: number;
+  /**
+   * Group name
+   */
+  groupName: string;
+  /**
+   * Group slug
+   */
+  groupSlug: string;
+  /**
+   * Developer guidance aggregated from the group's feedback (null unless the standing is a verdict). The deterministic summary combines standing, next focus, and developer-facing catalog guidance.
+   */
+  guidance?: string;
+  /**
+   * How the guidance text was produced (null when there is no guidance)
+   */
+  guidanceSource?: 'RULE_BASED';
+  /**
+   * Supporting observations the standing derives from (problems first); empty without a verdict
+   */
+  observations: Array<PracticeStandingObservationWritable>;
+  /**
+   * Distinct pieces of reviewed work the observations come from, per kind (provenance, not a score); empty without a verdict
+   */
+  sources: Array<FeedbackSourceCount>;
+  /**
+   * Derived qualitative standing across the group's practices
+   */
+  standing: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
+  /**
+   * Evidence support and provenance for the direction
+   */
+  trendSupport?: TrendSupport;
+};
+
+/**
+ * A developer's readable feedback for one practice
+ */
+export type PracticeStandingWritable = {
+  /**
+   * Opportunity-indexed direction of this practice's recent evidence
+   */
+  direction?: 'IMPROVING' | 'DECLINING' | 'UNCERTAIN' | 'INSUFFICIENT_EVIDENCE';
+  /**
+   * Group name this practice belongs to, if any
+   */
+  groupName?: string;
+  /**
+   * Group slug this practice belongs to, if any
+   */
+  groupSlug?: string;
+  /**
+   * Practice name
+   */
+  name: string;
+  /**
+   * Practice slug
+   */
+  slug: string;
+  /**
+   * Where the developer stands on this practice, or why no standing could be formed
+   */
+  standing: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
+  /**
+   * What the developer already does well here
+   */
+  strengths: Array<PracticeStandingObservationWritable>;
+  /**
+   * Specific feedback to act on (highest-impact first)
+   */
+  toWorkOn: Array<PracticeStandingObservationWritable>;
+  /**
+   * Evidence support and provenance for the direction
+   */
+  trendSupport?: TrendSupport;
+  /**
+   * A concrete picture of doing this well
+   */
+  whatGoodLooksLike?: string;
+  /**
+   * Why this practice matters, in plain language
+   */
+  whyItMatters?: string;
+};
+
+/**
+ * A single piece of practice feedback to read and act on
+ */
+export type PracticeStandingObservationWritable = {
+  /**
+   * What to do — the delivered feedback for this observation (null if nothing was delivered)
+   */
+  deliveredFeedback?: string;
+  /**
+   * What this observation says about the developer: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out. The lists only separate positive from negative, so this is what tells the two kinds of each apart.
+   */
+  kind: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP';
+  /**
+   * Where in the work, e.g. "FrameRecorder.swift:212", when known
+   */
+  locator?: string;
+  /**
+   * Observation id — handle to open the full detail
+   */
+  observationId: string;
+  /**
+   * Why this observation was recorded. BACKFILL means it came from a review of past work rather than from something that just happened, and nothing was posted anywhere at the time.
+   */
+  origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
+  /**
+   * Identifier of the reviewed work
+   */
+  reviewedWorkId: number;
+  /**
+   * Impact level (null unless assessed BAD)
+   */
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  /**
+   * The headline of the feedback
+   */
+  title: string;
+  /**
+   * The kind of reviewed work this is about
+   */
+  workKind: string;
+};
+
+/**
+ * An observation that contributed to a piece of feedback
+ */
+export type ReviewBoundObservationWritable = {
+  /**
+   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
+   */
+  assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation still has current review rules and supporting work snapshot
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * Practice group; null when the practice is Unassigned
+   */
+  group?: ReviewPracticeGroup;
+  observationId: string;
+  observedAt: Date;
+  /**
+   * Render order within the feedback (lower renders earlier)
+   */
+  ordinal: number;
+  practiceName: string;
+  practiceSlug: string;
+  presence?: 'PRESENT' | 'ABSENT';
+  /**
+   * Whether the observation leads the feedback or reinforces it
+   */
+  role: 'PRIMARY' | 'SUPPORTING';
+  /**
+   * Severity band (null unless outcome is NEGATIVE)
+   */
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  summary: string;
+};
+
+/**
+ * Full feedback detail including the stored composed body
+ */
+export type ReviewFeedbackDetailWritable = {
+  agentJobId: string;
+  /**
+   * Immutable human decision for this proposal, when one has been made
+   */
+  approval?: FeedbackApproval;
+  /**
+   * Work item the feedback targets; null when it is unanchored
+   */
+  artifact?: ReviewedWorkRef;
+  /**
+   * Stored composed body; null when none was produced, and always null on the IN_APP and IN_CHAT channels — neither the developer's practice pages nor the mentor's prepared context is readable by an operator
+   */
+  body?: string;
+  channel: 'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP';
+  createdAt: Date;
+  /**
+   * When the feedback was placed; null if it was not delivered
+   */
+  deliveredAt?: Date;
+  /**
+   * Ordered delivery-policy evaluations for this feedback's review
+   */
+  deliveryPolicy: Array<DeliveryPolicyTrace>;
+  deliveryState: 'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED';
+  id: string;
+  /**
+   * Source observations in render order
+   */
+  observations: Array<ReviewBoundObservationWritable>;
+  /**
+   * Recorded placements; empty when none
+   */
+  placements: Array<ReviewPlacement>;
+  /**
+   * Exact ordered summary and inline messages covered by the approval decision
+   */
+  proposedPlacements: Array<ReviewProposedPlacement>;
+  /**
+   * Who the feedback is addressed to; null when the identity is no longer resolvable
+   */
+  recipient?: ReviewSubject;
+  /**
+   * The feedback this one replaced; null on a first delivery
+   */
+  replacesId?: string;
+  /**
+   * Reviewed source revision for an immutable approval package
+   */
+  reviewedRevision?: string;
+  /**
+   * Whose work the feedback addresses; may equal the recipient
+   */
+  subject?: ReviewSubject;
+  /**
+   * Why delivery stopped; set on withheld or terminally partial feedback
+   */
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  /**
+   * Cross-run continuity key tying successive deliveries together
+   */
+  threadKey?: string;
+};
+
+/**
+ * A practice review observation with its linked feedback outcomes
+ */
+export type ReviewObservationWritable = {
+  agentJobId: string;
+  artifact: ReviewedWorkRef;
+  /**
+   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
+   */
+  assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation still has current review rules and supporting work snapshot
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * Counts of linked feedback by delivery state
+   */
+  feedbackDisposition: ReviewFeedbackDisposition;
+  /**
+   * Practice group; null when the practice is Unassigned
+   */
+  group?: ReviewPracticeGroup;
+  id: string;
+  observedAt: Date;
+  /**
+   * What occasioned the measurement. BACKFILL came from a confirmed campaign over work that already existed, so it is not a point on the live trend line.
+   */
+  origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
+  practiceName: string;
+  practiceSlug: string;
+  presence?: 'PRESENT' | 'ABSENT';
+  /**
+   * Cross-run locus key; null when continuity is unavailable
+   */
+  recurrenceKey?: string;
+  /**
+   * Severity band (null unless outcome is NEGATIVE)
+   */
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  /**
+   * Whose work the observation is about; null when the identity is no longer resolvable
+   */
+  subject?: ReviewSubject;
+  summary: string;
+};
+
+/**
+ * An observation with evidence and linked feedback
+ */
+export type ReviewObservationDetailWritable = {
+  agentJobId: string;
+  artifact: ReviewedWorkRef;
+  /**
+   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
+   */
+  assessment?: 'GOOD' | 'BAD';
+  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation still has current review rules and supporting work snapshot
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  evidence?: ObservationEvidence;
+  evidenceRationale?: string;
+  /**
+   * Linked feedback, newest first
+   */
+  feedback: Array<ReviewBoundFeedback>;
+  /**
+   * Practice group; null when the practice is Unassigned
+   */
+  group?: ReviewPracticeGroup;
+  id: string;
+  observedAt: Date;
+  practiceName: string;
+  /**
+   * Criteria revision selected as of job start, when available
+   */
+  practiceRevisionId?: number;
+  practiceSlug: string;
+  presence?: 'PRESENT' | 'ABSENT';
+  /**
+   * Cross-run locus key; null when continuity is unavailable
+   */
+  recurrenceKey?: string;
+  /**
+   * Severity band (null unless outcome is NEGATIVE)
+   */
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  /**
+   * Whose work the observation is about; null when the identity is no longer resolvable
+   */
+  subject?: ReviewSubject;
+  summary: string;
+};
+
+export type UserPracticeSummaryWritable = {
+  groupStandings: Array<PracticeGroupStandingWritable>;
+  groups: Array<PracticeGroup>;
+  practices: Array<ReviewedPractice>;
+  standings: Array<PracticeStandingWritable>;
+};
+
 export type GetJwksData = {
   body?: never;
   path?: never;
@@ -6349,7 +7248,7 @@ export type AdminListAuthEventsData = {
     size?: number;
     accountId?: number;
     actingAccountId?: number;
-    eventType?: Array<'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
     result?: Array<'SUCCESS' | 'FAILURE'>;
     from?: Date;
     to?: Date;
@@ -6361,7 +7260,7 @@ export type AdminListAuthEventsResponses = {
   /**
    * OK
    */
-  200: PageAuthEventView;
+  200: PageResponseDtoAuthEventView;
 };
 
 export type AdminListAuthEventsResponse = AdminListAuthEventsResponses[keyof AdminListAuthEventsResponses];
@@ -6372,7 +7271,7 @@ export type AdminExportAuthEventsData = {
   query?: {
     accountId?: number;
     actingAccountId?: number;
-    eventType?: Array<'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
     result?: Array<'SUCCESS' | 'FAILURE'>;
     from?: Date;
     to?: Date;
@@ -6411,7 +7310,7 @@ export type AdminListConfigAuditEventsResponses = {
   /**
    * OK
    */
-  200: PageConfigAuditEntryView;
+  200: PageResponseDtoConfigAuditEntryView;
 };
 
 export type AdminListConfigAuditEventsResponse = AdminListConfigAuditEventsResponses[keyof AdminListConfigAuditEventsResponses];
@@ -6431,6 +7330,31 @@ export type AdminGetConfigurationReadinessResponses = {
 };
 
 export type AdminGetConfigurationReadinessResponse = AdminGetConfigurationReadinessResponses[keyof AdminGetConfigurationReadinessResponses];
+
+export type AdminSendTestEmailData = {
+  body?: EmailTestRequest;
+  path?: never;
+  query?: never;
+  url: '/admin/email/test';
+};
+
+export type AdminSendTestEmailErrors = {
+  /**
+   * Malformed request or invalid recipient address
+   */
+  400: ProblemDetail;
+};
+
+export type AdminSendTestEmailError = AdminSendTestEmailErrors[keyof AdminSendTestEmailErrors];
+
+export type AdminSendTestEmailResponses = {
+  /**
+   * Email delivery outcome
+   */
+  200: EmailTestResponse;
+};
+
+export type AdminSendTestEmailResponse = AdminSendTestEmailResponses[keyof AdminSendTestEmailResponses];
 
 export type AdminListLlmConnectionsData = {
   body?: never;
@@ -7320,6 +8244,66 @@ export type AdminPlaceCuratedPracticeResponses = {
 
 export type AdminPlaceCuratedPracticeResponse = AdminPlaceCuratedPracticeResponses[keyof AdminPlaceCuratedPracticeResponses];
 
+export type AdminDeclinePracticeReleaseData = {
+  body?: never;
+  headers: {
+    'If-Match': string;
+  };
+  path: {
+    slug: string;
+  };
+  query?: never;
+  url: '/admin/practice-catalog/practices/{slug}/release';
+};
+
+export type AdminDeclinePracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: CuratedPractice;
+};
+
+export type AdminDeclinePracticeReleaseResponse = AdminDeclinePracticeReleaseResponses[keyof AdminDeclinePracticeReleaseResponses];
+
+export type AdminGetPracticeReleaseData = {
+  body?: never;
+  path: {
+    slug: string;
+  };
+  query?: never;
+  url: '/admin/practice-catalog/practices/{slug}/release';
+};
+
+export type AdminGetPracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: PracticeReleaseProposal;
+};
+
+export type AdminGetPracticeReleaseResponse = AdminGetPracticeReleaseResponses[keyof AdminGetPracticeReleaseResponses];
+
+export type AdminAcceptPracticeReleaseData = {
+  body: AcceptPracticeReleaseRequest;
+  headers: {
+    'If-Match': string;
+  };
+  path: {
+    slug: string;
+  };
+  query?: never;
+  url: '/admin/practice-catalog/practices/{slug}/release';
+};
+
+export type AdminAcceptPracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: CuratedPractice;
+};
+
+export type AdminAcceptPracticeReleaseResponse = AdminAcceptPracticeReleaseResponses[keyof AdminAcceptPracticeReleaseResponses];
+
 export type AdminUpdateCuratedPracticeStatusData = {
   body: UpdateCuratedStatusRequest;
   headers: {
@@ -7358,6 +8342,7 @@ export type AdminListProductFeedbackData = {
   body?: never;
   path?: never;
   query?: {
+    status?: 'OPEN' | 'RESOLVED' | 'ALL';
     /**
      * Zero-based page index (0..N)
      */
@@ -7382,35 +8367,6 @@ export type AdminListProductFeedbackResponses = {
 };
 
 export type AdminListProductFeedbackResponse = AdminListProductFeedbackResponses[keyof AdminListProductFeedbackResponses];
-
-export type AdminListProductSurveyResponsesData = {
-  body?: never;
-  path?: never;
-  query?: {
-    /**
-     * Zero-based page index (0..N)
-     */
-    page?: number;
-    /**
-     * The size of the page to be returned
-     */
-    size?: number;
-    /**
-     * Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.
-     */
-    sort?: Array<string>;
-  };
-  url: '/admin/product-feedback/responses';
-};
-
-export type AdminListProductSurveyResponsesResponses = {
-  /**
-   * OK
-   */
-  200: PagedModelSubmission;
-};
-
-export type AdminListProductSurveyResponsesResponse = AdminListProductSurveyResponsesResponses[keyof AdminListProductSurveyResponsesResponses];
 
 export type AdminListProductSurveysData = {
   body?: never;
@@ -7456,6 +8412,220 @@ export type AdminCreateProductSurveyResponses = {
 };
 
 export type AdminCreateProductSurveyResponse = AdminCreateProductSurveyResponses[keyof AdminCreateProductSurveyResponses];
+
+export type AdminDeleteProductSurveyData = {
+  body?: never;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}';
+};
+
+export type AdminDeleteProductSurveyResponses = {
+  /**
+   * OK
+   */
+  200: unknown;
+};
+
+export type AdminGetProductSurveyData = {
+  body?: never;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}';
+};
+
+export type AdminGetProductSurveyResponses = {
+  /**
+   * OK
+   */
+  200: Survey;
+};
+
+export type AdminGetProductSurveyResponse = AdminGetProductSurveyResponses[keyof AdminGetProductSurveyResponses];
+
+export type AdminUpdateProductSurveyData = {
+  body: SurveyEdit;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}';
+};
+
+export type AdminUpdateProductSurveyResponses = {
+  /**
+   * OK
+   */
+  200: Survey;
+};
+
+export type AdminUpdateProductSurveyResponse = AdminUpdateProductSurveyResponses[keyof AdminUpdateProductSurveyResponses];
+
+export type AdminPreviewSurveyEmailInvitationsData = {
+  body?: never;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}/email-invitations';
+};
+
+export type AdminPreviewSurveyEmailInvitationsResponses = {
+  /**
+   * OK
+   */
+  200: SurveyEmailInvitationSummary;
+};
+
+export type AdminPreviewSurveyEmailInvitationsResponse = AdminPreviewSurveyEmailInvitationsResponses[keyof AdminPreviewSurveyEmailInvitationsResponses];
+
+export type AdminSendSurveyEmailInvitationsData = {
+  body?: SurveyEmailInvitationRequest;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}/email-invitations';
+};
+
+export type AdminSendSurveyEmailInvitationsErrors = {
+  /**
+   * Email delivery is not configured; no invitations were requested
+   */
+  503: ProblemDetail;
+};
+
+export type AdminSendSurveyEmailInvitationsError = AdminSendSurveyEmailInvitationsErrors[keyof AdminSendSurveyEmailInvitationsErrors];
+
+export type AdminSendSurveyEmailInvitationsResponses = {
+  /**
+   * Invitation request summary
+   */
+  200: SurveyEmailInvitationSummary;
+};
+
+export type AdminSendSurveyEmailInvitationsResponse = AdminSendSurveyEmailInvitationsResponses[keyof AdminSendSurveyEmailInvitationsResponses];
+
+export type AdminListProductSurveyResponsesData = {
+  body?: never;
+  path: {
+    surveyId: string;
+  };
+  query?: {
+    /**
+     * Zero-based page index (0..N)
+     */
+    page?: number;
+    /**
+     * The size of the page to be returned
+     */
+    size?: number;
+    /**
+     * Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.
+     */
+    sort?: Array<string>;
+  };
+  url: '/admin/product-feedback/surveys/{surveyId}/responses';
+};
+
+export type AdminListProductSurveyResponsesResponses = {
+  /**
+   * OK
+   */
+  200: PagedModelSurveyResponse;
+};
+
+export type AdminListProductSurveyResponsesResponse = AdminListProductSurveyResponsesResponses[keyof AdminListProductSurveyResponsesResponses];
+
+export type AdminExportProductSurveyResponsesData = {
+  body?: never;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}/responses/export';
+};
+
+export type AdminExportProductSurveyResponsesResponses = {
+  /**
+   * OK
+   */
+  200: string;
+};
+
+export type AdminExportProductSurveyResponsesResponse = AdminExportProductSurveyResponsesResponses[keyof AdminExportProductSurveyResponsesResponses];
+
+export type AdminGetProductSurveySummaryData = {
+  body?: never;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}/summary';
+};
+
+export type AdminGetProductSurveySummaryResponses = {
+  /**
+   * OK
+   */
+  200: SurveySummary;
+};
+
+export type AdminGetProductSurveySummaryResponse = AdminGetProductSurveySummaryResponses[keyof AdminGetProductSurveySummaryResponses];
+
+export type AdminTriageProductFeedbackData = {
+  body: FeedbackTriage;
+  path: {
+    feedbackId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/{feedbackId}';
+};
+
+export type AdminTriageProductFeedbackResponses = {
+  /**
+   * OK
+   */
+  200: FeedbackItem;
+};
+
+export type AdminTriageProductFeedbackResponse = AdminTriageProductFeedbackResponses[keyof AdminTriageProductFeedbackResponses];
+
+export type AdminGetReleaseData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/admin/release';
+};
+
+export type AdminGetReleaseResponses = {
+  /**
+   * OK
+   */
+  200: ReleaseStatus;
+};
+
+export type AdminGetReleaseResponse = AdminGetReleaseResponses[keyof AdminGetReleaseResponses];
+
+export type AdminCheckReleaseData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/admin/release/checks';
+};
+
+export type AdminCheckReleaseResponses = {
+  /**
+   * OK
+   */
+  200: ReleaseStatus;
+};
+
+export type AdminCheckReleaseResponse = AdminCheckReleaseResponses[keyof AdminCheckReleaseResponses];
 
 export type AdminGetInstanceSettingsData = {
   body?: never;
@@ -7597,34 +8767,6 @@ export type AdminUpdateWorkspaceLlmBudgetResponses = {
 
 export type AdminUpdateWorkspaceLlmBudgetResponse = AdminUpdateWorkspaceLlmBudgetResponses[keyof AdminUpdateWorkspaceLlmBudgetResponses];
 
-export type ImpersonateData = {
-  body: ImpersonateRequest;
-  path?: never;
-  query?: never;
-  url: '/auth/impersonate';
-};
-
-export type ImpersonateResponses = {
-  /**
-   * OK
-   */
-  200: unknown;
-};
-
-export type ExitImpersonationData = {
-  body?: never;
-  path?: never;
-  query?: never;
-  url: '/auth/impersonate:exit';
-};
-
-export type ExitImpersonationResponses = {
-  /**
-   * OK
-   */
-  200: unknown;
-};
-
 export type LogoutData = {
   body?: never;
   path?: never;
@@ -7646,12 +8788,21 @@ export type RefreshData = {
   url: '/auth/refresh';
 };
 
+export type RefreshErrors = {
+  /**
+   * Session has ended
+   */
+  401: unknown;
+};
+
 export type RefreshResponses = {
   /**
-   * OK
+   * Session renewal completed
    */
-  200: unknown;
+  204: void;
 };
+
+export type RefreshResponse = RefreshResponses[keyof RefreshResponses];
 
 export type ListGlobalContributorsData = {
   body?: never;
@@ -7684,6 +8835,26 @@ export type ListIdentityProvidersResponses = {
 };
 
 export type ListIdentityProvidersResponse = ListIdentityProvidersResponses[keyof ListIdentityProvidersResponses];
+
+export type UnsubscribeEmailData = {
+  body?: {
+    'List-Unsubscribe': string;
+  };
+  path: {
+    token: string;
+  };
+  query?: never;
+  url: '/notifications/unsubscribe/{token}';
+};
+
+export type UnsubscribeEmailResponses = {
+  /**
+   * Subscription disabled, or token no longer applicable
+   */
+  204: void;
+};
+
+export type UnsubscribeEmailResponse = UnsubscribeEmailResponses[keyof UnsubscribeEmailResponses];
 
 export type CallbackGetData = {
   body?: never;
@@ -7947,6 +9118,69 @@ export type UnlinkIdentityResponses = {
 
 export type UnlinkIdentityResponse = UnlinkIdentityResponses[keyof UnlinkIdentityResponses];
 
+export type GetNotificationPreferencesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/notification-preferences';
+};
+
+export type GetNotificationPreferencesResponses = {
+  /**
+   * Your current email subscriptions
+   */
+  200: NotificationPreferences;
+};
+
+export type GetNotificationPreferencesResponse = GetNotificationPreferencesResponses[keyof GetNotificationPreferencesResponses];
+
+export type UpdateNotificationPreferencesData = {
+  body: UpdateNotificationPreferences;
+  headers: {
+    /**
+     * Current preferences ETag
+     */
+    'If-Match': string;
+  };
+  path?: never;
+  query?: never;
+  url: '/user/notification-preferences';
+};
+
+export type UpdateNotificationPreferencesErrors = {
+  /**
+   * Invalid preferences or If-Match header
+   */
+  400: ProblemDetail;
+  /**
+   * Enabling this subscription requires instance administration
+   */
+  403: ProblemDetail;
+  /**
+   * Enabling email requires a verified contact on an active account
+   */
+  409: ProblemDetail;
+  /**
+   * The supplied ETag is stale
+   */
+  412: ProblemDetail;
+  /**
+   * If-Match is required
+   */
+  428: ProblemDetail;
+};
+
+export type UpdateNotificationPreferencesError = UpdateNotificationPreferencesErrors[keyof UpdateNotificationPreferencesErrors];
+
+export type UpdateNotificationPreferencesResponses = {
+  /**
+   * Email subscriptions updated
+   */
+  200: NotificationPreferences;
+};
+
+export type UpdateNotificationPreferencesResponse = UpdateNotificationPreferencesResponses[keyof UpdateNotificationPreferencesResponses];
+
 export type RevokeOtherSessionsData = {
   body?: never;
   path?: never;
@@ -8207,7 +9441,7 @@ export type ListAgentJobsResponses = {
   /**
    * Paginated job list
    */
-  200: PageAgentJob;
+  200: PageResponseDtoAgentJob;
 };
 
 export type ListAgentJobsResponse = ListAgentJobsResponses[keyof ListAgentJobsResponses];
@@ -8384,7 +9618,7 @@ export type ListWorkspaceConfigAuditEventsResponses = {
   /**
    * OK
    */
-  200: PageConfigAuditEntryView;
+  200: PageResponseDtoConfigAuditEntryView;
 };
 
 export type ListWorkspaceConfigAuditEventsResponse = ListWorkspaceConfigAuditEventsResponses[keyof ListWorkspaceConfigAuditEventsResponses];
@@ -8546,7 +9780,7 @@ export type ListConnectionSyncJobsResponses = {
   /**
    * OK
    */
-  200: PageSyncJob;
+  200: PageResponseDtoSyncJob;
 };
 
 export type ListConnectionSyncJobsResponse = ListConnectionSyncJobsResponses[keyof ListConnectionSyncJobsResponses];
@@ -10645,7 +11879,8 @@ export type ListObservationsData = {
     /**
      * Filter by presence
      */
-    presence?: 'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE';
+    presence?: 'PRESENT' | 'ABSENT';
+    assessmentStatus?: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
     /**
      * Only observations on these kinds of reviewed work, e.g. scm.pull_request (repeatable)
      */
@@ -10682,7 +11917,7 @@ export type ListObservationsResponses = {
   /**
    * Paginated observations returned
    */
-  200: PageObservationList;
+  200: PageResponseDtoObservationList;
 };
 
 export type ListObservationsResponse = ListObservationsResponses[keyof ListObservationsResponses];
@@ -10758,6 +11993,99 @@ export type GetObservationResponses = {
 };
 
 export type GetObservationResponse = GetObservationResponses[keyof GetObservationResponses];
+
+export type ListPracticeReleasesData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/releases';
+};
+
+export type ListPracticeReleasesResponses = {
+  /**
+   * OK
+   */
+  200: Array<PracticeReleaseProposal>;
+};
+
+export type ListPracticeReleasesResponse = ListPracticeReleasesResponses[keyof ListPracticeReleasesResponses];
+
+export type DeclinePracticeReleaseData = {
+  body?: never;
+  headers: {
+    'If-Match': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    slug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/releases/{slug}';
+};
+
+export type DeclinePracticeReleaseResponses = {
+  /**
+   * The offered version was declined
+   */
+  204: void;
+};
+
+export type DeclinePracticeReleaseResponse = DeclinePracticeReleaseResponses[keyof DeclinePracticeReleaseResponses];
+
+export type GetPracticeReleaseData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    slug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/releases/{slug}';
+};
+
+export type GetPracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: PracticeReleaseProposal;
+};
+
+export type GetPracticeReleaseResponse = GetPracticeReleaseResponses[keyof GetPracticeReleaseResponses];
+
+export type AcceptPracticeReleaseData = {
+  body: AcceptPracticeReleaseRequest;
+  headers: {
+    'If-Match': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    slug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/releases/{slug}';
+};
+
+export type AcceptPracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: Practice;
+};
+
+export type AcceptPracticeReleaseResponse = AcceptPracticeReleaseResponses[keyof AcceptPracticeReleaseResponses];
 
 export type ReorderPracticesData = {
   body: ReorderPracticesRequest;
@@ -10989,7 +12317,7 @@ export type ListPracticeReviewFeedbackData = {
     page?: number;
     size?: number;
     deliveryState?: Array<'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED'>;
-    suppressionReason?: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
+    suppressionReason?: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
     channel?: Array<'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP'>;
     agentJobId?: string;
     /**
@@ -11123,7 +12451,8 @@ export type ListPracticeReviewObservationsData = {
     sort?: 'NEWEST' | 'ACTIONABILITY';
     practiceSlug?: Array<string>;
     groupSlug?: Array<string>;
-    presence?: Array<'PRESENT' | 'ABSENT' | 'NOT_APPLICABLE' | 'INCONCLUSIVE'>;
+    assessmentStatus?: Array<'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED'>;
+    presence?: Array<'PRESENT' | 'ABSENT'>;
     assessment?: Array<'GOOD' | 'BAD'>;
     severity?: Array<'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO'>;
     agentJobId?: string;
@@ -11627,7 +12956,7 @@ export type SubmitWorkspaceProductFeedbackResponses = {
   200: unknown;
 };
 
-export type ListAvailableProductSurveysData = {
+export type ListProductSurveyInvitationsData = {
   body?: never;
   path: {
     /**
@@ -11639,16 +12968,16 @@ export type ListAvailableProductSurveysData = {
   url: '/workspaces/{workspaceSlug}/product-feedback/surveys';
 };
 
-export type ListAvailableProductSurveysResponses = {
+export type ListProductSurveyInvitationsResponses = {
   /**
    * OK
    */
-  200: Array<Survey>;
+  200: Array<SurveyInvitation>;
 };
 
-export type ListAvailableProductSurveysResponse = ListAvailableProductSurveysResponses[keyof ListAvailableProductSurveysResponses];
+export type ListProductSurveyInvitationsResponse = ListProductSurveyInvitationsResponses[keyof ListProductSurveyInvitationsResponses];
 
-export type DismissProductSurveyData = {
+export type UndoProductSurveyDeclineData = {
   body?: never;
   path: {
     /**
@@ -11658,10 +12987,50 @@ export type DismissProductSurveyData = {
     surveyId: string;
   };
   query?: never;
-  url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/dismissal';
+  url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline';
 };
 
-export type DismissProductSurveyResponses = {
+export type UndoProductSurveyDeclineResponses = {
+  /**
+   * OK
+   */
+  200: unknown;
+};
+
+export type DeclineProductSurveyData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    surveyId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline';
+};
+
+export type DeclineProductSurveyResponses = {
+  /**
+   * OK
+   */
+  200: unknown;
+};
+
+export type AcknowledgeProductSurveyInvitationData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    surveyId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/invitation';
+};
+
+export type AcknowledgeProductSurveyInvitationResponses = {
   /**
    * OK
    */
@@ -12385,6 +13754,220 @@ export type UpdateTokenResponses = {
 
 export type UpdateTokenResponse = UpdateTokenResponses[keyof UpdateTokenResponses];
 
+export type ListUserViewUsersData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: {
+    page?: number;
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/user-view/users';
+};
+
+export type ListUserViewUsersResponses = {
+  /**
+   * OK
+   */
+  200: PageResponseDtoUserViewUser;
+};
+
+export type ListUserViewUsersResponse = ListUserViewUsersResponses[keyof ListUserViewUsersResponses];
+
+export type ListUserViewConversationsData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+  };
+  query?: {
+    page?: number;
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/conversations';
+};
+
+export type ListUserViewConversationsResponses = {
+  /**
+   * OK
+   */
+  200: PageResponseDtoChatThreadSummary;
+};
+
+export type ListUserViewConversationsResponse = ListUserViewConversationsResponses[keyof ListUserViewConversationsResponses];
+
+export type GetUserViewConversationData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+    threadId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/conversations/{threadId}';
+};
+
+export type GetUserViewConversationResponses = {
+  /**
+   * OK
+   */
+  200: ChatThreadDetail;
+};
+
+export type GetUserViewConversationResponse = GetUserViewConversationResponses[keyof GetUserViewConversationResponses];
+
+export type GetUserPracticeViewData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices';
+};
+
+export type GetUserPracticeViewResponses = {
+  /**
+   * OK
+   */
+  200: UserPracticeSummary;
+};
+
+export type GetUserPracticeViewResponse = GetUserPracticeViewResponses[keyof GetUserPracticeViewResponses];
+
+export type ListUserViewRunsData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+    groupSlug: string;
+  };
+  query?: {
+    practiceSlug?: string;
+    /**
+     * Only reviews of these artifact kinds, e.g. scm.pull_request (repeatable)
+     */
+    artifactKinds?: Array<string>;
+    severities?: Array<'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO'>;
+    /**
+     * Zero-based page, at most 100
+     */
+    page?: number;
+    /**
+     * Page size from 1 to 50
+     */
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/runs';
+};
+
+export type ListUserViewRunsResponses = {
+  /**
+   * OK
+   */
+  200: PracticeGroupReviewRunsPage;
+};
+
+export type ListUserViewRunsResponse = ListUserViewRunsResponses[keyof ListUserViewRunsResponses];
+
+export type GetUserViewTrendData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+    groupSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/trend';
+};
+
+export type GetUserViewTrendResponses = {
+  /**
+   * OK
+   */
+  200: PracticeGroupTrend;
+};
+
+export type GetUserViewTrendResponse = GetUserViewTrendResponses[keyof GetUserViewTrendResponses];
+
+export type GetUserViewObservationData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+    observationId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices/observations/{observationId}';
+};
+
+export type GetUserViewObservationResponses = {
+  /**
+   * OK
+   */
+  200: ObservationDetail;
+};
+
+export type GetUserViewObservationResponse = GetUserViewObservationResponses[keyof GetUserViewObservationResponses];
+
 export type GetUsersWithTeamsData = {
   body?: never;
   path: {
@@ -12405,93 +13988,3 @@ export type GetUsersWithTeamsResponses = {
 };
 
 export type GetUsersWithTeamsResponse = GetUsersWithTeamsResponses[keyof GetUsersWithTeamsResponses];
-
-export type GetUserAchievementsData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    /**
-     * the user's GitHub login
-     */
-    login: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/users/{login}/achievements';
-};
-
-export type GetUserAchievementsResponses = {
-  /**
-   * list of all achievements with user-specific progress
-   */
-  200: Array<Achievement>;
-};
-
-export type GetUserAchievementsResponse = GetUserAchievementsResponses[keyof GetUserAchievementsResponses];
-
-export type GetAllAchievementDefinitionsData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    login: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/users/{login}/achievements/definitions';
-};
-
-export type GetAllAchievementDefinitionsResponses = {
-  /**
-   * OK
-   */
-  200: Array<Achievement>;
-};
-
-export type GetAllAchievementDefinitionsResponse = GetAllAchievementDefinitionsResponses[keyof GetAllAchievementDefinitionsResponses];
-
-export type RecalculateUserAchievementsData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    /**
-     * the user's GitHub login
-     */
-    login: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/users/{login}/achievements/recalculate';
-};
-
-export type RecalculateUserAchievementsResponses = {
-  /**
-   * Recalculation task started successfully
-   */
-  202: unknown;
-};
-
-export type ReloadAchievementsData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    login: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/users/{login}/achievements/reload';
-};
-
-export type ReloadAchievementsResponses = {
-  /**
-   * OK
-   */
-  200: unknown;
-};

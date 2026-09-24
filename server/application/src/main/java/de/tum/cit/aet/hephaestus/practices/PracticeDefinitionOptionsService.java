@@ -63,6 +63,7 @@ public class PracticeDefinitionOptionsService {
                                 source.privacyClass(),
                                 source.requiredQuality(),
                                 source.completenessPolicy().supportsComplete()))
-                        .toList());
+                        .toList(),
+                signalOptions.rolesFor(artifact).stream().sorted().toList());
     }
 }

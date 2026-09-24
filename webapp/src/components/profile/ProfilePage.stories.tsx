@@ -3,9 +3,9 @@ import { endOfISOWeek, formatISO, startOfISOWeek } from "date-fns";
 import { fn } from "storybook/test";
 
 import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
-import { STORY_NOW } from "@/components/common/story-clock";
 import { withStandardPage } from "@/stories/decorators";
-import { expectNoPageOverflow } from "@/test/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
+import { STORY_NOW } from "@/stories/story-clock";
 
 import { PracticeGroupStandingCard } from "./PracticeGroupStandingCard";
 import { ProfilePage } from "./ProfilePage";
@@ -21,6 +21,7 @@ const meta = {
 	},
 	decorators: [withStandardPage],
 	tags: ["autodocs"],
+	args: { providerType: "GITHUB" },
 } satisfies Meta<typeof ProfilePage>;
 
 export default meta;
@@ -219,4 +220,19 @@ export const MobileReflow: Story = {
 		chromatic: { viewports: [320] },
 	},
 	play: expectNoPageOverflow,
+};
+
+export const ActivityUnavailable: Story = {
+	args: {
+		...Default.args,
+		activityMonitorError: { status: 503 },
+		onRetryActivityMonitor: fn(),
+	},
+};
+
+export const LoadingActivity: Story = {
+	args: {
+		...Default.args,
+		isActivityLoading: true,
+	},
 };

@@ -130,6 +130,7 @@ jobs:
         run: cosign sign-blob --yes --bundle "${CHANNEL_FILE}.sigstore.json" "$CHANNEL_FILE"
 
       - name: Publish the channel
+        id: publish-channel
         working-directory: deploy-state
         env:
           GH_TOKEN: ${{ github.token }}
@@ -141,7 +142,8 @@ jobs:
             --message "chore(deploy): ${CHANNEL_FILE} -> ${RELEASE}" \
             -- channels
 
-      - name: Wait for the environment to converge
+      - name: Verify the public webapp version
+        id: webapp-version
         if: ${{ !inputs.freeze }}
         env:
           EXPECTED: ${{ steps.release.outputs.version }}
@@ -156,9 +158,16 @@ jobs:
             if [ -n "$config" ]; then
               running=$(curl -fsS --max-time 20 "https://${HOSTNAME}${config}" |
                 sed -nE 's/.*APPLICATION_VERSION: "([^"]*)".*/\1/p' | head -1 || true)
-              [ "$running" = "$EXPECTED" ] && { echo "Converged on $running"; exit 0; }
+              [ "$running" = "$EXPECTED" ] && { echo "Public webapp reports $running (other services not checked)"; exit 0; }
             fi
             sleep 20
           done
-          echo "::error::${HOSTNAME} did not reach ${EXPECTED} within 15 minutes"
+          echo "::error::Public webapp at ${HOSTNAME} did not report ${EXPECTED} within 15 minutes"
           exit 1
+
+      - name: Report promotion verification scope
+        if: ${{ always() && steps.publish-channel.outcome == 'success' }}
+        env:
+          FROZEN: ${{ inputs.freeze }}
+          WEBAPP_OUTCOME: ${{ steps.webapp-version.outcome }}
+        run: node scripts/report-promotion-coverage.ts

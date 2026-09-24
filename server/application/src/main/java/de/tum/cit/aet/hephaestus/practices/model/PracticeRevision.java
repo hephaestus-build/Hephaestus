@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.model;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.ReviewRuleFingerprint;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -102,6 +103,10 @@ public class PracticeRevision {
     @ToString.Exclude
     private PracticeAutomatedReviewPolicy automatedReviewPolicy;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "delivery_behavior", columnDefinition = "jsonb", nullable = false)
+    private PracticeDeliveryBehavior deliveryBehavior;
+
     @Column(name = "why_it_matters", columnDefinition = "TEXT")
     @ToString.Exclude
     private @Nullable String whyItMatters;
@@ -145,6 +150,7 @@ public class PracticeRevision {
         this.precomputeScript = practice.getPrecomputeScript();
         this.automatedReviewPolicy =
                 Objects.requireNonNull(practice.getAutomatedReviewPolicy(), "practice.automatedReviewPolicy");
+        this.deliveryBehavior = practice.getDeliveryBehavior();
         this.whyItMatters = practice.getWhyItMatters();
         this.whatGoodLooksLike = practice.getWhatGoodLooksLike();
         PracticeGroup group = practice.getGroup();
@@ -155,10 +161,14 @@ public class PracticeRevision {
             this.groupIcon = group.getIcon();
             this.groupColor = group.getColor();
         }
-        this.reviewRuleFingerprint = computeReviewRuleFingerprint();
+        this.reviewRuleFingerprint = calculateReviewRuleFingerprint();
     }
 
     public String computeReviewRuleFingerprint() {
+        return calculateReviewRuleFingerprint();
+    }
+
+    private String calculateReviewRuleFingerprint() {
         return ReviewRuleFingerprint.of(
                 slug, name, bindings, criteria, precomputeScript, automatedReviewPolicy, groupSlug);
     }

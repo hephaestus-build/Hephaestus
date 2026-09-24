@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Map;
 import java.util.regex.Pattern;
 import liquibase.Contexts;
 import liquibase.Liquibase;
@@ -14,7 +16,9 @@ import liquibase.resource.ClassLoaderResourceAccessor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.images.builder.ImageFromDockerfile;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
 
 public final class PostgreSQLTestContainer {
 
@@ -26,13 +30,13 @@ public final class PostgreSQLTestContainer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PostgreSQLTestContainer.class);
 
-    private static @Nullable PostgreSQLContainer<?> container;
+    private static @Nullable PostgreSQLContainer container;
     private static boolean migratedTemplateReady;
 
     private PostgreSQLTestContainer() {}
 
-    public static synchronized PostgreSQLContainer<?> getInstance() {
-        PostgreSQLContainer<?> current = container;
+    public static synchronized PostgreSQLContainer getInstance() {
+        PostgreSQLContainer current = container;
         if (current == null) {
             current = createContainer();
             container = current;
@@ -42,7 +46,7 @@ public final class PostgreSQLTestContainer {
 
     public static synchronized TestDatabase createDatabase(String name) {
         validateDatabaseName(name);
-        PostgreSQLContainer<?> postgres = getInstance();
+        PostgreSQLContainer postgres = getInstance();
         try (Connection connection = DriverManager.getConnection(
                         postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
                 Statement statement = connection.createStatement()) {
@@ -64,7 +68,7 @@ public final class PostgreSQLTestContainer {
     }
 
     private static TestDatabase cloneDatabase(String name, String templateName) {
-        PostgreSQLContainer<?> postgres = getInstance();
+        PostgreSQLContainer postgres = getInstance();
         try (Connection connection = DriverManager.getConnection(
                         postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
                 Statement statement = connection.createStatement()) {
@@ -106,19 +110,25 @@ public final class PostgreSQLTestContainer {
         }
     }
 
-    private static TestDatabase database(PostgreSQLContainer<?> postgres, String name) {
+    private static TestDatabase database(PostgreSQLContainer postgres, String name) {
         String jdbcUrl = "jdbc:postgresql://" + postgres.getHost() + ":" + postgres.getMappedPort(5432) + "/" + name;
         return new TestDatabase(jdbcUrl, postgres.getUsername(), postgres.getPassword());
     }
 
     public record TestDatabase(String jdbcUrl, String username, String password) {}
 
-    @SuppressWarnings("resource") // Closed by the JVM shutdown hook.
-    private static PostgreSQLContainer<?> createContainer() {
-        PostgreSQLContainer<?> newContainer = new PostgreSQLContainer<>("postgres:18")
+    // Ryuk stops this singleton after JVM exit, keeping it available while Spring closes cached contexts.
+    @SuppressWarnings("resource")
+    private static PostgreSQLContainer createContainer() {
+        PostgreSQLContainer newContainer = new PostgreSQLContainer(DockerImageName.parse(new ImageFromDockerfile()
+                                .withDockerfile(
+                                        Path.of(System.getProperty("basedir", "."), "../../docker/postgres/Dockerfile"))
+                                .get())
+                        .asCompatibleSubstituteFor("postgres"))
                 .withDatabaseName(DEFAULT_TEST_DB)
                 .withUsername(DEFAULT_TEST_USER)
-                .withPassword(DEFAULT_TEST_PASSWORD);
+                .withPassword(DEFAULT_TEST_PASSWORD)
+                .withTmpFs(Map.of("/var/lib/postgresql", "rw"));
 
         newContainer.start();
         ensureExtensions(
@@ -131,16 +141,10 @@ public final class PostgreSQLTestContainer {
                 newContainer.getUsername(),
                 newContainer.getDatabaseName());
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            if (newContainer.isRunning()) {
-                newContainer.stop();
-            }
-        }));
-
         return newContainer;
     }
 
-    /** Enables extensions required by Hibernate-generated test schemas because Liquibase is disabled in tests. */
+    // Hibernate-created schemas need citext without relying on Liquibase.
     private static void ensureExtensions(String jdbcUrl, String username, String password) {
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password)) {
             connection.createStatement().execute("CREATE EXTENSION IF NOT EXISTS citext");

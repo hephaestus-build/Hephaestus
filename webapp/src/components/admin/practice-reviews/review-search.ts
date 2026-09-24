@@ -1,12 +1,13 @@
 import { z } from "zod";
 
+import { statusValues } from "@/components/common/status-def";
 import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
+import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { FILTERABLE_PLACES } from "@/components/practice-vocabulary/delivery-place-defs";
 import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
 import { REVIEW_STATUS_DEFS } from "@/components/practice-vocabulary/review-status-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import { statusValues } from "@/components/practice-vocabulary/status-def";
 import {
 	reasonsInFamilies,
 	WITHHOLDING_FAMILY_DEFS,
@@ -14,6 +15,7 @@ import {
 import { ARTIFACT_KIND_VALUES, type KnownArtifactKind } from "@/lib/artifact-kinds";
 import { dayAfterInstant, dayStartInstant, fromDayParam } from "@/lib/date-range-search";
 import { multiValue, narrowToEnum } from "@/lib/search-params";
+import { hasText } from "@/lib/text";
 
 /**
  * Read by the query and by the skeleton that stands in for the results, so a skeleton cannot draw a
@@ -25,7 +27,7 @@ export const REVIEW_PAGE_SIZE = 25;
  * How often a queued or running review is re-asked for, on every screen that watches one. Applied
  * through TanStack Query's `refetchInterval`, which stops on its own at a terminal status.
  */
-export const ACTIVE_REVIEW_POLL_MS = 5_000;
+export const ACTIVE_REVIEW_POLL_MS = 5000;
 
 /**
  * Ordering names the server understands. `ACTIONABILITY` puts shortfalls first, worst severity down
@@ -59,7 +61,7 @@ const scope = {
 };
 
 function canonicalDateRange<T extends { from?: string; to?: string }>(search: T): T {
-	if (!search.from || (search.to && search.to < search.from)) {
+	if (!hasText(search.from) || (hasText(search.to) && search.to < search.from)) {
 		return { ...search, to: undefined };
 	}
 	return search;
@@ -84,6 +86,7 @@ export const observationsSearchSchema = z
 		page,
 		groupSlug: multiValue,
 		practiceSlug: multiValue,
+		assessmentStatus: enumValues(statusValues(ASSESSMENT_STATUS_DEFS)).optional(),
 		presence: enumValues(statusValues(PRESENCE_DEFS)),
 		assessment: enumValues(statusValues(ASSESSMENT_DEFS)),
 		severity: enumValues(statusValues(SEVERITY_DEFS)),
@@ -114,13 +117,13 @@ export type FeedbackSearch = z.infer<typeof feedbackSearchSchema>;
 export type ObservationsSearch = z.infer<typeof observationsSearchSchema>;
 export type RunsSearch = z.infer<typeof runsSearchSchema>;
 
-export type ReviewScopeSearch = {
+export interface ReviewScopeSearch {
 	agentJobId?: string;
 	artifactKind?: KnownArtifactKind;
 	artifactId?: number;
 	from?: string;
 	to?: string;
-};
+}
 
 export function reviewScopeSearch(search: ReviewScopeSearch): ReviewScopeSearch {
 	return {
@@ -169,9 +172,10 @@ export function feedbackQuery(search: FeedbackSearch, size: number) {
 		page: search.page ?? 0,
 		size,
 		deliveryState: search.deliveryState,
-		suppressionReason: search.withheldFamily?.length
-			? reasonsInFamilies(search.withheldFamily)
-			: undefined,
+		suppressionReason:
+			search.withheldFamily !== undefined && search.withheldFamily.length > 0
+				? reasonsInFamilies(search.withheldFamily)
+				: undefined,
 		channel: search.channel,
 		recipientUserId: search.recipientUserId,
 	};
@@ -182,8 +186,13 @@ export function observationsQuery(search: ObservationsSearch, size: number) {
 		...scopeQuery(search),
 		page: search.page ?? 0,
 		size,
-		groupSlug: search.groupSlug?.length ? search.groupSlug : undefined,
-		practiceSlug: search.practiceSlug?.length ? search.practiceSlug : undefined,
+		groupSlug:
+			search.groupSlug !== undefined && search.groupSlug.length > 0 ? search.groupSlug : undefined,
+		practiceSlug:
+			search.practiceSlug !== undefined && search.practiceSlug.length > 0
+				? search.practiceSlug
+				: undefined,
+		assessmentStatus: search.assessmentStatus,
 		presence: search.presence,
 		assessment: search.assessment,
 		severity: search.severity,

@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -21,7 +23,6 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.MentorSlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.MentorSlackThreadRepository;
@@ -33,6 +34,8 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackRetentionSweeper;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspacePurgeAdapter;
+import de.tum.cit.aet.hephaestus.mentor.ChatMessage;
+import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
 import de.tum.cit.aet.hephaestus.mentor.ChatThread;
 import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -42,8 +45,11 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
+import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
@@ -56,8 +62,11 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeBlockedException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -101,6 +110,9 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private ChatThreadRepository chatThreadRepository;
 
     @Autowired
+    private ChatMessageRepository chatMessageRepository;
+
+    @Autowired
     private SlackMessageRepository slackMessageRepository;
 
     @Autowired
@@ -134,6 +146,9 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private FeedbackObservationRepository feedbackObservationRepository;
 
     @Autowired
+    private FeedbackPlacementRepository feedbackPlacementRepository;
+
+    @Autowired
     private AgentJobRepository agentJobRepository;
 
     @Autowired
@@ -144,6 +159,9 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private AccountRepository accountRepository;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -249,6 +267,59 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Nested
     class DataCleanup {
+
+        @Test
+        void purgeRemovesTheProductRowsTheWorkspaceOwnsAndKeepsInstanceWideSurveys() {
+            Workspace workspace = createGitLabWorkspaceWithData("product-rows");
+            Long workspaceId = workspace.getId();
+            long accountId = Objects.requireNonNull(
+                    accountRepository.save(new Account("Product purge")).getId());
+            UUID targeted = seedSurvey(workspaceId);
+            UUID instanceWide = seedSurvey(null);
+            UUID targetedParticipation = seedParticipation(targeted, accountId, workspaceId);
+            UUID feedback = UUID.randomUUID();
+            jdbcTemplate.update(
+                    "INSERT INTO product_feedback (id, account_id, workspace_id, kind, message, app_version, created_at, submission_minute) "
+                            + "VALUES (?, ?, ?, 'FEEDBACK', 'From the purged workspace', 'test', now(), now())",
+                    feedback,
+                    accountId,
+                    workspaceId);
+
+            workspaceLifecycleService.purgeWorkspace(workspace.getWorkspaceSlug());
+
+            assertThat(jdbcTemplate.queryForList(
+                            "SELECT id FROM product_survey WHERE id IN (?, ?)", UUID.class, targeted, instanceWide))
+                    .containsExactly(instanceWide);
+            assertThat(jdbcTemplate.queryForList(
+                            "SELECT id FROM product_survey_participation WHERE id = ?",
+                            UUID.class,
+                            targetedParticipation))
+                    .isEmpty();
+            assertThat(jdbcTemplate.queryForList("SELECT id FROM product_feedback WHERE id = ?", UUID.class, feedback))
+                    .isEmpty();
+        }
+
+        private UUID seedSurvey(@Nullable Long workspaceId) {
+            UUID id = UUID.randomUUID();
+            jdbcTemplate.update(
+                    "INSERT INTO product_survey (id, title, description, questions_json, workspace_id, starts_at, active, created_at) "
+                            + "VALUES (?, 'Survey', 'Description', CAST('[]' AS jsonb), ?, now(), true, now())",
+                    id,
+                    workspaceId);
+            return id;
+        }
+
+        private UUID seedParticipation(UUID surveyId, long accountId, Long workspaceId) {
+            UUID id = UUID.randomUUID();
+            jdbcTemplate.update(
+                    "INSERT INTO product_survey_participation (id, survey_id, account_id, workspace_id, status, invited_at) "
+                            + "VALUES (?, ?, ?, ?, 'INVITED', now())",
+                    id,
+                    surveyId,
+                    accountId,
+                    workspaceId);
+            return id;
+        }
 
         @Test
         void purgeDeletesAllWorkspaceScopedData() {
@@ -499,7 +570,8 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
 
         Workspace purged = workspaceRepository.findById(workspace.getId()).orElseThrow();
         assertThat(purged.getStatus()).isEqualTo(Workspace.WorkspaceStatus.PURGED);
@@ -528,7 +600,8 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         Workspace unchanged = workspaceRepository.findById(workspace.getId()).orElseThrow();
         assertThat(unchanged.getStatus()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
@@ -556,7 +629,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             return String.format("%010d.000000", instant.getEpochSecond());
         }
 
-        private void insertThread(Long workspaceId, String slackChannelId, String slackThreadTs, String lastTs) {
+        private SlackThread insertThread(Long workspaceId, String slackChannelId, String slackThreadTs, String lastTs) {
             SlackThread thread = new SlackThread();
             thread.setWorkspaceId(workspaceId);
             thread.setSlackChannelId(slackChannelId);
@@ -564,7 +637,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             thread.setFirstTs(lastTs);
             thread.setLastTs(lastTs);
             thread.setMessageCount(1);
-            slackThreadRepository.save(thread);
+            return slackThreadRepository.save(thread);
         }
 
         /** Insert one ingested Slack message with a controlled {@code ingested_at} (native — bypasses @CreationTimestamp). */
@@ -615,7 +688,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             mentorThread.setSlackUserId("U1");
             mentorSlackThreadRepository.save(mentorThread);
 
-            slackParticipantConsentRepository.upsert(workspaceId, "U1", true, true, "SLACK_APP_HOME");
+            slackParticipantConsentRepository.optOutOfIngestion(workspaceId, "U1", "SLACK_APP_HOME");
         }
 
         @Test
@@ -683,38 +756,97 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             Workspace a = createBareWorkspace("slack-conv-a");
             Workspace b = createBareWorkspace("slack-conv-b");
 
-            SlackThread threadA = new SlackThread();
-            threadA.setWorkspaceId(a.getId());
-            threadA.setSlackChannelId("CA");
-            threadA.setSlackThreadTs("500.1");
-            threadA = slackThreadRepository.save(threadA);
-            UUID convObsA = seedDerivedConversation(a, threadA.getId());
+            SlackThread threadA = insertThread(a.getId(), "CA", "500.1", "500.1");
+            DerivedConversation derivedA = seedDerivedConversation(a, threadA.getId());
 
-            SlackThread threadB = new SlackThread();
-            threadB.setWorkspaceId(b.getId());
-            threadB.setSlackChannelId("CB");
-            threadB.setSlackThreadTs("600.1");
-            threadB = slackThreadRepository.save(threadB);
-            UUID convObsB = seedDerivedConversation(b, threadB.getId());
+            SlackThread threadB = insertThread(b.getId(), "CB", "600.1", "600.1");
+            DerivedConversation derivedB = seedDerivedConversation(b, threadB.getId());
 
-            // Drive the Slack purge contributor for A in isolation (the real chain wraps the contributors in
-            // one transaction, so mirror that with a TransactionTemplate). It is the explicit
-            // eraseAllConversationForWorkspace call (not the practices contributor) that must erase the derived rows
-            // here, so this fails if that port call is removed from the adapter.
+            // Run this contributor alone to prove it erases derived rows without the practices contributor.
             TransactionTemplate tx = new TransactionTemplate(transactionManager);
             tx.executeWithoutResult(status -> slackWorkspacePurgeAdapter.deleteWorkspaceData(a.getId()));
 
-            // A's derived CONVERSATION rows are erased; B's remain intact (tenant scoping).
-            assertThat(observationRepository.findById(convObsA)).isEmpty();
-            assertThat(observationRepository.findById(convObsB)).isPresent();
-            // Idempotent: a second contributor pass (double-delete) is a no-op.
+            assertDerivedConversationErased(derivedA);
+            assertDerivedConversationExists(derivedB);
             tx.executeWithoutResult(status -> slackWorkspacePurgeAdapter.deleteWorkspaceData(a.getId()));
-            assertThat(observationRepository.findById(convObsB)).isPresent();
+            assertDerivedConversationExists(derivedB);
         }
 
-        /** Seed a chat.conversation_thread observation + feedback + join anchored to {@code threadId} for {@code workspace}. */
-        private UUID seedDerivedConversation(Workspace workspace, long threadId) {
+        @Test
+        void shouldEraseDeliveredAndPreparedJudgmentsWhenWorkspaceIsPurged() {
+            Workspace erasedWorkspace = createBareWorkspace("delivered-purge-a");
+            Workspace retainedWorkspace = createBareWorkspace("delivered-purge-b");
+            SlackThread erasedThread = insertThread(erasedWorkspace.getId(), "CA", "700.1", "700.1");
+            SlackThread retainedThread = insertThread(retainedWorkspace.getId(), "CB", "800.1", "800.1");
+            DerivedConversation erased = seedDerivedConversation(erasedWorkspace, erasedThread.getId());
+            DerivedConversation retained = seedDerivedConversation(retainedWorkspace, retainedThread.getId());
+            assertDerivedConversationExists(erased);
+
+            workspaceLifecycleService.purgeWorkspace(erasedWorkspace.getWorkspaceSlug());
+
+            assertDerivedConversationErased(erased);
+            assertDerivedConversationExists(retained);
+            assertThat(chatMessageRepository.findById(erased.messageId())).isEmpty();
+            assertThat(chatMessageRepository.findById(retained.messageId())).isPresent();
+        }
+
+        private record DerivedConversation(
+                List<UUID> observationIds, UUID preparedId, UUID deliveredId, UUID messageId) {}
+
+        private void assertDerivedConversationExists(DerivedConversation derived) {
+            assertThat(observationRepository.findAllById(derived.observationIds()))
+                    .hasSize(2);
+            assertThat(feedbackRepository.findById(derived.preparedId()))
+                    .get()
+                    .extracting(Feedback::getDeliveryState)
+                    .isEqualTo(FeedbackDeliveryState.PREPARED);
+            assertThat(feedbackRepository.findById(derived.deliveredId()))
+                    .get()
+                    .extracting(Feedback::getDeliveryState)
+                    .isEqualTo(FeedbackDeliveryState.DELIVERED);
+            assertThat(boundFeedbackIds(derived))
+                    .containsExactlyInAnyOrder(derived.preparedId(), derived.deliveredId());
+            assertThat(feedbackPlacementRepository.findByFeedbackId(derived.deliveredId()))
+                    .singleElement()
+                    .extracting(FeedbackPlacement::getChatMessageId)
+                    .isEqualTo(derived.messageId());
+        }
+
+        private void assertDerivedConversationErased(DerivedConversation derived) {
+            assertThat(observationRepository.findAllById(derived.observationIds()))
+                    .isEmpty();
+            assertThat(feedbackRepository.findById(derived.preparedId())).isEmpty();
+            assertThat(feedbackRepository.findById(derived.deliveredId())).isEmpty();
+            assertThat(boundFeedbackIds(derived)).isEmpty();
+            assertThat(feedbackPlacementRepository.findByFeedbackId(derived.deliveredId()))
+                    .isEmpty();
+        }
+
+        private List<@Nullable UUID> boundFeedbackIds(DerivedConversation derived) {
+            return jdbcTemplate.queryForList(
+                    "SELECT feedback_id FROM feedback_observation WHERE feedback_id IN (?, ?)",
+                    UUID.class,
+                    derived.preparedId(),
+                    derived.deliveredId());
+        }
+
+        /** Seed both a never-delivered and a delivered judgment for one conversation. */
+        private DerivedConversation seedDerivedConversation(Workspace workspace, long threadId) {
             User owner = persistUser("conv-" + workspace.getId() + "-subject");
+            ChatThread chatThread = new ChatThread();
+            chatThread.setId(UUID.randomUUID());
+            chatThread.setWorkspace(workspace);
+            chatThread.setUser(owner);
+            chatThreadRepository.save(chatThread);
+            ChatMessage message = new ChatMessage();
+            message.setId(UUID.randomUUID());
+            message.setThread(chatThread);
+            message.setRole(ChatMessage.Role.ASSISTANT);
+            message.setStatus(ChatMessage.Status.completed);
+            message.setParts(OM.valueToTree(List.of(Map.of("type", "text", "text", "Delivered guidance"))));
+            message.setMetadata(OM.createObjectNode());
+            chatMessageRepository.save(message);
+
             Practice practice = new Practice();
             practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.CONVERSATION_THREAD));
             practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
@@ -722,36 +854,40 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             practice.setSlug("conv-practice-" + workspace.getId());
             practice.setName("Conversation Practice");
             practice.setCriteria("Test description");
-            practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
             practice = practiceRepository.save(practice);
 
             AgentJob job = new AgentJob();
             job.setWorkspace(workspace);
             job.setJobType(AgentJobType.CONVERSATION_REVIEW);
+            job.setArtifactKind(ArtifactKinds.CONVERSATION_THREAD);
+            job.setStatus(AgentJobStatus.COMPLETED);
             job.setConfigSnapshot(OM.valueToTree(Map.of("model", "test")));
             job = agentJobRepository.save(job);
 
-            UUID observationId = UUID.randomUUID();
-            observationRepository.insertIfAbsent(
-                    observationId,
-                    "occ-" + observationId,
-                    job.getId(),
-                    job.getWorkspace().getId(),
-                    practice.getId(),
-                    null,
-                    ArtifactKinds.CONVERSATION_THREAD.value(),
-                    threadId,
-                    owner.getId(),
-                    "Observation title",
-                    "ABSENT",
-                    "BAD",
-                    "MAJOR",
-                    null,
-                    null,
-                    null,
-                    Instant.now(),
-                    "LIVE");
-            Feedback feedback = feedbackRepository.save(Feedback.builder()
+            List<UUID> observationIds = List.of(UUID.randomUUID(), UUID.randomUUID());
+            for (UUID observationId : observationIds) {
+                observationRepository.insertIfAbsent(
+                        observationId,
+                        "occ-" + observationId,
+                        job.getId(),
+                        job.getWorkspace().getId(),
+                        practice.getId(),
+                        null,
+                        ArtifactKinds.CONVERSATION_THREAD.value(),
+                        threadId,
+                        owner.getId(),
+                        "Observation title",
+                        "ASSESSED",
+                        "ABSENT",
+                        "GOOD",
+                        "MAJOR",
+                        null,
+                        null,
+                        null,
+                        Instant.now(),
+                        "LIVE");
+            }
+            Feedback prepared = feedbackRepository.save(Feedback.builder()
                     .agentJobId(job.getId())
                     .workspaceId(workspace.getId())
                     .artifactKind(ArtifactKinds.CONVERSATION_THREAD)
@@ -765,8 +901,30 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .createdAt(Instant.now())
                     .build());
             feedbackObservationRepository.insertIfAbsent(
-                    feedback.getId(), observationId, EvidenceRole.PRIMARY.name(), 0);
-            return observationId;
+                    prepared.getId(), observationIds.get(0), EvidenceRole.PRIMARY.name(), 0);
+            Feedback delivered = feedbackRepository.save(Feedback.builder()
+                    .agentJobId(job.getId())
+                    .workspaceId(workspace.getId())
+                    .artifactKind(ArtifactKinds.CONVERSATION_THREAD)
+                    .artifactId(threadId)
+                    .recipientUserId(owner.getId())
+                    .aboutUserId(owner.getId())
+                    .channel(FeedbackChannel.IN_CHAT)
+                    .position(1)
+                    .deliveryState(FeedbackDeliveryState.DELIVERED)
+                    .source(FeedbackSource.AGENT)
+                    .createdAt(Instant.now())
+                    .deliveredAt(Instant.now())
+                    .build());
+            feedbackObservationRepository.insertIfAbsent(
+                    delivered.getId(), observationIds.get(1), EvidenceRole.PRIMARY.name(), 0);
+            feedbackPlacementRepository.save(FeedbackPlacement.builder()
+                    .feedback(delivered)
+                    .placementType(PlacementType.CONVERSATION_TURN)
+                    .chatMessageId(message.getId())
+                    .createdAt(Instant.now())
+                    .build());
+            return new DerivedConversation(observationIds, prepared.getId(), delivered.getId(), message.getId());
         }
     }
 }

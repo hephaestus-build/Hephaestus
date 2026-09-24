@@ -34,7 +34,7 @@ class TaskEnvelopeWriterTest extends BaseUnitTest {
     void writesKindAndSchemaVersion() throws Exception {
         JsonNode root = reader.readTree(writer.write(sampleEnvelope()));
 
-        assertThat(root.get("schemaVersion").asInt()).isEqualTo(1);
+        assertThat(root.get("schemaVersion").asInt()).isEqualTo(2);
         assertThat(root.get("jobId").asString()).isEqualTo("00000000-0000-0000-0000-00000000abcd");
         assertThat(root.get("workspaceId").asLong()).isEqualTo(99L);
         assertThat(root.get("task").get("kind").asString()).isEqualTo("practice_review");
@@ -60,8 +60,9 @@ class TaskEnvelopeWriterTest extends BaseUnitTest {
     void roundTripDeserialise() throws Exception {
         TaskEnvelope decoded = reader.readValue(writer.write(sampleEnvelope()), TaskEnvelope.class);
 
-        assertThat(decoded.schemaVersion()).isEqualTo(1);
+        assertThat(decoded.schemaVersion()).isEqualTo(2);
         assertThat(decoded.workspaceId()).isEqualTo(99L);
+        assertThat(decoded.paths()).isEqualTo(TaskPaths.capturedInputs());
         assertThat(decoded.task()).isInstanceOf(Task.PracticeReview.class);
         Task.PracticeReview task = (Task.PracticeReview) decoded.task();
         assertThat(task.prompt()).isEqualTo("Review this PR");
@@ -85,10 +86,10 @@ class TaskEnvelopeWriterTest extends BaseUnitTest {
     void rejectsNonPositiveFields() {
         Task.PracticeReview task = new Task.PracticeReview("p", 1, "o/r");
         UUID jobId = UUID.randomUUID();
-        assertThatThrownBy(() -> new TaskEnvelope(0, jobId, 1L, task))
+        assertThatThrownBy(() -> new TaskEnvelope(0, jobId, 1L, task, TaskPaths.capturedInputs()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("schemaVersion");
-        assertThatThrownBy(() -> new TaskEnvelope(1, jobId, 0L, task))
+        assertThatThrownBy(() -> new TaskEnvelope(2, jobId, 0L, task, TaskPaths.capturedInputs()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("workspaceId");
     }

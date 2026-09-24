@@ -16,7 +16,9 @@ export type DateLike = Date | string | undefined | null;
  * fallback: `asDate(value)?.toLocaleDateString() ?? "–"`.
  */
 export function asDate(value: DateLike): Date | undefined {
-	if (value == null) return undefined;
+	if (value == null) {
+		return undefined;
+	}
 	const date = value instanceof Date ? value : new Date(value);
 	return Number.isNaN(date.getTime()) ? undefined : date;
 }

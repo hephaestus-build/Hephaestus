@@ -30,6 +30,7 @@ describe("toEvidenceLocations", () => {
 				endLine: 44,
 				sourceKind: "scm.pull-request.diff",
 				side: "NEW",
+				revision: undefined,
 				snippet: "a();\nb();",
 				redacted: false,
 			},
@@ -54,6 +55,12 @@ describe("toEvidenceLocations", () => {
 		expect(location?.redacted).toBe(true);
 
 		expect(location?.path).toBe("src/Main.java");
+	});
+
+	it("preserves the commit that a historical quote was verified against", () => {
+		const revision = "a".repeat(40);
+		const [location] = toEvidenceLocations({ citations: [citation({ revision })] });
+		expect(location?.revision).toBe(revision);
 	});
 
 	it("preserves the order the reviewer recorded", () => {
@@ -91,6 +98,7 @@ describe("toEvidenceLocations", () => {
 				endLine: 4,
 				sourceKind: "scm.pull-request.diff",
 				redacted: false,
+				revision: undefined,
 				change: {
 					before: "-export const PAGE_SIZE = 25;",
 					after: "+export const PAGE_SIZE = 20;",
@@ -241,7 +249,7 @@ describe("toEvidenceCheck", () => {
 			}),
 		).toStrictEqual([
 			{ term: "Looked for", detail: "a test exercising the new branch" },
-			{ term: "Read", detail: "The code changes and Files in the repository" },
+			{ term: "Read", detail: "The code changes and Files and history in the repository" },
 			{
 				term: "How far it reached",
 				detail: "every test file the diff touches and the repository's own test tree",

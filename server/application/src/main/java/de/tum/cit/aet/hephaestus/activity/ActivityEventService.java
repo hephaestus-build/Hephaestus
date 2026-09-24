@@ -13,38 +13,17 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.observation.annotation.Observed;
 import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Records activity events with XP.
- *
- * <p>Idempotent via unique constraint on event_key.
- *
- * <h3>Security Model</h3>
- * <p><strong>INTERNAL API - NOT FOR DIRECT CONTROLLER USE.</strong>
- *
- * <p>This service has no authorization checks because it is designed to be called
- * exclusively by {@link ActivityEventListener} in response to domain events that
- * have already been authenticated and authorized through the webhook/sync pipeline.
- *
- * <p><strong>Do NOT expose this service to controllers or REST endpoints.</strong>
- * All event recording flows through the listener pattern:
- * <pre>
- * Authenticated Webhook → MessageHandler → ScmDomainEvent → ActivityEventListener → ActivityEventService
- * </pre>
- *
- * <p>If authorization is needed in the future (e.g., manual event injection),
- * add {@code @PreAuthorize("hasRole('ADMIN')")} to the record() method.
- *
- * @see ActivityEventListener The only intended caller of this service
+ * Records activity from authenticated provider events; performs no caller authorization.
+ * Cross-module callers use {@link ActivityRecorder}, not controllers.
  */
 @Slf4j
 @Service
@@ -53,26 +32,22 @@ public class ActivityEventService implements ActivityRecorder {
     private final ActivityEventRepository eventRepository;
     private final WorkspaceRepository workspaceRepository;
     private final ExperiencePointProperties xpProperties;
-    private final ApplicationEventPublisher eventPublisher;
     private final Counter eventsRecordedCounter;
     private final Counter eventsDuplicateCounter;
     private final Counter eventsFailedCounter;
     private final DistributionSummary xpDistribution;
     private final MeterRegistry meterRegistry;
 
-    // Pre-registered timers per event type to avoid cardinality bomb
     private final ConcurrentHashMap<ActivityEventType, Timer> eventTypeTimers = new ConcurrentHashMap<>();
 
     public ActivityEventService(
             ActivityEventRepository eventRepository,
             WorkspaceRepository workspaceRepository,
             ExperiencePointProperties xpProperties,
-            MeterRegistry meterRegistry,
-            ApplicationEventPublisher eventPublisher) {
+            MeterRegistry meterRegistry) {
         this.eventRepository = eventRepository;
         this.workspaceRepository = workspaceRepository;
         this.xpProperties = xpProperties;
-        this.eventPublisher = eventPublisher;
         this.eventsRecordedCounter = Counter.builder(ActivityMetrics.ACTIVITY_EVENTS_RECORDED)
                 .description("Number of activity events recorded")
                 .register(meterRegistry);
@@ -89,10 +64,6 @@ public class ActivityEventService implements ActivityRecorder {
         this.meterRegistry = meterRegistry;
     }
 
-    /**
-     * Get or create a timer for the given event type.
-     * Pre-registers timers to avoid unbounded cardinality.
-     */
     private Timer getTimerForEventType(ActivityEventType eventType) {
         return eventTypeTimers.computeIfAbsent(
                 eventType,
@@ -104,15 +75,7 @@ public class ActivityEventService implements ActivityRecorder {
     }
 
     /**
-     * Record an activity event.
-     *
-     * <p>This method is idempotent: duplicate events (same event_key) are silently ignored.
-     *
-     * @return true if recorded successfully, false if:
-     * <ul>
-     *   <li>Event is a duplicate (already exists with same event_key)</li>
-     *   <li>Workspace not found (logs warning, does not throw)</li>
-     * </ul>
+     * @return false for a duplicate event key or missing workspace; true when inserted
      */
     @Override
     @Transactional
@@ -138,7 +101,6 @@ public class ActivityEventService implements ActivityRecorder {
             ActivityTargetType targetType,
             Long targetId,
             double xp) {
-        // Validate workspace exists first (cheap lookup)
         if (!workspaceRepository.existsById(workspaceId)) {
             eventsFailedCounter.increment();
             log.warn(
@@ -149,20 +111,17 @@ public class ActivityEventService implements ActivityRecorder {
             return false;
         }
 
-        // Clamp XP to valid bounds: minimum 0, configurable maximum (safety cap)
         double maxXp = xpProperties.maxXpPerEvent();
         double clampedXp = Math.max(0.0, Math.min(xp, maxXp));
         if (clampedXp != xp) {
             log.debug("Clamped XP value: originalXp={}, clampedXp={}, eventType={}", xp, clampedXp, eventType);
         }
 
-        // Round to 2 decimal places for consistent precision (HALF_UP rounding)
         double roundedXp = XpPrecision.round(clampedXp);
 
         String eventKey = ActivityEvent.buildKey(eventType, targetId, occurredAt);
 
-        // Use ON CONFLICT DO NOTHING to atomically handle duplicates.
-        // This eliminates the race condition between exists() check and save().
+        // ON CONFLICT handles concurrent deliveries without a check-then-insert race.
         Timer eventTimer = getTimerForEventType(eventType);
         long startTime = System.nanoTime();
         int rowsInserted = eventRepository.insertIfAbsent(
@@ -187,13 +146,7 @@ public class ActivityEventService implements ActivityRecorder {
         eventsRecordedCounter.increment();
         xpDistribution.record(roundedXp);
 
-        // Publish event for downstream listeners (e.g., achievement system)
-        eventPublisher.publishEvent(new ActivitySavedEvent(
-                Optional.ofNullable(actor), eventType, occurredAt, workspaceId, targetType, targetId));
-
-        // One line per recorded event — DEBUG by default (per-event bookkeeping; the
-        // eventsRecordedCounter / xpDistribution metrics already track volume). Per-repo
-        // sync rollups carry the INFO-level summary.
+        // Per-event details stay at DEBUG; metrics and sync rollups report volume.
         log.debug(
                 "Recorded activity event: eventType={}, targetId={}, xp={}, scopeId={}, actorId={}",
                 eventType,
@@ -204,45 +157,7 @@ public class ActivityEventService implements ActivityRecorder {
         return true;
     }
 
-    /**
-     * Record an activity event using a command object.
-     *
-     * <p>This is the preferred API for recording events - cleaner than the
-     * parameter method and provides compile-time safety via the builder pattern.
-     *
-     * @param command the command containing all event data
-     * @return true if recorded successfully, false otherwise
-     * @see RecordActivityCommand
-     */
-    public boolean record(RecordActivityCommand command) {
-        return persist(
-                command.workspaceId(),
-                command.eventType(),
-                command.occurredAt(),
-                command.actor(),
-                command.repository(),
-                command.targetType(),
-                command.targetId(),
-                command.xp());
-    }
-
-    /**
-     * Record an activity event for a deleted entity.
-     *
-     * <p>When an entity is deleted, we may not have access to the actor or repository
-     * information from the entity itself. This method records the deletion event
-     * with null actor and repository - it's still valuable for audit trail purposes.
-     *
-     * <p>Deleted events always have 0 XP since they represent data removal, not
-     * value-adding activity.
-     *
-     * @param workspaceId the workspace ID
-     * @param eventType   the event type (e.g., COMMENT_DELETED, ISSUE_DELETED)
-     * @param occurredAt  when the deletion occurred
-     * @param targetType  the type of entity that was deleted
-     * @param targetId    the ID of the deleted entity
-     * @return true if recorded successfully, false otherwise
-     */
+    /** Records deletions without actor/repository context or XP; the target may no longer exist. */
     @Override
     @Transactional
     @Observed(name = "activity.record.deleted", contextualName = "record-deleted-activity-event")
@@ -252,16 +167,6 @@ public class ActivityEventService implements ActivityRecorder {
             Instant occurredAt,
             ActivityTargetType targetType,
             Long targetId) {
-        // Record with null actor and repository - acceptable for deletion audit trail
-        return persist(
-                workspaceId,
-                eventType,
-                occurredAt,
-                null, // actor unknown for deleted entities
-                null, // repository unknown for deleted entities
-                targetType,
-                targetId,
-                0.0 // deletions have no XP value
-                );
+        return persist(workspaceId, eventType, occurredAt, null, null, targetType, targetId, 0.0);
     }
 }

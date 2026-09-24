@@ -41,16 +41,14 @@ const thread = (label: string): ReviewedWorkRef => ({
 });
 
 /** The sentence as a reader reads it, pills, groups and links and all. */
+function readSegment(segment: FeedbackTextSegment): string {
+	if (segment.type === "text") {
+		return segment.text;
+	}
+	return segment.type === "work" ? segment.ref.label : segment.name;
+}
 const plain = (segments: FeedbackTextSegment[] | undefined) =>
-	(segments ?? [])
-		.map((segment) =>
-			segment.type === "text"
-				? segment.text
-				: segment.type === "work"
-					? segment.ref.label
-					: segment.name,
-		)
-		.join("");
+	(segments ?? []).map(readSegment).join("");
 
 const change = (
 	type: ProfileChange["type"],
@@ -119,8 +117,8 @@ describe("count", () => {
 		const clause = plain(changed)
 			.split(". ")
 			.find((part) => part.includes("changed"));
-		expect(clause).toMatch(/\d+ more practices and \d+ groups? changed/);
-		expect(clause).not.toMatch(/\b(one|two|three|four|five|six|seven|eight|nine)\b/);
+		expect(clause).toMatch(/\d+ more practices and \d+ groups? changed/u);
+		expect(clause).not.toMatch(/\b(?:one|two|three|four|five|six|seven|eight|nine)\b/u);
 	});
 });
 
@@ -280,14 +278,14 @@ describe("composeOverview", () => {
 		);
 		expect(movedUp).toContain("Group 2 is now Going well after !421 and !425.");
 		expect(movedUp).toMatch(
-			/further practices? (and \w+ groups? )?moved the same way; the practices table lists them\.$/,
+			/further practices? (?:and \w+ groups? )?moved the same way; the practices table lists them\.$/u,
 		);
 		const trends = plain(composed.rest[3]?.segments);
 		expect(trends).toBe(
 			"Practice 2, Practice 8, Practice 14 and Practice 20 now show More positive recently " +
 				"over !421 and !425.",
 		);
-		expect(trends).not.toMatch(/the same way/);
+		expect(trends).not.toMatch(/the same way/u);
 	});
 
 	it("names a group that moved as the group itself, not as a practice", () => {
@@ -593,10 +591,10 @@ describe("group sentences", () => {
 		expect(groupSentences(group("DEVELOPER"))).toStrictEqual([
 			"Describe what changed and why marked as addressed on 9 September.",
 		]);
-		expect(plain(practiceSentences(group("WORK"))["describe"])).toBe(
+		expect(plain(practiceSentences(group("WORK")).describe)).toBe(
 			"Feedback resolved by the work after !428, !427 and !425 came back clean.",
 		);
-		expect(plain(practiceSentences(group("DEVELOPER"))["describe"])).toBe(
+		expect(plain(practiceSentences(group("DEVELOPER")).describe)).toBe(
 			"Feedback marked as addressed on 9 September.",
 		);
 	});
@@ -719,14 +717,14 @@ describe("groupOverviewOf", () => {
 			"Respond to each review comment",
 		]);
 		expect(composed.reviewedWork).toHaveLength(1);
-		expect(plain(composed.practiceSentences["scope"])).toBe(
+		expect(plain(composed.practiceSentences.scope)).toBe(
 			"There is new feedback, seen on !421 and !425.",
 		);
-		expect(plain(composed.practiceSentences["describe"])).toBe("Feedback resolved.");
+		expect(plain(composed.practiceSentences.describe)).toBe("Feedback resolved.");
 		expect(plain(composed.practiceSentences["diff-size"])).toBe(
 			"Moved to Needs attention after !423.",
 		);
-		expect(composed.practiceSentences["other"]).toBeUndefined();
+		expect(composed.practiceSentences.other).toBeUndefined();
 	});
 
 	it("is empty for a group the overview does not mention, with the reviewed work still there", () => {
@@ -752,8 +750,8 @@ describe("practice sentences", () => {
 		});
 		// A first sighting names the work it was seen on, never the standing it landed at: that is
 		// the badge on the same row.
-		expect(plain(sentences["first"])).toBe("Seen for the first time on !1.");
-		expect(plain(sentences["trend"])).toBe("Now shows More difficulties recently.");
+		expect(plain(sentences.first)).toBe("Seen for the first time on !1.");
+		expect(plain(sentences.trend)).toBe("Now shows More difficulties recently.");
 	});
 
 	it("say a practice was seen for the first time even when the wire names no work", () => {
@@ -762,7 +760,7 @@ describe("practice sentences", () => {
 			groupName: "G",
 			changes: [change("FIRST_OBSERVED", "first", "First", { evidence: [] })],
 		});
-		expect(plain(sentences["first"])).toBe("Seen for the first time.");
+		expect(plain(sentences.first)).toBe("Seen for the first time.");
 	});
 });
 

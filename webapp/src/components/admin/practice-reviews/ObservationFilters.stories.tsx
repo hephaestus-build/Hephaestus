@@ -5,15 +5,10 @@ import type { FacetSource } from "@/components/common/FacetMultiSelect";
 import { withStandardPage } from "@/stories/decorators";
 import { StatefulPatch } from "@/stories/stateful";
 
+import { practiceGroups, reviewArtifact, workspaceMembers, workspacePractices } from "./fixtures";
 import { groupFacetOptions, ObservationFilters, practiceFacetOptions } from "./ObservationFilters";
 import type { ObservationsSearch } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
-import {
-	practiceGroups,
-	reviewArtifact,
-	workspaceMembers,
-	workspacePractices,
-} from "./story-mock-data";
 
 const PEOPLE: ReviewPeople = {
 	options: workspaceMembers
@@ -39,7 +34,6 @@ const PRACTICES: FacetSource = {
 };
 
 const meta = {
-	title: "Workspace admin/Practice reviews/Building blocks/Observation filters",
 	component: ObservationFilters,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	decorators: [withStandardPage],
@@ -67,6 +61,7 @@ const meta = {
 					}}
 					onReset={() => {
 						patch({
+							assessmentStatus: undefined,
 							groupSlug: undefined,
 							practiceSlug: undefined,
 							presence: undefined,
@@ -110,7 +105,7 @@ export const ReportsAChosenSeverity: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Severity" }));
 		const listbox = await screen.findByRole("listbox", { name: "Severity options" });
-		await userEvent.click(await within(listbox).findByRole("option", { name: /Major/ }));
+		await userEvent.click(await within(listbox).findByRole("option", { name: /Major/u }));
 		await expect(args.onPatch).toHaveBeenCalledWith({ severity: ["MAJOR"] });
 	},
 };
@@ -122,12 +117,12 @@ export const ReportsAChosenSeverity: Story = {
 export const SortIsNotAFilter: Story = {
 	args: { search: { presence: undefined, assessment: undefined, severity: ["MAJOR"] }, total: 2 },
 	play: async ({ args, canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("combobox", { name: /Sort/ }));
+		await userEvent.click(canvas.getByRole("combobox", { name: /Sort/u }));
 		await userEvent.click(await screen.findByRole("option", { name: "Most actionable first" }));
 		await expect(args.onPatch).toHaveBeenCalledWith({ order: "ACTIONABILITY" });
 
 		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
-		await expect(canvas.getByRole("combobox", { name: /Sort/ })).toHaveTextContent(
+		await expect(canvas.getByRole("combobox", { name: /Sort/u })).toHaveTextContent(
 			"Most actionable first",
 		);
 	},
@@ -173,8 +168,8 @@ export const ScopedToOnePieceOfWork: Story = {
 		total: 5,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/Reviewed work/);
-		canvas.getByText(/ls1intum\/Hephaestus · #1423/);
+		canvas.getByText(/Reviewed work/u);
+		canvas.getByText(/ls1intum\/Hephaestus · #1423/u);
 	},
 };
 
@@ -187,5 +182,23 @@ export const Mobile: Story = {
 	parameters: { chromatic: { viewports: [320] }, viewport: { defaultViewport: "reflow" } },
 	play: async ({ canvas }) => {
 		await canvas.findByTitle("Severity: Major");
+	},
+};
+
+export const UnassessedStatuses: Story = {
+	args: {
+		search: {
+			assessmentStatus: ["NOT_APPLICABLE", "UNDETERMINED"],
+			presence: undefined,
+			assessment: undefined,
+			severity: undefined,
+		},
+	},
+	play: async ({ canvas, userEvent }) => {
+		await expect(canvas.getByRole("combobox", { name: /Assessment status/u })).toHaveTextContent(
+			"2",
+		);
+		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
+		await expect(canvas.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
 	},
 };

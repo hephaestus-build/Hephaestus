@@ -2,18 +2,19 @@ import type { ReactNode } from "react";
 
 import type { PracticeGroup, PracticeGroupStanding } from "@/api/types.gen";
 import { type LoadState, loadProps } from "@/components/common/panel-state";
-import type { DetailStackEntry } from "@/components/core/detail-drawer/detail-stack";
+import type { DetailStackEntry } from "@/components/layout/detail-drawer/detail-stack";
 import {
 	type DetailDrawerLevel,
 	DetailDrawerStack,
-} from "@/components/core/detail-drawer/DetailDrawerStack";
-import type { LevelPath } from "@/components/core/detail-drawer/DetailPath";
-import { levelPathAt } from "@/components/core/detail-drawer/level-path";
+} from "@/components/layout/detail-drawer/DetailDrawerStack";
+import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { levelPathAt } from "@/components/layout/detail-drawer/level-path";
 import type {
 	FeedbackRatingProps,
 	PracticeFeedbackCardEntry,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { type PracticeGroupDetail, REVIEW_RUN_PAGE_SIZE } from "@/hooks/use-practice-group-detail";
+import { hasText } from "@/lib/text";
 
 import {
 	DEFAULT_PRACTICE_TAB,
@@ -111,10 +112,10 @@ export function PracticeGroupDetailDrawer({
 	onSelectionChange,
 }: PracticeGroupDetailDrawerProps) {
 	const groupIndex = detailStack.findIndex((entry) => entry.kind === "practice-group");
-	const openGroupSlug = groupIndex >= 0 ? detailStack[groupIndex]?.id : undefined;
+	const openGroupSlug = groupIndex === -1 ? undefined : detailStack[groupIndex]?.id;
 	const openPracticeSlug = detailStack.find((entry) => entry.kind === "practice")?.id;
 	const openGroup = groups.find((candidate) => candidate.slug === openGroupSlug);
-	const openStanding = openGroupSlug ? groupStandings[openGroupSlug] : undefined;
+	const openStanding = hasText(openGroupSlug) ? groupStandings[openGroupSlug] : undefined;
 	const load = loadProps(state);
 	// A level behind is named by what it shows: a group by its name, a route's own level by the
 	// route. The practice level is the deepest, so it is never behind another.
@@ -122,53 +123,59 @@ export function PracticeGroupDetailDrawer({
 		if (entry.kind === "practice-group") {
 			return groups.find((candidate) => candidate.slug === entry.id)?.name ?? "Group";
 		}
-		if (entry.kind === "practice") return "Practice";
+		if (entry.kind === "practice") {
+			return "Practice";
+		}
 		return levelLabel?.(entry) ?? entry.kind;
 	};
 	const pathAt = levelPathAt(detailStack, { pageLabel: PAGE_LABEL, labelOf, onClose });
 
 	return (
 		<DetailDrawerStack stack={detailStack} size="detailWide" onClose={onClose}>
-			{(entry, level) =>
-				entry.kind === "practice-group" ? (
-					<PracticeGroupDetailLevel
-						nested={level.nested}
-						path={pathAt(level.depth)}
-						group={openGroup}
-						standing={openStanding}
-						practices={detail.practices}
-						{...(openGroupSlug ? groupOverview?.(openGroupSlug) : undefined)}
-						openPracticeSlug={openPracticeSlug}
-						onOpenPractice={onOpenPractice}
-						{...load}
-					/>
-				) : entry.kind === "practice" ? (
-					<PracticeDetailLevel
-						nested={level.nested}
-						path={pathAt(level.depth)}
-						practice={detail.practice}
-						feed={detail.feed}
-						feedbackCards={feedbackCards}
-						ratingProps={ratingProps}
-						skeletonRows={REVIEW_RUN_PAGE_SIZE}
-						// The group level is under the practice's whenever the group is known, so a
-						// card's group name goes back to it.
-						onOpenGroup={openGroup && (() => onClose(groupIndex + 1))}
-						tab={practiceTab}
-						onTabChange={(tab) =>
-							// The default is the URL's silence.
-							onSelectionChange({ practiceTab: tab === DEFAULT_PRACTICE_TAB ? undefined : tab })
-						}
-						observations={{
-							onRespond: detail.respond,
-							pendingFeedbackId: detail.pendingFeedbackId,
-						}}
-						{...load}
-					/>
-				) : (
-					renderLevel?.(entry, level, pathAt(level.depth))
-				)
-			}
+			{(entry, level): ReactNode => {
+				if (entry.kind === "practice-group") {
+					return (
+						<PracticeGroupDetailLevel
+							nested={level.nested}
+							path={pathAt(level.depth)}
+							group={openGroup}
+							standing={openStanding}
+							practices={detail.practices}
+							{...(hasText(openGroupSlug) ? groupOverview?.(openGroupSlug) : undefined)}
+							openPracticeSlug={openPracticeSlug}
+							onOpenPractice={onOpenPractice}
+							{...load}
+						/>
+					);
+				}
+				if (entry.kind === "practice") {
+					return (
+						<PracticeDetailLevel
+							nested={level.nested}
+							path={pathAt(level.depth)}
+							practice={detail.practice}
+							feed={detail.feed}
+							feedbackCards={feedbackCards}
+							ratingProps={ratingProps}
+							skeletonRows={REVIEW_RUN_PAGE_SIZE}
+							// The group level is under the practice's whenever the group is known, so a
+							// card's group name goes back to it.
+							onOpenGroup={openGroup && (() => onClose(groupIndex + 1))}
+							tab={practiceTab}
+							onTabChange={(tab) =>
+								// The default is the URL's silence.
+								onSelectionChange({ practiceTab: tab === DEFAULT_PRACTICE_TAB ? undefined : tab })
+							}
+							observations={{
+								onRespond: detail.respond,
+								pendingFeedbackId: detail.pendingFeedbackId,
+							}}
+							{...load}
+						/>
+					);
+				}
+				return renderLevel?.(entry, level, pathAt(level.depth));
+			}}
 		</DetailDrawerStack>
 	);
 }

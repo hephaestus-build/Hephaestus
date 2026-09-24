@@ -13,12 +13,14 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.PreviousInAppFeedback;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
@@ -180,7 +182,8 @@ class InAppCompositionListenerTest extends BaseUnitTest {
                 .thenReturn(List.of(RECIPIENT_ID));
         when(workspaceDefaults.forWorkspace(WORKSPACE_ID))
                 .thenReturn(new WorkspaceReviewDefaults(PracticeAutonomy.AUTOMATIC));
-        when(visibilityPolicy.permitsAll(eq(WORKSPACE_ID), any(), any()))
+        when(visibilityPolicy.permitsForNewDelivery(
+                        eq(WORKSPACE_ID), any(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
                 .thenAnswer(invocation -> invocation.<List<Observation>>getArgument(1).stream()
                         .map(Observation::getId)
                         .collect(Collectors.toSet()));
@@ -200,8 +203,9 @@ class InAppCompositionListenerTest extends BaseUnitTest {
                 .agentJobId(UUID.randomUUID())
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(artifactId)
+                .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.ABSENT)
-                .assessment(Assessment.BAD)
+                .assessment(Assessment.GOOD)
                 .origin(ObservationOrigin.LIVE)
                 .observedAt(observedAt)
                 .build();

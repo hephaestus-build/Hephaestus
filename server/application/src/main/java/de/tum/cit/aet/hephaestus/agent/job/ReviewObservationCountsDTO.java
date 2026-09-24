@@ -16,7 +16,7 @@ public record ReviewObservationCountsDTO(
                 description = "Practices that looked at the evidence and could not settle the question either way; "
                         + "reported apart from notApplicable because one says there was nothing here to judge and the "
                         + "other says we could not tell")
-        Long inconclusive) {
+        Long undetermined) {
     public static ReviewObservationCountsDTO empty() {
         return new ReviewObservationCountsDTO(0L, 0L, 0L, 0L);
     }

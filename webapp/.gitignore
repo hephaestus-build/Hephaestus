@@ -9,3 +9,4 @@ storybook-static
 
 # Test results (CI)
 test-results/
+chromatic-report.xml

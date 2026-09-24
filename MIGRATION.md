@@ -2,7 +2,7 @@
 
 This document helps you upgrade between versions of Hephaestus. For what a version number promises
 (public contract, upgrade guarantee, support statement), see the
-[Compatibility Policy](https://ls1intum.github.io/Hephaestus/admin/compatibility-policy).
+[Compatibility Policy](https://docs.hephaestus.build/admin/compatibility-policy).
 
 > ⚠️ **Pre-1.0 Notice**: We are in active development. Minor versions (0.x.0) may contain breaking changes. Always test in staging before production.
 
@@ -25,7 +25,7 @@ repository root points at a different Compose project and reports nothing.
 docker compose images application-server
 
 # Latest release
-curl -fsSL https://api.github.com/repos/ls1intum/Hephaestus/releases/latest \
+curl -fsSL https://api.github.com/repos/hephaestus-build/Hephaestus/releases/latest \
   | grep -m1 '"tag_name"'
 ```
 
@@ -51,7 +51,7 @@ During pre-1.0, we follow [Semantic Versioning 0.x conventions](https://semver.o
 
 Before upgrading to any new `0.x.0` version:
 
-1. ✅ Read the [release notes](https://github.com/ls1intum/Hephaestus/releases)
+1. ✅ Read the [release notes](https://github.com/hephaestus-build/Hephaestus/releases)
 2. ✅ Check this migration guide for breaking changes
 3. ✅ Verify in staging first (auto-deployed on every release)
 4. ✅ Approve production deployment after staging verification
@@ -61,9 +61,134 @@ Before upgrading to any new `0.x.0` version:
 ## Version History
 
 Entries exist only for releases that need operator action. Everything else is in the
-[release notes](https://github.com/ls1intum/Hephaestus/releases).
+[release notes](https://github.com/hephaestus-build/Hephaestus/releases).
 
 ### Next release
+
+### v0.80.0
+
+#### 🔴 Name your research organisation, and check your legal pages, before upgrading
+
+First-login setup is now one short screen with no operator-specific text. It states the terms of use
+and points at `/imprint` and `/privacy` for who runs the deployment, what it stores and for how long.
+Configure both before you upgrade — on an instance still serving the built-in placeholder, the first
+thing a new account reads now points at nothing.
+
+**The research question is no longer asked by default.** It appears only where
+`HEPHAESTUS_RESEARCH_ORGANIZATION` names the organisation that runs the study, which the screen and
+the account-settings switch then show beside the choice; consent has to identify its controller. Set
+it if you run a study. Leave it unset and setup is the terms alone, the settings switch is hidden, and
+`PUT /user/consent/research` answers 404 — accounts that already answered keep their recorded
+decision, and nothing is deleted.
+
+The wording changed and its version moved to `2026-09-11`, so every account accepts it once more. The
+gate runs on requests from existing sessions too, so signed-in users meet it as soon as the deployment
+finishes rather than at their next sign-in. A browser tab left open on the old setup screen during the
+upgrade shows an error and needs a full refresh, not the page's own retry.
+
+Every research decision now records the organisation it was asked about, so changing
+`HEPHAESTUS_RESEARCH_ORGANIZATION` later asks each account again rather than carrying an answer over to
+a different name. Terms acceptance is untouched by that change.
+
+Nothing is dropped from the database this release. `consent_notice` and its archived `2026-08-30`
+wording stay exactly as the baseline seeded them; `consent_decision.notice_sha256` only loses its
+`NOT NULL`, and `research_organization` is added alongside it. Decisions recorded from here on identify
+their wording by `notice_version`, which points at the release that published it. A replica still
+running the previous image keeps working against this schema, and rolling the image back stays
+possible. A later release removes the archive and the digest.
+
+#### 🔴 Drain sandboxes before upgrading their installation ownership
+
+Before upgrading, drain active practice reviews and interactive conversations, then stop the
+installation's workers. Assign a stable `SANDBOX_DOCKER_OWNER` to all worker-capable roles sharing
+one database. Use different values for installations sharing a Docker daemon but not a database.
+The default is `default`; valid values contain 1–63 lowercase letters, digits and hyphens and start
+with a letter or digit.
+
+After verifying which installation owns them, remove its remaining legacy containers and networks.
+The new cleanup does not adopt containers that only carry `hephaestus.managed=true`, legacy
+`agent-net-` networks, or resources labelled with another owner. Do not remove another installation's
+resources. Restart the upgraded roles with the same owner value and confirm a new practice review
+can complete. Apply the same drain procedure before changing the owner later.
+
+### v0.79.0
+
+#### 🔴 Achievements retired
+
+Achievement pages, unlock notifications, the skill-tree designer, and achievement administration are no longer available. Remove bookmarks and external links to these routes:
+
+- `/w/{workspaceSlug}/achievements`
+- `/w/{workspaceSlug}/user/{username}/achievements`
+- `/w/{workspaceSlug}/admin/achievements`
+- `/w/{workspaceSlug}/admin/achievement-designer`
+
+Remove clients of `/workspaces/{workspaceSlug}/users/{login}/achievements` and its `/definitions`, `/recalculate`, and `/reload` endpoints. Workspace responses no longer include `achievementsEnabled`; stop sending that property to the workspace feature-update endpoint. There are no replacement achievement endpoints or redirects.
+
+The upgrade permanently drops `user_achievement` and `workspace.achievements_enabled`. There is no data export, retained achievement storage, or replacement feature in the application. Activity history, practice feedback, leaderboards, leagues, and XP progression remain available.
+
+Before upgrading, back up the database and stop every application runtime role (`server`, `worker`, and `webhook`). Start only the upgraded version after migration; a rolling deployment with older versions is not supported for this removal. Returning to an older version requires restoring the pre-upgrade database backup; Liquibase cannot recover deleted progress.
+
+### v0.78.0
+
+#### 🔴 PostgreSQL 18 and baseline synchronization required
+
+PostgreSQL 18 is the only supported database major version. The bundled image no longer accepts a PostgreSQL 17 build target.
+
+If your database is still on PostgreSQL 17, first complete the [v0.77.4 PostgreSQL 17-to-18 upgrade procedure](https://github.com/hephaestus-build/Hephaestus/blob/v0.77.4/docs/admin/backup-restore.mdx#postgresql-17-to-18). Verify a successful restore into PostgreSQL 18 and keep an off-host backup before removing the old database. Then install this release. Do not attach a PostgreSQL 17 data directory to the PostgreSQL 18 image.
+
+All existing databases, including PostgreSQL 18 installations, must complete the [baseline synchronization runbook](https://docs.hephaestus.build/admin/liquibase-baseline-runbook) before the candidate application starts. Take and test-restore a full backup, verify the v0.77.4 cut-point, stop writers, and run `changeLogSyncToTag baseline_v0_77_4` using the candidate image. Unsynchronized existing schemas fail startup. Fresh databases apply the baseline automatically.
+
+### v0.77.0
+
+#### 🔴 Product feedback and survey answers of already-deleted accounts are removed during the upgrade
+
+**Affected**: every deployment where someone deleted their account after sending product feedback or
+answering a survey.
+
+**Before**: account deletion left those submissions in the database. A deleted account is kept as an
+empty placeholder rather than removed, so the cascade that would have deleted its submissions never
+fired, and the free text and answers stayed indefinitely.
+
+**After**: account deletion removes them, and the database migration in this release removes the ones
+earlier releases left behind. Both deletions are permanent.
+
+**Migration**: nothing to configure. If you have to keep those submissions — a legal hold, or
+reporting on product feedback — export them or take a database backup before you deploy this release.
+
+#### 🔴 Rename Docker sandbox settings
+
+Update custom application YAML, Spring property overrides, environment files and Compose overrides
+before upgrading. Removed names are not aliases: a worker-role process refuses to start while any of
+them is still set, naming the one it found and the replacement to use.
+The shipped single-host deployment still uses the local Docker socket and gateway port `8081`.
+
+| Old Spring property | Replacement |
+| --- | --- |
+| `hephaestus.sandbox.docker-host` | `hephaestus.sandbox.docker.host` |
+| `hephaestus.sandbox.tls-verify` | `hephaestus.sandbox.docker.tls-verify` |
+| `hephaestus.sandbox.cert-path` | `hephaestus.sandbox.docker.cert-path` |
+| `hephaestus.sandbox.container-runtime` | `hephaestus.sandbox.docker.container-runtime` |
+| `hephaestus.sandbox.app-server-container-id` | `hephaestus.sandbox.docker.app-server-container-id` |
+| `hephaestus.mentor.docker-cli` | `hephaestus.sandbox.docker.cli` |
+
+- Rename `SANDBOX_TLS_VERIFY` to `SANDBOX_DOCKER_TLS_VERIFY` and `SANDBOX_CONTAINER_RUNTIME` to
+  `SANDBOX_DOCKER_CONTAINER_RUNTIME`. Update any direct `HEPHAESTUS_*` environment overrides to match
+  the new Spring property paths as well.
+- `SANDBOX_DOCKER_HOST` is unchanged. New explicit environment mappings are
+  `SANDBOX_DOCKER_CERT_PATH`, `SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID` and `SANDBOX_DOCKER_CLI`.
+- For TCP Docker access, mount client certificates read-only into each worker-capable container,
+  enable TLS verification, and set `SANDBOX_DOCKER_CERT_PATH` to the mounted directory containing
+  `ca.pem`, `cert.pem` and `key.pem`. Java operations and interactive commands now share these
+  settings. Inherited `DOCKER_CONTEXT`, `DOCKER_HOST`, and Docker TLS variables no longer select
+  the interactive daemon.
+
+For defaults and connection requirements, see the
+[Docker configuration reference](https://docs.hephaestus.build/admin/configuration-readiness#docker-configuration).
+
+Restart `application-server` and `application-worker`, confirm their Docker health check, and run a
+practice review and an interactive mentor session. If gVisor is configured, inspect the created
+sandbox's runtime to confirm it is `runsc`; a successful application boot does not validate the
+daemon's runtime registry.
 
 ### v0.76.0
 
@@ -1204,7 +1329,7 @@ HEPHAESTUS_MENTOR_AGENT_PULL_POLICY=IF_NOT_PRESENT
 
 ### v1.0.0 (Future)
 
-At v1.0.0 the [Compatibility Policy](https://ls1intum.github.io/Hephaestus/admin/compatibility-policy)
+At v1.0.0 the [Compatibility Policy](https://docs.hephaestus.build/admin/compatibility-policy)
 takes effect — the public contract, the "any 1.x → any later 1.y" upgrade guarantee,
 deprecation-ahead-of-removal, and latest-release-only support. Until then, expect rapid iteration and
 occasional breaking changes in minor releases.
@@ -1220,7 +1345,7 @@ and review the release notes for endpoint changes.
 
 ### New Required Environment Variable
 
-1. Check the release notes and the [Production Setup](https://ls1intum.github.io/Hephaestus/admin/production-setup) guide for new variables
+1. Check the release notes and the [Production Setup](https://docs.hephaestus.build/admin/production-setup) guide for new variables
 2. Add them to your deployment's environment (see the `docker/compose.app.yaml` env block)
 3. Restart services
 
@@ -1254,7 +1379,7 @@ in CI and are not a supported recovery path. The supported recoveries, in order 
    changesets succeeded before deciding.
 2. **Restore from backup** if the instance must come back now and forward-fixing will take longer than
    the outage budget. Follow
-   [Backup & restore](https://ls1intum.github.io/Hephaestus/admin/backup-restore); restore the
+   [Backup & restore](https://docs.hephaestus.build/admin/backup-restore); restore the
    database dump *and* the `.env` holding `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`, or every encrypted
    credential in the restored database is unreadable. Then pin `IMAGE_TAG` to the version the dump
    was taken under so it is not immediately re-migrated by the release that failed.
@@ -1266,7 +1391,7 @@ do.
 
 ## Getting Help
 
-1. 📖 [GitHub Discussions](https://github.com/ls1intum/Hephaestus/discussions) - Ask the community
-2. 🐛 [Issues](https://github.com/ls1intum/Hephaestus/issues) - Report problems
+1. 📖 [GitHub Discussions](https://github.com/hephaestus-build/Hephaestus/discussions) - Ask the community
+2. 🐛 [Issues](https://github.com/hephaestus-build/Hephaestus/issues) - Report problems
 3. 📝 [CHANGELOG.md](./CHANGELOG.md) - Detailed change history
-4. 🔄 [Release Notes](https://github.com/ls1intum/Hephaestus/releases) - Per-version details
+4. 🔄 [Release Notes](https://github.com/hephaestus-build/Hephaestus/releases) - Per-version details

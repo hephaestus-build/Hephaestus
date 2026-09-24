@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeRequestDTO;
@@ -71,6 +72,75 @@ class PracticeServiceUpdateIntegrationTest extends AbstractWorkspaceIntegrationT
         return practiceRepository.save(practice);
     }
 
+    private Practice persistScopedPractice(String slug) {
+        PracticeSubject gate = new PracticeSubject(
+                "the change has no Swift code",
+                List.of(PracticeSubjectClause.changedPathMatches(List.of("**/*.swift"))));
+        Practice practice = new Practice();
+        practice.setWorkspace(workspace);
+        practice.setSlug(slug);
+        practice.setName("Review Swift code");
+        practice.setBindings(List.of(new PracticeBinding(
+                List.of(ScmSignals.PULL_REQUEST_OPENED),
+                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                false,
+                ActorRole.REVIEWER,
+                gate)));
+        practice.setCriteria("Assess the review");
+        practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
+        practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
+        return practiceRepository.save(practice);
+    }
+
+    @Test
+    void shouldKeepTheGateAndReviewerAfterANameOnlyUpdate() {
+        Practice before = persistScopedPractice("scoped-name");
+        PracticeBinding binding = before.getBindings().getFirst();
+
+        practiceService.updatePractice(
+                ctx,
+                before.getSlug(),
+                new UpdatePracticeRequestDTO("New name", null, null, null, null, null, null, null, null, null));
+
+        Practice reloaded = practiceService.getPractice(ctx, before.getSlug());
+        assertThat(reloaded.getName()).isEqualTo("New name");
+        assertThat(reloaded.getBindings().getFirst().appliesWhen()).isEqualTo(binding.appliesWhen());
+        assertThat(reloaded.getBindings().getFirst().subject()).isEqualTo(ActorRole.REVIEWER);
+    }
+
+    @Test
+    void shouldRefuseScopeRemovalWithoutIntentAndAllowItWithIntent() {
+        Practice before = persistScopedPractice("scoped-removal");
+        PracticeBinding binding = before.getBindings().getFirst();
+        PracticeBinding unscoped =
+                new PracticeBinding(binding.signals(), binding.needs(), binding.onDrafts(), ActorRole.AUTHOR, null);
+        assertThatThrownBy(() -> practiceService.updatePractice(
+                        ctx,
+                        before.getSlug(),
+                        new UpdatePracticeRequestDTO(
+                                null, List.of(unscoped), null, null, null, null, null, null, null, null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("APPLIES_WHEN");
+
+        practiceService.updatePractice(
+                ctx,
+                before.getSlug(),
+                new UpdatePracticeRequestDTO(
+                        null,
+                        List.of(unscoped),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Set.of(BindingChange.APPLIES_WHEN, BindingChange.SUBJECT)));
+        Practice reloaded = practiceService.getPractice(ctx, before.getSlug());
+        assertThat(reloaded.getBindings().getFirst().appliesWhen()).isNull();
+        assertThat(reloaded.getBindings().getFirst().subject()).isEqualTo(ActorRole.AUTHOR);
+    }
+
     @Test
     @DisplayName("a stored practice holding two occasions can still be renamed")
     void renamesAPracticeStoredWithTwoOccasions() {
@@ -79,7 +149,7 @@ class PracticeServiceUpdateIntegrationTest extends AbstractWorkspaceIntegrationT
         Practice updated = practiceService.updatePractice(
                 ctx,
                 "stored-with-two",
-                new UpdatePracticeRequestDTO("After the rule", null, null, null, null, null, null, null, null));
+                new UpdatePracticeRequestDTO("After the rule", null, null, null, null, null, null, null, null, null));
 
         assertThat(updated.getName()).isEqualTo("After the rule");
         // Untouched, not truncated: an edit that says nothing about occasions decides nothing about them.
@@ -103,6 +173,7 @@ class PracticeServiceUpdateIntegrationTest extends AbstractWorkspaceIntegrationT
                                         PracticeBinding.on(
                                                 ScmSignals.PULL_REQUEST_REVIEWED,
                                                 PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST))),
+                                null,
                                 null,
                                 null,
                                 null,
@@ -133,6 +204,7 @@ class PracticeServiceUpdateIntegrationTest extends AbstractWorkspaceIntegrationT
                         null,
                         null,
                         null,
+                        null,
                         null));
 
         assertThat(updated.getBindings()).hasSize(1);
@@ -152,7 +224,7 @@ class PracticeServiceUpdateIntegrationTest extends AbstractWorkspaceIntegrationT
                         ctx,
                         "still-validated",
                         new UpdatePracticeRequestDTO(
-                                null, null, null, null, null, "Say PRESENT when it is there", null, null, null)))
+                                null, null, null, null, null, "Say PRESENT when it is there", null, null, null, null)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Why it matters is guidance for people and must not use detector result labels");
     }
@@ -174,7 +246,7 @@ class PracticeServiceUpdateIntegrationTest extends AbstractWorkspaceIntegrationT
         assertThatCode(() -> practiceService.updatePractice(
                         ctx,
                         "ordinary",
-                        new UpdatePracticeRequestDTO("Renamed", null, null, null, null, null, null, null, null)))
+                        new UpdatePracticeRequestDTO("Renamed", null, null, null, null, null, null, null, null, null)))
                 .doesNotThrowAnyException();
     }
 }

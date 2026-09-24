@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import jakarta.persistence.*;
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.Locale;
@@ -117,6 +118,9 @@ public class WorkspaceMembership {
     @EqualsAndHashCode
     @ToString
     public static class Id implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         @Nullable
         private Long workspaceId;

@@ -11,9 +11,23 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 
 class AgentImageReferenceGuardTest extends BaseUnitTest {
+
+    @ParameterizedTest
+    @ValueSource(strings = {"specs", "cds-training"})
+    void shouldNotRequireRuntimeImagesDuringArtifactGeneration(String profile) {
+        // An inherited digest policy is runtime configuration; an artifact build uses no agent image.
+        new ApplicationContextRunner()
+                .withPropertyValues("spring.profiles.active=" + profile, "hephaestus.agent.image.require-digest=true")
+                .withUserConfiguration(AgentImageReferenceGuard.class, AgentImagePinGuard.class)
+                .run(context -> assertThat(context)
+                        .hasNotFailed()
+                        .doesNotHaveBean(AgentImageReferenceGuard.class)
+                        .doesNotHaveBean(AgentImagePinGuard.class));
+    }
 
     private static AgentImageReferenceGuard guardFor(String reference) {
         return new AgentImageReferenceGuard(new AgentImageProperties(reference, ImagePullPolicy.IF_NOT_PRESENT));

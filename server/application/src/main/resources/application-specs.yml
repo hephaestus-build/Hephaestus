@@ -7,6 +7,12 @@ spring:
                 in-tests: true
     liquibase:
         enabled: false
+    # Artifact generation has no event_publication table and publishes nothing; keep the
+    # registry (which opens a connection to detect the database) out of the context.
+    autoconfigure:
+        exclude:
+            - org.springframework.modulith.events.jdbc.JdbcEventPublicationAutoConfiguration
+            - org.springframework.modulith.events.config.EventPublicationAutoConfiguration
     datasource:
         url: jdbc:h2:mem:hephaestus-specs;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;DATABASE_TO_LOWER=TRUE
         username: sa
@@ -31,17 +37,13 @@ hephaestus:
             outline:
                 client-id: ""
                 client-secret: ""
-    # OpenAPI generation boots the full Spring context; HmacOAuthStateService fails fast
-    # without a webhook/oauth-state secret. Use a deterministic placeholder for the spec run.
-    webhook:
-        secret: "specs-only-placeholder-secret-do-not-use-in-prod"
     # Enable Slack/Outline admin endpoints so they surface in the generated client. The vendor
     # clients themselves aren't called during the spec run — just the controllers are loaded.
     integration:
         slack:
             enabled: true
-            client-id: "specs-only-placeholder-client-id"
-            client-secret: "specs-only-placeholder-client-secret"
+            client-id: ""
+            client-secret: ""
         outline:
             enabled: true
     runtime:
@@ -49,9 +51,6 @@ hephaestus:
             enabled: false
     workspace:
         init-default: false
-    mail:
-        enabled: false
-        sender: noreply@example.com
     sync:
         nats:
             enabled: false

@@ -1,0 +1,20 @@
+{
+  "schemaVersion" : 2,
+  "jobId" : "00000000-0000-0000-0000-00000000abcd",
+  "workspaceId" : 99,
+  "task" : {
+    "kind" : "practice_review",
+    "prompt" : "Review merge request #42 in owner/repo. Read the context files, then persist every justified observation via the report_observation tool. Follow .pi/AGENTS.md for the schema and rules.",
+    "pullRequestNumber" : 42,
+    "repositoryFullName" : "owner/repo"
+  },
+  "paths" : {
+    "contextRoot" : "inputs/context",
+    "repositoryRoot" : "inputs/sources/scm/repo",
+    "manifest" : "inputs/manifest.json",
+    "practiceIndex" : "inputs/practices/index.json",
+    "compositionRequest" : "inputs/feedback-composition.json",
+    "preparedFeedback" : "inputs/history/prepared.json",
+    "precomputeScripts" : "work/precompute/practices"
+  }
+}

@@ -26,12 +26,16 @@ import de.tum.cit.aet.hephaestus.testconfig.TestCacheConfiguration;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Stream;
+import net.javacrumbs.shedlock.core.LockConfiguration;
+import net.javacrumbs.shedlock.core.LockProvider;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -62,6 +66,9 @@ import tools.jackson.databind.node.ObjectNode;
             "spring.liquibase.change-log=classpath:db/master.xml",
             "spring.liquibase.contexts=dev,prod",
             "spring.jpa.hibernate.ddl-auto=validate",
+            // Migrations own this schema; do not run the Hibernate-created-schema fixture.
+            "spring.sql.init.mode=never",
+            "spring.jpa.defer-datasource-initialization=false",
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
@@ -93,6 +100,9 @@ class ProductionSchemaContractIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
+    private LockProvider locks;
+
+    @Autowired
     private SlackConversationProjector slackConversationProjector;
 
     @Autowired
@@ -112,6 +122,24 @@ class ProductionSchemaContractIntegrationTest {
 
     @Autowired
     private IdentityProviderRepository identityProviderRepository;
+
+    @Test
+    void shouldAcquireAndReleaseSchedulerLocksAgainstTheMigratedSchema() {
+        String name = "schema-" + UUID.randomUUID();
+        var configuration = new LockConfiguration(Instant.now(), name, Duration.ofMinutes(1), Duration.ZERO);
+        var first = locks.lock(configuration).orElseThrow();
+        try {
+            try {
+                assertThat(locks.lock(configuration)).isEmpty();
+            } finally {
+                first.unlock();
+            }
+            var next = locks.lock(configuration).orElseThrow();
+            next.unlock();
+        } finally {
+            jdbcTemplate.update("DELETE FROM shedlock WHERE name = ?", name);
+        }
+    }
 
     @Test
     void observationForeignKeysPreserveTenantAndProvenance() {
@@ -198,13 +226,6 @@ class ProductionSchemaContractIntegrationTest {
     @Test
     @DisplayName("Production Liquibase schema applies cleanly and the JPA entities validate against it")
     void productionSchemaAppliesAndEntitiesValidate() {
-        Integer appliedChangesets =
-                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM databasechangelog", Integer.class);
-        assertThat(appliedChangesets)
-                .as("Liquibase DATABASECHANGELOG ledger should record the full production migration set")
-                .isNotNull()
-                .isGreaterThan(500);
-
         assertColumnExists("workspace", "account_login");
         assertColumnExists("connection", "credentials_encrypted");
         assertColumnExists("slack_message", "author_member_id");

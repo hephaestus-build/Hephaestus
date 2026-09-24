@@ -133,6 +133,31 @@
 					"type": "string",
 					"minLength": 20,
 					"maxLength": 80
+				},
+				"deliveryBehavior": {
+					"description": "How negative feedback from this practice is placed or deduplicated.",
+					"$ref": "#/$defs/deliveryBehavior"
+				}
+			}
+		},
+		"deliveryBehavior": {
+			"description": "Declared feedback placement and co-occurrence choices for a practice.",
+			"type": "object",
+			"required": ["summaryOnly"],
+			"additionalProperties": false,
+			"properties": {
+				"summaryOnly": {
+					"description": "Show feedback in the summary instead of on a changed line.",
+					"type": "boolean"
+				},
+				"overlapGroup": {
+					"description": "On issues, show only the first negative practice in this group.",
+					"type": "string",
+					"pattern": "\\S"
+				},
+				"redundantToSlug": {
+					"description": "When both practices are negative, show feedback from this preferred practice instead.",
+					"$ref": "#/$defs/slug"
 				}
 			}
 		},
@@ -190,8 +215,8 @@
 					"type": "boolean"
 				},
 				"subject": {
-					"description": "Whose conduct a review occasioned this way judges, and therefore which person its observations are filed against. Defaults to AUTHOR. A practice about reviewing somebody else's work names REVIEWER.",
-					"enum": ["AUTHOR", "ASSIGNEE", "REVIEWER"]
+					"description": "Whose conduct a review occasioned this way judges, and therefore which person its observations are filed against. Defaults to AUTHOR. A practice about reviewing somebody else's work names REVIEWER; one about the act of merging names MERGER, reviewed only when the merger is the author the run is about.",
+					"enum": ["AUTHOR", "ASSIGNEE", "REVIEWER", "MERGER"]
 				},
 				"appliesWhen": {
 					"description": "What must be in the work for this practice to have anything to judge. Decided from staged evidence before the practice is put to a model, so a practice whose subject is provably absent is not asked. Omit to apply to every artifact of this kind.",

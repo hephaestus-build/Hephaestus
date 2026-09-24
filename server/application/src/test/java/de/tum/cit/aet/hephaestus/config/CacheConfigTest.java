@@ -12,17 +12,11 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
+import org.springframework.cache.support.SimpleCacheManager;
 
-/**
- * Pins the cache table at the configuration boundary. Adding/removing a named cache without
- * updating the spec list — or shipping a {@code @Cacheable(value="...")} that doesn't appear
- * here — breaks the contract this test guards.
- */
 class CacheConfigTest extends BaseUnitTest {
 
     private static final List<String> EXPECTED_NAMES = List.of(
-            "achievementProgress",
             "auth_jwt_revoked",
             "contributors",
             "mentor_authored_work_context",
@@ -35,7 +29,8 @@ class CacheConfigTest extends BaseUnitTest {
     @DisplayName("cacheManager exposes exactly the declared caches by name")
     void registersAllSpecsAsCaches() {
         MeterRegistry registry = new SimpleMeterRegistry();
-        CacheManager manager = new CacheConfig().cacheManager(registry);
+        SimpleCacheManager manager = new CacheConfig().cacheManager(registry);
+        manager.afterPropertiesSet();
 
         Collection<String> names = manager.getCacheNames();
         assertThat(names).containsExactlyInAnyOrderElementsOf(EXPECTED_NAMES);
@@ -49,8 +44,6 @@ class CacheConfigTest extends BaseUnitTest {
     @Test
     @DisplayName("mentor context caches share a 5-minute TTL and 512-entry cap")
     void mentorContextsHaveCorrectTtlAndSize() {
-        // Derive the list from the spec table itself so EVERY mentor_* cache is pinned — adding a
-        // new one with a divergent TTL/size can no longer slip past a hand-maintained list.
         List<String> mentorCaches = CacheConfig.SPECS.stream()
                 .map(CacheConfig.CacheSpec::name)
                 .filter(name -> name.startsWith("mentor_"))
@@ -70,8 +63,8 @@ class CacheConfigTest extends BaseUnitTest {
     }
 
     @Test
-    void longLivedCachesUnchanged() {
-        for (String name : List.of("contributors", "pullRequestTemplates", "achievementProgress")) {
+    void contributorAndTemplateCachesHaveOneHourTtlAndThousandEntryLimit() {
+        for (String name : List.of("contributors", "pullRequestTemplates")) {
             CacheConfig.CacheSpec spec = findSpec(name);
             assertThat(spec.ttl()).isEqualTo(Duration.ofSeconds(3600));
             assertThat(spec.maxSize()).isEqualTo(1000L);

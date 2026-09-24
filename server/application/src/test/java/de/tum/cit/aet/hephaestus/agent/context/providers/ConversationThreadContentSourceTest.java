@@ -73,7 +73,7 @@ class ConversationThreadContentSourceTest extends BaseUnitTest {
         assertThat(source.required()).isTrue();
         assertThat(files).containsKey("inputs/context/conversation_thread.json");
         String written = new String(files.get("inputs/context/conversation_thread.json"));
-        assertThat(written).contains("\"channel\":\"C0ABC\"").contains("\"messageCount\":3");
+        assertThat(written).contains("\"channel\" : \"C0ABC\"").contains("\"messageCount\" : 3");
     }
 
     @Test

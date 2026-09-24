@@ -4,7 +4,6 @@ import { expect } from "storybook/test";
 import { AutonomyBadge } from "./AutonomyBadge";
 
 const meta = {
-	title: "Shared/Practice vocabulary/Autonomy badge",
 	component: AutonomyBadge,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],

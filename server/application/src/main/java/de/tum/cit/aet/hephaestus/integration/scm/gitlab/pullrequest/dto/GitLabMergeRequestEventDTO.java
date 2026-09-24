@@ -46,7 +46,9 @@ public record GitLabMergeRequestEventDTO(
             @JsonProperty("merged_at") @Nullable String mergedAt,
             @NonNull String url,
             @JsonProperty("last_commit") @Nullable LastCommit lastCommit,
-            @JsonProperty("merge_commit_sha") @Nullable String mergeCommitSha) {}
+            @JsonProperty("merge_commit_sha") @Nullable String mergeCommitSha,
+            // The head before this update; GitLab sends it only when the update pushed commits.
+            @Nullable String oldrev) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record LastCommit(

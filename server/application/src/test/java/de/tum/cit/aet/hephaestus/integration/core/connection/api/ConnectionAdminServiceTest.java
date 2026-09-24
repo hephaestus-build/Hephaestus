@@ -62,7 +62,7 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         // Real converter so the encrypt/round-trip behaviour is exercised end-to-end.
-        credentialConverter = new CredentialBundleConverter("a".repeat(32), "dev");
+        credentialConverter = new CredentialBundleConverter("a".repeat(32), false);
         service = new ConnectionAdminService(
                 connectionRepository,
                 auditRepository,

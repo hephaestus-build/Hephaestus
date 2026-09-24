@@ -15,9 +15,6 @@ public record UpdateWorkspaceFeaturesRequestDTO(
         @Schema(description = "Enable the Pi mentor chat feature") @Nullable
         Boolean mentorEnabled,
 
-        @Schema(description = "Enable the achievements system") @Nullable
-        Boolean achievementsEnabled,
-
         @Schema(description = "Enable the leaderboard ranking page") @Nullable
         Boolean leaderboardEnabled,
 

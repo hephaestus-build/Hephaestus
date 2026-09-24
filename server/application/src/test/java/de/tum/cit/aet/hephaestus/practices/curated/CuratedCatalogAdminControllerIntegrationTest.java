@@ -4,9 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.event.WorkspacesInitializedEvent;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.BindingChange;
+import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
+import de.tum.cit.aet.hephaestus.practices.PracticeSubject;
+import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CreateCuratedGroupRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CreateCuratedPracticeRequestDTO;
@@ -27,6 +33,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -60,6 +67,9 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
 
     @Autowired
     private PracticeEvidenceDefaults evidenceDefaults;
+
+    @Autowired
+    private CuratedCatalogService catalogService;
 
     private Workspace workspace;
 
@@ -103,9 +113,66 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .expectBody()
                 // Selected by kind rather than by position; the list is ordered by the registered domains.
                 .jsonPath("$.workTypes[?(@.artifactKind == 'chat.conversation_thread')].recommendedNeeds[0].sourceKind")
-                .value(contains("slack.conversation.thread"))
+                .value((java.util.List<String> value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, contains("slack.conversation.thread")))
                 .jsonPath("$.workTypes[?(@.artifactKind == 'chat.conversation_thread')].allowedSources[0].displayName")
-                .value(contains("Slack thread"));
+                .value((java.util.List<String> value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, contains("Slack thread")));
+    }
+
+    @Test
+    void shouldKeepCatalogScopeOnWordingEditAndRequireIntentToRemoveIt() {
+        CuratedPracticeDTO before = getPractice();
+        PracticeBinding base =
+                definitionOf(before, before.definition().criteria()).bindings().getFirst();
+        PracticeSubject gate = new PracticeSubject(
+                "the change has no Swift code",
+                List.of(PracticeSubjectClause.changedPathMatches(List.of("**/*.swift"))));
+        PracticeBinding scoped =
+                new PracticeBinding(base.signals(), base.needs(), base.onDrafts(), ActorRole.REVIEWER, gate);
+        CuratedPracticeDTO saved = putDefinition(
+                        etagOf(before),
+                        requestWithBindings(
+                                before,
+                                "Scoped practice",
+                                scoped,
+                                Set.of(BindingChange.APPLIES_WHEN, BindingChange.SUBJECT)))
+                .expectStatus()
+                .isOk()
+                .expectBody(CuratedPracticeDTO.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(saved).isNotNull();
+
+        CuratedPracticeDTO renamed = putDefinition(
+                        etagOf(saved), requestWithBindings(saved, "Renamed practice", scoped, null))
+                .expectStatus()
+                .isOk()
+                .expectBody(CuratedPracticeDTO.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(renamed).isNotNull();
+        assertThat(getPractice().definition().bindings().getFirst().appliesWhen())
+                .isEqualTo(gate);
+        assertThat(getPractice().definition().bindings().getFirst().subject()).isEqualTo(ActorRole.REVIEWER);
+
+        putDefinition(etagOf(renamed), requestWithBindings(renamed, "Renamed practice", base, null))
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        putDefinition(
+                        etagOf(renamed),
+                        requestWithBindings(
+                                renamed,
+                                "Renamed practice",
+                                base,
+                                Set.of(BindingChange.APPLIES_WHEN, BindingChange.SUBJECT)))
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+        assertThat(getPractice().definition().bindings().getFirst().appliesWhen())
+                .isNull();
+        assertThat(getPractice().definition().bindings().getFirst().subject()).isEqualTo(ActorRole.AUTHOR);
     }
 
     @Test
@@ -127,7 +194,10 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
 
     @Test
     void theShippedDefinitionIsAlwaysThereToCompareAgainstBeforeTakingIt() {
-        putPractice(etagOf(getPractice()), "Our own criteria").expectStatus().isOk();
+        putPractice(etagOf(getPractice()), "Our own criteria")
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
 
         CuratedPracticeDTO edited = getPractice();
 
@@ -149,7 +219,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 before.definition().automatedReviewPolicy(),
                 "Our own words about why this matters.",
                 before.definition().whatGoodLooksLike(),
-                before.definition().groupSlug());
+                before.definition().groupSlug(),
+                null);
         webTestClient
                 .put()
                 .uri(CATALOG + "/practices/" + PRACTICE)
@@ -161,14 +232,18 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .bodyValue(body)
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         assertThat(getPractice().status().changeKind()).isEqualTo(CatalogChangeKind.WORDING);
     }
 
     @Test
     void usingTheHephaestusVersionRemovesTheStoredEditEntirely() {
-        putPractice(etagOf(getPractice()), "Our own criteria").expectStatus().isOk();
+        putPractice(etagOf(getPractice()), "Our own criteria")
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
         assertThat(overrideRows()).isOne();
 
         webTestClient
@@ -191,7 +266,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
     @Test
     void savingTheShippedDefinitionStopsOverridingIt() {
         CuratedPracticeDTO original = getPractice();
-        putPractice(etagOf(original), "Our own criteria").expectStatus().isOk();
+        putPractice(etagOf(original), "Our own criteria").expectStatus().isOk().expectBody(Void.class);
         CuratedPracticeDTO edited = getPractice();
         assertThat(edited.shipped()).isNotNull();
 
@@ -220,7 +295,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
     @Test
     void refusesAnEditBasedOnAVersionSomebodyElseHasMovedOn() {
         String stale = etagOf(getPractice());
-        putPractice(stale, "Our own criteria").expectStatus().isOk();
+        putPractice(stale, "Our own criteria").expectStatus().isOk().expectBody(Void.class);
 
         putPractice(stale, "Someone else's criteria")
                 .expectStatus()
@@ -240,13 +315,17 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .bodyValue(definitionOf(getPractice(), "Our own criteria"))
                 .exchange()
                 .expectStatus()
-                .isEqualTo(428);
+                .isEqualTo(428)
+                .expectBody(Void.class);
     }
 
     @Test
     void guardsTheFirstEditOfAnEntryNobodyHasTouched() {
         assertThat(overrideRows()).isZero();
-        putPractice("\"nonsense\"", "Our own criteria").expectStatus().isEqualTo(412);
+        putPractice("\"nonsense\"", "Our own criteria")
+                .expectStatus()
+                .isEqualTo(412)
+                .expectBody(Void.class);
     }
 
     @Test
@@ -263,7 +342,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .bodyValue(new UpdateCuratedStatusRequestDTO(CuratedStatus.RETIRED))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         CuratedCatalogDTO catalog = getCatalog();
         webTestClient
@@ -277,7 +357,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .bodyValue(new UpdateCuratedStatusRequestDTO(CuratedStatus.RETIRED))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         webTestClient
                 .put()
@@ -288,7 +369,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 })
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
         webTestClient
                 .put()
                 .uri(CATALOG + "/groups/" + GROUP + "/override/acknowledgement")
@@ -298,7 +380,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 })
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT count(*) FROM curated_practice_override WHERE slug = ? AND based_on_digest IS NULL",
@@ -493,6 +576,23 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
     }
 
     @Test
+    void movingAPracticeKeepsItsDeclaredDeliveryBehavior() {
+        EffectiveCatalog before = catalogService.catalog();
+        var original = before.practice(PRACTICE).orElseThrow();
+        assertThat(original.effective().deliveryBehavior().summaryOnly()).isTrue();
+        String destination = before.groups().stream()
+                .map(CatalogEntry::slug)
+                .filter(slug -> !slug.equals(original.effective().groupSlug()))
+                .findFirst()
+                .orElseThrow();
+
+        catalogService.placePractice(PRACTICE, EntityTagPrecondition.parse(quote(before.etag())), destination, 0);
+
+        assertThat(catalogService.practice(PRACTICE).effective().deliveryBehavior())
+                .isEqualTo(original.effective().deliveryBehavior());
+    }
+
+    @Test
     @WithAdminUser
     void notOfferingAnGroupWithholdsThePracticesFiledUnderIt() {
         ensureAdminMembership(workspace);
@@ -550,7 +650,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -574,7 +675,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .bodyValue(new PlacePracticeRequestDTO(destinationGroup, 0))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         webTestClient
                 .patch()
@@ -587,7 +689,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .bodyValue(new UpdateCuratedStatusRequestDTO(CuratedStatus.RETIRED))
                 .exchange()
                 .expectStatus()
-                .isEqualTo(412);
+                .isEqualTo(412)
+                .expectBody(Void.class);
     }
 
     @Test
@@ -625,7 +728,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 null,
                 source.whyItMatters(),
                 source.whatGoodLooksLike(),
-                source.groupSlug());
+                source.groupSlug(),
+                null);
 
         CuratedPracticeDTO created = webTestClient
                 .post()
@@ -657,7 +761,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .bodyValue(new CreateCuratedPracticeRequestDTO(practiceSlug, definitionOf(template, "Saved criteria")))
                 .exchange()
                 .expectStatus()
-                .isCreated();
+                .isCreated()
+                .expectBody(Void.class);
 
         String groupSlug = "removed-group";
         webTestClient
@@ -669,7 +774,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                         groupSlug, new CuratedGroupRequestDTO("Removed group", "Saved description", "Folder", "slate")))
                 .exchange()
                 .expectStatus()
-                .isCreated();
+                .isCreated()
+                .expectBody(Void.class);
 
         jdbcTemplate.update(
                 "UPDATE curated_practice_override SET based_on_digest = repeat('a', 64) WHERE slug = ?", practiceSlug);
@@ -690,7 +796,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 })
                 .exchange()
                 .expectStatus()
-                .isEqualTo(412);
+                .isEqualTo(412)
+                .expectBody(Void.class);
 
         webTestClient
                 .put()
@@ -748,7 +855,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                         "house-rules", new CuratedGroupRequestDTO("House rules", "Ours alone", "Scale", "amber")))
                 .exchange()
                 .expectStatus()
-                .isCreated();
+                .isCreated()
+                .expectBody(Void.class);
 
         CuratedCatalogDTO afterGroup = getCatalog();
         assertThat(afterGroup.groups())
@@ -780,7 +888,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                         new CreateCuratedPracticeRequestDTO("house-practice", definitionOf(template, "House criteria")))
                 .exchange()
                 .expectStatus()
-                .isCreated();
+                .isCreated()
+                .expectBody(Void.class);
 
         List<CuratedPracticeSummaryDTO> afterPractices = getCatalog().practices().stream()
                 .filter(practice -> java.util.Objects.equals(
@@ -840,12 +949,16 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .bodyValue(new CreateCuratedPracticeRequestDTO("anything", definitionOf(getPractice(), "Criteria")))
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
     void recordsAnInstanceAuditRowWithoutCopyingTheDefinitionIntoIt() {
-        putPractice(etagOf(getPractice()), "Our own criteria").expectStatus().isOk();
+        putPractice(etagOf(getPractice()), "Our own criteria")
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
 
         var rows = jdbcTemplate.queryForList("""
             SELECT workspace_id, new_value::text AS new_value
@@ -865,7 +978,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
     @Test
     void auditsSuccessiveGuidanceOnlyEdits() {
         CuratedPracticeDTO original = getPractice();
-        putPractice(etagOf(original), "Our own criteria").expectStatus().isOk();
+        putPractice(etagOf(original), "Our own criteria").expectStatus().isOk().expectBody(Void.class);
 
         CuratedPracticeDTO edited = getPractice();
         CuratedPracticeRequestDTO guidanceEdit = new CuratedPracticeRequestDTO(
@@ -876,7 +989,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 edited.definition().automatedReviewPolicy(),
                 "Updated guidance",
                 edited.definition().whatGoodLooksLike(),
-                edited.definition().groupSlug());
+                edited.definition().groupSlug(),
+                null);
         webTestClient
                 .put()
                 .uri(CATALOG + "/practices/" + PRACTICE)
@@ -888,13 +1002,41 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .bodyValue(guidanceEdit)
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody(Void.class);
 
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT count(*) FROM config_audit_event WHERE entity_type = 'CURATED_PRACTICE' AND entity_id = ? AND action = 'UPDATED'",
                         Long.class,
                         PRACTICE))
                 .isEqualTo(2);
+    }
+
+    private WebTestClient.ResponseSpec putDefinition(String ifMatch, CuratedPracticeRequestDTO request) {
+        return webTestClient
+                .put()
+                .uri(CATALOG + "/practices/" + PRACTICE)
+                .headers(headers -> {
+                    headers.setBearerAuth(ADMIN_TOKEN);
+                    headers.set(HttpHeaders.IF_MATCH, ifMatch);
+                })
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange();
+    }
+
+    private static CuratedPracticeRequestDTO requestWithBindings(
+            CuratedPracticeDTO practice, String name, PracticeBinding binding, @Nullable Set<BindingChange> changes) {
+        return new CuratedPracticeRequestDTO(
+                name,
+                List.of(binding),
+                practice.definition().criteria(),
+                practice.definition().precomputeScript(),
+                practice.definition().automatedReviewPolicy(),
+                practice.definition().whyItMatters(),
+                practice.definition().whatGoodLooksLike(),
+                practice.definition().groupSlug(),
+                changes);
     }
 
     private WebTestClient.ResponseSpec putPractice(String ifMatch, String criteria) {
@@ -919,7 +1061,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 practice.definition().automatedReviewPolicy(),
                 practice.definition().whyItMatters(),
                 practice.definition().whatGoodLooksLike(),
-                practice.definition().groupSlug());
+                practice.definition().groupSlug(),
+                null);
     }
 
     private CuratedPracticeDTO getPractice() {

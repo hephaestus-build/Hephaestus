@@ -14,6 +14,12 @@ import org.springframework.stereotype.Repository;
 @Repository
 @WorkspaceAgnostic("Fleet-wide worker coordination; not workspace-scoped.")
 public interface WorkerRegistryRepository extends JpaRepository<WorkerRegistry, String> {
+    @Query(
+            value =
+                    "SELECT worker_id FROM worker_registry WHERE last_heartbeat >= now() - make_interval(secs => :ttlSeconds)",
+            nativeQuery = true)
+    java.util.List<String> findLiveWorkerIds(@Param("ttlSeconds") long ttlSeconds);
+
     /** Upsert this worker's heartbeat on the DB clock, so every liveness comparison stays on one clock. */
     @Modifying
     @Query(

@@ -2,10 +2,10 @@ import { Link, useMatchRoute, useParams, useSearch } from "@tanstack/react-route
 import { MessageSquareText, ScanSearch, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { PageHeader } from "@/components/core/PageHeader";
-import { PageLayout } from "@/components/core/PageLayout";
+import { cn } from "cn";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { tabsListVariants } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
 
 import type { ReviewScopeSearch } from "./review-search";
 import { reviewArtifactTypeFromSlug } from "./ReviewArtifact";
@@ -56,7 +56,7 @@ export type PracticeReviewSection = (typeof VIEWS)[number]["id"];
  * rather than two hand-tuned lookalikes. If `ui/tabs.tsx` ever exports a trigger variant, use it here.
  */
 const SECTION_LINK_CLASS =
-	"relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center rounded-md border border-transparent px-1.5 py-0.5 text-sm font-medium whitespace-nowrap text-foreground/60 transition-all hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring dark:text-muted-foreground dark:hover:text-foreground aria-[current=page]:bg-background aria-[current=page]:text-foreground aria-[current=page]:shadow-sm dark:aria-[current=page]:border-input dark:aria-[current=page]:bg-input/30 dark:aria-[current=page]:text-foreground";
+	"relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center rounded-md border border-transparent px-1.5 py-0.5 text-sm font-medium whitespace-nowrap text-foreground/60 transition-all hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring dark:text-muted-foreground dark:hover:text-foreground aria-[current=page]:bg-background aria-[current=page]:text-foreground aria-[current=page]:shadow-sm dark:aria-[current=page]:border-input dark:aria-[current=page]:bg-input/30 dark:aria-[current=page]:text-foreground";
 
 export interface PracticeReviewsHeaderProps {
 	workspaceSlug: string;
@@ -64,25 +64,37 @@ export interface PracticeReviewsHeaderProps {
 	scope?: ReviewScopeSearch;
 }
 
+function matchedSection(
+	targetActive: boolean,
+	deliveryActive: boolean,
+	observationsActive: boolean,
+): PracticeReviewSection | undefined {
+	if (targetActive) {
+		return undefined;
+	}
+	if (deliveryActive) {
+		return "delivery";
+	}
+	if (observationsActive) {
+		return "observations";
+	}
+	return "reviews";
+}
+
 export function PracticeReviewsLayout({ workspaceSlug, children }: PracticeReviewsLayoutProps) {
 	const matchRoute = useMatchRoute();
 	const params = useParams({ strict: false });
 	const search = useSearch({ strict: false });
-	const artifactId =
-		"artifactId" in params
-			? Number(params.artifactId)
-			: "artifactId" in search
-				? search.artifactId
-				: undefined;
+	const searchArtifactId = "artifactId" in search ? search.artifactId : undefined;
+	const artifactId = "artifactId" in params ? Number(params.artifactId) : searchArtifactId;
+	const searchAgentJobId = "agentJobId" in search ? search.agentJobId : undefined;
+	const searchArtifactKind = "artifactKind" in search ? search.artifactKind : undefined;
 	const scope = {
-		agentJobId:
-			"jobId" in params ? params.jobId : "agentJobId" in search ? search.agentJobId : undefined,
+		agentJobId: "jobId" in params ? params.jobId : searchAgentJobId,
 		artifactKind:
 			"artifactKind" in params && typeof params.artifactKind === "string"
 				? reviewArtifactTypeFromSlug(params.artifactKind)
-				: "artifactKind" in search
-					? search.artifactKind
-					: undefined,
+				: searchArtifactKind,
 		artifactId: Number.isSafeInteger(artifactId) ? artifactId : undefined,
 		from: "from" in search ? search.from : undefined,
 		to: "to" in search ? search.to : undefined,
@@ -105,26 +117,25 @@ export function PracticeReviewsLayout({ workspaceSlug, children }: PracticeRevie
 			fuzzy: true,
 		}),
 	);
-	const activeId = targetActive
-		? undefined
-		: deliveryActive
-			? "delivery"
-			: observationsActive
-				? "observations"
-				: "reviews";
 
 	return (
 		<PageLayout>
-			<PracticeReviewsHeader workspaceSlug={workspaceSlug} activeSection={activeId} scope={scope} />
+			<PracticeReviewsHeader
+				workspaceSlug={workspaceSlug}
+				activeSection={matchedSection(targetActive, deliveryActive, observationsActive)}
+				scope={scope}
+			/>
 			{children}
 		</PageLayout>
 	);
 }
 
+const NO_SCOPE: ReviewScopeSearch = {};
+
 export function PracticeReviewsHeader({
 	workspaceSlug,
 	activeSection,
-	scope = {},
+	scope = NO_SCOPE,
 }: PracticeReviewsHeaderProps) {
 	const activeView = VIEWS.find((view) => view.id === activeSection);
 	const title = activeView?.title ?? "Reviewed work";

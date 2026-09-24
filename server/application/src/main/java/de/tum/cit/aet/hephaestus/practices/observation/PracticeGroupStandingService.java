@@ -54,7 +54,7 @@ public class PracticeGroupStandingService {
      */
     @Transactional(readOnly = true)
     public List<PracticeGroupStandingDTO> getGroupStandings(Long workspaceId, List<PracticeGroup> groups) {
-        return rollUp(practiceStandingService.getStandingSnapshot(workspaceId), groups);
+        return summarize(groups, practiceStandingService.getStandingSnapshot(workspaceId));
     }
 
     /**
@@ -62,8 +62,8 @@ public class PracticeGroupStandingService {
      * over the snapshot, which already carries the workspace it was read for; the caller holds the
      * transaction the snapshot's lazy associations are read in.
      */
-    public List<PracticeGroupStandingDTO> rollUp(
-            PracticeStandingService.StandingSnapshot snapshot, List<PracticeGroup> groups) {
+    public List<PracticeGroupStandingDTO> summarize(
+            List<PracticeGroup> groups, PracticeStandingService.StandingSnapshot snapshot) {
         Map<String, List<PracticeStandingDTO>> cardsByGroup = cardsByGroup(snapshot.dtos());
         Map<String, GroupSignal> signalsByGroup = groupSignals(snapshot);
         return groups.stream()

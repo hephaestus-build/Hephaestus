@@ -6,8 +6,10 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepositor
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackUsefulness;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -39,16 +41,18 @@ public record ObservationDetailDTO(
         @NonNull @Schema(description = "Observation summary")
         String summary,
 
-        @NonNull @Schema(description = "Presence: PRESENT, ABSENT, NOT_APPLICABLE, or INCONCLUSIVE")
+        @NonNull AssessmentStatus assessmentStatus,
+
+        @Nullable @Schema(description = "PRESENT or ABSENT only when ASSESSED")
         Presence presence,
 
         @Nullable
         @Schema(
                 description =
-                        "Assessment: GOOD or BAD; null when the presence carries no direction (NOT_APPLICABLE, INCONCLUSIVE)")
+                        "Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED")
         Assessment assessment,
 
-        @Nullable @Schema(description = "Severity level (null unless assessment is BAD)")
+        @Nullable @Schema(description = "Severity level (null unless outcome is NEGATIVE)")
         Severity severity,
 
         @Nullable ObservationEvidenceDTO evidence,
@@ -97,6 +101,14 @@ public record ObservationDetailDTO(
 
         @NonNull @Schema(description = "When the observation was made")
         Instant observedAt) {
+    @com.fasterxml.jackson.annotation.JsonProperty("outcome")
+    @Schema(
+            description = "Derived from presence and contextual behavior assessment; null unless assessed",
+            accessMode = Schema.AccessMode.READ_ONLY)
+    public @Nullable Outcome getOutcome() {
+        return Outcome.of(presence, assessment);
+    }
+
     public static ObservationDetailDTO from(
             Observation observation,
             @Nullable String deliveredFeedback,
@@ -112,6 +124,7 @@ public record ObservationDetailDTO(
                 observation.getArtifactKind(),
                 observation.getArtifactId(),
                 observation.getSummary(),
+                observation.getAssessmentStatus(),
                 observation.getPresence(),
                 observation.getAssessment(),
                 observation.getSeverity(),
@@ -128,7 +141,7 @@ public record ObservationDetailDTO(
                         : FeedbackResolution.valueOf(feedback.getResponseResolution()),
                 feedback == null ? null : feedback.getResponseComment(),
                 observation.getRecurrenceKey(),
-                ReviewClaimCurrentness.of(observation.getPracticeRevision(), practice),
+                ReviewClaimCurrentness.of(observation.getPracticeRevision(), practice, observation.getSupersededAt()),
                 observation.getOrigin(),
                 artifactUrl,
                 observation.getObservedAt());

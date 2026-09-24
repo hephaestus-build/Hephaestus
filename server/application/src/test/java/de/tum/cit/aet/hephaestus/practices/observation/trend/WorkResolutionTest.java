@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import java.time.Instant;
@@ -80,28 +81,30 @@ class WorkResolutionTest {
     }
 
     private static Observation clean(long artifactId, UUID jobId, String observedAt) {
-        return observation(artifactId, jobId, observedAt, Presence.PRESENT, Assessment.GOOD);
+        return observation(artifactId, jobId, observedAt, AssessmentStatus.ASSESSED, Presence.PRESENT, Assessment.GOOD);
     }
 
     private static Observation problem(long artifactId, UUID jobId, String observedAt) {
-        return observation(artifactId, jobId, observedAt, Presence.ABSENT, Assessment.BAD);
+        return observation(artifactId, jobId, observedAt, AssessmentStatus.ASSESSED, Presence.ABSENT, Assessment.GOOD);
     }
 
     private static Observation noVerdict(long artifactId, UUID jobId, String observedAt) {
-        return observation(artifactId, jobId, observedAt, Presence.NOT_APPLICABLE, null);
+        return observation(artifactId, jobId, observedAt, AssessmentStatus.NOT_APPLICABLE, null, null);
     }
 
     private static Observation observation(
             long artifactId,
             UUID jobId,
             String observedAt,
-            Presence presence,
+            AssessmentStatus status,
+            @org.jspecify.annotations.Nullable Presence presence,
             @org.jspecify.annotations.Nullable Assessment assessment) {
         return Observation.builder()
                 .id(UUID.randomUUID())
                 .agentJobId(jobId)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(artifactId)
+                .assessmentStatus(status)
                 .presence(presence)
                 .assessment(assessment)
                 .observedAt(Instant.parse(observedAt))

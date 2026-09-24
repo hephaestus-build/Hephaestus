@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -48,38 +49,13 @@ class AgentVocabularySyncTest extends BaseUnitTest {
     }
 
     @Test
-    void carriesValenceAgrees() throws IOException {
-        String body = Files.readString(NORMALIZER, StandardCharsets.UTF_8);
-        Matcher fn = Pattern.compile(
-                        // Tolerates the parameter and return annotations the TypeScript runtime carries; the body,
-                        // which is what this test reads the valenced presences out of, is captured either way.
-                        "export function carriesValence\\([^)]*\\)[^{]*\\{(.*?)\\n\\}", Pattern.DOTALL)
-                .matcher(body);
-        assertThat(fn.find())
-                .as("carriesValence() is declared in pi-observation-normalize.ts")
-                .isTrue();
-
-        Set<String> jsValenced = quotedStrings(fn.group(1));
-        Set<String> javaValenced = Arrays.stream(Presence.values())
-                .filter(Presence::carriesValence)
-                .map(Enum::name)
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
-
-        assertThat(jsValenced)
-                .as("presences the JS carriesValence() accepts vs Presence::carriesValence")
-                .containsExactlyInAnyOrderElementsOf(javaValenced);
-    }
-
-    @Test
-    void runnerOffersTheFusedOutcomeVocabulary() throws IOException {
-        String body = Files.readString(RUNNER, StandardCharsets.UTF_8);
-
-        assertThat(body)
-                .as("pi-runner.ts offers the fused outcome vocabulary the parser resolves against")
-                .contains("\"BEHAVIOR_PRESENT_GOOD\"")
-                .contains("\"BEHAVIOR_ABSENT_BAD_MAJOR\"")
-                .contains("\"NO_REVIEW_OCCASION\"")
-                .contains("\"INSUFFICIENT_EVIDENCE\"");
+    void assessmentStatusVocabularyMatches() throws IOException {
+        assertThat(jsArray("ASSESSMENT_STATUS_VALUES"))
+                .containsExactlyInAnyOrderElementsOf(names(AssessmentStatus.values()));
+        String runner = Files.readString(RUNNER, StandardCharsets.UTF_8);
+        assertThat(runner)
+                .contains("assessmentStatus:", "presence:", "assessment:", "severity:")
+                .doesNotContain("BEHAVIOR_PRESENT_GOOD", "NO_REVIEW_OCCASION", "INSUFFICIENT_EVIDENCE");
     }
 
     @Test
@@ -128,12 +104,8 @@ class AgentVocabularySyncTest extends BaseUnitTest {
     void orchestratorPromptCoversEveryOutcome() throws IOException {
         String body = Files.readString(ORCHESTRATOR, StandardCharsets.UTF_8);
         assertThat(body)
-                .contains("BEHAVIOR_PRESENT_")
-                .contains("BEHAVIOR_ABSENT_")
-                .contains("NO_REVIEW_OCCASION")
-                .contains("INSUFFICIENT_EVIDENCE")
-                .doesNotContain("NOT_APPLICABLE")
-                .doesNotContain("INCONCLUSIVE");
+                .contains("ASSESSED", "PRESENT", "ABSENT", "GOOD", "BAD", "NOT_APPLICABLE", "UNDETERMINED")
+                .doesNotContain("BEHAVIOR_PRESENT_", "NO_REVIEW_OCCASION", "INSUFFICIENT_EVIDENCE", "INCONCLUSIVE");
     }
 
     private static List<String> names(Enum<?>[] values) {

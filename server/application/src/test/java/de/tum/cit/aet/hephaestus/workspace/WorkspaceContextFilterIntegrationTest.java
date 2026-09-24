@@ -79,7 +79,8 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -103,7 +104,8 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
 
         assertThat(workspaceMembershipRepository.findByWorkspace_IdAndUser_IdIn(
                         workspace.getId(), Set.of(visitor.getId())))
@@ -144,7 +146,8 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -179,7 +182,8 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -209,8 +213,20 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
 
     @Test
     void unauthenticatedWorkspaceListIsUnauthorized() {
-        webTestClient.get().uri("/workspaces").exchange().expectStatus().isUnauthorized();
-        webTestClient.get().uri("/workspaces/").exchange().expectStatus().isUnauthorized();
+        webTestClient
+                .get()
+                .uri("/workspaces")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+        webTestClient
+                .get()
+                .uri("/workspaces/")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -245,7 +261,8 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .uri("/workspaces/{workspaceSlug}/context-echo", workspace.getWorkspaceSlug())
                 .exchange()
                 .expectStatus()
-                .isUnauthorized();
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
@@ -330,7 +347,8 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .uri("/workspaces/{workspaceSlug}/context-echo", "secret-space")
                 .exchange()
                 .expectStatus()
-                .isNotFound();
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     @Test

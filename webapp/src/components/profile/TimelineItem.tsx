@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 export interface TimelineItemProps {
 	/** When this happened; carried as machine-readable `<time>` metadata when given. */
@@ -54,7 +54,7 @@ export function TimelineItem({
 				{label !== undefined && (
 					<span
 						className={cn(
-							"absolute left-1/2 top-3 z-10 size-2.5 -translate-x-1/2 rounded-full border-2 border-background",
+							"absolute top-3 left-1/2 z-10 size-2.5 -translate-x-1/2 rounded-full border-2 border-background",
 							dot === "accent" ? "bg-mentor" : "bg-muted-foreground",
 						)}
 						aria-hidden
@@ -65,7 +65,7 @@ export function TimelineItem({
 					<span
 						className={cn(
 							"absolute bottom-0 left-1/2 -translate-x-1/2 border-l border-dashed border-muted-foreground/50",
-							label !== undefined ? "top-5" : "top-0",
+							label === undefined ? "top-0" : "top-5",
 						)}
 						aria-hidden
 					/>
@@ -73,7 +73,7 @@ export function TimelineItem({
 					<span
 						className={cn(
 							"absolute bottom-0 left-1/2 w-px -translate-x-1/2 bg-border group-last:hidden",
-							label !== undefined ? "top-5" : "top-0",
+							label === undefined ? "top-0" : "top-5",
 						)}
 						aria-hidden
 					/>

@@ -216,6 +216,7 @@ class WorkspaceMembershipControllerIntegrationTest extends AbstractWorkspaceInte
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 }

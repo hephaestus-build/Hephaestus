@@ -12,6 +12,40 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
+    void shouldPreserveTheVerifiedCommitForHistoricalEvidence() {
+        var evidence = MAPPER.createObjectNode();
+        evidence.putArray("citations")
+                .addObject()
+                .put("sourceKind", "scm.repository.tree")
+                .put("artifactPath", "repo/.git/HEAD")
+                .put("path", "deleted.java")
+                .put("revision", "a".repeat(40))
+                .put("startLine", 3)
+                .put("quote", "earlier source");
+        var mapped = ObservationEvidenceDTO.from(evidence);
+        assertThat(mapped).isNotNull();
+        assertThat(mapped.citations().getFirst().revision()).isEqualTo("a".repeat(40));
+    }
+
+    @Test
+    void shouldPreserveTheVerifiedCommitOfAChangeCitation() {
+        var evidence = MAPPER.createObjectNode();
+        evidence.putArray("citations")
+                .addObject()
+                .put("sourceKind", "scm.pull-request.diff")
+                .put("artifactPath", "inputs/context/change.json")
+                .put("path", "src/Auth.java")
+                .put("side", "NEW")
+                .put("revision", "b".repeat(40))
+                .put("startLine", 10)
+                .put("quote", "insecure();");
+        var mapped = ObservationEvidenceDTO.from(evidence);
+        assertThat(mapped).isNotNull();
+        assertThat(mapped.citations().getFirst().revision()).isEqualTo("b".repeat(40));
+        assertThat(mapped.citations().getFirst().side()).isEqualTo(EvidenceCitationSide.NEW);
+    }
+
+    @Test
     void mapsCanonicalRedactedCitation() {
         var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
                 {"detector":"secret-scan","citations":[{"sourceKind":"scm.repository.tree",\
