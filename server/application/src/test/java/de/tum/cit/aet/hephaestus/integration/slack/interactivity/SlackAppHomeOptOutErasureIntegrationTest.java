@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
-import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationCommand;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -146,7 +145,6 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
         handler = new SlackInteractivityHandler(
                 workspaceResolver,
                 identityResolver,
-                mock(ResearchParticipationCommand.class),
                 mock(SlackAppHomeService.class),
                 new SlackParticipantConsentService(participantConsentRepository),
                 new SlackPersonErasureService(messageRepository, threadRepository, conversationFeedbackErasure),

@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -54,8 +55,9 @@ public class WorkspaceMembershipController {
     @SecurityRequirements
     public ResponseEntity<List<WorkspaceMembershipDTO>> listMembers(
             WorkspaceContext context,
-            @Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Results per page, capped at 100") @RequestParam(defaultValue = "50") int size) {
+            @Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0") @Min(0) int page,
+            @Parameter(description = "Results per page, capped at 100") @RequestParam(defaultValue = "50") @Min(1)
+                    int size) {
         int pageSize = Math.min(size, 100);
         Pageable pageable = PageRequest.of(page, pageSize, Sort.by("createdAt").ascending());
 

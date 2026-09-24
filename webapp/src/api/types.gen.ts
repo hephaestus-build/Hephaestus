@@ -4,6 +4,12 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type AcceptPracticeReleaseRequest = {
+  choices: {
+    [key: string]: 'CURRENT' | 'OFFERED';
+  };
+};
+
 /**
  * A human-readable account identity. <code>displayName</code>/<code>email</code> are null for deleted accounts.
  */
@@ -95,7 +101,6 @@ export type AdminWorkspaceView = {
   displayName: string;
   id: number;
   memberCount: number;
-  ownerAccountId?: number;
   ownerLogin?: string;
   providerType?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
   status: string;
@@ -336,6 +341,7 @@ export type AuthEventView = {
   occurredAt: Date;
   result: string;
   userAgent?: string;
+  viewedUserId?: number;
   workspaceId?: number;
 };
 
@@ -490,7 +496,7 @@ export type CatalogGroupPracticeAction = {
  * The catalog entry a workspace copy came from and whether it differs now
  */
 export type CatalogOrigin = {
-  link: 'IN_SYNC' | 'LOCALLY_EDITED' | 'UPDATE_AVAILABLE';
+  link: 'IN_SYNC' | 'LOCALLY_EDITED' | 'UPDATE_AVAILABLE' | 'DECLINED';
   /**
    * Slug of the catalog entry this copy was made from
    */
@@ -975,6 +981,7 @@ export type CreatePracticeRequest = {
    * Practice review criteria
    */
   criteria: string;
+  deliveryBehavior?: PracticeDeliveryBehavior;
   /**
    * Practice group to add the practice to. Omit or set to null for Unassigned.
    */
@@ -1258,6 +1265,7 @@ export type CuratedPracticeDefinition = {
   automatedReviewValidation: PracticeAutomatedReviewValidation;
   bindings: Array<PracticeBinding>;
   criteria: string;
+  deliveryBehavior: PracticeDeliveryBehavior;
   groupSlug?: string;
   name: string;
   precomputeScript?: string;
@@ -1274,12 +1282,17 @@ export type CuratedPracticeRequest = {
    */
   automatedReviewPolicy?: PracticeAutomatedReviewPolicy;
   /**
+   * Explicit intent to change the gate or the person judged
+   */
+  bindingChanges?: Array<'APPLIES_WHEN' | 'SUBJECT'>;
+  /**
    * The one occasion this practice is reviewed on; the kind of work is read off the signals
    */
   bindings: [
     PracticeBinding
   ];
   criteria: string;
+  deliveryBehavior?: PracticeDeliveryBehavior;
   groupSlug?: string;
   name: string;
   precomputeScript?: string;
@@ -1307,8 +1320,6 @@ export type CurrentUserView = {
   hasGitLabIdentity?: boolean;
   id?: number;
   identityProvider?: string;
-  impersonating?: boolean;
-  impersonatorId?: number;
   linkedProviders?: Array<LinkedProvider>;
   primaryEmail?: string;
   profileUrl?: string;
@@ -1343,7 +1354,7 @@ export type DeliveryPolicyTrace = {
   admittedRevision: number;
   allowed: boolean;
   checks: Array<DeliveryPolicyTraceCheck>;
-  decisiveReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  decisiveReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
   evaluatedAt: Date;
   evaluatedRevision?: number;
   facts: DeliveryPolicyFactsSnapshot;
@@ -1386,6 +1397,28 @@ export type DeveloperPracticeSummary = {
    * Total number of observations
    */
   totalObservations: number;
+};
+
+export type EmailTestRequest = {
+  /**
+   * the mailbox to send the test email to; blank means the caller's own verified address
+   */
+  to?: string;
+};
+
+export type EmailTestResponse = {
+  /**
+   * the accepted <code>Message-ID</code>, only for <code>SENT</code>; search for it in the relay's log
+   */
+  messageId?: string;
+  /**
+   * what became of the test email; <code>SENT</code> is the only success
+   */
+  outcome: 'SENT' | 'EXPIRED' | 'NOT_CONFIGURED' | 'SILENT_MODE' | 'NO_RECIPIENT' | 'UNSUBSCRIBED' | 'INVALID_ADDRESS' | 'REJECTED' | 'UNAVAILABLE' | 'RATE_LIMITED';
+  /**
+   * the address it went to, or <code>null</code> when there was no recipient to resolve
+   */
+  to?: string;
 };
 
 /**
@@ -1727,11 +1760,6 @@ export type IdentityView = {
   providerType?: string;
   subject?: string;
   username?: string;
-};
-
-export type ImpersonateRequest = {
-  reason: string;
-  targetAccountId: number;
 };
 
 /**
@@ -2272,6 +2300,23 @@ export type LoginProviderView = {
   updatedAt: Date;
 };
 
+export type NotificationPreferences = {
+  /**
+   * This instance has an email transport and sender configured
+   */
+  deliveryConfigured: boolean;
+  /**
+   * The account has an active verified email address
+   */
+  emailAvailable: boolean;
+  etag: string;
+  productFeedback: boolean;
+  productSurveys: boolean;
+  researchSurveys: boolean;
+  surveySummaries: boolean;
+  workspaceAlerts: boolean;
+};
+
 /**
  * Full practice observation detail including delivered feedback and evidence
  */
@@ -2294,7 +2339,7 @@ export type ObservationDetail = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -2370,7 +2415,7 @@ export type ObservationList = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -2601,6 +2646,25 @@ export type PageResponseDtoAuthEventView = {
  *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
  *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
  */
+export type PageResponseDtoChatThreadSummary = {
+  content?: Array<ChatThreadSummary>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
 export type PageResponseDtoConfigAuditEntryView = {
   content?: Array<ConfigAuditEntryView>;
   empty?: boolean;
@@ -2641,6 +2705,25 @@ export type PageResponseDtoObservationList = {
  */
 export type PageResponseDtoSyncJob = {
   content?: Array<SyncJob>;
+  empty?: boolean;
+  first?: boolean;
+  last?: boolean;
+  number?: number;
+  numberOfElements?: number;
+  pageable?: Pageable;
+  size?: number;
+  sort?: Sort;
+  totalElements?: number;
+  totalPages?: number;
+};
+
+/**
+ * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+ *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+ *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ */
+export type PageResponseDtoUserViewUser = {
+  content?: Array<UserViewUser>;
   empty?: boolean;
   first?: boolean;
   last?: boolean;
@@ -2744,6 +2827,7 @@ export type Practice = {
    * Practice review criteria
    */
   criteria: string;
+  deliveryBehavior: PracticeDeliveryBehavior;
   /**
    * Position within its group (lowest first); ties broken by name
    */
@@ -2871,6 +2955,24 @@ export type PracticeBinding = {
 };
 
 /**
+ * A practice as its author wrote it.
+ *
+ *  <p><code>artifactKind</code> is not a field. It is read off {@link de.tum.cit.aet.hephaestus.practices.PracticeDefinition#bindings #bindings()}, whose signal names carry
+ *  it as a prefix, so there is nothing for a second statement of it to disagree with.
+ */
+export type PracticeDefinition = {
+  automatedReviewPolicy: PracticeAutomatedReviewPolicy;
+  bindings: Array<PracticeBinding>;
+  criteria: string;
+  deliveryBehavior: PracticeDeliveryBehavior;
+  groupSlug?: string;
+  name: string;
+  precomputeScript?: string;
+  whatGoodLooksLike?: string;
+  whyItMatters?: string;
+};
+
+/**
  * What a practice author may choose, per type of reviewed work
  */
 export type PracticeDefinitionOptions = {
@@ -2879,6 +2981,15 @@ export type PracticeDefinitionOptions = {
    */
   sourceContractVersion: string;
   workTypes: Array<PracticeWorkTypeDefinitionOptions>;
+};
+
+/**
+ * Delivery choices declared by the practice author, not inferred from its slug.
+ */
+export type PracticeDeliveryBehavior = {
+  overlapGroup?: string;
+  redundantToSlug?: string;
+  summaryOnly: boolean;
 };
 
 /**
@@ -3036,6 +3147,10 @@ export type PracticeGroupReviewObservation = {
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation still has current review rules and supporting work snapshot
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   feedbackId?: string;
   feedbackResolution?: 'ADDRESSED' | 'DISPUTED' | 'NOT_APPLICABLE';
   feedbackResponseComment?: string;
@@ -3148,6 +3263,27 @@ export type PracticeGroupTrend = {
 export type PracticeManualReviewSignal = {
   displayName: string;
   signal: string;
+};
+
+export type PracticeReleaseField = {
+  conflict: boolean;
+  field: 'NAME' | 'BINDINGS' | 'CRITERIA' | 'PRECOMPUTE_SCRIPT' | 'AUTOMATED_REVIEW_POLICY' | 'WHY_IT_MATTERS' | 'WHAT_GOOD_LOOKS_LIKE' | 'GROUP_SLUG' | 'DELIVERY_BEHAVIOR';
+  offeredChanged: boolean;
+};
+
+/**
+ * One offer and the exact three versions an administrator reviews before deciding.
+ */
+export type PracticeReleaseProposal = {
+  base: PracticeDefinition;
+  baseSource: 'EXACT_ADOPTION' | 'BUNDLED_DIGEST_MATCH' | 'BUNDLED_FINGERPRINT_MATCH' | 'CURRENT_DEFINITION';
+  current: PracticeDefinition;
+  currentRevision?: number;
+  etag: string;
+  fields: Array<PracticeReleaseField>;
+  offered: PracticeDefinition;
+  offeredDigest: string;
+  slug: string;
 };
 
 export type PracticeReviewCoveragePreview = {
@@ -3422,7 +3558,7 @@ export type PracticeTraceEntry = {
   /**
    * Why prepared feedback was withheld. Non-empty with observations present means we measured and deliberately said nothing.
    */
-  withheldReasons: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
+  withheldReasons: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
 };
 
 export type PracticeTrend = {
@@ -3454,6 +3590,7 @@ export type PracticeWorkTypeDefinitionOptions = {
    * The occasions a practice on this work type can be bound to. A review somebody asks for by hand is not among them — see manualReviewSignal.
    */
   signals: Array<PracticeSignalOption>;
+  subjectRoles: Array<'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER'>;
   supportedAutomatedReviewModes: Array<'LANGUAGE_MODEL' | 'NONE'>;
 };
 
@@ -4087,7 +4224,7 @@ export type ReviewBoundFeedback = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
 };
 
 /**
@@ -4100,7 +4237,7 @@ export type ReviewBoundObservation = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -4169,7 +4306,7 @@ export type ReviewFeedback = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
 };
 
 /**
@@ -4243,7 +4380,7 @@ export type ReviewFeedbackDetail = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
   /**
    * Cross-run continuity key tying successive deliveries together
    */
@@ -4288,7 +4425,7 @@ export type ReviewObservation = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -4355,7 +4492,7 @@ export type ReviewObservationDetail = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   evidence?: ObservationEvidence;
@@ -4804,6 +4941,22 @@ export type SurveyEdit = {
   endsAt?: Date;
   startsAt: Date;
   title: string;
+};
+
+export type SurveyEmailInvitationRequest = {
+  sendReminder?: boolean;
+};
+
+/**
+ * Counts refer to email requests, not in-app invitations or responses. Accepted means SMTP relay acceptance.
+ */
+export type SurveyEmailInvitationSummary = {
+  accepted: number;
+  alreadyRequested: number;
+  deliveryConfigured: boolean;
+  eligible: number;
+  queued: number;
+  remaining: number;
 };
 
 export type SurveyInvitation = {
@@ -5348,6 +5501,14 @@ export type UpdateLoginProviderRequest = {
   scopes?: string;
 };
 
+export type UpdateNotificationPreferences = {
+  productFeedback: boolean;
+  productSurveys: boolean;
+  researchSurveys: boolean;
+  surveySummaries: boolean;
+  workspaceAlerts: boolean;
+};
+
 /**
  * Transition a mirrored Outline collection to a target mirror state (pause / resume)
  */
@@ -5407,6 +5568,10 @@ export type UpdatePracticeRequest = {
    */
   automatedReviewPolicy?: PracticeAutomatedReviewPolicy;
   /**
+   * Explicit intent to change the gate or the person judged
+   */
+  bindingChanges?: Array<'APPLIES_WHEN' | 'SUBJECT'>;
+  /**
    * Replacement occasion and its evidence; omit to leave it unchanged
    */
   bindings?: [
@@ -5420,6 +5585,7 @@ export type UpdatePracticeRequest = {
    * Practice review criteria
    */
   criteria?: string;
+  deliveryBehavior?: PracticeDeliveryBehavior;
   /**
    * Catalog placement to apply with the definition update; omit to leave unchanged
    */
@@ -5763,14 +5929,17 @@ export type UserInfo = {
   name: string;
 };
 
+export type UserPracticeSummary = {
+  groupStandings: Array<PracticeGroupStanding>;
+  groups: Array<PracticeGroup>;
+  practices: Array<ReviewedPractice>;
+  standings: Array<PracticeStanding>;
+};
+
 /**
  * User preferences and settings
  */
 export type UserSettings = {
-  /**
-   * Whether the user consents to participate in research studies
-   */
-  participateInResearch: boolean;
   /**
    * Whether new practice-feedback comments may be delivered on issues, pull requests, and merge requests authored by the user, together with related Slack reminders
    */
@@ -5785,6 +5954,14 @@ export type UserTeams = {
   name: string;
   teams: Array<TeamSummary>;
   url: string;
+};
+
+export type UserViewUser = {
+  accountId?: number;
+  accountStatus?: string;
+  login: string;
+  name?: string;
+  userId: number;
 };
 
 /**
@@ -6303,7 +6480,7 @@ export type ObservationDetailWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -6367,7 +6544,7 @@ export type ObservationListWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -6437,6 +6614,10 @@ export type PracticeGroupReviewObservationWritable = {
    */
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * Whether an observation still has current review rules and supporting work snapshot
+   */
+  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   feedbackId?: string;
   feedbackResolution?: 'ADDRESSED' | 'DISPUTED' | 'NOT_APPLICABLE';
   feedbackResponseComment?: string;
@@ -6622,7 +6803,7 @@ export type ReviewBoundObservationWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -6709,7 +6890,7 @@ export type ReviewFeedbackDetailWritable = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
   /**
    * Cross-run continuity key tying successive deliveries together
    */
@@ -6728,7 +6909,7 @@ export type ReviewObservationWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -6775,7 +6956,7 @@ export type ReviewObservationDetailWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation was produced using the current review rules
+   * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   evidence?: ObservationEvidence;
@@ -6812,6 +6993,13 @@ export type ReviewObservationDetailWritable = {
   summary: string;
 };
 
+export type UserPracticeSummaryWritable = {
+  groupStandings: Array<PracticeGroupStandingWritable>;
+  groups: Array<PracticeGroup>;
+  practices: Array<ReviewedPractice>;
+  standings: Array<PracticeStandingWritable>;
+};
+
 export type GetJwksData = {
   body?: never;
   path?: never;
@@ -6838,7 +7026,7 @@ export type AdminListAuthEventsData = {
     size?: number;
     accountId?: number;
     actingAccountId?: number;
-    eventType?: Array<'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
     result?: Array<'SUCCESS' | 'FAILURE'>;
     from?: Date;
     to?: Date;
@@ -6861,7 +7049,7 @@ export type AdminExportAuthEventsData = {
   query?: {
     accountId?: number;
     actingAccountId?: number;
-    eventType?: Array<'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
     result?: Array<'SUCCESS' | 'FAILURE'>;
     from?: Date;
     to?: Date;
@@ -6920,6 +7108,31 @@ export type AdminGetConfigurationReadinessResponses = {
 };
 
 export type AdminGetConfigurationReadinessResponse = AdminGetConfigurationReadinessResponses[keyof AdminGetConfigurationReadinessResponses];
+
+export type AdminSendTestEmailData = {
+  body?: EmailTestRequest;
+  path?: never;
+  query?: never;
+  url: '/admin/email/test';
+};
+
+export type AdminSendTestEmailErrors = {
+  /**
+   * Malformed request or invalid recipient address
+   */
+  400: ProblemDetail;
+};
+
+export type AdminSendTestEmailError = AdminSendTestEmailErrors[keyof AdminSendTestEmailErrors];
+
+export type AdminSendTestEmailResponses = {
+  /**
+   * Email delivery outcome
+   */
+  200: EmailTestResponse;
+};
+
+export type AdminSendTestEmailResponse = AdminSendTestEmailResponses[keyof AdminSendTestEmailResponses];
 
 export type AdminListLlmConnectionsData = {
   body?: never;
@@ -7809,6 +8022,66 @@ export type AdminPlaceCuratedPracticeResponses = {
 
 export type AdminPlaceCuratedPracticeResponse = AdminPlaceCuratedPracticeResponses[keyof AdminPlaceCuratedPracticeResponses];
 
+export type AdminDeclinePracticeReleaseData = {
+  body?: never;
+  headers: {
+    'If-Match': string;
+  };
+  path: {
+    slug: string;
+  };
+  query?: never;
+  url: '/admin/practice-catalog/practices/{slug}/release';
+};
+
+export type AdminDeclinePracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: CuratedPractice;
+};
+
+export type AdminDeclinePracticeReleaseResponse = AdminDeclinePracticeReleaseResponses[keyof AdminDeclinePracticeReleaseResponses];
+
+export type AdminGetPracticeReleaseData = {
+  body?: never;
+  path: {
+    slug: string;
+  };
+  query?: never;
+  url: '/admin/practice-catalog/practices/{slug}/release';
+};
+
+export type AdminGetPracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: PracticeReleaseProposal;
+};
+
+export type AdminGetPracticeReleaseResponse = AdminGetPracticeReleaseResponses[keyof AdminGetPracticeReleaseResponses];
+
+export type AdminAcceptPracticeReleaseData = {
+  body: AcceptPracticeReleaseRequest;
+  headers: {
+    'If-Match': string;
+  };
+  path: {
+    slug: string;
+  };
+  query?: never;
+  url: '/admin/practice-catalog/practices/{slug}/release';
+};
+
+export type AdminAcceptPracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: CuratedPractice;
+};
+
+export type AdminAcceptPracticeReleaseResponse = AdminAcceptPracticeReleaseResponses[keyof AdminAcceptPracticeReleaseResponses];
+
 export type AdminUpdateCuratedPracticeStatusData = {
   body: UpdateCuratedStatusRequest;
   headers: {
@@ -7969,6 +8242,51 @@ export type AdminUpdateProductSurveyResponses = {
 };
 
 export type AdminUpdateProductSurveyResponse = AdminUpdateProductSurveyResponses[keyof AdminUpdateProductSurveyResponses];
+
+export type AdminPreviewSurveyEmailInvitationsData = {
+  body?: never;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}/email-invitations';
+};
+
+export type AdminPreviewSurveyEmailInvitationsResponses = {
+  /**
+   * OK
+   */
+  200: SurveyEmailInvitationSummary;
+};
+
+export type AdminPreviewSurveyEmailInvitationsResponse = AdminPreviewSurveyEmailInvitationsResponses[keyof AdminPreviewSurveyEmailInvitationsResponses];
+
+export type AdminSendSurveyEmailInvitationsData = {
+  body?: SurveyEmailInvitationRequest;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}/email-invitations';
+};
+
+export type AdminSendSurveyEmailInvitationsErrors = {
+  /**
+   * Email delivery is not configured; no invitations were requested
+   */
+  503: ProblemDetail;
+};
+
+export type AdminSendSurveyEmailInvitationsError = AdminSendSurveyEmailInvitationsErrors[keyof AdminSendSurveyEmailInvitationsErrors];
+
+export type AdminSendSurveyEmailInvitationsResponses = {
+  /**
+   * Invitation request summary
+   */
+  200: SurveyEmailInvitationSummary;
+};
+
+export type AdminSendSurveyEmailInvitationsResponse = AdminSendSurveyEmailInvitationsResponses[keyof AdminSendSurveyEmailInvitationsResponses];
 
 export type AdminListProductSurveyResponsesData = {
   body?: never;
@@ -8227,34 +8545,6 @@ export type AdminUpdateWorkspaceLlmBudgetResponses = {
 
 export type AdminUpdateWorkspaceLlmBudgetResponse = AdminUpdateWorkspaceLlmBudgetResponses[keyof AdminUpdateWorkspaceLlmBudgetResponses];
 
-export type ImpersonateData = {
-  body: ImpersonateRequest;
-  path?: never;
-  query?: never;
-  url: '/auth/impersonate';
-};
-
-export type ImpersonateResponses = {
-  /**
-   * OK
-   */
-  200: unknown;
-};
-
-export type ExitImpersonationData = {
-  body?: never;
-  path?: never;
-  query?: never;
-  url: '/auth/impersonate:exit';
-};
-
-export type ExitImpersonationResponses = {
-  /**
-   * OK
-   */
-  200: unknown;
-};
-
 export type LogoutData = {
   body?: never;
   path?: never;
@@ -8323,6 +8613,26 @@ export type ListIdentityProvidersResponses = {
 };
 
 export type ListIdentityProvidersResponse = ListIdentityProvidersResponses[keyof ListIdentityProvidersResponses];
+
+export type UnsubscribeEmailData = {
+  body?: {
+    'List-Unsubscribe': string;
+  };
+  path: {
+    token: string;
+  };
+  query?: never;
+  url: '/notifications/unsubscribe/{token}';
+};
+
+export type UnsubscribeEmailResponses = {
+  /**
+   * Subscription disabled, or token no longer applicable
+   */
+  204: void;
+};
+
+export type UnsubscribeEmailResponse = UnsubscribeEmailResponses[keyof UnsubscribeEmailResponses];
 
 export type CallbackGetData = {
   body?: never;
@@ -8585,6 +8895,69 @@ export type UnlinkIdentityResponses = {
 };
 
 export type UnlinkIdentityResponse = UnlinkIdentityResponses[keyof UnlinkIdentityResponses];
+
+export type GetNotificationPreferencesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/notification-preferences';
+};
+
+export type GetNotificationPreferencesResponses = {
+  /**
+   * Your current email subscriptions
+   */
+  200: NotificationPreferences;
+};
+
+export type GetNotificationPreferencesResponse = GetNotificationPreferencesResponses[keyof GetNotificationPreferencesResponses];
+
+export type UpdateNotificationPreferencesData = {
+  body: UpdateNotificationPreferences;
+  headers: {
+    /**
+     * Current preferences ETag
+     */
+    'If-Match': string;
+  };
+  path?: never;
+  query?: never;
+  url: '/user/notification-preferences';
+};
+
+export type UpdateNotificationPreferencesErrors = {
+  /**
+   * Invalid preferences or If-Match header
+   */
+  400: ProblemDetail;
+  /**
+   * Enabling this subscription requires instance administration
+   */
+  403: ProblemDetail;
+  /**
+   * Enabling email requires a verified contact on an active account
+   */
+  409: ProblemDetail;
+  /**
+   * The supplied ETag is stale
+   */
+  412: ProblemDetail;
+  /**
+   * If-Match is required
+   */
+  428: ProblemDetail;
+};
+
+export type UpdateNotificationPreferencesError = UpdateNotificationPreferencesErrors[keyof UpdateNotificationPreferencesErrors];
+
+export type UpdateNotificationPreferencesResponses = {
+  /**
+   * Email subscriptions updated
+   */
+  200: NotificationPreferences;
+};
+
+export type UpdateNotificationPreferencesResponse = UpdateNotificationPreferencesResponses[keyof UpdateNotificationPreferencesResponses];
 
 export type RevokeOtherSessionsData = {
   body?: never;
@@ -11368,6 +11741,99 @@ export type GetObservationResponses = {
 
 export type GetObservationResponse = GetObservationResponses[keyof GetObservationResponses];
 
+export type ListPracticeReleasesData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/releases';
+};
+
+export type ListPracticeReleasesResponses = {
+  /**
+   * OK
+   */
+  200: Array<PracticeReleaseProposal>;
+};
+
+export type ListPracticeReleasesResponse = ListPracticeReleasesResponses[keyof ListPracticeReleasesResponses];
+
+export type DeclinePracticeReleaseData = {
+  body?: never;
+  headers: {
+    'If-Match': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    slug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/releases/{slug}';
+};
+
+export type DeclinePracticeReleaseResponses = {
+  /**
+   * The offered version was declined
+   */
+  204: void;
+};
+
+export type DeclinePracticeReleaseResponse = DeclinePracticeReleaseResponses[keyof DeclinePracticeReleaseResponses];
+
+export type GetPracticeReleaseData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    slug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/releases/{slug}';
+};
+
+export type GetPracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: PracticeReleaseProposal;
+};
+
+export type GetPracticeReleaseResponse = GetPracticeReleaseResponses[keyof GetPracticeReleaseResponses];
+
+export type AcceptPracticeReleaseData = {
+  body: AcceptPracticeReleaseRequest;
+  headers: {
+    'If-Match': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    slug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/releases/{slug}';
+};
+
+export type AcceptPracticeReleaseResponses = {
+  /**
+   * OK
+   */
+  200: Practice;
+};
+
+export type AcceptPracticeReleaseResponse = AcceptPracticeReleaseResponses[keyof AcceptPracticeReleaseResponses];
+
 export type ReorderPracticesData = {
   body: ReorderPracticesRequest;
   path: {
@@ -11598,7 +12064,7 @@ export type ListPracticeReviewFeedbackData = {
     page?: number;
     size?: number;
     deliveryState?: Array<'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED'>;
-    suppressionReason?: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
+    suppressionReason?: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
     channel?: Array<'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP'>;
     agentJobId?: string;
     /**
@@ -13034,6 +13500,220 @@ export type UpdateTokenResponses = {
 };
 
 export type UpdateTokenResponse = UpdateTokenResponses[keyof UpdateTokenResponses];
+
+export type ListUserViewUsersData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: {
+    page?: number;
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/user-view/users';
+};
+
+export type ListUserViewUsersResponses = {
+  /**
+   * OK
+   */
+  200: PageResponseDtoUserViewUser;
+};
+
+export type ListUserViewUsersResponse = ListUserViewUsersResponses[keyof ListUserViewUsersResponses];
+
+export type ListUserViewConversationsData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+  };
+  query?: {
+    page?: number;
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/conversations';
+};
+
+export type ListUserViewConversationsResponses = {
+  /**
+   * OK
+   */
+  200: PageResponseDtoChatThreadSummary;
+};
+
+export type ListUserViewConversationsResponse = ListUserViewConversationsResponses[keyof ListUserViewConversationsResponses];
+
+export type GetUserViewConversationData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+    threadId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/conversations/{threadId}';
+};
+
+export type GetUserViewConversationResponses = {
+  /**
+   * OK
+   */
+  200: ChatThreadDetail;
+};
+
+export type GetUserViewConversationResponse = GetUserViewConversationResponses[keyof GetUserViewConversationResponses];
+
+export type GetUserPracticeViewData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices';
+};
+
+export type GetUserPracticeViewResponses = {
+  /**
+   * OK
+   */
+  200: UserPracticeSummary;
+};
+
+export type GetUserPracticeViewResponse = GetUserPracticeViewResponses[keyof GetUserPracticeViewResponses];
+
+export type ListUserViewRunsData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+    groupSlug: string;
+  };
+  query?: {
+    practiceSlug?: string;
+    /**
+     * Only reviews of these artifact kinds, e.g. scm.pull_request (repeatable)
+     */
+    artifactKinds?: Array<string>;
+    severities?: Array<'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO'>;
+    /**
+     * Zero-based page, at most 100
+     */
+    page?: number;
+    /**
+     * Page size from 1 to 50
+     */
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/runs';
+};
+
+export type ListUserViewRunsResponses = {
+  /**
+   * OK
+   */
+  200: PracticeGroupReviewRunsPage;
+};
+
+export type ListUserViewRunsResponse = ListUserViewRunsResponses[keyof ListUserViewRunsResponses];
+
+export type GetUserViewTrendData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+    groupSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/trend';
+};
+
+export type GetUserViewTrendResponses = {
+  /**
+   * OK
+   */
+  200: PracticeGroupTrend;
+};
+
+export type GetUserViewTrendResponse = GetUserViewTrendResponses[keyof GetUserViewTrendResponses];
+
+export type GetUserViewObservationData = {
+  body?: never;
+  headers: {
+    /**
+     * Why the administrator views this user: percent-encoded UTF-8, 1–500 characters
+     */
+    'X-User-View-Reason': string;
+  };
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    userId: number;
+    observationId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}/practices/observations/{observationId}';
+};
+
+export type GetUserViewObservationResponses = {
+  /**
+   * OK
+   */
+  200: ObservationDetail;
+};
+
+export type GetUserViewObservationResponse = GetUserViewObservationResponses[keyof GetUserViewObservationResponses];
 
 export type GetUsersWithTeamsData = {
   body?: never;

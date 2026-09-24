@@ -10,10 +10,8 @@ import java.util.Collection;
  *
  * <p><strong>Why this exists (no module cycle).</strong> The thread → derived-feedback link is a one-way
  * {@code integration.slack → practices::spi} dependency. The implementation lives INSIDE {@code practices} (an
- * adapter on the practices repositories); the caller injects only this interface. That mirrors how the
- * {@code core.auth::auth-spi} ports ({@code AccountPreferencesQuery} / {@code ResearchParticipationCommand}) are
- * owned by their data module and called from {@code integration.slack} — no reverse edge, so no Spring Modulith
- * cycle forms even though {@code practices} never depends on {@code integration.slack}.
+ * adapter on the practices repositories); the caller injects only this interface. No reverse edge is
+ * introduced, so no Spring Modulith cycle forms even though practices never depends on Slack.
  *
  * <p><strong>Scope (the no-regression contract).</strong> An implementation MUST delete ONLY rows where
  * {@code artifact_kind = chat.conversation_thread} AND {@code artifact_id} is one of {@code slackThreadIds} AND that

@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.slack.interactivity;
 
-import de.tum.cit.aet.hephaestus.core.auth.spi.ConsentSource;
-import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationCommand;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
@@ -39,7 +37,6 @@ public class SlackInteractivityHandler {
 
     private final SlackWorkspaceResolver workspaceResolver;
     private final SlackMentorIdentityResolver identityResolver;
-    private final ResearchParticipationCommand researchParticipationCommand;
     private final SlackAppHomeService appHomeService;
     private final SlackParticipantConsentService participantConsentService;
     private final SlackPersonErasureService personErasureService;
@@ -49,7 +46,6 @@ public class SlackInteractivityHandler {
     public SlackInteractivityHandler(
             SlackWorkspaceResolver workspaceResolver,
             SlackMentorIdentityResolver identityResolver,
-            ResearchParticipationCommand researchParticipationCommand,
             SlackAppHomeService appHomeService,
             SlackParticipantConsentService participantConsentService,
             SlackPersonErasureService personErasureService,
@@ -57,7 +53,6 @@ public class SlackInteractivityHandler {
         this(
                 workspaceResolver,
                 identityResolver,
-                researchParticipationCommand,
                 appHomeService,
                 participantConsentService,
                 personErasureService,
@@ -68,7 +63,6 @@ public class SlackInteractivityHandler {
     SlackInteractivityHandler(
             SlackWorkspaceResolver workspaceResolver,
             SlackMentorIdentityResolver identityResolver,
-            ResearchParticipationCommand researchParticipationCommand,
             SlackAppHomeService appHomeService,
             SlackParticipantConsentService participantConsentService,
             SlackPersonErasureService personErasureService,
@@ -76,7 +70,6 @@ public class SlackInteractivityHandler {
             ExecutorService followUpExecutor) {
         this.workspaceResolver = workspaceResolver;
         this.identityResolver = identityResolver;
-        this.researchParticipationCommand = researchParticipationCommand;
         this.appHomeService = appHomeService;
         this.participantConsentService = participantConsentService;
         this.personErasureService = personErasureService;
@@ -101,20 +94,11 @@ public class SlackInteractivityHandler {
                     handleChannelMessageOptOut(workspaceId, teamId, slackUserId, channelId, true);
                 case SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_IN ->
                     handleChannelMessageOptIn(workspaceId, teamId, slackUserId);
-                case SlackAppHomeService.ACTION_RESEARCH_OPT_OUT ->
-                    handleResearchToggle(workspaceId, teamId, slackUserId, false);
-                case SlackAppHomeService.ACTION_RESEARCH_OPT_IN ->
-                    handleResearchToggle(workspaceId, teamId, slackUserId, true);
                 case SlackConsentBlocks.ACTION_PARTICIPANT_OPT_OUT ->
                     handleChannelMessageOptOut(workspaceId, teamId, slackUserId, channelId, false);
                 default -> log.debug("slack.interactivity: unhandled action_id {}", actionId);
             }
         }
-    }
-
-    private void handleResearchToggle(long workspaceId, String teamId, String slackUserId, boolean participate) {
-        participantConsentService.recordResearchDecision(workspaceId, slackUserId, participate);
-        setResearchParticipation(workspaceId, teamId, slackUserId, participate);
     }
 
     private void handleChannelMessageOptOut(
@@ -149,19 +133,6 @@ public class SlackInteractivityHandler {
 
     private void handleChannelMessageOptIn(long workspaceId, String teamId, String slackUserId) {
         participantConsentService.recordChannelMessageOptIn(workspaceId, slackUserId);
-        followUpExecutor.execute(() -> refreshHomeBestEffort(teamId, slackUserId));
-    }
-
-    private void setResearchParticipation(long workspaceId, String teamId, String slackUserId, boolean participate) {
-        Optional<Long> memberId = identityResolver.resolveActiveMemberId(workspaceId, teamId, slackUserId);
-        if (memberId.isEmpty()) {
-            log.debug(
-                    "slack.interactivity: research consent toggle from unlinked Slack user {} in team {} — skipping",
-                    slackUserId,
-                    teamId);
-            return;
-        }
-        researchParticipationCommand.setForUserId(memberId.get(), participate, ConsentSource.SLACK_APP_HOME);
         followUpExecutor.execute(() -> refreshHomeBestEffort(teamId, slackUserId));
     }
 

@@ -23,8 +23,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Token-bucket rate limiter for sensitive and resource-intensive endpoints. Sits on the
- * resource-server chain (covers {@code /auth/refresh}, {@code /auth/impersonate}, {@code DELETE
- * /user}) and the oauth2Login chain (covers {@code GET /oauth2/authorization/*}); registered after
+ * resource-server chain (covers {@code /auth/refresh}, {@code /workspaces/{slug}/user-view/users/**},
+ * {@code DELETE /user}) and the oauth2Login chain (covers {@code GET /oauth2/authorization/*}); registered after
  * authentication so the account principal is resolvable from the {@link SecurityContextHolder}.
  *
  * <p>On breach the response is HTTP 429 with an RFC 9457 {@code application/problem+json} body and a
@@ -61,7 +61,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
     private enum Endpoint {
         OAUTH_AUTHORIZATION("oauth-authz", false, true),
         REFRESH("refresh", true, true),
-        IMPERSONATE("impersonate", true, true),
+        USER_VIEW("user-view", true, true),
         DELETE_USER("delete-user", true, true),
         // GDPR Art. 20 export: cap POST /user/exports (the async assembly). Account-scoped (JWT sub)
         // with IP fallback — the route requires isAuthenticated(), so sub is normally present.
@@ -120,7 +120,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         long retryAfterSeconds = RateLimitResponse.retryAfterSeconds(probe);
         // key is namespaced (no raw account-id PII beyond what already exists in auth logs); safe at WARN.
         log.warn("Rate limit exceeded: endpoint={} key={} retryAfterSeconds={}", endpoint, key, retryAfterSeconds);
-        // Tag by bucket namespace (oauth-authz/refresh/impersonate/delete-user) — bounded, no PII.
+        // Tag by bucket namespace — bounded, no PII.
         metrics.recordRateLimitBlocked(endpoint.namespace);
         RateLimitResponse.writeTooManyRequests(request, response, retryAfterSeconds, objectMapper);
     }
@@ -145,10 +145,9 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && path.equals("/auth/refresh")) {
             return Endpoint.REFRESH;
         }
-        // Begin-impersonation only. The exit verb (/auth/impersonate:exit) is a separate, non-rate-
-        // limited path; equals() (not startsWith) keeps it out of this bucket.
-        if ("POST".equals(method) && path.equals("/auth/impersonate")) {
-            return Endpoint.IMPERSONATE;
+        // Keyed on the administrator, not the viewed user, so switching users does not reset the budget.
+        if ("GET".equals(method) && path.matches("/workspaces/[^/]+/user-view/users(?:/.*)?")) {
+            return Endpoint.USER_VIEW;
         }
         if ("DELETE".equals(method) && path.equals("/user")) {
             return Endpoint.DELETE_USER;
@@ -175,7 +174,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         return switch (endpoint) {
             case OAUTH_AUTHORIZATION -> properties.oauthAuthorization();
             case REFRESH -> properties.refresh();
-            case IMPERSONATE -> properties.impersonate();
+            case USER_VIEW -> properties.userView();
             case DELETE_USER -> properties.deleteUser();
             case EXPORT -> properties.export();
             case MENTOR_CHAT -> properties.mentorChat();

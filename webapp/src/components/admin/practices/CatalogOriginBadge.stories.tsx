@@ -19,7 +19,7 @@ type Story = StoryObj<typeof meta>;
 export const MatchesCatalog: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByRole("button", { name: "Same as the catalog" }).focus();
-		const tooltip = await within(document.body).findByText(/the catalog never edits your copy/u);
+		const tooltip = await within(document.body).findByText(/will not edit your copy/u);
 		await waitFor(async () => expect(tooltip).toBeVisible());
 	},
 };
@@ -45,6 +45,23 @@ export const CatalogChanged: Story = {
 		// The label carries the outcome, not just the event: nothing applies a catalog update to a
 		// workspace copy, so "the catalog changed" on its own invites the opposite reading.
 		const tooltip = await within(document.body).findByText(/Your copy is untouched/u);
+		await waitFor(async () => expect(tooltip).toBeVisible());
+	},
+};
+
+export const UpdateDeclined: Story = {
+	args: {
+		origin: {
+			slug: "clear-pr-description",
+			link: "DECLINED",
+			sourceOffered: true,
+		},
+	},
+	play: async ({ canvas }) => {
+		canvas.getByRole("button", { name: "Update declined" }).focus();
+		const tooltip = await within(document.body).findByText(
+			/different version can be offered later/u,
+		);
 		await waitFor(async () => expect(tooltip).toBeVisible());
 	},
 };

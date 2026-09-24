@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -36,7 +37,7 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
     protected WorkspaceMembershipRepository workspaceMembershipRepository;
 
     @Autowired
-    private AccountRepository fixtureAccounts;
+    protected AccountRepository accountRepository;
 
     @Autowired
     private IdentityLinkRepository fixtureIdentities;
@@ -62,7 +63,16 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
                         new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.com")));
     }
 
-    /** Named authentication fixtures also get their verified login identity during setup. */
+    protected Account persistAccount(String displayName) {
+        return accountRepository.save(new Account(displayName));
+    }
+
+    protected Account persistInstanceAdmin(String displayName) {
+        Account account = new Account(displayName);
+        account.setAppRole(Account.AppRole.APP_ADMIN);
+        return accountRepository.save(account);
+    }
+
     protected User persistUser(String login) {
         IdentityProvider provider = ensureGitHubProvider();
         User user = new User();
@@ -78,7 +88,7 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
         user.setUpdatedAt(Instant.now());
         user = userRepository.save(user);
         if (java.util.Set.of("admin", "mentor", "testuser").contains(login)) {
-            TestUserFactory.ensureAccountForUser(fixtureAccounts, fixtureIdentities, user);
+            TestUserFactory.ensureAccountForUser(accountRepository, fixtureIdentities, user);
         }
         return user;
     }
@@ -100,13 +110,13 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
 
     protected WorkspaceMembership ensureAdminMembership(Workspace workspace) {
         User adminUser = TestUserFactory.ensureUser(userRepository, "admin", 3L, ensureGitHubProvider());
-        TestUserFactory.ensureAccountForUser(fixtureAccounts, fixtureIdentities, adminUser);
+        TestUserFactory.ensureAccountForUser(accountRepository, fixtureIdentities, adminUser);
         return ensureWorkspaceMembership(workspace, adminUser, WorkspaceMembership.WorkspaceRole.ADMIN);
     }
 
     protected WorkspaceMembership ensureOwnerMembership(Workspace workspace) {
         User adminUser = TestUserFactory.ensureUser(userRepository, "admin", 3L, ensureGitHubProvider());
-        TestUserFactory.ensureAccountForUser(fixtureAccounts, fixtureIdentities, adminUser);
+        TestUserFactory.ensureAccountForUser(accountRepository, fixtureIdentities, adminUser);
         return ensureWorkspaceMembership(workspace, adminUser, WorkspaceMembership.WorkspaceRole.OWNER);
     }
 }

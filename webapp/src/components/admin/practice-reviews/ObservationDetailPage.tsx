@@ -5,6 +5,10 @@ import type { GetPracticeReviewObservationResponse, Practice } from "@/api/types
 import { MissingRecordEmpty } from "@/components/common/MissingRecordEmpty";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import {
+	ClaimCurrentnessAlert,
+	ClaimCurrentnessBadge,
+} from "@/components/practice-vocabulary/ClaimCurrentness";
 import { deliveryOutcome } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
 import { withholdingReasonSentence } from "@/components/practice-vocabulary/withholding-defs";
@@ -21,11 +25,7 @@ import { hasText } from "@/lib/text";
 import { ObservationEvidence } from "./ObservationEvidence";
 import { type ObservationsSearch, reviewScopeSearch } from "./review-search";
 import { ReviewArtifactLink, reviewArtifactTypeSlug } from "./ReviewArtifact";
-import {
-	ClaimCurrentnessAlert,
-	ClaimCurrentnessBadge,
-	ObservationResultBadge,
-} from "./ReviewBadges";
+import { ObservationResultBadge } from "./ReviewBadges";
 import { ReviewBreadcrumbs } from "./ReviewBreadcrumbs";
 import {
 	ReviewDetailHeader,

@@ -43,6 +43,59 @@ jobs:
             exit 1
           fi
 
+      - name: Validate the opt-in PostgreSQL backup overlay
+        working-directory: docker/self-host
+        run: |
+          set -euo pipefail
+          export BACKUP_S3_BUCKET=test BACKUP_S3_ENDPOINT=s3.example.invalid
+          export BACKUP_S3_REGION=eu-central-1 BACKUP_S3_KEY=test
+          export BACKUP_S3_KEY_SECRET=test BACKUP_CIPHER_PASS=test
+          export BACKUP_RESTORE_S3_KEY=restore BACKUP_RESTORE_S3_KEY_SECRET=restore
+          rendered=$(docker compose -f compose.yaml -f compose.backup.yaml --profile backup config --format json)
+          jq -e '
+            (.services.postgres.command | index("archive_mode=on") != null) and
+            (.services | has("pgbackrest-restore") | not)
+          ' <<< "$rendered" >/dev/null
+          jq -e '
+            .services.postgres.environment.PGBACKREST_REPO1_CIPHER_PASS == "test" and
+            .services.pgbackrest.environment.PGBACKREST_REPO1_CIPHER_PASS == "test" and
+            (.services.pgbackrest.volumes | any(.target == "/var/lib/postgresql" and .read_only == true))
+          ' <<< "$rendered" >/dev/null
+          combined=$(docker compose -f compose.yaml -f compose.backup.yaml -f compose.restore.yaml config --format json)
+          jq -e '
+            (.services.postgres.command | index("archive_mode=off") != null) and
+            .services.postgres.environment.PGBACKREST_REPO1_S3_KEY == "restore"
+          ' <<< "$combined" >/dev/null
+          unset BACKUP_S3_KEY BACKUP_S3_KEY_SECRET
+          restored=$(docker compose -f compose.yaml -f compose.restore.yaml --profile restore config --format json)
+          guarded=$(docker compose -f compose.yaml -f compose.restore.yaml --profile restore-release-only config --format json)
+          [ "$(docker compose -f compose.yaml -f compose.restore.yaml config --services)" = postgres ] || {
+            echo "::error::plain restore-clone up would start more than PostgreSQL"
+            exit 1
+          }
+          jq -e '
+            (.services | has("pgbackrest") | not) and
+            (.services.postgres.command | index("archive_mode=off") != null) and
+            .services.postgres.environment.PGBACKREST_REPO1_S3_KEY == "restore" and
+            .services["pgbackrest-restore"].environment.PGBACKREST_REPO1_S3_KEY == "restore" and
+            (.services["pgbackrest-restore"].volumes | any(.target == "/var/lib/postgresql" and .read_only != true))
+          ' <<< "$restored" >/dev/null
+          jq -e '
+            .services["application-server"].entrypoint == ["/bin/false"] and
+            .services["application-worker"].entrypoint == ["/bin/false"] and
+            .services["webhook-server"].entrypoint == ["/bin/false"]
+          ' <<< "$guarded" >/dev/null
+          export BACKUP_S3_KEY=test
+          if docker compose -f compose.yaml -f compose.backup.yaml config --quiet 2>/dev/null; then
+            echo "::error::backup overlay accepted a missing S3 secret"
+            exit 1
+          fi
+          unset BACKUP_RESTORE_S3_KEY_SECRET
+          if docker compose -f compose.yaml -f compose.restore.yaml config --quiet 2>/dev/null; then
+            echo "::error::restore overlay accepted a missing read-only S3 secret"
+            exit 1
+          fi
+
       - name: Assert the merged stack matches single-host intent
         working-directory: docker/self-host
         run: |

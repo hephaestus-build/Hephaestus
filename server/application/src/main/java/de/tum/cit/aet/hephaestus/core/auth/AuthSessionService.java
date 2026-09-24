@@ -18,12 +18,9 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -73,14 +70,6 @@ public class AuthSessionService {
     }
 
     /**
-     * How long before {@code imp_exp} a rotation already exits. A token minted at the deadline would be
-     * born expired, so the operator would be signed out instead of returned to their own session. Keep
-     * this at or above the SPA's {@code REFRESH_SKEW_MS} in {@code use-session-keep-alive.ts}, which
-     * decides when that rotation happens.
-     */
-    private static final Duration IMPERSONATION_EXIT_SKEW = Duration.ofSeconds(60);
-
-    /**
      * Rotates the session, returning false when the presenting session must end. A lost rotation race
      * leaves the response untouched because another request may already have renewed the session.
      */
@@ -91,8 +80,6 @@ public class AuthSessionService {
             TokenConstraints context,
             HttpServletRequest request,
             HttpServletResponse response) {
-        Long impersonatorId = context.impersonatorId();
-        Instant impersonationExpiresAt = context.impersonationExpiresAt();
         Instant sessionExpiresAt = context.sessionExpiresAt();
         Timer.Sample sample = metrics.startRefreshTimer();
         try {
@@ -114,50 +101,14 @@ public class AuthSessionService {
                 clearCookie(response);
                 return false;
             }
-            // An impersonation is only ever as legitimate as the operator behind it. Suspending or
-            // demoting an operator revokes their own sessions, but the impersonation token's subject is
-            // the target, so it survives that sweep — this is where it ends.
-            if (impersonatorId != null && !isActiveInstanceAdmin(impersonatorId)) {
-                metrics.recordRefreshResult(AuthMetrics.RefreshResult.SUSPENDED);
-                clearCookie(response);
-                return false;
-            }
-            HephaestusJwtIssuer.Token token;
-            if (impersonatorId == null) {
-                token = jwtIssuer.issue(
-                        principalFactory.forAccountId(accountId),
-                        TokenConstraints.session(sessionExpiresAt, context.authTime()),
-                        request);
-                authEventLogger
-                        .event(AuthEvent.EventType.TOKEN_REFRESH, AuthEvent.Result.SUCCESS)
-                        .account(accountId)
-                        .record();
-            } else if (impersonationExpired(impersonationExpiresAt) || isAppAdmin(account)) {
-                // Starting impersonation forbids admin targets; promotion must also end an existing one.
-                String exitReason = isAppAdmin(account) ? "TARGET_PROMOTED" : "EXPIRED";
-                token = jwtIssuer.issue(
-                        principalFactory.forAccountId(impersonatorId),
-                        TokenConstraints.session(sessionExpiresAt, context.authTime()),
-                        request);
-                authEventLogger
-                        .event(AuthEvent.EventType.IMPERSONATION_END, AuthEvent.Result.SUCCESS)
-                        .account(accountId)
-                        .actingAccount(impersonatorId)
-                        .details("{\"reason\":\"" + exitReason + "\"}")
-                        .record();
-                metrics.recordImpersonationAutoExit(exitReason.toLowerCase(Locale.ROOT));
-            } else {
-                token = jwtIssuer.issue(
-                        principalFactory.forAccountId(accountId),
-                        new TokenConstraints(
-                                impersonatorId, impersonationExpiresAt, sessionExpiresAt, context.authTime()),
-                        request);
-                authEventLogger
-                        .event(AuthEvent.EventType.TOKEN_REFRESH, AuthEvent.Result.SUCCESS)
-                        .account(accountId)
-                        .actingAccount(impersonatorId)
-                        .record();
-            }
+            HephaestusJwtIssuer.Token token = jwtIssuer.issue(
+                    principalFactory.forAccountId(accountId),
+                    TokenConstraints.session(sessionExpiresAt, context.authTime()),
+                    request);
+            authEventLogger
+                    .event(AuthEvent.EventType.TOKEN_REFRESH, AuthEvent.Result.SUCCESS)
+                    .account(accountId)
+                    .record();
             setCookie(response, token);
             metrics.recordRefreshResult(AuthMetrics.RefreshResult.SUCCESS);
             return true;
@@ -179,20 +130,6 @@ public class AuthSessionService {
         cookie.setMaxAge((int) Math.max(0, maxAge));
         cookie.setAttribute("SameSite", "Lax");
         response.addCookie(cookie);
-    }
-
-    private boolean impersonationExpired(@Nullable Instant impersonationExpiresAt) {
-        return impersonationExpiresAt == null
-                || !clock.instant().plus(IMPERSONATION_EXIT_SKEW).isBefore(impersonationExpiresAt);
-    }
-
-    private static boolean isAppAdmin(Account account) {
-        return account.getAppRole() == Account.AppRole.APP_ADMIN;
-    }
-
-    private boolean isActiveInstanceAdmin(Long accountId) {
-        Account operator = accountRepository.findById(accountId).orElse(null);
-        return operator != null && operator.getStatus() == Account.Status.ACTIVE && isAppAdmin(operator);
     }
 
     /** Active (non-revoked, non-expired) sessions for an account. */

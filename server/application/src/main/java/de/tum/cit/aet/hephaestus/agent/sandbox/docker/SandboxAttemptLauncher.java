@@ -3,10 +3,12 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -41,12 +43,25 @@ public final class SandboxAttemptLauncher {
     }
 
     /** Registers the gateway session for the credential and creates the attempt volumes, or neither. */
-    public Attempt open(@Nullable NetworkPolicy policy, Path inputTar, Map<String, String> labels) throws IOException {
+    public Attempt open(@Nullable UUID jobId, @Nullable NetworkPolicy policy, Path inputTar, Map<String, String> labels)
+            throws IOException {
         String token = policy == null ? null : policy.llmProxyToken();
         if (token == null || token.isBlank()) {
             throw new IllegalArgumentException("Gateway credential required");
         }
-        var session = gatewaySessions.register(token, inputTar, "out");
+        SandboxGatewaySessions.Session session;
+        try {
+            session = jobId == null
+                    ? gatewaySessions.register(token, inputTar, "out")
+                    : gatewaySessions.register(jobId, token, inputTar, "out");
+        } catch (IOException | RuntimeException exception) {
+            try {
+                Files.deleteIfExists(inputTar);
+            } catch (IOException cleanupFailure) {
+                exception.addSuppressed(cleanupFailure);
+            }
+            throw exception;
+        }
         try {
             return new Attempt(session, new DockerAttemptWorkspace(volumeOperations, session.id(), labels));
         } catch (RuntimeException exception) {

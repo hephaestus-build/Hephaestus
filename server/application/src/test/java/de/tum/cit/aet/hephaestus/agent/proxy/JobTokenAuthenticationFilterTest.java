@@ -288,6 +288,57 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             verify(filterChain, never()).doFilter(any(), any());
         }
 
+        @Test
+        void shouldReturn409ForResultUploadOnAnotherWorker() throws Exception {
+            AgentJob job = createRunningJob();
+            job.setWorkerId("worker-2");
+            when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of("llm_proxy")));
+            when(agentJobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+
+            var request = new MockHttpServletRequest("POST", "/internal/llm/runtime/" + job.getId() + "/result");
+            request.setRemoteAddr("10.0.0.2");
+            request.addHeader("Authorization", "Bearer " + JOB_JWT);
+            var response = new MockHttpServletResponse();
+
+            filter.doFilterInternal(request, response, filterChain);
+
+            assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_CONFLICT);
+            verify(filterChain, never()).doFilter(any(), any());
+        }
+
+        @Test
+        void shouldRejectCancelledResultUploadWithoutRevealingOwnership() throws Exception {
+            AgentJob job = createRunningJob();
+            job.setStatus(AgentJobStatus.CANCELLED);
+            job.setWorkerId("worker-2");
+            when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of("llm_proxy")));
+            when(agentJobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+
+            var request = new MockHttpServletRequest("POST", "/internal/llm/runtime/" + job.getId() + "/result");
+            request.setRemoteAddr("10.0.0.2");
+            request.addHeader("Authorization", "Bearer " + JOB_JWT);
+            var response = new MockHttpServletResponse();
+
+            filter.doFilterInternal(request, response, filterChain);
+
+            assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+        }
+
+        @Test
+        void shouldRejectResultUploadForAnotherJob() throws Exception {
+            AgentJob job = createRunningJob();
+            when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of("llm_proxy")));
+
+            var request = new MockHttpServletRequest("POST", "/internal/llm/runtime/" + UUID.randomUUID() + "/result");
+            request.setRemoteAddr("10.0.0.2");
+            request.addHeader("Authorization", "Bearer " + JOB_JWT);
+            var response = new MockHttpServletResponse();
+
+            filter.doFilterInternal(request, response, filterChain);
+
+            assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+        }
+
         private MockHttpServletResponse authenticate(String token) throws Exception {
             var request = new MockHttpServletRequest();
             request.setRemoteAddr("10.0.0.2");

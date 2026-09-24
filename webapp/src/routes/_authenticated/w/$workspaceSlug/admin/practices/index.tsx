@@ -1,6 +1,6 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, retainSearchParams } from "@tanstack/react-router";
-import { ListChecks } from "lucide-react";
+import { Inbox, ListChecks } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
@@ -16,6 +16,7 @@ import {
 	listPracticeEvidenceOutcomesOptions,
 	listPracticesOptions,
 	listPracticesQueryKey,
+	listPracticeReleasesOptions,
 	previewGroupAdoptionOptions,
 	previewPracticeAdoptionOptions,
 } from "@/api/@tanstack/react-query.gen";
@@ -72,6 +73,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { DrawerBody } from "@/components/ui/drawer";
 import { practiceCatalogStructureScope } from "@/hooks/practice-catalog-cache";
 import { usePracticeCatalogMutations } from "@/hooks/use-practice-catalog-mutations";
@@ -144,6 +146,9 @@ function PracticeCatalogRoute() {
 	});
 	const practicesQuery = useQuery({
 		...listPracticesOptions({ path: { workspaceSlug } }),
+	});
+	const releasesQuery = useQuery({
+		...listPracticeReleasesOptions({ path: { workspaceSlug } }),
 	});
 	const definitionOptionsQuery = useQuery({
 		...getPracticeDefinitionOptionsOptions({ path: { workspaceSlug } }),
@@ -381,6 +386,17 @@ function PracticeCatalogRoute() {
 			<PageHeader
 				icon={<ListChecks />}
 				title="Practice setup"
+				actions={
+					<Button
+						variant="outline"
+						nativeButton={false}
+						render={
+							<Link to="/w/$workspaceSlug/admin/practices/releases" params={{ workspaceSlug }} />
+						}
+					>
+						<Inbox /> Review updates{releasesQuery.data ? ` (${releasesQuery.data.length})` : ""}
+					</Button>
+				}
 				description={
 					<>
 						Organize this workspace’s practices and add suggestions from the instance catalog. The

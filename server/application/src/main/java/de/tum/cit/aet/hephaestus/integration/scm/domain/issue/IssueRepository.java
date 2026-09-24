@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,6 +21,15 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @WorkspaceAgnostic("Issues scoped through repository_id -> repository.workspace_id")
 public interface IssueRepository extends JpaRepository<Issue, Long> {
+    @Transactional
+    @Modifying
+    @Query(value = """
+        UPDATE issue SET review_snapshot_id = :snapshotId, review_snapshot_digest = :digest
+        WHERE id = :issueId AND issue_type = 'ISSUE'
+          AND review_snapshot_digest IS DISTINCT FROM :digest
+        """, nativeQuery = true)
+    int advanceReviewSnapshot(
+            @Param("issueId") long issueId, @Param("snapshotId") UUID snapshotId, @Param("digest") String digest);
     /**
      * Finds an issue (not a pull request) by repository ID and number.
      * Uses {@code TYPE(i) = Issue} to exclude PullRequest subclass rows, which is

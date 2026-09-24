@@ -58,6 +58,8 @@ tags:
   name: Auth
 - description: Workspace-scoped practice-review policy
   name: Practice Review Settings
+- description: Instance-admin-only read-only access to users
+  name: User view
 - description: Workspace integration connection management
   name: Connections
 - description: Up/down votes on mentor assistant messages
@@ -113,6 +115,8 @@ tags:
   name: Teams
 - description: The developer's own prepared practice feedback
   name: In-App Feedback
+- description: Instance-wide email transport verification
+  name: Instance Email
 - description: "Workspace-scoped \"bring your own\" AI provider connections, models\
     \ and settings"
   name: Workspace LLM
@@ -127,6 +131,8 @@ tags:
     GitLab-specific REST endpoints used during the workspace creation wizard. Gated on the
      <code>GITLAB_WORKSPACE_CREATION</code> feature flag.
   name: git-lab-preflight-controller
+- description: Review catalogue changes before they affect a workspace
+  name: Practice Catalog
 - description: Instance-admin LLM connection and settings management
   name: Admin LLM
 - description: Manage practice groups
@@ -194,6 +200,7 @@ paths:
           items:
             type: string
             enum:
+            - USER_VIEW
             - LOGIN
             - LOGIN_FAILED
             - LOGOUT
@@ -277,6 +284,7 @@ paths:
           items:
             type: string
             enum:
+            - USER_VIEW
             - LOGIN
             - LOGIN_FAILED
             - LOGOUT
@@ -456,6 +464,32 @@ paths:
       summary: Get redacted configuration readiness
       tags:
       - Configuration Readiness
+  /admin/email/test:
+    post:
+      description: "Sends a test email through the configured relay to the given address,\
+        \ or to the caller's verified address when none is given."
+      operationId: adminSendTestEmail
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailTestRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailTestResponse"
+          description: Email delivery outcome
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Malformed request or invalid recipient address
+      summary: Send a test email
+      tags:
+      - Instance Email
   /admin/llm/connections:
     get:
       operationId: adminListLlmConnections
@@ -1332,8 +1366,8 @@ paths:
       - Admin Practice Catalog
   /admin/practice-catalog/practices/{slug}/override/acknowledgement:
     put:
-      description: Records that the Hephaestus update was reviewed and keeps the saved
-        definition.
+      description: Acknowledges that a saved custom practice is no longer shipped.
+        Changed bundled practices use the release endpoint.
       operationId: adminKeepCuratedPractice
       parameters:
       - in: path
@@ -1396,6 +1430,77 @@ paths:
                 $ref: "#/components/schemas/CuratedCatalog"
           description: OK
       summary: Move a practice to another catalog group
+      tags:
+      - Admin Practice Catalog
+  /admin/practice-catalog/practices/{slug}/release:
+    delete:
+      operationId: adminDeclinePracticeRelease
+      parameters:
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CuratedPractice"
+          description: OK
+      summary: Decline this bundled practice update
+      tags:
+      - Admin Practice Catalog
+    get:
+      operationId: adminGetPracticeRelease
+      parameters:
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeReleaseProposal"
+          description: OK
+      summary: Compare a bundled practice update with the instance version
+      tags:
+      - Admin Practice Catalog
+    put:
+      operationId: adminAcceptPracticeRelease
+      parameters:
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptPracticeReleaseRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CuratedPractice"
+          description: OK
+      summary: Accept selected fields from a bundled practice update
       tags:
       - Admin Practice Catalog
   /admin/practice-catalog/practices/{slug}/status:
@@ -1606,6 +1711,56 @@ paths:
                 $ref: "#/components/schemas/Survey"
           description: OK
       summary: "Edit a survey's title, purpose, schedule or pause state"
+      tags:
+      - survey-admin
+  /admin/product-feedback/surveys/{surveyId}/email-invitations:
+    get:
+      operationId: adminPreviewSurveyEmailInvitations
+      parameters:
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SurveyEmailInvitationSummary"
+          description: OK
+      summary: Preview eligible survey email recipients and relay acceptance counts
+      tags:
+      - survey-admin
+    post:
+      operationId: adminSendSurveyEmailInvitations
+      parameters:
+      - in: path
+        name: surveyId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyEmailInvitationRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SurveyEmailInvitationSummary"
+          description: Invitation request summary
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Email delivery is not configured; no invitations were requested
+      summary: Queue up to 1000 new or explicitly retried cancelled survey email invitations
       tags:
       - survey-admin
   /admin/product-feedback/surveys/{surveyId}/responses:
@@ -1908,30 +2063,6 @@ paths:
       summary: Set or clear a workspace's monthly cap on host-funded LLM spend
       tags:
       - Admin
-  /auth/impersonate:
-    post:
-      operationId: impersonate
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ImpersonateRequest"
-        required: true
-      responses:
-        "200":
-          description: OK
-      summary: Begin impersonating another account
-      tags:
-      - Auth
-  /auth/impersonate:exit:
-    post:
-      operationId: exitImpersonation
-      responses:
-        "200":
-          description: OK
-      summary: "Exit impersonation, restore operator session"
-      tags:
-      - Auth
   /auth/logout:
     post:
       operationId: logout
@@ -1984,6 +2115,40 @@ paths:
       summary: List available identity providers
       tags:
       - Auth discovery
+  /notifications/unsubscribe/{token}:
+    post:
+      operationId: unsubscribeEmail
+      parameters:
+      - in: path
+        name: token
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                List-Unsubscribe:
+                  type: string
+              required:
+              - List-Unsubscribe
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                List-Unsubscribe:
+                  type: string
+              required:
+              - List-Unsubscribe
+      responses:
+        "204":
+          description: "Subscription disabled, or token no longer applicable"
+      security: []
+      summary: Unsubscribe from one optional email subscription
+      tags:
+      - Notification preferences
   /oauth/callback/{kind}:
     get:
       operationId: callbackGet
@@ -2259,6 +2424,86 @@ paths:
       summary: Unlink one of the current user's linked identity providers
       tags:
       - Account
+  /user/notification-preferences:
+    get:
+      operationId: getNotificationPreferences
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferences"
+          description: Your current email subscriptions
+          headers:
+            ETag:
+              description: Strong validator for If-Match
+              schema:
+                type: string
+              style: simple
+      summary: Get your email subscriptions
+      tags:
+      - notification-preferences
+    put:
+      operationId: updateNotificationPreferences
+      parameters:
+      - description: Current preferences ETag
+        in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationPreferences"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferences"
+          description: Email subscriptions updated
+          headers:
+            ETag:
+              description: Strong validator for the updated preferences
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Invalid preferences or If-Match header
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Enabling this subscription requires instance administration
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Enabling email requires a verified contact on an active account
+        "412":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The supplied ETag is stale
+        "428":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: If-Match is required
+      summary: Update your email subscriptions
+      tags:
+      - notification-preferences
   /user/sessions:
     delete:
       operationId: revokeOtherSessions
@@ -3860,6 +4105,7 @@ paths:
           type: integer
           format: int32
           default: 0
+          minimum: 0
       - description: "Results per page, capped at 100"
         in: query
         name: size
@@ -3868,6 +4114,7 @@ paths:
           type: integer
           format: int32
           default: 50
+          minimum: 1
       responses:
         "200":
           content:
@@ -5555,6 +5802,117 @@ paths:
       summary: Get observation detail
       tags:
       - Practice Observations
+  /workspaces/{workspaceSlug}/practices/releases:
+    get:
+      operationId: listPracticeReleases
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PracticeReleaseProposal"
+          description: OK
+      summary: List pending practice releases
+      tags:
+      - Practice Catalog
+  /workspaces/{workspaceSlug}/practices/releases/{slug}:
+    delete:
+      operationId: declinePracticeRelease
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: The offered version was declined
+      summary: Decline this version of a practice release
+      tags:
+      - Practice Catalog
+    get:
+      operationId: getPracticeRelease
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeReleaseProposal"
+          description: OK
+      summary: "Compare the adopted, current, and offered practice"
+      tags:
+      - Practice Catalog
+    put:
+      operationId: acceptPracticeRelease
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - in: header
+        name: If-Match
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptPracticeReleaseRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Practice"
+          description: OK
+      summary: Accept selected fields from a practice release
+      tags:
+      - Practice Catalog
   /workspaces/{workspaceSlug}/practices/reorder:
     patch:
       description: Sets each practice's display order to its index in the provided
@@ -5906,6 +6264,7 @@ paths:
             - CONVERSATION_EXPIRED
             - ARTIFACT_GONE
             - ARTIFACT_CLOSED
+            - ISSUE_SNAPSHOT_CHANGED
             - ARTIFACT_MERGED
             - ARTIFACT_DRAFT
             - RECIPIENT_OPTED_OUT
@@ -7810,6 +8169,332 @@ paths:
       summary: Update workspace Personal Access Token
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/user-view/users:
+    get:
+      operationId: listUserViewUsers
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 25
+          maximum: 100
+          minimum: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageResponseDTOUserViewUser"
+          description: OK
+      summary: List workspace users and their linked account status
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/conversations:
+    get:
+      operationId: listUserViewConversations
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 25
+          maximum: 100
+          minimum: 1
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageResponseDTOChatThreadSummary"
+          description: OK
+      summary: View a user's existing private conversations
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/conversations/{threadId}:
+    get:
+      operationId: getUserViewConversation
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: threadId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatThreadDetail"
+          description: OK
+      summary: Read a user's private conversation without changing it
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices:
+    get:
+      operationId: getUserPracticeView
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPracticeSummary"
+          description: OK
+      summary: View a user's existing private practice profile without signing in
+        as them
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/runs:
+    get:
+      operationId: listUserViewRuns
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: groupSlug
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: practiceSlug
+        required: false
+        schema:
+          type: string
+      - description: "Only reviews of these artifact kinds, e.g. scm.pull_request\
+          \ (repeatable)"
+        in: query
+        name: artifactKinds
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+      - in: query
+        name: severities
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - CRITICAL
+            - MAJOR
+            - MINOR
+            - INFO
+      - description: "Zero-based page, at most 100"
+        in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 100
+          minimum: 0
+      - description: Page size from 1 to 50
+        in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 50
+          minimum: 1
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeGroupReviewRunsPage"
+          description: OK
+      summary: View a user's private practice review history
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/trend:
+    get:
+      operationId: getUserViewTrend
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: groupSlug
+        required: true
+        schema:
+          type: string
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeGroupTrend"
+          description: OK
+      summary: View a user's private practice group trend
+      tags:
+      - User view
+  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices/observations/{observationId}:
+    get:
+      operationId: getUserViewObservation
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: observationId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Why the administrator views this user: percent-encoded UTF-8,\
+          \ 1–500 characters"
+        in: header
+        name: X-User-View-Reason
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObservationDetail"
+          description: OK
+      summary: View a user's private observation and feedback
+      tags:
+      - User view
   /workspaces/{workspaceSlug}/users:
     get:
       operationId: getUsersWithTeams
@@ -7836,6 +8521,18 @@ paths:
       - workspace
 components:
   schemas:
+    AcceptPracticeReleaseRequest:
+      type: object
+      properties:
+        choices:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+            - CURRENT
+            - OFFERED
+      required:
+      - choices
     AccountRef:
       type: object
       description: A human-readable account identity. <code>displayName</code>/<code>email</code>
@@ -7971,9 +8668,6 @@ components:
           type: integer
           format: int64
         memberCount:
-          type: integer
-          format: int64
-        ownerAccountId:
           type: integer
           format: int64
         ownerLogin:
@@ -8324,6 +9018,9 @@ components:
           type: string
         userAgent:
           type: string
+        viewedUserId:
+          type: integer
+          format: int64
         workspaceId:
           type: integer
           format: int64
@@ -8587,6 +9284,7 @@ components:
           - IN_SYNC
           - LOCALLY_EDITED
           - UPDATE_AVAILABLE
+          - DECLINED
         slug:
           type: string
           description: Slug of the catalog entry this copy was made from
@@ -9397,6 +10095,8 @@ components:
           description: Practice review criteria
           maxLength: 50000
           minLength: 0
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         groupSlug:
           type:
           - string
@@ -9873,6 +10573,8 @@ components:
             $ref: "#/components/schemas/PracticeBinding"
         criteria:
           type: string
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         groupSlug:
           type: string
         name:
@@ -9889,6 +10591,7 @@ components:
       - automatedReviewValidation
       - bindings
       - criteria
+      - deliveryBehavior
       - name
     CuratedPracticeRequest:
       type: object
@@ -9898,6 +10601,15 @@ components:
           $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
           description: Evidence requirements; omit to use the recommended requirements
             for the selected work type
+        bindingChanges:
+          type: array
+          description: Explicit intent to change the gate or the person judged
+          items:
+            type: string
+            enum:
+            - APPLIES_WHEN
+            - SUBJECT
+          uniqueItems: true
         bindings:
           type: array
           description: The one occasion this practice is reviewed on; the kind of
@@ -9910,6 +10622,8 @@ components:
           type: string
           maxLength: 50000
           minLength: 0
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         groupSlug:
           type: string
           maxLength: 64
@@ -9983,11 +10697,6 @@ components:
           format: int64
         identityProvider:
           type: string
-        impersonating:
-          type: boolean
-        impersonatorId:
-          type: integer
-          format: int64
         linkedProviders:
           type: array
           items:
@@ -10098,6 +10807,7 @@ components:
           - CONVERSATION_EXPIRED
           - ARTIFACT_GONE
           - ARTIFACT_CLOSED
+          - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
@@ -10203,6 +10913,44 @@ components:
       - practiceName
       - practiceSlug
       - totalObservations
+    EmailTestRequest:
+      type: object
+      properties:
+        to:
+          type: string
+          format: email
+          description: the mailbox to send the test email to; blank means the caller's
+            own verified address
+          maxLength: 254
+          minLength: 0
+    EmailTestResponse:
+      type: object
+      properties:
+        messageId:
+          type: string
+          description: "the accepted <code>Message-ID</code>, only for <code>SENT</code>;\
+            \ search for it in the relay's log"
+        outcome:
+          type: string
+          description: what became of the test email; <code>SENT</code> is the only
+            success
+          enum:
+          - SENT
+          - EXPIRED
+          - NOT_CONFIGURED
+          - SILENT_MODE
+          - NO_RECIPIENT
+          - UNSUBSCRIBED
+          - INVALID_ADDRESS
+          - REJECTED
+          - UNAVAILABLE
+          - RATE_LIMITED
+        to:
+          type: string
+          description: "the address it went to, or <code>null</code> when there was\
+            \ no recipient to resolve"
+      required:
+      - outcome
     EvidenceCitation:
       type: object
       description: A verified quote and its exact source location
@@ -10692,18 +11440,6 @@ components:
           type: string
         username:
           type: string
-    ImpersonateRequest:
-      type: object
-      properties:
-        reason:
-          type: string
-          minLength: 1
-        targetAccountId:
-          type: integer
-          format: int64
-      required:
-      - reason
-      - targetAccountId
     InAppEvidence:
       type: object
       description: One piece of work the pattern was observed on
@@ -11409,6 +12145,36 @@ components:
       - scopes
       - type
       - updatedAt
+    NotificationPreferences:
+      type: object
+      properties:
+        deliveryConfigured:
+          type: boolean
+          description: This instance has an email transport and sender configured
+        emailAvailable:
+          type: boolean
+          description: The account has an active verified email address
+        etag:
+          type: string
+        productFeedback:
+          type: boolean
+        productSurveys:
+          type: boolean
+        researchSurveys:
+          type: boolean
+        surveySummaries:
+          type: boolean
+        workspaceAlerts:
+          type: boolean
+      required:
+      - deliveryConfigured
+      - emailAvailable
+      - etag
+      - productFeedback
+      - productSurveys
+      - researchSurveys
+      - surveySummaries
+      - workspaceAlerts
     ObservationDetail:
       type: object
       description: Full practice observation detail including delivered feedback and
@@ -11440,8 +12206,8 @@ components:
           - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -11551,8 +12317,8 @@ components:
           - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -11870,6 +12636,42 @@ components:
         totalPages:
           type: integer
           format: int32
+    PageResponseDTOChatThreadSummary:
+      type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatThreadSummary"
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          type: integer
+          format: int32
+        numberOfElements:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageable"
+        size:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/Sort"
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
     PageResponseDTOConfigAuditEntryView:
       type: object
       description: |-
@@ -11953,6 +12755,42 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SyncJob"
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          type: integer
+          format: int32
+        numberOfElements:
+          type: integer
+          format: int32
+        pageable:
+          $ref: "#/components/schemas/Pageable"
+        size:
+          type: integer
+          format: int32
+        sort:
+          $ref: "#/components/schemas/Sort"
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageResponseDTOUserViewUser:
+      type: object
+      description: |-
+        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
+         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
+         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserViewUser"
         empty:
           type: boolean
         first:
@@ -12123,6 +12961,8 @@ components:
         criteria:
           type: string
           description: Practice review criteria
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         displayOrder:
           type: integer
           format: int32
@@ -12162,6 +13002,7 @@ components:
       - bindings
       - createdAt
       - criteria
+      - deliveryBehavior
       - displayOrder
       - id
       - name
@@ -12283,6 +13124,40 @@ components:
       required:
       - needs
       - signals
+    PracticeDefinition:
+      type: object
+      description: |-
+        A practice as its author wrote it.
+
+         <p><code>artifactKind</code> is not a field. It is read off {@link de.tum.cit.aet.hephaestus.practices.PracticeDefinition#bindings #bindings()}, whose signal names carry
+         it as a prefix, so there is nothing for a second statement of it to disagree with.
+      properties:
+        automatedReviewPolicy:
+          $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
+        bindings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeBinding"
+        criteria:
+          type: string
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
+        groupSlug:
+          type: string
+        name:
+          type: string
+        precomputeScript:
+          type: string
+        whatGoodLooksLike:
+          type: string
+        whyItMatters:
+          type: string
+      required:
+      - automatedReviewPolicy
+      - bindings
+      - criteria
+      - deliveryBehavior
+      - name
     PracticeDefinitionOptions:
       type: object
       description: "What a practice author may choose, per type of reviewed work"
@@ -12298,6 +13173,19 @@ components:
       required:
       - sourceContractVersion
       - workTypes
+    PracticeDeliveryBehavior:
+      type: object
+      description: "Delivery choices declared by the practice author, not inferred\
+        \ from its slug."
+      properties:
+        overlapGroup:
+          type: string
+        redundantToSlug:
+          type: string
+        summaryOnly:
+          type: boolean
+      required:
+      - summaryOnly
     PracticeEvidenceBlocker:
       type: object
       description: "One thing that blocked automated review, and how many reviews\
@@ -12506,6 +13394,14 @@ components:
           - ASSESSED
           - NOT_APPLICABLE
           - UNDETERMINED
+        claimCurrentness:
+          type: string
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
+          enum:
+          - CURRENT
+          - STALE
+          - UNVERIFIABLE
         feedbackId:
           type: string
           format: uuid
@@ -12555,6 +13451,7 @@ components:
           type: string
       required:
       - assessmentStatus
+      - claimCurrentness
       - observationId
       - practiceName
       - practiceSlug
@@ -12723,6 +13620,69 @@ components:
       required:
       - displayName
       - signal
+    PracticeReleaseField:
+      type: object
+      properties:
+        conflict:
+          type: boolean
+        field:
+          type: string
+          enum:
+          - NAME
+          - BINDINGS
+          - CRITERIA
+          - PRECOMPUTE_SCRIPT
+          - AUTOMATED_REVIEW_POLICY
+          - WHY_IT_MATTERS
+          - WHAT_GOOD_LOOKS_LIKE
+          - GROUP_SLUG
+          - DELIVERY_BEHAVIOR
+        offeredChanged:
+          type: boolean
+      required:
+      - conflict
+      - field
+      - offeredChanged
+    PracticeReleaseProposal:
+      type: object
+      description: One offer and the exact three versions an administrator reviews
+        before deciding.
+      properties:
+        base:
+          $ref: "#/components/schemas/PracticeDefinition"
+        baseSource:
+          type: string
+          enum:
+          - EXACT_ADOPTION
+          - BUNDLED_DIGEST_MATCH
+          - BUNDLED_FINGERPRINT_MATCH
+          - CURRENT_DEFINITION
+        current:
+          $ref: "#/components/schemas/PracticeDefinition"
+        currentRevision:
+          type: integer
+          format: int32
+        etag:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeReleaseField"
+        offered:
+          $ref: "#/components/schemas/PracticeDefinition"
+        offeredDigest:
+          type: string
+        slug:
+          type: string
+      required:
+      - base
+      - baseSource
+      - current
+      - etag
+      - fields
+      - offered
+      - offeredDigest
+      - slug
     PracticeReviewCoveragePreview:
       type: object
       properties:
@@ -13106,6 +14066,7 @@ components:
             - CONVERSATION_EXPIRED
             - ARTIFACT_GONE
             - ARTIFACT_CLOSED
+            - ISSUE_SNAPSHOT_CHANGED
             - ARTIFACT_MERGED
             - ARTIFACT_DRAFT
             - RECIPIENT_OPTED_OUT
@@ -13193,6 +14154,15 @@ components:
             A review somebody asks for by hand is not among them — see manualReviewSignal.
           items:
             $ref: "#/components/schemas/PracticeSignalOption"
+        subjectRoles:
+          type: array
+          items:
+            type: string
+            enum:
+            - AUTHOR
+            - ASSIGNEE
+            - REVIEWER
+            - MERGER
         supportedAutomatedReviewModes:
           type: array
           items:
@@ -13208,6 +14178,7 @@ components:
       - recommendedNeeds
       - recommendedPolicy
       - signals
+      - subjectRoles
       - supportedAutomatedReviewModes
     ProbeLlmConnectionRequest:
       type: object
@@ -14119,6 +15090,7 @@ components:
           - CONVERSATION_EXPIRED
           - ARTIFACT_GONE
           - ARTIFACT_CLOSED
+          - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
@@ -14158,8 +15130,8 @@ components:
           - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -14291,6 +15263,7 @@ components:
           - CONVERSATION_EXPIRED
           - ARTIFACT_GONE
           - ARTIFACT_CLOSED
+          - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
@@ -14432,6 +15405,7 @@ components:
           - CONVERSATION_EXPIRED
           - ARTIFACT_GONE
           - ARTIFACT_CLOSED
+          - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
@@ -14512,8 +15486,8 @@ components:
           - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -14634,8 +15608,8 @@ components:
           - UNDETERMINED
         claimCurrentness:
           type: string
-          description: Whether an observation was produced using the current review
-            rules
+          description: Whether an observation still has current review rules and supporting
+            work snapshot
           enum:
           - CURRENT
           - STALE
@@ -15339,6 +16313,40 @@ components:
       - description
       - startsAt
       - title
+    SurveyEmailInvitationRequest:
+      type: object
+      properties:
+        sendReminder:
+          type: boolean
+    SurveyEmailInvitationSummary:
+      type: object
+      description: "Counts refer to email requests, not in-app invitations or responses.\
+        \ Accepted means SMTP relay acceptance."
+      properties:
+        accepted:
+          type: integer
+          format: int32
+        alreadyRequested:
+          type: integer
+          format: int32
+        deliveryConfigured:
+          type: boolean
+        eligible:
+          type: integer
+          format: int32
+        queued:
+          type: integer
+          format: int32
+        remaining:
+          type: integer
+          format: int32
+      required:
+      - accepted
+      - alreadyRequested
+      - deliveryConfigured
+      - eligible
+      - queued
+      - remaining
     SurveyInvitation:
       type: object
       properties:
@@ -16113,6 +17121,25 @@ components:
           type: boolean
         scopes:
           type: string
+    UpdateNotificationPreferences:
+      type: object
+      properties:
+        productFeedback:
+          type: boolean
+        productSurveys:
+          type: boolean
+        researchSurveys:
+          type: boolean
+        surveySummaries:
+          type: boolean
+        workspaceAlerts:
+          type: boolean
+      required:
+      - productFeedback
+      - productSurveys
+      - researchSurveys
+      - surveySummaries
+      - workspaceAlerts
     UpdateOutlineCollectionStateRequest:
       type: object
       description: Transition a mirrored Outline collection to a target mirror state
@@ -16183,6 +17210,15 @@ components:
           description: "Replacement review settings; omit to preserve them, or to\
             \ take the recommended ones when the bindings move the practice to a different\
             \ kind of work"
+        bindingChanges:
+          type: array
+          description: Explicit intent to change the gate or the person judged
+          items:
+            type: string
+            enum:
+            - APPLIES_WHEN
+            - SUBJECT
+          uniqueItems: true
         bindings:
           type: array
           description: Replacement occasion and its evidence; omit to leave it unchanged
@@ -16206,6 +17242,8 @@ components:
           maxLength: 50000
           minLength: 0
           pattern: "[\\s\\S]*\\S[\\s\\S]*"
+        deliveryBehavior:
+          $ref: "#/components/schemas/PracticeDeliveryBehavior"
         group:
           $ref: "#/components/schemas/BindPracticeGroupRequest"
           description: Catalog placement to apply with the definition update; omit
@@ -16608,20 +17646,40 @@ components:
       - id
       - login
       - name
+    UserPracticeSummary:
+      type: object
+      properties:
+        groupStandings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeGroupStanding"
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeGroup"
+        practices:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewedPractice"
+        standings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeStanding"
+      required:
+      - groupStandings
+      - groups
+      - practices
+      - standings
     UserSettings:
       type: object
       description: User preferences and settings
       properties:
-        participateInResearch:
-          type: boolean
-          description: Whether the user consents to participate in research studies
         practiceFeedbackDeliveryEnabled:
           type: boolean
           description: "Whether new practice-feedback comments may be delivered on\
             \ issues, pull requests, and merge requests authored by the user, together\
             \ with related Slack reminders"
       required:
-      - participateInResearch
       - practiceFeedbackDeliveryEnabled
     UserTeams:
       type: object
@@ -16650,6 +17708,24 @@ components:
       - name
       - teams
       - url
+    UserViewUser:
+      type: object
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        accountStatus:
+          type: string
+        login:
+          type: string
+        name:
+          type: string
+        userId:
+          type: integer
+          format: int64
+      required:
+      - login
+      - userId
     Workspace:
       type: object
       description: Complete workspace information including configuration and settings

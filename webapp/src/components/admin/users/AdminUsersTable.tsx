@@ -30,14 +30,12 @@ export interface AdminUsersTableProps {
 	hasSearch: boolean;
 	/** Total rows loaded from the server (before client-side search filtering). */
 	totalLoaded: number;
-	/** Id of the signed-in admin — used to disable self-impersonation. Undefined until loaded. */
+	/** Id of the signed-in admin, who cannot revoke their own admin role. Undefined until loaded. */
 	currentUserId: number | undefined;
 	hasNextPage: boolean;
 	isFetchingNextPage: boolean;
 	onLoadMore: () => void;
 	onChangeRole: (user: AdminAccountView) => void;
-	onImpersonate: (user: AdminAccountView) => void;
-	/** Force sign-out: revoke all of the account's active sessions (also kills impersonation of it). */
 	onForceSignOut: (user: AdminAccountView) => void;
 }
 
@@ -116,7 +114,6 @@ function UserRows({
 	hasNextPage,
 	isFetchingNextPage,
 	onChangeRole,
-	onImpersonate,
 	onForceSignOut,
 }: Omit<AdminUsersTableProps, "totalLoaded" | "onLoadMore">) {
 	if (isLoading) {
@@ -205,18 +202,6 @@ function UserRows({
 								>
 									<UserCog className="size-4" />
 									{changeRoleLabel(isSelfAdmin, user.appRole)}
-								</DropdownMenuItem>
-								<DropdownMenuSeparator />
-								<DropdownMenuItem
-									disabled={isSelf}
-									onClick={() => {
-										if (!isSelf) {
-											onImpersonate(user);
-										}
-									}}
-								>
-									<Users className="size-4" />
-									{isSelf ? "Cannot impersonate self" : "Impersonate"}
 								</DropdownMenuItem>
 								<DropdownMenuSeparator />
 								<DropdownMenuItem variant="destructive" onClick={() => onForceSignOut(user)}>

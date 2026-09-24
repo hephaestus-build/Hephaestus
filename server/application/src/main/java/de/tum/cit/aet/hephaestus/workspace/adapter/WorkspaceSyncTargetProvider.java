@@ -153,6 +153,15 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
     }
 
     @Override
+    public void updateSyncError(Long syncTargetId, SyncPass pass, @Nullable String error) {
+        switch (pass) {
+            case RECENT -> repositoryToMonitorRepository.updateRecentSyncError(syncTargetId, error);
+            case HISTORICAL_BACKFILL ->
+                repositoryToMonitorRepository.updateHistoricalBackfillSyncError(syncTargetId, error);
+        }
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<SyncMetadata> getSyncMetadata(Long scopeId) {
         return workspaceRepository.findById(scopeId).map(this::toSyncMetadata);

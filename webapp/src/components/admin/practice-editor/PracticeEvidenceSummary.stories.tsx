@@ -23,7 +23,7 @@ const meta = {
 			status: "AUTHOR_DECLARED",
 			sourceContractVersion: "1.2.0",
 			policyDigest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-			reviewRuleFingerprint: `v2:${"0".repeat(64)}`,
+			reviewRuleFingerprint: `v4:${"0".repeat(64)}`,
 		},
 	},
 	parameters: { layout: "padded" },
@@ -50,6 +50,26 @@ export const AuthorDeclared: Story = {
 
 export const OneOccasion: Story = {
 	args: { bindings: [mockPullRequestBinding] },
+};
+
+export const ScopedReviewer: Story = {
+	args: {
+		bindings: [
+			{
+				...mockPullRequestBinding,
+				subject: "REVIEWER",
+				appliesWhen: {
+					absentSays: "the change has no Swift code",
+					anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+				},
+			},
+		],
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("reviewer")).toBeVisible();
+		await expect(canvas.getByText("Changed path matches **/*.swift")).toBeVisible();
+		await expect(canvas.getByText("Otherwise skip: the change has no Swift code")).toBeVisible();
+	},
 };
 
 export const NoOccasion: Story = {

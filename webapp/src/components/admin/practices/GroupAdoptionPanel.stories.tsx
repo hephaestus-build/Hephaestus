@@ -28,6 +28,7 @@ const practice = {
 		artifactKind: "scm.pull_request" as const,
 		bindings: [mockPullRequestBinding],
 		criteria: "Confirm the pull request explains both the change and its motivation.",
+		deliveryBehavior: { summaryOnly: false },
 		automatedReviewPolicy: mockPullRequestPolicy,
 		automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 		groupSlug: "review-ready-work",

@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobService;
 import de.tum.cit.aet.hephaestus.agent.job.ConversationReviewSubmitter;
 import de.tum.cit.aet.hephaestus.agent.job.conversation.ConversationThreadTriggerScheduler;
-import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationCommand;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -232,7 +231,6 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         handler = new SlackInteractivityHandler(
                 workspaceResolver,
                 identityResolver,
-                mock(ResearchParticipationCommand.class),
                 mock(SlackAppHomeService.class),
                 new SlackParticipantConsentService(participantConsentRepository),
                 new SlackPersonErasureService(messageRepository, threadRepository, conversationFeedbackErasure),

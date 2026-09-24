@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.core.auth.web;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
@@ -17,7 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
  * Resolves the current Hephaestus account from the validated JWT in the security context.
  *
  * <p>Our JWTs carry {@code sub = Account.id} (decimal), {@code jti} (UUID), and optionally
- * {@code act} (impersonator id). This is the single place those are parsed so controllers
+ * session deadlines. This is the single place those are parsed so controllers
  * stay declarative.
  */
 @NamedInterface("current-account")
@@ -93,42 +92,6 @@ public final class CurrentAccount {
                     .toList();
         }
         return List.of();
-    }
-
-    /** Impersonator account id if this is an impersonation session, else null. */
-    @Nullable
-    public static Long impersonatorId() {
-        Jwt jwt = jwtOrNull();
-        if (jwt == null || !jwt.hasClaim("act")) {
-            return null;
-        }
-        Object act = jwt.getClaim("act");
-        if (act instanceof Map<?, ?> map && map.get("sub") instanceof String sub) {
-            try {
-                return Long.parseLong(sub);
-            } catch (NumberFormatException ignored) {
-                return null;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Absolute impersonation expiry ({@code imp_exp} claim, epoch seconds) if present, else null.
-     * Carries the time-box ceiling so {@code refresh} can auto-exit once it passes — the per-token
-     * {@code exp} only bounds a single token, not the whole impersonation session.
-     */
-    @Nullable
-    public static Instant impersonationExpiresAt() {
-        Jwt jwt = jwtOrNull();
-        if (jwt == null) {
-            return null;
-        }
-        Object impExp = jwt.getClaim("imp_exp");
-        if (impExp instanceof Number n) {
-            return Instant.ofEpochSecond(n.longValue());
-        }
-        return null;
     }
 
     /**

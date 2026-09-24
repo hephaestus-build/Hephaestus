@@ -10,6 +10,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DeliveryPolicyTrace } from "@/components/practice-trace/DeliveryPolicyTrace";
+import { ClaimCurrentnessBadge } from "@/components/practice-vocabulary/ClaimCurrentness";
 import { DeliveryTrace } from "@/components/practice-vocabulary/DeliveryTrace";
 import { codeCitationLocator } from "@/components/practice-vocabulary/evidence-source-defs";
 import { observationResult } from "@/components/practice-vocabulary/observation-result";
@@ -29,7 +30,7 @@ import { proposalRejectionReasonLabel } from "./proposal-rejection-vocabulary";
 import { subjectLabel } from "./review-format";
 import { type FeedbackSearch, reviewScopeSearch } from "./review-search";
 import { ReviewArtifactLink, reviewArtifactTypeSlug } from "./ReviewArtifact";
-import { ClaimCurrentnessBadge, ObservationResultBadge } from "./ReviewBadges";
+import { ObservationResultBadge } from "./ReviewBadges";
 import { ReviewBreadcrumbs } from "./ReviewBreadcrumbs";
 import {
 	ReviewDetailHeader,

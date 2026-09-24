@@ -135,7 +135,7 @@ public class ReviewBackfillSubmitter {
             return Outcome.PASSED;
         }
 
-        switch (detectionGate.evaluateIssue(issue, key.get().signalName(), TriggerMode.MANUAL)) {
+        switch (detectionGate.evaluateIssue(issue, workspaceId, key.get().signalName(), TriggerMode.MANUAL)) {
             case GateDecision.Skip skip -> {
                 log.debug("Backfill skipped by practice gate: issueId={}, reason={}", issue.getId(), skip.reason());
                 signalRecorder.markRefused(key.get(), skip.resolvedSignalReason());
@@ -156,7 +156,9 @@ public class ReviewBackfillSubmitter {
                                 issue.getHtmlUrl(),
                                 issue.getUpdatedAt(),
                                 key.get().signalName(),
-                                SignalOrigins.observationOriginOf(run.getDiscoveredVia())),
+                                SignalOrigins.observationOriginOf(run.getDiscoveredVia()),
+                                null,
+                                issue.getReviewSnapshotId()),
                         key.get(),
                         detect);
                 return Outcome.SUBMITTED;

@@ -38,7 +38,7 @@ public class GitHubCommitBackfillService {
      * Backfills commits for a repository from its local bare git clone. Idempotent: a commit whose
      * details are captured is skipped, and a commit whose capture failed is retried next cycle.
      *
-     * @return number of commits captured, or -1 if skipped (disabled/error)
+     * @return number of commits captured, or -1 if intentionally skipped
      */
     public int backfillCommits(SyncTarget syncTarget, Repository repository, Long scopeId) {
         if (!gitRepositoryManager.isEnabled()) {
@@ -55,50 +55,35 @@ public class GitHubCommitBackfillService {
             return -1;
         }
 
-        try {
-            String cloneUrl = "https://github.com/" + repository.getNameWithOwner() + ".git";
-            String token = resolveToken(syncTarget);
-            gitRepositoryManager.ensureRepository(key, cloneUrl, token);
+        String cloneUrl = "https://github.com/" + repository.getNameWithOwner() + ".git";
+        String token = resolveToken(syncTarget);
+        gitRepositoryManager.ensureRepository(key, cloneUrl, token);
 
-            String headSha = gitRepositoryManager.resolveBranchHead(key, defaultBranch);
-            if (headSha == null) {
-                log.warn(
-                        "Skipped commit backfill: reason=cannotResolveHead, repoId={}, repoName={}, branch={}",
-                        repoId,
-                        repoName,
-                        defaultBranch);
-                return -1;
-            }
-
-            Long providerId = repository.getProvider().getId();
-            var origin = new CommitDetailsPersister.Origin(
-                    scopeId,
-                    DataSource.GRAPHQL_SYNC,
-                    IdentityProviderType.GITHUB,
-                    sha -> CommitUtils.buildCommitUrl(repository.getNameWithOwner(), sha),
-                    email -> authorResolver.resolveByEmail(email, providerId));
-            Map<Outcome, Integer> outcomes = new EnumMap<>(Outcome.class);
-            gitRepositoryManager.forEachMissingCommit(
-                    key,
-                    shas -> commitRepository.findGitDetailsCapturedShas(repoId, shas),
-                    info -> outcomes.merge(persister.persist(info, repository, origin), 1, Integer::sum));
-            log.info(
-                    "Completed commit backfill: repoId={}, capturedCommits={}, failedCommits={}, scope=all-branches",
-                    repoId,
-                    outcomes.getOrDefault(Outcome.CAPTURED, 0),
-                    outcomes.getOrDefault(Outcome.FAILED, 0));
-            return outcomes.getOrDefault(Outcome.CAPTURED, 0);
-        } catch (GitRepositoryManager.GitOperationException e) {
-            log.error(
-                    "Commit backfill failed (git operation): repoId={}, repoName={}, error={}",
-                    repoId,
-                    repoName,
-                    e.getMessage());
-            return -1;
-        } catch (Exception e) {
-            log.error("Commit backfill failed: repoId={}, repoName={}, error={}", repoId, repoName, e.getMessage(), e);
-            return -1;
+        String headSha = gitRepositoryManager.resolveBranchHead(key, defaultBranch);
+        if (headSha == null) {
+            throw new IllegalStateException("Cannot resolve repository HEAD");
         }
+
+        Long providerId = repository.getProvider().getId();
+        var origin = new CommitDetailsPersister.Origin(
+                scopeId,
+                DataSource.GRAPHQL_SYNC,
+                IdentityProviderType.GITHUB,
+                sha -> CommitUtils.buildCommitUrl(repository.getNameWithOwner(), sha),
+                email -> authorResolver.resolveByEmail(email, providerId));
+        Map<Outcome, Integer> outcomes = new EnumMap<>(Outcome.class);
+        gitRepositoryManager.forEachMissingCommit(
+                key,
+                shas -> commitRepository.findGitDetailsCapturedShas(repoId, shas),
+                info -> outcomes.merge(persister.persist(info, repository, origin), 1, Integer::sum));
+        if (outcomes.getOrDefault(Outcome.FAILED, 0) > 0) {
+            throw new IllegalStateException("Commit capture failed for one or more commits");
+        }
+        log.info(
+                "Completed commit backfill: repoId={}, capturedCommits={}, scope=all-branches",
+                repoId,
+                outcomes.getOrDefault(Outcome.CAPTURED, 0));
+        return outcomes.getOrDefault(Outcome.CAPTURED, 0);
     }
 
     /**
@@ -113,12 +98,7 @@ public class GitHubCommitBackfillService {
             return syncTarget.personalAccessToken();
         }
         if (syncTarget.installationId() != null && tokenService.isConfigured()) {
-            try {
-                return tokenService.getInstallationToken(syncTarget.installationId());
-            } catch (Exception e) {
-                log.warn("Failed to get installation token for commit backfill: {}", e.getMessage());
-                return null;
-            }
+            return tokenService.getInstallationToken(syncTarget.installationId());
         }
         return null;
     }

@@ -436,10 +436,8 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("bills the reaped attempt's proxy-recorded tokens at its frozen price")
         void billsTheReapedAttemptsProxyRecordedTokensAtItsFrozenPrice() {
             UUID jobId = UUID.randomUUID();
-            // Started 20 minutes ago with 600s (10min) timeout + 5min buffer = 15min
-            // 20 min > 15 min → stale
-            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1200), 600);
-            job.setExecutionStartedAt(Instant.now().minusSeconds(1190));
+            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1800), 600);
+            job.setExecutionStartedAt(Instant.now().minusSeconds(1790));
             job.setRetryCount(2);
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
@@ -473,7 +471,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("a job that never started executing is reaped without any ledger event")
         void shouldReapAJobStillInPreparationWithoutAttributingUsage() {
             UUID jobId = UUID.randomUUID();
-            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1200), 600);
+            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1800), 600);
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
             when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(job));
@@ -498,8 +496,6 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("a job inside its own timeout is left RUNNING")
         void shouldSkipRunningJobsNotYetStale() {
             UUID jobId = UUID.randomUUID();
-            // Started 5 minutes ago with 600s (10min) timeout + 5min buffer = 15min
-            // 5 min < 15 min → not stale yet
             AgentJob job = runningJob(jobId, Instant.now().minusSeconds(300), 600);
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
@@ -512,6 +508,19 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
             verifyNoInteractions(usageRecorder);
         }
 
+        @Test
+        void shouldNotReapAnAttemptDuringResultUploadGrace() {
+            UUID jobId = UUID.randomUUID();
+            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1200), 600);
+            job.setExecutionStartedAt(Instant.now().minusSeconds(1190));
+            when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(job));
+
+            sweeper.reapStaleRunningJobs();
+
+            verify(jobRepository, never()).transitionStatus(any(), any(), any(), any(), any());
+        }
+
         /**
          * The wedge this guards: a snapshot written by a NEWER schema version — the reverted-canary
          * case {@link ConfigSnapshot#fromJson} rejects by design. Accounting runs inside the same
@@ -522,8 +531,8 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("a snapshot this server cannot read still terminalises the job, billed UNPRICED")
         void unreadableSnapshotStillTerminalisesTheJob() {
             UUID jobId = UUID.randomUUID();
-            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1200), 600);
-            job.setExecutionStartedAt(Instant.now().minusSeconds(1190));
+            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1800), 600);
+            job.setExecutionStartedAt(Instant.now().minusSeconds(1790));
             job.setConfigSnapshot(snapshotFromTheFuture());
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
@@ -555,7 +564,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("an unreadable snapshot falls back to the default timeout rather than skipping the job")
         void unreadableSnapshotFallsBackToTheDefaultTimeout() {
             UUID jobId = UUID.randomUUID();
-            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1200), 600);
+            AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1800), 600);
             job.setConfigSnapshot(snapshotFromTheFuture());
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));

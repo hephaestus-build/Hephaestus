@@ -70,9 +70,11 @@ export function CuratedPracticeCreateLevel({ nested, onDone }: CuratedPracticeCr
 				}))}
 				isPending={createPractice.isPending}
 				definitionOptions={definitionOptionsQuery.data}
-				onSubmit={({ slug, ...definition }: CuratedPracticeFormValue) =>
-					createPractice.mutate({ body: { slug, definition } })
-				}
+				onSubmit={({
+					slug,
+					bindingChanges: _bindingChanges,
+					...definition
+				}: CuratedPracticeFormValue) => createPractice.mutate({ body: { slug, definition } })}
 			/>
 		);
 	}

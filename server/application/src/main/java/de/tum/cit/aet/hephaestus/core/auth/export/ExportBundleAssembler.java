@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.auth.spi.NotificationPreferencesExportQuery;
+import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Instant;
@@ -35,6 +37,8 @@ public class ExportBundleAssembler {
     private final AccountPreferencesQuery preferencesQuery;
     private final GitProviderRegistry gitProviderRegistry;
     private final Clock clock;
+    private final ResearchParticipationQuery researchParticipation;
+    private final NotificationPreferencesExportQuery notificationPreferences;
 
     public ExportBundleAssembler(
             AccountService accountService,
@@ -43,7 +47,9 @@ public class ExportBundleAssembler {
             AccountWorkspaceMembershipQuery workspaceMembershipQuery,
             AccountPreferencesQuery preferencesQuery,
             GitProviderRegistry gitProviderRegistry,
-            Clock clock) {
+            Clock clock,
+            NotificationPreferencesExportQuery notificationPreferences,
+            ResearchParticipationQuery researchParticipation) {
         this.accountService = accountService;
         this.accountFeatureRepository = accountFeatureRepository;
         this.authEventRepository = authEventRepository;
@@ -51,6 +57,8 @@ public class ExportBundleAssembler {
         this.preferencesQuery = preferencesQuery;
         this.gitProviderRegistry = gitProviderRegistry;
         this.clock = clock;
+        this.notificationPreferences = notificationPreferences;
+        this.researchParticipation = researchParticipation;
     }
 
     @Transactional(readOnly = true)
@@ -76,10 +84,12 @@ public class ExportBundleAssembler {
 
         List<String> featureFlags = accountFeatureRepository.findFlagsByAccountId(accountId);
 
-        ExportBundle.Preferences preferences = preferencesQuery
+        boolean practiceFeedbackDelivery = preferencesQuery
                 .preferencesForAccount(accountId)
-                .map(p -> new ExportBundle.Preferences(p.participateInResearch(), p.practiceFeedbackDeliveryEnabled()))
-                .orElse(null);
+                .map(AccountPreferencesQuery.PreferencesView::practiceFeedbackDeliveryEnabled)
+                .orElse(AccountPreferencesQuery.PreferencesView.PRACTICE_FEEDBACK_DELIVERY_ENABLED_BY_DEFAULT);
+        ExportBundle.Preferences preferences =
+                new ExportBundle.Preferences(researchParticipation.participates(accountId), practiceFeedbackDelivery);
 
         // Real calendar months (not 30-day approximations) so this window matches the partition
         // retention (pg_partman, 12 months), which is also 12 calendar months.
@@ -101,7 +111,8 @@ public class ExportBundleAssembler {
                 memberships,
                 featureFlags,
                 preferences,
-                authEvents);
+                authEvents,
+                notificationPreferences.preferences(accountId));
     }
 
     private ExportBundle.Identity toIdentity(IdentityLink il) {

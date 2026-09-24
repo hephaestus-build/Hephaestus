@@ -68,6 +68,45 @@ class WorkspaceMembershipControllerIntegrationTest extends AbstractWorkspaceInte
                 .containsExactlyInAnyOrder("admin", "membership-member", "membership-owner");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"?page=-1", "?size=0", "?size=-1"})
+    @WithAdminUser
+    void shouldRejectInvalidPagination(String query) {
+        Workspace workspace = createWorkspace(
+                "pagination-space", "Pagination Space", "pagination", AccountType.ORG, persistUser("pagination-owner"));
+        ensureAdminMembership(workspace);
+
+        webTestClient
+                .get()
+                .uri("/workspaces/{slug}/members" + query, workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectHeader()
+                .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo(400);
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldAcceptPageSizeAboveCap() {
+        Workspace workspace = createWorkspace(
+                "large-page-space", "Large Page Space", "large-page", AccountType.ORG, persistUser("large-page-owner"));
+        ensureAdminMembership(workspace);
+
+        webTestClient
+                .get()
+                .uri("/workspaces/{slug}/members?size=101", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(WorkspaceMembershipDTO.class);
+    }
+
     @Test
     @WithMentorUser
     void adminCanAssignRoleToMember() {

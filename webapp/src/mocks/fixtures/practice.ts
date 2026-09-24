@@ -11,7 +11,7 @@ export const mockAuthorDeclaredEvidenceValidation = {
 	status: "AUTHOR_DECLARED",
 	sourceContractVersion: "1.2.0",
 	policyDigest: "0".repeat(64),
-	reviewRuleFingerprint: `v2:${"0".repeat(64)}`,
+	reviewRuleFingerprint: `v4:${"0".repeat(64)}`,
 } satisfies PracticeAutomatedReviewValidation;
 
 export const mockPullRequestPolicy = {
@@ -194,6 +194,7 @@ export const mockPracticeDefinitionOptions = {
 				displayName: "Review requested by hand",
 			},
 			supportedAutomatedReviewModes: ["LANGUAGE_MODEL"],
+			subjectRoles: ["AUTHOR", "ASSIGNEE", "REVIEWER", "MERGER"],
 			recommendedPolicy: mockPullRequestPolicy,
 			recommendedNeeds: mockPullRequestBinding.needs,
 			allowedSources: [
@@ -288,6 +289,7 @@ export const mockPracticeDefinitionOptions = {
 				displayName: "Review requested by hand",
 			},
 			supportedAutomatedReviewModes: ["LANGUAGE_MODEL"],
+			subjectRoles: ["AUTHOR", "ASSIGNEE"],
 			recommendedPolicy: mockIssuePolicy,
 			recommendedNeeds: mockIssueBinding.needs,
 			allowedSources: [
@@ -328,6 +330,7 @@ export const mockPracticeDefinitionOptions = {
 				},
 			],
 			supportedAutomatedReviewModes: ["LANGUAGE_MODEL"],
+			subjectRoles: ["AUTHOR"],
 			recommendedPolicy: mockConversationPolicy,
 			recommendedNeeds: mockConversationBinding.needs,
 			allowedSources: [
@@ -355,6 +358,7 @@ export const mockPracticeDefinitionOptions = {
 				{ signal: "docs.document.archived", displayName: "Archived", recommended: false },
 			],
 			supportedAutomatedReviewModes: ["LANGUAGE_MODEL"],
+			subjectRoles: ["AUTHOR"],
 			recommendedPolicy: mockDocumentPolicy,
 			recommendedNeeds: mockDocumentBinding.needs,
 			allowedSources: [

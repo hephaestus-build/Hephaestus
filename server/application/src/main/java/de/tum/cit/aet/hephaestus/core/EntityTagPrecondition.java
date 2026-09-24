@@ -18,6 +18,12 @@ public record EntityTagPrecondition(List<ETag> candidates) {
         return candidates.stream().anyMatch(candidate -> candidate.isWildcard() || candidate.compare(current, true));
     }
 
+    /** A release decision must name the exact version shown to the administrator; '*' is not enough. */
+    public boolean matchesExact(String tag) {
+        ETag current = new ETag(tag, false);
+        return candidates.stream().anyMatch(candidate -> !candidate.isWildcard() && candidate.compare(current, true));
+    }
+
     public static String format(String tag) {
         return new ETag(tag, false).formattedTag();
     }

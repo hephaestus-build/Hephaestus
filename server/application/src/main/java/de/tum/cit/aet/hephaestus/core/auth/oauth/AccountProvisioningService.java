@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.util.Map;
@@ -15,6 +16,7 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
@@ -43,6 +45,7 @@ public class AccountProvisioningService {
     private final AccountJitCreator accountJitCreator;
     private final AdminBootstrapPolicy adminBootstrapPolicy;
     private final Clock clock;
+    private final ApplicationEventPublisher eventPublisher;
 
     public AccountProvisioningService(
             AccountRepository accountRepository,
@@ -52,7 +55,8 @@ public class AccountProvisioningService {
             VerifiedEmailResolver verifiedEmailResolver,
             AccountJitCreator accountJitCreator,
             AdminBootstrapPolicy adminBootstrapPolicy,
-            Clock clock) {
+            Clock clock,
+            ApplicationEventPublisher eventPublisher) {
         this.accountRepository = accountRepository;
         this.identityLinkRepository = identityLinkRepository;
         this.gitProviderRegistry = gitProviderRegistry;
@@ -61,6 +65,7 @@ public class AccountProvisioningService {
         this.accountJitCreator = accountJitCreator;
         this.adminBootstrapPolicy = adminBootstrapPolicy;
         this.clock = clock;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -112,6 +117,13 @@ public class AccountProvisioningService {
                         registrationId, subject, link.getAccount().getId());
             }
             identityLinkRepository.touchLastLogin(link.getId(), clock.instant());
+            if (link.getExternalActorId() == null) {
+                // A developer synced from a repository before their first sign-in has a user row this
+                // link did not know about; a later sync can also create it after the link.
+                gitProviderRegistry
+                        .findActorId(providerId, subject)
+                        .ifPresent(actorId -> identityLinkRepository.linkExternalActorIfAbsent(link.getId(), actorId));
+            }
             log.info(
                     "auth.success: returning login provider={} accountId={}",
                     registrationId,
@@ -134,6 +146,10 @@ public class AccountProvisioningService {
             IdentityLink linked = newIdentityLink(account, providerId, subject, teamId, principal);
             linked.setLinkedVia(IdentityLink.LinkedVia.MANUAL_LINK);
             identityLinkRepository.save(linked);
+            eventPublisher.publishEvent(new AccountSecurityChangedEvent(
+                    Objects.requireNonNull(account.getId()),
+                    AccountSecurityChangedEvent.Kind.IDENTITY_LINKED,
+                    clock.instant()));
             log.info("auth.success: linked provider={} to existing accountId={}", registrationId, account.getId());
             return new ProvisionResult(account, true);
         }
@@ -221,6 +237,10 @@ public class AccountProvisioningService {
                 && adminBootstrapPolicy.shouldPromote(registrationId, subject, login)) {
             account.setAppRole(Account.AppRole.APP_ADMIN);
             accountRepository.save(account);
+            eventPublisher.publishEvent(new AccountSecurityChangedEvent(
+                    Objects.requireNonNull(account.getId()),
+                    AccountSecurityChangedEvent.Kind.APP_ROLE_CHANGED,
+                    clock.instant()));
             log.info(
                     "auth.bootstrap: promoted accountId={} to APP_ADMIN via bootstrap-admins allowlist (provider={})",
                     account.getId(),
@@ -241,6 +261,8 @@ public class AccountProvisioningService {
         link.setProviderId(providerId);
         link.setSubject(subject);
         link.setTeamId(teamId);
+        link.setExternalActorId(
+                gitProviderRegistry.findActorId(providerId, subject).orElse(null));
         link.setUsernameAtSignup(stringAttr(principal, "login", "preferred_username", "username"));
         link.setEmailAtSignup(email(principal));
         link.setDisplayName(stringAttr(principal, "name", "display_name"));

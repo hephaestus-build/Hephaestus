@@ -68,12 +68,7 @@ public class PracticeGroupDetailController {
             WorkspaceContext workspaceContext,
             @PathVariable String groupSlug,
             @Valid @ParameterObject PracticeGroupReviewRunFilterParams filter) {
-        return ResponseEntity.ok(reviewRunService.list(
-                workspaceContext,
-                groupSlug,
-                filter.practiceSlug(),
-                filter.kinds(),
-                filter.severities(),
-                filter.pageable()));
+        return ResponseEntity.ok(
+                reviewRunService.list(workspaceContext, groupSlug, filter.runFilters(), filter.pageable()));
     }
 }

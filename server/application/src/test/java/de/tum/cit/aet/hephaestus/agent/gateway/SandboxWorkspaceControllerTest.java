@@ -3,8 +3,14 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.Base64;
+import java.util.HexFormat;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -25,18 +31,35 @@ class SandboxWorkspaceControllerTest {
     void shouldAdvertiseAndTransferOnlyTheAuthenticatedRuntimeWorkspace() throws Exception {
         var archive = Files.writeString(temporary.resolve("input.tar"), "trusted input");
         try (var session = sessions.register("token", archive, "out")) {
+            var request = new MockHttpServletRequest();
             var response = new MockHttpServletResponse();
             assertThat(controller.capabilities(session.id(), "Bearer token").protocolVersion())
                     .isEqualTo(3);
             assertThat(controller.capabilities(session.id(), "Bearer token").workspaceByteBudget())
                     .isEqualTo(Files.size(archive));
-            assertThatThrownBy(() -> controller.workspace(session.id(), "Bearer other", response))
+            assertThatThrownBy(() -> controller.workspace(session.id(), "Bearer other", request, response))
                     .isInstanceOfSatisfying(
                             ResponseStatusException.class,
                             e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
-            controller.workspace(session.id(), "Bearer token", response);
+            controller.workspace(session.id(), "Bearer token", request, response);
             assertThat(response.getContentAsByteArray()).isEqualTo(Files.readAllBytes(archive));
             assertThat(response.getContentType()).isEqualTo("application/x-tar");
+        }
+    }
+
+    @Test
+    void shouldRefuseAnUnadvertisedAreaOrRepository() throws Exception {
+        var archive = Files.writeString(temporary.resolve("input.tar"), "input");
+        try (var session = sessions.register("token", archive, "out")) {
+            for (String query : java.util.List.of("area=private", "repo=other")) {
+                var request = new MockHttpServletRequest();
+                request.setQueryString(query);
+                assertThatThrownBy(() -> controller.workspace(
+                                session.id(), "Bearer token", request, new MockHttpServletResponse()))
+                        .isInstanceOfSatisfying(
+                                ResponseStatusException.class,
+                                e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+            }
         }
     }
 
@@ -47,12 +70,47 @@ class SandboxWorkspaceControllerTest {
             var request = new MockHttpServletRequest();
             var response = new MockHttpServletResponse();
             request.setContent(new byte[] {1});
-            assertThatThrownBy(() -> controller.result(session.id(), "Bearer token", request, response))
+            String digest = "sha-256=:"
+                    + Base64.getEncoder()
+                            .encodeToString(MessageDigest.getInstance("SHA-256").digest(new byte[] {1})) + ":";
+            assertThatThrownBy(() -> controller.result(session.id(), "Bearer token", digest, request, response))
                     .isInstanceOfSatisfying(
                             ResponseStatusException.class,
                             exception -> assertThat(exception.getStatusCode().value())
                                     .isEqualTo(400));
             assertThatThrownBy(session::result).isInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    @Test
+    void shouldAnswerDuplicateUploadWithTheAdmittedDigest() throws Exception {
+        var archive = Files.writeString(temporary.resolve("input.tar"), "input");
+        var bytes = new ByteArrayOutputStream();
+        try (var tar = new TarArchiveOutputStream(bytes)) {
+            var entry = new TarArchiveEntry("out/observations.json");
+            entry.setSize(2);
+            tar.putArchiveEntry(entry);
+            tar.write("{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            tar.closeArchiveEntry();
+        }
+        byte[] result = bytes.toByteArray();
+        byte[] hash = MessageDigest.getInstance("SHA-256").digest(result);
+        String digest = "sha-256=:" + Base64.getEncoder().encodeToString(hash) + ":";
+        String etag = '"' + HexFormat.of().formatHex(hash) + '"';
+        try (var session = sessions.register("token", archive, "out")) {
+            var first = new MockHttpServletResponse();
+            var request = new MockHttpServletRequest();
+            request.setContent(result);
+            controller.result(session.id(), "Bearer token", digest, request, first);
+            assertThat(first.getStatus()).isEqualTo(204);
+            assertThat(first.getHeader("ETag")).isEqualTo(etag);
+
+            var repeat = new MockHttpServletResponse();
+            var retry = new MockHttpServletRequest();
+            retry.setContent(result);
+            controller.result(session.id(), "Bearer token", digest, retry, repeat);
+            assertThat(repeat.getStatus()).isEqualTo(409);
+            assertThat(repeat.getHeader("ETag")).isEqualTo(etag);
         }
     }
 

@@ -703,13 +703,37 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
             repo.setNameWithOwner("ls1intum/Hephaestus");
             issue.setRepository(repo);
             Workspace workspace = createWorkspace();
-            when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
+            when(workspaceResolver.resolveAllForRepository("ls1intum/Hephaestus"))
+                    .thenReturn(List.of(workspace));
             when(practiceDetectionReadiness.hasRunnableAgent(WORKSPACE_ID)).thenReturn(true);
             Practice issuePractice = createPractice(ScmSignals.ISSUE_OPENED);
             when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(issuePractice));
-            GateDecision decision = gate.evaluateIssue(issue, ScmSignals.ISSUE_OPENED, TriggerMode.AUTO);
+            GateDecision decision = gate.evaluateIssue(issue, WORKSPACE_ID, ScmSignals.ISSUE_OPENED, TriggerMode.AUTO);
 
             assertThat(decision).isInstanceOf(GateDecision.Detect.class);
+        }
+
+        @Test
+        void reviewsAnIssueInTheRequestedWorkspaceWhenSeveralMonitorItsRepository() {
+            Issue issue = new Issue();
+            issue.setId(7L);
+            issue.setAssignees(new HashSet<>());
+            Repository repo = new Repository();
+            repo.setNameWithOwner("ls1intum/Hephaestus");
+            issue.setRepository(repo);
+            Workspace first = createWorkspace();
+            Workspace second = createWorkspace();
+            second.setId(2L);
+            when(workspaceResolver.resolveAllForRepository("ls1intum/Hephaestus"))
+                    .thenReturn(List.of(first, second));
+            when(practiceDetectionReadiness.hasRunnableAgent(2L)).thenReturn(true);
+            when(practiceRepository.findByWorkspaceId(2L)).thenReturn(List.of(createPractice(ScmSignals.ISSUE_OPENED)));
+
+            GateDecision decision = gate.evaluateIssue(issue, 2L, ScmSignals.ISSUE_OPENED, TriggerMode.AUTO);
+
+            assertThat(decision).isInstanceOf(GateDecision.Detect.class);
+            assertThat(((GateDecision.Detect) decision).workspace().getId()).isEqualTo(2L);
+            verify(practiceRepository, never()).findByWorkspaceId(WORKSPACE_ID);
         }
     }
 

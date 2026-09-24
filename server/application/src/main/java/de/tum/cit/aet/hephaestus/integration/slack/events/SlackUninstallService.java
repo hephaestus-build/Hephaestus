@@ -2,7 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorSlackThreadService;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
@@ -30,6 +33,7 @@ public class SlackUninstallService {
     private final MentorSlackThreadService mentorSlackThreadService;
     private final ConversationFeedbackErasure conversationFeedbackErasure;
     private final SlackMessageService messageService;
+    private final IntegrationAttentionService attention;
 
     public SlackUninstallService(
             SlackWorkspaceResolver workspaceResolver,
@@ -37,13 +41,15 @@ public class SlackUninstallService {
             SlackWorkspacePurgeAdapter purgeAdapter,
             MentorSlackThreadService mentorSlackThreadService,
             ConversationFeedbackErasure conversationFeedbackErasure,
-            SlackMessageService messageService) {
+            SlackMessageService messageService,
+            IntegrationAttentionService attention) {
         this.workspaceResolver = workspaceResolver;
         this.connectionService = connectionService;
         this.purgeAdapter = purgeAdapter;
         this.mentorSlackThreadService = mentorSlackThreadService;
         this.conversationFeedbackErasure = conversationFeedbackErasure;
         this.messageService = messageService;
+        this.attention = attention;
     }
 
     @Transactional
@@ -54,19 +60,26 @@ public class SlackUninstallService {
             return;
         }
         long workspaceId = workspaceOpt.get();
-        connectionService
-                .findActive(workspaceId, IntegrationKind.SLACK)
-                .ifPresent(connection -> connectionService.transition(
-                        connection,
-                        new ConnectionService.TransitionRequest(
-                                IntegrationState.UNINSTALLED,
-                                "APP_UNINSTALLED".equals(eventType) || "app_uninstalled".equals(eventType)
-                                        ? "APP_UNINSTALLED"
-                                        : "TOKENS_REVOKED",
-                                "SLACK",
-                                teamId,
-                                uninstallCorrelationId(teamId, eventType, eventId),
-                                "Slack " + eventType + " received")));
+        connectionService.findActive(workspaceId, IntegrationKind.SLACK).ifPresent(connection -> {
+            Connection changed = connectionService.transition(
+                    connection,
+                    new ConnectionService.TransitionRequest(
+                            IntegrationState.UNINSTALLED,
+                            "APP_UNINSTALLED".equals(eventType) || "app_uninstalled".equals(eventType)
+                                    ? "APP_UNINSTALLED"
+                                    : "TOKENS_REVOKED",
+                            "SLACK",
+                            teamId,
+                            uninstallCorrelationId(teamId, eventType, eventId),
+                            "Slack " + eventType + " received"));
+            if ("tokens_revoked".equalsIgnoreCase(eventType)) {
+                attention.report(
+                        changed.getId(),
+                        workspaceId,
+                        IntegrationAttentionChangedEvent.Problem.CREDENTIAL_REVOKED,
+                        false);
+            }
+        });
         int erasedConversationRows = conversationFeedbackErasure.eraseAllConversationForWorkspace(workspaceId);
         purgeAdapter.deleteWorkspaceData(workspaceId);
         int purgedThreads = mentorSlackThreadService.purgeSlackThreads(workspaceId);

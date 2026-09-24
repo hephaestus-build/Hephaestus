@@ -46,6 +46,8 @@ const child = spawnSync(
 		path.resolve(paths.contextRoot, "metadata.json"),
 		"--context",
 		paths.contextRoot,
+		"--context-reference",
+		path.relative(root, paths.contextRoot),
 		"--change",
 		path.resolve(root, CHANGE_ROOT),
 		"--practices",

@@ -117,6 +117,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
             for (Method method : ObservationRepository.class.getDeclaredMethods()) {
                 Query query = method.getAnnotation(Query.class);
                 if (query == null) continue;
+                if (method.isAnnotationPresent(WorkspaceAgnostic.class)) continue;
                 assertThat(method.getParameters())
                         .as("%s must bind workspaceId", method.getName())
                         .anyMatch(parameter -> {
@@ -510,6 +511,10 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "LeaderboardDigestReadyEvent", // Carries workspaceId for the vendor-publish
                                         // fan-out
                                         "WorkspaceCreatedEvent", // Carries workspaceId + kind
+                                        "IntegrationAttentionChangedEvent", // Carries an explicit workspaceId and
+                                        // connectionId
+                                        "ProductFeedbackSubmittedEvent", // Instance-admin fan-out; submission UUID
+                                        // covers instance or workspace feedback
                                         // ConnectionLifecycleEvent.Activated / .Deactivated carry workspaceId directly
                                         // (published from ConnectionService.transition; consumed by vendor adapters).
                                         "Activated",

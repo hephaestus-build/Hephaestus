@@ -180,7 +180,15 @@ public class PracticeFeedbackDeliveryPolicy {
                 ? FeedbackSuppressionReason.ARTIFACT_GONE
                 : closedWhenQueued || target.getState() == Issue.State.CLOSED
                         ? FeedbackSuppressionReason.ARTIFACT_CLOSED
-                        : null;
+                        : target.getReviewSnapshotId() == null
+                                        || !target.getReviewSnapshotId()
+                                                .toString()
+                                                .equals(java.util.Objects.requireNonNull(
+                                                                metadata, "eligible issue has metadata")
+                                                        .path("review_snapshot_id")
+                                                        .asString(""))
+                                ? FeedbackSuppressionReason.ISSUE_SNAPSHOT_CHANGED
+                                : null;
         String repositoryName = issue == null || issue.getRepository() == null
                 ? null
                 : issue.getRepository().getNameWithOwner();

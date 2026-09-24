@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790187943939-1" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column name="historical_backfill_sync_error" type="VARCHAR(2048)"/>
+            <column name="recent_sync_error" type="VARCHAR(2048)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790187943939-2" author="hephaestus">
+        <addColumn tableName="slack_monitored_channel">
+            <column name="last_sync_error" type="VARCHAR(2048)"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

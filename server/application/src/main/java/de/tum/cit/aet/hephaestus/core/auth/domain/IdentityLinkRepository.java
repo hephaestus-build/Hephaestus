@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.domain;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -69,6 +70,16 @@ public interface IdentityLinkRepository extends JpaRepository<IdentityLink, Long
     @Modifying
     @Query("DELETE FROM IdentityLink il WHERE il.id = :id AND il.account.id = :accountId")
     int deleteByIdAndAccountId(@Param("id") Long id, @Param("accountId") Long accountId);
+
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.core.auth.domain.LinkedAccountRow(
+                   il.externalActorId, il.account.id, il.account.status)
+          FROM IdentityLink il
+         WHERE il.externalActorId IN :externalActorIds
+           AND il.disabledAt IS NULL
+        """)
+    List<LinkedAccountRow> findLinkedAccountsByExternalActorIds(
+            @Param("externalActorIds") Collection<Long> externalActorIds);
 
     /**
      * Fills an absent cached actor reference; an existing reference is never replaced.

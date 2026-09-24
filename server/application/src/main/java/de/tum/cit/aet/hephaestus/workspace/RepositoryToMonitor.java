@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -65,6 +66,21 @@ public class RepositoryToMonitor {
 
     // The time up to which discussions have been synced in the recent sync
     private Instant discussionsSyncedAt;
+
+    @Column(length = 2048)
+    private @Nullable String recentSyncError;
+
+    @Column(length = 2048)
+    private @Nullable String historicalBackfillSyncError;
+
+    public @Nullable String getSyncErrorSummary() {
+        if (recentSyncError == null) {
+            return historicalBackfillSyncError;
+        }
+        return historicalBackfillSyncError == null
+                ? recentSyncError
+                : recentSyncError + "; " + historicalBackfillSyncError;
+    }
 
     // Issue Backfill Tracking
 

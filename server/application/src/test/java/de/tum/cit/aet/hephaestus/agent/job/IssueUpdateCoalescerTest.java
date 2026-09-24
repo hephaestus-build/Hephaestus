@@ -89,7 +89,7 @@ class IssueUpdateCoalescerTest extends BaseUnitTest {
         Issue issue = issue();
         Workspace other = new Workspace();
         other.setId(9L);
-        when(workspaceResolver.resolveForRepository("owner/repo")).thenReturn(Optional.of(other));
+        when(workspaceResolver.resolveAllForRepository("owner/repo")).thenReturn(List.of(other));
         ArtifactSignal old = signal("old", 60);
         when(signals.lockDeferred(7L, 42L, ScmSignals.ISSUE_UPDATED.value())).thenReturn(List.of(old));
         when(issues.findByIdWithRepositoryAndAssignees(42L)).thenReturn(Optional.of(issue));
@@ -103,7 +103,7 @@ class IssueUpdateCoalescerTest extends BaseUnitTest {
     @Test
     void shouldRefuseTheWholeGroupWhenNoWorkspaceMonitorsTheRepositoryAnymore() {
         Issue issue = issue();
-        when(workspaceResolver.resolveForRepository("owner/repo")).thenReturn(Optional.empty());
+        when(workspaceResolver.resolveAllForRepository("owner/repo")).thenReturn(List.of());
         ArtifactSignal old = signal("old", 60);
         when(signals.lockDeferred(7L, 42L, ScmSignals.ISSUE_UPDATED.value())).thenReturn(List.of(old));
         when(issues.findByIdWithRepositoryAndAssignees(42L)).thenReturn(Optional.of(issue));
@@ -177,7 +177,7 @@ class IssueUpdateCoalescerTest extends BaseUnitTest {
     private void stubOwningWorkspace() {
         Workspace workspace = new Workspace();
         workspace.setId(7L);
-        when(workspaceResolver.resolveForRepository("owner/repo")).thenReturn(Optional.of(workspace));
+        when(workspaceResolver.resolveAllForRepository("owner/repo")).thenReturn(List.of(workspace));
     }
 
     private static ArtifactSignal signal(String revision, int ageSeconds) {

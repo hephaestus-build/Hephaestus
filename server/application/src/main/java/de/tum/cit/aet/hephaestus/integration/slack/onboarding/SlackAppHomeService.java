@@ -13,7 +13,6 @@ import com.slack.api.model.block.LayoutBlock;
 import com.slack.api.model.block.composition.ConfirmationDialogObject;
 import com.slack.api.model.view.View;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
-import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackHephaestusUiLinks;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
@@ -39,13 +38,10 @@ public class SlackAppHomeService {
 
     public static final String ACTION_CHANNEL_MESSAGES_OPT_OUT = "channel_messages_opt_out";
     public static final String ACTION_CHANNEL_MESSAGES_OPT_IN = "channel_messages_opt_in";
-    public static final String ACTION_RESEARCH_OPT_OUT = "research_opt_out";
-    public static final String ACTION_RESEARCH_OPT_IN = "research_opt_in";
     public static final String ACTION_OPEN_HEPHAESTUS = "open_hephaestus_ui";
 
     private final SlackWorkspaceResolver workspaceResolver;
     private final SlackMentorIdentityResolver identityResolver;
-    private final AccountPreferencesQuery preferencesQuery;
     private final SlackParticipantConsentRepository participantConsentRepository;
     private final SlackMonitoredChannelRepository monitoredChannelRepository;
     private final MentorReadinessQuery mentorReadinessQuery;
@@ -56,7 +52,6 @@ public class SlackAppHomeService {
     public SlackAppHomeService(
             SlackWorkspaceResolver workspaceResolver,
             SlackMentorIdentityResolver identityResolver,
-            AccountPreferencesQuery preferencesQuery,
             SlackParticipantConsentRepository participantConsentRepository,
             SlackMonitoredChannelRepository monitoredChannelRepository,
             MentorReadinessQuery mentorReadinessQuery,
@@ -65,7 +60,6 @@ public class SlackAppHomeService {
             SlackHephaestusUiLinks uiLinks) {
         this.workspaceResolver = workspaceResolver;
         this.identityResolver = identityResolver;
-        this.preferencesQuery = preferencesQuery;
         this.participantConsentRepository = participantConsentRepository;
         this.monitoredChannelRepository = monitoredChannelRepository;
         this.mentorReadinessQuery = mentorReadinessQuery;
@@ -98,24 +92,16 @@ public class SlackAppHomeService {
                         workspaceId, slackUserId);
         long activeChannels =
                 monitoredChannelRepository.countByWorkspaceIdAndConsentState(workspaceId, ConsentState.ACTIVE);
-        boolean participating = developer
-                .map(User::getId)
-                .flatMap(preferencesQuery::preferencesForUserId)
-                .map(AccountPreferencesQuery.PreferencesView::participateInResearch)
-                .orElse(false);
 
-        blocks.addAll(overviewBlocks(
-                new HomeOverviewState(mentorReady, login, channelMessagesAllowed, activeChannels, participating)));
+        blocks.addAll(
+                overviewBlocks(new HomeOverviewState(mentorReady, login, channelMessagesAllowed, activeChannels)));
         blocks.addAll(openHephaestusBlocks(uiLinks.userSettingsUrl()));
         blocks.add(divider());
         blocks.addAll(channelMessageBlocks(channelMessagesAllowed));
         blocks.add(divider());
 
         if (login.isEmpty()) {
-            // Message-use control is Slack-id based and already shown. Research needs an account identity.
             blocks.addAll(onboardingService.linkCtaBlocks());
-        } else {
-            blocks.addAll(researchToggleBlocks(participating));
         }
 
         return View.builder().type("home").blocks(blocks).build();
@@ -134,9 +120,6 @@ public class SlackAppHomeService {
                 state.login().map(value -> "Linked as `" + value + "`").orElse("No active linked workspace member");
         String activeChannelText =
                 state.activeChannels() == 1 ? "1 active channel" : state.activeChannels() + " active channels";
-        String researchState = state.login().isEmpty()
-                ? "Account access required"
-                : state.participating() ? "Included" : "Not included";
         return List.of(
                 section(s -> s.text(markdownText(leadText(state.mentorReady(), state.login())))),
                 section(s -> s.fields(List.of(
@@ -148,11 +131,9 @@ public class SlackAppHomeService {
                         markdownText("*Channel context*\n"
                                 + stateIcon(state.channelMessagesAllowed() && state.activeChannels() > 0)
                                 + " "
-                                + (state.channelMessagesAllowed() ? "Allowed, " + activeChannelText : "Not allowed")),
-                        markdownText(
-                                "*Research use*\n" + stateIcon(state.login().isPresent() && state.participating())
-                                        + " "
-                                        + researchState)))),
+                                + (state.channelMessagesAllowed()
+                                        ? "Allowed, " + activeChannelText
+                                        : "Not allowed"))))),
                 section(s -> s.text(markdownText(
                         "*Context and privacy.* Hephaestus can use your linked project work and new messages "
                                 + "you send in monitored channels. It does not read channel history from before the "
@@ -160,11 +141,7 @@ public class SlackAppHomeService {
     }
 
     record HomeOverviewState(
-            boolean mentorReady,
-            Optional<String> login,
-            boolean channelMessagesAllowed,
-            long activeChannels,
-            boolean participating) {}
+            boolean mentorReady, Optional<String> login, boolean channelMessagesAllowed, long activeChannels) {}
 
     private static List<LayoutBlock> openHephaestusBlocks(String url) {
         if (url == null || url.isBlank()) {
@@ -173,7 +150,7 @@ public class SlackAppHomeService {
         return List.of(
                 section(s ->
                         s.text(markdownText("*Account settings.* Use this Home tab for Slack message-use controls. "
-                                + "Open Hephaestus to manage sign-in, account linking, and web preferences."))),
+                                + "Open Hephaestus to manage sign-in, account linking, and research participation."))),
                 actions(a -> a.elements(asElements(button(b -> b.text(plainText("Open account settings"))
                         .url(url)
                         .actionId(ACTION_OPEN_HEPHAESTUS)
@@ -228,23 +205,5 @@ public class SlackAppHomeService {
                 .confirm(plainText("Allow future messages"))
                 .deny(plainText("Cancel"))
                 .build();
-    }
-
-    List<LayoutBlock> researchToggleBlocks(boolean participating) {
-        String status = participating
-                ? "*Research use is included.* De-identified practice data may be used to improve Hephaestus research."
-                : "*Research use is not included.* Your practice data is not used for research.";
-        return List.of(
-                section(s -> s.text(markdownText(status))),
-                actions(a -> a.elements(asElements(
-                        participating
-                                ? button(b -> b.text(plainText("Stop research use"))
-                                        .actionId(ACTION_RESEARCH_OPT_OUT)
-                                        .value("false")
-                                        .style("danger"))
-                                : button(b -> b.text(plainText("Allow research use"))
-                                        .actionId(ACTION_RESEARCH_OPT_IN)
-                                        .value("true")
-                                        .style("primary"))))));
     }
 }

@@ -22,7 +22,13 @@ export const DATA_COLLECTION = {
 	frameContextLines: 5,
 } satisfies Required<Omit<DataCollection, "queryParams">>;
 
-export function stripRequestUserAndBreadcrumbs(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
+const isUnsubscribePage = () => /^\/unsubscribe\/?$/u.test(window.location.pathname);
+
+export function stripRequestUserAndBreadcrumbs(event: Sentry.ErrorEvent): Sentry.ErrorEvent | null {
+	// Bearer-link confirmation stays untracked even if monitoring was enabled on a previous page.
+	if (isUnsubscribePage()) {
+		return null;
+	}
 	delete event.user;
 	delete event.request;
 	delete event.breadcrumbs;
@@ -39,7 +45,7 @@ export function initSentry() {
 	if (initialized) {
 		return;
 	}
-	if (!sentryDsn || !hasErrorMonitoringConsent()) {
+	if (!sentryDsn || !hasErrorMonitoringConsent() || isUnsubscribePage()) {
 		return;
 	}
 	Sentry.init({

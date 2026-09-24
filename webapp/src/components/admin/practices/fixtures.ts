@@ -104,6 +104,7 @@ export const mockPractice: Practice = {
 	whatGoodLooksLike:
 		"A PR opens with a one-paragraph summary, links the issue, and lists the exact steps a reviewer ran to verify it.",
 	artifactKind: "scm.pull_request",
+	deliveryBehavior: { summaryOnly: false },
 	automatedReviewPolicy: mockPullRequestPolicy,
 	automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 	displayOrder: 0,
@@ -127,6 +128,7 @@ export const mockPractices: Practice[] = [
 		criteria:
 			"## Code Review Thoroughness\n\nEvaluate depth and quality of code reviews. Reviewers should engage with logic and design, not just style.",
 		artifactKind: "scm.pull_request",
+		deliveryBehavior: { summaryOnly: false },
 		automatedReviewPolicy: mockPullRequestPolicy,
 		automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 		displayOrder: 0,
@@ -147,6 +149,7 @@ export const mockPractices: Practice[] = [
 		criteria:
 			"## Test Coverage\n\nChecks that new code includes appropriate test coverage. Critical paths and edge cases should be tested.",
 		artifactKind: "scm.pull_request",
+		deliveryBehavior: { summaryOnly: false },
 		automatedReviewPolicy: mockPullRequestPolicy,
 		automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 		displayOrder: 0,
@@ -166,6 +169,7 @@ export const mockUnassignedPractice: Practice = {
 	criteria:
 		"## Error State Handling\n\nEvaluates whether the code properly handles and surfaces errors to the user instead of silently swallowing them.",
 	artifactKind: "scm.pull_request",
+	deliveryBehavior: { summaryOnly: false },
 	automatedReviewPolicy: mockPullRequestPolicy,
 	automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 	displayOrder: 0,
@@ -182,6 +186,7 @@ export const mockPracticeLongText: Practice = {
 	criteria:
 		"## Very Long Criteria\n\nThis is a multi-paragraph criteria block designed to test the line-clamp behavior on the card preview.\n\n### Section 1\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.\n\n### Section 2\nUt enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.\n\n### Section 3\nDuis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.",
 	artifactKind: "scm.pull_request",
+	deliveryBehavior: { summaryOnly: false },
 	automatedReviewPolicy: mockPullRequestPolicy,
 	automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 	displayOrder: 0,
@@ -214,6 +219,7 @@ export const mockPracticeWithAllTriggers: Practice = {
 		"export default { findings };",
 	].join("\n"),
 	artifactKind: "scm.pull_request",
+	deliveryBehavior: { summaryOnly: false },
 	automatedReviewPolicy: mockPullRequestPolicy,
 	automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
 	displayOrder: 0,

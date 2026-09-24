@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -70,6 +71,29 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
         verifyNoInteractions(authorization);
     }
 
+    @Test
+    void shouldNotAuthorizeSupersededIssueFeedbackForNewDelivery() {
+        EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
+        Observation historical = historicalObservation();
+
+        assertThat(new ObservationVisibilityPolicy(authorization)
+                        .permitsForNewDelivery(7L, List.of(historical), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .isEmpty();
+        verifyNoInteractions(authorization);
+    }
+
+    @Test
+    void shouldShowAuthorizedHistoricalObservationsInReviewRunHistory() {
+        EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
+        Observation historical = historicalObservation();
+        when(authorization.permitsAll(7L, List.of(historical), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .thenReturn(Set.of(historical.getId()));
+
+        assertThat(new ObservationVisibilityPolicy(authorization)
+                        .permitsHistory(7L, List.of(historical), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .containsExactly(historical.getId());
+    }
+
     private static Observation observation(String evaluatedFingerprint, String currentFingerprint) {
         PracticeRevision evaluated = mock(PracticeRevision.class);
         PracticeRevision current = mock(PracticeRevision.class);
@@ -82,6 +106,13 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
                 .agentJobId(UUID.randomUUID())
                 .practice(practice)
                 .practiceRevision(evaluated)
+                .build();
+    }
+
+    private static Observation historicalObservation() {
+        return Observation.builder()
+                .id(UUID.randomUUID())
+                .supersededAt(Instant.now())
                 .build();
     }
 }

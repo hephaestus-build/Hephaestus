@@ -13,7 +13,7 @@ import org.jspecify.annotations.Nullable;
  * @param memoryBytes maximum memory in bytes (container + tmpfs combined)
  * @param cpus CPU limit (e.g. 2.0 = two full cores)
  * @param pidsLimit maximum number of processes inside the container
- * @param maxRuntime hard deadline after which the container is killed
+ * @param maxRuntime work deadline; the batch runner can use the result-upload grace after it
  */
 public record ResourceLimits(
         long memoryBytes,

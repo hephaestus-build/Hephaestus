@@ -46,8 +46,8 @@ export function ResearchParticipationSection({
 							Participate in academic research
 						</FieldLabel>
 						<FieldDescription>
-							When enabled, {organization} may use your Hephaestus usage and feedback interactions
-							for the academic research described in the{" "}
+							When enabled, {organization} may use your Hephaestus usage and practice feedback
+							interactions for the academic research described in the{" "}
 							<a
 								href="/privacy"
 								target="_blank"

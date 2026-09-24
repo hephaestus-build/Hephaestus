@@ -1,7 +1,7 @@
 /** Missing captures return null, distinct from captured records with no items. */
 
 import type { ChangeCommit } from "./change.ts";
-import { readContextJson } from "./context.ts";
+import { contextFile, readContextJson } from "./context.ts";
 import { isJsonObject, text } from "./practice-contract.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "./types.ts";
 
@@ -327,9 +327,13 @@ export function mergeFacts(metadata: PullRequestMetadata): MergeFacts {
 }
 
 /** The merge as one record row: who merged, when, with the provider's own decision fields beside it. */
-export function mergeRow(metadata: PullRequestMetadata, merge: MergeFacts): Hint {
+export function mergeRow(
+	metadata: PullRequestMetadata,
+	merge: MergeFacts,
+	contextReference: string,
+): Hint {
 	return {
-		file: "inputs/context/metadata.json",
+		file: contextFile(contextReference, "metadata.json"),
 		line: 0,
 		pattern: "merge",
 		context: merge.merged
@@ -350,9 +354,13 @@ export function mergeRow(metadata: PullRequestMetadata, merge: MergeFacts): Hint
 }
 
 /** One record row per submitted decision, oldest first, placed against the merge and the author. */
-export function decisionRows(decisions: readonly ReviewDecision[], merge: MergeFacts): Hint[] {
+export function decisionRows(
+	decisions: readonly ReviewDecision[],
+	merge: MergeFacts,
+	contextReference: string,
+): Hint[] {
 	return decisions.map((d) => ({
-		file: "inputs/context/review_threads.json",
+		file: contextFile(contextReference, "review_threads.json"),
 		line: 0,
 		pattern: "review decision",
 		context: `${d.author ?? "?"}: ${d.state}${d.body === undefined ? "" : ` — ${excerpt(d.body, 120)}`}`,
@@ -383,11 +391,15 @@ export function lastDecisionPerReviewer(decisions: readonly ReviewDecision[]): R
  * the merge when the record dates the resolution: a thread closed after the fact was open at the
  * merge, which is what the practice asks.
  */
-export function unresolvedThreadRows(threads: readonly ReviewThread[], mergedAt?: string): Hint[] {
+export function unresolvedThreadRows(
+	threads: readonly ReviewThread[],
+	contextReference: string,
+	mergedAt?: string,
+): Hint[] {
 	const openAtMerge = (t: ReviewThread) =>
 		t.state !== "RESOLVED" || (mergedAt !== undefined && later(t.resolvedAt, mergedAt));
 	return threads.filter(openAtMerge).map((t) => ({
-		file: t.path ?? "inputs/context/review_threads.json",
+		file: t.path ?? contextFile(contextReference, "review_threads.json"),
 		line: t.line ?? 0,
 		pattern: t.state === "RESOLVED" ? "thread resolved after the merge" : "unresolved thread",
 		context: `${t.state}${t.path === undefined ? "" : ` on ${t.path}${t.line === undefined ? "" : `:${t.line}`}`}${t.resolvedAt === undefined ? "" : `, resolved ${t.resolvedAt}`}`,

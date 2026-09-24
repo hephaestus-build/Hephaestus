@@ -49,8 +49,6 @@ public class AccountWebController {
             @Nullable String primaryEmail,
             String appRole,
             String status,
-            boolean impersonating,
-            @Nullable Long impersonatorId,
             // Identity fields the SPA's useAuth() surface needs (sourced from the primary IdentityLink).
             @Nullable String username,
             @Nullable String avatarUrl,
@@ -82,7 +80,6 @@ public class AccountWebController {
     @Operation(summary = "Get the current user", operationId = "getCurrentUser")
     public ResponseEntity<CurrentUserViewDTO> currentUser() {
         Account account = accountService.requireById(CurrentAccount.requireId());
-        Long impersonatorId = CurrentAccount.impersonatorId();
         var identities = accountService.activeIdentities(Objects.requireNonNull(account.getId()));
         // Primary identity = most recently used active link (login source for the SPA).
         IdentityLink primary = identities.stream().findFirst().orElse(null);
@@ -99,8 +96,6 @@ public class AccountWebController {
                 account.getPrimaryEmail(),
                 account.getAppRole().name(),
                 account.getStatus().name(),
-                impersonatorId != null,
-                impersonatorId,
                 primary != null ? primary.getUsernameAtSignup() : account.getDisplayName(),
                 primary != null ? primary.getAvatarUrl() : null,
                 primary != null ? primary.getProfileUrl() : null,
@@ -129,7 +124,7 @@ public class AccountWebController {
         @ApiResponse(responseCode = "409", description = "Cannot unlink the account's only remaining sign-in method"),
     })
     public ResponseEntity<Void> unlinkIdentity(@PathVariable Long id) {
-        accountService.unlinkIdentity(CurrentAccount.requireId(), id, CurrentAccount.impersonatorId());
+        accountService.unlinkIdentity(CurrentAccount.requireId(), id);
         return ResponseEntity.noContent().build();
     }
 
@@ -142,7 +137,7 @@ public class AccountWebController {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "X-Confirm-Delete header must equal your account id to confirm deletion");
         }
-        accountService.softDelete(accountId, CurrentAccount.impersonatorId());
+        accountService.softDelete(accountId);
         return ResponseEntity.noContent().build();
     }
 

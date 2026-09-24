@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -28,7 +29,7 @@ class LedgerSignalRecorderTest extends BaseUnitTest {
 
     @Test
     void shouldCountDurablyDeferredOccasionsSeparatelyFromDuplicates() {
-        when(repository.insertDeferred(eq(KEY), any(), any(), any())).thenReturn(1, 0);
+        when(repository.insertDeferred(eq(KEY), any(), any(), any(), isNull())).thenReturn(1, 0);
 
         assertThat(recorder.defer(KEY, Instant.now())).isTrue();
         assertThat(recorder.defer(KEY, Instant.now())).isFalse();
@@ -45,6 +46,14 @@ class LedgerSignalRecorderTest extends BaseUnitTest {
                         .counter()
                         .count())
                 .isOne();
+    }
+
+    @Test
+    void shouldKeepTheIssueActorSeparateFromTheReviewRequester() {
+        recorder.defer(KEY, Instant.now(), 99L);
+
+        verify(repository).insertDeferred(eq(KEY), any(), any(), any(), eq(99L));
+        verify(repository, never()).insertOrClaimUndecided(any(), any(), any(), anyString(), any(), any());
     }
 
     @Test

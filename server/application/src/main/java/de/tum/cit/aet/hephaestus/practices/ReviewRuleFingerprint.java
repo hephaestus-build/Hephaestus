@@ -12,7 +12,7 @@ import org.jspecify.annotations.Nullable;
  */
 public final class ReviewRuleFingerprint {
 
-    private static final String SCHEME = "v3:";
+    private static final String SCHEME = "v4:";
 
     private ReviewRuleFingerprint() {}
 
@@ -34,13 +34,14 @@ public final class ReviewRuleFingerprint {
                         .hex());
     }
 
-    /** Actor attribution is excluded because it does not change evidence or evaluation rules. */
+    /** The subject determines whose work is judged, so it is part of the rule. */
     static void addBindings(CanonicalDigest digest, List<PracticeBinding> bindings) {
         digest.addInt(bindings.size());
         for (PracticeBinding binding : bindings) {
             digest.addInt(binding.signals().size());
             binding.signals().forEach(signal -> digest.add(signal.value()));
             digest.add(String.valueOf(binding.onDrafts()));
+            digest.add(binding.subject().name());
             digest.addInt(binding.needs().size());
             binding.needs()
                     .forEach(need -> digest.add(need.sourceKind().value())

@@ -45,6 +45,8 @@ Compose maps `POSTGRES_PASSWORD` to `DATABASE_PASSWORD` and owns the runtime-rol
 | `hephaestus.agent.image.reference` | `HEPHAESTUS_AGENT_IMAGE_REFERENCE` |
 | `hephaestus.sandbox.docker.container-runtime` | `SANDBOX_DOCKER_CONTAINER_RUNTIME` |
 | `hephaestus.sentry.dsn` | `SENTRY_DSN` |
+| `spring.mail.host` | `SPRING_MAIL_HOST` |
+| `hephaestus.email.from` | `HEPHAESTUS_EMAIL_FROM` |
 
 ## Runtime roles
 
@@ -98,7 +100,7 @@ satisfy sign-in readiness. Worker and webhook roles do not load login providers.
 
 ### Recent sign-in for sensitive actions
 
-Changing an account's role, forcing an account out of all its sessions, starting an impersonation,
+Changing an account's role, forcing an account out of all its sessions, viewing as a user,
 changing a login provider, registering an LLM connection, and linking an identity all require a
 sign-in from the last few minutes. `HEPHAESTUS_AUTH_STEP_UP_MAX_AGE` sets that window; it defaults to
 `5m` and must be a positive duration shorter than the absolute session lifetime, or the gate can
@@ -109,7 +111,7 @@ multi-factor authentication: an identity provider that still holds a session may
 asking for anything, so enforce MFA at the provider. A refused action is not replayed once access is
 confirmed — review it and submit it again.
 
-### Session and impersonation deadlines
+### Session deadlines
 
 The access cookie lasts `24h` by default (`HEPHAESTUS_AUTH_ACCESS_TTL`). The browser renews it
 approximately hourly while active, before expiry, or when returning to a tab whose renewal is due.
@@ -119,12 +121,10 @@ Secure, host-only, SameSite=Lax cookies in production; they are never stored in 
 
 A session ends at `hephaestus.auth.session-max-lifetime` (default `7d`, configurable with
 `HEPHAESTUS_AUTH_SESSION_MAX_LIFETIME`) no matter how active it is;
-renewing an access token rolls within that deadline and never past it. An impersonation ends at
-`hephaestus.auth.impersonation-max-lifetime` (default `1h`), or sooner — when its time-box is reached
-or when the account being impersonated is promoted to instance admin, both of which return the
-operator to their own session and record an `IMPERSONATION_END` entry in the audit viewer; neither
-requires anyone to sign in again. The operator's own session ending, or the operator no longer being
-an instance admin, ends the impersonation outright instead — there is no session left to return to.
+renewing an access token rolls within that deadline and never past it. Reads through a
+[user view](/contributor/instance-admin#read-only-user-views) are budgeted per instance
+administrator: `HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY` per
+`HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_PERIOD`, 120 per minute by default.
 
 ### Choosing session limits
 
@@ -230,3 +230,14 @@ Sentry is optional. When configured, `hephaestus.sentry.dsn` must use HTTPS. The
 Frontend error rates include only browsers whose users accepted error monitoring. Treat them as
 consent-biased diagnostics, not as an availability metric or a basis for comparing deployments.
 Server-side error rates do not have this selection bias.
+
+## Email
+
+Email is optional. The fact `notification.email` is `NOT_CONFIGURED` until `spring.mail.host` names a
+relay, and `ACTION_REQUIRED` when a relay is set but `hephaestus.email.from` is blank: with no sender
+address every notification is withheld and recorded as `NOT_CONFIGURED`. This optional readiness
+fact never prevents startup. Personal settings do not expose SMTP setup warnings; administrators
+configure the capability in instance settings. See the supported no-email behavior in the setup guide.
+Configuration and verification are in [Production setup → Email](./production-setup#email); activating
+email requires the processing review in the
+[processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).
