@@ -150,6 +150,7 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
         channel.setChannelName("general");
         channel.setConsentState(ConsentState.ACTIVE);
         channel.setLastHistorySyncedTs(SlackTs.ofInstant(syncedAt));
+        channel.setLastSyncError("History sync failed (SlackApiException)");
 
         when(monitoredChannelRepository.findByWorkspaceIdAndConsentStateNot(WS, ConsentState.REVOKED))
                 .thenReturn(List.of(channel));
@@ -167,7 +168,7 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
         assertThat(resource.lastSyncedAt()).isEqualTo(syncedAt);
         assertThat(resource.itemCount()).isEqualTo(42L);
         assertThat(resource.upstreamCount()).isNull();
-        assertThat(resource.lastError()).isNull();
+        assertThat(resource.lastError()).isEqualTo("History sync failed (SlackApiException)");
     }
 
     @Test

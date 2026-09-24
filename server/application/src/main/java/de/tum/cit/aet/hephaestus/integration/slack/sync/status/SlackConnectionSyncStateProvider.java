@@ -108,7 +108,7 @@ public class SlackConnectionSyncStateProvider implements ConnectionSyncStateProv
                 // (no expander); its watermark is the channel's own, not a stand-in for a missing per-class one.
                 List.of(new SyncResourceCount(SyncResourceCount.KEY_MESSAGES, "Messages", itemCount, lastSyncedAt)),
                 null,
-                null,
+                channel.getLastSyncError(),
                 null,
                 null);
     }

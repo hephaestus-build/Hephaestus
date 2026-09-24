@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -18,8 +19,12 @@ import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerPropert
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJob;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobConflictException;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobHandle;
@@ -28,9 +33,13 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.label.GitLabLabelSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.subissue.GitLabSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.List;
@@ -269,6 +278,102 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
 
         verify(deletionSweepService, never()).sweepScope(any(), any());
+    }
+
+    @Test
+    void shouldRecordIncompleteProjectSyncAndClearAfterRecovery() {
+        var holder = mockHolder();
+        var issueSync = org.mockito.Mockito.mock(GitLabIssueSyncService.class);
+        when(holder.getIssueSyncService()).thenReturn(issueSync);
+        Repository project = prepareProject(holder);
+        when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any()))
+                .thenReturn(SyncResult.abortedError(1), SyncResult.completed(2));
+
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Issue sync: ABORTED_ERROR");
+
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, null);
+    }
+
+    @Test
+    void shouldNotClearAnIssueErrorWhenTheLaterSubIssuePhaseSucceeds() {
+        var holder = mockHolder();
+        var issueSync = org.mockito.Mockito.mock(GitLabIssueSyncService.class);
+        var subIssueSync = org.mockito.Mockito.mock(GitLabSubIssueSyncService.class);
+        when(holder.getIssueSyncService()).thenReturn(issueSync);
+        when(holder.getSubIssueSyncService()).thenReturn(subIssueSync);
+        Repository project = prepareProject(holder);
+        when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any())).thenReturn(SyncResult.abortedError(1));
+        when(subIssueSync.syncSubIssuesForRepository(WORKSPACE_ID, project)).thenReturn(SyncResult.completed(1));
+
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Issue sync: ABORTED_ERROR");
+    }
+
+    @Test
+    void shouldClearAProjectErrorAfterTheFailedPostPhaseRecovers() {
+        var holder = mockHolder();
+        var subIssueSync = org.mockito.Mockito.mock(GitLabSubIssueSyncService.class);
+        when(holder.getSubIssueSyncService()).thenReturn(subIssueSync);
+        Repository project = prepareProject(holder);
+        when(subIssueSync.syncSubIssuesForRepository(WORKSPACE_ID, project))
+                .thenReturn(SyncResult.abortedError(0), SyncResult.completed(1));
+
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Sub-issue sync: ABORTED_ERROR");
+
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, null);
+    }
+
+    @Test
+    void shouldNotMarkAProjectFreshWhenNoSyncServiceRuns() {
+        prepareProject(mockHolder());
+
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(repositoryRepository, never()).updateLastSyncAt(eq(99L), any());
+        verify(syncTargetProvider, never()).updateSyncError(eq(77L), eq(SyncPass.RECENT), isNull());
+    }
+
+    @Test
+    void shouldNotAdvanceLabelWatermarkWhenProjectLabelSyncAborts() {
+        var holder = mockHolder();
+        var labelSync = org.mockito.Mockito.mock(GitLabLabelSyncService.class);
+        when(holder.getLabelSyncService()).thenReturn(labelSync);
+        Repository project = prepareProject(holder);
+        when(labelSync.syncLabelsForRepository(WORKSPACE_ID, project)).thenReturn(SyncResult.abortedError(0));
+
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Label sync: ABORTED_ERROR");
+        verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.LABELS), any());
+    }
+
+    private Repository prepareProject(GitLabSyncServiceHolder holder) {
+        when(syncServiceHolderProvider.getIfAvailable()).thenReturn(holder);
+        Repository project = new Repository();
+        project.setId(99L);
+        project.setNameWithOwner("course/project");
+        when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID)).thenReturn(List.of(project));
+        var target = SyncTargetTestBuilder.syncTarget()
+                .id(77L)
+                .scopeId(WORKSPACE_ID)
+                .repositoryNameWithOwner("course/project")
+                .build();
+        session = new SyncSession(
+                WORKSPACE_ID,
+                "my-workspace",
+                "My Workspace",
+                "my-group",
+                null,
+                "https://gitlab.com",
+                List.of(target),
+                session.syncContext());
+        when(syncTargetProvider.getSyncSessions(IntegrationKind.GITLAB)).thenReturn(List.of(session));
+        return project;
     }
 
     /** A holder whose every sub-service is null, so all sync phases no-op and the run reaches the sweep. */
