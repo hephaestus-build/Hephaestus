@@ -33,7 +33,7 @@ void test("runner executes a staged practice and writes its public artifact cont
 		sample: script({
 			hints: [
 				{
-					file: "inputs/context/general_comments.json",
+					file: "context/general_comments.json",
 					line: 0,
 					pattern: "conversation ask",
 					context: "Please add the confetti",
@@ -70,7 +70,7 @@ void test("runner executes a staged practice and writes its public artifact cont
 	// A record hint is a row of facts, shown with every flag — a false one is a fact too.
 	assert.match(
 		summary,
-		/\*\*Record facts:\*\*\n- `inputs\/context\/general_comments\.json` — conversation ask: `Please add the confetti` \[by=jennifer, authorReplied=false, threadResolved=true\]/u,
+		/\*\*Record facts:\*\*\n- `context\/general_comments\.json` — conversation ask: `Please add the confetti` \[by=jennifer, authorReplied=false, threadResolved=true\]/u,
 	);
 	assert.ok(await readFile(path.join(output, ".complete"), "utf8"));
 });
@@ -91,7 +91,7 @@ void test("a practice that scanned the diff and found nothing says what it scann
 /** A long row of the given kind, so a handful of practices overrun the budget. */
 function row(i: number, inDiff: boolean) {
 	return {
-		file: inDiff ? `src/file${i}.ts` : "inputs/context/comments.json",
+		file: inDiff ? `src/file${i}.ts` : "context/comments.json",
 		line: i,
 		pattern: inDiff ? "candidate" : "reviewer comment",
 		context: "x".repeat(150),

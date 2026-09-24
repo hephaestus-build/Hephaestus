@@ -16,6 +16,23 @@ metadata under `inputs/`, then validates returned results. The container derives
 statistics and precompute hints under `work/`. Mount isolation is defined under
 [Path conventions](#path-conventions).
 
+The initializer reads the gateway's advertised archive size and downloads the tar to a temporary file
+under `/workspace`. It checks the byte count before extraction. A dropped or short transfer is retried
+from byte zero; an archive above the advertised size is refused. The gateway serves the same staged
+tar file for each retry while the attempt is active.
+No optional area or repository is advertised yet, so the gateway refuses a workspace query.
+
+For result upload, the runner sends `Content-Digest: sha-256=:<base64>:` over the complete tar.
+The gateway checks it against the received bytes before it keeps the first complete result. Both
+the first success and a repeat `409` return the first result's strong `ETag`; the runner accepts
+either only when the tag matches its archive. Other `409` responses are failures, not acknowledgements.
+An authenticated upload sent to a worker that does not own the running attempt receives `409`
+without an `ETag`. The batch runtime URL contains the job ID; a token for another job cannot
+produce this ownership response for that URL.
+The runner stops its child at the work deadline, then retries the complete result archive with
+bounded exponential delay until the ten-minute upload deadline. The attempt token expires at that
+upload deadline. A terminal upload failure has exit code `43`; it is not a successful review.
+
 ```text
 /workspace/
 ├── inputs/                          # READ-ONLY (the /workspace volume is mounted read-only, not a path guard).
@@ -224,6 +241,8 @@ ownership or prevent symlink traversal.
 A declared location does not guarantee content exists there. For example, a review without a
 repository has no repository tree, and feedback composition runs only when its request is present.
 The runner and precompute resolve input locations from these fields, not from the layout shown above.
+Precompute receives the relative `contextRoot` for record citations as well as its absolute path
+for file reads, so a relocated job folder does not leave stale citation paths.
 Scratch and output locations remain fixed by this ABI.
 
 ## Output archive validation
@@ -254,11 +273,13 @@ worker filesystem.
 | 2    | Fatal runner error — an unhandled rejection or uncaught exception. Debug and usage files are persisted first |
 | 3    | Watchdog hard-kill (budget + grace exceeded); writes `out/watchdog-killed.json` first |
 | 42   | Task-envelope contract drift: malformed envelope, unsupported version or kind, or invalid paths |
+| 43   | Result archive upload did not complete before the upload deadline or was refused |
 | 75   | The review finished, but the call admitting its observations never reached the server |
 | 76   | No practice was reached, and every model call the run made went unanswered |
+| 124  | The work deadline stopped the runner child; result upload was still attempted |
 
 `137` is a container SIGKILL from the runtime, not a runner code. The server treats `0` as success,
-`42` as drift, and `75` and `76` as attempts to repeat; every other non-zero code is a generic failure.
+`42` as drift, `124` as a timeout, and `75` and `76` as attempts to repeat; every other non-zero code is a generic failure.
 
 The gateway address is fixed for an attempt. If it becomes unreachable, runner retries cannot follow
 a relocated worker. Exit `75` requeues the job with a new token and backoff unless an admission already

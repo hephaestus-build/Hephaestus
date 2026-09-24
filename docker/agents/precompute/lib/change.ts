@@ -62,7 +62,7 @@ function changedFiles(value: unknown): ChangedFile[] {
 
 /**
  * The commits from base to head, oldest first, as the server staged them in the context
- * (`inputs/context/commits.json`); empty when the record was not captured.
+ * (`commits.json` in the task-declared context); empty when the record was not captured.
  */
 export async function readCommits(contextDir: string | undefined): Promise<ChangeCommit[]> {
 	const source = await readChangeText(contextDir, "commits.json");

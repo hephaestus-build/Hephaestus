@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { parseArgs } from "node:util";
 
 const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
@@ -119,6 +121,11 @@ try {
 		source,
 		"CREATE TABLE restore_qualification(id bigint PRIMARY KEY, value text NOT NULL); INSERT INTO restore_qualification VALUES (1, 'preserved')",
 	);
+	sql(source, "UPDATE instance_settings SET silent_mode_engaged = FALSE WHERE id = 1");
+	sql(
+		source,
+		"INSERT INTO workspace(account_login, account_type, display_name, is_publicly_viewable, slug, status, mentor_enabled) VALUES ('restore-probe', 'USER', 'Restore probe', FALSE, 'restore-probe', 'ACTIVE', TRUE)",
+	);
 	sql(source, "CALL partman.run_maintenance_proc()");
 	const sourceFingerprint = fingerprint(source);
 	const partmanConfig = sql(
@@ -206,6 +213,24 @@ try {
 		) !== "t"
 	) {
 		throw new Error("auth_event partitions were not restored");
+	}
+	const lockdown = readFileSync(
+		path.join(import.meta.dirname, "..", "docker", "self-host", "restore-clone-lockdown.sql"),
+	);
+	run(
+		"docker",
+		["exec", "-i", target, "psql", "-U", "root", "-d", "hephaestus", "-v", "ON_ERROR_STOP=1"],
+		lockdown,
+	);
+	if (sql(target, "SELECT silent_mode_engaged FROM instance_settings WHERE id = 1") !== "t") {
+		throw new Error("restored instance did not engage Silent Mode");
+	}
+	const restoredPolicy = sql(
+		target,
+		"SELECT practice_delivery_status || ':' || practice_rollout_revision || ':' || mentor_enabled || ':' || practice_review_auto_trigger_enabled || ':' || practice_review_manual_trigger_enabled FROM workspace WHERE slug = 'restore-probe'",
+	);
+	if (restoredPolicy !== "PAUSED:1:false:false:false") {
+		throw new Error(`restored workspace did not pause all feedback paths: ${restoredPolicy}`);
 	}
 } finally {
 	for (const container of [source, target]) {

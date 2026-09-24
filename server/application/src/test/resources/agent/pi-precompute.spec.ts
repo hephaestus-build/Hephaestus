@@ -61,8 +61,8 @@ if (scenarioRoot !== undefined && scenarioRoot !== "") {
 				path.join(root, scripts, "example.ts"),
 				`import { readFileSync } from "node:fs";
 import { parseDiff } from "../lib/diff-parser.ts";
-export default (repo, diff, metadata, context, change) => ({
- hints: [], directions: [], metrics: {
+export default (repo, diff, metadata, context, change, reference) => ({
+ hints: [{ file: reference + "/metadata.json", line: 0, pattern: "record", context: "task path", inDiff: false, flags: {} }], directions: [], metrics: {
   files: diff.size,
   addedLine: Number(diff.get("a").addedLines.get(1) === "line"),
   parsed: parseDiff(readFileSync(change + "/diff.patch", "utf8")).size,
@@ -130,6 +130,16 @@ export default (repo, diff, metadata, context, change) => ({
 			);
 			assert.ok(typeof result === "object" && result !== null);
 			assert.equal(Reflect.get(result, "status"), "ok");
+			assert.deepEqual(Reflect.get(result, "hints"), [
+				{
+					file: `${context}/metadata.json`,
+					line: 0,
+					pattern: "record",
+					context: "task path",
+					inDiff: false,
+					flags: {},
+				},
+			]);
 			assert.deepEqual(Reflect.get(result, "metrics"), {
 				files: 1,
 				addedLine: 1,
