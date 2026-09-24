@@ -114,6 +114,11 @@ public class ArtifactSignal {
     @Column(name = "requested_by_user_id")
     private Long requestedByUserId;
 
+    /** The person who changed the issue; unlike requestedByUserId, this is not a review requester. */
+    @Nullable
+    @Column(name = "actor_user_id")
+    private Long actorUserId;
+
     /**
      * When the {@link #state} last actually changed — and therefore how long this signal has been
      * waiting in the one it is in. Only a change of state moves it, which is what the lapse deadline

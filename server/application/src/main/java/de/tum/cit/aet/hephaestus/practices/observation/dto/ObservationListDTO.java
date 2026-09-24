@@ -78,7 +78,7 @@ public record ObservationListDTO(
                 observation.getPresence(),
                 observation.getAssessment(),
                 observation.getSeverity(),
-                ReviewClaimCurrentness.of(observation.getPracticeRevision(), practice),
+                ReviewClaimCurrentness.of(observation.getPracticeRevision(), practice, observation.getSupersededAt()),
                 observation.getOrigin(),
                 observation.getObservedAt());
     }

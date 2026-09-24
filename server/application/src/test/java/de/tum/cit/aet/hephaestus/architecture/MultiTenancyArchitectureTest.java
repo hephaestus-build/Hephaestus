@@ -117,6 +117,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
             for (Method method : ObservationRepository.class.getDeclaredMethods()) {
                 Query query = method.getAnnotation(Query.class);
                 if (query == null) continue;
+                if (method.isAnnotationPresent(WorkspaceAgnostic.class)) continue;
                 assertThat(method.getParameters())
                         .as("%s must bind workspaceId", method.getName())
                         .anyMatch(parameter -> {

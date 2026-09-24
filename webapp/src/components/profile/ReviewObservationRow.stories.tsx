@@ -14,6 +14,7 @@ const strength = {
 	assessmentStatus: "ASSESSED",
 	presence: "PRESENT",
 	assessment: "GOOD",
+	claimCurrentness: "CURRENT",
 } satisfies PracticeGroupReviewObservation;
 
 const observations: PracticeGroupReviewObservation[] = [
@@ -26,6 +27,7 @@ const observations: PracticeGroupReviewObservation[] = [
 		assessmentStatus: "ASSESSED",
 		presence: "ABSENT",
 		assessment: "BAD",
+		claimCurrentness: "CURRENT",
 	},
 	{
 		observationId: "00000000-0000-0000-0000-000000000301",
@@ -36,6 +38,7 @@ const observations: PracticeGroupReviewObservation[] = [
 		presence: "PRESENT",
 		assessment: "BAD",
 		severity: "MAJOR",
+		claimCurrentness: "CURRENT",
 	},
 	{
 		observationId: "00000000-0000-0000-0000-000000000351",
@@ -46,6 +49,7 @@ const observations: PracticeGroupReviewObservation[] = [
 		presence: "ABSENT",
 		assessment: "GOOD",
 		severity: "CRITICAL",
+		claimCurrentness: "CURRENT",
 	},
 	{
 		observationId: "00000000-0000-0000-0000-000000000401",
@@ -54,6 +58,7 @@ const observations: PracticeGroupReviewObservation[] = [
 		title: "This change performs no network request",
 		assessmentStatus: "NOT_APPLICABLE",
 		presence: undefined,
+		claimCurrentness: "CURRENT",
 	},
 	{
 		observationId: "00000000-0000-0000-0000-000000000501",
@@ -62,6 +67,7 @@ const observations: PracticeGroupReviewObservation[] = [
 		title: "The evidence does not settle whether the page is current",
 		assessmentStatus: "UNDETERMINED",
 		presence: undefined,
+		claimCurrentness: "CURRENT",
 	},
 ];
 
@@ -83,6 +89,13 @@ type Story = StoryObj<typeof meta>;
 
 export const StrengthShown: Story = {
 	args: { observation: strength, onRespond: fn() },
+};
+
+export const Historical: Story = {
+	args: { observation: { ...strength, claimCurrentness: "STALE" }, onRespond: fn() },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Historical observation")).toBeVisible();
+	},
 };
 export const AssessmentMatrix: Story = {
 	args: StrengthShown.args,

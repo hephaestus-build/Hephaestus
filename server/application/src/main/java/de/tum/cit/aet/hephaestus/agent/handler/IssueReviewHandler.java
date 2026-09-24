@@ -125,6 +125,12 @@ public class IssueReviewHandler implements JobTypeHandler {
         metadata.put("title", r.title());
         metadata.put("body", r.body());
         metadata.put("state", r.state());
+        if (r.actorUserId() != null) {
+            metadata.put("actor_user_id", r.actorUserId());
+        }
+        if (r.reviewSnapshotId() != null) {
+            metadata.put("review_snapshot_id", r.reviewSnapshotId().toString());
+        }
         if (r.url() != null) {
             metadata.put("issue_url", r.url());
         }

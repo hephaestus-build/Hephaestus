@@ -34,11 +34,17 @@ public class ObservationVisibilityPolicy {
         return permitted(workspaceId, observations, purpose, true);
     }
 
+    /** Read-only history keeps superseded rows, but still enforces evidence authorization. */
+    public Set<UUID> permitsHistory(long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose) {
+        return evidenceAuthorization.permitsAll(workspaceId, observations, purpose);
+    }
+
     private Set<UUID> permitted(
             long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose, boolean newDelivery) {
         List<Observation> current = new ArrayList<>(observations.size());
         for (Observation observation : observations) {
-            if (ReviewClaimCurrentness.of(observation.getPracticeRevision(), observation.getPractice())
+            if (ReviewClaimCurrentness.of(
+                            observation.getPracticeRevision(), observation.getPractice(), observation.getSupersededAt())
                     == ReviewClaimCurrentness.CURRENT) {
                 current.add(observation);
             }

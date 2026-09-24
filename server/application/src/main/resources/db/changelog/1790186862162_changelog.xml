@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790186862162-1" author="hephaestus">
+        <addColumn tableName="artifact_signal">
+            <column name="actor_user_id" type="BIGINT"/>
+        </addColumn>
+        <addForeignKeyConstraint baseTableName="artifact_signal" baseColumnNames="actor_user_id"
+                                 referencedTableName="user" referencedColumnNames="id"
+                                 constraintName="sfk_artifact_signal_actor_user" onDelete="SET NULL"/>
+        <addColumn tableName="issue">
+            <column name="review_snapshot_id" type="UUID"/>
+            <column name="review_snapshot_digest" type="VARCHAR(128)"/>
+        </addColumn>
+        <addColumn tableName="observation">
+            <column name="superseded_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </addColumn>
+        <sql>UPDATE issue SET review_snapshot_id = gen_random_uuid() WHERE issue_type = 'ISSUE'</sql>
+        <sql>UPDATE observation SET superseded_at = CURRENT_TIMESTAMP WHERE artifact_kind = 'scm.issue'</sql>
+    </changeSet>
+    <changeSet id="1790186862162-2" author="hephaestus">
+        <comment>Allow a changed issue snapshot to stop feedback at delivery.</comment>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE feedback DROP CONSTRAINT chk_feedback_suppression_reason;
+            ALTER TABLE feedback ADD CONSTRAINT chk_feedback_suppression_reason
+                CHECK (suppression_reason IS NULL OR suppression_reason IN (
+                    'VOLUME_CAPPED', 'COMPOSER_DEDUPED', 'COMPOSER_WITHHELD', 'REACTED_DISPUTED',
+                    'REACTED_NOT_APPLICABLE', 'CONVERSATION_EXPIRED', 'ARTIFACT_GONE', 'ARTIFACT_CLOSED',
+                    'ISSUE_SNAPSHOT_CHANGED', 'ARTIFACT_MERGED', 'ARTIFACT_DRAFT', 'RECIPIENT_OPTED_OUT',
+                    'EMPTY_AFTER_SANITIZE', 'INSTANCE_SILENCED', 'PRACTICE_REQUIRES_APPROVAL', 'BACKFILL_QUIET',
+                    'WORKSPACE_DISABLED', 'APPROVAL_STALE', 'APPROVAL_NO_LONGER_ELIGIBLE',
+                    'WORKSPACE_DELIVERY_PAUSED', 'STALE_ROLLOUT_REVISION', 'OUTSIDE_CURRENT_COVERAGE'));
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

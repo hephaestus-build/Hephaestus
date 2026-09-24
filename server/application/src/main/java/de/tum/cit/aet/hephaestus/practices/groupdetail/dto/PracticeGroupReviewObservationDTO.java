@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.groupdetail.dto;
 
+import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackUsefulness;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
@@ -30,7 +31,8 @@ public record PracticeGroupReviewObservationDTO(
         Assessment assessment,
 
         @Nullable Severity severity,
-        @Nullable String recurrenceKey) {
+        @Nullable String recurrenceKey,
+        @NonNull ReviewClaimCurrentness claimCurrentness) {
     @com.fasterxml.jackson.annotation.JsonProperty("outcome")
     @Schema(
             description = "Derived from presence and contextual behavior assessment; null unless assessed",
@@ -58,6 +60,8 @@ public record PracticeGroupReviewObservationDTO(
                 observation.getPresence(),
                 observation.getAssessment(),
                 observation.getSeverity(),
-                observation.getRecurrenceKey());
+                observation.getRecurrenceKey(),
+                ReviewClaimCurrentness.of(
+                        observation.getPracticeRevision(), observation.getPractice(), observation.getSupersededAt()));
     }
 }

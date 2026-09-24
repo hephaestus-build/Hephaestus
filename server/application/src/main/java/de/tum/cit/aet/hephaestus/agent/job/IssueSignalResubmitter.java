@@ -80,7 +80,8 @@ public class IssueSignalResubmitter implements PendingSignalResubmitter {
             return;
         }
 
-        switch (practiceReviewDetectionGate.evaluateIssue(issue, key.signalName(), TriggerMode.AUTO)) {
+        switch (practiceReviewDetectionGate.evaluateIssue(
+                issue, key.workspaceId(), key.signalName(), TriggerMode.AUTO)) {
             case GateDecision.Skip skip -> {
                 log.debug(
                         "Pending signal now skipped by practice gate: issueId={}, reason={}",
@@ -105,7 +106,9 @@ public class IssueSignalResubmitter implements PendingSignalResubmitter {
                                 key.signalName(),
                                 // See PullRequestSignalResubmitter: the ledger row's discovery mode is the only thing
                                 // that still remembers which population this review was meant to measure.
-                                SignalOrigins.observationOriginOf(signal.getDiscoveredVia())),
+                                SignalOrigins.observationOriginOf(signal.getDiscoveredVia()),
+                                signal.getActorUserId(),
+                                issue.getReviewSnapshotId()),
                         key,
                         detect);
         }

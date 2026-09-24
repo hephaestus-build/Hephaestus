@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -343,8 +344,13 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
         var event = new ScmDomainEvent.IssueCreated(data, webhookContext());
         var jobs = mock(AgentJobService.class);
         var detectionGate = mock(PracticeReviewDetectionGate.class);
-        var listener =
-                new IssueAgentJobEventListener(jobs, issueRepository, detectionGate, workspaceResolver, signalRecorder);
+        var listener = new IssueAgentJobEventListener(
+                jobs,
+                issueRepository,
+                detectionGate,
+                workspaceResolver,
+                signalRecorder,
+                java.util.Objects.requireNonNull(transactionTemplate.getTransactionManager()));
         tombstoneIssue();
 
         transactionTemplate.executeWithoutResult(status -> listener.onIssueCreated(event));
@@ -358,7 +364,7 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
         upsertIssue();
         assertThat(gateLoadedIssue().getDeletedAt()).isNull();
         var decision = new GateDecision.Detect(workspace, List.of(), 1, TriggerMode.AUTO);
-        when(detectionGate.evaluateIssue(any(), eq(ScmSignals.ISSUE_OPENED), eq(TriggerMode.AUTO)))
+        when(detectionGate.evaluateIssue(any(), anyLong(), eq(ScmSignals.ISSUE_OPENED), eq(TriggerMode.AUTO)))
                 .thenReturn(decision);
         resubmit(new IssueSignalResubmitter(jobs, issueRepository, detectionGate, signalRecorder), held);
 

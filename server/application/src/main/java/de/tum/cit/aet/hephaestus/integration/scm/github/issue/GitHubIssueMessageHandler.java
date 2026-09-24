@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContext
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.subissue.GitHubSubIssueSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,11 +31,13 @@ public class GitHubIssueMessageHandler extends AbstractIntegrationMessageHandler
     private final ProcessingContextFactory contextFactory;
     private final GitHubIssueProcessor issueProcessor;
     private final GitHubSubIssueSyncService subIssueSyncService;
+    private final GitHubUserProcessor userProcessor;
 
     public GitHubIssueMessageHandler(
             ProcessingContextFactory contextFactory,
             GitHubIssueProcessor issueProcessor,
             GitHubSubIssueSyncService subIssueSyncService,
+            GitHubUserProcessor userProcessor,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -46,6 +49,7 @@ public class GitHubIssueMessageHandler extends AbstractIntegrationMessageHandler
         this.contextFactory = contextFactory;
         this.issueProcessor = issueProcessor;
         this.subIssueSyncService = subIssueSyncService;
+        this.userProcessor = userProcessor;
     }
 
     @Override
@@ -68,7 +72,12 @@ public class GitHubIssueMessageHandler extends AbstractIntegrationMessageHandler
             return;
         }
 
-        routeToProcessor(event, issueDto, context);
+        Long actorId = null;
+        if (event.sender() != null && context.providerId() != null) {
+            var actor = userProcessor.findOrCreate(event.sender(), context.providerId());
+            actorId = actor != null ? actor.getId() : null;
+        }
+        routeToProcessor(event, issueDto, context.withActorUserId(actorId));
     }
 
     private void recountParent(@Nullable Issue issue) {
