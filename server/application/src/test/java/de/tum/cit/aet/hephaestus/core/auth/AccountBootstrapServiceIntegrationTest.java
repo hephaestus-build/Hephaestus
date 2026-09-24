@@ -39,7 +39,12 @@ class AccountBootstrapServiceIntegrationTest extends BaseIntegrationTest {
         databaseTestUtils.cleanDatabase();
         AuthProperties properties = mock(AuthProperties.class);
         when(properties.bootstrapToken()).thenReturn(TOKEN);
-        bootstrapService = new AccountBootstrapService(accountRepository, authEventLogger, properties);
+        bootstrapService = new AccountBootstrapService(
+                accountRepository,
+                authEventLogger,
+                properties,
+                java.time.Clock.systemUTC(),
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 
     private Account persistUser(String name) {

@@ -688,7 +688,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             mentorThread.setSlackUserId("U1");
             mentorSlackThreadRepository.save(mentorThread);
 
-            slackParticipantConsentRepository.upsert(workspaceId, "U1", true, true, "SLACK_APP_HOME");
+            slackParticipantConsentRepository.optOutOfIngestion(workspaceId, "U1", "SLACK_APP_HOME");
         }
 
         @Test

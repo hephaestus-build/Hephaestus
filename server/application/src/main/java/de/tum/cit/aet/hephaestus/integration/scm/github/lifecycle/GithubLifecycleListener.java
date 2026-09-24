@@ -5,8 +5,10 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
@@ -98,6 +100,7 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
     private final OrganizationService organizationService;
     private final ConnectionService connectionService;
     private final WorkspaceLifecycleService workspaceLifecycleService;
+    private final IntegrationAttentionService attention;
 
     public GithubLifecycleListener(
             NatsConnectionProperties natsProperties,
@@ -112,7 +115,8 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
             GitHubAppTokenService gitHubAppTokenService,
             OrganizationService organizationService,
             ConnectionService connectionService,
-            WorkspaceLifecycleService workspaceLifecycleService) {
+            WorkspaceLifecycleService workspaceLifecycleService,
+            IntegrationAttentionService attention) {
         this.natsProperties = natsProperties;
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
@@ -126,6 +130,7 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
         this.organizationService = organizationService;
         this.connectionService = connectionService;
         this.workspaceLifecycleService = workspaceLifecycleService;
+        this.attention = attention;
     }
 
     @Override
@@ -555,6 +560,16 @@ public class GithubLifecycleListener implements IntegrationLifecycleListener {
             workspace = workspaceRepository.save(workspace);
         }
 
+        if (status == Workspace.WorkspaceStatus.SUSPENDED || status == Workspace.WorkspaceStatus.ACTIVE) {
+            long workspaceId = workspace.getId();
+            connectionService
+                    .findActive(workspaceId, IntegrationKind.GITHUB)
+                    .ifPresent(connection -> attention.report(
+                            connection.getId(),
+                            workspaceId,
+                            IntegrationAttentionChangedEvent.Problem.PROVIDER_SUSPENDED,
+                            status == Workspace.WorkspaceStatus.ACTIVE));
+        }
         return Optional.of(workspace);
     }
 

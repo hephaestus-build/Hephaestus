@@ -1,0 +1,10 @@
+[(#{email.account-security-changed.subject})]
+
+[(${change})]
+
+If you did not expect this change, review your sign-in identities and sessions, and contact your instance operator.
+
+Review account settings: [(${webappUrl})]/settings
+
+--
+[(#{email.footer(${webappUrl})})]

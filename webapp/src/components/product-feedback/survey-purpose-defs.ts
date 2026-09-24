@@ -3,6 +3,8 @@ import { FlaskConical, Wrench } from "lucide-react";
 import type { Survey, SurveyInvitation } from "@/api/types.gen";
 import type { StatusDefs } from "@/components/common/status-def";
 
+import { READERS } from "./feedback-copy";
+
 /** "a study run by X" — a research survey always names the organisation it was published for. */
 export function studyOf(survey: Pick<SurveyInvitation, "researchOrganization">): string {
 	return `a study run by ${survey.researchOrganization}`;
@@ -18,7 +20,7 @@ export const SURVEY_PURPOSE_DEFS: StatusDefs<Survey["purpose"]> = {
 		label: "Product",
 		icon: Wrench,
 		badgeVariant: "secondary",
-		description: "Read by the Hephaestus team to improve the product.",
+		description: `Read by ${READERS} to improve the product.`,
 	},
 	RESEARCH: {
 		label: "Research",

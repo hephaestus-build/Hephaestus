@@ -9,7 +9,6 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -58,16 +57,6 @@ public class AccountController {
         var user = resolveOrProvisionCurrentUser(auth);
         if (user.isEmpty()) {
             return ResponseEntity.notFound().build();
-        }
-        JwtAuthenticationToken token = resolveAuthentication(auth);
-        if (token == null) {
-            // No authenticated principal: only allow non-consent-revoking updates.
-            UserPreferences preferences = preferencesService.getOrCreatePreferences(user.get());
-            boolean switchingOffResearch =
-                    Boolean.FALSE.equals(userSettings.participateInResearch()) && preferences.isParticipateInResearch();
-            if (switchingOffResearch) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-            }
         }
         return ResponseEntity.ok(preferencesService.updateUserSettings(user.get(), userSettings));
     }

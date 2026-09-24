@@ -1399,6 +1399,28 @@ export type DeveloperPracticeSummary = {
   totalObservations: number;
 };
 
+export type EmailTestRequest = {
+  /**
+   * the mailbox to send the test email to; blank means the caller's own verified address
+   */
+  to?: string;
+};
+
+export type EmailTestResponse = {
+  /**
+   * the accepted <code>Message-ID</code>, only for <code>SENT</code>; search for it in the relay's log
+   */
+  messageId?: string;
+  /**
+   * what became of the test email; <code>SENT</code> is the only success
+   */
+  outcome: 'SENT' | 'EXPIRED' | 'NOT_CONFIGURED' | 'SILENT_MODE' | 'NO_RECIPIENT' | 'UNSUBSCRIBED' | 'INVALID_ADDRESS' | 'REJECTED' | 'UNAVAILABLE' | 'RATE_LIMITED';
+  /**
+   * the address it went to, or <code>null</code> when there was no recipient to resolve
+   */
+  to?: string;
+};
+
 /**
  * A verified quote and its exact source location
  */
@@ -2276,6 +2298,23 @@ export type LoginProviderView = {
   seededFromEnv?: boolean;
   type: string;
   updatedAt: Date;
+};
+
+export type NotificationPreferences = {
+  /**
+   * This instance has an email transport and sender configured
+   */
+  deliveryConfigured: boolean;
+  /**
+   * The account has an active verified email address
+   */
+  emailAvailable: boolean;
+  etag: string;
+  productFeedback: boolean;
+  productSurveys: boolean;
+  researchSurveys: boolean;
+  surveySummaries: boolean;
+  workspaceAlerts: boolean;
 };
 
 /**
@@ -4904,6 +4943,22 @@ export type SurveyEdit = {
   title: string;
 };
 
+export type SurveyEmailInvitationRequest = {
+  sendReminder?: boolean;
+};
+
+/**
+ * Counts refer to email requests, not in-app invitations or responses. Accepted means SMTP relay acceptance.
+ */
+export type SurveyEmailInvitationSummary = {
+  accepted: number;
+  alreadyRequested: number;
+  deliveryConfigured: boolean;
+  eligible: number;
+  queued: number;
+  remaining: number;
+};
+
 export type SurveyInvitation = {
   description: string;
   endsAt?: Date;
@@ -5446,6 +5501,14 @@ export type UpdateLoginProviderRequest = {
   scopes?: string;
 };
 
+export type UpdateNotificationPreferences = {
+  productFeedback: boolean;
+  productSurveys: boolean;
+  researchSurveys: boolean;
+  surveySummaries: boolean;
+  workspaceAlerts: boolean;
+};
+
 /**
  * Transition a mirrored Outline collection to a target mirror state (pause / resume)
  */
@@ -5877,10 +5940,6 @@ export type UserPracticeSummary = {
  * User preferences and settings
  */
 export type UserSettings = {
-  /**
-   * Whether the user consents to participate in research studies
-   */
-  participateInResearch: boolean;
   /**
    * Whether new practice-feedback comments may be delivered on issues, pull requests, and merge requests authored by the user, together with related Slack reminders
    */
@@ -7050,6 +7109,31 @@ export type AdminGetConfigurationReadinessResponses = {
 
 export type AdminGetConfigurationReadinessResponse = AdminGetConfigurationReadinessResponses[keyof AdminGetConfigurationReadinessResponses];
 
+export type AdminSendTestEmailData = {
+  body?: EmailTestRequest;
+  path?: never;
+  query?: never;
+  url: '/admin/email/test';
+};
+
+export type AdminSendTestEmailErrors = {
+  /**
+   * Malformed request or invalid recipient address
+   */
+  400: ProblemDetail;
+};
+
+export type AdminSendTestEmailError = AdminSendTestEmailErrors[keyof AdminSendTestEmailErrors];
+
+export type AdminSendTestEmailResponses = {
+  /**
+   * Email delivery outcome
+   */
+  200: EmailTestResponse;
+};
+
+export type AdminSendTestEmailResponse = AdminSendTestEmailResponses[keyof AdminSendTestEmailResponses];
+
 export type AdminListLlmConnectionsData = {
   body?: never;
   path?: never;
@@ -8159,6 +8243,51 @@ export type AdminUpdateProductSurveyResponses = {
 
 export type AdminUpdateProductSurveyResponse = AdminUpdateProductSurveyResponses[keyof AdminUpdateProductSurveyResponses];
 
+export type AdminPreviewSurveyEmailInvitationsData = {
+  body?: never;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}/email-invitations';
+};
+
+export type AdminPreviewSurveyEmailInvitationsResponses = {
+  /**
+   * OK
+   */
+  200: SurveyEmailInvitationSummary;
+};
+
+export type AdminPreviewSurveyEmailInvitationsResponse = AdminPreviewSurveyEmailInvitationsResponses[keyof AdminPreviewSurveyEmailInvitationsResponses];
+
+export type AdminSendSurveyEmailInvitationsData = {
+  body?: SurveyEmailInvitationRequest;
+  path: {
+    surveyId: string;
+  };
+  query?: never;
+  url: '/admin/product-feedback/surveys/{surveyId}/email-invitations';
+};
+
+export type AdminSendSurveyEmailInvitationsErrors = {
+  /**
+   * Email delivery is not configured; no invitations were requested
+   */
+  503: ProblemDetail;
+};
+
+export type AdminSendSurveyEmailInvitationsError = AdminSendSurveyEmailInvitationsErrors[keyof AdminSendSurveyEmailInvitationsErrors];
+
+export type AdminSendSurveyEmailInvitationsResponses = {
+  /**
+   * Invitation request summary
+   */
+  200: SurveyEmailInvitationSummary;
+};
+
+export type AdminSendSurveyEmailInvitationsResponse = AdminSendSurveyEmailInvitationsResponses[keyof AdminSendSurveyEmailInvitationsResponses];
+
 export type AdminListProductSurveyResponsesData = {
   body?: never;
   path: {
@@ -8485,6 +8614,26 @@ export type ListIdentityProvidersResponses = {
 
 export type ListIdentityProvidersResponse = ListIdentityProvidersResponses[keyof ListIdentityProvidersResponses];
 
+export type UnsubscribeEmailData = {
+  body?: {
+    'List-Unsubscribe': string;
+  };
+  path: {
+    token: string;
+  };
+  query?: never;
+  url: '/notifications/unsubscribe/{token}';
+};
+
+export type UnsubscribeEmailResponses = {
+  /**
+   * Subscription disabled, or token no longer applicable
+   */
+  204: void;
+};
+
+export type UnsubscribeEmailResponse = UnsubscribeEmailResponses[keyof UnsubscribeEmailResponses];
+
 export type CallbackGetData = {
   body?: never;
   path: {
@@ -8746,6 +8895,69 @@ export type UnlinkIdentityResponses = {
 };
 
 export type UnlinkIdentityResponse = UnlinkIdentityResponses[keyof UnlinkIdentityResponses];
+
+export type GetNotificationPreferencesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/notification-preferences';
+};
+
+export type GetNotificationPreferencesResponses = {
+  /**
+   * Your current email subscriptions
+   */
+  200: NotificationPreferences;
+};
+
+export type GetNotificationPreferencesResponse = GetNotificationPreferencesResponses[keyof GetNotificationPreferencesResponses];
+
+export type UpdateNotificationPreferencesData = {
+  body: UpdateNotificationPreferences;
+  headers: {
+    /**
+     * Current preferences ETag
+     */
+    'If-Match': string;
+  };
+  path?: never;
+  query?: never;
+  url: '/user/notification-preferences';
+};
+
+export type UpdateNotificationPreferencesErrors = {
+  /**
+   * Invalid preferences or If-Match header
+   */
+  400: ProblemDetail;
+  /**
+   * Enabling this subscription requires instance administration
+   */
+  403: ProblemDetail;
+  /**
+   * Enabling email requires a verified contact on an active account
+   */
+  409: ProblemDetail;
+  /**
+   * The supplied ETag is stale
+   */
+  412: ProblemDetail;
+  /**
+   * If-Match is required
+   */
+  428: ProblemDetail;
+};
+
+export type UpdateNotificationPreferencesError = UpdateNotificationPreferencesErrors[keyof UpdateNotificationPreferencesErrors];
+
+export type UpdateNotificationPreferencesResponses = {
+  /**
+   * Email subscriptions updated
+   */
+  200: NotificationPreferences;
+};
+
+export type UpdateNotificationPreferencesResponse = UpdateNotificationPreferencesResponses[keyof UpdateNotificationPreferencesResponses];
 
 export type RevokeOtherSessionsData = {
   body?: never;

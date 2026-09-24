@@ -145,3 +145,26 @@ await test("every https router sets HSTS itself, not through the edge", () => {
 		}
 	}
 });
+
+await test("capability-link pages suppress referrers before scripts or assets load in every deployment", () => {
+	const html = readFileSync(new URL("../webapp/index.html", import.meta.url), "utf8");
+	const policy = html.indexOf('<meta name="referrer" content="no-referrer" />');
+	assert.ok(
+		policy !== -1 && policy < html.search(/<(?:script|link)\b/u),
+		"static referrer policy must precede assets, not wait for the SPA",
+	);
+	const nginx = readFileSync(
+		new URL("../webapp/docker/security-headers.conf", import.meta.url),
+		"utf8",
+	);
+	assert.match(nginx, /add_header Referrer-Policy "no-referrer" always;/u);
+	for (const file of [
+		"../docker/compose.proxy.yaml",
+		"../docker/self-host/compose.single-host.yaml",
+	]) {
+		assert.match(
+			readFileSync(new URL(file, import.meta.url), "utf8"),
+			/traefik\.http\.middlewares\.security-headers\.headers\.referrerPolicy=no-referrer/u,
+		);
+	}
+});

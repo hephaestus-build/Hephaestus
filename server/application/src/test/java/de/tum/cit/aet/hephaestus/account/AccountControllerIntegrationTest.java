@@ -83,7 +83,7 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
                 .jsonPath("$.practiceFeedbackDeliveryEnabled")
                 .isEqualTo(true)
                 .jsonPath("$.participateInResearch")
-                .isEqualTo(false);
+                .doesNotExist();
 
         var provisionedUser = userRepository.findByLogin(GITLAB_LOGIN).orElseThrow();
         assertThat(provisionedUser.getNativeId()).isEqualTo(GITLAB_NATIVE_ID);

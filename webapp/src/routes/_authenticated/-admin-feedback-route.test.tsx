@@ -63,6 +63,9 @@ describe("instance feedback inbox route", () => {
 
 		await screen.findByText(bugReport.message, undefined, ROUTE_RENDER_WAIT);
 		expect(requested).toContain("OPEN");
+		expect(screen.getByRole("link", { name: "grace@example.org" }).getAttribute("href")).toBe(
+			"mailto:grace@example.org",
+		);
 		expect(screen.queryByText(resolvedNote.message)).toBeNull();
 
 		await user.click(screen.getByRole("button", { name: "Resolved" }));

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -18,6 +19,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Instant;
@@ -53,6 +55,8 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     private LoginProviderRepository loginProviderRepository;
     private GitProviderRegistry gitProviderRegistry;
     private AccountProvisioningService service;
+    private final org.springframework.context.ApplicationEventPublisher events =
+            mock(org.springframework.context.ApplicationEventPublisher.class);
 
     @BeforeEach
     void setUp() {
@@ -71,7 +75,11 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
         lenient().when(gitProviderRegistry.resolveProviderId(any(), any())).thenReturn(PROVIDER_ID);
         lenient().when(gitProviderRegistry.findActorId(anyLong(), any())).thenReturn(Optional.empty());
         lenient().when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        lenient().when(accountJitCreator.create(any(), any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(accountJitCreator.create(any(), any())).thenAnswer(inv -> {
+            Account created = inv.getArgument(0);
+            created.setId(101L);
+            return created;
+        });
         service = new AccountProvisioningService(
                 accountRepository,
                 identityLinkRepository,
@@ -80,7 +88,8 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
                 verifiedEmailResolver,
                 accountJitCreator,
                 adminBootstrapPolicy,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                events);
     }
 
     @Test
@@ -186,6 +195,7 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
                 service.resolveOrProvision("github", "sub-1", principal(), AuthIntentCookie.Intent.login(null, null));
 
         assertThat(result.account().getAppRole()).isEqualTo(Account.AppRole.USER);
+        verify(events, never()).publishEvent(any(AccountSecurityChangedEvent.class));
     }
 
     private static OAuth2User principal() {
@@ -262,9 +272,10 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(linkOn(winner)));
         when(verifiedEmailResolver.resolve(eq("github"), any()))
                 .thenReturn(new VerifiedEmailResolver.ResolvedEmail("u@v.de", true));
-        when(accountJitCreator.create(any(), any()))
-                .thenThrow(new DataIntegrityViolationException(
-                        "duplicate key value violates uq_identity_link_provider_subject_team"));
+        doThrow(new DataIntegrityViolationException(
+                        "duplicate key value violates uq_identity_link_provider_subject_team"))
+                .when(accountJitCreator)
+                .create(any(), any());
 
         var result =
                 service.resolveOrProvision("github", "sub-1", principal(), AuthIntentCookie.Intent.login(null, null));
@@ -280,7 +291,9 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.empty());
         when(verifiedEmailResolver.resolve(eq("github"), any()))
                 .thenReturn(new VerifiedEmailResolver.ResolvedEmail("u@v.de", true));
-        when(accountJitCreator.create(any(), any())).thenThrow(new DataIntegrityViolationException("duplicate key"));
+        doThrow(new DataIntegrityViolationException("duplicate key"))
+                .when(accountJitCreator)
+                .create(any(), any());
 
         assertThatThrownBy(() -> service.resolveOrProvision(
                         "github", "sub-1", principal(), AuthIntentCookie.Intent.login(null, null)))
@@ -353,6 +366,9 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
         verify(identityLinkRepository).save(saved.capture());
         assertThat(saved.getValue().getLinkedVia()).isEqualTo(IdentityLink.LinkedVia.MANUAL_LINK);
         assertThat(saved.getValue().getAccount().getId()).isEqualTo(42L);
+        verify(events)
+                .publishEvent(
+                        new AccountSecurityChangedEvent(42L, AccountSecurityChangedEvent.Kind.IDENTITY_LINKED, NOW));
         verify(accountRepository, never()).save(any()); // link attaches, never JIT-creates
     }
 
@@ -383,6 +399,7 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
         // (the handler would otherwise audit a phantom IDENTITY_LINKED for what is really a login).
         assertThat(result.identityLinked()).isFalse();
         verify(identityLinkRepository).touchLastLogin(any(), any());
+        verify(events, never()).publishEvent(any(AccountSecurityChangedEvent.class));
         verify(identityLinkRepository, never()).save(any());
     }
 

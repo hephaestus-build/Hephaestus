@@ -27,6 +27,11 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Map<String, String> FULL_CONTEXT_ASSIGNMENTS = Map.ofEntries(
             assignment("testconfig.BaseIntegrationTest", "base"),
+            assignment("notification.AccountDeletionEmailIntegrationTest", "email-capture"),
+            assignment("notification.AccountSecurityEmailIntegrationTest", "email-capture"),
+            assignment("productfeedback.ProductFeedbackEmailIntegrationTest", "email-capture"),
+            assignment("productfeedback.SurveyEmailInvitationIntegrationTest", "email-capture"),
+            assignment("notification.email.EmailAdminControllerIntegrationTest", "email-capture"),
             assignment("agent.handler.ObservationAdmissionConcurrencyIntegrationTest", "admission-race"),
             assignment("agent.job.DeferredIssueEventIntegrationTest", "issue-event-transaction"),
             assignment("agent.job.IssueUpdateCoalescerIntegrationTest", "issue-coalescer-transaction"),
@@ -48,6 +53,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Map<String, String> FULL_CONTEXT_JUSTIFICATIONS = Map.ofEntries(
             Map.entry("base", "shared PostgreSQL, HTTP, security, and application acceptance context"),
+            Map.entry(
+                    "email-capture",
+                    "shared configured sender identity and captured SMTP boundary for durable delivery and HTTP authorization"),
             Map.entry(
                     "admission-race",
                     "real proxied observation admission with a held verification and bounded database lock waits"),
@@ -85,6 +93,11 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "testconfig.RealAuthIntegrationTest");
 
     private static final Set<String> PROPERTY_SOURCE_TESTS = names(
+            "notification.AccountDeletionEmailIntegrationTest",
+            "notification.AccountSecurityEmailIntegrationTest",
+            "productfeedback.ProductFeedbackEmailIntegrationTest",
+            "productfeedback.SurveyEmailInvitationIntegrationTest",
+            "notification.email.EmailAdminControllerIntegrationTest",
             "agent.job.IssueUpdateCoalescerIntegrationTest",
             "core.auth.dev.DevLoginIntegrationTest",
             "integration.outline.OutlineFrameworkRegistrationIntegrationTest",

@@ -9,10 +9,14 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
+import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -33,6 +37,8 @@ public class AccountService {
     private final IdentityLinkRepository identityLinkRepository;
     private final IssuedJwtRepository issuedJwtRepository;
     private final AuthEventLogger authEventLogger;
+    private final AuthProperties authProperties;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public AccountService(
@@ -40,11 +46,15 @@ public class AccountService {
             IdentityLinkRepository identityLinkRepository,
             IssuedJwtRepository issuedJwtRepository,
             AuthEventLogger authEventLogger,
+            AuthProperties authProperties,
+            ApplicationEventPublisher eventPublisher,
             Clock clock) {
         this.accountRepository = accountRepository;
         this.identityLinkRepository = identityLinkRepository;
         this.issuedJwtRepository = issuedJwtRepository;
         this.authEventLogger = authEventLogger;
+        this.authProperties = authProperties;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
@@ -74,14 +84,19 @@ public class AccountService {
             // must NOT reset deleted_at (restarting the 48h purge clock) or re-emit ACCOUNT_DELETED.
             return;
         }
+        Instant deletedAt = clock.instant();
         account.setStatus(Account.Status.DELETING);
-        account.setDeletedAt(clock.instant());
+        account.setDeletedAt(deletedAt);
         accountRepository.save(account);
-        issuedJwtRepository.revokeAllForAccount(accountId, clock.instant(), IssuedJwt.RevokedReason.ACCOUNT_DELETED);
+        issuedJwtRepository.revokeAllForAccount(accountId, deletedAt, IssuedJwt.RevokedReason.ACCOUNT_DELETED);
         authEventLogger
                 .event(AuthEvent.EventType.ACCOUNT_DELETED, AuthEvent.Result.SUCCESS)
                 .account(accountId)
                 .record();
+        // Same transaction as the status flip: the confirmation email is only owed once the
+        // cooldown really started, and the registry row commits with it.
+        eventPublisher.publishEvent(
+                new AccountDeletionScheduledEvent(accountId, deletedAt.plus(authProperties.deleteCooldown())));
     }
 
     /**
@@ -122,6 +137,8 @@ public class AccountService {
                 .account(accountId)
                 .gitProvider(gitProviderId)
                 .record();
+        eventPublisher.publishEvent(new AccountSecurityChangedEvent(
+                accountId, AccountSecurityChangedEvent.Kind.IDENTITY_UNLINKED, clock.instant()));
     }
 
     public List<Account> adminList(int page, int size) {
@@ -160,6 +177,9 @@ public class AccountService {
                 }
             }
             Account.AppRole previousRole = account.getAppRole();
+            if (previousRole == role) {
+                return account;
+            }
             account.setAppRole(role);
             accountRepository.save(account);
             if (isDemotion) {
@@ -181,6 +201,8 @@ public class AccountService {
                     .actingAccount(actingAccountId)
                     .details("{\"from\":\"" + previousRole.name() + "\",\"to\":\"" + role.name() + "\"}")
                     .record();
+            eventPublisher.publishEvent(new AccountSecurityChangedEvent(
+                    accountId, AccountSecurityChangedEvent.Kind.APP_ROLE_CHANGED, clock.instant()));
         }
         return account;
     }

@@ -94,7 +94,7 @@ function AdminFeedbackInboxPage() {
 			<PageHeader
 				icon={<Inbox />}
 				title="Feedback inbox"
-				description="Ideas, bug reports and feedback members sent to this instance. Nobody is notified; check it regularly."
+				description="Private inbox for ideas, bug reports and feedback. Marking an item resolved does not notify its sender."
 			/>
 
 			<div className="flex flex-wrap items-center justify-between gap-3">

@@ -1,5 +1,9 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
+import static com.tngtech.archunit.core.domain.JavaAccess.Predicates.target;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo;
+import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.name;
+import static com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
@@ -14,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScmCommentReactionSink;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
+import de.tum.cit.aet.hephaestus.notification.email.EmailGateway;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.springframework.graphql.client.GraphQlClientInterceptor;
@@ -21,6 +26,7 @@ import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.graphql.client.RSocketGraphQlClient;
 import org.springframework.graphql.client.WebSocketGraphQlClient;
 import org.springframework.http.HttpMethod;
+import org.springframework.mail.MailSender;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -76,9 +82,32 @@ class OutboundEgressArchitectureTest extends HephaestusArchitectureTest {
                 .beAssignableTo(ScmCommentReactionSink.class)
                 .orShould()
                 .haveFullyQualifiedName(SlackMessageService.class.getName())
-                .because("gateway status is limited to the reviewed SPI and Slack client surfaces");
+                .orShould()
+                .haveFullyQualifiedName(EmailGateway.class.getName())
+                .because("gateway status is limited to the reviewed SPI, Slack and email client surfaces");
 
         rule.check(classes);
+    }
+
+    @Test
+    void shouldKeepSmtpWritesInsideDeclaredGateway() {
+        noClasses()
+                .that()
+                .areNotAnnotatedWith(OutboundEgressGateway.class)
+                .should()
+                .callMethodWhere(target(owner(assignableTo(MailSender.class))).and(target(name("send"))))
+                .because("an SMTP send outside the email gateway would bypass Silent Mode and the delivery record")
+                .check(classes);
+
+        noClasses()
+                .that()
+                .resideOutsideOfPackage("..notification.email..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("org.springframework.mail..", "jakarta.mail..")
+                .because(
+                        "the notification.email package is the only home of the mail API; everything else hands it an EmailMessage")
+                .check(classes);
     }
 
     @Test

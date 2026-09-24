@@ -33,6 +33,18 @@ interface AdminUserPatch {
 export const handlers = [
 	// --- current user -------------------------------------------------------
 	http.get("*/user", () => HttpResponse.json(currentUser)),
+	http.get("*/user/notification-preferences", () =>
+		HttpResponse.json({
+			productFeedback: false,
+			workspaceAlerts: false,
+			surveySummaries: false,
+			productSurveys: false,
+			researchSurveys: false,
+			emailAvailable: true,
+			deliveryConfigured: true,
+			etag: '"0-0-0"',
+		}),
+	),
 	http.get("*/user/consent", () =>
 		HttpResponse.json({
 			completed: true,

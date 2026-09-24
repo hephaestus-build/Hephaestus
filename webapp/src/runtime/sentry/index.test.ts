@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { DATA_COLLECTION, stripRequestUserAndBreadcrumbs } from "./index";
 
@@ -23,7 +23,21 @@ it("strips request, user, and breadcrumb fields", () => {
 		breadcrumbs: [{ category: "navigation", data: { from: "/private" } }],
 	});
 
-	expect(event.request).toBeUndefined();
-	expect(event.user).toBeUndefined();
-	expect(event.breadcrumbs).toBeUndefined();
+	expect(event?.request).toBeUndefined();
+	expect(event?.user).toBeUndefined();
+	expect(event?.breadcrumbs).toBeUndefined();
+});
+
+describe("unsubscribe privacy", () => {
+	afterEach(() => window.history.replaceState(null, "", "/"));
+
+	it.each(["/unsubscribe", "/unsubscribe/"])(
+		"drops the entire report on bearer-link page %s",
+		(path) => {
+			window.history.replaceState(null, "", `${path}?token=private-capability`);
+			expect(
+				stripRequestUserAndBreadcrumbs({ type: undefined, message: "A request failed" }),
+			).toBeNull();
+		},
+	);
 });

@@ -391,7 +391,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
         @Test
         void objectProviderUsageIsLimited() {
             Set<String> knownCycleBreakers = Set.of(
-                    "AccountPreferencesService",
+                    "FairRetryPostProcessor", // A static BeanPostProcessor must not initialize JDBC/serializer beans
+                    // early.
                     "WorkspaceActivationService",
                     "GithubLifecycleListener", // IntegrationNatsConsumer absent under the webhook runtime role
                     // (server.enabled=false) — see ADR 0008
