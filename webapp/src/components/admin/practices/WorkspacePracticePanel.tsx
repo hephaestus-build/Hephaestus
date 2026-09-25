@@ -2,7 +2,6 @@ import { Pencil } from "lucide-react";
 
 import { cn } from "cn";
 import type { Practice, PracticeDefinitionOptions } from "@/api/types.gen";
-import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
 import { CatalogOriginBadge } from "@/components/admin/practices/CatalogOriginBadge";
 import { practiceFormLevel } from "@/components/admin/practices/practice-search";
 import { PracticeDefinitionPreview } from "@/components/admin/practices/PracticeDefinitionPreview";
@@ -14,6 +13,7 @@ import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDraw
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { AUTONOMY_DEFS } from "@/components/practice-vocabulary/autonomy-defs";
 import { AutonomySourceNote } from "@/components/practice-vocabulary/AutonomySourceNote";
+import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
 import { buttonVariants } from "@/components/ui/button";
 import { DrawerBody, DrawerDescription, DrawerFooter, DrawerTitle } from "@/components/ui/drawer";

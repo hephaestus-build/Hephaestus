@@ -14,21 +14,16 @@ function arcs(canvasElement: HTMLElement) {
 	}));
 }
 
+/**
+ * The distribution of a group's practices, drawn as one arc per standing in the registry's
+ * worst-first order. Purely decorative — the same counts appear as text beside it — so it is
+ * `aria-hidden`. It takes the counts the legend beside it reads, and comes in two sizes: large
+ * beside a summary box, small in a table cell. What the stories below pin down is the arc
+ * arithmetic, which has three cases a two-segment example never reaches.
+ */
 const meta = {
 	component: PracticeGroupStandingRing,
-	parameters: {
-		layout: "centered",
-		docs: {
-			description: {
-				component:
-					"The distribution of a group's practices, drawn as one arc per standing in the registry's " +
-					"worst-first order. Purely decorative — the same counts appear as text beside it — so it " +
-					"is `aria-hidden`. It takes the counts the legend beside it reads, and comes in two sizes: " +
-					"large beside a summary box, small in a table cell. What the stories below pin down is " +
-					"the arc arithmetic, which has three cases a two-segment example never reaches.",
-			},
-		},
-	},
+	parameters: { layout: "centered" },
 	tags: ["autodocs"],
 } satisfies Meta<typeof PracticeGroupStandingRing>;
 
@@ -42,9 +37,6 @@ export const SingleSegment: Story = {
 	},
 };
 
-export const TwoSegments: Story = {
-	args: { counts: { DEVELOPING: 1, STRENGTH: 1 } },
-};
 export const AllStandings: Story = {
 	args: {
 		counts: { DEVELOPING: 2, MIXED: 3, STRENGTH: 4, NO_OPPORTUNITY: 2, NOT_OBSERVED: 1 },
@@ -70,14 +62,6 @@ export const NoPractices: Story = {
 	play: async ({ canvasElement }) => {
 		await expect(arcs(canvasElement)).toStrictEqual([{ dasharray: null, dashoffset: null }]);
 		await expect(canvasElement.querySelector("circle")).toHaveAttribute("stroke-width", "1");
-	},
-};
-
-/** The large ring, beside a summary box's counts in the page header and a group's header. */
-export const Large: Story = {
-	args: {
-		counts: { STRENGTH: 7, MIXED: 3, DEVELOPING: 2, NO_OPPORTUNITY: 1, NOT_OBSERVED: 3 },
-		size: "lg",
 	},
 };
 

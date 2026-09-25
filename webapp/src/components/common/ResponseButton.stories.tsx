@@ -32,13 +32,6 @@ const TONE_LABELS: Record<ResponseTone, string> = {
 
 const TONES = ["positive", "negative", "neutral"] as const;
 
-/** The tint a pressed response wears, by tone: the ground that tells the choices apart. */
-const PRESSED_GROUND: Record<ResponseTone, string> = {
-	positive: "aria-pressed:bg-success/10",
-	negative: "aria-pressed:bg-destructive/10",
-	neutral: "aria-pressed:bg-muted",
-};
-
 const groundOf = (button: HTMLElement) => getComputedStyle(button).backgroundColor;
 
 /** The two buttons a tone renders in this story: the one at rest and the pressed one. */
@@ -53,9 +46,8 @@ function restAndPressed(buttons: HTMLElement[]): [HTMLElement, HTMLElement] {
 /**
  * The responses themselves, at rest and pressed. Each tone owns a tint and wears no other, so the
  * agreeing and the disputing choice read as opposites and neither is mistaken for an untouched
- * outline. The grounds are read off the rendered buttons, not just off their class lists: the
- * outline variant paints its own `aria-pressed:bg-muted`, and only the computed colour says whose
- * ground won.
+ * outline. The grounds are read off the rendered buttons: the outline variant paints its own
+ * `aria-pressed:bg-muted`, and only the computed colour says whose ground won.
  */
 export const Responses: Story = {
 	render: () => (
@@ -72,26 +64,29 @@ export const Responses: Story = {
 		</div>
 	),
 	play: async ({ canvas }) => {
-		// The muted ground the outline variant paints when pressed: what a tinted tone must beat.
-		const [, mutedPressed] = restAndPressed(
-			canvas.getAllByRole("button", { name: TONE_LABELS.neutral }),
-		);
+		const pressedGrounds = new Set<string>();
 		for (const tone of TONES) {
 			const [rest, pressed] = restAndPressed(
 				canvas.getAllByRole("button", { name: TONE_LABELS[tone] }),
 			);
 			await expect(rest).toHaveAttribute("aria-pressed", "false");
 			await expect(pressed).toHaveAttribute("aria-pressed", "true");
-			await expect(pressed).toHaveClass(PRESSED_GROUND[tone]);
-			// No tone borrows another's: a pressed "Not helpful" never reads as agreement.
-			for (const other of TONES.filter((candidate) => candidate !== tone)) {
-				await expect(pressed).not.toHaveClass(PRESSED_GROUND[other]);
-			}
-			// Pressed says so on the ground itself, and a tinted tone paints over the muted one.
+			// Pressed says so on the ground itself.
 			await expect(groundOf(pressed)).not.toBe(groundOf(rest));
-			if (tone !== "neutral") {
-				await expect(groundOf(pressed)).not.toBe(groundOf(mutedPressed));
-			}
+			pressedGrounds.add(groundOf(pressed));
 		}
+		// No tone borrows another's, the outline's muted one included: a pressed "Not helpful" never
+		// reads as agreement.
+		await expect(pressedGrounds.size).toBe(TONES.length);
 	},
+};
+
+/**
+ * The same responses in the dark theme, where the outline paints a ground and a border of its own:
+ * each tint restates both there, so a pressed response still reads in its tone and never as the
+ * outline's own pressed muted ground.
+ */
+export const ResponsesDark: Story = {
+	...Responses,
+	globals: { theme: "dark" },
 };

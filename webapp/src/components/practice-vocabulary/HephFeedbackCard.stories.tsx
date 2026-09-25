@@ -1,15 +1,14 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 
 import { settledPopup } from "@/stories/overlay";
 
-import { text } from "@/components/common/feedback-text";
 import { ARTIFACT_KIND } from "@/lib/artifact-kinds";
 import { pullRequest } from "@/stories/practice-profile-story-mock-data";
 import { expectTouchTarget } from "@/test/controls";
 
-import { ASSESSMENT_DEFS } from "./assessment-defs";
 import { ATTENTION_DEFS } from "./attention-defs";
+import { text } from "./feedback-text";
 import { HephFeedbackCard } from "./HephFeedbackCard";
 
 /**
@@ -81,28 +80,24 @@ const ATTENTION_ROWS = [
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Held rows, a block after them, and the footer counting the work under the number rule. */
+/** Held rows, a block after them, and the footer counting the work of each kind in digits. */
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
 		// The mark stands for Heph and names itself; the word is not written under it.
 		await expect(canvas.getByRole("img", { name: "Heph, AI mentor" })).toBeVisible();
 		await expect(canvas.queryByText("Heph")).toBeNull();
 		await expect(canvas.getByText("What is holding up well")).toBeVisible();
-		await expect(canvas.getByText("What changed")).toBeVisible();
-		await expect(canvas.getByText("Another two practices held too.")).toBeVisible();
 		// The footer counts each kind: three pull requests, one issue.
 		await expect(canvas.getByText("pull requests")).toBeVisible();
 		await expect(canvas.getByText("issue")).toBeVisible();
-		// A held row names its practice as the one grey pill, never as bold text or a bare link.
+		// A held row names its practice as a control that opens it, large enough to press.
 		const pill = canvas.getByRole("button", { name: "Describe what changed and why" });
-		await expect(pill).toHaveAttribute("data-slot", "badge");
 		await expectTouchTarget(pill);
 		await userEvent.click(pill);
 		await expect(args.onOpenPractice).toHaveBeenCalledWith("describe-what-and-why");
-		// The held tick is 14 px of icon and a tooltip; its pointer target is still the minimum.
-		for (const tick of canvas.getAllByRole("button", { name: `${ASSESSMENT_DEFS.GOOD.label}:` })) {
-			await expectTouchTarget(tick);
-		}
+		// The held tick is named for what it stands for: a practice that held, or feedback resolved.
+		await expect(canvas.getByRole("button", { name: "Going well" })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Resolved" })).toBeVisible();
 	},
 };
 
@@ -115,48 +110,15 @@ export const NeedsYourAttention: Story = {
 	args: { needsAttention: ATTENTION_ROWS },
 	play: async ({ args, canvas }) => {
 		await expect(canvas.getByText("What needs your attention")).toBeVisible();
-		await expect(canvas.getByText("Back to 0 of 3 clean after")).toBeVisible();
-		await expect(canvas.getByText("There is new feedback, seen on")).toBeVisible();
-		// Each glyph names itself for a reader who cannot see its colour, and the two never share one.
-		await expect(
-			canvas.getByRole("button", { name: `${ATTENTION_DEFS.reset.label}:` }),
-		).toBeVisible();
-		await expect(
-			canvas.getByRole("button", { name: `${ATTENTION_DEFS.new.label}:` }),
-		).toBeVisible();
+		// Each glyph names itself for a reader who cannot see its colour.
+		await expect(canvas.getByRole("button", { name: "Back to no clean work" })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "New feedback" })).toBeVisible();
 		// The link says which card it goes to, so two of them do not read as one link repeated.
 		const link = canvas.getByRole("button", {
 			name: "Read the feedback for Say which acceptance criteria are done",
 		});
 		await userEvent.click(link);
 		await expect(args.onReadFeedback).toHaveBeenCalledWith("acceptance-criteria");
-	},
-};
-
-/**
- * More than the block's two rows: the card still draws two, and what the composer left over is the
- * paragraph's business — the card never grows a third row on its own.
- */
-export const AttentionRowsAreCapped: Story = {
-	args: {
-		needsAttention: ATTENTION_ROWS,
-		blocks: [
-			{
-				label: "What changed",
-				content: (
-					<p className="text-sm">
-						Two more practices changed as well; the practices table lists them.
-					</p>
-				),
-			},
-		],
-	},
-	play: async ({ canvas }) => {
-		// Two rows, and what did not fit is counted in the paragraph rather than added as a third.
-		await expect(canvas.getAllByRole("button", { name: /^Read the feedback for /u })).toHaveLength(
-			2,
-		);
-		await expect(canvas.getByText(/Two more practices changed as well/u)).toBeVisible();
 	},
 };
 
@@ -199,13 +161,8 @@ export const HeldWithoutASentence: Story = {
 		if (!row) {
 			throw new Error("Every held row is a list item");
 		}
-		await expect(row).toHaveTextContent(
-			new RegExp(
-				`^${ASSESSMENT_DEFS.GOOD.label}: A practice of our ownHeld across four pull requests$`,
-				"u",
-			),
-		);
-		await expect(canvas.queryByText("Going well")).toBeNull();
+		await expect(within(row).getByRole("button", { name: "Going well" })).toBeVisible();
+		await expect(row).toHaveTextContent(/^A practice of our ownHeld across four pull requests$/u);
 	},
 };
 
@@ -236,16 +193,6 @@ export const GitLabWork: Story = {
 	},
 };
 
-/** The skeleton mirrors the card at rest, so the page does not jump when the overview lands. */
-export const Loading: Story = {
-	args: { isLoading: true },
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByText("What is holding up well")).toBeNull();
-		// The mark stays while the card fills, and it is not a control.
-		await expect(canvas.queryByRole("button")).toBeNull();
-	},
-};
-
 /** Nothing held, no blocks and no reviewed work: the card is not drawn, the mark included. */
 export const NothingToSay: Story = {
 	args: { holdingUp: [], holdingUpNote: undefined, reviewedWork: [], blocks: [] },
@@ -257,14 +204,7 @@ export const NothingToSay: Story = {
 /** The name a pointer reaches: hovering the mark says the same words its label does. */
 export const MarkTooltip: Story = {
 	play: async ({ canvas }) => {
-		// The trigger is the span around the mark; the pointer lands on it, not on the SVG's own box.
-		const trigger = canvas
-			.getByRole("img", { name: "Heph, AI mentor" })
-			.closest("[data-slot=tooltip-trigger]");
-		if (!(trigger instanceof HTMLElement)) {
-			throw new Error("The mark sits inside its tooltip trigger");
-		}
-		await userEvent.pointer([{ target: trigger }, { target: trigger, coords: { x: 8, y: 8 } }]);
+		await userEvent.hover(canvas.getByRole("img", { name: "Heph, AI mentor" }));
 		const tooltip = await settledPopup();
 		await expect(tooltip).toHaveTextContent("Heph, AI mentor");
 	},

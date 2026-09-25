@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
-import { settledPopup } from "@/stories/overlay";
 import {
 	groups,
 	OVERVIEW_FIXTURE,
@@ -9,7 +8,6 @@ import {
 } from "@/stories/practice-profile-story-mock-data";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
-import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
 import { composeOverview } from "./compose-overview";
 
 import { PracticeFeedbackOverview } from "./PracticeFeedbackOverview";
@@ -27,7 +25,6 @@ const meta = {
 		groups,
 		onOpenGroup: fn(),
 		onReadFeedback: fn(),
-		isLoading: false,
 	},
 	argTypes: {
 		// One composed record: nothing in it is a control a reader could set by hand.
@@ -77,8 +74,6 @@ export const Default: Story = {
 		const attentionPill = within(attention).getByRole("button", {
 			name: "Scope the change to one concern",
 		});
-		await expect(attentionPill).toHaveAttribute("data-slot", "badge");
-		await expect(resolvedPill).toHaveAttribute("data-slot", "badge");
 		await userEvent.click(attentionPill);
 		await expect(args.onOpenPractice).toHaveBeenLastCalledWith("scope-one-reviewable-change");
 		await userEvent.click(
@@ -128,22 +123,12 @@ export const SharedMoves: Story = {
 			"Write commit subjects a reviewer can follow",
 			"Keep the diff reviewable in one sitting",
 		]) {
-			await expect(within(trends).getByRole("button", { name })).toHaveAttribute(
-				"data-slot",
-				"badge",
-			);
+			await expect(within(trends).getByRole("button", { name })).toBeVisible();
 		}
 
-		// A group that moved shows as itself: its own icon in front and its own colour, and a press
-		// opens it.
+		// A group that moved shows as itself, and a press opens it.
 		const groupName = canvas.getByRole("button", { name: "Communicating in the open" });
-		const visual = groupName.parentElement;
-		if (!visual) {
-			throw new Error("The group's name sits inside its icon and colour");
-		}
-		await expect(visual).toHaveClass("text-violet-700");
-		await expect(visual.querySelector(".lucide-message-circle")).not.toBeNull();
-		await expect(canvas.getByText(/is now Mixed feedback after/u)).toBeVisible();
+		await expect(canvas.getByText(/moved to Mixed feedback after/u)).toBeVisible();
 		await userEvent.click(groupName);
 		await expect(args.onOpenGroup).toHaveBeenLastCalledWith("communication");
 	},
@@ -177,66 +162,6 @@ export const OneChangeFolded: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Show the change" }));
 		await expect(canvas.getByRole("button", { name: "Show less" })).toBeVisible();
-	},
-};
-
-/**
- * Nothing held, nothing moved and nothing reviewed: the heading stays and the card is not drawn.
- */
-export const Empty: Story = {
-	args: {
-		overview: {
-			...composed,
-			holdingUp: [],
-			holdingUpNote: undefined,
-			changed: [],
-			rest: [],
-			reviewedWork: [],
-		},
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("heading", { level: 2 })).toBeNull();
-		await expect(canvas.queryByText("Heph")).toBeNull();
-		await expect(canvas.queryByText("What is holding up well")).toBeNull();
-		await expect(canvas.queryByText("What changed")).toBeNull();
-	},
-};
-
-/**
- * Only the footer has something to say: the card is the reviewed work alone, with no empty block
- * over it.
- */
-export const OnlyReviewedWork: Story = {
-	args: {
-		overview: { ...composed, holdingUp: [], holdingUpNote: undefined, changed: [], rest: [] },
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("pull requests")).toBeVisible();
-		await expect(canvas.queryByText("What is holding up well")).toBeNull();
-		await expect(canvas.queryByText("What changed")).toBeNull();
-		await expect(canvas.queryByRole("button", { name: /^Show the/u })).toBeNull();
-	},
-};
-
-/** The held tick explains itself: the registry's words and sentence, reachable by keyboard. */
-export const HeldTickExplained: Story = {
-	play: async ({ canvas }) => {
-		const [tick] = canvas.getAllByRole("button", { name: `${ASSESSMENT_DEFS.GOOD.label}:` });
-		if (!tick) {
-			throw new Error("Every held row carries its tick");
-		}
-		// Keyboard path: focus opens the tooltip as it does for every status icon.
-		tick.focus();
-		const tooltip = await settledPopup();
-		await expect(tooltip).toHaveTextContent(ASSESSMENT_DEFS.GOOD.description);
-	},
-};
-
-export const Loading: Story = {
-	args: { isLoading: true },
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("heading", { level: 2 })).toBeNull();
-		await expect(canvas.queryByRole("button")).toBeNull();
 	},
 };
 

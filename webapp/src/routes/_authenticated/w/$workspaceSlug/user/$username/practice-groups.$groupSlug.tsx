@@ -1,28 +1,23 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Navigate, redirect, useNavigate } from "@tanstack/react-router";
-import { toast } from "sonner";
 import { z } from "zod";
 import {
-	deleteFeedbackResponseMutation,
 	getPracticeGroupTrendOptions,
 	listGroupsOptions,
 	listPracticeGroupReviewRunsInfiniteOptions,
-	listPracticeGroupReviewRunsInfiniteQueryKey,
 	listPracticeGroupStandingsOptions,
 	listPracticeStandingsOptions,
 	listReviewedPracticesOptions,
-	replaceFeedbackResponseMutation,
 } from "@/api/@tanstack/react-query.gen";
+import { combinePanelStates, loadProps, queryLoadState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PracticeGroupDetailPage } from "@/components/profile/PracticeGroupDetailPage";
-import { isEmptyFeedbackResponse, type ReviewRunFeedState } from "@/components/profile/review-runs";
+import { nextReviewRunPage, reviewRunFeedState } from "@/components/profile/review-runs";
+import { useFeedbackResponseWrite } from "@/hooks/use-feedback-response-write";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { contributingPractices } from "@/lib/practice-standing";
-import { problemDetailOf } from "@/lib/problem-detail";
 import { useSearchPatch } from "@/lib/search-params";
-import { hasText } from "@/lib/text";
 import { resolveCurrentUser } from "@/runtime/auth/guard";
-import { loadedPages } from "@/runtime/tanstack-query/spring-page";
 
 const ACTIVITY_PAGE_SIZE = 10;
 
@@ -80,7 +75,6 @@ function PracticeGroupDetail() {
 	const { workspaceSlug, username, groupSlug } = Route.useParams();
 	const { practice: selectedPracticeSlug } = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
-	const queryClient = useQueryClient();
 	const updateSelection = useSearchPatch<{ practice?: string }>();
 
 	const groupsQuery = useQuery({
@@ -111,25 +105,9 @@ function PracticeGroupDetail() {
 	const activityQuery = useInfiniteQuery({
 		...listPracticeGroupReviewRunsInfiniteOptions(reviewRunsRequest),
 		initialPageParam: 0,
-		getNextPageParam: (lastPage) =>
-			lastPage.hasNext === true ? (lastPage.page ?? 0) + 1 : undefined,
+		getNextPageParam: nextReviewRunPage,
 	});
-	const invalidateReviewRuns = async () =>
-		queryClient.invalidateQueries({
-			queryKey: listPracticeGroupReviewRunsInfiniteQueryKey({ path: { workspaceSlug, groupSlug } }),
-		});
-	const replaceResponseMutation = useMutation({
-		...replaceFeedbackResponseMutation(),
-		onSuccess: invalidateReviewRuns,
-		onError: (error) =>
-			toast.error(problemDetailOf(error, "Could not save your feedback response")),
-	});
-	const deleteResponseMutation = useMutation({
-		...deleteFeedbackResponseMutation(),
-		onSuccess: invalidateReviewRuns,
-		onError: (error) =>
-			toast.error(problemDetailOf(error, "Could not withdraw your feedback response")),
-	});
+	const { respond, pendingResponses } = useFeedbackResponseWrite(workspaceSlug, () => groupSlug);
 	const group = groupsQuery.data?.find((candidate) => candidate.slug === groupSlug);
 	const standing = statusesQuery.data?.find((candidate) => candidate.groupSlug === groupSlug);
 	const practices = practicesQuery.data
@@ -140,30 +118,6 @@ function PracticeGroupDetail() {
 				trendQuery.data,
 			)
 		: undefined;
-	const activityFailed = activityQuery.error != null;
-	let reviewRunFeed: ReviewRunFeedState;
-	if (activityQuery.isPending) {
-		reviewRunFeed = { status: "loading" };
-	} else if (activityFailed) {
-		reviewRunFeed = {
-			status: "error",
-			error: activityQuery.error,
-			onRetry: () => {
-				void activityQuery.refetch();
-			},
-		};
-	} else {
-		reviewRunFeed = {
-			status: "ready",
-			runs: loadedPages(activityQuery.data).flatMap((page) => page.content),
-			hasMore: activityQuery.hasNextPage,
-			isLoadingMore: activityQuery.isFetchingNextPage,
-			onLoadMore: () => {
-				void activityQuery.fetchNextPage();
-			},
-		};
-	}
-
 	return (
 		<PracticeGroupDetailPage
 			group={group}
@@ -174,58 +128,17 @@ function PracticeGroupDetail() {
 			onSelectPractice={(practiceSlug) => {
 				updateSelection({ practice: practiceSlug });
 			}}
-			feed={reviewRunFeed}
+			feed={reviewRunFeedState(activityQuery)}
 			skeletonRows={ACTIVITY_PAGE_SIZE}
-			onRespond={(observation, response) => {
-				const feedbackId = observation.feedbackResponse?.feedbackId;
-				if (!hasText(feedbackId)) {
-					return;
-				}
-				if (isEmptyFeedbackResponse(response)) {
-					deleteResponseMutation.mutate({ path: { workspaceSlug, feedbackId } });
-					return;
-				}
-				replaceResponseMutation.mutate({
-					path: { workspaceSlug, feedbackId },
-					body: response,
-				});
-			}}
-			pendingFeedbackId={
-				[replaceResponseMutation, deleteResponseMutation].find((mutation) => mutation.isPending)
-					?.variables.path.feedbackId
-			}
-			isLoading={
-				groupsQuery.isPending ||
-				statusesQuery.isPending ||
-				practicesQuery.isPending ||
-				standingsQuery.isPending ||
-				trendQuery.isPending
-			}
-			error={
-				groupsQuery.error ??
-				statusesQuery.error ??
-				practicesQuery.error ??
-				standingsQuery.error ??
-				trendQuery.error ??
-				undefined
-			}
-			onRetry={() => {
-				if (groupsQuery.isError) {
-					void groupsQuery.refetch();
-				}
-				if (statusesQuery.isError) {
-					void statusesQuery.refetch();
-				}
-				if (practicesQuery.isError) {
-					void practicesQuery.refetch();
-				}
-				if (standingsQuery.isError) {
-					void standingsQuery.refetch();
-				}
-				if (trendQuery.isError) {
-					void trendQuery.refetch();
-				}
-			}}
+			onRespond={respond}
+			pendingResponses={pendingResponses}
+			{...loadProps(
+				combinePanelStates(
+					[groupsQuery, statusesQuery, practicesQuery, standingsQuery, trendQuery].map(
+						queryLoadState,
+					),
+				),
+			)}
 			onBack={() => {
 				void navigate({
 					to: "/w/$workspaceSlug/user/$username",

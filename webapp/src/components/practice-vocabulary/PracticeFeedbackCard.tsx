@@ -1,16 +1,10 @@
+import { Meter } from "@base-ui/react/meter";
 import { ArrowRightIcon, CheckIcon, ChevronRightIcon, ClockIcon, PackageIcon } from "lucide-react";
 import { type ComponentType, type Ref, useId } from "react";
 
 import { cn } from "cn";
 import type { ReviewedWorkRef } from "@/api/types.gen";
-import {
-	count,
-	countedWork,
-	type FeedbackTextSegment,
-	linkWork,
-} from "@/components/common/feedback-text";
-import { FeedbackText } from "@/components/common/FeedbackText";
-import { FOCUS_RING, HIT_AREA_24 } from "@/components/common/focus";
+import { FOCUS_RING } from "@/components/common/focus";
 import { InlineLink } from "@/components/common/InlineLink";
 import { ResponseButton, toneOf } from "@/components/common/ResponseButton";
 import {
@@ -21,23 +15,26 @@ import {
 import { statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
-import { type KnownWorkProvider, reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
+import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { pillClasses } from "@/components/practice-vocabulary/group-visuals";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { asDate, formatDay, formatDayTime, formatShortDay } from "@/lib/dates";
+import { formatDay, formatDayTime, formatShortDay } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
 import { FEEDBACK_STATE_DEFS, type FeedbackState, isOpenFeedback } from "./feedback-state-defs";
+import { type FeedbackTextSegment, linkWork } from "./feedback-text";
 import { FEEDBACK_USEFULNESS_DEFS, type FeedbackUsefulness } from "./feedback-usefulness-defs";
+import { FeedbackText } from "./FeedbackText";
 import { GroupName } from "./GroupName";
 import {
 	OBSERVATION_OUTCOME_OF_WORK,
 	OBSERVATION_OUTCOME_PRESENTATION,
 	type ReviewedWorkKind,
 } from "./observation-outcome";
+import { countedStripWork, type StripPiece, stripPieces } from "./practice-feedback-card-strip";
 import { PracticePill } from "./PracticePill";
-import { StatusTooltip } from "./StatusTooltip";
+import { StatusIcon } from "./StatusTooltip";
 
 /** Why a piece of feedback was not helpful; the wire's dispute carries the comment beside it. */
 type NotHelpfulReason = "not-accurate" | "not-useful" | "already-doing";
@@ -52,24 +49,14 @@ const NOT_HELPFUL_REASONS: ResponseReason<NotHelpfulReason>[] = [
 export type FeedbackComment = ResponseComment<NotHelpfulReason>;
 
 /**
- * The strip is a window on the newest reviews of this developer's work, at most this many, the
- * evidence and the clean work alike: a glance at the pattern, not a log of every place it was
- * seen. The label counts the distinct work on show, never more.
- */
-const STRIP_WORK_LIMIT = 5;
-
-/**
  * One piece of reviewed work in the card's strip — the evidence behind the feedback — with what
  * the review saw on it.
  */
 export interface ReviewedWorkOutcome {
 	/** The work by number — "!425" — linked to its page when the provider has one. */
 	ref: ReviewedWorkRef;
-	/**
-	 * When the work was reviewed, as an ISO date-time; the strip orders by it and shows it as the
-	 * short day, "28 Aug".
-	 */
-	date: string;
+	/** When the work was reviewed; the strip orders by it and shows it as the short day, "28 Aug". */
+	date: Date;
 	outcome: ReviewedWorkKind;
 }
 
@@ -79,8 +66,8 @@ export interface ReviewedWorkOutcome {
  */
 export interface CleanWork {
 	ref: ReviewedWorkRef;
-	/** When the piece was reviewed, as an ISO date-time; the strip orders and dates it by this. */
-	date: string;
+	/** When the piece was reviewed; the strip orders and dates it by this. */
+	date: Date;
 }
 
 /** The group a card's practice belongs to, with what the card draws its name in. */
@@ -132,16 +119,8 @@ export interface PracticeFeedbackCardEntry {
 	/** The line under the next step: what ticks it, or what did. */
 	condition: FeedbackTextSegment[];
 	state: FeedbackState;
-	/**
-	 * When the feedback was created or, once `state` is resolved or closed, when that happened;
-	 * an ISO date-time.
-	 */
-	timestamp: string;
-}
-
-/** Newest first, by the timestamp the card shows. */
-export function newestFirst<T extends { timestamp: string }>(cards: T[]): T[] {
-	return [...cards].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+	/** When the feedback was created or, once `state` is resolved or closed, when that happened. */
+	timestamp: Date;
 }
 
 /** The card props that let one piece of feedback be rated. */
@@ -184,34 +163,20 @@ export interface PracticeFeedbackCardProps extends FeedbackRatingProps {
 
 /**
  * The footer's phrase: a piece of feedback that is still open says when it was written, to the
- * minute — "Created 9 September, 14:10" — and one the work resolved says the day it happened —
+ * minute — "Created 9 September, 2:10 pm" — and one the work resolved says the day it happened —
  * "Resolved 9 September" — because the minute of a resolution is the review's, not the reader's.
  */
 function formatTimestamp(date: Date, state: FeedbackState): string {
-	switch (state) {
-		case "resolved": {
-			return `Resolved ${formatDay(date)}`;
-		}
-		case "closed": {
-			return `Closed ${formatDay(date)}`;
-		}
-		case "new":
-		case "open": {
-			return `Created ${formatDayTime(date)}`;
-		}
-	}
+	return isOpenFeedback(state)
+		? `Created ${formatDayTime(date)}`
+		: `${FEEDBACK_STATE_DEFS[state].label} ${formatDay(date)}`;
 }
 
 /**
  * One piece of practice feedback in three bands: what was seen, the next step with the meter that
- * resolves it, and the footer that rates it. The glyph leading the next-step band is the state
- * the work changes, never a control the reader ticks: it is the badge's own icon, a circle-minus
- * while open and a filled circle-check once resolved, so it reads as the same status said twice,
- * and nothing in that place looks like a checkbox.
- *
- * Two states wear a tint, each in its own colour and the same way: a new card the accent's wash
- * and edge, a resolved card the success colour's wash, edge and next-step band. Every other card
- * is the plain ground.
+ * resolves it, and the footer that rates it. The glyph leading the next-step band says where the
+ * work stands and is never a control, so nothing in that place looks like a checkbox the reader
+ * could tick.
  */
 export function PracticeFeedbackCard({
 	card: {
@@ -242,32 +207,12 @@ export function PracticeFeedbackCard({
 }: PracticeFeedbackCardProps) {
 	const headingId = useId();
 	const resolved = state === "resolved";
-	// The band's glyph is the badge's own icon said twice; a resolved card's is the filled tick.
 	const BandIcon = FEEDBACK_STATE_DEFS[isOpenFeedback(state) ? "open" : state].icon;
-	const stamp = asDate(timestamp);
 	const GroupIcon = group?.icon ?? PackageIcon;
 	const groupPill = hasText(group?.color) ? pillClasses(group.color) : undefined;
-	// The strip reads left to right in time, evidence and clean work in one run: a clean piece
-	// reviewed before the newest evidence stands where its date puts it, not after it. The window
-	// keeps the newest.
 	const cleanCount = cleanWork.length;
-	const shownWork: StripPiece[] = [
-		...reviewedWork.map((work) => ({
-			// The same thread can be reviewed twice on different days.
-			key: `${work.ref.kind} ${work.ref.id} ${work.date}`,
-			ref: work.ref,
-			date: work.date,
-			outcome: work.outcome,
-		})),
-		...cleanWork.map((clean) => ({
-			key: `${clean.ref.kind} ${clean.ref.id} clean`,
-			ref: clean.ref,
-			date: clean.date,
-			outcome: "DEMONSTRATED_STRENGTH" as const,
-		})),
-	]
-		.sort((a, b) => a.date.localeCompare(b.date))
-		.slice(-STRIP_WORK_LIMIT);
+	const cleanLabel = `${cleanCount} of ${cleanNeeded} clean`;
+	const shownWork = stripPieces(reviewedWork, cleanWork);
 	const evidenceRefs = reviewedWork.map((piece) => piece.ref);
 	const stripLabel = countedStripWork(shownWork.map((piece) => piece.ref));
 	// The work the body may name: everything the card can vouch for, whether the strip shows it or
@@ -284,7 +229,7 @@ export function PracticeFeedbackCard({
 			className={cn(
 				FOCUS_RING,
 				"flex flex-col overflow-hidden rounded-xl border bg-background",
-				// The accent's one wash: a new card is the thing the eye should land on.
+				// The two washes: `webapp/AGENTS.md` § Practice surfaces palette.
 				state === "new" && "border-mentor/35 bg-linear-160 from-mentor/5 to-background to-55%",
 				resolved && "border-success/35 bg-linear-160 from-success/5 to-background to-55%",
 				className,
@@ -298,7 +243,6 @@ export function PracticeFeedbackCard({
 							onOpen={onOpenPractice && (() => onOpenPractice(practiceSlug))}
 						/>
 						<span className="text-muted-foreground">in</span>
-						{/* A practice in no group is named as unassigned, with nowhere to open. */}
 						<GroupName
 							name={group?.name ?? "Unassigned"}
 							icon={GroupIcon}
@@ -359,8 +303,15 @@ export function PracticeFeedbackCard({
 						<FeedbackText segments={condition} onOpenPractice={onOpenPractice} />
 					</p>
 				</div>
-				<div className="col-start-2 flex flex-col items-start gap-1.5 sm:col-start-3 sm:items-end sm:pt-0.5">
-					<span className="inline-flex gap-1" aria-hidden>
+				{/* A count toward a threshold is a meter, not task progress (APG meter pattern). */}
+				<Meter.Root
+					value={cleanCount}
+					max={cleanNeeded}
+					aria-label="Clean work in a row"
+					getAriaValueText={() => cleanLabel}
+					className="col-start-2 flex flex-col items-start gap-1.5 sm:col-start-3 sm:items-end sm:pt-0.5"
+				>
+					<Meter.Track className="inline-flex gap-1">
 						{Array.from({ length: cleanNeeded }, (_, index) => (
 							<span
 								key={index}
@@ -370,26 +321,23 @@ export function PracticeFeedbackCard({
 								)}
 							/>
 						))}
-					</span>
-					<span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-						{cleanCount} of {cleanNeeded} clean
-					</span>
-				</div>
+					</Meter.Track>
+					<Meter.Value className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+						{() => cleanLabel}
+					</Meter.Value>
+				</Meter.Root>
 			</div>
 
 			<div className="flex flex-wrap items-center justify-between gap-4 border-t p-4">
 				<div className="flex flex-wrap items-center gap-3">
-					{stamp && (
-						<span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-							<ClockIcon className="size-4 shrink-0" aria-hidden />
-							<time dateTime={stamp.toISOString()}>{formatTimestamp(stamp, state)}</time>
-						</span>
-					)}
+					<span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+						<ClockIcon className="size-4 shrink-0" aria-hidden />
+						<time dateTime={timestamp.toISOString()}>{formatTimestamp(timestamp, state)}</time>
+					</span>
 					{onRate &&
 						statusValues(FEEDBACK_USEFULNESS_DEFS).map((value) => {
 							const { icon: Icon, label } = FEEDBACK_USEFULNESS_DEFS[value];
 							const pressed = usefulness === value;
-							// The one being written says so; the other only waits.
 							const saving = isPending && pressed;
 							return (
 								<ResponseButton
@@ -444,42 +392,6 @@ export function PracticeFeedbackCard({
 }
 
 /**
- * The work the strip shows — evidence and clean pieces alike — counted by what its pieces are:
- * "three pull requests", "three merge requests" at GitLab, and "four pieces of work" when the
- * pieces are not all of one kind, since the noun is claimed only where every piece bears it out.
- * The kind and the provider are the ones they share, for the glyph beside the label.
- */
-function countedStripWork(refs: ReviewedWorkRef[]): {
-	kind?: string;
-	provider?: KnownWorkProvider;
-	text: string;
-} {
-	const [first] = refs;
-	const oneKind = first !== undefined && refs.every((ref) => ref.kind === first.kind);
-	const provider =
-		first !== undefined && refs.every((ref) => ref.provider === first.provider)
-			? first.provider
-			: undefined;
-	// The same piece reviewed twice is on show twice and counted once.
-	const distinct = new Set(refs.map((ref) => `${ref.kind} ${ref.id}`)).size;
-	const counted = oneKind
-		? countedWork(first.kind, distinct, provider)
-		: count(distinct, "piece of work", "pieces of work");
-	// "Newest three pull requests" is also right when three is all there ever were; one piece is
-	// simply where it was seen.
-	return {
-		kind: oneKind ? first.kind : undefined,
-		provider,
-		text: distinct > 1 ? `Newest ${counted}` : `Seen on ${counted}`,
-	};
-}
-
-/** One item of the strip, in the order it is drawn: a piece of work, what the review made of it, and when. */
-interface StripPiece extends ReviewedWorkOutcome {
-	key: string;
-}
-
-/**
  * One piece of the strip. The arrow that leads it travels with it, so a wrapped line never ends
  * on one.
  */
@@ -487,56 +399,15 @@ function StripPieceView({ piece, arrow }: { piece: StripPiece; arrow: boolean })
 	return (
 		<span className="inline-flex items-center gap-2 whitespace-nowrap">
 			{arrow && <ChevronRightIcon className="size-3 shrink-0 text-muted-foreground" aria-hidden />}
-			<WorkOutcome outcome={piece.outcome} />
+			<StatusIcon
+				def={OBSERVATION_OUTCOME_PRESENTATION[OBSERVATION_OUTCOME_OF_WORK[piece.outcome]]}
+			/>
 			<InlineLink href={piece.ref.url} external className="font-medium">
 				{piece.ref.label}
 			</InlineLink>
-			{hasText(piece.date) && <WorkDate value={piece.date} />}
-		</span>
-	);
-}
-
-/**
- * The strip's outcome icon, saying what the observation row says for the same outcome. An icon
- * that stands alone as a tooltip's trigger: no chrome of its own, a ring when focused, and its
- * name for a screen reader, since the icon is all that tells the good from the bad.
- */
-interface WorkOutcomeProps {
-	outcome: ReviewedWorkKind;
-}
-
-function WorkOutcome({ outcome }: WorkOutcomeProps) {
-	const def = OBSERVATION_OUTCOME_PRESENTATION[OBSERVATION_OUTCOME_OF_WORK[outcome]];
-	const OutcomeIcon = def.icon;
-	return (
-		<StatusTooltip
-			def={def}
-			render={<button type="button" />}
-			// The icon is 14 px, so the hit area is widened a step beyond the constant's.
-			className={cn(
-				HIT_AREA_24,
-				"inline-flex cursor-help items-center before:-inset-1.5",
-				FOCUS_RING,
-			)}
-		>
-			<OutcomeIcon className={cn("size-3.5 shrink-0", def.className)} aria-hidden />
-			<span className="sr-only">{def.label}: </span>
-		</StatusTooltip>
-	);
-}
-
-interface WorkDateProps {
-	/** An ISO date-time. */
-	value: string;
-}
-
-function WorkDate({ value }: WorkDateProps) {
-	const date = asDate(value);
-	return (
-		date && (
-			<time dateTime={date.toISOString()} className="text-muted-foreground tabular-nums">
-				{formatShortDay(date)}
+			<time dateTime={piece.date.toISOString()} className="text-muted-foreground tabular-nums">
+				{formatShortDay(piece.date)}
 			</time>
-		)
+		</span>
 	);
 }

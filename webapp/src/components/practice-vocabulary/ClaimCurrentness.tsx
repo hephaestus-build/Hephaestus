@@ -6,12 +6,13 @@ import { Badge } from "@/components/ui/badge";
 
 type Currentness = ReviewObservation["claimCurrentness"];
 
+const STALE_NOTE = "The practice or the reviewed work changed after this observation.";
+
 /**
- * Everything any surface says about an observation the current practice text did not produce.
- * `CURRENT` has no entry because a surface says nothing for it: badging the ordinary case buries
- * the exceptions. `note` is the one line a developer's surface prints instead of the operator's
- * badge and alert — the observation is still shown in full, and the sentence says what to make
- * of it.
+ * Everything any surface says about an observation the current practice text did not produce;
+ * `CURRENT` is the ordinary case and has no words. `note` is the one line a developer's surface
+ * prints instead of the operator's badge and alert — the observation is still shown in full, and
+ * the sentence says what to make of it.
  */
 const NON_CURRENT = {
 	STALE: {
@@ -19,9 +20,8 @@ const NON_CURRENT = {
 		badgeVariant: "warning",
 		Icon: ClockAlert,
 		title: "This observation is no longer current",
-		description:
-			"The practice or the reviewed work changed after this observation. The earlier result remains in the record, but it does not describe the current state.",
-		note: "The practice or the reviewed work changed after this observation.",
+		description: `${STALE_NOTE} The earlier result remains in the record, but it does not describe the current state.`,
+		note: STALE_NOTE,
 	},
 	UNVERIFIABLE: {
 		badge: "Rules version unknown",

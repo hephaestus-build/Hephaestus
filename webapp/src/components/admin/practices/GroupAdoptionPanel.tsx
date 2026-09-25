@@ -1,7 +1,6 @@
 import { ChevronRight, CircleAlert } from "lucide-react";
 
 import type { CatalogGroupAdoptionPreview } from "@/api/types.gen";
-import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
 import { PracticeListSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -11,6 +10,7 @@ import {
 	CATALOG_GROUP_ACTION_DEFS,
 	CATALOG_GROUP_CHANGE_ACTIONS,
 } from "@/components/practice-vocabulary/catalog-group-action-defs";
+import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { DrawerBody, DrawerDescription, DrawerFooter, DrawerTitle } from "@/components/ui/drawer";

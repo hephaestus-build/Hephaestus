@@ -1,21 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import type {
-	HeldPractice,
-	PracticeProfileOverview,
-	ProfileChange,
-	ReviewedWorkRef,
-} from "@/api/types.gen";
-import { count, type FeedbackTextSegment } from "@/components/common/feedback-text";
+import type { HeldPractice, ProfileChange, ReviewedWorkRef } from "@/api/types.gen";
 import { ATTENTION_DEFS } from "@/components/practice-vocabulary/attention-defs";
+import type { FeedbackTextSegment } from "@/components/practice-vocabulary/feedback-text";
 import type { PracticeFeedbackCardEntry } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { ARTIFACT_KIND } from "@/lib/artifact-kinds";
 
 import {
+	composeGroupOverview,
 	composeNextStep,
 	composeOverview,
 	EMPTY_OVERVIEW,
-	groupOverviewOf,
 } from "./compose-overview";
 
 const AT = new Date("2026-09-09T14:10:00Z");
@@ -81,7 +76,9 @@ const held = (slug: string, name: string, cleanWork: number): HeldPractice => ({
 	since: new Date("2026-08-20T09:00:00Z"),
 });
 
-const overview = (partial: Partial<PracticeProfileOverview>): PracticeProfileOverview => ({
+type Overview = Parameters<typeof composeOverview>[0];
+
+const overview = (partial: Partial<Overview>): Overview => ({
 	...EMPTY_OVERVIEW,
 	latestRun: { jobId: "job-1", at: AT, reviewedWork: pullRequest(425) },
 	...partial,
@@ -105,18 +102,12 @@ function synthetic(n: number): ProfileChange[] {
 			groupName: `Group ${index % 3}`,
 			from,
 			to: type === "TREND_TURNED" ? "IMPROVING" : "STRENGTH",
+			direction: "UP",
 		});
 	});
 }
 
-describe("count", () => {
-	it("spells a count below ten and writes digits from ten", () => {
-		expect(count(1, "practice", "practices")).toBe("one practice");
-		expect(count(9, "practice", "practices")).toBe("nine practices");
-		expect(count(10, "practice", "practices")).toBe("10 practices");
-		expect(count(22, "practice", "practices")).toBe("22 practices");
-	});
-
+describe("the paragraph's count", () => {
 	it("never mixes a digit with a word inside one clause", () => {
 		const { changed } = composeOverview(overview({ changes: synthetic(16) }));
 		const clause = plain(changed)
@@ -136,24 +127,19 @@ describe("a sentence's opening", () => {
 				),
 			}),
 		);
-		expect(plain(composed.changed)).toBe("Two practices moved since the latest run.");
-	});
-
-	it("leaves a digit alone", () => {
-		const composed = composeOverview(
-			overview({
-				changes: Array.from({ length: 12 }, (_, n) =>
-					change("STANDING_MOVED", `up-${n}`, `Up ${n}`, { from: "MIXED", to: "STRENGTH" }),
-				),
-			}),
-		);
-		expect(plain(composed.changed)).toBe("12 practices moved since the latest run.");
+		expect(plain(composed.changed)).toBe("Two practices changed since the latest run.");
 	});
 
 	it("leaves a practice name alone, as the link it is", () => {
 		const composed = composeOverview(
 			overview({
-				changes: [change("STANDING_MOVED", "scope", "scope", { from: "STRENGTH", to: "MIXED" })],
+				changes: [
+					change("STANDING_MOVED", "scope", "scope", {
+						from: "STRENGTH",
+						to: "MIXED",
+						direction: "DOWN",
+					}),
+				],
 			}),
 		);
 		expect(composed.changed[0]).toStrictEqual({ type: "practice", slug: "scope", name: "scope" });
@@ -174,6 +160,28 @@ describe("composeOverview", () => {
 		const composed = composeOverview(overview({}));
 		expect(plain(composed.changed)).toBe("Nothing moved since the latest run.");
 		expect(composed.restCount).toBe(0);
+	});
+
+	it("counts first sightings as changes, not as moves, when it names nothing", () => {
+		const composed = composeOverview(
+			overview({
+				changes: [1, 2].map((n) => change("FIRST_OBSERVED", `first-${n}`, `First ${n}`)),
+			}),
+		);
+		expect(plain(composed.changed)).toBe("Two practices changed since the latest run.");
+		expect(composed.restCount).toBe(2);
+	});
+
+	it("reads a move with no direction — into or out of a standing no review settled — as no slip", () => {
+		const composed = composeOverview(
+			overview({
+				changes: [
+					change("STANDING_MOVED", "scope", "Scope", { from: "STRENGTH", to: "NOT_OBSERVED" }),
+				],
+			}),
+		);
+		expect(plain(composed.changed)).toBe("One practice changed since the latest run.");
+		expect(composed.rest.map((paragraph) => paragraph.title)).toStrictEqual(["Moved up"]);
 	});
 
 	it("gives new feedback a row rather than a sentence, and the paragraph nothing to say", () => {
@@ -201,6 +209,7 @@ describe("composeOverview", () => {
 					change("STANDING_MOVED", "diff-size", "Keep the diff reviewable in one sitting", {
 						from: "MIXED",
 						to: "DEVELOPING",
+						direction: "DOWN",
 						evidence: [pullRequest(423)],
 					}),
 					change("STANDING_MOVED", "linked-issue", "Link the issue the change closes", {
@@ -215,12 +224,12 @@ describe("composeOverview", () => {
 		]);
 		expect(plain(composed.changed)).toBe(
 			"Keep the diff reviewable in one sitting moved to Needs attention after !423. " +
-				"One more practice changed as well; the practices table lists them.",
+				"One more practice changed as well.",
 		);
 		expect(composed.restCount).toBe(1);
 		expect(composed.rest.map((paragraph) => paragraph.title)).toStrictEqual(["Moved up"]);
 		expect(plain(composed.rest[0]?.segments)).toBe(
-			"Link the issue the change closes is now Going well after !421 and !425.",
+			"Link the issue the change closes moved to Going well after !421 and !425.",
 		);
 	});
 
@@ -228,7 +237,11 @@ describe("composeOverview", () => {
 		const changes = [
 			...[1, 2, 3].map((n) => change("FEEDBACK_NEW", `new-${n}`, `New ${n}`)),
 			...[1, 2].map((n) =>
-				change("STANDING_MOVED", `down-${n}`, `Down ${n}`, { from: "STRENGTH", to: "MIXED" }),
+				change("STANDING_MOVED", `down-${n}`, `Down ${n}`, {
+					from: "STRENGTH",
+					to: "MIXED",
+					direction: "DOWN",
+				}),
 			),
 			...[1, 2, 3].map((n) =>
 				change("STANDING_MOVED", `up-${n}`, `Up ${n}`, { from: "MIXED", to: "STRENGTH" }),
@@ -249,7 +262,7 @@ describe("composeOverview", () => {
 		]);
 		expect(plain(composed.changed)).toBe(
 			"Down 1 moved to Mixed feedback after !421 and !425. " +
-				"Five more practices and one group changed as well; the practices table lists them.",
+				"Five more practices and one group changed as well.",
 		);
 		// What the paragraph counted is exactly what unfolds, the named events left out.
 		expect(composed.restCount).toBe(6);
@@ -259,10 +272,10 @@ describe("composeOverview", () => {
 			"Moved up",
 		]);
 		expect(plain(composed.rest[0]?.segments)).toBe(
-			"There is new feedback on New 3, seen on !421 and !425.",
+			"New 3 has new feedback, seen on !421 and !425.",
 		);
 		expect(plain(composed.rest[1]?.segments)).toBe(
-			"Down 2 is now Mixed feedback after !421 and !425.",
+			"Down 2 moved to Mixed feedback after !421 and !425.",
 		);
 	});
 
@@ -281,12 +294,10 @@ describe("composeOverview", () => {
 		const movedUp = plain(composed.rest[1]?.segments);
 		// Four subjects named, however few sentences that takes: the three practices that moved
 		// alike are one sentence and the group that moved with them is its own.
-		expect(movedUp).toContain(
-			"Practice 0, Practice 3 and Practice 6 are now Going well after !421 and !425.",
-		);
-		expect(movedUp).toContain("Group 2 is now Going well after !421 and !425.");
-		expect(movedUp).toMatch(
-			/further practices? (?:and \w+ groups? )?moved the same way; the practices table lists them\.$/u,
+		expect(movedUp).toBe(
+			"Practice 0, Practice 3 and Practice 6 moved to Going well after !421 and !425. " +
+				"Group 2 moved to Going well after !421 and !425. " +
+				'Five further practices moved the same way; the "All practice groups" table lists them.',
 		);
 		const trends = plain(composed.rest[3]?.segments);
 		expect(trends).toBe(
@@ -307,7 +318,7 @@ describe("composeOverview", () => {
 		);
 		const fresh = composed.rest.find((paragraph) => paragraph.title === "New feedback");
 		expect(plain(fresh?.segments)).toMatch(
-			/One further practice has new feedback; the practices table lists them\.$/u,
+			/One further practice has new feedback; the "All practice groups" table lists it\.$/u,
 		);
 		expect(plain(fresh?.segments)).not.toMatch(/moved/u);
 	});
@@ -325,7 +336,7 @@ describe("composeOverview", () => {
 		);
 		const trends = composed.rest.find((paragraph) => paragraph.title === "Trends turned");
 		expect(plain(trends?.segments)).toMatch(
-			/Two further practices saw their trends turn; the practices table lists them\.$/u,
+			/Two further practices saw their trends turn; the "All practice groups" table lists them\.$/u,
 		);
 		expect(plain(trends?.segments)).not.toMatch(/moved/u);
 	});
@@ -339,6 +350,7 @@ describe("composeOverview", () => {
 						groupName: "Communicating in the open",
 						from: "STRENGTH",
 						to: "MIXED",
+						direction: "DOWN",
 						evidence: [thread("#releases")],
 					}),
 				],
@@ -377,8 +389,8 @@ describe("composeOverview", () => {
 		// The practice and the group made the same move, but a group is not one of the practices:
 		// each is its own sentence, and the group carries the slug its icon and colour come from.
 		expect(plain(composed.rest[0]?.segments)).toBe(
-			"Scope the change to one concern is now Going well after #19. " +
-				"Acting on review feedback is now Going well after #19.",
+			"Scope the change to one concern moved to Going well after #19. " +
+				"Acting on review feedback moved to Going well after #19.",
 		);
 		expect(composed.rest[0]?.segments).toContainEqual({
 			type: "group",
@@ -588,9 +600,7 @@ describe("what needs your attention", () => {
 			"Reset 1",
 			"Reset 2",
 		]);
-		expect(plain(composed.changed)).toBe(
-			"Two more practices changed as well; the practices table lists them.",
-		);
+		expect(plain(composed.changed)).toBe("Two more practices changed as well.");
 		expect(composed.restCount).toBe(2);
 		expect(composed.rest.map((paragraph) => paragraph.title)).toStrictEqual(["New feedback"]);
 	});
@@ -602,6 +612,7 @@ describe("what needs your attention", () => {
 					change("STANDING_MOVED", "diff-size", "Keep the diff reviewable in one sitting", {
 						from: "MIXED",
 						to: "DEVELOPING",
+						direction: "DOWN",
 					}),
 				],
 			}),
@@ -617,6 +628,7 @@ describe("what needs your attention", () => {
 					change("STANDING_MOVED", "diff-size", "Keep the diff reviewable in one sitting", {
 						from: "MIXED",
 						to: "DEVELOPING",
+						direction: "DOWN",
 						evidence: [pullRequest(423)],
 					}),
 				],
@@ -626,16 +638,6 @@ describe("what needs your attention", () => {
 		expect(plain(composed.changed)).toBe(
 			"Keep the diff reviewable in one sitting moved to Needs attention after !423.",
 		);
-	});
-
-	it("drops a held practice whose feedback the work fell back on", () => {
-		const composed = composeOverview(
-			overview({
-				holdingUp: [held("scope", "Scope", 4)],
-				changes: [change("FEEDBACK_RESET", "scope", "Scope")],
-			}),
-		);
-		expect(composed.holdingUp).toStrictEqual([]);
 	});
 
 	it("unfolds the fall backs it only counted in that kind's own words", () => {
@@ -684,23 +686,20 @@ describe("dedupe", () => {
 		]);
 	});
 
-	it("drops a held practice that also slipped: holding and slipping contradict", () => {
-		const composed = composeOverview(
-			overview({
-				holdingUp: [held("scope", "Scope", 4)],
-				changes: [change("STANDING_MOVED", "scope", "Scope", { from: "STRENGTH", to: "MIXED" })],
+	it.each([
+		["fell back", change("FEEDBACK_RESET", "scope", "Scope")],
+		[
+			"slipped",
+			change("STANDING_MOVED", "scope", "Scope", {
+				from: "STRENGTH",
+				to: "MIXED",
+				direction: "DOWN",
 			}),
-		);
-		expect(composed.holdingUp).toStrictEqual([]);
-		expect(plain(composed.changed)).toContain("Scope moved to Mixed feedback");
-	});
-
-	it("drops a held practice that got new feedback", () => {
+		],
+		["got new feedback", change("FEEDBACK_NEW", "scope", "Scope")],
+	])("drops a held practice that %s: holding and slipping contradict", (_how, slip) => {
 		const composed = composeOverview(
-			overview({
-				holdingUp: [held("scope", "Scope", 4)],
-				changes: [change("FEEDBACK_NEW", "scope", "Scope")],
-			}),
+			overview({ holdingUp: [held("scope", "Scope", 4)], changes: [slip] }),
 		);
 		expect(composed.holdingUp).toStrictEqual([]);
 	});
@@ -721,7 +720,11 @@ describe("dedupe", () => {
 			overview({
 				changes: [
 					change("STANDING_MOVED", "scope", "Scope", { from: "DEVELOPING", to: "MIXED" }),
-					change("STANDING_MOVED", "scope", "Scope", { from: "MIXED", to: "DEVELOPING" }),
+					change("STANDING_MOVED", "scope", "Scope", {
+						from: "MIXED",
+						to: "DEVELOPING",
+						direction: "DOWN",
+					}),
 				],
 			}),
 		);
@@ -730,7 +733,7 @@ describe("dedupe", () => {
 	});
 });
 
-describe("composeReviewedWork", () => {
+describe("the reviewed work", () => {
 	it("groups the work by kind and provider in the footer's order and keeps the addresses", () => {
 		const composed = composeOverview(
 			overview({
@@ -769,14 +772,13 @@ interface ChangesInGroup {
 const inGroup = ({ groupSlug, groupName, changes }: ChangesInGroup): ProfileChange[] =>
 	changes.map((entry) => ({ ...entry, groupSlug, groupName }));
 
-/** The group's sentences for the practices table, and each practice's own for the group level. */
+/** The group's sentences for the "All practice groups" table, and each practice's own for its level. */
 const groupSentences = (group: ChangesInGroup) =>
 	composeOverview(overview({ changes: inGroup(group) })).groupSentences[group.groupSlug]?.map(
 		plain,
 	);
 const practiceSentences = (group: ChangesInGroup) =>
-	groupOverviewOf(composeOverview(overview({ changes: inGroup(group) })), group.groupSlug)
-		.practiceSentences;
+	composeGroupOverview(overview({ changes: inGroup(group) }), group.groupSlug).practiceSentences;
 
 describe("group sentences", () => {
 	it("say what changed in the group, one sentence per event, what needs the reader first", () => {
@@ -826,19 +828,6 @@ describe("group sentences", () => {
 			changes: [1, 2, 3, 4].map((n) => change("FEEDBACK_NEW", `p-${n}`, `P ${n}`)),
 		});
 		expect(sentences).toStrictEqual(["P 1, P 2, P 3 and P 4 have new feedback."]);
-	});
-
-	it("keep every practice of a joined bullet as its own pill", () => {
-		const composed = composeOverview(
-			overview({
-				changes: [1, 2].map((n) => change("FEEDBACK_NEW", `p-${n}`, `P ${n}`)),
-			}),
-		);
-		const bullet = composed.groupSentences["review-ready-work"]?.[0];
-		expect(bullet?.filter((segment) => segment.type === "practice")).toStrictEqual([
-			{ type: "practice", slug: "p-1", name: "P 1" },
-			{ type: "practice", slug: "p-2", name: "P 2" },
-		]);
 	});
 
 	it("split one kind by the transition, so two moves are two bullets", () => {
@@ -908,28 +897,27 @@ describe("group sentences", () => {
 	});
 });
 
-describe("groupOverviewOf", () => {
+describe("composeGroupOverview", () => {
 	it("narrows the held rows to the group and gives each practice its own sentence", () => {
-		const composed = groupOverviewOf(
-			composeOverview(
-				overview({
-					holdingUp: [held("respond", "Respond to each review comment", 4)],
-					reviewedWork: [pullRequest(425)],
-					changes: [
-						change("FEEDBACK_NEW", "scope", "Scope the change to one concern"),
-						change("FEEDBACK_RESOLVED", "describe", "Describe what changed and why", {
-							evidence: [],
-						}),
-						change("STANDING_MOVED", "diff-size", "Keep the diff reviewable", {
-							from: "MIXED",
-							to: "DEVELOPING",
-							evidence: [pullRequest(423)],
-						}),
-						// Another group's change stays out of this group's level.
-						change("FEEDBACK_NEW", "other", "Other", { groupSlug: "other", groupName: "Other" }),
-					],
-				}),
-			),
+		const composed = composeGroupOverview(
+			overview({
+				holdingUp: [held("respond", "Respond to each review comment", 4)],
+				reviewedWork: [pullRequest(425)],
+				changes: [
+					change("FEEDBACK_NEW", "scope", "Scope the change to one concern"),
+					change("FEEDBACK_RESOLVED", "describe", "Describe what changed and why", {
+						evidence: [],
+					}),
+					change("STANDING_MOVED", "diff-size", "Keep the diff reviewable", {
+						from: "MIXED",
+						to: "DEVELOPING",
+						direction: "DOWN",
+						evidence: [pullRequest(423)],
+					}),
+					// Another group's change stays out of this group's level.
+					change("FEEDBACK_NEW", "other", "Other", { groupSlug: "other", groupName: "Other" }),
+				],
+			}),
 			"review-ready-work",
 		);
 		expect(composed.holdingUp.map((row) => row.practiceName)).toStrictEqual([
@@ -948,13 +936,11 @@ describe("groupOverviewOf", () => {
 	});
 
 	it("is empty for a group the overview does not mention, with the reviewed work still there", () => {
-		const page = composeOverview(
-			overview({ holdingUp: [held("a", "A", 2)], reviewedWork: [pullRequest(425)] }),
-		);
-		const composed = groupOverviewOf(page, "other");
+		const input = overview({ holdingUp: [held("a", "A", 2)], reviewedWork: [pullRequest(425)] });
+		const composed = composeGroupOverview(input, "other");
 		expect(composed.holdingUp).toStrictEqual([]);
 		expect(composed.practiceSentences).toStrictEqual({});
-		expect(composed.reviewedWork).toBe(page.reviewedWork);
+		expect(composed.reviewedWork).toStrictEqual(composeOverview(input).reviewedWork);
 	});
 });
 
@@ -1004,14 +990,14 @@ describe("the unfolded rest", () => {
 	it("counts the first sightings it did not name in their own words", () => {
 		const composed = composeOverview(overview({ changes: firstSeen(12) }));
 		expect(plain(composed.rest[0]?.segments)).toContain(
-			"Eight further practices were seen for the first time; the practices table lists them.",
+			'Eight further practices were seen for the first time; the "All practice groups" table lists them.',
 		);
 	});
 
 	it("agrees with a single first sighting it did not name", () => {
 		const composed = composeOverview(overview({ changes: firstSeen(5) }));
 		expect(plain(composed.rest[0]?.segments)).toContain(
-			"One further practice was seen for the first time; the practices table lists them.",
+			'One further practice was seen for the first time; the "All practice groups" table lists it.',
 		);
 	});
 
@@ -1028,7 +1014,7 @@ describe("the unfolded rest", () => {
 	it("names the practices that made the same move in one sentence, and agrees with them", () => {
 		const composed = composeOverview(overview({ changes: movedUp(3) }));
 		expect(plain(composed.rest[0]?.segments)).toBe(
-			"Up 0, Up 1 and Up 2 are now Going well after #19.",
+			"Up 0, Up 1 and Up 2 moved to Going well after #19.",
 		);
 		// Each keeps its own pill, so every practice named is still one the reader can open.
 		expect(
@@ -1052,43 +1038,16 @@ describe("the unfolded rest", () => {
 		// The third practice moved to the same standing, but the sentence names the work it was
 		// seen on, so it cannot ride on a sentence that names other work.
 		expect(plain(composed.rest[0]?.segments)).toBe(
-			"Up 0 and Up 1 are now Going well after #19. Up elsewhere is now Going well after #20.",
+			"Up 0 and Up 1 moved to Going well after #19. Up elsewhere moved to Going well after #20.",
 		);
 	});
 
 	it("counts the subjects a joined sentence did not name, not the sentences", () => {
 		const composed = composeOverview(overview({ changes: movedUp(6) }));
 		expect(plain(composed.rest[0]?.segments)).toBe(
-			"Up 0, Up 1, Up 2 and Up 3 are now Going well after #19. " +
-				"Two further practices moved the same way; the practices table lists them.",
+			"Up 0, Up 1, Up 2 and Up 3 moved to Going well after #19. " +
+				'Two further practices moved the same way; the "All practice groups" table lists them.',
 		);
-	});
-
-	it("leaves the other kinds reading as they did", () => {
-		const composed = composeOverview(
-			overview({
-				changes: [
-					...[1, 2, 3].map((n) =>
-						change("FEEDBACK_NEW", `new-${n}`, `New ${n}`, { evidence: [githubPullRequest(17)] }),
-					),
-					change("STANDING_MOVED", "up", "Up", {
-						from: "MIXED",
-						to: "STRENGTH",
-						evidence: [githubPullRequest(17)],
-					}),
-					change("TREND_TURNED", "trend", "Trend", {
-						to: "IMPROVING",
-						evidence: [githubPullRequest(17)],
-					}),
-				],
-			}),
-		);
-		const byTitle = Object.fromEntries(
-			composed.rest.map((paragraph) => [paragraph.title, plain(paragraph.segments)]),
-		);
-		expect(byTitle["New feedback"]).toBe("There is new feedback on New 3, seen on #17.");
-		expect(byTitle["Moved up"]).toBe("Up is now Going well after #17.");
-		expect(byTitle["Trends turned"]).toBe("Trend now shows More positive recently over #17.");
 	});
 });
 
@@ -1101,15 +1060,15 @@ describe("composeNextStep", () => {
 		headline: "Merge requests bundle a fix with a refactor",
 		body: "",
 		reviewedWork: [
-			{ ref: pullRequest(418), date: "2026-09-06", outcome: "COMMISSION_PROBLEM" },
-			{ ref: pullRequest(421), date: "2026-09-03", outcome: "OMISSION_GAP" },
+			{ ref: pullRequest(418), date: new Date("2026-09-06"), outcome: "COMMISSION_PROBLEM" },
+			{ ref: pullRequest(421), date: new Date("2026-09-03"), outcome: "OMISSION_GAP" },
 		],
 		nextStep: "Open the fix first as its own merge request.",
 		condition: [],
-		cleanWork: [{ ref: pullRequest(423), date: "2026-09-08" }],
+		cleanWork: [{ ref: pullRequest(423), date: new Date("2026-09-08") }],
 		cleanNeeded: 3,
 		state: "open",
-		timestamp: "2026-09-09T14:10:00.000Z",
+		timestamp: new Date("2026-09-09T14:10:00.000Z"),
 		...overrides,
 	});
 
@@ -1130,7 +1089,7 @@ describe("composeNextStep", () => {
 			practiceSlug: "describe",
 			practiceName: "Describe what changed and why",
 			nextStep: "",
-			timestamp: "2026-09-10T09:00:00.000Z",
+			timestamp: new Date("2026-09-10T09:00:00.000Z"),
 		});
 		expect(plain(composeNextStep([card(), later], "review-ready-work"))).toContain(
 			"on Scope the change to one concern",

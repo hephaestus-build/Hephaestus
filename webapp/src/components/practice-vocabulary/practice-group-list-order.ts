@@ -11,14 +11,6 @@ export type SortDirection = "asc" | "desc";
  */
 export const DEFAULT_PRACTICE_GROUP_SORT: SortDirection = "asc";
 
-/**
- * The sort a header press produces: the other way round, never "unsorted" — the list always has an
- * order.
- */
-export function nextPracticeGroupSort(current: SortDirection): SortDirection {
-	return current === "asc" ? "desc" : "asc";
-}
-
 /** Registry declaration order: what needs attention first, what no review has reached last. */
 const STANDING_ORDER = statusValues(PRACTICE_GROUP_STANDING_DEFS);
 

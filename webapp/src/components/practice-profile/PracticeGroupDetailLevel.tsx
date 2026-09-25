@@ -2,9 +2,6 @@ import { ClipboardCheckIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
-import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
-import { count, type FeedbackTextSegment } from "@/components/common/feedback-text";
-import { FeedbackText } from "@/components/common/FeedbackText";
 import {
 	PracticeTabsList,
 	PracticeTabsRail,
@@ -12,31 +9,30 @@ import {
 	PracticeTabsTrigger,
 } from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { SectionLabel } from "@/components/common/SectionLabel";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { Section } from "@/components/layout/Section";
+import { count, type FeedbackTextSegment } from "@/components/practice-vocabulary/feedback-text";
+import { FeedbackText } from "@/components/practice-vocabulary/FeedbackText";
+import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import {
 	HephFeedbackCard,
 	type HephFeedbackCardProps,
+	HephFeedbackCardSkeleton,
 } from "@/components/practice-vocabulary/HephFeedbackCard";
 import {
 	DEFAULT_PRACTICE_GROUP_SORT,
 	sortByStanding,
 } from "@/components/practice-vocabulary/practice-group-list-order";
 import { formatGroupStandingBasis } from "@/components/practice-vocabulary/practice-trend-presentation";
-import {
-	countPracticeStandings,
-	PracticeGroupStandingRing,
-} from "@/components/practice-vocabulary/PracticeGroupStandingRing";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import {
 	PracticeTable,
 	PracticeTableRow,
-	RowLinkCell,
 	StandingCell,
 	SubjectCell,
 } from "@/components/practice-vocabulary/PracticeTable";
+import { countPracticeStandings } from "@/components/practice-vocabulary/standing-counts";
 import { StandingBadge, TrendNote } from "@/components/practice-vocabulary/StandingBadge";
 import { StandingSummaryBox } from "@/components/practice-vocabulary/StandingSummaryBox";
 import { WhereYouStand } from "@/components/practice-vocabulary/WhereYouStand";
@@ -47,15 +43,14 @@ import { TableCell } from "@/components/ui/table";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";
 
+import { LabelledBlock, NoDescription } from "./practice-profile-blocks";
+
 export interface PracticeGroupDetailLevelProps extends Partial<
 	Pick<HephFeedbackCardProps, "holdingUp" | "holdingUpNote" | "reviewedWork">
 > {
 	nested?: boolean;
-	/**
-	 * Where the level sits, from the drawer; mounted alone, the eyebrow is the kind and nothing
-	 * behind it.
-	 */
-	path?: LevelPath;
+	/** Where the level sits, from the drawer. */
+	path: LevelPath;
 	group?: PracticeGroup;
 	standing?: PracticeGroupStanding;
 	/** The group's practices, as the standings carry them; left out while they load. */
@@ -116,15 +111,15 @@ const loadingRow = (
 	</>
 );
 
+const NO_HELD: NonNullable<PracticeGroupDetailLevelProps["holdingUp"]> = [];
+const NO_WORK: NonNullable<PracticeGroupDetailLevelProps["reviewedWork"]> = [];
+const NO_SENTENCES: NonNullable<PracticeGroupDetailLevelProps["practiceSentences"]> = {};
+
 /**
  * One practice group as the profile's first detail level: where the reader stands in it, Heph's
  * word on what holds and the next step, and in two tabs the practices it reviews and what the
  * group is about. What the reviews found stays one level deeper, on the practice.
  */
-const NO_HELD: NonNullable<PracticeGroupDetailLevelProps["holdingUp"]> = [];
-const NO_WORK: NonNullable<PracticeGroupDetailLevelProps["reviewedWork"]> = [];
-const NO_SENTENCES: NonNullable<PracticeGroupDetailLevelProps["practiceSentences"]> = {};
-
 export function PracticeGroupDetailLevel({
 	nested,
 	path,
@@ -166,7 +161,13 @@ export function PracticeGroupDetailLevel({
 			renderRow={(practice) => (
 				<PracticeTableRow
 					open={practice.slug === openPracticeSlug}
-					onOpen={onOpenPractice && (() => onOpenPractice(practice.slug))}
+					link={
+						onOpenPractice && {
+							text: "Open practice",
+							name: practice.name,
+							onOpen: () => onOpenPractice(practice.slug),
+						}
+					}
 				>
 					<StandingCell
 						standing={practice.standing}
@@ -178,7 +179,6 @@ export function PracticeGroupDetailLevel({
 						badge={<PracticePill name={practice.name} />}
 						sentence={practiceSentences[practice.slug]}
 					/>
-					<RowLinkCell label={onOpenPractice && `Open ${practice.name}`}>Open practice</RowLinkCell>
 				</PracticeTableRow>
 			)}
 			empty={{
@@ -196,7 +196,7 @@ export function PracticeGroupDetailLevel({
 		body = (
 			// Heph's card, the tabs and the practices table, as they will be laid out.
 			<>
-				<HephFeedbackCard holdingUp={[]} reviewedWork={[]} isLoading />
+				<HephFeedbackCardSkeleton />
 				<PracticeTabsSkeleton tabs={2} />
 				{practicesTable}
 			</>
@@ -280,16 +280,13 @@ export function PracticeGroupDetailLevel({
 								support={standing?.trendSupport}
 								scope="group"
 							/>
-							<section className="flex flex-col gap-1.5" aria-labelledby="about-group-heading">
-								<SectionLabel as="h2" id="about-group-heading">
-									About this group
-								</SectionLabel>
+							<LabelledBlock label="About this group" className="flex flex-col gap-1.5">
 								{hasText(group.description) ? (
 									<p className="max-w-2xl text-sm">{group.description}</p>
 								) : (
-									<p className="text-sm text-muted-foreground">No description yet.</p>
+									<NoDescription />
 								)}
-							</section>
+							</LabelledBlock>
 						</div>
 					</TabsContent>
 				</Tabs>
@@ -335,7 +332,6 @@ export function PracticeGroupDetailLevel({
 				    regions): full width under the title below `sm`, beside it from there on. */}
 				{group && (isLoading || practiceCount > 0) && (
 					<StandingSummaryBox
-						ring={<PracticeGroupStandingRing counts={counts} />}
 						label={practiceCountLabel(practiceCount)}
 						counts={counts}
 						isLoading={isLoading}

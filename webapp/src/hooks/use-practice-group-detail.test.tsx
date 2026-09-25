@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PracticeStanding } from "@/api/types.gen";
 import { EMPTY_REVIEW_RUN_FEED } from "@/components/profile/review-runs";
 import { server } from "@/mocks/server";
+import { sleep } from "@/test/async";
 
 import { usePracticeGroupDetail } from "./use-practice-group-detail";
 
@@ -53,7 +54,25 @@ describe("usePracticeGroupDetail", () => {
 		expect(result.current.practice?.slug).toBe("scope-one-concern");
 	});
 
-	it("settles the feed without a request when the practice has no group to read runs from", async () => {
+	it("reads a practice's runs through its own group when the level opens on its own", async () => {
+		const groupsRead: unknown[] = [];
+		server.use(
+			http.get(
+				"*/workspaces/:workspaceSlug/practice-groups/:groupSlug/review-runs",
+				({ params }) => {
+					groupsRead.push(params.groupSlug);
+					return HttpResponse.json({ content: [], hasNext: false, page: 0, size: 10 });
+				},
+			),
+		);
+
+		const { result } = renderDetail({ practiceSlug: "scope-one-concern" });
+
+		await waitFor(() => expect(result.current.feed.status).toBe("ready"));
+		expect(groupsRead).toStrictEqual(["packaging"]);
+	});
+
+	it("opens a practice in no group, with a settled feed and no request", async () => {
 		const runs = vi.fn(() => HttpResponse.json({ content: [], hasNext: false, page: 0, size: 10 }));
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/practice-groups/:groupSlug/review-runs", runs),
@@ -63,7 +82,9 @@ describe("usePracticeGroupDetail", () => {
 		// skeleton on screen that no response can ever resolve.
 		const { result } = renderDetail({ practiceSlug: "write-tests" });
 
+		expect(result.current.practice?.slug).toBe("write-tests");
 		expect(result.current.feed).toStrictEqual(EMPTY_REVIEW_RUN_FEED);
-		await waitFor(() => expect(runs).not.toHaveBeenCalled());
+		await sleep(0);
+		expect(runs).not.toHaveBeenCalled();
 	});
 });

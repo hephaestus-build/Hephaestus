@@ -1,8 +1,8 @@
 // The palette this page and its levels share is `webapp/AGENTS.md` § Practice surfaces palette.
-import { MessageSquareTextIcon } from "lucide-react";
 import { useState } from "react";
 
 import type { PracticeGroup, PracticeStanding } from "@/api/types.gen";
+import type { LoadState } from "@/components/common/panel-state";
 import {
 	PracticeTabsList,
 	PracticeTabsRail,
@@ -11,30 +11,20 @@ import {
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Section } from "@/components/layout/Section";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
+import { HephFeedbackCardSkeleton } from "@/components/practice-vocabulary/HephFeedbackCard";
 import {
 	type FeedbackRatingProps,
-	newestFirst,
 	PracticeFeedbackCard,
 	type PracticeFeedbackCardEntry,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
-import { countPracticeStandings } from "@/components/practice-vocabulary/PracticeGroupStandingRing";
-import {
-	Empty,
-	EmptyDescription,
-	EmptyHeader,
-	EmptyMedia,
-	EmptyTitle,
-} from "@/components/ui/empty";
+import { countPracticeStandings } from "@/components/practice-vocabulary/standing-counts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 import type { ComposedOverview } from "./compose-overview";
-import {
-	DEFAULT_FEEDBACK_TAB,
-	FEEDBACK_TABS,
-	type FeedbackTab,
-	type PracticeTab,
-} from "./practice-profile-search";
+import { newestFirst } from "./practice-feedback-cards";
+import { FeedbackEmpty, type FeedbackEmptyProps } from "./practice-profile-blocks";
+import { FEEDBACK_TABS, type FeedbackTab, type PracticeTab } from "./practice-profile-search";
 import { PracticeFeedbackOverview } from "./PracticeFeedbackOverview";
 import { PracticeProfilePageHeader } from "./PracticeProfilePageHeader";
 
@@ -62,13 +52,9 @@ export interface PracticeProfilePageProps {
 	 */
 	onOpenPractice?: (practiceSlug: string, tab?: PracticeTab) => void;
 	/** The tab over the feedback cards, from the route's `feedback` search param. */
-	feedbackTab?: FeedbackTab;
+	feedbackTab: FeedbackTab;
 	onFeedbackTabChange?: (tab: FeedbackTab) => void;
-	/** The header's "See all practice groups": opens the level with the table of every practice. */
-	onShowAllPractices?: () => void;
-	isLoading: boolean;
-	error?: unknown;
-	onRetry?: () => void;
+	state: LoadState;
 }
 
 /**
@@ -85,21 +71,18 @@ const FEEDBACK_TAB_LABELS: Record<FeedbackTab, string> = {
 	all: "All",
 };
 
-/**
- * What a tab with no cards says, in the shape every practice surface says it in: the title names
- * what is missing and the sentence says when it will show up. A practice's own level uses the
- * same block for the same reason.
- */
-const APPEARS_WHEN_SEEN =
-	"Feedback appears once the same shortcoming keeps showing up on your work.";
-const EMPTY_TAB: Record<FeedbackTab, { title: string; description: string }> = {
-	newest: { title: "No feedback yet.", description: APPEARS_WHEN_SEEN },
-	open: { title: "No open feedback yet.", description: APPEARS_WHEN_SEEN },
+/** No open card; "Newest" lists only open cards, so it says the same. */
+const NO_OPEN_FEEDBACK: FeedbackEmptyProps = { title: "No open feedback yet." };
+
+/** What a tab with no cards says where it differs from every other empty list of feedback. */
+const EMPTY_TAB: Record<FeedbackTab, FeedbackEmptyProps> = {
+	newest: NO_OPEN_FEEDBACK,
+	open: NO_OPEN_FEEDBACK,
 	resolved: {
 		title: "No resolved feedback yet.",
 		description: "A card moves here once the work resolves it or you mark it as addressed.",
 	},
-	all: { title: "No feedback yet.", description: APPEARS_WHEN_SEEN },
+	all: {},
 };
 
 /**
@@ -135,12 +118,9 @@ export function PracticeProfilePage({
 	ratingProps,
 	onOpenGroup,
 	onOpenPractice,
-	feedbackTab = DEFAULT_FEEDBACK_TAB,
+	feedbackTab,
 	onFeedbackTabChange,
-	onShowAllPractices,
-	isLoading,
-	error,
-	onRetry,
+	state,
 }: PracticeProfilePageProps) {
 	const openGroupBySlug = (groupSlug: string) => {
 		const group = groups.find((candidate) => candidate.slug === groupSlug);
@@ -168,13 +148,18 @@ export function PracticeProfilePage({
 
 	// The alert alone, as `profile/ProfilePage` does: the header's "No practices set up yet" and a
 	// tab's "No feedback yet" are claims about the workspace, and a failed load has none to make.
-	if (error != null) {
+	if (state.status === "error") {
 		return (
 			<div className="mx-auto w-full max-w-xl">
-				<QueryErrorAlert error={error} title="Could not load your practices" onRetry={onRetry} />
+				<QueryErrorAlert
+					error={state.error}
+					title="Could not load your practices"
+					onRetry={state.onRetry}
+				/>
 			</div>
 		);
 	}
+	const isLoading = state.status === "loading";
 
 	return (
 		<div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
@@ -183,17 +168,19 @@ export function PracticeProfilePage({
 				counts={countPracticeStandings(practices)}
 				practiceCount={practices.length}
 				groupCount={groups.length}
-				onSeeAllPractices={onShowAllPractices}
 				isLoading={isLoading}
 			/>
-			<PracticeFeedbackOverview
-				overview={overview}
-				onOpenPractice={onOpenPractice}
-				groups={groups}
-				onOpenGroup={onOpenGroup && openGroupBySlug}
-				onReadFeedback={readFeedback}
-				isLoading={isLoading}
-			/>
+			{isLoading ? (
+				<HephFeedbackCardSkeleton />
+			) : (
+				<PracticeFeedbackOverview
+					overview={overview}
+					onOpenPractice={onOpenPractice}
+					groups={groups}
+					onOpenGroup={onOpenGroup && openGroupBySlug}
+					onReadFeedback={readFeedback}
+				/>
+			)}
 			<Section
 				size="lg"
 				title="Your feedback"
@@ -231,15 +218,7 @@ export function PracticeProfilePage({
 									<Skeleton key={index} className="h-64 w-full rounded-xl" />
 								))}
 							{!isLoading && cardsByTab[feedbackTab].length === 0 && (
-								<Empty>
-									<EmptyHeader>
-										<EmptyMedia variant="icon">
-											<MessageSquareTextIcon />
-										</EmptyMedia>
-										<EmptyTitle>{EMPTY_TAB[feedbackTab].title}</EmptyTitle>
-										<EmptyDescription>{EMPTY_TAB[feedbackTab].description}</EmptyDescription>
-									</EmptyHeader>
-								</Empty>
+								<FeedbackEmpty {...EMPTY_TAB[feedbackTab]} />
 							)}
 							{cardsByTab[feedbackTab].map((card) => (
 								<PracticeFeedbackCard

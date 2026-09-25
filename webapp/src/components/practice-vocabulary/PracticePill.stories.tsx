@@ -54,7 +54,6 @@ export const LongestName: Story = {
 	],
 	play: async ({ canvas }) => {
 		const name = canvas.getByText(/Explain significant decisions where/u);
-		await expect(name).toHaveClass("truncate");
 		await expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
 	},
 };

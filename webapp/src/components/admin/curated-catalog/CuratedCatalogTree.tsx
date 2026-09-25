@@ -2,7 +2,6 @@ import { GripVertical, MoreHorizontal } from "lucide-react";
 
 import type { CuratedGroup, CuratedPracticeSummary } from "@/api/types.gen";
 import { automatedReviewLimitationLabel } from "@/components/admin/practice-editor/evidence-presentation";
-import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
 import {
 	type ActionTriggerRef,
 	type CatalogEntryMoveActions,
@@ -11,6 +10,7 @@ import {
 	UNASSIGNED_CATALOG_BUCKET,
 } from "@/components/admin/practice-editor/SortableCatalogTree";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

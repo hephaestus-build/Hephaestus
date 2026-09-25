@@ -1,5 +1,10 @@
 import type { InAppFeedback, PracticeGroup } from "@/api/types.gen";
-import { count, type FeedbackTextSegment, refs, text } from "@/components/common/feedback-text";
+import {
+	count,
+	type FeedbackTextSegment,
+	refs,
+	text,
+} from "@/components/practice-vocabulary/feedback-text";
 import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import type {
 	PracticeFeedbackCardEntry,
@@ -7,6 +12,11 @@ import type {
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { formatDay } from "@/lib/dates";
 import { capitalise, hasText } from "@/lib/text";
+
+/** Newest first, by the timestamp the card shows. */
+export function newestFirst<T extends { timestamp: Date }>(cards: T[]): T[] {
+	return [...cards].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+}
 
 /** The line under an open card's next step, with the wire's own count. */
 const cleanCondition = (needed: number): FeedbackTextSegment[] => [
@@ -16,58 +26,45 @@ const cleanCondition = (needed: number): FeedbackTextSegment[] => [
 ];
 
 /**
- * How a piece of feedback closed, if it did — the server's rule, read off the wire: resolved by
- * the work coming back clean, resolved by the reader's own answer, or closed unresolved because
- * the practice's review rules changed. Which answers resolve is the server's to decide and it
- * dates the one that did; the card reads that date and takes only the wording from the answer.
- * When more than one happened, the earliest is what closed it, and its date and wording are the
- * card's.
+ * How a piece of feedback closed, if it did. When and by what is the server's to say, in
+ * `closedAt` and `closedBy`; the card only words it.
  */
 function closureOf(
 	feedback: InAppFeedback,
 ): { at: Date; state: "resolved" | "closed"; condition: FeedbackTextSegment[] } | undefined {
-	const { response, resolvedByDeveloperAt } = feedback;
-	// The server decides whether an answer resolves and says when; the card only picks the wording.
-	const byReader = resolvedByDeveloperAt
-		? {
-				at: resolvedByDeveloperAt,
-				state: "resolved" as const,
-				condition: [
-					text(
-						`Marked as ${response?.resolution === "NOT_APPLICABLE" ? "not applicable" : "addressed"} on ${formatDay(resolvedByDeveloperAt)}`,
-					),
-				],
-			}
-		: undefined;
-	const byWork = feedback.resolvedByWorkAt
-		? {
-				at: feedback.resolvedByWorkAt,
-				state: "resolved" as const,
+	const { closedAt: at, closedBy } = feedback;
+	if (at === undefined || closedBy === undefined) {
+		return undefined;
+	}
+	const day = formatDay(at);
+	switch (closedBy) {
+		case "WORK": {
+			return {
+				at,
+				state: "resolved",
 				condition:
 					feedback.cleanWork.length > 0
 						? [
-								text(`Resolved by the work on ${formatDay(feedback.resolvedByWorkAt)} · `),
+								text(`Resolved by the work on ${day} · `),
 								...refs(feedback.cleanWork.map((clean) => clean.reviewedWork)),
 								text(" came back clean"),
 							]
-						: [text(`Resolved by the work on ${formatDay(feedback.resolvedByWorkAt)}`)],
-			}
-		: undefined;
-	const byPractice = feedback.practiceChangedAt
-		? {
-				at: feedback.practiceChangedAt,
-				state: "closed" as const,
-				condition: [
-					text(
-						`Closed on ${formatDay(feedback.practiceChangedAt)} · the practice's review rules changed`,
-					),
-				],
-			}
-		: undefined;
-	// Ties go to the work, then the reader, then the practice: the order the glossary lists them.
-	return [byWork, byReader, byPractice]
-		.filter((closure) => closure !== undefined)
-		.sort((a, b) => a.at.getTime() - b.at.getTime())[0];
+						: [text(`Resolved by the work on ${day}`)],
+			};
+		}
+		case "DEVELOPER": {
+			const answer =
+				feedback.response?.resolution === "NOT_APPLICABLE" ? "not applicable" : "addressed";
+			return { at, state: "resolved", condition: [text(`Marked as ${answer} on ${day}`)] };
+		}
+		case "PRACTICE_CHANGED": {
+			return {
+				at,
+				state: "closed",
+				condition: [text(`Closed on ${day} · the practice's review rules changed`)],
+			};
+		}
+	}
 }
 
 /**
@@ -83,7 +80,7 @@ export function toFeedbackCard(
 	const closure = closureOf(feedback);
 	const reviewedWork: ReviewedWorkOutcome[] = feedback.evidence.map((evidence) => ({
 		ref: evidence.reviewedWork,
-		date: evidence.observedAt.toISOString(),
+		date: evidence.observedAt,
 		outcome: evidence.outcome,
 	}));
 	return {
@@ -108,10 +105,10 @@ export function toFeedbackCard(
 		condition: closure?.condition ?? cleanCondition(feedback.cleanNeeded),
 		cleanWork: feedback.cleanWork.map((clean) => ({
 			ref: clean.reviewedWork,
-			date: clean.reviewedAt.toISOString(),
+			date: clean.reviewedAt,
 		})),
 		cleanNeeded: feedback.cleanNeeded,
 		state: closure?.state ?? (feedback.readAt ? "open" : "new"),
-		timestamp: (closure?.at ?? feedback.preparedAt).toISOString(),
+		timestamp: closure?.at ?? feedback.preparedAt,
 	};
 }

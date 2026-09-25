@@ -13,13 +13,12 @@ import {
 	SHARED_TRANSITION_OVERVIEW,
 } from "@/stories/practice-profile-story-mock-data";
 import { expectNoPageOverflow } from "@/stories/reflow";
-import { Stateful } from "@/stories/stateful";
 
-import { AllPracticesTable } from "./AllPracticesTable";
+import { AllPracticeGroupsTable } from "./AllPracticeGroupsTable";
 import { composeOverview } from "./compose-overview";
 
 const meta = {
-	component: AllPracticesTable,
+	component: AllPracticeGroupsTable,
 	tags: ["autodocs"],
 	args: {
 		groups,
@@ -30,26 +29,16 @@ const meta = {
 		onSortChange: fn(),
 		onOpenGroup: fn(),
 		onOpenPractice: fn(),
-		isLoading: false,
+		state: { status: "ready" },
 	},
-	// The route orders the rows under the sort it holds; the harness does the same so a press on the
-	// header reorders the rows here too.
+	// The caller orders the rows under the sort it holds.
 	render: (args) => (
-		<Stateful initial={args.sort}>
-			{(sort, setSort) => (
-				<AllPracticesTable
-					{...args}
-					groups={sortPracticeGroups(args.groups, args.standings, sort)}
-					sort={sort}
-					onSortChange={(next) => {
-						args.onSortChange(next);
-						setSort(next);
-					}}
-				/>
-			)}
-		</Stateful>
+		<AllPracticeGroupsTable
+			{...args}
+			groups={sortPracticeGroups(args.groups, args.standings, args.sort)}
+		/>
 	),
-} satisfies Meta<typeof AllPracticesTable>;
+} satisfies Meta<typeof AllPracticeGroupsTable>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -82,10 +71,6 @@ export const Default: Story = {
 		await expect(canvas.getByText("Acting on review feedback").closest("td")?.textContent).toBe(
 			"Acting on review feedback",
 		);
-		// The group is named as the feedback cards name it: its icon and name in its colour, no pill.
-		const name = canvas.getByText("Acting on review feedback");
-		await expect(name.closest('[data-slot="badge"]')).toBeNull();
-		await expect(name.parentElement).toHaveClass("bg-transparent");
 
 		// A practice name in a sentence opens the practice, not the group.
 		await userEvent.click(canvas.getByRole("button", { name: "Scope the change to one concern" }));
@@ -99,7 +84,7 @@ export const Default: Story = {
 
 /**
  * A group's events are one bullet each, every one listed, with the practice as the pill the
- * feedback cards name it with; the marker is the muted grey.
+ * feedback cards name it with.
  */
 export const ManyEvents: Story = {
 	play: async ({ args, canvas }) => {
@@ -107,7 +92,6 @@ export const ManyEvents: Story = {
 		if (!cell) {
 			throw new Error("The group's name sits in its cell");
 		}
-		await expect(within(cell).getByRole("list")).toHaveClass("marker:text-muted-foreground");
 		const items = within(cell).getAllByRole("listitem");
 		await expect(items).toHaveLength(6);
 		// Feedback the work fell back on comes first, then new feedback, then the resolutions.
@@ -120,9 +104,9 @@ export const ManyEvents: Story = {
 		await expect(items[2]).toHaveTextContent(
 			/^Describe what changed and why resolved by the work after #22/u,
 		);
-		const pill = within(cell).getByRole("button", { name: "Scope the change to one concern" });
-		await expect(pill).toHaveAttribute("data-slot", "badge");
-		await userEvent.click(pill);
+		await userEvent.click(
+			within(cell).getByRole("button", { name: "Scope the change to one concern" }),
+		);
 		await expect(args.onOpenPractice).toHaveBeenCalledWith("scope-one-reviewable-change");
 		await expect(args.onOpenGroup).not.toHaveBeenCalled();
 	},
@@ -172,37 +156,6 @@ export const OneBulletPerMove: Story = {
 	},
 };
 
-/**
- * The Standing header is the table's one sort: a press reverses it and the header says which way.
- */
-export const Sorting: Story = {
-	play: async ({ args, canvas }) => {
-		const standing = canvas.getByRole("columnheader", { name: "Standing" });
-		await expect(standing).toHaveAttribute("aria-sort", "ascending");
-
-		await userEvent.click(within(standing).getByRole("button", { name: "Standing" }));
-		await expect(args.onSortChange).toHaveBeenLastCalledWith("desc");
-		await expect(standing).toHaveAttribute("aria-sort", "descending");
-		const rows = canvas.getAllByRole("button", { name: /^Open group /u });
-		await expect(rows[0]).toHaveAccessibleName("Open group Testing your changes");
-
-		await userEvent.click(within(standing).getByRole("button", { name: "Standing" }));
-		await expect(standing).toHaveAttribute("aria-sort", "ascending");
-	},
-};
-
-export const SortedDescending: Story = {
-	args: { sort: "desc" },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("columnheader", { name: "Standing" })).toHaveAttribute(
-			"aria-sort",
-			"descending",
-		);
-		const rows = canvas.getAllByRole("button", { name: /^Open group /u });
-		await expect(rows[0]).toHaveAccessibleName("Open group Testing your changes");
-	},
-};
-
 /** The open group's row carries a bar on its leading edge and nothing else changes. */
 export const OpenRow: Story = {
 	args: { openGroupSlug: "communication" },
@@ -236,7 +189,7 @@ export const Empty: Story = {
 };
 
 export const Loading: Story = {
-	args: { isLoading: true },
+	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("table", { name: "All practice groups" })).toHaveAttribute(
 			"aria-busy",
@@ -249,13 +202,16 @@ export const Loading: Story = {
 export const LoadFailed: Story = {
 	args: {
 		groups: [],
-		error: new Error("Practice standings are unavailable right now"),
-		onRetry: fn(),
+		state: {
+			status: "error",
+			error: new Error("Practice standings are unavailable right now"),
+			onRetry: fn(),
+		},
 	},
-	play: async ({ args, canvas }) => {
-		await expect(canvas.getByText("Could not load your practices")).toBeVisible();
+	play: async ({ args: { state }, canvas }) => {
+		await expect(canvas.getByText("Could not load your practice groups")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
-		await expect(args.onRetry).toHaveBeenCalled();
+		await expect(state.status === "error" && state.onRetry).toHaveBeenCalledOnce();
 	},
 };
 

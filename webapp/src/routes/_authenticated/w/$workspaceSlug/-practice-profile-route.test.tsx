@@ -86,11 +86,15 @@ async function openPractice(router: Awaited<ReturnType<typeof renderProfile>>) {
 		),
 	);
 	fireEvent.click(
-		await screen.findByRole("button", { name: `Open ${practice.name}` }, ROUTE_RENDER_WAIT),
+		await screen.findByRole(
+			"button",
+			{ name: `Open practice ${practice.name}` },
+			ROUTE_RENDER_WAIT,
+		),
 	);
 	await waitFor(() =>
 		expect(router.state.location.search.detail).toStrictEqual([
-			"practices:all",
+			"practice-groups:all",
 			group,
 			practiceEntry,
 		]),
@@ -130,7 +134,7 @@ describe("practice profile route", () => {
 		fireEvent.click(
 			await screen.findByRole("link", { name: "See all practice groups" }, ROUTE_RENDER_WAIT),
 		);
-		await waitFor(() => expect(detail()).toStrictEqual(["practices:all"]));
+		await waitFor(() => expect(detail()).toStrictEqual(["practice-groups:all"]));
 		fireEvent.click(
 			await screen.findByRole(
 				"button",
@@ -138,16 +142,22 @@ describe("practice profile route", () => {
 				ROUTE_RENDER_WAIT,
 			),
 		);
-		await waitFor(() => expect(detail()).toStrictEqual(["practices:all", group]));
+		await waitFor(() => expect(detail()).toStrictEqual(["practice-groups:all", group]));
 		fireEvent.click(
-			await screen.findByRole("button", { name: `Open ${practice.name}` }, ROUTE_RENDER_WAIT),
+			await screen.findByRole(
+				"button",
+				{ name: `Open practice ${practice.name}` },
+				ROUTE_RENDER_WAIT,
+			),
 		);
 
-		await waitFor(() => expect(detail()).toStrictEqual(["practices:all", group, practiceEntry]));
+		await waitFor(() =>
+			expect(detail()).toStrictEqual(["practice-groups:all", group, practiceEntry]),
+		);
 		// The list, the group and the practice: three levels, and Back pops exactly one.
 		expect(router.history).toHaveLength(entries + 3);
 		router.history.back();
-		await waitFor(() => expect(detail()).toStrictEqual(["practices:all", group]));
+		await waitFor(() => expect(detail()).toStrictEqual(["practice-groups:all", group]));
 	});
 
 	it("opens and closes an observation without writing the URL, so leaving the level takes one step", async () => {
@@ -175,7 +185,7 @@ describe("practice profile route", () => {
 		// The level was pushed on this visit, so its Back goes back in history — to the group.
 		fireEvent.click(screen.getByRole("button", { name: "Back" }));
 		await waitFor(() =>
-			expect(router.state.location.search.detail).toStrictEqual(["practices:all", group]),
+			expect(router.state.location.search.detail).toStrictEqual(["practice-groups:all", group]),
 		);
 	});
 
@@ -193,7 +203,7 @@ describe("practice profile route", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Back" }));
 
 		await waitFor(() => expect(search().detail).toStrictEqual([group]));
-		expect(search().practiceTab).toBeUndefined();
+		expect(router.state.location.searchStr).not.toContain("practiceTab");
 	});
 
 	it("keeps the URL silent on the default feedback tab and spells every other one", async () => {
@@ -205,8 +215,7 @@ describe("practice profile route", () => {
 		// still selected in the DOM is not a change.
 		fireEvent.click(await screen.findByRole("tab", { name: /^Newest/u, selected: false }));
 
-		await waitFor(() => expect(router.state.location.search.feedback).toBeUndefined());
-		expect(router.state.location.searchStr).toBe("");
+		await waitFor(() => expect(router.state.location.searchStr).toBe(""));
 	});
 
 	it("keeps the URL silent on the default sort direction, and the level a press from dismissed", async () => {
@@ -227,7 +236,9 @@ describe("practice profile route", () => {
 		);
 		fireEvent.click(standing());
 
-		await waitFor(() => expect(router.state.location.search.dir).toBeUndefined());
+		await waitFor(() =>
+			expect(standing().closest("th")?.getAttribute("aria-sort")).toBe("ascending"),
+		);
 		expect(router.state.location.searchStr).not.toContain("dir=");
 		// Sorting is a view of the open level, not a place: neither press left a history entry, and
 		// the level was pushed on this one, so Back still dismisses it in a single step.

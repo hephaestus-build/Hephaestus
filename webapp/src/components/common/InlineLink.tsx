@@ -23,12 +23,10 @@ export interface InlineLinkProps extends Omit<
 }
 
 /**
- * A link inside running text — a practice name, a work reference, a group, a crumb in a level's
- * path — and the one rule every inline link on a practice surface follows: plain text in the
- * text colour at rest, nothing dashed and nothing visible, and on hover or focus mentor blue
- * with a solid underline. The one component every such link renders through, so a name that
- * opens a level and one that opens the provider's page look alike. A reference with nowhere to
- * go wears none of it: a word that answers no press gets no hover. Rendered through
+ * A link inside running text — a practice name, a work reference, a crumb in a level's path —
+ * drawn to the practice surfaces' link rule (`webapp/AGENTS.md` § Practice surfaces palette), so a
+ * name that opens a level and one that opens the provider's page look alike. A reference with
+ * nowhere to go is a word, and a word that answers no press gets no hover. Rendered through
  * `useRender`, so it can stand in a `render=` slot such as a tooltip trigger's.
  */
 export function InlineLink({
@@ -46,7 +44,7 @@ export function InlineLink({
 	const interactive = defaultTagName !== "span" || render !== undefined;
 	// Only a real address opens elsewhere; a reference with no address is a word, icon and all.
 	const outbound = hasText(href) && external;
-	const ownProps: Record<string, unknown> = {
+	const ownProps: useRender.ElementProps<"a"> = {
 		className: cn(
 			"text-foreground",
 			interactive && [

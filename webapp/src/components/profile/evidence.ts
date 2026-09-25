@@ -1,5 +1,6 @@
 import type { EvidenceCitation, ObservationDetail } from "@/api/types.gen";
 import { evidenceSourceDef } from "@/components/practice-vocabulary/evidence-source-defs";
+import { andList } from "@/lib/text";
 
 export interface EvidenceLocation {
 	path: string;
@@ -13,8 +14,7 @@ export interface EvidenceLocation {
 	redacted: boolean;
 	/**
 	 * One changed passage, folded from the diff's two citations of it: what the lines read before
-	 * the change and what they read after. A folded block names no line range and no commit, since
-	 * each side carries its own and the block shows both.
+	 * the change and what they read after.
 	 */
 	change?: { before: string; after: string };
 }
@@ -81,7 +81,8 @@ function foldDiffSides(citations: EvidenceCitation[]): EvidenceLocation[] {
 
 /**
  * One citation as the profile reads it. A folded block keeps neither the side, the commit nor the
- * quote of the citation it grew from: those are one side's, and the block now carries both.
+ * quote of the citation it grew from, and is captioned with no line range: each side was read at
+ * its own revision, so any one of them would be true of one side only, and the block shows both.
  */
 function toLocation({ citation, change }: DiffBlock): EvidenceLocation {
 	if (change !== undefined) {
@@ -187,18 +188,10 @@ function consultedCheck(consulted: string[]): EvidenceCheck[] {
 	if (consulted.length === 0) {
 		return [];
 	}
-	return [{ term: "Read", detail: joinWithAnd(consulted.map(sourceLabel)) }];
+	return [{ term: "Read", detail: andList.format(consulted.map(sourceLabel)) }];
 }
 
 const sourceLabel = (sourceKind: string) => evidenceSourceDef(sourceKind).label;
-
-/** "A", "A and B", "A, B and C" — a list read as a sentence rather than as a set of chips. */
-function joinWithAnd(items: string[]): string {
-	if (items.length < 2) {
-		return items.join("");
-	}
-	return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
-}
 
 export function splitPath(path: string): { directory: string; fileName: string } {
 	const lastSlash = path.lastIndexOf("/");

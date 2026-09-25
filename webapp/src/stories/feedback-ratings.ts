@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import type { FeedbackResponseRequest } from "@/api/types.gen";
 import type { FeedbackRatingProps } from "@/components/practice-vocabulary/PracticeFeedbackCard";
-import { nextRating } from "@/hooks/use-in-app-feedback";
+import { nextRating, withComment } from "@/hooks/use-in-app-feedback";
 
 /**
  * What the reader said about one piece of feedback, and whether the comment band is still open
@@ -16,8 +16,8 @@ interface FeedbackRating {
 /**
  * The ratings a story holds in place of the server, keyed by feedback id: the same contract
  * `useInAppFeedback` fulfils on the wire, without a network, and on the hook's own `nextRating`
- * rule — a press on a rating opens the comment band; pressing the chosen rating again withdraws it
- * and closes the band; Send and Skip close the band and keep the rating.
+ * and `withComment` rules — a press on a rating opens the comment band; pressing the chosen rating
+ * again withdraws it and closes the band; Send and Skip close the band and keep the rating.
  */
 export function useFeedbackRatings() {
 	const [ratings, setRatings] = useState<Record<string, FeedbackRating | undefined>>({});
@@ -35,10 +35,11 @@ export function useFeedbackRatings() {
 				const response = nextRating(current?.response, usefulness);
 				return { response, commentOpen: response.usefulness !== undefined };
 			}),
-		onSendComment: ({ comment }) =>
+		onSendComment: (comment) =>
 			update(
 				feedbackId,
-				(current) => current && { response: { ...current.response, comment }, commentOpen: false },
+				(current) =>
+					current && { response: withComment(current.response, comment), commentOpen: false },
 			),
 		onSkipComment: () =>
 			update(feedbackId, (current) => current && { ...current, commentOpen: false }),

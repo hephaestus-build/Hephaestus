@@ -8,7 +8,7 @@ import type { FeedbackResponse, InAppFeedback } from "@/api/types.gen";
 import { nextRating, useInAppFeedback } from "@/hooks/use-in-app-feedback";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
-import { sleep } from "@/test/async";
+import { deferred, sleep } from "@/test/async";
 
 describe("nextRating", () => {
 	it("keeps the resolution and the comment when a rating replaces another", () => {
@@ -63,12 +63,20 @@ function inAppFeedback(response?: Omit<Wire<FeedbackResponse>, "feedbackId">): W
  * transitions differ only in that body. `reads` counts the GETs, because reading the cards is
  * what delivers them.
  */
-function renderFeedback(response?: Omit<Wire<FeedbackResponse>, "feedbackId">, enabled?: boolean) {
+function renderFeedback(
+	response?: Omit<Wire<FeedbackResponse>, "feedbackId">,
+	enabled?: boolean,
+	/** Holds every read after the first open until it settles. */
+	reread?: Promise<void>,
+) {
 	const written: { method: string; body: unknown }[] = [];
 	const reads: string[] = [];
 	server.use(
-		http.get("*/workspaces/:workspaceSlug/practices/feedback/in-app", ({ request }) => {
+		http.get("*/workspaces/:workspaceSlug/practices/feedback/in-app", async ({ request }) => {
 			reads.push(request.url);
+			if (reads.length > 1) {
+				await reread;
+			}
 			return HttpResponse.json([inAppFeedback(response)]);
 		}),
 		http.put(
@@ -108,6 +116,33 @@ describe("useInAppFeedback", () => {
 			method: "PUT",
 			body: { usefulness: "HELPFUL" },
 		});
+	});
+
+	it("shows the rating being written until the cards have been read again", async () => {
+		const reread = deferred();
+		const { result, written, reads } = renderFeedback(
+			{ usefulness: "UNHELPFUL" },
+			true,
+			reread.promise,
+		);
+		await waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+		act(() => {
+			result.current.ratingProps(feedbackId).onRate?.("HELPFUL");
+		});
+
+		// The write has landed and the cards are being read again, still carrying the rating it
+		// replaced: the buttons wait on the pressed rating, so "Saving…" and the comment band sit
+		// under the one the reader chose.
+		await waitFor(() => expect(reads).toHaveLength(2));
+		expect(written).toHaveLength(1);
+		expect(result.current.ratingProps(feedbackId)).toMatchObject({
+			usefulness: "HELPFUL",
+			commentOpen: true,
+			isPending: true,
+		});
+		reread.resolve();
+		await waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(false));
 	});
 
 	it("settles empty and asks for nothing while it is not enabled", async () => {

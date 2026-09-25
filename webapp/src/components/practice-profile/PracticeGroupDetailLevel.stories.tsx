@@ -15,12 +15,12 @@ import {
 import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
-import { composeNextStep, composeOverview, groupOverviewOf } from "./compose-overview";
+import { composeGroupOverview, composeNextStep } from "./compose-overview";
 import { PracticeGroupDetailLevel } from "./PracticeGroupDetailLevel";
 
 /** What the route composes for the group's level: its slice of the overview and its next step. */
 const groupOverview = (groupSlug: string) => ({
-	...groupOverviewOf(composeOverview(OVERVIEW_FIXTURE), groupSlug),
+	...composeGroupOverview(OVERVIEW_FIXTURE, groupSlug),
 	nextStep: composeNextStep(ALL_FEEDBACK_CARDS, groupSlug),
 });
 
@@ -32,6 +32,7 @@ const meta = {
 	parameters: { layout: "fullscreen" },
 	decorators: [withPageBehind],
 	args: {
+		path: { behind: [{ label: "Practice profile", depth: 0 }], onClose: fn() },
 		group: packagingGroup,
 		standing: packagingStanding,
 		practices: detailPractices,
@@ -39,6 +40,10 @@ const meta = {
 		onOpenPractice: fn(),
 		isLoading: false,
 		onRetry: fn(),
+	},
+	argTypes: {
+		// The close is the drawer stack's, which the render holds; only the crumbs come from here.
+		path: { control: false },
 	},
 	// Stateful, so Escape, an outside press and the header control really close the panel instead
 	// of firing an inert spy.
@@ -55,7 +60,7 @@ const meta = {
 							{...args}
 							nested={level.nested}
 							path={{
-								behind: [{ label: "Practice profile", depth: 0 }],
+								behind: args.path.behind,
 								onClose: (depth) => setStack(stack.slice(0, depth)),
 							}}
 						/>
@@ -92,24 +97,28 @@ export const Default: Story = {
 		const header = screen.getByRole("heading", { name: packagingGroup.name });
 		await expect(header).toBeVisible();
 		await expect(screen.getByText("Group")).toBeVisible();
-		// A line between the header and Heph's card, so the two do not touch.
-		await expect(
-			document.querySelector("[data-slot='drawer-body'] > [data-slot='separator']"),
-		).not.toBeNull();
-		// The practice count and its ring sit beside the title, in the header.
+		// The practice count and its ring sit beside the title, over the line that closes the
+		// header; Heph's card starts under it, so the two do not touch.
 		const summary = screen.getByText("five practices in this group");
 		await expect(summary).toBeVisible();
-		await expect(summary.closest("[data-slot='drawer-header']")).not.toBeNull();
+		const [line] = within(screen.getByRole("dialog")).getAllByRole("separator");
+		if (!line) {
+			throw new Error("Expected the line under the header.");
+		}
+		await expect(summary.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+			line.getBoundingClientRect().top,
+		);
+		await expect(
+			screen.getByRole("img", { name: "Heph, AI mentor" }).getBoundingClientRect().top,
+		).toBeGreaterThan(line.getBoundingClientRect().bottom);
 		await expect(screen.getByText("Next step")).toBeVisible();
 		const nextStep = screen.getByText(/That is the open next step on/u);
 		await expect(nextStep).toBeVisible();
-		// The practice the next step names, and each practice in the table, is the grey pill.
-		await expect(
+		// The practice the next step names opens the practice.
+		await userEvent.click(
 			within(nextStep).getByRole("button", { name: "Scope the change to one concern" }),
-		).toHaveAttribute("data-slot", "badge");
-		await expect(
-			screen.getByText("Keep the diff reviewable in one sitting").closest('[data-slot="badge"]'),
-		).not.toBeNull();
+		);
+		await expect(args.onOpenPractice).toHaveBeenLastCalledWith("scope-one-reviewable-change");
 		// Heph's card is the group's summary over the tabs; the practices open, counted.
 		await expect(screen.getByRole("tab", { name: "Practices 5" })).toHaveAttribute(
 			"aria-selected",
@@ -121,8 +130,10 @@ export const Default: Story = {
 		// linked.
 		await expect(screen.getByText(/^Feedback resolved by the work after/u)).toBeVisible();
 		await expect(screen.queryByText("Suggested next step")).not.toBeInTheDocument();
-		await userEvent.click(screen.getByRole("button", { name: `Open ${focusedChanges.name}` }));
-		await expect(args.onOpenPractice).toHaveBeenCalledWith(focusedChanges.slug);
+		await userEvent.click(
+			screen.getByRole("button", { name: `Open practice ${focusedChanges.name}` }),
+		);
+		await expect(args.onOpenPractice).toHaveBeenLastCalledWith(focusedChanges.slug);
 	},
 };
 
@@ -187,8 +198,6 @@ export const NoDescription: Story = {
 export const Sorting: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByText("Practices in this group"));
-		const names = () =>
-			practiceRows().map((row) => within(row).getByRole("button", { name: /^Open /u }).textContent);
 		await expect(practiceRows()).toHaveLength(5);
 		const standing = screen.getByRole("button", { name: "Standing" });
 		await expect(standing.closest("th")).toHaveAttribute("aria-sort", "ascending");
@@ -205,7 +214,6 @@ export const Sorting: Story = {
 		await expect(practiceRows()[0]).toHaveTextContent("Going well");
 		await expect(practiceRows()[0]).toHaveTextContent("Mark the change ready and link its issue");
 		await expect(practiceRows()[4]).toHaveTextContent("Needs attention");
-		await expect(names()).toHaveLength(5);
 	},
 };
 
@@ -277,10 +285,6 @@ export const OpenPracticeRow: Story = {
 		}
 		await expect(openRows).toHaveLength(1);
 		await expect(openRow).toHaveTextContent(focusedChanges.name);
-		// The open row's bar is drawn by its first cell, which reads the row's state.
-		await expect(openRow.querySelector("td")).toHaveClass(
-			"group-data-[state=open]/row:before:bg-mentor",
-		);
 	},
 };
 

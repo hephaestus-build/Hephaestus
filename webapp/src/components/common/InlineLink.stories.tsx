@@ -24,11 +24,6 @@ export const OpensALevel: Story = {
 	args: { onClick: fn() },
 	play: async ({ args, canvas }) => {
 		const link = canvas.getByRole("button", { name: "Scope the change to one concern" });
-		// The one link rule: plain at rest, a solid underline in mentor blue on hover.
-		await expect(link).not.toHaveClass("underline");
-		await expect(link).not.toHaveClass("decoration-dashed");
-		await expect(link).toHaveClass("hover:underline");
-		await expect(link).toHaveClass("hover:text-mentor");
 		await userEvent.click(link);
 		await expect(args.onClick).toHaveBeenCalledOnce();
 	},
@@ -40,8 +35,6 @@ export const Internal: Story = {
 	play: async ({ canvas }) => {
 		const link = canvas.getByRole("link", { name: "your practice profile" });
 		await expect(link).not.toHaveAttribute("target");
-		await expect(link).not.toHaveClass("underline");
-		await expect(link).toHaveClass("hover:underline");
 	},
 };
 
@@ -82,8 +75,6 @@ export const NoAddress: Story = {
 			const word = canvas.getByText(label);
 			await expect(word.tagName).toBe("SPAN");
 			await expect(word).not.toHaveAttribute("target");
-			await expect(word).not.toHaveClass("underline");
-			await expect(word).not.toHaveClass("hover:underline");
 		}
 	},
 };

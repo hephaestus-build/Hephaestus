@@ -14,13 +14,7 @@ import {
 	sortByStanding,
 } from "./practice-group-list-order";
 import { PracticePill } from "./PracticePill";
-import {
-	PracticeTable,
-	PracticeTableRow,
-	RowLinkCell,
-	StandingCell,
-	SubjectCell,
-} from "./PracticeTable";
+import { PracticeTable, PracticeTableRow, StandingCell, SubjectCell } from "./PracticeTable";
 
 const rows = practicesByGroup["review-ready-work"] ?? [];
 
@@ -56,10 +50,15 @@ const meta = {
 		rows,
 		rowKey: (practice: PracticeStanding) => practice.slug,
 		renderRow: (practice: PracticeStanding) => (
-			<PracticeTableRow onOpen={() => onOpen(practice.slug)}>
+			<PracticeTableRow
+				link={{
+					text: "Open practice",
+					name: practice.name,
+					onOpen: () => onOpen(practice.slug),
+				}}
+			>
 				<StandingCell standing={practice.standing} scope="practice" />
 				<SubjectCell badge={<PracticePill name={practice.name} />} />
-				<RowLinkCell label={`Open ${practice.name}`}>Open practice</RowLinkCell>
 			</PracticeTableRow>
 		),
 		empty: {
@@ -97,50 +96,56 @@ type Story = StoryObj<typeof meta>;
 /** What needs attention first; a press on Standing turns the order around. */
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
-		const links = () =>
-			canvas
-				.getAllByRole("button", { name: /^Open /u })
-				.map((link) => link.getAttribute("aria-label"));
-		await expect(links()).toStrictEqual([
-			"Open Keep the diff reviewable in one sitting",
-			"Open Scope the change to one concern",
-			"Open Describe what changed and why",
-			"Open Mark the change ready and link its issue",
-			"Open Write commit subjects a reviewer can follow",
+		const links = () => canvas.getAllByRole("button", { name: /^Open practice /u });
+		// Each name starts with the link's visible words, so a reader who speaks them reaches it
+		// (WCAG 2.2 SC 2.5.3); the practice after them tells the rows apart.
+		for (const link of links()) {
+			await expect(link).toHaveTextContent(/^Open practice$/u);
+		}
+		const names = () => links().map((link) => link.getAttribute("aria-label"));
+		await expect(names()).toStrictEqual([
+			"Open practice Keep the diff reviewable in one sitting",
+			"Open practice Scope the change to one concern",
+			"Open practice Describe what changed and why",
+			"Open practice Mark the change ready and link its issue",
+			"Open practice Write commit subjects a reviewer can follow",
 		]);
-		// The subject cell names the practice as the grey pill.
-		await expect(
-			canvas.getByText("Scope the change to one concern").closest('[data-slot="badge"]'),
-		).not.toBeNull();
 		await userEvent.click(canvas.getByRole("button", { name: "Standing" }));
 		await expect(args.onSortChange).toHaveBeenCalledWith("desc");
-		await expect(links()[0]).toBe("Open Mark the change ready and link its issue");
-		// The row's link follows the one link rule: plain at rest, blue with a solid underline
-		// when the row is hovered.
-		const link = canvas.getByRole("button", { name: "Open Scope the change to one concern" });
-		await expect(link).not.toHaveClass("underline");
-		await expect(link).toHaveClass("group-hover/row:underline");
-		await expect(link).toHaveClass("group-hover/row:text-mentor");
+		await expect(names()[0]).toBe("Open practice Mark the change ready and link its issue");
 	},
 };
 
 /**
  * The standing badge and the trend chip are buttons only so a keyboard reaches their sentences;
- * they answer nothing of their own, so a press on either is the row's.
+ * they answer nothing of their own, so a pointer's press on either is the row's. A keyboard's
+ * Enter on one is not: that reader came for the sentence, and the row's own link is theirs.
  */
 export const OpensFromTheStandingCell: Story = {
 	play: async ({ canvas }) => {
 		onOpen.mockClear();
 		const row = canvas
-			.getByRole("button", { name: "Open Describe what changed and why" })
+			.getByRole("button", { name: "Open practice Describe what changed and why" })
 			.closest("tr");
 		if (!row) {
 			throw new Error("Expected the row around its link.");
 		}
-		await userEvent.click(within(row).getByRole("button", { name: "Mixed feedback" }));
+		const badge = within(row).getByRole("button", { name: "Mixed feedback" });
+		await userEvent.click(badge);
 		await expect(onOpen).toHaveBeenLastCalledWith("describe-what-and-why");
 		await userEvent.click(within(row).getByRole("button", { name: "Not enough to compare yet" }));
 		await expect(onOpen).toHaveBeenCalledTimes(2);
+
+		onOpen.mockClear();
+		badge.focus();
+		await userEvent.keyboard("{Enter}");
+		await expect(onOpen).not.toHaveBeenCalled();
+		// The row's own link is the keyboard path, and Enter on it still opens the row.
+		within(row)
+			.getByRole("button", { name: "Open practice Describe what changed and why" })
+			.focus();
+		await userEvent.keyboard("{Enter}");
+		await expect(onOpen).toHaveBeenCalledWith("describe-what-and-why");
 	},
 };
 
@@ -163,9 +168,20 @@ export const Loading: Story = {
 export const Empty: Story = {
 	args: { rows: [] },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No practices here yet.")).toBeVisible();
-		await expect(
-			canvas.getByText("Practices appear here once an admin adds them to this group."),
-		).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Standing" })).toBeVisible();
+		// One cell across the three columns a row has without `heads`.
+		await expect(canvas.getByRole("cell")).toHaveAttribute("colspan", "3");
+	},
+};
+
+/** The empty block spans the columns the extra heads add as well, however many each covers. */
+export const EmptyUnderHeads: Story = {
+	args: { rows: [], heads: [{ label: "Trend", span: 2 }] },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("columnheader", { name: "Trend" })).toHaveAttribute(
+			"colspan",
+			"2",
+		);
+		await expect(canvas.getByRole("cell")).toHaveAttribute("colspan", "5");
 	},
 };

@@ -355,13 +355,6 @@ export const DismissedLevelDoesNotComeBack: Story = {
 	},
 };
 
-/**
- * A press on a visible layer brings that layer to the front. With three levels open, a press on
- * the strip the middle level leaves showing closes the front level only; a press on the page
- * beside the stack closes every level. The suite's reduced motion zeroes the peek, which would
- * leave no strip to press, so this story alone restores it in a plain stylesheet — unlayered, so
- * it outranks the utility.
- */
 /** A press at a point of the page, on whatever is drawn there. */
 async function pressAt(clientX: number, clientY: number) {
 	const target = document.elementFromPoint(clientX, clientY);
@@ -371,6 +364,13 @@ async function pressAt(clientX: number, clientY: number) {
 	await userEvent.pointer({ target, coords: { clientX, clientY }, keys: "[MouseLeft]" });
 }
 
+/**
+ * A press on a visible layer brings that layer to the front. With three levels open, a press on
+ * the strip the middle level leaves showing closes the front level only; a press on the page
+ * beside the stack closes every level. The suite's reduced motion zeroes the peek, which would
+ * leave no strip to press, so this story alone restores it in a plain stylesheet — unlayered, so
+ * it outranks the utility.
+ */
 export const PressingALayerBringsItToTheFront: Story = {
 	args: {
 		stack: [

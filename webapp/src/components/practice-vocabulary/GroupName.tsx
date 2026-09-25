@@ -17,8 +17,7 @@ export interface GroupNameProps {
 /**
  * A group's icon before its name, both in the group's colour, with the name an `InlineLink` under
  * the one rule every link on the page follows. The pill's ground is dropped in both themes: this is
- * a name, not a badge. The feedback cards and the practices table name a group through it, so the
- * two read as one thing.
+ * a name, not a badge.
  */
 export function GroupName({ name, icon: Icon, pill, onOpen, className }: GroupNameProps) {
 	return (

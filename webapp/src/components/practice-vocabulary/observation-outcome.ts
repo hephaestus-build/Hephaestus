@@ -1,13 +1,7 @@
-import {
-	CircleDashedIcon,
-	CircleHelpIcon,
-	CircleXIcon,
-	type LucideIcon,
-	ShieldCheckIcon,
-} from "lucide-react";
+import { CircleDashedIcon, CircleXIcon, ShieldCheckIcon } from "lucide-react";
 
 import type { InAppEvidence } from "@/api/types.gen";
-import type { StatusDef } from "@/components/common/status-def";
+import type { StatusDefs } from "@/components/common/status-def";
 
 import type { Assessment } from "./assessment-defs";
 import { ASSESSMENT_STATUS_DEFS, type AssessmentStatus } from "./assessment-status-defs";
@@ -42,53 +36,42 @@ export type ObservationOutcome =
 	| "UNDETERMINED";
 
 /**
- * The words, icon, colour and one-line description of each outcome, in the order a reader ranks
- * them: the two positive cells, the two negative ones, then the two statuses under which nothing
- * was judged. The icons of the assessed cells are the outcome registry's own, so a strength and a
- * problem look the same here as on any surface that only tells positive from negative; the two
- * statuses describe themselves in the status registry's sentences.
+ * Each outcome in the order a reader ranks them: the two positive cells, the two negative ones,
+ * then the two statuses under which nothing was judged. The assessed cells take the outcome
+ * registry's icon and tone, so a strength and a problem look the same here as on any surface that
+ * only tells positive from negative; the two statuses are the status registry's.
  */
-export const OBSERVATION_OUTCOME_PRESENTATION = {
+export const OBSERVATION_OUTCOME_PRESENTATION: StatusDefs<ObservationOutcome> = {
 	PRESENT_GOOD: {
 		label: "Strength shown",
 		icon: OUTCOME_DEFS.POSITIVE.icon,
-		className: "text-success",
+		badgeVariant: OUTCOME_DEFS.POSITIVE.badgeVariant,
 		description: "The practice was applied in this work, and that is worth keeping.",
 	},
 	ABSENT_BAD: {
 		label: "Risk avoided",
 		icon: ShieldCheckIcon,
-		className: "text-success",
+		badgeVariant: OUTCOME_DEFS.POSITIVE.badgeVariant,
 		description: "A harmful behaviour could have appeared in the work and did not.",
 	},
 	PRESENT_BAD: {
 		label: "Needs improvement",
 		icon: OUTCOME_DEFS.NEGATIVE.icon,
-		className: "text-destructive",
+		badgeVariant: OUTCOME_DEFS.NEGATIVE.badgeVariant,
 		description: "Something in this work goes against the practice.",
 	},
 	ABSENT_GOOD: {
 		label: "Expected practice missing",
 		icon: CircleXIcon,
-		className: "text-destructive",
+		badgeVariant: OUTCOME_DEFS.NEGATIVE.badgeVariant,
 		description: "The practice should have been applied in this work and was not.",
 	},
 	NOT_APPLICABLE: {
-		label: ASSESSMENT_STATUS_DEFS.NOT_APPLICABLE.label,
+		...ASSESSMENT_STATUS_DEFS.NOT_APPLICABLE,
 		icon: CircleDashedIcon,
-		className: "text-muted-foreground",
-		description: ASSESSMENT_STATUS_DEFS.NOT_APPLICABLE.description,
 	},
-	UNDETERMINED: {
-		label: ASSESSMENT_STATUS_DEFS.UNDETERMINED.label,
-		icon: CircleHelpIcon,
-		className: "text-muted-foreground",
-		description: ASSESSMENT_STATUS_DEFS.UNDETERMINED.description,
-	},
-} as const satisfies Record<
-	ObservationOutcome,
-	Pick<StatusDef, "label" | "description"> & { icon: LucideIcon; className: string }
->;
+	UNDETERMINED: ASSESSMENT_STATUS_DEFS.UNDETERMINED,
+};
 
 /** The status explains an unassessed observation; an assessed one is the cell its two axes name. */
 export function observationOutcome(observation: ObservationOutcomeInput): ObservationOutcome {

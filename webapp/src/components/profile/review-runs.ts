@@ -6,7 +6,7 @@ import type {
 	PracticeGroupReviewRun,
 	PracticeGroupReviewRunsPage,
 } from "@/api/types.gen";
-import type { PanelState } from "@/components/common/panel-state";
+import { type PanelState, queryLoadState } from "@/components/common/panel-state";
 import { loadedPages } from "@/runtime/tanstack-query/spring-page";
 
 /** The review-run feed of one practice level, with its paging while earlier runs exist. */
@@ -31,8 +31,7 @@ export const EMPTY_REVIEW_RUN_FEED: ReviewRunFeedState = {
 
 /**
  * How every review-run feed pages: a page says whether another follows and which number it is, and
- * the feed ends where it does not. The developer's own level and an admin's user view read the
- * same endpoint shape, so the rule is written once.
+ * the feed ends where it does not.
  */
 export function nextReviewRunPage(lastPage: PracticeGroupReviewRunsPage): number | undefined {
 	return lastPage.hasNext === true ? (lastPage.page ?? 0) + 1 : undefined;
@@ -52,17 +51,9 @@ interface ReviewRunQuery {
 
 /** One infinite query as the feed's state: failed, loading, or the loaded pages as one list. */
 export function reviewRunFeedState(query: ReviewRunQuery): ReviewRunFeedState {
-	if (query.isError) {
-		return {
-			status: "error",
-			error: query.error,
-			onRetry: () => {
-				void query.refetch();
-			},
-		};
-	}
-	if (query.isPending) {
-		return { status: "loading" };
+	const state = queryLoadState(query);
+	if (state.status !== "ready") {
+		return state;
 	}
 	return {
 		status: "ready",
@@ -81,23 +72,18 @@ export function reviewRunFeedState(query: ReviewRunQuery): ReviewRunFeedState {
  * full, so nothing is loaded when one opens and there is nothing for the route to hold.
  */
 export interface ObservationControls {
-	onRespond?: (observation: ObservationDetail, response: FeedbackResponse) => void;
-	/** The feedback whose response is being written; its row's buttons wait. */
-	pendingFeedbackId?: string;
+	onRespond?: (observation: ObservationDetail, response: FeedbackResponseRequest) => void;
+	/**
+	 * The response being written to each piece of feedback; a row shows it over the one it arrived
+	 * with, and its buttons wait until the write lands.
+	 */
+	pendingResponses?: ReadonlyMap<string, FeedbackResponseRequest>;
 }
-/** Complete replacement payload for a feedback response. */
-export type FeedbackResponse = FeedbackResponseRequest;
-export function isEmptyFeedbackResponse(response: FeedbackResponse): boolean {
+
+export function isEmptyFeedbackResponse(response: FeedbackResponseRequest): boolean {
 	return (
 		response.usefulness === undefined &&
 		response.resolution === undefined &&
 		(response.comment === undefined || response.comment.trim() === "")
 	);
-}
-export function feedbackResponseOf(observation: ObservationDetail): FeedbackResponse {
-	return {
-		usefulness: observation.feedbackResponse?.usefulness,
-		resolution: observation.feedbackResponse?.resolution,
-		comment: observation.feedbackResponse?.comment,
-	};
 }

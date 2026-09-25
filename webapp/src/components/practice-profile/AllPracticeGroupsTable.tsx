@@ -1,29 +1,28 @@
 import { ClipboardCheckIcon } from "lucide-react";
 
 import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
-import { BulletList } from "@/components/common/BulletList";
-import type { FeedbackTextSegment } from "@/components/common/feedback-text";
-import { FeedbackText } from "@/components/common/FeedbackText";
+import type { LoadState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import type { FeedbackTextSegment } from "@/components/practice-vocabulary/feedback-text";
+import { FeedbackText } from "@/components/practice-vocabulary/FeedbackText";
 import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { GroupName } from "@/components/practice-vocabulary/GroupName";
 import type { SortDirection } from "@/components/practice-vocabulary/practice-group-list-order";
-import {
-	countPracticeStandings,
-	PracticeGroupStandingRing,
-	StandingCountsList,
-} from "@/components/practice-vocabulary/PracticeGroupStandingRing";
+import { PracticeGroupStandingRing } from "@/components/practice-vocabulary/PracticeGroupStandingRing";
 import {
 	PracticeTable,
 	PracticeTableRow,
-	RowLinkCell,
 	StandingCell,
 	SubjectCell,
 } from "@/components/practice-vocabulary/PracticeTable";
+import { countPracticeStandings } from "@/components/practice-vocabulary/standing-counts";
+import { StandingCountsList } from "@/components/practice-vocabulary/StandingCountsList";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TableCell, TableHead } from "@/components/ui/table";
+import { TableCell } from "@/components/ui/table";
 
-export interface AllPracticesTableProps {
+import { ALL_PRACTICE_GROUPS } from "./practice-profile-search";
+
+export interface AllPracticeGroupsTableProps {
 	/** Already sorted by the caller under `sort`. */
 	groups: PracticeGroup[];
 	standings: Record<string, PracticeGroupStanding | undefined>;
@@ -43,9 +42,7 @@ export interface AllPracticesTableProps {
 	openGroupSlug?: string;
 	/** Opens a practice named inside a group's sentence. */
 	onOpenPractice?: (practiceSlug: string) => void;
-	isLoading: boolean;
-	error?: unknown;
-	onRetry?: () => void;
+	state: LoadState;
 }
 
 interface GroupRowProps {
@@ -71,7 +68,16 @@ function GroupRow({
 	const counts = countPracticeStandings(practices);
 
 	return (
-		<PracticeTableRow open={open} onOpen={onOpenGroup && (() => onOpenGroup(group))}>
+		<PracticeTableRow
+			open={open}
+			link={
+				onOpenGroup && {
+					text: "Open group",
+					name: group.name,
+					onOpen: () => onOpenGroup(group),
+				}
+			}
+		>
 			<StandingCell
 				standing={standing?.standing ?? "NOT_OBSERVED"}
 				direction={standing?.direction}
@@ -89,17 +95,15 @@ function GroupRow({
 
 			<SubjectCell badge={<GroupName name={group.name} icon={Icon} pill={pill} />}>
 				{sentences.length > 0 && (
-					<BulletList className="max-w-md text-sm">
+					<ul className="max-w-md list-disc space-y-1 pl-4 text-sm marker:text-muted-foreground">
 						{sentences.map((sentence, index) => (
 							<li key={index}>
 								<FeedbackText segments={sentence} onOpenPractice={onOpenPractice} />
 							</li>
 						))}
-					</BulletList>
+					</ul>
 				)}
 			</SubjectCell>
-
-			<RowLinkCell label={onOpenGroup && `Open group ${group.name}`}>Open group</RowLinkCell>
 		</PracticeTableRow>
 	);
 }
@@ -140,7 +144,7 @@ const NO_SENTENCES: FeedbackTextSegment[][] = [];
  * row opens its group through the "Open group" at its end, and a practice's pill opens the
  * practice.
  */
-export function AllPracticesTable({
+export function AllPracticeGroupsTable({
 	groups,
 	standings,
 	practicesByGroup,
@@ -150,28 +154,25 @@ export function AllPracticesTable({
 	onOpenGroup,
 	openGroupSlug,
 	onOpenPractice,
-	isLoading,
-	error,
-	onRetry,
-}: AllPracticesTableProps) {
-	if (error != null) {
+	state,
+}: AllPracticeGroupsTableProps) {
+	if (state.status === "error") {
 		return (
-			<QueryErrorAlert error={error} title="Could not load your practices" onRetry={onRetry} />
+			<QueryErrorAlert
+				error={state.error}
+				title="Could not load your practice groups"
+				onRetry={state.onRetry}
+			/>
 		);
 	}
 
 	return (
 		<PracticeTable
-			aria-label="All practice groups"
+			aria-label={ALL_PRACTICE_GROUPS}
 			sort={sort}
 			onSortChange={onSortChange}
-			heads={
-				<TableHead colSpan={2}>
-					<span className="sr-only">Practices by standing</span>
-				</TableHead>
-			}
+			heads={[{ label: <span className="sr-only">Practices by standing</span>, span: 2 }]}
 			subjectHead="Practice group"
-			columns={5}
 			rows={groups}
 			rowKey={(group) => group.slug}
 			renderRow={(group) => (
@@ -191,7 +192,7 @@ export function AllPracticesTable({
 				description:
 					"Practice groups appear here once an admin sets up the practices this workspace reviews.",
 			}}
-			isLoading={isLoading}
+			isLoading={state.status === "loading"}
 			loadingRow={loadingRow}
 		/>
 	);

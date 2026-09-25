@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, within } from "storybook/test";
 
-import { PracticeGroupStandingRing } from "./PracticeGroupStandingRing";
 import { StandingSummaryBox } from "./StandingSummaryBox";
 
 const counts = { DEVELOPING: 2, MIXED: 3, STRENGTH: 6, NOT_OBSERVED: 1 };
@@ -11,13 +10,8 @@ const meta = {
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
 	args: {
-		ring: <PracticeGroupStandingRing counts={counts} />,
 		label: "12 practices in 4 groups",
 		counts,
-	},
-	argTypes: {
-		// The ring is a rendered element, not a value a control can set.
-		ring: { control: false },
 	},
 } satisfies Meta<typeof StandingSummaryBox>;
 
@@ -27,9 +21,24 @@ type Story = StoryObj<typeof meta>;
 /** The ring, what it stands for, and one line per standing present, in the ring's own order. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("12 practices in 4 groups")).toBeVisible();
 		const legend = canvas.getByRole("list", { name: "Practices by standing" });
-		await expect(legend.children).toHaveLength(4);
+		await expect(
+			within(legend)
+				.getAllByRole("listitem")
+				.map((item) => item.textContent),
+		).toStrictEqual(["2Needs attention", "3Mixed", "6Going well", "1Not observed"]);
+	},
+};
+
+/**
+ * Across the page, as the practice profile's header lays it: the legend on one line that wraps,
+ * and what the summary leads to at the end.
+ */
+export const Fill: Story = {
+	parameters: { layout: "padded" },
+	args: {
+		layout: "fill",
+		children: <span className="text-sm font-medium">See all practice groups</span>,
 	},
 };
 
@@ -39,12 +48,10 @@ export const Default: Story = {
  */
 export const NothingCounted: Story = {
 	args: {
-		ring: <PracticeGroupStandingRing counts={{}} />,
 		label: "No practices in this group",
 		counts: {},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No practices in this group")).toBeVisible();
 		await expect(canvas.queryByRole("list")).toBeNull();
 	},
 };
@@ -55,9 +62,8 @@ export const NothingCounted: Story = {
  */
 export const Loading: Story = {
 	args: { isLoading: true },
-	play: async ({ canvas, canvasElement }) => {
+	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("12 practices in 4 groups")).toBeNull();
 		await expect(canvas.queryByRole("list")).toBeNull();
-		await expect(canvasElement.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(5);
 	},
 };

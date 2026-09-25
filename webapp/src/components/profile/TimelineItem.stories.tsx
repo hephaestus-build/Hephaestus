@@ -4,10 +4,6 @@ import { daysBefore } from "@/stories/story-clock";
 
 import { TimelineItem } from "./TimelineItem";
 
-/**
- * One row on a vertical timeline: a label column, a dot on a connecting rail, then the content.
- * Rows without a label join the group above — same rail, no dot of their own.
- */
 const meta = {
 	component: TimelineItem,
 	tags: ["autodocs"],
@@ -31,13 +27,6 @@ export const Default: Story = {
 		at: new Date(daysBefore(2)),
 		label: "2 days ago",
 		children: row("Something happened here."),
-	},
-};
-
-/** A grouped row: no label and no dot, because the row above already names this moment. */
-export const GroupedRow: Story = {
-	args: {
-		children: row("Same moment as the row above."),
 	},
 };
 

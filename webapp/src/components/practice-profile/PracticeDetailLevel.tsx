@@ -1,6 +1,5 @@
-import { MessageSquareTextIcon } from "lucide-react";
-
 import type { ReactNode } from "react";
+
 import type { PracticeStanding } from "@/api/types.gen";
 import {
 	PracticeTabsList,
@@ -9,7 +8,6 @@ import {
 	PracticeTabsTrigger,
 } from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { SectionLabel } from "@/components/common/SectionLabel";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { Section } from "@/components/layout/Section";
@@ -18,7 +16,6 @@ import { isSettledStanding } from "@/components/practice-vocabulary/practice-gro
 import { formatStandingBasis } from "@/components/practice-vocabulary/practice-trend-presentation";
 import {
 	type FeedbackRatingProps,
-	newestFirst,
 	PracticeFeedbackCard,
 	type PracticeFeedbackCardEntry,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
@@ -31,17 +28,12 @@ import {
 } from "@/components/profile/review-runs";
 import { ReviewRunFeed, ReviewRunFeedSkeleton } from "@/components/profile/ReviewRunFeed";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
-import {
-	Empty,
-	EmptyDescription,
-	EmptyHeader,
-	EmptyMedia,
-	EmptyTitle,
-} from "@/components/ui/empty";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";
 
-import { DEFAULT_PRACTICE_TAB, PRACTICE_TABS, type PracticeTab } from "./practice-profile-search";
+import { newestFirst } from "./practice-feedback-cards";
+import { FeedbackEmpty, LabelledBlock, NoDescription } from "./practice-profile-blocks";
+import { PRACTICE_TABS, type PracticeTab } from "./practice-profile-search";
 
 const TAB_LABELS: Record<PracticeTab, string> = {
 	observations: "Observations",
@@ -54,15 +46,13 @@ export interface PracticeDetailLevelProps {
 	/**
 	 * Where the level sits, from the drawer: the path is what names the group this practice is in.
 	 */
-	path?: LevelPath;
+	path: LevelPath;
 	/** Returns to the group's level under this one; a card's group name is a link only with it. */
 	onOpenGroup?: () => void;
-	/** Opens another practice a card's text names; without it the name is a word. */
-	onOpenPractice?: (practiceSlug: string) => void;
 	/** The practice, as the standings carry it: the catalog's words and where the reader stands. */
 	practice?: PracticeStanding;
 	/** The tab shown, from the route's `practiceTab` search param. */
-	tab?: PracticeTab;
+	tab: PracticeTab;
 	onTabChange?: (tab: PracticeTab) => void;
 	feed?: ReviewRunFeedState;
 	/** The developer's practice feedback; the level shows the cards written about this practice. */
@@ -72,7 +62,8 @@ export interface PracticeDetailLevelProps {
 	 * rated.
 	 */
 	ratingProps?: (feedbackId: string) => FeedbackRatingProps;
-	skeletonRows?: number;
+	/** How many rows the feed draws while its first page loads. */
+	skeletonRows: number;
 	/** The reader's response to an observation, from the route. */
 	observations?: ObservationControls;
 	isLoading: boolean;
@@ -104,14 +95,13 @@ export function PracticeDetailLevel({
 	nested,
 	path,
 	onOpenGroup,
-	onOpenPractice,
 	practice,
-	tab = DEFAULT_PRACTICE_TAB,
+	tab,
 	onTabChange,
 	feed = EMPTY_REVIEW_RUN_FEED,
 	feedbackCards = NO_CARDS,
 	ratingProps,
-	skeletonRows = 3,
+	skeletonRows,
 	observations,
 	isLoading,
 	error,
@@ -153,7 +143,6 @@ export function PracticeDetailLevel({
 			card={card}
 			{...ratingProps?.(card.feedbackId)}
 			onLearnMore={onTabChange && (() => onTabChange("about"))}
-			onOpenPractice={onOpenPractice}
 			onOpenGroup={onOpenGroup && (() => onOpenGroup())}
 		/>
 	);
@@ -228,40 +217,22 @@ export function PracticeDetailLevel({
 						description="The feedback written about this practice: the open card, then the ones that resolved, newest first."
 					>
 						{feedbackCount === 0 ? (
-							<Empty>
-								<EmptyHeader>
-									<EmptyMedia variant="icon">
-										<MessageSquareTextIcon />
-									</EmptyMedia>
-									<EmptyTitle>No feedback yet.</EmptyTitle>
-									<EmptyDescription>
-										Feedback appears once the same shortcoming keeps showing up on your work.
-									</EmptyDescription>
-								</EmptyHeader>
-							</Empty>
+							<FeedbackEmpty />
 						) : (
 							<div className="flex flex-col gap-6">
 								{feedback.open && (
-									<section
-										className="flex flex-col gap-2.5"
-										aria-labelledby="current-feedback-heading"
-									>
-										<SectionLabel as="h3" id="current-feedback-heading">
-											Current feedback
-										</SectionLabel>
+									<LabelledBlock label="Current feedback" as="h3" className="flex flex-col gap-2.5">
 										{feedbackCard(feedback.open)}
-									</section>
+									</LabelledBlock>
 								)}
 								{feedback.resolved.length > 0 && (
-									<section
+									<LabelledBlock
+										label="Resolved feedback"
+										as="h3"
 										className="flex flex-col gap-2.5"
-										aria-labelledby="resolved-feedback-heading"
 									>
-										<SectionLabel as="h3" id="resolved-feedback-heading">
-											Resolved feedback
-										</SectionLabel>
 										{feedback.resolved.map(feedbackCard)}
-									</section>
+									</LabelledBlock>
 								)}
 							</div>
 						)}
@@ -282,28 +253,19 @@ export function PracticeDetailLevel({
 							scope="practice"
 						/>
 						{hasText(practice.whyItMatters) && (
-							<section className="flex flex-col gap-1.5" aria-labelledby="why-it-matters-heading">
-								<SectionLabel as="h2" id="why-it-matters-heading">
-									Why it matters
-								</SectionLabel>
+							<LabelledBlock label="Why it matters" className="flex flex-col gap-1.5">
 								<p className="max-w-2xl text-sm">{practice.whyItMatters}</p>
-							</section>
+							</LabelledBlock>
 						)}
 						{hasText(practice.whatGoodLooksLike) && (
-							<section className="flex flex-col gap-1.5" aria-labelledby="what-good-heading">
-								<SectionLabel as="h2" id="what-good-heading">
-									What good looks like
-								</SectionLabel>
+							<LabelledBlock label="What good looks like" className="flex flex-col gap-1.5">
 								<p className="max-w-2xl text-sm">{practice.whatGoodLooksLike}</p>
-							</section>
+							</LabelledBlock>
 						)}
 						{!hasText(practice.whyItMatters) && !hasText(practice.whatGoodLooksLike) && (
-							<section className="flex flex-col gap-1.5" aria-labelledby="about-practice-heading">
-								<SectionLabel as="h2" id="about-practice-heading">
-									About this practice
-								</SectionLabel>
-								<p className="text-sm text-muted-foreground">No description yet.</p>
-							</section>
+							<LabelledBlock label="About this practice" className="flex flex-col gap-1.5">
+								<NoDescription />
+							</LabelledBlock>
 						)}
 					</div>
 				</TabsContent>
@@ -312,7 +274,7 @@ export function PracticeDetailLevel({
 	} else {
 		body = (
 			<p className="text-sm text-muted-foreground">
-				This practice does not exist or is not reviewed in this group.
+				This practice does not exist or is not reviewed in this workspace.
 			</p>
 		);
 	}

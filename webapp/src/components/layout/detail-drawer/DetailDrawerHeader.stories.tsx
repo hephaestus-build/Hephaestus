@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, screen, userEvent, waitFor } from "storybook/test";
 
-import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { DrawerBody, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { withPageBehind } from "@/stories/decorators";
 import { expectSettledVisible } from "@/stories/overlay";

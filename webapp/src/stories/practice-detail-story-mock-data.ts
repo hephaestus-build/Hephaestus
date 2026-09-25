@@ -161,10 +161,6 @@ export const detailRun: PracticeGroupReviewRun = {
 	reviewId: "00000000-0000-0000-0000-000000000101",
 	reviewedAt: daysBefore(2),
 	reviewedWork: pullRequest(902),
-	lead: "The change is sound, but it carries a package move and a caching change in one diff.",
-	practicesEvaluated: 19,
-	practicesEligible: 19,
-	durationSeconds: 528,
 	observations: [
 		detailObservation,
 		{
@@ -265,41 +261,6 @@ export const searchedAndFoundNothing: ObservationDetail = {
 			consulted: ["scm.pull-request.diff", "scm.repository.tree"],
 			boundary:
 				"every test file the diff touches and the repository's own test tree; I did not read test sources outside it",
-		},
-	},
-};
-
-/** The practice had nothing to judge here, with the fact about the work that settled it. */
-export const nothingToJudge: ObservationDetail = {
-	...onThatPullRequest,
-	id: "00000000-0000-0000-0000-000000000141",
-	summary: "This change performs no network request",
-	assessmentStatus: "NOT_APPLICABLE",
-	evidence: {
-		detector: "practice-observer",
-		citations: [],
-		inapplicability: {
-			subject: "how a change handles a network call that times out",
-			consulted: ["scm.pull-request.diff"],
-			ruledOutBy: "nothing in the diff calls out of the process",
-		},
-	},
-};
-
-/** The review could not settle the question, and says what would have. */
-export const couldNotSettleIt: ObservationDetail = {
-	...onThatPullRequest,
-	id: "00000000-0000-0000-0000-000000000151",
-	summary: "The evidence does not settle whether the rename was asked for",
-	assessmentStatus: "UNDETERMINED",
-	evidenceRationale:
-		"The description mentions a review thread the review was not given, so the two changes may have been requested together.",
-	evidence: {
-		detector: "practice-observer",
-		citations: [],
-		undecidability: {
-			openQuestion: "whether a reviewer asked for the package move in this same request",
-			wouldSettleIt: "the review thread the description points at",
 		},
 	},
 };

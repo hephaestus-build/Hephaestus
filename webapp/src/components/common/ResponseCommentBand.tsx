@@ -75,6 +75,7 @@ export function ResponseCommentBand<TReason extends string = string>({
 					spacing={2}
 					value={reason === undefined ? [] : [reason]}
 					onValueChange={(next) => setReason(next[0])}
+					disabled={isPending}
 					className="flex-wrap"
 				>
 					{reasons.map((candidate) => (

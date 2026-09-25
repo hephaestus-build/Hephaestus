@@ -3,6 +3,7 @@ import { ArrowLeftIcon, ChevronDownIcon, CircleDashedIcon, InfoIcon } from "luci
 import { useState } from "react";
 
 import type {
+	FeedbackResponseRequest,
 	ObservationDetail,
 	PracticeGroup,
 	PracticeGroupStanding,
@@ -21,11 +22,7 @@ import type { ContributingPractice } from "@/lib/practice-standing";
 import { hasText } from "@/lib/text";
 
 import { PracticeNextStepCallout } from "./PracticeNextStepCallout";
-import {
-	EMPTY_REVIEW_RUN_FEED,
-	type FeedbackResponse,
-	type ReviewRunFeedState,
-} from "./review-runs";
+import { EMPTY_REVIEW_RUN_FEED, type ReviewRunFeedState } from "./review-runs";
 import { ReviewRunFeed } from "./ReviewRunFeed";
 
 type PracticeStandingKey = NonNullable<PracticeStanding["standing"]> | "UNMEASURED";
@@ -48,8 +45,8 @@ export interface PracticeGroupDetailPageProps {
 	onSelectPractice?: (practiceSlug: string | undefined) => void;
 	feed?: ReviewRunFeedState;
 	skeletonRows?: number;
-	onRespond?: (observation: ObservationDetail, response: FeedbackResponse) => void;
-	pendingFeedbackId?: string;
+	onRespond?: (observation: ObservationDetail, response: FeedbackResponseRequest) => void;
+	pendingResponses?: ReadonlyMap<string, FeedbackResponseRequest>;
 	isLoading: boolean;
 	error?: unknown;
 	onRetry?: () => void;
@@ -99,7 +96,7 @@ export function PracticeGroupDetailPage({
 	feed = EMPTY_REVIEW_RUN_FEED,
 	skeletonRows = 3,
 	onRespond,
-	pendingFeedbackId,
+	pendingResponses,
 	isLoading,
 	error,
 	onRetry,
@@ -158,7 +155,7 @@ export function PracticeGroupDetailPage({
 		<ReviewRunFeed
 			feed={feed}
 			skeletonRows={skeletonRows}
-			observations={{ onRespond, pendingFeedbackId }}
+			observations={{ onRespond, pendingResponses }}
 			emptyTitle="No review runs"
 			emptyDescription={
 				hasAnyFeedNarrowing

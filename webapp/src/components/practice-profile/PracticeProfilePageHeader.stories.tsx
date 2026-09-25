@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn } from "storybook/test";
+import { expect } from "storybook/test";
 
 import { ARTIFACT_KIND } from "@/lib/artifact-kinds";
 import { expectNoPageOverflow } from "@/stories/reflow";
@@ -24,7 +24,6 @@ const meta = {
 		counts: { STRENGTH: 7, MIXED: 3, DEVELOPING: 2, NO_OPPORTUNITY: 1, NOT_OBSERVED: 3 },
 		practiceCount: 16,
 		groupCount: 5,
-		onSeeAllPractices: fn(),
 		isLoading: false,
 	},
 } satisfies Meta<typeof PracticeProfilePageHeader>;
@@ -33,9 +32,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-	play: async ({ canvas, args, userEvent }) => {
+	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent("Practice profile");
-		await expect(canvas.queryByText(/visible only to you/u)).toBeNull();
 		await expect(canvas.getByText(/resolves once your work comes back clean/u)).toBeVisible();
 		await expect(canvas.getByText("9 September, 2:10 pm")).toBeVisible();
 		await expect(canvas.getByRole("link", { name: /^#releases/u })).toBeVisible();
@@ -53,11 +51,11 @@ export const Default: Story = {
 		]);
 
 		// One destination, and the card is all of it: the words are the keyboard path and their
-		// pseudo-element covers the card for the pointer.
-		const destination = canvas.getByRole("link", { name: "See all practice groups" });
-		await expect(destination).toBeEnabled();
-		await userEvent.click(destination);
-		await expect(args.onSeeAllPractices).toHaveBeenCalledOnce();
+		// pseudo-element covers the card for the pointer. The level it opens is an address.
+		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toHaveAttribute(
+			"href",
+			expect.stringContaining("practice-groups%3Aall"),
+		);
 	},
 };
 
@@ -85,12 +83,19 @@ export const NothingObservedYet: Story = {
 		await expect(canvas.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
 			"16Not observed",
 		]);
-		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeEnabled();
+		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeVisible();
 	},
 };
 
-/** A document title longer than 28 characters is cut in the chip; the full title stays on hover. */
+/**
+ * A work label longer than the chip is cut at the chip's edge rather than widening the page; the
+ * link still carries all of it.
+ */
 export const LongWorkLabel: Story = {
+	parameters: {
+		viewport: { defaultViewport: "reflow" },
+		chromatic: { viewports: [320] },
+	},
 	args: {
 		latestRun: {
 			jobId: "run-2026-09-09",
@@ -104,8 +109,15 @@ export const LongWorkLabel: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		const link = canvas.getByRole("link", { name: /^Queue retry policy for the n…/u });
-		await expect(link).toHaveAttribute("title", "Queue retry policy for the notification pipeline");
+		const link = canvas.getByRole("link", {
+			name: /^Queue retry policy for the notification pipeline/u,
+		});
+		const cut = link.parentElement;
+		if (!cut) {
+			throw new Error("Expected the line the label is cut in.");
+		}
+		await expect(cut.scrollWidth).toBeGreaterThan(cut.clientWidth);
+		await expectNoPageOverflow();
 	},
 };
 
@@ -121,28 +133,28 @@ export const Empty: Story = {
 		await expect(canvas.queryByText("Latest run")).toBeNull();
 		await expect(canvas.getByText("No practices set up yet")).toBeVisible();
 		await expect(canvas.queryByRole("list")).toBeNull();
-		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeEnabled();
-	},
-};
-
-/** Without a handler the destination stays where it is, disabled, so the card keeps its shape. */
-export const NoSeeAllHandler: Story = {
-	args: { onSeeAllPractices: undefined },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeDisabled();
-	},
-};
-
-export const Loading: Story = {
-	args: { isLoading: true },
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("heading", { level: 1 })).toBeNull();
-		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeDisabled();
+		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeVisible();
 	},
 };
 
 /**
- * The five standings at 390 px: the legend wraps and the destination takes the row under it,
+ * The title, the introduction and the destination stand while the counts load; only the chip and
+ * the counts wait, and no count is shown as zero in the meantime.
+ */
+export const Loading: Story = {
+	args: { isLoading: true },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent("Practice profile");
+		await expect(canvas.getByText(/resolves once your work comes back clean/u)).toBeVisible();
+		await expect(canvas.queryByText("Latest run")).toBeNull();
+		await expect(canvas.queryByText("16 practices in 5 groups")).toBeNull();
+		await expect(canvas.queryByRole("list")).toBeNull();
+		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeVisible();
+	},
+};
+
+/**
+ * The five standings at 320 px: the legend wraps and the destination takes the row under it,
  * without widening the page.
  */
 export const MobileReflow: Story = {

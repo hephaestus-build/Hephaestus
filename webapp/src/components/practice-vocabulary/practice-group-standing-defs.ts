@@ -24,6 +24,8 @@ export function isSettledStanding(standing: PracticeGroupStandingValue): boolean
 
 export interface PracticeGroupStandingDef extends StatusDef {
 	shortLabel: string;
+	/** The standing as the predicate of "n practices", so a count of them reads as one sentence. */
+	predicate: { one: string; many: string };
 }
 export const PRACTICE_GROUP_STANDING_DEFS: Record<
 	PracticeGroupStandingValue,
@@ -35,6 +37,7 @@ export const PRACTICE_GROUP_STANDING_DEFS: Record<
 		icon: CircleAlertIcon,
 		badgeVariant: "destructive",
 		description: "Recent reviews here were mostly problems.",
+		predicate: { one: "needs attention", many: "need attention" },
 	},
 	MIXED: {
 		shortLabel: "Mixed",
@@ -42,6 +45,7 @@ export const PRACTICE_GROUP_STANDING_DEFS: Record<
 		icon: CircleMinusIcon,
 		badgeVariant: "warning",
 		description: "Recent reviews found both strengths and problems here.",
+		predicate: { one: "shows mixed feedback", many: "show mixed feedback" },
 	},
 	STRENGTH: {
 		shortLabel: "Going well",
@@ -49,6 +53,7 @@ export const PRACTICE_GROUP_STANDING_DEFS: Record<
 		icon: CircleCheckIcon,
 		badgeVariant: "success",
 		description: "Recent reviews here were almost entirely positive.",
+		predicate: { one: "is going well", many: "are going well" },
 	},
 	NO_OPPORTUNITY: {
 		shortLabel: "Nothing to report",
@@ -57,6 +62,7 @@ export const PRACTICE_GROUP_STANDING_DEFS: Record<
 		badgeVariant: "outline",
 		description:
 			"Your work was reviewed, but nothing here could be judged: either these practices did not apply to it, or the evidence did not settle the question.",
+		predicate: { one: "has nothing to report", many: "have nothing to report" },
 	},
 	NOT_OBSERVED: {
 		shortLabel: "Not observed",
@@ -64,17 +70,22 @@ export const PRACTICE_GROUP_STANDING_DEFS: Record<
 		icon: CircleDashedIcon,
 		badgeVariant: "outline",
 		description: "No practice in this group has been observed in your work yet.",
+		predicate: { one: "is not observed yet", many: "are not observed yet" },
 	},
 };
 
 /**
  * The same standings read for one practice. The sentences are the group's, except where the
- * group's names its practices: a practice no review has settled is one practice nothing has
- * observed, not a group of them.
+ * group's speak of its practices: a practice is one practice, not a group of them.
  */
 export const PRACTICE_STANDING_DEFS: Record<PracticeGroupStandingValue, PracticeGroupStandingDef> =
 	{
 		...PRACTICE_GROUP_STANDING_DEFS,
+		NO_OPPORTUNITY: {
+			...PRACTICE_GROUP_STANDING_DEFS.NO_OPPORTUNITY,
+			description:
+				"Your work was reviewed, but this practice could not be judged on it: either it did not apply, or the evidence did not settle the question.",
+		},
 		NOT_OBSERVED: {
 			...PRACTICE_GROUP_STANDING_DEFS.NOT_OBSERVED,
 			description: "No review has observed this practice in your work yet.",

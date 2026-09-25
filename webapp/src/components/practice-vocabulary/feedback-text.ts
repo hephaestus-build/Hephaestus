@@ -7,6 +7,7 @@
  */
 import type { ReviewedWorkRef } from "@/api/types.gen";
 import { artifactKindNoun, type WorkProvider } from "@/lib/artifact-kinds";
+import { andList } from "@/lib/text";
 
 /**
  * A piece of reviewed work as the wire names it — `!425` for a merge request, `#releases` for a
@@ -121,14 +122,14 @@ export function countsTogether(
 export const countedWork = (kind: string | undefined, n: number, provider?: WorkProvider): string =>
 	`${spell(n)} ${artifactKindNoun(kind, n, provider)}`;
 
-/** "A", "A and B", "A, B and C". */
+/** "A", "A and B", "A, B and C", each item keeping its own segments. */
 export function list(items: FeedbackTextSegment[][]): FeedbackTextSegment[] {
-	return items.flatMap((item, index) => {
-		if (index === 0) {
-			return item;
-		}
-		return [text(index === items.length - 1 ? " and " : ", "), ...item];
-	});
+	// The formatter places the items by index, so each element part names the item it stands for.
+	return andList
+		.formatToParts(items.map((_, index) => String(index)))
+		.flatMap((part) =>
+			part.type === "element" ? (items[Number(part.value)] ?? []) : [text(part.value)],
+		);
 }
 
 /** The work references listed, each as a link: "!421, !423 and !425". */

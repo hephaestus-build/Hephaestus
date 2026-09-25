@@ -52,9 +52,16 @@ const feedback: InAppFeedback = {
 };
 
 const RESOLVED_BY_WORK = {
-	resolvedByWorkAt: new Date("2026-09-05T08:00:00Z"),
+	closedAt: new Date("2026-09-05T08:00:00Z"),
+	closedBy: "WORK" as const,
 	cleanWork: [cleanWork(8, "2026-08-25"), cleanWork(9, "2026-08-30"), cleanWork(10, "2026-09-05")],
 };
+
+/** The reader's own answer, as the server records the resolution it dates. */
+const answered = (resolution: "ADDRESSED" | "NOT_APPLICABLE" | "DISPUTED") => ({
+	readAt: new Date("2026-08-21"),
+	response: { feedbackId: "f1", resolution, respondedAt: new Date("2026-09-09T14:10:00Z") },
+});
 
 describe("toFeedbackCard", () => {
 	it("reads an unread card as new, with each piece of work named, linked and judged as the wire says", () => {
@@ -67,30 +74,22 @@ describe("toFeedbackCard", () => {
 			body: "#16 and #17 list the files touched.",
 			nextStep: "Write one paragraph on the problem.",
 			group: { slug: "review-ready-work", name: "Packaging work for review", color: "sky" },
-			cleanWork: [{ ref: pullRequest(8), date: "2026-08-25T00:00:00.000Z" }],
+			cleanWork: [{ ref: pullRequest(8), date: new Date("2026-08-25") }],
 			cleanNeeded: 3,
-			timestamp: "2026-08-20T10:05:00.000Z",
+			timestamp: new Date("2026-08-20T10:05:00Z"),
 		});
 		expect(card.condition).toStrictEqual([
 			{ type: "text", text: "Ticks itself once three pieces of work in a row come back clean" },
 		]);
 		expect(card.reviewedWork).toStrictEqual([
-			{ ref: pullRequest(6), date: "2026-08-19T00:00:00.000Z", outcome: "OMISSION_GAP" },
-			{ ref: pullRequest(7), date: "2026-08-13T00:00:00.000Z", outcome: "COMMISSION_PROBLEM" },
+			{ ref: pullRequest(6), date: new Date("2026-08-19"), outcome: "OMISSION_GAP" },
+			{ ref: pullRequest(7), date: new Date("2026-08-13"), outcome: "COMMISSION_PROBLEM" },
 		]);
 	});
 
-	it("reads a card the work resolved as resolved on that day, naming the clean work", () => {
+	it("reads a card the work closed as resolved on that day, naming the clean work", () => {
 		const card = toFeedbackCard({ ...feedback, ...RESOLVED_BY_WORK }, [group]);
-		expect(card).toMatchObject({
-			state: "resolved",
-			cleanWork: [
-				{ ref: pullRequest(8), date: "2026-08-25T00:00:00.000Z" },
-				{ ref: pullRequest(9), date: "2026-08-30T00:00:00.000Z" },
-				{ ref: pullRequest(10), date: "2026-09-05T00:00:00.000Z" },
-			],
-			timestamp: "2026-09-05T08:00:00.000Z",
-		});
+		expect(card).toMatchObject({ state: "resolved", timestamp: new Date("2026-09-05T08:00:00Z") });
 		expect(card.condition).toStrictEqual([
 			{ type: "text", text: "Resolved by the work on 5 September · " },
 			{ type: "work", ref: pullRequest(8) },
@@ -102,127 +101,58 @@ describe("toFeedbackCard", () => {
 		]);
 	});
 
-	it("lets the earlier of the two resolutions say how it was resolved", () => {
-		const addressed = {
-			feedbackId: "f1",
-			resolution: "ADDRESSED",
-			respondedAt: new Date("2026-09-01T14:10:00Z"),
-		} as const;
-		const byPerson = toFeedbackCard(
-			{
-				...feedback,
-				...RESOLVED_BY_WORK,
-				response: addressed,
-				resolvedByDeveloperAt: addressed.respondedAt,
-			},
-			[group],
+	it("reads a read card as open and one the reader closed as resolved, in the words of their answer", () => {
+		expect(toFeedbackCard({ ...feedback, readAt: new Date("2026-08-21") }, [group]).state).toBe(
+			"open",
 		);
-		expect(byPerson.timestamp).toBe("2026-09-01T14:10:00.000Z");
-		expect(byPerson.condition).toStrictEqual([
-			{ type: "text", text: "Marked as addressed on 1 September" },
-		]);
-		const byWork = toFeedbackCard(
-			{
-				...feedback,
-				...RESOLVED_BY_WORK,
-				response: { ...addressed, respondedAt: new Date("2026-09-09T14:10:00Z") },
-				resolvedByDeveloperAt: new Date("2026-09-09T14:10:00Z"),
-			},
-			[group],
-		);
-		expect(byWork.timestamp).toBe("2026-09-05T08:00:00.000Z");
-		expect(byWork.condition[0]).toStrictEqual({
-			type: "text",
-			text: "Resolved by the work on 5 September · ",
-		});
-	});
-
-	it("reads a read card as open and an addressed one as resolved on the day it was answered", () => {
-		const open = toFeedbackCard({ ...feedback, readAt: new Date("2026-08-21") }, [group]);
-		expect(open.state).toBe("open");
-		const resolved = toFeedbackCard(
-			{
-				...feedback,
-				readAt: new Date("2026-08-21"),
-				response: {
-					feedbackId: "f1",
-					resolution: "ADDRESSED",
-					respondedAt: new Date("2026-09-09T14:10:00Z"),
-				},
-				resolvedByDeveloperAt: new Date("2026-09-09T14:10:00Z"),
-			},
+		const closedAt = new Date("2026-09-09T14:10:00Z");
+		const addressed = toFeedbackCard(
+			{ ...feedback, ...answered("ADDRESSED"), closedAt, closedBy: "DEVELOPER" },
 			[group],
 		);
 		// The meter stays where the work left it: marking it addressed fills nothing in.
-		expect(resolved).toMatchObject({
+		expect(addressed).toMatchObject({
 			state: "resolved",
-			cleanWork: [{ ref: pullRequest(8), date: "2026-08-25T00:00:00.000Z" }],
-			timestamp: "2026-09-09T14:10:00.000Z",
+			cleanWork: [{ ref: pullRequest(8), date: new Date("2026-08-25") }],
+			timestamp: closedAt,
 		});
-		expect(resolved.condition).toStrictEqual([
+		expect(addressed.condition).toStrictEqual([
 			{ type: "text", text: "Marked as addressed on 9 September" },
 		]);
-	});
-
-	it("reads a card the reader marked not applicable as resolved, saying so", () => {
-		const card = toFeedbackCard(
-			{
-				...feedback,
-				readAt: new Date("2026-08-21"),
-				response: {
-					feedbackId: "f1",
-					resolution: "NOT_APPLICABLE",
-					respondedAt: new Date("2026-09-09T14:10:00Z"),
-				},
-				resolvedByDeveloperAt: new Date("2026-09-09T14:10:00Z"),
-			},
+		const notApplicable = toFeedbackCard(
+			{ ...feedback, ...answered("NOT_APPLICABLE"), closedAt, closedBy: "DEVELOPER" },
 			[group],
 		);
-		expect(card).toMatchObject({ state: "resolved", timestamp: "2026-09-09T14:10:00.000Z" });
-		expect(card.condition).toStrictEqual([
+		expect(notApplicable.condition).toStrictEqual([
 			{ type: "text", text: "Marked as not applicable on 9 September" },
 		]);
 	});
 
-	it("reads a card whose practice changed as closed on that day, unless it had resolved before", () => {
+	it("reads a card the practice change closed as closed, saying why", () => {
 		const closed = toFeedbackCard(
-			{ ...feedback, readAt: new Date("2026-08-21"), practiceChangedAt: new Date("2026-09-02") },
+			{
+				...feedback,
+				readAt: new Date("2026-08-21"),
+				closedAt: new Date("2026-09-02"),
+				closedBy: "PRACTICE_CHANGED",
+			},
 			[group],
 		);
-		expect(closed).toMatchObject({ state: "closed", timestamp: "2026-09-02T00:00:00.000Z" });
+		expect(closed).toMatchObject({ state: "closed", timestamp: new Date("2026-09-02") });
 		expect(closed.condition).toStrictEqual([
 			{ type: "text", text: "Closed on 2 September · the practice's review rules changed" },
 		]);
-		const resolvedFirst = toFeedbackCard(
-			{ ...feedback, ...RESOLVED_BY_WORK, practiceChangedAt: new Date("2026-09-12") },
-			[group],
-		);
-		expect(resolvedFirst).toMatchObject({
-			state: "resolved",
-			timestamp: "2026-09-05T08:00:00.000Z",
-		});
 	});
 
 	it("shows a card written without a next step with an empty band", () => {
 		expect(toFeedbackCard({ ...feedback, nextStep: undefined }, [group]).nextStep).toBe("");
 	});
 
-	it("leaves a card whose feedback disputes the practice open, on the day it was written", () => {
-		const card = toFeedbackCard(
-			{
-				...feedback,
-				readAt: new Date("2026-08-21"),
-				response: {
-					feedbackId: "f1",
-					resolution: "DISPUTED",
-					respondedAt: new Date("2026-09-09T14:10:00Z"),
-				},
-			},
-			[group],
-		);
-		// A dispute is an answer, not a closure: the server dates no resolution, so the card keeps the
+	it("leaves a card the reader disputed open, on the day it was written", () => {
+		// A dispute is an answer, not a closure: the server closes nothing, so the card keeps the
 		// condition that would tick it.
-		expect(card).toMatchObject({ state: "open", timestamp: "2026-08-20T10:05:00.000Z" });
+		const card = toFeedbackCard({ ...feedback, ...answered("DISPUTED") }, [group]);
+		expect(card).toMatchObject({ state: "open", timestamp: new Date("2026-08-20T10:05:00Z") });
 		expect(card.condition).toStrictEqual([
 			{ type: "text", text: "Ticks itself once three pieces of work in a row come back clean" },
 		]);

@@ -1,35 +1,33 @@
-import { createFileRoute, Navigate, retainSearchParams } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	Navigate,
+	retainSearchParams,
+	stripSearchParams,
+} from "@tanstack/react-router";
 
 import type { PracticeGroup } from "@/api/types.gen";
-import { combinePanelStates, loadProps, queryLoadState } from "@/components/common/panel-state";
-import {
-	type DetailStackEntry,
-	encodeDetailStack,
-	parseDetailStack,
-} from "@/components/layout/detail-drawer/detail-stack";
+import { combinePanelStates, queryLoadState } from "@/components/common/panel-state";
+import { parseDetailStack } from "@/components/layout/detail-drawer/detail-stack";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
-import { AllPracticesLevel } from "@/components/practice-profile/AllPracticesLevel";
-import { composeNextStep, groupOverviewOf } from "@/components/practice-profile/compose-overview";
 import {
-	allPracticesLevel,
-	DEFAULT_FEEDBACK_TAB,
-	parsePracticeGroupListSort,
+	composeGroupOverview,
+	composeNextStep,
+	composeOverview,
+} from "@/components/practice-profile/compose-overview";
+import {
 	PRACTICE_PROFILE_LEVEL_KINDS,
 	openLevelId,
+	PRACTICE_PROFILE_SEARCH_DEFAULTS,
 	PRACTICE_PROFILE_SEARCH_PARAMS,
 	type PracticeGroupDetailSelection,
-	type PracticeProfileDetailLevelKind,
 	practiceGroupLevel,
 	practiceLevel,
+	type PracticeProfileSearch,
 	practiceProfileSearchSchema,
 	type PracticeTab,
 } from "@/components/practice-profile/practice-profile-search";
 import { PracticeGroupDetailDrawer } from "@/components/practice-profile/PracticeGroupDetailDrawer";
 import { PracticeProfilePage } from "@/components/practice-profile/PracticeProfilePage";
-import {
-	DEFAULT_PRACTICE_GROUP_SORT,
-	sortPracticeGroups,
-} from "@/components/practice-vocabulary/practice-group-list-order";
 import { useInAppFeedback } from "@/hooks/use-in-app-feedback";
 import { REVIEW_RUN_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
 import { usePracticeProfileOverview } from "@/hooks/use-practice-profile-overview";
@@ -44,7 +42,11 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-
 	head: workspaceHead("Practice profile"),
 	validateSearch: practiceProfileSearchSchema,
 	search: {
-		middlewares: [retainSearchParams(PRACTICE_PROFILE_SEARCH_PARAMS)],
+		middlewares: [
+			retainSearchParams(PRACTICE_PROFILE_SEARCH_PARAMS),
+			// The shortest address that means the same is the one a reader shares.
+			stripSearchParams(PRACTICE_PROFILE_SEARCH_DEFAULTS),
+		],
 	},
 });
 
@@ -56,18 +58,15 @@ const PRACTICE_LEVEL_PARAMS = [
 function PracticeProfile() {
 	const { workspaceSlug } = Route.useParams();
 	const search = Route.useSearch();
-	const sort = parsePracticeGroupListSort(search);
 	const setSearch = useSearchState();
 
 	const detailStack = parseDetailStack(search.detail, PRACTICE_PROFILE_LEVEL_KINDS);
 	const stackControls = useDetailStack(detailStack, { levelParams: PRACTICE_LEVEL_PARAMS });
 
-	// The selection inside the practice level — its tab — is UI state on the page the reader is
-	// already on, so it is written through `useSearchState` in place, keeping the history entry's
-	// state: the level was pushed on this entry, and `useDetailStack` reads that stamp to dismiss
-	// the level by going back.
-	const updateSelection = (selection: PracticeGroupDetailSelection) => {
-		void setSearch((previous) => ({ ...previous, ...selection }), { state: true, replace: true });
+	// A tab or a sort is a view of what is open, not a place: rewritten in place, keeping the history
+	// entry's state — the stamp `useDetailStack` reads to dismiss a level by going back.
+	const setView = (view: Partial<PracticeProfileSearch>) => {
+		void setSearch((previous) => ({ ...previous, ...view }), { state: true, replace: true });
 	};
 
 	const featureState = useWorkspaceFeatures(workspaceSlug);
@@ -98,7 +97,6 @@ function PracticeProfile() {
 		overviewQuery.state,
 		feedback.state,
 	]);
-	const load = loadProps(page);
 
 	// Only a definite "off" redirects: the surface exists only where practices review the work, and
 	// sending someone away before the answer arrives would bounce them out of a workspace that does.
@@ -106,114 +104,59 @@ function PracticeProfile() {
 		return <Navigate to="/w/$workspaceSlug" params={{ workspaceSlug }} replace />;
 	}
 
-	const visibleGroups = sortPracticeGroups(groups, groupStandings, sort);
-
+	const composed = composeOverview(overview);
 	const openGroup = (group: PracticeGroup) => stackControls.open(practiceGroupLevel(group.slug));
-	// One level in, one level out: a practice is two history entries — its group, then the
-	// practice over it — so the level's back arrow, which goes back in history, lands on the group
-	// and the browser's Back button agrees with it. Pushed in turn, since each entry is written
-	// against the location the one before it produced. A list that is open stays underneath.
-	const pushLevel = async (
-		stack: DetailStackEntry<PracticeProfileDetailLevelKind>[],
-		tab?: PracticeTab,
-	) =>
-		setSearch(
-			(previous) => ({
-				...previous,
-				detail: encodeDetailStack(stack),
-				practiceTab: tab,
-			}),
-			{ state: (previous) => ({ ...previous, detailPush: true }) },
-		);
-	// A practice whose standing this workspace does not carry opens alone and the level says so.
-	const openPractice = async (practiceSlug: string, tab?: PracticeTab) => {
+	// One level in, one level out: a practice is its group, then the practice over it, so the
+	// level's back arrow lands on the group and the browser's Back button agrees with it. A list
+	// that is open stays underneath. A practice whose standing this workspace does not carry opens
+	// alone and the level says so.
+	const openPractice = (practiceSlug: string, tab?: PracticeTab) => {
 		const groupSlug = practiceStandings.find((entry) => entry.slug === practiceSlug)?.groupSlug;
-		const withGroup = hasText(groupSlug)
-			? [...detailStack, practiceGroupLevel(groupSlug)]
-			: detailStack;
-		if (hasText(groupSlug)) {
-			await pushLevel(withGroup);
-		}
-		await pushLevel([...withGroup, practiceLevel(practiceSlug)], tab);
+		void stackControls.push(
+			[...(hasText(groupSlug) ? [practiceGroupLevel(groupSlug)] : []), practiceLevel(practiceSlug)],
+			{ practiceTab: tab },
+		);
 	};
 
 	return (
 		<>
 			<PracticeProfilePage
-				overview={overview}
+				overview={composed}
 				practices={practiceStandings}
 				groups={groups}
 				feedbackCards={feedback.cards}
 				ratingProps={feedback.ratingProps}
 				onOpenGroup={openGroup}
-				onOpenPractice={(slug, tab) => {
-					void openPractice(slug, tab);
-				}}
-				feedbackTab={search.feedback ?? DEFAULT_FEEDBACK_TAB}
-				onFeedbackTabChange={(tab) => {
-					// A tab is a view of the page, not a place: rewritten in place, with the default as
-					// the URL's silence, so Back still leaves the page.
-					void setSearch(
-						(previous) => ({
-							...previous,
-							feedback: tab === DEFAULT_FEEDBACK_TAB ? undefined : tab,
-						}),
-						{ state: true, replace: true },
-					);
-				}}
-				onShowAllPractices={() => stackControls.open(allPracticesLevel())}
-				{...load}
+				onOpenPractice={openPractice}
+				feedbackTab={search.feedback}
+				onFeedbackTabChange={(tab) => setView({ feedback: tab })}
+				state={page}
 			/>
 			<PracticeGroupDetailDrawer
 				detail={detail}
 				detailStack={detailStack}
-				levelLabel={() => "All practice groups"}
-				renderLevel={(entry, level, path) =>
-					entry.kind === "practices" ? (
-						<AllPracticesLevel
-							nested={level.nested}
-							path={path}
-							groups={visibleGroups}
-							standings={groupStandings}
-							practicesByGroup={practicesByGroup}
-							sentences={overview.groupSentences}
-							sort={sort}
-							onSortChange={(next) => {
-								// The default sort is the URL's silence, so a header press that lands back
-								// on it leaves a clean address. Sorting a level's table is a view of the
-								// level, not a place: written in place, keeping the entry's `detailPush`
-								// stamp, so Back still dismisses the level in one step.
-								void setSearch(
-									(previous) => ({
-										...previous,
-										dir: next === DEFAULT_PRACTICE_GROUP_SORT ? undefined : next,
-									}),
-									{ state: true, replace: true },
-								);
-							}}
-							onOpenGroup={openGroup}
-							openGroupSlug={openLevelId(detailStack, "practice-group")}
-							onOpenPractice={(slug) => {
-								void openPractice(slug);
-							}}
-							{...load}
-						/>
-					) : null
-				}
+				allPracticeGroups={{
+					practicesByGroup,
+					sentences: composed.groupSentences,
+					sort: search.dir,
+					onSortChange: (dir) => setView({ dir }),
+					onOpenGroup: openGroup,
+					onOpenPractice: (slug) => openPractice(slug),
+				}}
 				onClose={stackControls.close}
 				groups={groups}
 				groupStandings={groupStandings}
 				state={page}
 				feedbackCards={feedback.cards}
 				groupOverview={(groupSlug) => ({
-					...groupOverviewOf(overview, groupSlug),
+					...composeGroupOverview(overview, groupSlug),
 					nextStep: composeNextStep(feedback.cards, groupSlug),
 				})}
 				ratingProps={feedback.ratingProps}
 				onOpenPractice={(practiceSlug) => stackControls.open(practiceLevel(practiceSlug))}
 				practiceTab={search.practiceTab}
 				skeletonRows={REVIEW_RUN_PAGE_SIZE}
-				onSelectionChange={updateSelection}
+				onSelectionChange={setView}
 			/>
 		</>
 	);

@@ -56,21 +56,27 @@ export const LoadingMore: Story = {
 	},
 };
 
-/** One block per run card the feed will show, announced while the reader waits. */
+/** One block per run card the feed will show, in a region marked busy until they land. */
 export const Loading: Story = {
 	args: { feed: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("status")).toHaveTextContent("Loading review runs");
+		await expect(canvas.getByText("Loading review runs").closest("[aria-busy]")).toHaveAttribute(
+			"aria-busy",
+			"true",
+		);
+		await expect(canvas.queryByRole("status")).toBeNull();
 	},
 };
 
-/** Nothing has reached this surface yet: the feed says so in the surface's own words. */
+/**
+ * Nothing has reached this surface and nothing earlier is left to read: the empty state, in the
+ * surface's own words, instead of a rail with no runs on it.
+ */
 export const NoRuns: Story = {
 	args: { feed: { ...readyFeed, runs: [] } },
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByText("Review runs appear here once your work has been reviewed."),
-		).toBeVisible();
+		await expect(canvas.queryByRole("list", { name: "Review runs" })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: "View earlier reviews" })).toBeNull();
 	},
 };
 
@@ -81,17 +87,38 @@ export const NarrowedToNothing: Story = {
 		emptyDescription: "No review runs mention Scope the change to one concern.",
 		emptyAction: <button type="button">Show every review in this group</button>,
 	},
-	play: async ({ canvas }) => {
+};
+
+/**
+ * A narrowing emptied the pages read so far while earlier ones remain: the feed does not yet know
+ * that nothing matches, so it says only what it has read and keeps the earlier pages a press away.
+ */
+export const NarrowedToNothingSoFar: Story = {
+	args: {
+		feed: { ...readyFeed, hasMore: true },
+		runs: [],
+		emptyAction: <button type="button">Show every review in this group</button>,
+	},
+	play: async ({ canvas, userEvent }) => {
+		await expect(canvas.queryByText("No review runs")).toBeNull();
+		await expect(canvas.getByText("Nothing here in the latest reviews.")).toBeVisible();
 		await expect(
 			canvas.getByRole("button", { name: "Show every review in this group" }),
 		).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: "View earlier reviews" }));
+		await expect(onLoadMore).toHaveBeenCalledOnce();
 	},
 };
 
-/** The feed could not be read: the error says which feed, and offers the retry. */
+/** The feed could not be read: the error says which feed, and its retry asks for it again. */
 export const Failed: Story = {
 	args: { feed: { status: "error", error: new Error("network"), onRetry: fn() } },
-	play: async ({ canvas }) => {
+	play: async ({ args, canvas, userEvent }) => {
 		await expect(canvas.getByText("Could not load review runs")).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
+		if (args.feed.status !== "error") {
+			throw new Error("The story's feed is the failed one.");
+		}
+		await expect(args.feed.onRetry).toHaveBeenCalledOnce();
 	},
 };
