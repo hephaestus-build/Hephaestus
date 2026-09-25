@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { hasText } from "@/lib/text";
 
 import { getMemberOnboardingOptions, listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
+import { getUserViewSession } from "@/runtime/user-view/session";
 
 /** Workspace gate: a directory layout, so every route under `w/$workspaceSlug/` inherits it. */
 // The gate answers on navigation only. A workspace revoked while a reader sits on one of its pages
@@ -19,8 +20,10 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 		}
 		if (workspaces.some((workspace) => workspace.workspaceSlug === params.workspaceSlug)) {
 			const base = `/w/${encodeURIComponent(params.workspaceSlug)}`;
-			// Owners must be able to repair setup; an outage must never revoke membership.
+			// Owners must be able to repair setup; an outage must never revoke membership. A user view
+			// never completes setup: the saved choices belong to the signed-in account.
 			if (
+				getUserViewSession() !== undefined ||
 				location.pathname === `${base}/onboarding` ||
 				location.pathname.startsWith(`${base}/admin`)
 			) {

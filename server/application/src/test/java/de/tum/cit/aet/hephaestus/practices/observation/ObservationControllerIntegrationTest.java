@@ -204,9 +204,10 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 .getResponseBody();
         var viewed = webTestClient
                 .get()
-                .uri("/workspaces/" + workspace.getWorkspaceSlug() + "/user-view/users/" + developer.getId()
-                        + "/practices/observations/" + own)
+                .uri(BASE_URI + "/" + own, workspace.getWorkspaceSlug())
                 .headers(h -> h.setBearerAuth("mock-jwt-sub-" + accountId))
+                .header("X-User-View-Workspace", workspace.getWorkspaceSlug())
+                .header("X-User-View-User", developer.getId().toString())
                 .header("X-User-View-Reason", "Verify practice feedback")
                 .exchange()
                 .expectStatus()
@@ -234,9 +235,10 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 Instant.now());
         webTestClient
                 .get()
-                .uri("/workspaces/" + workspace.getWorkspaceSlug() + "/user-view/users/" + developer.getId()
-                        + "/practices/observations/" + foreign)
+                .uri(BASE_URI + "/" + foreign, workspace.getWorkspaceSlug())
                 .headers(h -> h.setBearerAuth("mock-jwt-sub-" + accountId))
+                .header("X-User-View-Workspace", workspace.getWorkspaceSlug())
+                .header("X-User-View-User", developer.getId().toString())
                 .header("X-User-View-Reason", "Verify practice feedback")
                 .exchange()
                 .expectStatus()

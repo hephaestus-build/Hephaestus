@@ -10,6 +10,7 @@ import type { CurrentUserView, WorkspaceMembership } from "@/api/types.gen";
 import { isRecord } from "@/lib/is-record";
 import { hasText } from "@/lib/text";
 import { QUERY_STALE_TIME_MS } from "@/runtime/tanstack-query/query-defaults";
+import { clearUserViewUnlessOperator } from "@/runtime/user-view/session";
 
 export function currentUserQueryOptions() {
 	return queryOptions({
@@ -20,8 +21,14 @@ export function currentUserQueryOptions() {
 		// its lifetime is deliberately independent of observer unmounts — hence no `signal`.
 		queryFn: async () => {
 			const { data, error, response } = await getCurrentUser();
+			// Every request waits for this identity, so a view left in the tab by another account, or
+			// by a session that has ended, is dropped here before any request can carry it.
 			if (data !== undefined && response?.ok === true) {
+				clearUserViewUnlessOperator(data.id);
 				return data;
+			}
+			if (response?.status === 401) {
+				clearUserViewUnlessOperator(undefined);
 			}
 			// The generated client's error body need not contain the actual HTTP status.
 			throw new Error("Could not verify your session.", { cause: response ?? error });

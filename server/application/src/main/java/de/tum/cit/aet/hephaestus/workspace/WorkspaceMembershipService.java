@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
 import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
@@ -138,6 +139,15 @@ public class WorkspaceMembershipService {
 
     @Transactional(readOnly = true)
     public Optional<User> findMemberByLogin(Long workspaceId, String login) {
+        // A login is not unique across providers; the request's own actor is the one it means.
+        Optional<Long> actorId = CurrentScmIdentityHolder.getLogin()
+                .filter(login::equalsIgnoreCase)
+                .flatMap(actorLogin -> CurrentScmIdentityHolder.getUserId());
+        if (actorId.isPresent()) {
+            return workspaceMembershipRepository
+                    .findByWorkspace_IdAndUser_Id(workspaceId, actorId.get())
+                    .map(WorkspaceMembership::getUser);
+        }
         return workspaceMembershipRepository
                 .findFirstByWorkspace_IdAndUser_LoginIgnoreCaseOrderByUser_Id(workspaceId, login)
                 .map(WorkspaceMembership::getUser);

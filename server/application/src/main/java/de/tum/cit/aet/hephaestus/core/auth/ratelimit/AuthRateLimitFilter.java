@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth.ratelimit;
 
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
+import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import io.github.bucket4j.ConsumptionProbe;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -23,7 +24,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Token-bucket rate limiter for sensitive and resource-intensive endpoints. Sits on the
- * resource-server chain (covers {@code /auth/refresh}, {@code /workspaces/{slug}/user-view/users/**},
+ * resource-server chain (covers {@code /auth/refresh}, read-only user views,
  * {@code DELETE /user}) and the oauth2Login chain (covers {@code GET /oauth2/authorization/*}); registered after
  * authentication so the account principal is resolvable from the {@link SecurityContextHolder}.
  *
@@ -61,7 +62,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
     private enum Endpoint {
         OAUTH_AUTHORIZATION("oauth-authz", false, true),
         REFRESH("refresh", true, true),
-        USER_VIEW("user-view", true, true),
+        USER_VIEW("user-view", true, false),
         DELETE_USER("delete-user", true, true),
         // GDPR Art. 20 export: cap POST /user/exports (the async assembly). Account-scoped (JWT sub)
         // with IP fallback — the route requires isAuthenticated(), so sub is normally present.
@@ -146,7 +147,8 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             return Endpoint.REFRESH;
         }
         // Keyed on the administrator, not the viewed user, so switching users does not reset the budget.
-        if ("GET".equals(method) && path.matches("/workspaces/[^/]+/user-view/users(?:/.*)?")) {
+        if (("GET".equals(method) && path.matches("/workspaces/[^/]+/user-view/users(?:/.*)?"))
+                || UserViewContextHolder.USER_VIEW_REQUEST.matches(request)) {
             return Endpoint.USER_VIEW;
         }
         if ("DELETE".equals(method) && path.equals("/user")) {

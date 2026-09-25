@@ -118,7 +118,7 @@ class UserProfileServiceTest {
 
             when(workspaceMembershipService.findMemberByLogin(WORKSPACE_ID, USER_LOGIN))
                     .thenReturn(Optional.of(user));
-            when(profilePullRequestQueryRepository.findAuthoredByLoginAndStates(any(), any(), any(), any(), any()))
+            when(profilePullRequestQueryRepository.findAuthoredByUserIdAndStates(any(), any(), any(), any(), any()))
                     .thenReturn(List.of());
             when(profileActivityQueryService.getActivityStats(any(), any(), any(), any()))
                     .thenReturn(STATS_STUB);
@@ -158,7 +158,7 @@ class UserProfileServiceTest {
 
             when(workspaceMembershipService.findMemberByLogin(WORKSPACE_ID, USER_LOGIN))
                     .thenReturn(Optional.of(user));
-            when(profilePullRequestQueryRepository.findAuthoredByLoginAndStates(any(), any(), any(), any(), any()))
+            when(profilePullRequestQueryRepository.findAuthoredByUserIdAndStates(any(), any(), any(), any(), any()))
                     .thenReturn(List.of());
             when(profileActivityQueryService.getActivityStats(any(), any(), any(), any()))
                     .thenReturn(STATS_STUB);
@@ -191,7 +191,7 @@ class UserProfileServiceTest {
 
             when(workspaceMembershipService.findMemberByLogin(WORKSPACE_ID, USER_LOGIN))
                     .thenReturn(Optional.of(user));
-            when(profilePullRequestQueryRepository.findAuthoredByLoginAndStates(any(), any(), any(), any(), any()))
+            when(profilePullRequestQueryRepository.findAuthoredByUserIdAndStates(any(), any(), any(), any(), any()))
                     .thenReturn(List.of());
             when(profileActivityQueryService.getActivityStats(any(), any(), any(), any()))
                     .thenReturn(STATS_STUB);
@@ -234,7 +234,7 @@ class UserProfileServiceTest {
 
             when(workspaceMembershipService.findMemberByLogin(WORKSPACE_ID, USER_LOGIN))
                     .thenReturn(Optional.of(user));
-            when(profilePullRequestQueryRepository.findAuthoredByLoginAndStates(any(), any(), any(), any(), any()))
+            when(profilePullRequestQueryRepository.findAuthoredByUserIdAndStates(any(), any(), any(), any(), any()))
                     .thenReturn(List.of());
             when(profileActivityQueryService.getActivityStats(any(), any(), any(), any()))
                     .thenReturn(STATS_STUB);
@@ -269,7 +269,7 @@ class UserProfileServiceTest {
 
             when(workspaceMembershipService.findMemberByLogin(WORKSPACE_ID, USER_LOGIN))
                     .thenReturn(Optional.of(actor));
-            when(profilePullRequestQueryRepository.findAuthoredByLoginAndStates(any(), any(), any(), any(), any()))
+            when(profilePullRequestQueryRepository.findAuthoredByUserIdAndStates(any(), any(), any(), any(), any()))
                     .thenReturn(List.of());
             when(profileActivityQueryService.getActivityStats(any(), any(), any(), any()))
                     .thenReturn(STATS_STUB);
@@ -302,7 +302,7 @@ class UserProfileServiceTest {
 
             when(workspaceMembershipService.findMemberByLogin(WORKSPACE_ID, USER_LOGIN))
                     .thenReturn(Optional.of(user));
-            when(profilePullRequestQueryRepository.findAuthoredByLoginAndStates(any(), any(), any(), any(), any()))
+            when(profilePullRequestQueryRepository.findAuthoredByUserIdAndStates(any(), any(), any(), any(), any()))
                     .thenReturn(List.of());
             when(profileActivityQueryService.getActivityStats(any(), any(), any(), any()))
                     .thenReturn(STATS_STUB);
@@ -334,7 +334,7 @@ class UserProfileServiceTest {
 
             when(workspaceMembershipService.findMemberByLogin(WORKSPACE_ID, USER_LOGIN))
                     .thenReturn(Optional.of(user));
-            when(profilePullRequestQueryRepository.findAuthoredByLoginAndStates(any(), any(), any(), any(), any()))
+            when(profilePullRequestQueryRepository.findAuthoredByUserIdAndStates(any(), any(), any(), any(), any()))
                     .thenReturn(List.of());
             when(profileActivityQueryService.getActivityStats(any(), any(), any(), any()))
                     .thenReturn(STATS_STUB);
@@ -366,7 +366,7 @@ class UserProfileServiceTest {
 
             when(workspaceMembershipService.findMemberByLogin(WORKSPACE_ID, USER_LOGIN))
                     .thenReturn(Optional.of(user));
-            when(profilePullRequestQueryRepository.findAuthoredByLoginAndStates(any(), any(), any(), any(), any()))
+            when(profilePullRequestQueryRepository.findAuthoredByUserIdAndStates(any(), any(), any(), any(), any()))
                     .thenReturn(List.of());
             when(profileActivityQueryService.getActivityStats(any(), any(), any(), any()))
                     .thenReturn(STATS_STUB);
@@ -419,7 +419,7 @@ class UserProfileServiceTest {
                     .thenReturn(Optional.of(user));
             when(workspaceContributionActivityService.findFirstContributionInstant(eq(WORKSPACE_ID), any()))
                     .thenReturn(Optional.empty());
-            when(profileRepositoryQueryRepository.findContributedByLogin(eq(USER_LOGIN), eq(WORKSPACE_ID)))
+            when(profileRepositoryQueryRepository.findContributedByUserId(eq(USER_ID), eq(WORKSPACE_ID)))
                     .thenReturn(List.of(repository));
 
             Optional<ProfileDTO> result = service.getUserProfile(USER_LOGIN, WORKSPACE_ID, AFTER, BEFORE);
@@ -463,8 +463,8 @@ class UserProfileServiceTest {
 
             when(workspaceMembershipService.findMemberByLogin(WORKSPACE_ID, USER_LOGIN))
                     .thenReturn(Optional.of(user));
-            when(profilePullRequestQueryRepository.findAuthoredByLoginAndStates(
-                            eq(USER_LOGIN), eq(Set.of(Issue.State.OPEN)), eq(WORKSPACE_ID), any(), any()))
+            when(profilePullRequestQueryRepository.findAuthoredByUserIdAndStates(
+                            eq(USER_ID), eq(Set.of(Issue.State.OPEN)), eq(WORKSPACE_ID), any(), any()))
                     .thenReturn(List.of(included, excluded));
             when(activityEventRepository.findProfileActivityByActorInTimeframe(any(), any(), any(), any()))
                     .thenReturn(List.of());
@@ -494,7 +494,7 @@ class UserProfileServiceTest {
 
             when(workspaceMembershipService.findMemberByLogin(WORKSPACE_ID, USER_LOGIN))
                     .thenReturn(Optional.of(user));
-            when(profilePullRequestQueryRepository.findAuthoredByLoginAndStates(any(), any(), any(), any(), any()))
+            when(profilePullRequestQueryRepository.findAuthoredByUserIdAndStates(any(), any(), any(), any(), any()))
                     .thenReturn(sevenPrs);
             when(activityEventRepository.findProfileActivityByActorInTimeframe(any(), any(), any(), any()))
                     .thenReturn(List.of());
@@ -531,7 +531,7 @@ class UserProfileServiceTest {
 
             when(workspaceMembershipService.findMemberByLogin(WORKSPACE_ID, USER_LOGIN))
                     .thenReturn(Optional.of(user));
-            when(profilePullRequestQueryRepository.findAuthoredByLoginAndStates(any(), any(), any(), any(), any()))
+            when(profilePullRequestQueryRepository.findAuthoredByUserIdAndStates(any(), any(), any(), any(), any()))
                     .thenReturn(List.of(first, second));
             when(activityEventRepository.findProfileActivityByActorInTimeframe(any(), any(), any(), any()))
                     .thenReturn(List.of());

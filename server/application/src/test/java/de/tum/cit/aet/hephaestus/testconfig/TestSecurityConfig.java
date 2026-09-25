@@ -84,6 +84,10 @@ public class TestSecurityConfig {
             if (token.startsWith("mock-jwt-member-")) {
                 return numericSubject(token, token.substring("mock-jwt-member-".length()), "mentor_access");
             }
+            // "mock-jwt-admin-<accountId>": an instance administrator without mentor_access.
+            if (token.startsWith("mock-jwt-admin-")) {
+                return numericSubject(token, token.substring("mock-jwt-admin-".length()), "app_admin");
+            }
 
             String username;
             String userId;

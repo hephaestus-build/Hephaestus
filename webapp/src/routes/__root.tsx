@@ -1,5 +1,11 @@
 import { ErrorBoundary } from "@sentry/react";
-import { type QueryClient, useQuery } from "@tanstack/react-query";
+import {
+	notifyManager,
+	type QueryCache,
+	type QueryClient,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
 	HeadContent,
@@ -10,11 +16,22 @@ import {
 	useNavigate,
 	useRouter,
 } from "@tanstack/react-router";
-import { lazy, type ReactNode, Suspense, useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+	lazy,
+	type ReactNode,
+	Suspense,
+	useEffect,
+	useEffectEvent,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 import { toast } from "sonner";
 
 import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstack/react-query.gen";
 import type { SurveyInvitation } from "@/api/types.gen";
+import { UserViewBanner } from "@/components/admin/users/UserViewBanner";
+import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { LoginDialog } from "@/components/auth/LoginDialog";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { CookieConsentBanner } from "@/components/layout/CookieConsentBanner";
@@ -47,17 +64,20 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
 import { useProductSurveys, useSubmitProductFeedback } from "@/hooks/use-product-feedback";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
+import { stepUpChallengeOf } from "@/lib/problem-detail";
 import { getProviderSlug } from "@/lib/provider/provider-terms";
 import { useSearchState } from "@/lib/search-params";
 import { type AuthContextType, useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/guard";
 import { FeatureFlagDevTools } from "@/runtime/feature-flags/FeatureFlagDevTools";
 import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
+import { exitUserView } from "@/runtime/user-view/session";
 import { isCopilotExcludedRoute } from "./-copilot-route";
 
 const GlobalCopilot = lazy(async () => import("./-GlobalCopilot"));
@@ -87,10 +107,14 @@ function RootLayout() {
 			return "standard";
 		},
 	});
-	const { isAuthenticated, isLoading } = useAuth();
+	const { isAuthenticated, isLoading, userView } = useAuth();
 	const { enabled: hasMentorAccess } = useFeatureFlag("MENTOR_ACCESS");
 	const showCopilot =
-		!isLoading && isAuthenticated && hasMentorAccess && !isCopilotExcludedRoute(pathname);
+		!userView &&
+		!isLoading &&
+		isAuthenticated &&
+		hasMentorAccess &&
+		!isCopilotExcludedRoute(pathname);
 
 	if (surface === "auth") {
 		return (
@@ -115,6 +139,14 @@ function RootLayout() {
 					<AppSidebarContainer />
 					<SidebarInset className="mr-[var(--right-sidebar-width,0)] min-w-0">
 						<HeaderContainer />
+						{userView && (
+							<UserViewBanner
+								name={userView.name}
+								workspace={userView.workspaceName}
+								hasAccount={userView.hasAccount}
+								onExit={exitUserView}
+							/>
+						)}
 						<main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col">
 							{surface === "standard" ? (
 								<StandardPageSurface className="flex-1">
@@ -141,6 +173,7 @@ function RootLayout() {
 			</ProviderColorScope>
 			<Toaster />
 			<PublicLoginOverlay />
+			{userView && <UserViewConfirmAccess />}
 			{showCopilot && (
 				<ErrorBoundary handled>
 					<Suspense fallback={null}>
@@ -148,7 +181,7 @@ function RootLayout() {
 					</Suspense>
 				</ErrorBoundary>
 			)}
-			<FeatureFlagDevTools />
+			{!userView && <FeatureFlagDevTools />}
 		</>
 	);
 }
@@ -325,6 +358,7 @@ function HeaderContainer() {
 		isLoading,
 		username,
 		userProfile,
+		userView,
 		logout,
 		getUserProfilePictureUrl,
 		getUserId,
@@ -335,9 +369,11 @@ function HeaderContainer() {
 		userName: workspaceUserName,
 	} = useWorkspaceAccess();
 
-	const effectiveUsername = workspaceUserLogin ?? username;
-	const effectiveName =
-		workspaceUserName ?? (userProfile && `${userProfile.firstName} ${userProfile.lastName}`);
+	// The account menu signs the administrator out, so during a user view it names them.
+	const effectiveUsername = userView ? userProfile?.username : (workspaceUserLogin ?? username);
+	const effectiveName = userView
+		? userProfile?.name
+		: (workspaceUserName ?? (userProfile && `${userProfile.firstName} ${userProfile.lastName}`));
 
 	return (
 		<Header
@@ -352,8 +388,9 @@ function HeaderContainer() {
 			username={effectiveUsername}
 			avatarUrl={getUserProfilePictureUrl()}
 			workspaceSlug={chromeWorkspaceSlug}
+			readOnly={Boolean(userView)}
 			feedbackDialog={
-				!isLoading && isAuthenticated ? (
+				!userView && !isLoading && isAuthenticated ? (
 					<ProductFeedbackControls
 						key={`${getUserId()}:${chromeWorkspaceSlug}`}
 						workspaceSlug={chromeWorkspaceSlug}
@@ -364,6 +401,50 @@ function HeaderContainer() {
 			onLogout={() => {
 				void logout();
 			}}
+		/>
+	);
+}
+
+/** The newest refusal, so a dismissed one still cached cannot hide a later one. */
+function latestStepUpRefusal(queryCache: QueryCache): unknown {
+	let latest: { error: unknown; at: number } | undefined;
+	for (const { state } of queryCache.getAll()) {
+		if (
+			state.status === "error" &&
+			(latest === undefined || state.errorUpdatedAt > latest.at) &&
+			stepUpChallengeOf(state.error) !== undefined
+		) {
+			latest = { error: state.error, at: state.errorUpdatedAt };
+		}
+	}
+	return latest?.error;
+}
+
+/** Every read in a user view needs a recent sign-in, so any page's refusal asks for one here. */
+function UserViewConfirmAccess() {
+	const queryCache = useQueryClient().getQueryCache();
+	const refusal = useSyncExternalStore(
+		(onStoreChange) => queryCache.subscribe(notifyManager.batchCalls(onStoreChange)),
+		() => latestStepUpRefusal(queryCache),
+	);
+	const [dismissed, setDismissed] = useState<unknown>();
+	const challenge = refusal === dismissed ? undefined : stepUpChallengeOf(refusal);
+	const confirmAccess = useConfirmAccess(challenge !== undefined);
+
+	return (
+		<ConfirmAccessDialog
+			open={challenge !== undefined}
+			onOpenChange={(open) => {
+				if (!open) {
+					setDismissed(refusal);
+				}
+			}}
+			maxAgeSeconds={challenge?.maxAgeSeconds}
+			providers={confirmAccess.providers}
+			loading={confirmAccess.loading}
+			error={confirmAccess.error}
+			onRetry={confirmAccess.retry}
+			onSignIn={confirmAccess.signIn}
 		/>
 	);
 }
@@ -393,7 +474,7 @@ function sidebarContextOf(pathname: string): SidebarContext {
 
 function AppSidebarContainer() {
 	const { pathname } = useLocation();
-	const { isAuthenticated, username, isAppAdmin } = useAuth();
+	const { isAuthenticated, username, isAppAdmin, userView } = useAuth();
 	const { enabled: hasMentorAccess } = useFeatureFlag("MENTOR_ACCESS");
 	const navigate = useNavigate();
 	const switchWorkspace = useWorkspaceSwitcher();
@@ -450,6 +531,7 @@ function AppSidebarContainer() {
 			isOwner={workspaceAccess.role === "OWNER"}
 			isAppAdmin={isAppAdmin}
 			hasMentorAccess={hasMentorAccess}
+			readOnly={Boolean(userView)}
 			integrationKinds={integrationKinds}
 			context={sidebarContext}
 			workspaces={workspaces}

@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
 import { copyToClipboard } from "@/lib/clipboard";
 import { mentorPreferenceReason } from "@/lib/mentor-preference";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/$threadId")({
 	remountDeps: ({ params }) => params,
@@ -15,8 +16,13 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/$t
 
 function ThreadContainer() {
 	const { threadId, workspaceSlug } = Route.useParams();
-	const preference = useQuery(getMemberOnboardingOptions({ path: { workspaceSlug } }));
-	const readonly = !preference.data || Boolean(mentorPreferenceReason(preference.data));
+	const viewing = useAuth().userView !== undefined;
+	// The saved AI choice belongs to the signed-in account, so a user view never asks for it.
+	const preference = useQuery({
+		...getMemberOnboardingOptions({ path: { workspaceSlug } }),
+		enabled: !viewing,
+	});
+	const readonly = viewing || !preference.data || Boolean(mentorPreferenceReason(preference.data));
 
 	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
 	// already is, rather than as a toast away from the conversation that failed.
@@ -141,7 +147,7 @@ function ThreadContainer() {
 							}
 				}
 				onCopy={copyToClipboard}
-				onVote={handleVote}
+				onVote={viewing ? undefined : handleVote}
 				inputPlaceholder="Continue the conversation..."
 				className="h-full"
 			/>
