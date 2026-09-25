@@ -63,7 +63,7 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
     }
 
     @Test
-    void carriesTheSearchBehindAnAbsence() {
+    void shouldCarryTheSearchWhenTheEvidenceRecordsAnAbsence() {
         var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
                 {"citations":[{"sourceKind":"scm.pull-request.core",\
                 "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
@@ -83,7 +83,7 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
     }
 
     @Test
-    void carriesWhyThePracticeDidNotApply() {
+    void shouldCarryWhyWhenThePracticeDidNotApply() {
         var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
                 {"citations":[{"sourceKind":"scm.pull-request.core",\
                 "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
@@ -102,7 +102,7 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
     }
 
     @Test
-    void carriesWhatTheReviewCouldNotSettle() {
+    void shouldCarryTheOpenQuestionWhenTheReviewCouldNotSettleIt() {
         var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
                 {"citations":[{"sourceKind":"scm.pull-request.core",\
                 "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
@@ -119,7 +119,7 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
     }
 
     @Test
-    void readsAWarrantMissingAPartAsNoWarrantAtAll() {
+    void shouldCarryNoWarrantWhenTheWarrantMissesAPart() {
         var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
                 {"citations":[{"sourceKind":"scm.pull-request.core",\
                 "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
@@ -136,7 +136,7 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
     }
 
     @Test
-    void carriesNoWarrantWhenTheEvidenceRecordsNone() {
+    void shouldCarryNoWarrantWhenTheEvidenceRecordsNone() {
         var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
                 {"citations":[{"sourceKind":"scm.pull-request.core",\
                 "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\

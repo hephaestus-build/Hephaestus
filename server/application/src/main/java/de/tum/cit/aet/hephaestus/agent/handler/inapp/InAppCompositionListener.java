@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -63,6 +64,7 @@ public class InAppCompositionListener {
     private final InAppFeedbackPreparer preparer;
     private final PracticeFeedbackDeliveryPolicy deliveryPolicy;
     private final PreviousInAppFeedback previousInAppFeedback;
+    private final Clock clock;
 
     public InAppCompositionListener(
             AgentJobRepository agentJobRepository,
@@ -73,7 +75,8 @@ public class InAppCompositionListener {
             FeedbackCompositionResultParser resultParser,
             InAppFeedbackPreparer preparer,
             PracticeFeedbackDeliveryPolicy deliveryPolicy,
-            PreviousInAppFeedback previousInAppFeedback) {
+            PreviousInAppFeedback previousInAppFeedback,
+            Clock clock) {
         this.agentJobRepository = agentJobRepository;
         this.observationRepository = observationRepository;
         this.feedbackRepository = feedbackRepository;
@@ -83,6 +86,7 @@ public class InAppCompositionListener {
         this.preparer = preparer;
         this.deliveryPolicy = deliveryPolicy;
         this.previousInAppFeedback = previousInAppFeedback;
+        this.clock = clock;
     }
 
     @Async(FeedbackLaneExecutor.BEAN_NAME)
@@ -113,7 +117,7 @@ public class InAppCompositionListener {
     /** Prepare source observations using a separate composition job's output. */
     public int prepare(UUID sourceJobId, UUID compositionJobId, Long workspaceId) {
         int prepared = route(sourceJobId, compositionJobId, workspaceId);
-        agentJobRepository.markInAppPrepared(compositionJobId, Instant.now());
+        agentJobRepository.markInAppPrepared(compositionJobId, clock.instant());
         return prepared;
     }
 
@@ -166,7 +170,7 @@ public class InAppCompositionListener {
             int positionBase) {
         PracticeAutonomy workspaceDefault =
                 workspaceDefaults.forWorkspace(workspaceId).defaultAutonomy();
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         Instant windowStart = now.minus(Duration.ofDays(InAppFeedbackRouter.PATTERN_WINDOW_DAYS));
         List<InAppFeedbackPreparer.RoutedMessage> routed = new ArrayList<>(messages.size());
         for (ComposedInAppMessage message : messages) {
@@ -174,10 +178,9 @@ public class InAppCompositionListener {
             // the last card, or that the developer answered it over, or that the last card already cited
             // while it stays open, is never cited again. An open previous card is what the new one replaces.
             Optional<PreviousInAppFeedback.Previous> previous =
-                    previousInAppFeedback.find(workspaceId, recipientUserId, message.practiceSlug());
-            Instant since = previous.map(PreviousInAppFeedback.Previous::nextEvidenceSince)
-                    .filter(start -> start.isAfter(windowStart))
-                    .orElse(windowStart);
+                    previousInAppFeedback.find(workspaceId, recipientUserId, message.practiceSlug(), now);
+            Instant since =
+                    previous.map(card -> card.nextEvidenceSince(windowStart)).orElse(windowStart);
             List<Observation> evidence = visibleEvidence(workspaceId, recipientUserId, message.practiceSlug(), since);
             InAppRoutingDecision decision = InAppFeedbackRouter.route(
                     message,

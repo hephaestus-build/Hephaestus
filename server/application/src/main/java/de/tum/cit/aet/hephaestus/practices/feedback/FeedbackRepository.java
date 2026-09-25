@@ -161,12 +161,12 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             @Param("workspaceId") Long workspaceId, @Param("recipientUserId") Long recipientUserId, Pageable pageable);
 
     /**
-     * Retires a DELIVERED unit that a newer one replaces (compare-and-set): a prior in-context summary when
-     * a new one is posted, while inline-only deliveries stay DELIVERED on the same thread; and an open in-app
-     * card when a newer card about the same habit is prepared. The state predicate makes concurrent retries
-     * idempotent, and {@link #markSuperseded} is its twin for a unit still queued.
+     * Retires DELIVERED feedback that newer feedback replaces (compare-and-set): a prior in-context summary
+     * when a new one is posted, while inline-only deliveries stay DELIVERED on the same thread; and an open
+     * in-app card when a newer card about the same habit is prepared. The state predicate makes concurrent
+     * retries idempotent, and {@link #markSuperseded} is its twin for feedback still queued.
      *
-     * @return {@code 1} when this caller retired the unit, {@code 0} when it was not delivered
+     * @return {@code 1} when this caller retired it, {@code 0} when it was not delivered
      */
     @Modifying(flushAutomatically = true)
     @Transactional
@@ -536,7 +536,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
 
         /**
          * The raw column: a native-query projection is mapped from JDBC types, with no converter run. Null with
-         * {@link #getArtifactId()} for a unit that is not anchored on a piece of work.
+         * {@link #getArtifactId()} for feedback that is not anchored on a piece of work.
          */
         @Nullable
         String getArtifactKind();
@@ -609,40 +609,34 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     // system-authored text about a named person, so a missing one leaks more than a count.
 
     /**
-     * What the recipient may read on their own practice pages: their IN_APP units that were prepared or
-     * already read, newest first. Suppressed and superseded rows are excluded — the operator surface is
-     * where "we withheld this, and here is why" is answered; the developer's own surface shows what was
-     * actually said to them.
+     * What the recipient may read on their own practice pages, as a JPQL predicate over {@code f}: their
+     * IN_APP feedback that was prepared or already read. Suppressed and superseded rows are excluded — the
+     * operator surface is where "we withheld this, and here is why" is answered; the developer's own surface
+     * shows what was actually said to them. Binds {@code :workspaceId} and {@code :recipientUserId}.
      */
-    @Query("""
-        SELECT f FROM Feedback f
-        WHERE f.workspaceId = :workspaceId
+    String READABLE_IN_APP = """
+          f.workspaceId = :workspaceId
           AND f.recipientUserId = :recipientUserId
           AND f.channel = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel.IN_APP
           AND f.deliveryState IN (
               de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.PREPARED,
               de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.DELIVERED
           )
+        """;
+
+    /** Everything the recipient may read on their own practice pages ({@link #READABLE_IN_APP}), newest first. */
+    @Query("SELECT f FROM Feedback f WHERE " + READABLE_IN_APP + """
         ORDER BY f.createdAt DESC, f.id DESC
         """)
     List<Feedback> findReadableInAppForRecipient(
-            @Param("workspaceId") Long workspaceId, @Param("recipientUserId") Long recipientUserId, Pageable pageable);
+            @Param("workspaceId") Long workspaceId, @Param("recipientUserId") Long recipientUserId);
 
     /**
      * The readable IN_APP feedback about one practice for the recipient, newest first — the cards a new card
-     * about the same habit follows. The same readable states as {@link #findReadableInAppForRecipient}, and the
-     * same "about this practice" as {@link #lastInAppSurfacedAt}: the practice the card's bound evidence
-     * measures.
+     * about the same habit follows. The same "about this practice" as {@link #lastInAppSurfacedAt}: the
+     * practice the card's bound evidence measures.
      */
-    @Query("""
-        SELECT f FROM Feedback f
-        WHERE f.workspaceId = :workspaceId
-          AND f.recipientUserId = :recipientUserId
-          AND f.channel = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel.IN_APP
-          AND f.deliveryState IN (
-              de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.PREPARED,
-              de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.DELIVERED
-          )
+    @Query("SELECT f FROM Feedback f WHERE " + READABLE_IN_APP + """
           AND EXISTS (
               SELECT 1 FROM FeedbackObservation fo
               WHERE fo.feedback = f
@@ -660,20 +654,12 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     /**
      * The recipient's readable IN_APP feedback prepared at or after {@code since}, newest first — what the
      * practice profile reads for a window: feedback the window's runs composed is new, and feedback prepared
-     * inside the look-back may have been resolved by the work inside the window. The same readable states as
-     * {@link #findReadableInAppForRecipient}, because feedback the page will never show is not news; bounded
-     * by time rather than paged, because the window decides which rows matter, not their count.
+     * inside the look-back may have been resolved by the work inside the window. Readable only, because
+     * feedback the page will never show is not news; bounded by time rather than paged, because the window
+     * decides which rows matter, not their count.
      */
-    @Query("""
-        SELECT f FROM Feedback f
-        WHERE f.workspaceId = :workspaceId
-          AND f.recipientUserId = :recipientUserId
+    @Query("SELECT f FROM Feedback f WHERE " + READABLE_IN_APP + """
           AND f.createdAt >= :since
-          AND f.channel = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel.IN_APP
-          AND f.deliveryState IN (
-              de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.PREPARED,
-              de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.DELIVERED
-          )
         ORDER BY f.createdAt DESC, f.id DESC
         """)
     List<Feedback> findReadableInAppPreparedSince(
@@ -682,7 +668,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             @Param("since") Instant since);
 
     /**
-     * Flips PREPARED in-app units to DELIVERED at the moment their recipient actually reads them — one
+     * Flips PREPARED in-app feedback to DELIVERED at the moment its recipient actually reads it — one
      * statement for the whole page (compare-and-set, so two concurrent page loads cannot both claim a flip
      * and the second sees it in the count).
      *
@@ -692,7 +678,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
      *
      * <p>Native because {@link Feedback} is {@code @Immutable} — the ORM cannot update it.
      *
-     * @return how many units this call flipped; a unit that was no longer PREPARED is not counted
+     * @return how many pieces of feedback this call flipped; one that was no longer PREPARED is not counted
      */
     @Modifying
     @Transactional

@@ -18,9 +18,9 @@ import org.springframework.stereotype.Repository;
 @WorkspaceAgnostic("Reaction scoped through Feedback.workspaceId relationship")
 public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
     /**
-     * The response that currently stands for each of the reactor's feedback units in the workspace: the
-     * newest snapshot per unit, with the unit's channel and recipient beside it so a query can narrow the
-     * units without changing which snapshot stands. Binds {@code :reactorUserId} and {@code :workspaceId};
+     * The response that currently stands on each piece of the reactor's feedback in the workspace: the
+     * newest snapshot per piece, with its channel and recipient beside it so a query can narrow the feedback
+     * without changing which snapshot stands. Binds {@code :reactorUserId} and {@code :workspaceId};
      * a query wraps it as {@code (...) latest}.
      */
     String LATEST_RESPONSE = """
@@ -66,8 +66,7 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
      * The response that currently stands on each of these pieces of feedback, for the ones that have a
      * response: the batch form of {@link #findCurrentResponse}, so a page of cards is one query rather than one
      * per card. A piece of feedback whose newest snapshot says nothing — the recipient deleted their response —
-     * is absent here, whereas the single form returns that snapshot with every component null. The caller
-     * passes at least one id.
+     * is absent here. The caller passes at least one id.
      */
     @Query(value = """
         SELECT latest.feedback_id AS "feedbackId", latest.usefulness AS "usefulness", latest.action AS "resolution",

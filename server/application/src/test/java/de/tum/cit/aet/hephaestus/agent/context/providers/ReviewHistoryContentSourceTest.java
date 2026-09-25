@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -103,7 +102,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 new StagedArtifactNames(ReviewHistoryContentSourceTest::identitiesOf),
                 objectMapper);
         lenient()
-                .when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+                .when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any()))
                 .thenReturn(List.of());
         lenient()
                 .when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
@@ -209,7 +208,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     void stagesTheRecordedTextAsItWasWritten() {
         String rationale = "The practice requires a test; the assessment is BAD -> MAJOR severity band.";
         String body = "Per the fixed bucketing this is a MINOR severity tier finding.";
-        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any()))
                 .thenReturn(List.of(observationWithRationale(rationale)));
         when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
                 .thenReturn(List.of(Feedback.builder()
@@ -251,7 +250,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     @Test
     void stagesEarlierObservationsAsThePracticeTheVerdictAndTheSummary() {
-        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any()))
                 .thenReturn(List.of(observationAgainst(ArtifactKinds.PULL_REQUEST, OBSERVED_ARTIFACT_ROW_ID)));
 
         var captured = captureObservationHistory();
@@ -283,7 +282,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
             newestFirst.add(observation("swallows-errors", "rec-" + i, "Caught and ignored " + i));
         }
         newestFirst.add(observation("verification-guidance", "rec-v", "Missing restart check"));
-        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any()))
                 .thenReturn(newestFirst);
 
         JsonNode records = read(captureObservationHistory().files().get("inputs/history/observations.json"))
@@ -338,7 +337,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     @Test
     void shouldPreserveSeparateBehaviorRecordsAtTheSameLocation() {
-        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any()))
                 .thenReturn(List.of(
                         observation("verification-guidance", "same-location", "Missing restart check"),
                         observation("verification-guidance", "same-location", "Misleading setup instruction")));
@@ -359,7 +358,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     @Test
     void withholdsAnObservationTheVisibilityPolicyRefuses() {
-        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any()))
                 .thenReturn(List.of(observation("swallows-errors", "rec-1", "Caught and ignored")));
         doReturn(Set.of()).when(visibilityPolicy).permitsAll(anyLong(), any(), any());
 
@@ -399,7 +398,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
         @Test
         void anObservationCarriesTheHandleOfTheWorkItWasFiledAgainst() {
-            when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+            when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any()))
                     .thenReturn(List.of(observationAgainst(ArtifactKinds.PULL_REQUEST, OBSERVED_ARTIFACT_ROW_ID)));
 
             JsonNode artifact = read(captureObservationHistory().files().get("inputs/history/observations.json"))
@@ -430,7 +429,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
         @Test
         void workNoResolverCanNameIsStagedAsItsKindWithoutANumber() {
-            when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+            when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any()))
                     .thenReturn(
                             List.of(observationAgainst(ArtifactKinds.CONVERSATION_THREAD, UNNAMEABLE_ARTIFACT_ROW_ID)));
 
@@ -447,7 +446,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
         @Test
         void noHistoryFileCarriesARowIdAnywhere() {
-            when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), anyBoolean(), any()))
+            when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any()))
                     .thenReturn(List.of(
                             observationAgainst(ArtifactKinds.PULL_REQUEST, OBSERVED_ARTIFACT_ROW_ID),
                             observationAgainst(ArtifactKinds.CONVERSATION_THREAD, UNNAMEABLE_ARTIFACT_ROW_ID)));

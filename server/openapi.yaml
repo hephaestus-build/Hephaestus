@@ -11656,6 +11656,21 @@ components:
             \ once resolved these are exactly the pieces that resolved it"
           items:
             $ref: "#/components/schemas/InAppCleanWork"
+        closedAt:
+          type: string
+          format: date-time
+          description: "When it stopped being open: the earliest of the work completing\
+            \ its clean run, the developer answering that it is addressed or not applicable,\
+            \ and the practice changing its review rules after it was prepared; null\
+            \ while it is open"
+        closedBy:
+          type: string
+          description: "What closed it, for the moment closedAt names; on a tie the\
+            \ work, then the developer, then the practice; null while it is open"
+          enum:
+          - WORK
+          - DEVELOPER
+          - PRACTICE_CHANGED
         evidence:
           type: array
           description: "The pieces of work the habit was observed on, newest first"
@@ -11677,13 +11692,6 @@ components:
           type: string
           description: "The habit to try next, on its own; null for feedback prepared\
             \ without one"
-        practiceChangedAt:
-          type: string
-          format: date-time
-          description: "When the practice's review rules changed after this was prepared,\
-            \ which closes it without a resolution: the evidence was measured by rules\
-            \ the practice no longer has; null while the rules are the ones it was\
-            \ measured by"
         practiceName:
           type: string
         practiceSlug:
@@ -11697,17 +11705,6 @@ components:
           type: string
           format: date-time
           description: When this developer first opened it; null until they have
-        resolvedByDeveloperAt:
-          type: string
-          format: date-time
-          description: "When the developer's own answer resolved it: they marked it\
-            \ addressed or not applicable; null while they have not answered or their\
-            \ answer disputes it"
-        resolvedByWorkAt:
-          type: string
-          format: date-time
-          description: "When the work resolved it: the review of the piece of work\
-            \ that completed the clean run; null while the work has not"
         response:
           $ref: "#/components/schemas/FeedbackResponse"
           description: The developer's current response to this feedback; null while
@@ -12423,9 +12420,8 @@ components:
           - UNVERIFIABLE
         deliveredFeedback:
           type: string
-          description: What to do — the text of the newest feedback unit that said
-            something about this observation to this developer (null if nothing was
-            said)
+          description: What to do — the text of the newest feedback that said something
+            about this observation to this developer (null if nothing was said)
         evidence:
           $ref: "#/components/schemas/ObservationEvidence"
         evidenceRationale:
@@ -12434,9 +12430,9 @@ components:
         feedbackResponse:
           $ref: "#/components/schemas/FeedbackResponse"
           description: "The developer's standing answer to the very feedback whose\
-            \ text deliveredFeedback shows, with that unit's id as the handle for\
-            \ responding (null when nothing was said, or when the unit that said it\
-            \ failed to deliver and so cannot be answered)"
+            \ text deliveredFeedback shows, with that feedback's id as the handle\
+            \ for responding (null when nothing was said, or when the feedback that\
+            \ said it failed to deliver and so cannot be answered)"
         id:
           type: string
           format: uuid
@@ -13633,29 +13629,12 @@ components:
       type: object
       description: A complete review run in a developer's practice-group history
       properties:
-        durationSeconds:
-          type: integer
-          format: int64
-          description: "How long the run took, in seconds (null while it has not finished)"
-        lead:
-          type: string
-          description: The one sentence the review opened with about this piece of
-            work (null when it wrote none)
         observations:
           type: array
           description: "Every visible observation of the run, complete enough to open\
             \ in place"
           items:
             $ref: "#/components/schemas/ObservationDetail"
-        practicesEligible:
-          type: integer
-          format: int32
-          description: How many practices this run was eligible to review
-        practicesEvaluated:
-          type: integer
-          format: int32
-          description: How many of the practices this run was eligible for it actually
-            reached
         reviewId:
           type: string
           format: uuid
@@ -14078,9 +14057,8 @@ components:
       properties:
         deliveredFeedback:
           type: string
-          description: What to do — the text of the newest feedback unit that said
-            something about this observation to this developer (null if nothing was
-            said)
+          description: What to do — the text of the newest feedback that said something
+            about this observation to this developer (null if nothing was said)
         kind:
           type: string
           description: "What this observation says about the developer: a behaviour\
@@ -14592,6 +14570,14 @@ components:
           description: "How many pieces of work in a row have to come back clean to\
             \ resolve the feedback, for a FEEDBACK_RESET change: what the count fell\
             \ back from"
+        direction:
+          type: string
+          description: "Which way a STANDING_MOVED or GROUP_MOVED went on the standing\
+            \ scale, for a move between two verdicts; null for a move into or out\
+            \ of a standing that is not a verdict"
+          enum:
+          - UP
+          - DOWN
         evidence:
           type: array
           description: "The reviewed work that drove the change, newest first: for\

@@ -77,7 +77,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
      * may see — and drops only the one whose rules cannot be verified, which never reaches authorization.
      */
     @Test
-    void keepsStaleEvidenceAndDropsUnverifiableEvidenceFromWhatIsShown() {
+    void shouldKeepStaleEvidenceAndDropUnverifiableEvidenceWhenFilteringWhatIsShown() {
         EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
         Observation current = observation("fingerprint", "fingerprint");
         Observation stale = observation("old", "current");
@@ -92,7 +92,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
     }
 
     @Test
-    void asksNothingOfEvidenceAuthorizationWhenNothingShownCanBeVerified() {
+    void shouldAskNothingOfEvidenceAuthorizationWhenNothingShownCanBeVerified() {
         EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
 
         assertThat(new ObservationVisibilityPolicy(authorization)
@@ -103,7 +103,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
     }
 
     @Test
-    void hidesShownEvidenceThatEvidenceAuthorizationRefuses() {
+    void shouldHideShownEvidenceWhenEvidenceAuthorizationRefusesIt() {
         EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
         Observation current = observation("fingerprint", "fingerprint");
         when(authorization.permitsAll(7L, List.of(current), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))

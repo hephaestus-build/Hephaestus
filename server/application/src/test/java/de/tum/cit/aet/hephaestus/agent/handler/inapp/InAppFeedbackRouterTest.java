@@ -125,7 +125,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
      * shown the mildest problem on the work while the worst one goes unmentioned.
      */
     @Test
-    void citesTheWorstOfSeveralProblemsOneRunFoundOnOnePieceOfWork() {
+    void shouldCiteTheWorstProblemWhenOneRunFoundSeveralOnOnePieceOfWork() {
         UUID run = UUID.randomUUID();
         Observation nit = problemOf(42L, run, Severity.MINOR);
         Observation worst = problemOf(42L, run, Severity.CRITICAL);
@@ -136,10 +136,10 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
 
     /**
      * A piece of work counts once, at its newest review. A pull request whose re-review came back clean is
-     * not a problem any more, so it corroborates nothing: one slip on another pull request stays one.
+     * not a problem at its newest review, so it corroborates nothing: one slip on another pull request stays one.
      */
     @Test
-    void aProblemTheReReviewNoLongerFoundDoesNotCorroborate() {
+    void shouldNotCorroborateWhenTheReReviewCameBackClean() {
         Observation slipped = observation(
                 7L, UUID.randomUUID(), NOW.minus(Duration.ofDays(2)), ObservationOrigin.LIVE, Assessment.BAD);
         Observation recovered = observation(
@@ -152,7 +152,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
 
     /** Two pull requests that slipped and one that slipped and recovered: exactly two rows to cite. */
     @Test
-    void citesOneRowPerPieceOfWorkAtItsNewestReview() {
+    void shouldCiteOneRowPerPieceOfWorkWhenWorkWasReviewedTwice() {
         Observation first = observation(
                 1L, UUID.randomUUID(), NOW.minus(Duration.ofDays(3)), ObservationOrigin.LIVE, Assessment.BAD);
         Observation second = observation(

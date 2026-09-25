@@ -19,7 +19,7 @@ class WorkResolutionTest {
     private static final Instant PREPARED_AT = Instant.parse("2026-05-01T12:00:00Z");
 
     @Test
-    void shouldResolveOnTheThirdCleanPieceOfWorkAndKeepItResolved() {
+    void shouldStayResolvedWhenAProblemFollowsTheThirdCleanPieceOfWork() {
         UUID first = UUID.randomUUID();
         UUID second = UUID.randomUUID();
         UUID third = UUID.randomUUID();
@@ -36,7 +36,7 @@ class WorkResolutionTest {
     }
 
     @Test
-    void shouldCountAPieceOfWorkReviewedTwiceOnce() {
+    void shouldCountAPieceOfWorkOnceWhenItWasReviewedTwice() {
         // The same pull request re-reviewed is one occasion, read off its latest run: two pieces of work, not three.
         UUID firstRun = UUID.randomUUID();
         UUID secondRun = UUID.randomUUID();
@@ -55,7 +55,7 @@ class WorkResolutionTest {
     }
 
     @Test
-    void shouldStartOverAtAProblemAndSkipWorkWithoutAVerdict() {
+    void shouldStartOverAtAProblemAndSkipWorkWhenItHasNoVerdict() {
         WorkResolution resolution = resolve(List.of(
                 clean(11L, UUID.randomUUID(), "2026-05-02T09:00:00Z"),
                 problem(12L, UUID.randomUUID(), "2026-05-03T09:00:00Z"),
@@ -68,7 +68,7 @@ class WorkResolutionTest {
     }
 
     @Test
-    void shouldIgnoreWorkReviewedAtOrBeforePreparation() {
+    void shouldIgnoreWorkWhenItWasReviewedAtOrBeforePreparation() {
         WorkResolution resolution = resolve(List.of(
                 clean(8L, UUID.randomUUID(), "2026-04-30T09:00:00Z"),
                 clean(9L, UUID.randomUUID(), PREPARED_AT.toString()),

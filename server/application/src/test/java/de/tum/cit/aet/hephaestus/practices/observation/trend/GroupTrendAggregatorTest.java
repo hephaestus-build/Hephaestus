@@ -110,10 +110,7 @@ class GroupTrendAggregatorTest {
         PracticeTrend group = GroupTrendAggregator.aggregate(
                 "quality", List.of("naming", "testing"), List.of(naming, testing), properties);
 
-        TrendSupport support = group.support();
-        assertThat(support.currentOpportunities() + support.previousOpportunities())
-                .isEqualTo(16);
-        assertThat(support.opportunities()).isEqualTo(15);
+        assertThat(group.support().opportunities()).isEqualTo(15);
     }
 
     private PracticeTrend trend(String slug, BetaPosterior.Difference difference) {

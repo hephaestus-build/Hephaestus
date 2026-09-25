@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.inapp.dto;
 
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.inapp.FeedbackClosure.ClosedBy;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -24,16 +25,10 @@ import org.jspecify.annotations.Nullable;
  * inside the message the composer wrote; a number on the card would be a score, which this surface is
  * not. A card that says how many pieces of work it rests on counts {@link #evidence} itself.
  *
- * <p>The work resolves the feedback, not the developer: {@link #cleanWork} are the pieces of work in a row
- * that have come back clean on the practice since it was prepared, {@link #cleanNeeded} of them resolve it,
- * and once the run is complete {@link #resolvedByWorkAt} says when. Marking it addressed is the developer's
- * own, second way to resolve it: {@link #resolvedByDeveloperAt} says when their answer resolved it, and
- * {@link #response} carries the answer itself — the same answer the response endpoint returns, so a page of
- * cards does not fetch it once per card, and no reader re-derives which answers resolve.
- *
- * <p>A card whose practice was changed after it was prepared is closed rather than resolved:
- * {@link #practiceChangedAt} says when, and nothing the work or the developer does reopens it. A closed
- * card, resolved or not, leaves the page once {@code InAppFeedbackService#CLOSED_CARD_STAYS} has passed.
+ * <p>How the card closes is {@code FeedbackClosure}'s: {@link #closedAt} and {@link #closedBy} say when and
+ * what, and {@link #cleanWork} is the work's side of it ({@code WorkResolution}). {@link #response} is the
+ * developer's current answer, the same one the response endpoint returns, so a page of cards does not fetch it
+ * once per card. How long a closed card stays is {@code InAppFeedbackService#CLOSED_CARD_STAYS}.
  */
 @Schema(description = "A process-level message on the developer's own practice pages")
 public record InAppFeedbackDTO(
@@ -87,22 +82,16 @@ public record InAppFeedbackDTO(
 
         @Nullable
         @Schema(
-                description = "When the work resolved it: the review of the piece of work that completed the"
-                        + " clean run; null while the work has not")
-        Instant resolvedByWorkAt,
+                description = "When it stopped being open: the earliest of the work completing its clean run,"
+                        + " the developer answering that it is addressed or not applicable, and the practice"
+                        + " changing its review rules after it was prepared; null while it is open")
+        Instant closedAt,
 
         @Nullable
         @Schema(
-                description = "When the developer's own answer resolved it: they marked it addressed or not"
-                        + " applicable; null while they have not answered or their answer disputes it")
-        Instant resolvedByDeveloperAt,
-
-        @Nullable
-        @Schema(
-                description = "When the practice's review rules changed after this was prepared, which closes"
-                        + " it without a resolution: the evidence was measured by rules the practice no longer"
-                        + " has; null while the rules are the ones it was measured by")
-        Instant practiceChangedAt,
+                description = "What closed it, for the moment closedAt names; on a tie the work, then the developer,"
+                        + " then the practice; null while it is open")
+        ClosedBy closedBy,
 
         @Nullable @Schema(description = "The developer's current response to this feedback; null while they have none")
         FeedbackResponseDTO response) {}

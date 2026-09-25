@@ -166,10 +166,10 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
 
     /**
      * The next step the run composed about this observation. It lives in the run's own output rather than in the
-     * feedback ledger, because a withheld unit records the whole rendered note and not the sentence about one
-     * observation.
+     * feedback ledger, because a withheld piece of feedback records the whole rendered note and not the sentence
+     * about one observation.
      */
-    private void composeNextStep(UUID findingId, String nextStep) {
+    private void composeNextStep(UUID observationId, String nextStep) {
         agentJob.setOutput(OBJECT_MAPPER.readTree("""
                 {"feedback":{"lead":"This change lands the retry.",
                   "observations":[{"id":"%s","practiceSlug":"pr-description-quality","anchorable":false,
@@ -177,7 +177,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                   "units":[{"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"pr-description-quality",
                    "basedOn":["%s"],"title":"Detailed observation","nextStep":"%s",
                    "placement":{"kind":"ARTIFACT"}}]}}
-                """.formatted(findingId, findingId, nextStep)));
+                """.formatted(observationId, observationId, nextStep)));
         agentJob = agentJobRepository.saveAndFlush(agentJob);
     }
 
@@ -1016,9 +1016,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @Test
         @WithUser
         @DisplayName("carries the step the review wrote and the response the developer gave back to them")
-        void shouldReturnTheNextStepAndTheRecordedResponse() {
+        void shouldReturnTheNextStepAndTheResponseWhenTheDeveloperAnswered() {
             Instant now = Instant.now();
-            UUID findingId = insertObservation(
+            UUID observationId = insertObservation(
                     practiceA,
                     developer,
                     "Detailed observation",
@@ -1028,8 +1028,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "scm.pull_request",
                     42L,
                     now);
-            Feedback feedback = deliverFeedbackFor(findingId, "Split this PR so each change reviews on its own.", now);
-            composeNextStep(findingId, "Split the retry out into its own pull request.");
+            Feedback feedback =
+                    deliverFeedbackFor(observationId, "Split this PR so each change reviews on its own.", now);
+            composeNextStep(observationId, "Split the retry out into its own pull request.");
             reactionRepository.save(Reaction.builder()
                     .feedback(feedback)
                     .reactorUserId(developer.getId())
@@ -1041,7 +1042,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
 
             webTestClient
                     .get()
-                    .uri(BASE_URI + "/{findingId}", workspace.getWorkspaceSlug(), findingId)
+                    .uri(BASE_URI + "/{observationId}", workspace.getWorkspaceSlug(), observationId)
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
@@ -1064,9 +1065,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @Test
         @WithUser
         @DisplayName("answers about the newest delivered piece of feedback when two carried the observation")
-        void shouldAnswerAboutTheNewestDeliveredFeedback() {
+        void shouldAnswerAboutTheNewestDeliveredFeedbackWhenTwoCarriedTheObservation() {
             Instant now = Instant.now();
-            UUID findingId = insertObservation(
+            UUID observationId = insertObservation(
                     practiceA,
                     developer,
                     "Detailed observation",
@@ -1076,12 +1077,12 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "scm.pull_request",
                     42L,
                     now);
-            deliverFeedbackFor(findingId, "The first note the run posted.", now.minus(1, ChronoUnit.HOURS), 0);
-            Feedback newest = deliverFeedbackFor(findingId, "The note that replaced it.", now, 1);
+            deliverFeedbackFor(observationId, "The first note the run posted.", now.minus(1, ChronoUnit.HOURS), 0);
+            Feedback newest = deliverFeedbackFor(observationId, "The note that replaced it.", now, 1);
 
             webTestClient
                     .get()
-                    .uri(BASE_URI + "/{findingId}", workspace.getWorkspaceSlug(), findingId)
+                    .uri(BASE_URI + "/{observationId}", workspace.getWorkspaceSlug(), observationId)
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
@@ -1095,11 +1096,11 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
 
         @Test
         @WithUser
-        @DisplayName("the text and the handle to answer it come from one feedback unit, even when a newer "
-                + "cross-artifact unit is also bound to the observation")
-        void shouldAnswerAboutTheUnitWhoseTextItShows() {
+        @DisplayName("the text and the handle to answer it come from one piece of feedback, even when newer "
+                + "cross-artifact feedback is also bound to the observation")
+        void shouldAnswerAboutTheFeedbackWhoseTextItShowsWhenNewerFeedbackIsBound() {
             Instant now = Instant.now();
-            UUID findingId = insertObservation(
+            UUID observationId = insertObservation(
                     practiceA,
                     developer,
                     "Detailed observation",
@@ -1110,7 +1111,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     42L,
                     now);
             Feedback onTheWork = deliverFeedbackFor(
-                    findingId,
+                    observationId,
                     "Split this PR so each change reviews on its own.",
                     now.minus(1, ChronoUnit.HOURS),
                     0,
@@ -1118,11 +1119,15 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
             // Newer, delivered and bound to the same observation, but about a habit across several pieces of
             // work: its words are never the ones this page shows, so its id must never be the one it rates.
             deliverFeedbackFor(
-                    findingId, "You keep shipping pull requests that do three things.", now, 1, FeedbackChannel.IN_APP);
+                    observationId,
+                    "You keep shipping pull requests that do three things.",
+                    now,
+                    1,
+                    FeedbackChannel.IN_APP);
 
             webTestClient
                     .get()
-                    .uri(BASE_URI + "/{findingId}", workspace.getWorkspaceSlug(), findingId)
+                    .uri(BASE_URI + "/{observationId}", workspace.getWorkspaceSlug(), observationId)
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()

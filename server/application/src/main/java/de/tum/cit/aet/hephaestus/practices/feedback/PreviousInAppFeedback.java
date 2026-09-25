@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.inapp.FeedbackClosure;
 import de.tum.cit.aet.hephaestus.practices.feedback.inapp.InAppFeedbackEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
@@ -20,10 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
  * needs it: whether it is still open, so the next card replaces it rather than piling up beside it, and
  * where the next card's evidence starts, so that work the developer was already shown is never cited again.
  *
- * <p>Closed the way the card reports it — resolved by the work or by the developer, or closed because the
- * practice changed, whichever came first ({@code docs/contributor/practice-review-glossary.mdx} § How
- * feedback resolves). A practice never written about has no previous card; the caller's own window applies
- * then.
+ * <p>Closed the way the card reports it ({@link FeedbackClosure}). A practice never written about has no
+ * previous card; the caller's own window applies then.
  */
 @Component
 @RequiredArgsConstructor
@@ -46,34 +46,38 @@ public class PreviousInAppFeedback {
         }
 
         /**
-         * Where the next card's evidence starts: after the answer when there was one, and otherwise after
-         * this card was prepared, since the next card replaces it and the work it already cited is not news.
+         * Where the next card's evidence starts: after this card closed when it has, and otherwise after it
+         * was prepared, since the next card replaces it and the work it already cited is not news — but never
+         * before {@code windowStart}, which a card older than the window cannot pull back.
          */
-        public Instant nextEvidenceSince() {
-            return closedAt != null ? closedAt : preparedAt;
+        public Instant nextEvidenceSince(Instant windowStart) {
+            Instant leftOff = closedAt != null ? closedAt : preparedAt;
+            return leftOff.isAfter(windowStart) ? leftOff : windowStart;
         }
     }
 
+    /** The newest readable card about the practice, closed or open as of {@code now}. */
     @Transactional(readOnly = true)
-    public Optional<Previous> find(Long workspaceId, Long recipientUserId, String practiceSlug) {
+    public Optional<Previous> find(Long workspaceId, Long recipientUserId, String practiceSlug, Instant now) {
         List<Feedback> previous = feedbackRepository.findReadableInAppForPractice(
                 workspaceId, recipientUserId, practiceSlug, PageRequest.of(0, 1));
         if (previous.isEmpty()) {
             return Optional.empty();
         }
-        Feedback unit = previous.getFirst();
-        Map<UUID, List<Observation>> evidence = feedbackEvidence.visibleEvidence(workspaceId, List.of(unit.getId()));
+        Feedback feedback = previous.getFirst();
+        Map<UUID, List<Observation>> evidence =
+                feedbackEvidence.visibleEvidence(workspaceId, List.of(feedback.getId()));
+        Map<UUID, Instant> practiceChangedAt = feedbackEvidence.practiceChangedAt(evidence);
         Instant byWork = feedbackEvidence
-                .workResolutions(workspaceId, recipientUserId, List.of(unit), evidence)
-                .getOrDefault(unit.getId(), WorkResolution.NONE)
+                .workResolutions(workspaceId, recipientUserId, List.of(feedback), evidence, practiceChangedAt, now)
+                .getOrDefault(feedback.getId(), WorkResolution.NONE)
                 .resolvedAt();
         Instant byDeveloper = InAppFeedbackEvidence.resolvedByDeveloperAt(reactionRepository
-                .findCurrentResponse(unit.getId(), recipientUserId)
+                .findCurrentResponse(feedback.getId(), recipientUserId)
+                .map(response -> FeedbackResponseDTO.from(feedback.getId(), response))
                 .orElse(null));
-        Instant practiceChangedAt = feedbackEvidence.practiceChangedAt(evidence).get(unit.getId());
-        return Optional.of(new Previous(
-                unit.getId(),
-                unit.getCreatedAt(),
-                InAppFeedbackEvidence.closedAt(byWork, byDeveloper, practiceChangedAt)));
+        FeedbackClosure closure = FeedbackClosure.of(byWork, byDeveloper, practiceChangedAt.get(feedback.getId()));
+        return Optional.of(
+                new Previous(feedback.getId(), feedback.getCreatedAt(), closure == null ? null : closure.at()));
     }
 }

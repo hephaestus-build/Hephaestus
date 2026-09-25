@@ -150,7 +150,7 @@ class InAppFeedbackPreparerTest extends BaseUnitTest {
     }
 
     @Test
-    void writesACardWithNoOpenPredecessorAsFollowingNothing() {
+    void shouldReplaceNothingWhenNoCardAboutTheHabitIsOpen() {
         stubSave();
 
         preparer.prepare(JOB_ID, WORKSPACE_ID, 11L, List.of(admitted("ships-tests")), BASE);
@@ -160,7 +160,7 @@ class InAppFeedbackPreparerTest extends BaseUnitTest {
     }
 
     @Test
-    void retiresTheOpenCardAndPointsTheNewOneAtIt() {
+    void shouldRetireTheOpenCardAndPointTheNewOneAtItWhenOneIsOpen() {
         stubSave();
         UUID open = UUID.randomUUID();
         when(supersession.replaceOpen(WORKSPACE_ID, open))

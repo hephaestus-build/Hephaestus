@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.ObservationFeedbackUnit;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.ObservationFeedback;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -116,8 +116,8 @@ public class ObservationService {
     }
 
     /**
-     * The lanes whose unit this read model means: the ones that speak about the one observation they are
-     * bound to. A {@code IN_APP} unit is excluded because it is a message about a habit across several
+     * The lanes whose feedback this read model means: the ones that speak about the one observation they are
+     * bound to. {@code IN_APP} feedback is excluded because it is a message about a habit across several
      * pieces of work — it binds every problem behind it as evidence, so it would answer "what did you tell
      * me about this observation" with a paragraph that is explicitly not about it. Named here rather than
      * defaulted in the query so a fourth lane has to be admitted deliberately.
@@ -156,18 +156,18 @@ public class ObservationService {
 
     /**
      * The detail read model of each observation, in the given order, from one batched query per collaborator:
-     * the newest feedback unit that said something about each observation to this developer (ADR 0021: advice
+     * the newest piece of feedback that said something about each observation to this developer (ADR 0021: advice
      * lives on the delivered {@code Feedback}, not the immutable observation), which carries both the text the
      * developer reads and — when it delivered — the handle they answer it with, so the two can never come from
-     * different units. A caller hands in observations it has already loaded and gated: evidence
-     * is included only for the ids in {@code evidencePermitted}, which is {@link EvidenceAuthorization}'s answer
-     * for the delivery purpose, and the artifact link comes from the run target of the observation's job, absent
-     * when the target is no longer resolvable.
+     * different pieces of feedback. A caller hands in observations it has already loaded and gated, inside the
+     * transaction their lazy associations are read in: evidence is included only for the ids in
+     * {@code evidencePermitted}, which is {@link EvidenceAuthorization}'s answer for the delivery purpose, and the
+     * artifact link comes from the run target of the observation's job, absent when the target is no longer
+     * resolvable.
      *
-     * <p>Takes the workspace even though observation ids alone identify the rows: the units it loads are
-     * feedback, and feedback is tenant-scoped whatever the observation is.
+     * <p>Takes the workspace even though observation ids alone identify the rows: what it loads is feedback,
+     * and feedback is tenant-scoped whatever the observation is.
      */
-    @Transactional(readOnly = true)
     public List<ObservationDetailDTO> toDetails(
             Long workspaceId,
             Long developerId,
@@ -180,14 +180,14 @@ public class ObservationService {
         }
         List<UUID> observationIds =
                 observations.stream().map(Observation::getId).toList();
-        Map<UUID, ObservationFeedbackUnit> units = feedbackUnitByObservation(workspaceId, developerId, observationIds);
+        Map<UUID, ObservationFeedback> feedback = feedbackByObservation(workspaceId, developerId, observationIds);
         return observations.stream()
                 .map(observation -> {
                     ReviewRunTargetLookup.Target target = targets.get(observation.getAgentJobId());
                     ReviewRunNarrative narrative = narratives.get(observation.getAgentJobId());
                     return ObservationDetailDTO.from(
                             observation,
-                            units.get(observation.getId()),
+                            feedback.get(observation.getId()),
                             narrative == null ? null : narrative.nextStepFor(observation.getId()),
                             target == null ? null : target.url(),
                             evidencePermitted.contains(observation.getId()));
@@ -195,12 +195,12 @@ public class ObservationService {
                 .toList();
     }
 
-    private Map<UUID, ObservationFeedbackUnit> feedbackUnitByObservation(
+    private Map<UUID, ObservationFeedback> feedbackByObservation(
             Long workspaceId, Long recipientUserId, Collection<UUID> observationIds) {
         return feedbackObservationRepository
-                .findLatestFeedbackUnitByObservationIds(workspaceId, recipientUserId, observationIds, FEEDBACK_CHANNELS)
+                .findLatestFeedbackByObservationIds(workspaceId, recipientUserId, observationIds, FEEDBACK_CHANNELS)
                 .stream()
-                .collect(Collectors.toMap(ObservationFeedbackUnit::getObservationId, Function.identity()));
+                .collect(Collectors.toMap(ObservationFeedback::getObservationId, Function.identity()));
     }
 
     /**

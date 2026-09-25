@@ -122,22 +122,22 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
     }
 
     /**
-     * The one feedback unit an observation's detail page is about, per observation: the newest unit addressed
-     * to this developer on the lanes the caller names that actually said something — {@code DELIVERED} or
-     * {@code FAILED}, with a body — carrying its text, its id and the developer's standing answer to it.
+     * The one piece of feedback an observation's detail page is about, per observation: the newest one
+     * addressed to this developer on the lanes the caller names that actually said something —
+     * {@code DELIVERED} or {@code FAILED}, with a body — carrying its text, its id and the developer's standing
+     * answer to it.
      *
-     * <p><b>Text and handle come from this one row on purpose.</b> They used to be two queries with different
-     * predicates, so on an observation carried by more than one unit the reader could rate a unit other than
-     * the one whose words they had just read. The channel set is the caller's to state for the same reason
-     * {@link #findLatestFeedbackBodiesByObservationIds} makes it state one: an IN_APP unit is about a habit
-     * across several pieces of work, not about the one observation it is bound to.
+     * <p><b>Text and handle come from one row</b>, so on an observation carried by more than one piece of
+     * feedback the developer always rates the words they just read. The channel set is the caller's to state
+     * for the same reason {@link #findLatestFeedbackBodiesByObservationIds} makes it state one: IN_APP feedback
+     * is about a habit across several pieces of work, not about the one observation it is bound to.
      *
-     * <p><b>{@code feedbackId} is null on a {@code FAILED} unit.</b> The words were composed and the developer
-     * may have seen them on the artifact, so the text is shown; but the response endpoint accepts only a
-     * {@code DELIVERED} unit, so there is no handle to answer it with.
+     * <p><b>{@code feedbackId} is null on {@code FAILED} feedback.</b> The words were composed and the
+     * developer may have seen them on the artifact, so the text is shown; but the response endpoint accepts
+     * only {@code DELIVERED} feedback, so there is no handle to answer it with.
      *
-     * <p>Ordered by creation rather than by delivery time because a FAILED unit has no {@code delivered_at}:
-     * newest composed wins, and ties break on id.
+     * <p>Ordered by creation rather than by delivery time because FAILED feedback has no
+     * {@code delivered_at}: newest composed wins, and ties break on id.
      *
      * <p>Bound as channel names rather than as {@link FeedbackChannel} values, and scoped by
      * {@code workspace_id}, for the reasons {@link #findLatestFeedbackBodiesByObservationIds} spells out.
@@ -167,22 +167,22 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
           AND f.body IS NOT NULL
         ORDER BY fo.observation_id, f.created_at DESC, f.id DESC
         """, nativeQuery = true)
-    List<ObservationFeedbackUnit> findLatestFeedbackUnitByObservationIds(
+    List<ObservationFeedback> findLatestFeedbackByObservationIds(
             @Param("workspaceId") Long workspaceId,
             @Param("recipientUserId") Long recipientUserId,
             @Param("observationIds") Collection<UUID> observationIds,
             @Param("channels") Collection<String> channels);
 
     /**
-     * The feedback unit an observation's detail is about: what it said, the handle to answer it with when it
-     * can be answered, and the developer's standing answer. The answer is the same shape the response endpoint
+     * The piece of feedback an observation's detail is about: what it said, the handle to answer it with when
+     * it can be answered, and the developer's standing answer. The answer is the same shape the response endpoint
      * returns, so the observation detail reads it through {@code FeedbackResponseDTO.from} rather than
      * flattening the columns a second time.
      */
-    interface ObservationFeedbackUnit extends CurrentResponseProjection {
+    interface ObservationFeedback extends CurrentResponseProjection {
         UUID getObservationId();
 
-        /** Null when the unit is {@code FAILED}: its words are readable but it cannot be answered. */
+        /** Null when the feedback is {@code FAILED}: its words are readable but it cannot be answered. */
         @Nullable
         UUID getFeedbackId();
 

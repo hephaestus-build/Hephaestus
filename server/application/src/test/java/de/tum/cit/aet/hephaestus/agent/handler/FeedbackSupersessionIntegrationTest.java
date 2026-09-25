@@ -184,16 +184,16 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
     }
 
     /**
-     * A mentor unit the developer has already read is the case the un-saying rule is named for. It keeps
-     * its state, and the new unit is written beside it pointing back at it, so the thread reads as one
-     * habit raised twice over time rather than as an edit to something they have in their head.
+     * Mentor feedback the developer has already read is the case the un-saying rule is named for. It keeps
+     * its state, and the new piece of feedback is written beside it pointing back at it, so the thread reads
+     * as one habit raised twice over time rather than as an edit to something they have in their head.
      */
     @Test
-    @DisplayName("a mentor unit that has been read is followed rather than replaced")
-    void aMentorUnitThatWasReadIsFollowedRatherThanReplaced() {
+    @DisplayName("mentor feedback that has been read is followed rather than replaced")
+    void shouldFollowRatherThanReplaceMentorFeedbackWhenItWasRead() {
         String mentorThread = FeedbackThreadKey.forPractice(PRACTICE, RECIPIENT, FeedbackChannel.IN_CHAT);
         UUID read = feedbackRepository
-                .save(cardBuilder("The unit they read", FeedbackDeliveryState.DELIVERED, null)
+                .save(cardBuilder("The feedback they read", FeedbackDeliveryState.DELIVERED, null)
                         .channel(FeedbackChannel.IN_CHAT)
                         .threadKey(mentorThread)
                         .deliveredAt(Instant.now())
@@ -216,7 +216,7 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
      */
     @Test
     @DisplayName("an open in-app card is replaced whether or not it was read")
-    void anOpenInAppCardIsReplacedReadOrNot() {
+    void shouldReplaceAnOpenInAppCardWhetherOrNotItWasRead() {
         UUID queued = queuedCard("The card that was waiting").getId();
         UUID read = queuedCard("The card they opened").getId();
         assertThat(feedbackRepository.markInAppDelivered(workspace.getId(), List.of(read), Instant.now()))
@@ -237,8 +237,8 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
 
     /** A card another run already retired, or that was withheld, is not claimed twice and not followed. */
     @Test
-    @DisplayName("an in-app card that is no longer live is neither claimed again nor followed")
-    void anInAppCardNoLongerLiveIsNotClaimedAgain() {
+    @DisplayName("a retired or withheld in-app card is neither claimed again nor followed")
+    void shouldNeitherClaimNorFollowAnInAppCardWhenItIsRetiredOrWithheld() {
         UUID retired = queuedCard("Already replaced").getId();
         assertThat(transactionTemplate
                         .execute(status -> supersession.replaceOpen(workspace.getId(), retired))

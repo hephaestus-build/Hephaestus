@@ -78,13 +78,7 @@ public class ObservationHistoryContentSource implements ContentSource {
         Instant since = Instant.now().minus(LOOKBACK_DAYS, ChronoUnit.DAYS);
 
         List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                developerId,
-                workspaceId,
-                since,
-                // Verdicts only: coaching on a run that declined to take a direction would invite the mentor to
-                // invent one. The totals still reach it through the presence-count summary.
-                true,
-                PageRequest.of(0, MAX_RECENT_OBSERVATIONS));
+                developerId, workspaceId, since, PageRequest.of(0, MAX_RECENT_OBSERVATIONS));
         List<PullRequestReview> reviews = queryRepository.findReviewsReceivedSince(
                 workspaceId, developerId, since, PageRequest.of(0, MAX_RECENT_REVIEWS));
 

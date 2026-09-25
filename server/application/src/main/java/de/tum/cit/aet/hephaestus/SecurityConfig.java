@@ -26,6 +26,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.ObjectPostProcessor;
@@ -408,7 +409,7 @@ public class SecurityConfig {
                 UserViewAuthorizationConfig.REASON_HEADER,
                 // Every endpoint that hands out an ETag reads it back from If-Match (EntityTagPrecondition); a
                 // header not listed here never leaves the browser when the SPA runs on another origin, as in dev.
-                "If-Match"));
+                HttpHeaders.IF_MATCH));
         configuration.setExposedHeaders(
                 List.of(ReplicaIdentityFilter.HEADER_NAME, RequestCorrelationFilter.HEADER_NAME));
         configuration.setAllowCredentials(true);

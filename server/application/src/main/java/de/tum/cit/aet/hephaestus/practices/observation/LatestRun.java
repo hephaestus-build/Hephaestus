@@ -12,8 +12,7 @@ import java.util.stream.Collectors;
 
 /**
  * A piece of reviewed work counts once, at its newest review — the rule the glossary states for how feedback
- * resolves, and the one the trend, the work resolution, the standing and the in-app lane all read their
- * evidence by. The run holding a piece of work's newest observation speaks for that work; what an earlier run
+ * resolves. The run holding a piece of work's newest observation speaks for that work; what an earlier run
  * said about the same pull request is superseded, whichever way it went. Ties on the timestamp break on the
  * job id so a window whose timestamps collide still answers deterministically.
  */
@@ -25,7 +24,7 @@ public final class LatestRun {
      * The run that reviewed these rows' work last. The caller passes at least one row.
      *
      * <p>The tie-break compares the job id as its canonical string because the same rule is also written in SQL
-     * (`ORDER BY observed_at DESC, agent_job_id DESC`), and PostgreSQL orders {@code uuid} byte-wise while
+     * ({@code ORDER BY observed_at DESC, agent_job_id DESC}), and PostgreSQL orders {@code uuid} byte-wise while
      * {@link UUID#compareTo} orders its two halves as signed longs — the two would disagree on exactly the tie
      * this break exists for.
      */

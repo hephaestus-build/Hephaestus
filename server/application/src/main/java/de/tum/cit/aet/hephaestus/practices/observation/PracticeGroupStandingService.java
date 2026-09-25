@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -128,7 +129,6 @@ public class PracticeGroupStandingService {
                 .toList();
     }
 
-    /** A verdict's share is never absent; the fallback keeps the average total rather than throwing on a card. */
     private static PracticeGroupStandingDTO.Standing groupStanding(
             List<PracticeStandingDTO> cards,
             List<PracticeStandingDTO> verdicts,
@@ -139,11 +139,8 @@ public class PracticeGroupStandingService {
                     : PracticeGroupStandingDTO.Standing.NOT_OBSERVED;
         }
         double groupShare = verdicts.stream()
-                .mapToDouble(card -> {
-                    PracticeStanding practice = practices.get(card.slug());
-                    Double share = practice == null ? null : practice.share();
-                    return share == null ? 0.0 : share;
-                })
+                .mapToDouble(card -> Objects.requireNonNull(
+                        Objects.requireNonNull(practices.get(card.slug())).share()))
                 .average()
                 .orElseThrow();
         return switch (StandingScale.classify(groupShare)) {

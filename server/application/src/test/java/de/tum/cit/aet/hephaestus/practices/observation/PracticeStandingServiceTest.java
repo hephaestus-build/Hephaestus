@@ -335,7 +335,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
 
     @Test
     @DisplayName("each edge sees only the evidence recorded by then, and the window is loaded up to the newest edge")
-    void shouldCutTheEvidencePerEdgeAndLoadUpToTheNewestOne() {
+    void shouldCutTheEvidencePerEdgeWhenReadingStandingsAtSeveralEdges() {
         Practice practice = practice("robust-error-handling");
         Observation problem = bad(practice, Severity.MAJOR, 43L);
         when(observationRepository.findByDeveloperAndWorkspaceBetween(

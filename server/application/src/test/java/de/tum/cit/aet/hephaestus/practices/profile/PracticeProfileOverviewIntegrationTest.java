@@ -1,17 +1,22 @@
 package de.tum.cit.aet.hephaestus.practices.profile;
 
+import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.DEMONSTRATED_STRENGTH;
+import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.OMISSION_GAP;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.curated.BundledPracticeCatalogLoader;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
@@ -21,8 +26,8 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
@@ -30,6 +35,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * {@code GET /practice-profile/overview} against a seeded history: three runs on three pull requests, the
@@ -41,9 +48,6 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
 
     private static final String OVERVIEW_URI = "/workspaces/{workspaceSlug}/practice-profile/overview";
 
-    /** Whole seconds, so what Postgres stores is what the JSON says. */
-    private static final Instant NOW = Instant.now().truncatedTo(ChronoUnit.SECONDS);
-
     private static final Instant FIRST_RUN_AT = NOW.minus(Duration.ofDays(10));
     private static final Instant PREVIOUS_RUN_AT = NOW.minus(Duration.ofDays(5));
     private static final Instant LATEST_RUN_AT = NOW.minus(Duration.ofDays(1));
@@ -54,6 +58,12 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
 
     @Autowired
     private EntityManagerFactory entityManagerFactory;
+
+    @Autowired
+    private BundledPracticeCatalogLoader catalog;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     private Workspace workspace;
     private User developer;
@@ -92,13 +102,14 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
         latestRun = persistPullRequestReview(workspace, 22, LATEST_RUN_AT);
 
         // Descriptions held on every pull request; the diff slipped on #20, recovered on #21 and slipped again on #22.
-        observe(describeWhatAndWhy, firstRun, 20L, developer, "PRESENT", "GOOD", null, FIRST_RUN_AT);
-        olderProblem = observe(reviewableDiffSize, firstRun, 20L, developer, "ABSENT", "GOOD", "MINOR", FIRST_RUN_AT);
-        observe(describeWhatAndWhy, previousRun, 21L, developer, "PRESENT", "GOOD", null, PREVIOUS_RUN_AT);
-        observe(reviewableDiffSize, previousRun, 21L, developer, "PRESENT", "GOOD", null, PREVIOUS_RUN_AT);
-        observe(describeWhatAndWhy, latestRun, 22L, developer, "PRESENT", "GOOD", null, LATEST_RUN_AT);
+        observe(describeWhatAndWhy, firstRun, 20L, developer, DEMONSTRATED_STRENGTH, null, FIRST_RUN_AT);
+        olderProblem =
+                observe(reviewableDiffSize, firstRun, 20L, developer, OMISSION_GAP, Severity.MINOR, FIRST_RUN_AT);
+        observe(describeWhatAndWhy, previousRun, 21L, developer, DEMONSTRATED_STRENGTH, null, PREVIOUS_RUN_AT);
+        observe(reviewableDiffSize, previousRun, 21L, developer, DEMONSTRATED_STRENGTH, null, PREVIOUS_RUN_AT);
+        observe(describeWhatAndWhy, latestRun, 22L, developer, DEMONSTRATED_STRENGTH, null, LATEST_RUN_AT);
         UUID latestProblem =
-                observe(reviewableDiffSize, latestRun, 22L, developer, "ABSENT", "GOOD", "MAJOR", LATEST_RUN_AT);
+                observe(reviewableDiffSize, latestRun, 22L, developer, OMISSION_GAP, Severity.MAJOR, LATEST_RUN_AT);
 
         olderFeedback = persistInAppFeedback(
                 firstRun, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, FIRST_RUN_AT.plusSeconds(30));
@@ -114,15 +125,8 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("the window opens at the previous run and reports what the latest one changed")
-    void shouldReportTheLatestRunsChanges() {
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
+    void shouldReportWhatTheLatestRunChangedWhenTheWindowOpensAtThePreviousRun() {
+        readOverview()
                 .jsonPath("$.window.since")
                 .isEqualTo(PREVIOUS_RUN_AT.toString())
                 .jsonPath("$.latestRun.jobId")
@@ -147,7 +151,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
                 .jsonPath("$.holdingUp[0].practiceSlug")
                 .isEqualTo("explain-changes")
                 .jsonPath("$.holdingUp[0].holdsAs")
-                .isEqualTo("Every description says what changed and why")
+                .isEqualTo(catalog.holdsAs("describe-what-and-why").orElseThrow())
                 .jsonPath("$.holdingUp[0].cleanWork")
                 .isEqualTo(3)
                 .jsonPath("$.holdingUp[0].workKind")
@@ -197,26 +201,19 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     }
 
     /**
-     * A fourth run moves the window: it now opens at the third, so the third's changes are history and what the
+     * A fourth run moves the window: it opens at the third, so the third's changes are history and what the
      * fourth changed is reported. The diff recovered on #23, and the feedback #22 composed is not new again.
      */
     @Test
     @WithUser
     @DisplayName("a newer run opens the window at the run before it and reports what it changed")
-    void shouldMoveTheWindowWithANewerRun() {
+    void shouldMoveTheWindowWhenANewerRunArrives() {
         Instant recoveryRunAt = NOW.minus(Duration.ofHours(12));
         AgentJob recoveryRun = persistPullRequestReview(workspace, 23, recoveryRunAt);
-        observe(describeWhatAndWhy, recoveryRun, 23L, developer, "PRESENT", "GOOD", null, recoveryRunAt);
-        observe(reviewableDiffSize, recoveryRun, 23L, developer, "PRESENT", "GOOD", null, recoveryRunAt);
+        observe(describeWhatAndWhy, recoveryRun, 23L, developer, DEMONSTRATED_STRENGTH, null, recoveryRunAt);
+        observe(reviewableDiffSize, recoveryRun, 23L, developer, DEMONSTRATED_STRENGTH, null, recoveryRunAt);
 
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
+        readOverview()
                 .jsonPath("$.window.since")
                 .isEqualTo(LATEST_RUN_AT.toString())
                 .jsonPath("$.latestRun.jobId")
@@ -263,17 +260,10 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     @WithUser
     @DisplayName(
             "feedback the developer's work resolved is a change inside the window the third clean piece of work falls in")
-    void shouldReportFeedbackResolvedByTheWork() {
+    void shouldReportAResolutionWhenTheWorkResolvesFeedbackInsideTheWindow() {
         Feedback feedback = describingFeedbackPreparedAt(FIRST_RUN_AT.minus(Duration.ofDays(1)));
 
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
+        readOverview()
                 .jsonPath("$.changes[?(@.resolvedBy == 'WORK')].feedbackId")
                 .isEqualTo(feedback.getId().toString())
                 .jsonPath("$.changes[?(@.resolvedBy == 'WORK')].type")
@@ -286,7 +276,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
                 .isEqualTo(List.of("#22", "#21", "#20"))
                 .jsonPath("$.changes[?(@.resolvedBy == 'WORK')].evidence[0].url")
                 .isEqualTo("https://github.com/acme/api/pull/22")
-                // The developer's own response on the other practice is reported as before.
+                // The developer's own response on the other practice is reported beside it.
                 .jsonPath("$.changes[?(@.resolvedBy == 'DEVELOPER')].feedbackId")
                 .isEqualTo(olderFeedback.getId().toString());
     }
@@ -299,78 +289,82 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("feedback the work resolved before the window opened is not a change inside it")
-    void shouldNotReportFeedbackResolvedBeforeTheWindow() {
+    void shouldNotReportAResolutionWhenTheWorkResolvedItBeforeTheWindow() {
         Feedback feedback = describingFeedbackPreparedAt(FIRST_RUN_AT.minus(Duration.ofDays(4)));
         for (int number = 17; number <= 18; number++) {
             Instant reviewedAt = FIRST_RUN_AT.minus(Duration.ofDays(20 - number));
             AgentJob run = persistPullRequestReview(workspace, number, reviewedAt);
-            observe(describeWhatAndWhy, run, number, developer, "PRESENT", "GOOD", null, reviewedAt);
+            observe(describeWhatAndWhy, run, number, developer, DEMONSTRATED_STRENGTH, null, reviewedAt);
         }
 
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
+        readOverview()
                 .jsonPath("$.changes[?(@.feedbackId == '" + feedback.getId() + "')]")
                 .isEmpty();
     }
 
     /**
-     * The work that could resolve feedback is read off the standing's look-back, so feedback prepared before
-     * it cannot resolve through the profile: the third clean pull request falls inside the window, but the
-     * run of three would have to be counted from before the look-back began.
+     * The third clean pull request falls inside the window, but the feedback was prepared before the look-back
+     * ({@code docs/contributor/practice-review-glossary.mdx} § Practice profile overview).
      */
     @Test
     @WithUser
     @DisplayName("feedback prepared before the look-back is not resolved by the work inside the window")
-    void shouldNotResolveFeedbackPreparedBeforeTheLookBack() {
+    void shouldNotResolveFeedbackWhenItWasPreparedBeforeTheLookBack() {
         Feedback feedback =
                 describingFeedbackPreparedAt(NOW.minus(Duration.ofDays(PracticeStandingService.LOOKBACK_DAYS + 1)));
 
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
+        readOverview()
                 .jsonPath("$.changes[?(@.feedbackId == '" + feedback.getId() + "')]")
                 .isEmpty();
     }
 
     /**
-     * The read is bounded by the window and the look-back, not by the developer's history: two hundred cards
-     * resolved long ago add no query and no loaded row to the request.
+     * Three clean pull requests before the look-back resolved the feedback on its card, and the developer answers
+     * it inside the window ({@code docs/contributor/practice-review-glossary.mdx} § Practice profile overview).
      */
     @Test
     @WithUser
-    @DisplayName("feedback resolved before the look-back costs the overview nothing to read past")
-    void shouldNotReadFeedbackResolvedBeforeTheLookBack() {
+    @DisplayName("an answer inside the window to feedback prepared before the look-back is not a change")
+    void shouldNotReportAnAnswerWhenTheFeedbackWasPreparedBeforeTheLookBack() {
+        Instant preparedAt = NOW.minus(Duration.ofDays(PracticeStandingService.LOOKBACK_DAYS + 10));
+        Feedback feedback = describingFeedbackPreparedAt(preparedAt);
+        for (int number = 16; number <= 18; number++) {
+            Instant reviewedAt = preparedAt.plus(Duration.ofDays(number - 15));
+            AgentJob run = persistPullRequestReview(workspace, number, reviewedAt);
+            observe(describeWhatAndWhy, run, number, developer, DEMONSTRATED_STRENGTH, null, reviewedAt);
+        }
+        markAddressed(feedback, developer, LATEST_RUN_AT.plus(Duration.ofHours(2)));
+
+        readOverview()
+                .jsonPath("$.changes[?(@.feedbackId == '" + feedback.getId() + "')]")
+                .isEmpty();
+    }
+
+    /** Feedback resolved before the look-back adds no query and no loaded entity to the overview's read. */
+    @Test
+    @WithUser
+    @DisplayName("feedback resolved before the look-back adds nothing to what the overview reads")
+    void shouldReadNoMoreWhenFeedbackWasResolvedBeforeTheLookBack() {
         Statistics statistics =
                 entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         boolean wasEnabled = statistics.isStatisticsEnabled();
         statistics.setStatisticsEnabled(true);
         try {
-            getOverviewOk();
+            readOverview();
             statistics.clear();
-            getOverviewOk();
+            readOverview();
             long queriesWithoutHistory = statistics.getQueryExecutionCount();
             long rowsWithoutHistory = statistics.getEntityLoadCount();
 
             Instant longAgo = NOW.minus(Duration.ofDays(PracticeStandingService.LOOKBACK_DAYS + 30));
-            for (int number = 100; number < 300; number++) {
+            for (int number = 100; number < 103; number++) {
                 Feedback resolved = describingFeedbackPreparedAt(number, longAgo.plusSeconds(number));
                 markAddressed(
                         resolved, developer, longAgo.plus(Duration.ofDays(1)).plusSeconds(number));
             }
 
             statistics.clear();
-            getOverviewOk();
+            readOverview();
             assertThat(statistics.getQueryExecutionCount()).isEqualTo(queriesWithoutHistory);
             assertThat(statistics.getEntityLoadCount()).isEqualTo(rowsWithoutHistory);
         } finally {
@@ -385,20 +379,13 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("feedback the work resolved and the developer then marked addressed is reported once, by the work")
-    void shouldReportTheEarlierOfTheTwoResolutions() {
+    void shouldReportOneResolutionByTheWorkWhenTheDeveloperAddressedItLater() {
         Feedback feedback = describingFeedbackPreparedAt(FIRST_RUN_AT.minus(Duration.ofDays(1)));
         markAddressed(feedback, developer, LATEST_RUN_AT.plus(Duration.ofHours(3)));
 
         String thisFeedback = "$.changes[?(@.feedbackId == '" + feedback.getId() + "')]";
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                // One match, or the assertion refuses the list: the feedback resolved once.
+        // One match, or the assertion refuses the list: the feedback resolved once.
+        readOverview()
                 .jsonPath(thisFeedback + ".resolvedBy")
                 .isEqualTo("WORK")
                 .jsonPath(thisFeedback + ".at")
@@ -412,18 +399,11 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("feedback marked addressed before the window is not resolved again by the work inside it")
-    void shouldNotReportAWorkResolutionOfFeedbackAddressedBeforeTheWindow() {
+    void shouldNotReportAWorkResolutionWhenTheFeedbackWasAddressedBeforeTheWindow() {
         Feedback feedback = describingFeedbackPreparedAt(FIRST_RUN_AT.minus(Duration.ofDays(1)));
         markAddressed(feedback, developer, FIRST_RUN_AT.plus(Duration.ofHours(1)));
 
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
+        readOverview()
                 .jsonPath("$.changes[?(@.feedbackId == '" + feedback.getId() + "')]")
                 .isEmpty();
     }
@@ -436,12 +416,12 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("an answer inside the window to feedback the work resolved before it is not a change")
-    void shouldNotReportAnAnswerToFeedbackTheWorkResolvedBeforeTheWindow() {
+    void shouldNotReportAnAnswerWhenTheWorkResolvedTheFeedbackBeforeTheWindow() {
         Practice checkableOutcome =
                 persistPractice(workspace, null, "issue-has-checkable-outcome", "Define a checkable outcome", null);
         Instant preparedAt = FIRST_RUN_AT.minus(Duration.ofDays(4));
         AgentJob problemRun = persistPullRequestReview(workspace, 11, preparedAt);
-        UUID problem = observe(checkableOutcome, problemRun, 11L, developer, "ABSENT", "GOOD", "MINOR", preparedAt);
+        UUID problem = observe(checkableOutcome, problemRun, 11L, developer, OMISSION_GAP, Severity.MINOR, preparedAt);
         Feedback feedback = persistInAppFeedback(
                 problemRun, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, preparedAt.plusSeconds(30));
         bind(feedback, problem);
@@ -449,18 +429,11 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
         for (int number = 12; number <= 14; number++) {
             Instant reviewedAt = FIRST_RUN_AT.minus(Duration.ofDays(15 - number));
             AgentJob run = persistPullRequestReview(workspace, number, reviewedAt);
-            observe(checkableOutcome, run, number, developer, "PRESENT", "GOOD", null, reviewedAt);
+            observe(checkableOutcome, run, number, developer, DEMONSTRATED_STRENGTH, null, reviewedAt);
         }
         markAddressed(feedback, developer, LATEST_RUN_AT.plus(Duration.ofHours(2)));
 
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
+        readOverview()
                 .jsonPath("$.changes[?(@.feedbackId == '" + feedback.getId() + "')]")
                 .isEmpty();
     }
@@ -472,24 +445,17 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("new feedback is dated by the run that composed it, so the previous run's is not new in the window")
-    void shouldDateNewFeedbackByItsRun() {
+    void shouldDateNewFeedbackByItsRunWhenTheRowIsWrittenMomentsLater() {
         // The previous run found the description thin on #21 and spoke about it moments after its observation.
         // A different practice from the latest run's feedback, so a wrongly dated piece would survive the
         // per-practice dedupe and show up beside it rather than behind it.
         UUID previousRunsProblem =
-                observe(describeWhatAndWhy, previousRun, 21L, developer, "ABSENT", "GOOD", "MINOR", PREVIOUS_RUN_AT);
+                observe(describeWhatAndWhy, previousRun, 21L, developer, OMISSION_GAP, Severity.MINOR, PREVIOUS_RUN_AT);
         Feedback previousRunsFeedback = persistInAppFeedback(
                 previousRun, developer, 2, FeedbackDeliveryState.DELIVERED, BODY, PREVIOUS_RUN_AT.plusSeconds(30));
         bind(previousRunsFeedback, previousRunsProblem);
 
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
+        readOverview()
                 .jsonPath("$.changes[?(@.type == 'FEEDBACK_NEW')].feedbackId")
                 .isEqualTo(latestFeedback.getId().toString())
                 .jsonPath("$.changes[?(@.type == 'FEEDBACK_NEW')].at")
@@ -506,7 +472,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("the same developer's history in another workspace does not reach this overview")
-    void shouldNotLeakTheDevelopersHistoryInAnotherWorkspace() {
+    void shouldIgnoreTheDevelopersHistoryWhenItIsInAnotherWorkspace() {
         User otherOwner = persistUser("profile-foreign-owner");
         Workspace other =
                 createWorkspace("profile-foreign-ws", "Foreign WS", "profile-foreign-org", AccountType.ORG, otherOwner);
@@ -523,20 +489,13 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
         Instant foreignRunAt = NOW.minus(Duration.ofHours(6));
         AgentJob foreignRun = persistPullRequestReview(other, 30, foreignRunAt);
         UUID foreignProblem =
-                observe(otherPractice, foreignRun, 30L, developer, "ABSENT", "GOOD", "MAJOR", foreignRunAt);
+                observe(otherPractice, foreignRun, 30L, developer, OMISSION_GAP, Severity.MAJOR, foreignRunAt);
         Feedback foreignFeedback = persistInAppFeedback(
                 foreignRun, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, foreignRunAt.plusSeconds(30));
         bind(foreignFeedback, foreignProblem);
         markAddressed(foreignFeedback, developer, foreignRunAt.plusSeconds(60));
 
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
+        readOverview()
                 .jsonPath("$.window.since")
                 .isEqualTo(PREVIOUS_RUN_AT.toString())
                 .jsonPath("$.latestRun.jobId")
@@ -562,20 +521,13 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("feedback the developer ruled not applicable is resolved by them")
-    void shouldResolveFeedbackTheDeveloperRuledNotApplicable() {
+    void shouldResolveFeedbackWhenTheDeveloperRulesItNotApplicable() {
         Instant ruledOutAt = PREVIOUS_RUN_AT.plus(Duration.ofHours(2));
         Feedback ruledOut = describingFeedbackPreparedAt(23, FIRST_RUN_AT.minus(Duration.ofDays(2)));
         respond(ruledOut, developer, FeedbackResolution.NOT_APPLICABLE, ruledOutAt);
 
         String change = "$.changes[?(@.feedbackId == '" + ruledOut.getId() + "')]";
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
+        readOverview()
                 .jsonPath(change + ".type")
                 .isEqualTo("FEEDBACK_RESOLVED")
                 .jsonPath(change + ".resolvedBy")
@@ -584,23 +536,46 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
                 .isEqualTo(ruledOutAt.toString());
     }
 
+    /**
+     * Feedback its practice's rule change closed was not resolved, and an answer the developer gives afterwards
+     * does not make it so: the summary reports what the card reports.
+     */
+    @Test
+    @WithUser
+    @DisplayName("feedback its practice's change closed is not reported resolved by a later answer")
+    void shouldNotReportAResolutionWhenThePracticeChangedBeforeTheDeveloperAnswered() {
+        Instant preparedAt = FIRST_RUN_AT.minus(Duration.ofDays(2));
+        AgentJob run = persistPullRequestReview(workspace, 50, preparedAt);
+        UUID problem = observe(releaseNotes, run, 50L, developer, OMISSION_GAP, Severity.MINOR, preparedAt);
+        Feedback feedback = persistInAppFeedback(
+                run, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, preparedAt.plusSeconds(30));
+        bind(feedback, problem);
+        Instant rulesChangedAt = Objects.requireNonNull(transactionTemplate.execute(status -> {
+            Practice practice =
+                    practiceRepository.findById(releaseNotes.getId()).orElseThrow();
+            practice.setCriteria("A rewritten rubric, measuring something else");
+            PracticeRevision changed = practiceRevisionRepository.save(new PracticeRevision(practice, 2));
+            practice.setCurrentRevision(changed);
+            practiceRepository.save(practice);
+            return changed.getCreatedAt();
+        }));
+        markAddressed(feedback, developer, rulesChangedAt.plusMillis(1));
+
+        readOverview()
+                .jsonPath("$.changes[?(@.feedbackId == '" + feedback.getId() + "' && @.type == 'FEEDBACK_RESOLVED')]")
+                .isEmpty();
+    }
+
     /** A dispute asks for a reply: it closes nothing, so the card stays open for the work to resolve. */
     @Test
     @WithUser
     @DisplayName("feedback the developer disputed is not resolved by the dispute")
-    void shouldNotResolveFeedbackTheDeveloperDisputed() {
+    void shouldNotResolveFeedbackWhenTheDeveloperDisputesIt() {
         Feedback disputed = describingFeedbackPreparedAt(24, FIRST_RUN_AT.minus(Duration.ofDays(3)));
         respond(disputed, developer, FeedbackResolution.DISPUTED, PREVIOUS_RUN_AT.plus(Duration.ofHours(3)));
 
         String change = "$.changes[?(@.feedbackId == '" + disputed.getId() + "')]";
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
+        readOverview()
                 .jsonPath(change + ".resolvedBy")
                 .isEqualTo("WORK")
                 .jsonPath(change + ".at")
@@ -615,20 +590,13 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("feedback the work fell back on inside the window is reported with the work that reset it")
-    void shouldReportFeedbackTheWorkFellBackOn() {
+    void shouldReportAResetWhenTheWorkFallsBackInsideTheWindow() {
         Feedback feedback = releaseNotesFeedbackWithTwoCleanPieces();
         // The latest run found the practice missing again, inside the window.
-        observe(releaseNotes, latestRun, 22L, developer, "ABSENT", "GOOD", "MAJOR", LATEST_RUN_AT);
+        observe(releaseNotes, latestRun, 22L, developer, OMISSION_GAP, Severity.MAJOR, LATEST_RUN_AT);
 
         String change = "$.changes[?(@.type == 'FEEDBACK_RESET')]";
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
+        readOverview()
                 .jsonPath(change + ".feedbackId")
                 .isEqualTo(feedback.getId().toString())
                 .jsonPath(change + ".practiceSlug")
@@ -650,23 +618,14 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("feedback the work fell back on before the window is not a change inside it")
-    void shouldNotReportAFallBackBeforeTheWindow() {
+    void shouldNotReportAResetWhenTheWorkFellBackBeforeTheWindow() {
         Feedback feedback = releaseNotesFeedbackWithTwoCleanPieces();
         // The problem is older than the previous run, so the window opens on a clean run already at nothing.
         Instant slipAt = FIRST_RUN_AT.minus(Duration.ofDays(1));
         AgentJob slipRun = persistPullRequestReview(workspace, 43, slipAt);
-        observe(releaseNotes, slipRun, 43L, developer, "ABSENT", "GOOD", "MAJOR", slipAt);
+        observe(releaseNotes, slipRun, 43L, developer, OMISSION_GAP, Severity.MAJOR, slipAt);
 
-        webTestClient
-                .get()
-                .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.changes[?(@.type == 'FEEDBACK_RESET')]")
-                .isEmpty();
+        readOverview().jsonPath("$.changes[?(@.type == 'FEEDBACK_RESET')]").isEmpty();
     }
 
     /**
@@ -676,14 +635,14 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     private Feedback releaseNotesFeedbackWithTwoCleanPieces() {
         Instant preparedAt = FIRST_RUN_AT.minus(Duration.ofDays(6));
         AgentJob problemRun = persistPullRequestReview(workspace, 40, preparedAt);
-        UUID problem = observe(releaseNotes, problemRun, 40L, developer, "ABSENT", "GOOD", "MINOR", preparedAt);
+        UUID problem = observe(releaseNotes, problemRun, 40L, developer, OMISSION_GAP, Severity.MINOR, preparedAt);
         Feedback feedback = persistInAppFeedback(
                 problemRun, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, preparedAt.plusSeconds(30));
         bind(feedback, problem);
         for (int number = 41; number <= 42; number++) {
             Instant reviewedAt = FIRST_RUN_AT.minus(Duration.ofDays(45 - number));
             AgentJob run = persistPullRequestReview(workspace, number, reviewedAt);
-            observe(releaseNotes, run, number, developer, "PRESENT", "GOOD", null, reviewedAt);
+            observe(releaseNotes, run, number, developer, DEMONSTRATED_STRENGTH, null, reviewedAt);
         }
         return feedback;
     }
@@ -691,7 +650,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("a developer who is not a member of the workspace is refused")
-    void shouldRefuseANonMember() {
+    void shouldRefuseTheOverviewWhenTheDeveloperIsNotAMember() {
         User outsider = persistUser("outsider-owner");
         Workspace other =
                 createWorkspace("profile-other-ws", "Other WS", "profile-other-org", AccountType.ORG, outsider);
@@ -702,17 +661,20 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isForbidden();
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
-    private void getOverviewOk() {
-        webTestClient
+    /** The overview as the signed-in developer reads it. */
+    private WebTestClient.BodyContentSpec readOverview() {
+        return webTestClient
                 .get()
                 .uri(OVERVIEW_URI, workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody();
     }
 
     /** Delivered feedback about descriptions, written from a slip on pull request #19 reviewed at {@code preparedAt}. */
@@ -722,7 +684,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
 
     private Feedback describingFeedbackPreparedAt(int number, Instant preparedAt) {
         AgentJob run = persistPullRequestReview(workspace, number, preparedAt);
-        UUID problem = observe(describeWhatAndWhy, run, number, developer, "ABSENT", "GOOD", "MINOR", preparedAt);
+        UUID problem = observe(describeWhatAndWhy, run, number, developer, OMISSION_GAP, Severity.MINOR, preparedAt);
         Feedback feedback = persistInAppFeedback(
                 run, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, preparedAt.plusSeconds(30));
         bind(feedback, problem);

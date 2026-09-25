@@ -14,23 +14,12 @@ import org.jspecify.annotations.Nullable;
  * <p>A fact, not a sentence: the page composes its own copy from the type and the fields, so a change to the
  * wording never needs a server release. Practice-level changes carry the practice and its group; a
  * {@code GROUP_MOVED} carries only the group. {@code from} and {@code to} are the standing or trend values
- * the type says they are.
+ * the type says they are; {@code direction} says which way a move between two verdicts went, and a move into
+ * or out of a silence has none.
  */
 @Schema(description = "One change on the developer's practice profile since the previous review run")
 public record ProfileChangeDTO(
-        @NonNull
-        @Schema(
-                description = "What changed",
-                allowableValues = {
-                    "FEEDBACK_NEW",
-                    "FEEDBACK_RESOLVED",
-                    "FEEDBACK_RESET",
-                    "STANDING_MOVED",
-                    "TREND_TURNED",
-                    "GROUP_MOVED",
-                    "FIRST_OBSERVED"
-                })
-        Type type,
+        @NonNull @Schema(description = "What changed") Type type,
 
         @NonNull
         @Schema(
@@ -49,14 +38,19 @@ public record ProfileChangeDTO(
         @Nullable @Schema(description = "The standing or trend now, for a move or a turn")
         String to,
 
+        @Nullable
+        @Schema(
+                description = "Which way a STANDING_MOVED or GROUP_MOVED went on the standing scale, for a move"
+                        + " between two verdicts; null for a move into or out of a standing that is not a verdict")
+        Direction direction,
+
         @Nullable @Schema(description = "The feedback this is about, for a feedback change")
         UUID feedbackId,
 
         @Nullable
         @Schema(
                 description = "What resolved the feedback, for a FEEDBACK_RESOLVED change: the developer's work"
-                        + " coming back clean, or the developer marking it addressed",
-                allowableValues = {"WORK", "DEVELOPER"})
+                        + " coming back clean, or the developer marking it addressed")
         ResolvedBy resolvedBy,
 
         @Nullable
@@ -89,6 +83,13 @@ public record ProfileChangeDTO(
         GROUP_MOVED,
         /** The practice recorded its first observation about the developer. */
         FIRST_OBSERVED,
+    }
+
+    public enum Direction {
+        /** Toward {@code STRENGTH}. */
+        UP,
+        /** Toward {@code DEVELOPING}: a slip. */
+        DOWN,
     }
 
     public enum ResolvedBy {

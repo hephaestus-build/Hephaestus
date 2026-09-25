@@ -1,13 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices.observation;
 
+import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.clean;
+import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.problem;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
-import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService.StandingSnapshot.PracticeStanding;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.PracticeTrend;
@@ -18,7 +15,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -31,10 +27,9 @@ class PracticeStandingTest {
     private static final Instant NOW = Instant.parse("2026-05-01T09:00:00Z");
 
     @Test
-    void shouldHoldWhenEveryOpportunityInTheStandingWindowIsClean() {
-        assertThat(standing(
-                                PracticeStandingDTO.Standing.STRENGTH,
-                                trendOf(true, true, true, true, true, true, true, true, true))
+    void shouldHoldWhenTheOnlySlipIsOlderThanTheStandingWindow() {
+        // Four clean in the window of four; the slip before them is history the bar does not reach.
+        assertThat(standing(PracticeStandingDTO.Standing.STRENGTH, trendOf(false, true, true, true, true))
                         .isHolding())
                 .isTrue();
     }
@@ -48,7 +43,7 @@ class PracticeStandingTest {
     }
 
     @Test
-    void shouldHoldOverFewerApplicableOccasionsThanTheWindow() {
+    void shouldHoldWhenFewerPiecesOfWorkThanTheWindowWereJudged() {
         // Two pieces of work ever judged, both clean: the bar is what there is, not the window's size.
         assertThat(standing(PracticeStandingDTO.Standing.STRENGTH, trendOf(true, true))
                         .isHolding())
@@ -56,7 +51,7 @@ class PracticeStandingTest {
     }
 
     @Test
-    void shouldNotHoldBelowStrength() {
+    void shouldNotHoldWhenTheStandingIsBelowStrength() {
         assertThat(standing(PracticeStandingDTO.Standing.MIXED, trendOf(true, true, true, true))
                         .isHolding())
                 .isFalse();
@@ -77,18 +72,9 @@ class PracticeStandingTest {
                 .calculatePractice(SLUG, observations);
     }
 
-    private static Observation observation(int index, boolean clean) {
-        return Observation.builder()
-                .id(UUID.randomUUID())
-                .agentJobId(UUID.randomUUID())
-                .artifactKind(ArtifactKinds.PULL_REQUEST)
-                .artifactId(index + 1L)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(clean ? Presence.PRESENT : Presence.ABSENT)
-                .assessment(Assessment.GOOD)
-                .severity(clean ? null : Severity.MAJOR)
-                // Newest last, one day apart, well inside the trend horizon.
-                .observedAt(NOW.minus(Duration.ofDays(30L - index)))
-                .build();
+    private static Observation observation(int index, boolean isClean) {
+        // Newest last, one day apart, well inside the trend horizon.
+        String observedAt = NOW.minus(Duration.ofDays(30L - index)).toString();
+        return isClean ? clean(index + 1L, observedAt) : problem(index + 1L, observedAt);
     }
 }

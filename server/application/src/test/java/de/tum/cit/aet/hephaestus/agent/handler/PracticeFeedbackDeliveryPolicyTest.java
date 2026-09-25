@@ -173,10 +173,12 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                 .isTrue();
     }
 
+    /** The developer's own page under silent mode is the next test's; here it is what leaves the instance. */
     @ParameterizedTest
     @CsvSource({"scm.pull_request", "scm.issue"})
-    void silentModeStopsWhatLeavesTheInstanceAndLeavesTheDevelopersOwnPageAloneForScmWork(String artifactKind) {
-        AgentJob job = scmJob(artifactKind);
+    void shouldRefuseTheConversationForScmWorkWhenSilentModeIsEngaged(String artifactKind) {
+        AgentJob job = pullRequestJob();
+        job.setArtifactKind(ArtifactKind.of(artifactKind));
         when(silentModeQuery.isSilentModeEngaged()).thenReturn(true);
 
         var conversation = policy().evaluateForRecipient(
@@ -186,18 +188,9 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                         DeliveryPolicySurface.CONVERSATION,
                         AUTHOR_ID,
                         java.util.Set.of());
+
         assertThat(conversation.allowed()).isFalse();
         assertThat(conversation.refusal()).isEqualTo(FeedbackSuppressionReason.INSTANCE_SILENCED);
-
-        var inApp = policy().evaluateForRecipient(
-                        job,
-                        DeliveryPolicyStage.COMPOSITION,
-                        null,
-                        DeliveryPolicySurface.IN_APP,
-                        AUTHOR_ID,
-                        java.util.Set.of());
-        assertThat(inApp.allowed()).isTrue();
-        assertThat(inApp.suppressionReason()).isNull();
     }
 
     @ParameterizedTest

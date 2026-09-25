@@ -11,14 +11,13 @@ import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomyPolicy;
 import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
+import de.tum.cit.aet.hephaestus.practices.observation.ReviewedWorkKey;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 public final class InAppFeedbackRouter {
@@ -106,14 +105,14 @@ public final class InAppFeedbackRouter {
      */
     public static List<Observation> problemsIn(List<Observation> evidence) {
         Comparator<Observation> worstFirst = ObservationOrder.worstFirst();
-        Map<String, Observation> worstPerWork = new LinkedHashMap<>();
+        Map<ReviewedWorkKey, Observation> worstPerWork = new LinkedHashMap<>();
         for (Observation observation : LatestRun.perWork(evidence)) {
             if (observation.getAssessmentStatus() != AssessmentStatus.ASSESSED
                     || observation.getOutcome() != Outcome.NEGATIVE) {
                 continue;
             }
             worstPerWork.merge(
-                    workKey(observation),
+                    ReviewedWorkKey.of(observation),
                     observation,
                     (kept, next) -> worstFirst.compare(next, kept) < 0 ? next : kept);
         }
@@ -122,14 +121,6 @@ public final class InAppFeedbackRouter {
 
     /** How many separate pieces of work carry the problem — the unit of proof at the process level. */
     public static int distinctArtifacts(List<Observation> problems) {
-        Set<String> artifacts = new HashSet<>();
-        for (Observation problem : problems) {
-            artifacts.add(workKey(problem));
-        }
-        return artifacts.size();
-    }
-
-    private static String workKey(Observation observation) {
-        return observation.getArtifactKind().value() + ":" + observation.getArtifactId();
+        return (int) problems.stream().map(ReviewedWorkKey::of).distinct().count();
     }
 }

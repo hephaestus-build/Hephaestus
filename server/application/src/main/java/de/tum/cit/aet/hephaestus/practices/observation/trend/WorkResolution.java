@@ -77,8 +77,7 @@ public record WorkResolution(List<Work> cleanWork, @Nullable Instant resolvedAt,
                     problems.add(work);
                     continue;
                 }
-                // A clean piece starts the run over, so the problems behind it are no longer what the
-                // count stands at zero because of.
+                // problemWork is what the count stands at zero because of, and a clean piece moves it off zero.
                 problems.clear();
                 clean.add(work);
                 if (clean.size() == CLEAN_NEEDED) {
