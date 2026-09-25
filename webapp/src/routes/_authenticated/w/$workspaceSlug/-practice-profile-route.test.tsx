@@ -269,7 +269,8 @@ const feedback: Wire<InAppFeedback> = {
 
 /**
  * A user view is an administrator reading the developer's page: everything the developer would
- * answer — a rating, a comment, a response to an observation — is theirs alone, so none of it is
+ * answer — a rating, a comment, the card's own answer, a response to an observation — is theirs
+ * alone, so none of it is
  * offered. The developer's own visit is the control that shows the same controls are there.
  */
 describe("practice profile in a user view", () => {
@@ -282,22 +283,38 @@ describe("practice profile in a user view", () => {
 	});
 	afterEach(clearUserView);
 
-	/** The card's rating buttons on the page, then the observation's on the practice level. */
+	/**
+	 * The card's rating and answer buttons on the page, then the observation's response on the
+	 * practice level — the one of the two that offers a dispute of its own.
+	 */
 	async function responseControls() {
 		const router = await renderProfile();
 		await screen.findByText(feedback.headline, undefined, ROUTE_RENDER_WAIT);
 		const ratings = screen.queryAllByRole("button", { name: "Helpful" }).length;
+		const answers = screen.queryAllByRole("button", { name: "Addressed" }).length;
 		await openPractice(router);
 		await screen.findByText("Why it was noted", undefined, ROUTE_RENDER_WAIT);
-		return { ratings, observationResponse: screen.queryAllByText("Your response").length };
+		return {
+			ratings,
+			answers,
+			observationResponse: screen.queryAllByRole("button", { name: "Disputed" }).length,
+		};
 	}
 
-	it("offers the developer a rating and a response", async () => {
-		await expect(responseControls()).resolves.toStrictEqual({ ratings: 1, observationResponse: 1 });
+	it("offers the developer a rating, an answer and a response", async () => {
+		await expect(responseControls()).resolves.toStrictEqual({
+			ratings: 1,
+			answers: 1,
+			observationResponse: 1,
+		});
 	});
 
-	it("offers an administrator viewing as the developer neither", async () => {
+	it("offers an administrator viewing as the developer none of them", async () => {
 		storeUserView({ workspaceSlug: "acme", login: "ada", name: "Ada" });
-		await expect(responseControls()).resolves.toStrictEqual({ ratings: 0, observationResponse: 0 });
+		await expect(responseControls()).resolves.toStrictEqual({
+			ratings: 0,
+			answers: 0,
+			observationResponse: 0,
+		});
 	});
 });

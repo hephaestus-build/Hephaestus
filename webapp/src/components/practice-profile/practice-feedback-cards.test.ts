@@ -89,7 +89,11 @@ describe("toFeedbackCard", () => {
 
 	it("reads a card the work closed as resolved on that day, naming the clean work", () => {
 		const card = toFeedbackCard({ ...feedback, ...RESOLVED_BY_WORK }, [group]);
-		expect(card).toMatchObject({ state: "resolved", timestamp: new Date("2026-09-05T08:00:00Z") });
+		expect(card).toMatchObject({
+			state: "resolved",
+			resolvedBy: "WORK",
+			timestamp: new Date("2026-09-05T08:00:00Z"),
+		});
 		expect(card.condition).toStrictEqual([
 			{ type: "text", text: "Resolved by the work on 5 September · " },
 			{ type: "work", ref: pullRequest(8) },
@@ -113,6 +117,7 @@ describe("toFeedbackCard", () => {
 		// The meter stays where the work left it: marking it addressed fills nothing in.
 		expect(addressed).toMatchObject({
 			state: "resolved",
+			resolvedBy: "DEVELOPER",
 			cleanWork: [{ ref: pullRequest(8), date: new Date("2026-08-25") }],
 			timestamp: closedAt,
 		});

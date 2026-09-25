@@ -31,6 +31,7 @@ const meta = {
 		onRate: fn(),
 		onSendComment: fn(),
 		onSkipComment: fn(),
+		onResolve: fn(),
 		onLearnMore: fn(),
 		onOpenPractice: fn(),
 		onOpenGroup: fn(),
@@ -78,6 +79,15 @@ export const New: Story = {
 		);
 		await userEvent.click(canvas.getByRole("button", { name: "Not helpful" }));
 		await expect(args.onRate).toHaveBeenCalledWith("UNHELPFUL");
+		// The other way to close the card, beside the clean work: nothing answered yet, and each
+		// answer writes the registry's own value.
+		const response = within(canvas.getByRole("group", { name: "Your response" }));
+		await expect(response.getByRole("button", { name: "Not applicable" })).toHaveAttribute(
+			"aria-pressed",
+			"false",
+		);
+		await userEvent.click(response.getByRole("button", { name: "Addressed" }));
+		await expect(args.onResolve).toHaveBeenCalledWith("ADDRESSED");
 
 		// The head names the practice as a control that opens it, large enough to press.
 		const pill = canvas.getByRole("button", { name: "Scope the change to one concern" });
@@ -192,6 +202,7 @@ export const Resolved: Story = {
 		card: {
 			...card,
 			state: "resolved",
+			resolvedBy: "WORK",
 			cleanWork: threeClean,
 			condition: [
 				text("Resolved by the work on 9 September · "),
@@ -219,6 +230,41 @@ export const Resolved: Story = {
 			"aria-pressed",
 			"true",
 		);
+		// The work's resolution is not the reader's to take back, so there is no answer to give.
+		await expect(canvas.queryByRole("group", { name: "Your response" })).toBeNull();
+	},
+};
+
+/**
+ * The reader marked it addressed: the card resolves on the day they did, the meter stays where the
+ * work left it, and the answer stays pressed under it, so a second press takes it back and reopens
+ * the card.
+ */
+export const MarkedAsAddressed: Story = {
+	args: {
+		card: {
+			...card,
+			state: "resolved",
+			resolvedBy: "DEVELOPER",
+			cleanWork: twoClean,
+			condition: [text("Marked as addressed on 9 September")],
+			timestamp: new Date("2026-09-09T16:05:00"),
+		},
+		resolution: "ADDRESSED",
+	},
+	play: async ({ args, canvas }) => {
+		await expect(canvas.getByText("Resolved 9 September")).toBeVisible();
+		await expect(canvas.getByText("Marked as addressed on 9 September")).toBeVisible();
+		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
+		const response = within(canvas.getByRole("group", { name: "Your response" }));
+		const addressed = response.getByRole("button", { name: "Addressed" });
+		await expect(addressed).toHaveAttribute("aria-pressed", "true");
+		await expect(response.getByRole("button", { name: "Not applicable" })).toHaveAttribute(
+			"aria-pressed",
+			"false",
+		);
+		await userEvent.click(addressed);
+		await expect(args.onResolve).toHaveBeenCalledWith("ADDRESSED");
 	},
 };
 
@@ -418,6 +464,8 @@ export const Closed: Story = {
 		await expect(
 			canvas.getByText("Closed on 9 September · the practice's review rules changed"),
 		).toBeVisible();
+		// Closed unresolved, and no answer reopens it.
+		await expect(canvas.queryByRole("group", { name: "Your response" })).toBeNull();
 	},
 };
 
@@ -450,6 +498,7 @@ export const WithoutHandlers: Story = {
 		onRate: undefined,
 		onSendComment: undefined,
 		onSkipComment: undefined,
+		onResolve: undefined,
 		onLearnMore: undefined,
 		onOpenPractice: undefined,
 		onOpenGroup: undefined,
@@ -457,6 +506,7 @@ export const WithoutHandlers: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("button", { name: "Helpful" })).toBeNull();
 		await expect(canvas.queryByRole("button", { name: "Not helpful" })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: "Addressed" })).toBeNull();
 		await expect(
 			canvas.queryByRole("button", { name: "Learn more about this practice" }),
 		).toBeNull();

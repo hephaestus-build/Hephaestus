@@ -29,9 +29,14 @@ const cleanCondition = (needed: number): FeedbackTextSegment[] => [
  * How a piece of feedback closed, if it did. When and by what is the server's to say, in
  * `closedAt` and `closedBy`; the card only words it.
  */
-function closureOf(
-	feedback: InAppFeedback,
-): { at: Date; state: "resolved" | "closed"; condition: FeedbackTextSegment[] } | undefined {
+function closureOf(feedback: InAppFeedback):
+	| {
+			at: Date;
+			state: "resolved" | "closed";
+			resolvedBy?: PracticeFeedbackCardEntry["resolvedBy"];
+			condition: FeedbackTextSegment[];
+	  }
+	| undefined {
 	const { closedAt: at, closedBy } = feedback;
 	if (at === undefined || closedBy === undefined) {
 		return undefined;
@@ -42,6 +47,7 @@ function closureOf(
 			return {
 				at,
 				state: "resolved",
+				resolvedBy: "WORK",
 				condition:
 					feedback.cleanWork.length > 0
 						? [
@@ -55,7 +61,12 @@ function closureOf(
 		case "DEVELOPER": {
 			const answer =
 				feedback.response?.resolution === "NOT_APPLICABLE" ? "not applicable" : "addressed";
-			return { at, state: "resolved", condition: [text(`Marked as ${answer} on ${day}`)] };
+			return {
+				at,
+				state: "resolved",
+				resolvedBy: "DEVELOPER",
+				condition: [text(`Marked as ${answer} on ${day}`)],
+			};
 		}
 		case "PRACTICE_CHANGED": {
 			return {
@@ -109,6 +120,7 @@ export function toFeedbackCard(
 		})),
 		cleanNeeded: feedback.cleanNeeded,
 		state: closure?.state ?? (feedback.readAt ? "open" : "new"),
+		resolvedBy: closure?.resolvedBy,
 		timestamp: closure?.at ?? feedback.preparedAt,
 	};
 }

@@ -10,11 +10,14 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackUsefulness;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
+import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -27,11 +30,14 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 
 /**
  * The developer's own practice pages, end to end: who may read it, and what reading it records.
  */
 class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewIntegrationTest {
+
+    private static final String RESPONSE = "/workspaces/{slug}/practices/feedback/{feedbackId}/response";
 
     private Workspace workspace;
     private Practice practice;
@@ -239,6 +245,61 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
     }
 
     /**
+     * The card's own Addressed and Not applicable go through the response endpoint the rating uses, so the
+     * close is proven on that write rather than on a seeded row. The card writes the complete response, the
+     * rating and comment kept, and taking the answer back is the same write without the resolution.
+     */
+    @Test
+    @WithUser
+    @DisplayName("answering the card through the response endpoint closes it; taking the answer back reopens it")
+    void shouldCloseTheCardWhenTheDeveloperAnswersItAndReopenItWhenTheyTakeTheAnswerBack() {
+        Feedback feedback = persistInAppCard(
+                job,
+                developer,
+                7000,
+                FeedbackDeliveryState.DELIVERED,
+                "You keep shipping untested changes",
+                "Across your last three pull requests the tests did not move with the code.");
+        bind(feedback, persistObservation(practice, job, developer, 101L));
+
+        FeedbackResponseDTO addressed = writeResponse(
+                feedback,
+                new FeedbackResponseRequestDTO(
+                        FeedbackUsefulness.HELPFUL, FeedbackResolution.ADDRESSED, "Tests ship with the code now."));
+        readInAppPage(workspace)
+                .jsonPath("$[0].closedBy")
+                .isEqualTo("DEVELOPER")
+                .jsonPath("$[0].closedAt")
+                .value(at -> assertThat(Instant.parse((String) at)).isEqualTo(addressed.respondedAt()))
+                .jsonPath("$[0].response.usefulness")
+                .isEqualTo("HELPFUL")
+                .jsonPath("$[0].response.comment")
+                .isEqualTo("Tests ship with the code now.");
+
+        FeedbackResponseDTO notApplicable = writeResponse(
+                feedback,
+                new FeedbackResponseRequestDTO(FeedbackUsefulness.HELPFUL, FeedbackResolution.NOT_APPLICABLE, null));
+        readInAppPage(workspace)
+                .jsonPath("$[0].closedBy")
+                .isEqualTo("DEVELOPER")
+                .jsonPath("$[0].closedAt")
+                .value(at -> assertThat(Instant.parse((String) at)).isEqualTo(notApplicable.respondedAt()))
+                .jsonPath("$[0].response.resolution")
+                .isEqualTo("NOT_APPLICABLE");
+
+        writeResponse(feedback, new FeedbackResponseRequestDTO(FeedbackUsefulness.HELPFUL, null, null));
+        readInAppPage(workspace)
+                .jsonPath("$[0].closedAt")
+                .doesNotExist()
+                .jsonPath("$[0].closedBy")
+                .doesNotExist()
+                .jsonPath("$[0].response.usefulness")
+                .isEqualTo("HELPFUL")
+                .jsonPath("$[0].response.resolution")
+                .doesNotExist();
+    }
+
+    /**
      * Composition freezes text; it must not freeze the rules. Feedback whose evidence was measured under
      * review rules the practice has since changed stays on the page, closed, and says when the rules moved: a
      * card that vanished without a word would read as a claim withdrawn. Every edit to a practice appends a
@@ -319,6 +380,23 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
                 .get()
                 .extracting(Feedback::getDeliveryState)
                 .isEqualTo(FeedbackDeliveryState.PREPARED);
+    }
+
+    /** The complete response written through the endpoint the card calls, as the signed-in developer. */
+    private FeedbackResponseDTO writeResponse(Feedback feedback, FeedbackResponseRequestDTO request) {
+        FeedbackResponseDTO written = webTestClient
+                .put()
+                .uri(RESPONSE, workspace.getWorkspaceSlug(), feedback.getId())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(FeedbackResponseDTO.class)
+                .returnResult()
+                .getResponseBody();
+        return Objects.requireNonNull(written);
     }
 
     private UUID persistObservation(Practice about, AgentJob agentJob, User subject, long artifactId) {

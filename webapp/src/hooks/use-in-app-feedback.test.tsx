@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { FeedbackResponse, InAppFeedback } from "@/api/types.gen";
-import { nextRating, useInAppFeedback } from "@/hooks/use-in-app-feedback";
+import { nextRating, nextResolution, useInAppFeedback } from "@/hooks/use-in-app-feedback";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { deferred, sleep } from "@/test/async";
@@ -36,6 +36,36 @@ describe("nextRating", () => {
 				"HELPFUL",
 			),
 		).toStrictEqual({ usefulness: undefined, resolution: "ADDRESSED", comment: undefined });
+	});
+});
+
+describe("nextResolution", () => {
+	it("keeps the rating and the comment when an answer is chosen", () => {
+		expect(
+			nextResolution({ usefulness: "HELPFUL", comment: "Split it in two" }, "ADDRESSED"),
+		).toStrictEqual({ usefulness: "HELPFUL", resolution: "ADDRESSED", comment: "Split it in two" });
+	});
+
+	it("replaces a dispute, so the card closes on the answer the reader gave last", () => {
+		expect(
+			nextResolution(
+				{ usefulness: "UNHELPFUL", resolution: "DISPUTED", comment: "The rename was its own PR" },
+				"NOT_APPLICABLE",
+			),
+		).toStrictEqual({
+			usefulness: "UNHELPFUL",
+			resolution: "NOT_APPLICABLE",
+			comment: "The rename was its own PR",
+		});
+	});
+
+	it("takes the answer back when it is pressed again, keeping the rest", () => {
+		expect(
+			nextResolution(
+				{ usefulness: "HELPFUL", resolution: "ADDRESSED", comment: "Split it in two" },
+				"ADDRESSED",
+			),
+		).toStrictEqual({ usefulness: "HELPFUL", resolution: undefined, comment: "Split it in two" });
 	});
 });
 
@@ -143,6 +173,51 @@ describe("useInAppFeedback", () => {
 		});
 		reread.resolve();
 		await waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(false));
+	});
+
+	it("writes the answer over a dispute and shows it until the cards have been read again", async () => {
+		const reread = deferred();
+		const { result, written, reads } = renderFeedback(
+			{ usefulness: "UNHELPFUL", resolution: "DISPUTED", comment: "The rename was its own PR" },
+			true,
+			reread.promise,
+		);
+		await waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+		act(() => {
+			result.current.ratingProps(feedbackId).onResolve?.("ADDRESSED");
+		});
+
+		await waitFor(() => expect(reads).toHaveLength(2));
+		expect(written).toStrictEqual([
+			{
+				method: "PUT",
+				body: {
+					usefulness: "UNHELPFUL",
+					resolution: "ADDRESSED",
+					comment: "The rename was its own PR",
+				},
+			},
+		]);
+		expect(result.current.ratingProps(feedbackId)).toMatchObject({
+			usefulness: "UNHELPFUL",
+			resolution: "ADDRESSED",
+			isPending: true,
+		});
+		reread.resolve();
+		await waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(false));
+	});
+
+	it("withdraws the response when the answer standing alone is pressed again", async () => {
+		const { result, written } = renderFeedback({ resolution: "NOT_APPLICABLE" });
+		await waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+		act(() => {
+			result.current.ratingProps(feedbackId).onResolve?.("NOT_APPLICABLE");
+		});
+
+		await waitFor(() => expect(written).toHaveLength(1));
+		expect(written[0]?.method).toBe("DELETE");
 	});
 
 	it("settles empty and asks for nothing while it is not enabled", async () => {

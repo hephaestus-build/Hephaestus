@@ -1,9 +1,9 @@
 import { Meter } from "@base-ui/react/meter";
 import { ArrowRightIcon, CheckIcon, ChevronRightIcon, ClockIcon, PackageIcon } from "lucide-react";
-import { type ComponentType, type Ref, useId } from "react";
+import { type ComponentType, type Ref, useId, useState } from "react";
 
 import { cn } from "cn";
-import type { ReviewedWorkRef } from "@/api/types.gen";
+import type { InAppFeedback, ReviewedWorkRef } from "@/api/types.gen";
 import { FOCUS_RING } from "@/components/common/focus";
 import { InlineLink } from "@/components/common/InlineLink";
 import { ResponseButton, toneOf } from "@/components/common/ResponseButton";
@@ -12,6 +12,7 @@ import {
 	ResponseCommentBand,
 	type ResponseReason,
 } from "@/components/common/ResponseCommentBand";
+import { SectionLabel } from "@/components/common/SectionLabel";
 import { statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
@@ -22,6 +23,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { formatDay, formatDayTime, formatShortDay } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
+import { FEEDBACK_RESOLUTION_DEFS, type FeedbackResolution } from "./feedback-resolution-defs";
 import { FEEDBACK_STATE_DEFS, type FeedbackState, isOpenFeedback } from "./feedback-state-defs";
 import { type FeedbackTextSegment, linkWork } from "./feedback-text";
 import { FEEDBACK_USEFULNESS_DEFS, type FeedbackUsefulness } from "./feedback-usefulness-defs";
@@ -47,6 +49,15 @@ const NOT_HELPFUL_REASONS: ResponseReason<NotHelpfulReason>[] = [
 
 /** The note under a rating; the reason comes only with a "not helpful" one. */
 export type FeedbackComment = ResponseComment<NotHelpfulReason>;
+
+/**
+ * An answer that resolves the feedback, the card's own way to close it beside the work coming back
+ * clean. A dispute is the third resolution, but it leaves the feedback open and is written by "Not
+ * accurate" under a rating, so the card offers no button for it.
+ */
+export type ResolvingAnswer = Exclude<FeedbackResolution, "DISPUTED">;
+
+const RESOLVING_ANSWERS: ResolvingAnswer[] = ["ADDRESSED", "NOT_APPLICABLE"];
 
 /**
  * One piece of reviewed work in the card's strip — the evidence behind the feedback — with what
@@ -119,21 +130,32 @@ export interface PracticeFeedbackCardEntry {
 	/** The line under the next step: what ticks it, or what did. */
 	condition: FeedbackTextSegment[];
 	state: FeedbackState;
+	/**
+	 * Which way a resolved card resolved: the work's clean run, or the reader's own answer. Only the
+	 * reader's answer is theirs to take back, so only then does a resolved card keep its response
+	 * buttons.
+	 */
+	resolvedBy?: Exclude<NonNullable<InAppFeedback["closedBy"]>, "PRACTICE_CHANGED">;
 	/** When the feedback was created or, once `state` is resolved or closed, when that happened. */
 	timestamp: Date;
 }
 
-/** The card props that let one piece of feedback be rated. */
+/** The card props that let one piece of feedback be rated and answered. */
 export interface FeedbackRatingProps {
 	usefulness?: FeedbackUsefulness;
+	/**
+	 * The reader's answer, the one standing or the one being written. Addressed and Not applicable
+	 * press their button; a dispute presses neither, and either press replaces it.
+	 */
+	resolution?: FeedbackResolution;
 	/**
 	 * Whether the comment band under the footer is open; a rating press opens it, Send and Skip
 	 * close it.
 	 */
 	commentOpen?: boolean;
 	/**
-	 * A rating is being read or written: the chosen rating says it is saving, the other and the
-	 * band's controls wait for it.
+	 * A response is being written: the button just pressed, if it is still the chosen one, says it is
+	 * saving, and every other response control waits for it.
 	 */
 	isPending?: boolean;
 	/**
@@ -144,6 +166,12 @@ export interface FeedbackRatingProps {
 	onRate?: (usefulness: FeedbackUsefulness) => void;
 	onSendComment?: (comment: FeedbackComment) => void;
 	onSkipComment?: () => void;
+	/**
+	 * A press on Addressed or Not applicable, the chosen one included: the caller decides that a
+	 * second press takes the answer back. Without it the card has none of these buttons, and neither
+	 * has a card the work resolved or a practice change closed, which no answer can reopen.
+	 */
+	onResolve?: (answer: ResolvingAnswer) => void;
 }
 
 export interface PracticeFeedbackCardProps extends FeedbackRatingProps {
@@ -173,10 +201,10 @@ function formatTimestamp(date: Date, state: FeedbackState): string {
 }
 
 /**
- * One piece of practice feedback in three bands: what was seen, the next step with the meter that
- * resolves it, and the footer that rates it. The glyph leading the next-step band says where the
- * work stands and is never a control, so nothing in that place looks like a checkbox the reader
- * could tick.
+ * One piece of practice feedback in three bands: what was seen, the next step with the two ways it
+ * resolves — the meter the clean work fills and the reader's own answer — and the footer that rates
+ * it. The glyph leading the next-step band says where the work stands and is never a control, so
+ * nothing in that place looks like a checkbox the reader could tick.
  */
 export function PracticeFeedbackCard({
 	card: {
@@ -191,14 +219,17 @@ export function PracticeFeedbackCard({
 		nextStep,
 		condition,
 		state,
+		resolvedBy,
 		timestamp,
 	},
 	usefulness,
+	resolution,
 	commentOpen = false,
 	isPending = false,
 	onRate,
 	onSendComment,
 	onSkipComment,
+	onResolve,
 	onLearnMore,
 	onOpenPractice,
 	onOpenGroup,
@@ -206,7 +237,12 @@ export function PracticeFeedbackCard({
 	className,
 }: PracticeFeedbackCardProps) {
 	const headingId = useId();
+	const responseId = useId();
+	// Which row of buttons the reader pressed last, so a write in flight says "Saving…" on the button
+	// that asked for it and not on a pressed button in the other row.
+	const [lastPressed, setLastPressed] = useState<"rating" | "answer">("rating");
 	const resolved = state === "resolved";
+	const answerable = isOpenFeedback(state) || resolvedBy === "DEVELOPER";
 	const BandIcon = FEEDBACK_STATE_DEFS[isOpenFeedback(state) ? "open" : state].icon;
 	const GroupIcon = group?.icon ?? PackageIcon;
 	const groupPill = hasText(group?.color) ? pillClasses(group.color) : undefined;
@@ -326,6 +362,41 @@ export function PracticeFeedbackCard({
 						{() => cleanLabel}
 					</Meter.Value>
 				</Meter.Root>
+				{/* The other way to close the card, under the clean work that ticks it by itself. */}
+				{onResolve && answerable && (
+					<div className="col-start-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+						<SectionLabel id={responseId} className="font-normal">
+							Your response
+						</SectionLabel>
+						<div
+							role="group"
+							aria-labelledby={responseId}
+							className="flex flex-wrap items-center gap-2"
+						>
+							{RESOLVING_ANSWERS.map((value) => {
+								const def = FEEDBACK_RESOLUTION_DEFS[value];
+								const pressed = resolution === value;
+								const saving = isPending && pressed && lastPressed === "answer";
+								return (
+									<ResponseButton
+										key={value}
+										tone={toneOf(def.badgeVariant)}
+										pressed={pressed}
+										disabled={isPending}
+										className="bg-background"
+										onClick={() => {
+											setLastPressed("answer");
+											onResolve(value);
+										}}
+									>
+										{saving && <Spinner />}
+										{saving ? "Saving…" : def.label}
+									</ResponseButton>
+								);
+							})}
+						</div>
+					</div>
+				)}
 			</div>
 
 			<div className="flex flex-wrap items-center justify-between gap-4 border-t p-4">
@@ -338,14 +409,17 @@ export function PracticeFeedbackCard({
 						statusValues(FEEDBACK_USEFULNESS_DEFS).map((value) => {
 							const { icon: Icon, label } = FEEDBACK_USEFULNESS_DEFS[value];
 							const pressed = usefulness === value;
-							const saving = isPending && pressed;
+							const saving = isPending && pressed && lastPressed === "rating";
 							return (
 								<ResponseButton
 									key={value}
 									tone={toneOf(FEEDBACK_USEFULNESS_DEFS[value].badgeVariant)}
 									pressed={pressed}
 									disabled={isPending}
-									onClick={() => onRate(value)}
+									onClick={() => {
+										setLastPressed("rating");
+										onRate(value);
+									}}
 								>
 									{saving ? <Spinner /> : <Icon aria-hidden />}
 									{saving ? "Saving…" : label}

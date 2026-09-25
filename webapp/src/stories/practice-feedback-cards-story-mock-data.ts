@@ -202,6 +202,7 @@ const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		],
 		cleanNeeded: 3,
 		state: "resolved",
+		resolvedBy: "WORK",
 		timestamp: new Date("2026-09-09T14:10:00"),
 	},
 	{
@@ -237,6 +238,7 @@ const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		],
 		cleanNeeded: 3,
 		state: "resolved",
+		resolvedBy: "WORK",
 		timestamp: new Date("2026-09-02T11:40:00"),
 	},
 	{
@@ -269,6 +271,7 @@ const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		condition: [text("Marked as addressed on 27 August")],
 		cleanNeeded: 3,
 		state: "resolved",
+		resolvedBy: "DEVELOPER",
 		timestamp: new Date("2026-08-27T16:05:00"),
 	},
 ];

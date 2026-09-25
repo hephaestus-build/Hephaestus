@@ -10,6 +10,7 @@ import type {
 	FeedbackComment,
 	FeedbackRatingProps,
 	PracticeFeedbackCardEntry,
+	ResolvingAnswer,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { useFeedbackResponseWrite } from "@/hooks/use-feedback-response-write";
 
@@ -27,7 +28,7 @@ export interface InAppFeedbackRequest {
 export interface InAppFeedback {
 	/** Every readable card, newest first; empty until loaded. */
 	cards: PracticeFeedbackCardEntry[];
-	/** The card props that wire one piece of feedback's rating to the server. */
+	/** The card props that wire one piece of feedback's rating and answer to the server. */
 	ratingProps: (feedbackId: string) => FeedbackRatingProps;
 	state: LoadState;
 }
@@ -49,6 +50,23 @@ export function nextRating(
 		usefulness: withdrawing ? undefined : pressed,
 		resolution: withdrawing && resolution === "DISPUTED" ? undefined : resolution,
 		comment: withdrawing ? undefined : current?.comment,
+	};
+}
+
+/**
+ * The response a press on Addressed or Not applicable writes: the pressed answer in place of the one
+ * before, a dispute included, keeping the rating and the comment; pressed on the answer already
+ * chosen, the answer taken back and the rest kept. The server closes the card on the first and
+ * reopens it on the second.
+ */
+export function nextResolution(
+	current: FeedbackResponseRequest | undefined,
+	pressed: ResolvingAnswer,
+): FeedbackResponseRequest {
+	return {
+		usefulness: current?.usefulness,
+		resolution: current?.resolution === pressed ? undefined : pressed,
+		comment: current?.comment,
 	};
 }
 
@@ -83,9 +101,9 @@ const SETTLED_EMPTY: LoadState = { status: "ready" };
  * response, so the list is the one query; a card whose response is being written says so on its
  * own rating buttons, and a refetch that adds a card never re-skeletons the list.
  *
- * A rating is written as the complete response, keeping the resolution the reader chose before:
- * "Helpful" and "Not helpful" replace the usefulness, Send adds the comment, and pressing the
- * chosen rating again withdraws it.
+ * Every press writes the complete response, keeping what the reader said before: "Helpful" and
+ * "Not helpful" replace the usefulness, Send adds the comment, "Addressed" and "Not applicable"
+ * replace the resolution, and pressing the chosen one again withdraws it.
  */
 export function useInAppFeedback({
 	workspaceSlug,
@@ -111,6 +129,9 @@ export function useInAppFeedback({
 		write(feedbackId, next);
 		setOpenComment(next.usefulness === undefined ? undefined : feedbackId);
 	};
+	const resolve = (feedbackId: string, answer: ResolvingAnswer) => {
+		write(feedbackId, nextResolution(responseOf(feedbackId), answer));
+	};
 	const send = (feedbackId: string, comment: FeedbackComment) => {
 		write(feedbackId, withComment(responseOf(feedbackId), comment));
 		setOpenComment(undefined);
@@ -120,11 +141,13 @@ export function useInAppFeedback({
 		cards: feedback.map((item) => toFeedbackCard(item, groups)),
 		ratingProps: (feedbackId) => ({
 			usefulness: responseOf(feedbackId)?.usefulness,
+			resolution: responseOf(feedbackId)?.resolution,
 			commentOpen: openComment === feedbackId,
 			isPending: pendingResponses.has(feedbackId),
 			onRate: (usefulness) => rate(feedbackId, usefulness),
 			onSendComment: (comment) => send(feedbackId, comment),
 			onSkipComment: () => setOpenComment(undefined),
+			onResolve: (answer) => resolve(feedbackId, answer),
 		}),
 		state: enabled ? queryLoadState(feedbackQuery) : SETTLED_EMPTY,
 	};
