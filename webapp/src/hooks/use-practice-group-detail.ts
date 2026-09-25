@@ -44,7 +44,8 @@ export interface PracticeGroupDetail {
 	/** The open practice, once the open group is known to review it. */
 	practice?: PracticeStanding;
 	feed: ReviewRunFeedState;
-	respond: (observation: ObservationDetail, response: FeedbackResponse) => void;
+	/** Absent when this reader may not respond, which leaves no response controls. */
+	respond?: (observation: ObservationDetail, response: FeedbackResponse) => void;
 	pendingFeedbackId?: string;
 }
 
