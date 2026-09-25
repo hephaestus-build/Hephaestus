@@ -522,3 +522,16 @@ evidence, and neither contributes to the assessed-result denominator.
 8. Never write bare **binding**. Two unrelated things carry the word — a *practice binding* (an occasion
    a practice is reviewed on, `PracticeBinding`) and a *model binding* (a workspace's AI model for a
    purpose, `WorkspaceAgentBinding`). Use `REVIEW_MODEL_UNBOUND` for a missing AI model.
+
+## Member AI choice
+
+The [product vocabulary](./practice-feedback-language#member-onboarding-and-ai-choices) defines member
+onboarding, data handling, its tiers, and the AI choice as a ceiling. An admin declares one fact
+per model, who operates it, and Hephaestus derives the tier from it: **In-house**, **Cloud** or
+**Not declared**. A developer answers **In-house**, **Cloud** or **No AI**. The choice belongs to the
+account and holds in every workspace. A practice review uses the loosest model binding of the
+reviewing workspace within the ceiling of the developer it is about. Submission, queued execution,
+model requests, and feedback delivery recheck that choice. A developer no account resolves to has
+not answered; only a workspace that requires the choice keeps AI off their work.
+A missing required choice or No AI is an intentional refusal, never missing evidence. Suppressed
+occurrences do not automatically replay when the developer later enables AI.

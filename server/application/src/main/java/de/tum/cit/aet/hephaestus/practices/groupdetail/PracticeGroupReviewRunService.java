@@ -63,16 +63,6 @@ public class PracticeGroupReviewRunService {
             @Nullable List<ArtifactKind> artifactKinds,
             @Nullable List<Severity> severities) {}
 
-    @Transactional(readOnly = true)
-    public PracticeGroupReviewRunsPageDTO list(
-            WorkspaceContext workspaceContext,
-            long developerId,
-            String groupSlug,
-            RunFilters filter,
-            Pageable pageable) {
-        return loadRuns(workspaceContext, developerId, groupSlug, filter, pageable);
-    }
-
     private PracticeGroupReviewRunsPageDTO loadRuns(
             WorkspaceContext workspaceContext,
             long developerId,

@@ -1,6 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -81,6 +84,14 @@ public class LlmModel {
     @Column(name = "reasoning_effort", length = ReasoningEffort.MAX_LENGTH)
     private ReasoningEffort reasoningEffort;
 
+    @Nullable
+    @Enumerated(EnumType.STRING)
+    @Column(name = "brand", length = 16)
+    private AiModelBrand brand;
+
+    @Embedded
+    private DataHandlingFacts dataHandling = new DataHandlingFacts();
+
     @ColumnDefault("'GRANTED'")
     @Enumerated(EnumType.STRING)
     @Column(name = "visibility", nullable = false, length = 16)
@@ -96,6 +107,18 @@ public class LlmModel {
     @Nullable
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    /** Null-safe accessor: Hibernate sets the embeddable to {@code null} when every column is null. */
+    public DataHandlingFacts getDataHandling() {
+        if (dataHandling == null) {
+            dataHandling = new DataHandlingFacts();
+        }
+        return dataHandling;
+    }
+
+    public DataHandlingTier getDataHandlingTier() {
+        return getDataHandling().tier();
+    }
 
     @PrePersist
     public void prePersist() {

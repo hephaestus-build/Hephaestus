@@ -108,7 +108,7 @@ public class UserProfileService {
 
         List<RepositoryInfoDTO> contributedRepositories = workspaceId == null
                 ? List.of()
-                : profileRepositoryQueryRepository.findContributedByLogin(login, workspaceId).stream()
+                : profileRepositoryQueryRepository.findContributedByUserId(userEntity.getId(), workspaceId).stream()
                         .map(RepositoryInfoDTO::fromRepositoryWithoutLabels)
                         .sorted(Comparator.comparing(RepositoryInfoDTO::name))
                         .toList();
@@ -140,8 +140,8 @@ public class UserProfileService {
 
         List<ProfileReviewActivityDTO> allReviewActivity = buildReviewActivity(user.getId(), workspaceId, timeRange);
         List<PullRequestInfoDTO> allAuthoredPullRequests = profilePullRequestQueryRepository
-                .findAuthoredByLoginAndStates(
-                        login, Set.of(Issue.State.OPEN), workspaceId, timeRange.after(), timeRange.before())
+                .findAuthoredByUserIdAndStates(
+                        user.getId(), Set.of(Issue.State.OPEN), workspaceId, timeRange.after(), timeRange.before())
                 .stream()
                 .map(PullRequestInfoDTO::fromPullRequest)
                 .toList();

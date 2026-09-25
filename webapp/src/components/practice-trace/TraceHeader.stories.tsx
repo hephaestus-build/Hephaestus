@@ -68,6 +68,15 @@ export const DocumentHasNoButtonToAsk: Story = {
 	},
 };
 
+/** A reader who may not ask, such as an administrator viewing as a user, is offered no button. */
+export const WithoutRequestReview: Story = {
+	args: { onRequestReview: undefined },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Pull or merge request")).toBeVisible();
+		await expect(canvas.queryByRole("button", { name: "Review this now" })).not.toBeInTheDocument();
+	},
+};
+
 /** A deleted or unlinkable artifact keeps its title and loses only what it no longer has. */
 export const UnlinkableArtifact: Story = {
 	args: {

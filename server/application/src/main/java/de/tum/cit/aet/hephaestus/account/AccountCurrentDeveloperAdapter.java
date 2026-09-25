@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
  * user store from several older classes, so an adapter living there would close a {@code practices ↔
  * scm-data-platform} cycle that the module-boundary rules reject. This module already answers "what is
  * true about the signed-in account" for other modules' ports (see
- * {@link AccountResearchParticipationAdapter} and {@link AccountPreferencesQueryAdapter}), and nothing
+ * {@link AccountPreferencesQueryAdapter}), and nothing
  * depends on it in return.
  */
 @Service

@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
@@ -41,6 +40,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -149,7 +149,7 @@ public class AgentJobExecutor {
 
     private final AgentProperties agentProperties;
     private final AgentJobRepository jobRepository;
-    private final WorkspaceAgentBindingRepository bindingRepository;
+    private final ReviewMemberAiPolicy memberAiPolicy;
     private final JobTypeHandlerRegistry handlerRegistry;
     private final JobEvidenceFiles evidenceFiles;
     private final PracticePiAdapter practiceAgent;
@@ -191,7 +191,7 @@ public class AgentJobExecutor {
     public AgentJobExecutor(
             AgentProperties agentProperties,
             AgentJobRepository jobRepository,
-            WorkspaceAgentBindingRepository bindingRepository,
+            ReviewMemberAiPolicy memberAiPolicy,
             JobTypeHandlerRegistry handlerRegistry,
             JobEvidenceFiles evidenceFiles,
             PracticePiAdapter practiceAgent,
@@ -210,7 +210,7 @@ public class AgentJobExecutor {
             Optional<WorkerProperties> workerProperties) {
         this.agentProperties = agentProperties;
         this.jobRepository = jobRepository;
-        this.bindingRepository = bindingRepository;
+        this.memberAiPolicy = memberAiPolicy;
         this.handlerRegistry = handlerRegistry;
         this.evidenceFiles = evidenceFiles;
         this.practiceAgent = practiceAgent;
@@ -1094,6 +1094,16 @@ public class AgentJobExecutor {
 
             AgentJob job = locked.get();
 
+            if (!memberAiPolicy.permitsReview(job.getWorkspace().getId(), job.getJobType(), job.getMetadata())) {
+                job.setStatus(AgentJobStatus.CANCELLED);
+                job.setCompletedAt(Instant.now());
+                job.setErrorMessage("The developer has not enabled AI practice reviews in this workspace.");
+                job.setCancellationReason(AgentJobCancellationReason.MEMBER_AI_DECLINED);
+                jobRepository.save(job);
+                recordPracticeReviewRefusal(job, "member_ai_declined");
+                return new TerminalClaim(job, AgentJobStatus.CANCELLED);
+            }
+
             LlmBudgetBlockReason blockReason =
                     llmBudgetService.decide(job.getWorkspace().getId()).forFunding(claimedFundingSource(job));
             if (blockReason != LlmBudgetBlockReason.NONE) {
@@ -1106,9 +1116,8 @@ public class AgentJobExecutor {
             AgentPurpose purpose = job.getPurpose();
             WorkspaceAgentBinding binding = purpose == null
                     ? null
-                    : bindingRepository
-                            .findByWorkspaceIdAndPurpose(job.getWorkspace().getId(), purpose)
-                            .filter(WorkspaceAgentBinding::isEnabled)
+                    : memberAiPolicy
+                            .binding(job.getWorkspace().getId(), job.getJobType(), job.getMetadata())
                             .orElse(null);
             if (binding == null) {
                 return refuseUnavailableModel(job);
@@ -1116,6 +1125,8 @@ public class AgentJobExecutor {
             ConfigSnapshot snapshot;
             try {
                 ConfigSnapshot submitted = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
+                if (java.util.Objects.requireNonNullElse(submitted.dataHandlingTier(), DataHandlingTier.UNDECLARED)
+                        != binding.getDataHandlingTier()) return refuseUnavailableModel(job);
                 if (llmAdmissionService != null) {
                     var admitted = llmAdmissionService.admit(binding);
                     var ref = admitted.connection();
@@ -1136,11 +1147,10 @@ public class AgentJobExecutor {
                 return refuseUnavailableModel(job);
             }
 
-            // Admission above holds the binding row lock (joined into this transaction), so this count
-            // cannot race a sibling claim.
+            // Admission holds this slot's binding row lock until the RUNNING transition commits.
             {
-                long runningCount = jobRepository.countByWorkspaceIdAndPurposeAndStatusIn(
-                        job.getWorkspace().getId(), purpose, Set.of(AgentJobStatus.RUNNING));
+                long runningCount = jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        job.getWorkspace().getId(), purpose, binding.getDataHandlingTier());
                 if (runningCount >= binding.getMaxConcurrentJobs()) {
                     concurrencyRejected.increment();
                     log.info(
@@ -1421,8 +1431,8 @@ public class AgentJobExecutor {
         if (purpose == null) {
             return null;
         }
-        return bindingRepository
-                .findByWorkspaceIdAndPurpose(job.getWorkspace().getId(), purpose)
+        return memberAiPolicy
+                .binding(job.getWorkspace().getId(), job.getJobType(), job.getMetadata())
                 .map(WorkspaceAgentBinding::getFundingSource)
                 .orElse(null);
     }

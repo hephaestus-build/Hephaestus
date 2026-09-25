@@ -54,6 +54,21 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
 class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
+    @org.junit.jupiter.api.BeforeEach
+    void allowMemberAiForUnrelatedScenarios() {
+        org.mockito.Mockito.lenient()
+                .when(memberAiPolicy.permitsReview(
+                        org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
+        org.mockito.Mockito.lenient()
+                .when(memberAiPolicy.allowsResult(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
+    }
+
+    @org.mockito.Mock
+    private de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy memberAiPolicy;
 
     @Test
     void shouldRefuseIssueFeedbackWhenTheReviewedSnapshotChangedBeforeEgress() {
@@ -159,6 +174,18 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
 
         assertThat(policy().allowsComposition(job, DeliveryPolicySurface.CONVERSATION))
                 .isFalse();
+        assertThat(recordedRefusal()).isEqualTo(FeedbackSuppressionReason.RECIPIENT_OPTED_OUT);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = DeliveryPolicySurface.class,
+            names = {"IN_APP", "CONVERSATION"})
+    void shouldWithholdNewFeedbackAfterTheMemberChoosesNoAi(DeliveryPolicySurface surface) {
+        AgentJob job = conversationJob();
+        when(memberAiPolicy.allowsResult(job)).thenReturn(false);
+
+        assertThat(policy().allowsComposition(job, surface)).isFalse();
         assertThat(recordedRefusal()).isEqualTo(FeedbackSuppressionReason.RECIPIENT_OPTED_OUT);
     }
 
@@ -561,6 +588,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                 practiceRepository,
                 approvalRepository,
                 conversationSourceLiveness,
+                memberAiPolicy,
                 documentProjection);
     }
 

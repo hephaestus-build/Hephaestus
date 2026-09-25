@@ -395,7 +395,6 @@ public class LeaderboardService {
         }
 
         Long workspaceId = workspace.getId();
-        // The member decides which user a login means: a login is not unique across providers.
         User user = workspaceMembershipService
                 .findMemberByLogin(workspaceId, login)
                 .flatMap(member -> userRepository.findByIdWithEagerMergedPullRequests(member.getId()))

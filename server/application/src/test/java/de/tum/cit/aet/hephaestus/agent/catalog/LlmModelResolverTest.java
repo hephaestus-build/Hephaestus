@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -106,6 +107,50 @@ class LlmModelResolverTest extends BaseUnitTest {
         model.setEnabled(false);
         var ref = new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 10L, 20L, 30L);
         assertThat(resolver.resolveProxyCredential(ref)).isNull();
+    }
+
+    @Test
+    void shouldRefuseUndeclaredOrMismatchedModelsForATierSlot() {
+        var binding = binding();
+        binding.setInstanceModel(model);
+        binding.setDataHandlingTier(DataHandlingTier.IN_HOUSE);
+        assertThat(resolver.isAvailable(binding)).isFalse();
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
+        assertThat(resolver.isAvailable(binding)).isFalse();
+        assertThatThrownBy(() -> resolver.resolve(binding)).isInstanceOf(IllegalStateException.class);
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null));
+        assertThat(resolver.isAvailable(binding)).isTrue();
+    }
+
+    @Test
+    void shouldRefuseAStricterModelInALooserSlotBecauseTheSlotRuleIsExact() {
+        var binding = binding();
+        binding.setInstanceModel(model);
+        binding.setDataHandlingTier(DataHandlingTier.CLOUD);
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null));
+        assertThat(resolver.isAvailable(binding)).isFalse();
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
+        assertThat(resolver.isAvailable(binding)).isTrue();
+    }
+
+    @Test
+    void shouldAcceptAnyModelInTheUndeclaredSlot() {
+        var binding = binding();
+        binding.setInstanceModel(model);
+        assertThat(binding.getDataHandlingTier()).isEqualTo(DataHandlingTier.UNDECLARED);
+        assertThat(resolver.isAvailable(binding)).isTrue();
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
+        assertThat(resolver.isAvailable(binding)).isTrue();
+    }
+
+    @Test
+    void shouldReportTheModelsDerivedTierForAConnectionRef() {
+        var ref = new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 10L, 20L, 30L);
+        assertThat(resolver.dataHandlingTier(ref)).contains(DataHandlingTier.UNDECLARED);
+        model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
+        assertThat(resolver.dataHandlingTier(ref)).contains(DataHandlingTier.CLOUD);
+        assertThat(resolver.dataHandlingTier(LlmModelResolver.ConnectionRef.NONE))
+                .isEmpty();
     }
 
     @Test

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.core.security.EncryptedStringConverter;
+import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -50,6 +51,11 @@ public class LlmConnection {
 
     @Column(name = "display_name", nullable = false, length = 128)
     private String displayName;
+
+    @Nullable
+    @Enumerated(EnumType.STRING)
+    @Column(name = "connection_platform", length = 32)
+    private LlmConnectionPlatform connectionPlatform;
 
     @Column(name = "base_url", nullable = false, length = 2048)
     @ToString.Exclude

@@ -1,11 +1,12 @@
 package de.tum.cit.aet.hephaestus;
 
-import de.tum.cit.aet.hephaestus.account.userview.UserViewAuthorizationConfig;
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
 import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
+import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
+import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.feature.FeatureFlag;
 import de.tum.cit.aet.hephaestus.observability.ReplicaIdentityFilter;
 import de.tum.cit.aet.hephaestus.observability.RequestCorrelationFilter;
@@ -263,6 +264,12 @@ public class SecurityConfig {
         }
 
         http.authorizeHttpRequests(requests -> {
+            // A user view is an instance administrator's GET and nothing else, decided before any permit below.
+            // A CORS preflight only names these headers, never sends them, so it is not a view; the mentor
+            // flag is the caller's own authority and does not apply to one.
+            requests.requestMatchers(UserViewContextHolder.USER_VIEW_READ)
+                    .hasAuthority(SecurityUtils.APP_ADMIN_AUTHORITY);
+            requests.requestMatchers(UserViewContextHolder.USER_VIEW_REQUEST).denyAll();
             // CORS preflight requests must be permitted for cross-origin requests to work.
             // Without this, OPTIONS requests are rejected with 403 before CORS headers can be added.
             requests.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
@@ -406,7 +413,9 @@ public class SecurityConfig {
                 "X-Requested-With",
                 "Origin",
                 "X-XSRF-TOKEN",
-                UserViewAuthorizationConfig.REASON_HEADER,
+                UserViewContextHolder.REASON_HEADER,
+                UserViewContextHolder.WORKSPACE_HEADER,
+                UserViewContextHolder.USER_HEADER,
                 // Every endpoint that hands out an ETag reads it back from If-Match (EntityTagPrecondition); a
                 // header not listed here never leaves the browser when the SPA runs on another origin, as in dev.
                 HttpHeaders.IF_MATCH));

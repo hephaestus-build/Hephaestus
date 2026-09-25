@@ -65,6 +65,21 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
+    @org.junit.jupiter.api.BeforeEach
+    void allowMemberAiForUnrelatedScenarios() {
+        org.mockito.Mockito.lenient()
+                .when(memberAiPolicy.permitsReview(
+                        org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
+        org.mockito.Mockito.lenient()
+                .when(memberAiPolicy.allowsResult(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
+    }
+
+    @org.mockito.Mock
+    private de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy memberAiPolicy;
 
     /** The pinned change: {@code BASE..HEAD}, in a checkout whose HEAD tree is {@code TREE}. */
     private static final String BASE = "a".repeat(40);
@@ -135,7 +150,8 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 objectMapper,
                 cas,
                 sourceCatalogs,
-                historicalGit);
+                historicalGit,
+                memberAiPolicy);
 
         lenient().when(sourceCatalogs.isSourceUsePermitted(any(), any(), any())).thenReturn(true);
 
@@ -692,6 +708,18 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     .hasMessageContaining("scm.repository.tree");
             verifyNoInteractions(observationRepository, historicalGit);
         }
+    }
+
+    @Test
+    void shouldNotAdmitObservationsAfterDeveloperChoosesNoAi() {
+        when(memberAiPolicy.allowsResult(testJob)).thenReturn(false);
+        assertThatThrownBy(() ->
+                        service.prepare(testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
+                .isInstanceOfSatisfying(
+                        ObservationsRefusedException.class,
+                        refused -> assertThat(refused.reasonCode()).isEqualTo("member_ai_declined"))
+                .hasMessageContaining("AI choice");
+        verifyNoInteractions(observationRepository, eventPublisher);
     }
 
     @Nested

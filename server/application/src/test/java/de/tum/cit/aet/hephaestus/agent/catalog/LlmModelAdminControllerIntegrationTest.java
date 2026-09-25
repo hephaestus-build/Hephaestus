@@ -10,8 +10,11 @@ import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,7 +44,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
 
     private LlmModelDTO createModel(Long connectionId, String slug) {
         // Models start inactive until an explicit price declaration is supplied.
-        var request = new CreateLlmModelRequestDTO(slug, "Test Model", "gpt-5", null, null, null, false);
+        var request =
+                new CreateLlmModelRequestDTO(slug, "Test Model", "gpt-5", null, null, null, null, null, false, null);
         return Objects.requireNonNull(webTestClient
                 .post()
                 .uri("/admin/llm/connections/{connectionId}/models", connectionId)
@@ -130,7 +134,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .jsonPath("$.length()")
                 .isEqualTo(1);
 
-        var updateRequest = new UpdateLlmModelRequestDTO("Renamed Model", null, null, null, null, null);
+        var updateRequest =
+                new UpdateLlmModelRequestDTO("Renamed Model", null, null, null, null, null, null, null, null, null);
         webTestClient
                 .patch()
                 .uri("/admin/llm/models/{id}", created.id())
@@ -161,6 +166,145 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .expectStatus()
                 .isNotFound()
                 .expectBody(Void.class);
+    }
+
+    @Test
+    void appAdminDeclaresDataHandlingAndTheTierIsDerivedOnEveryRead() {
+        LlmConnection connection = seedConnection();
+        var request = new CreateLlmModelRequestDTO(
+                "declared-model",
+                "Declared Model",
+                "gpt-5",
+                null,
+                null,
+                null,
+                LlmDataOperator.PROVIDER,
+                "EU region, DPA renews next spring",
+                false,
+                AiModelBrand.OPENAI);
+        LlmModelDTO created = Objects.requireNonNull(webTestClient
+                .post()
+                .uri("/admin/llm/connections/{connectionId}/models", connection.getId())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody(LlmModelDTO.class)
+                .returnResult()
+                .getResponseBody());
+        assertThat(created.operatedBy()).isEqualTo(LlmDataOperator.PROVIDER);
+        assertThat(created.dataHandlingNote()).isEqualTo("EU region, DPA renews next spring");
+        assertThat(created.dataHandlingTier()).isEqualTo(DataHandlingTier.CLOUD);
+        assertThat(created.brand()).isEqualTo(AiModelBrand.OPENAI);
+        assertThat(llmModelRepository.findById(created.id()).orElseThrow().getBrand())
+                .isEqualTo(AiModelBrand.OPENAI);
+
+        DataHandlingFacts stored =
+                llmModelRepository.findById(created.id()).orElseThrow().getDataHandling();
+        assertThat(stored.getOperatedBy()).isEqualTo(LlmDataOperator.PROVIDER);
+        assertThat(stored.getNote()).isEqualTo("EU region, DPA renews next spring");
+
+        // The declaration is replaced wholesale: an update naming only the operator drops the note.
+        webTestClient
+                .patch()
+                .uri("/admin/llm/models/{id}", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("operatedBy", "PROVIDER"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.dataHandlingNote")
+                .doesNotExist()
+                .jsonPath("$.dataHandlingTier")
+                .isEqualTo("CLOUD")
+                .jsonPath("$.brand")
+                .isEqualTo("OPENAI");
+
+        webTestClient
+                .patch()
+                .uri("/admin/llm/models/{id}", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UpdateLlmModelRequestDTO(null, null, null, null, null, null, null, null, null, null))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.operatedBy")
+                .doesNotExist()
+                .jsonPath("$.dataHandlingTier")
+                .isEqualTo("UNDECLARED");
+    }
+
+    @Test
+    void activatingADeclaredModelWithItsDeclarationKeepsTheTier() {
+        // The instance console activates in a second request after the price is set; that request
+        // carries the declaration again because an update replaces the facts wholesale.
+        LlmConnection connection = seedConnection();
+        var request = new CreateLlmModelRequestDTO(
+                "activated-model",
+                "Activated Model",
+                "gpt-5",
+                null,
+                null,
+                null,
+                LlmDataOperator.OWN_ORGANISATION,
+                null,
+                false,
+                null);
+        LlmModelDTO created = Objects.requireNonNull(webTestClient
+                .post()
+                .uri("/admin/llm/connections/{connectionId}/models", connection.getId())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody(LlmModelDTO.class)
+                .returnResult()
+                .getResponseBody());
+
+        webTestClient
+                .put()
+                .uri("/admin/llm/models/{id}/price", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UpdateLlmModelPriceRequestDTO(
+                        PricingMode.NO_CHARGE, null, null, null, null, "Self-hosted, no per-token charge"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+
+        webTestClient
+                .patch()
+                .uri("/admin/llm/models/{id}", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UpdateLlmModelRequestDTO(
+                        null, null, null, null, null, LlmDataOperator.OWN_ORGANISATION, null, true, null, null))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+
+        webTestClient
+                .get()
+                .uri("/admin/llm/models/{id}", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.enabled")
+                .isEqualTo(true)
+                .jsonPath("$.dataHandlingTier")
+                .isEqualTo("IN_HOUSE");
     }
 
     @Test
@@ -322,7 +466,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .contentType(MediaType.APPLICATION_JSON)
                 // Different slug, SAME upstream model id as "dup-first" — only the upstream-id guard can
                 // reject this, so a pass cannot be the slug-conflict handler answering by accident.
-                .bodyValue(new CreateLlmModelRequestDTO("dup-second", "Test Model", "gpt-5", null, null, null, false))
+                .bodyValue(new CreateLlmModelRequestDTO(
+                        "dup-second", "Test Model", "gpt-5", null, null, null, null, null, false, null))
                 .exchange()
                 .expectStatus()
                 .isEqualTo(409)

@@ -16,7 +16,9 @@ const [data, socket, objects] = volumes;
 const config = path.join(import.meta.dirname, "..", "docker", "self-host", "pgbackrest.conf");
 const certificates = mkdtempSync(path.join(tmpdir(), `${id}-certs-`));
 const minioImage =
-	"quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e";
+	"cgr.dev/chainguard/minio@sha256:bd014394a80898e68c149f2311fdf8d5a2c2f3bb2c33b9327ae6d02b4b065ae1";
+const minioClientImage =
+	"cgr.dev/chainguard/minio-client@sha256:b8b144ab34694ecea25aa352c4be9de4c26ee2a02701521dce02ee5593c57338";
 const repositoryEnvironment = (restored: boolean): string[] => [
 	"-e",
 	"PGBACKREST_REPO1_TYPE=s3",
@@ -57,24 +59,38 @@ function docker(...args: string[]): string {
 	return run("docker", args);
 }
 
+function mc(role: "writer" | "reader", ...args: string[]): string {
+	const credentials =
+		role === "writer" ? "backup-writer:local-writer-secret" : "restore-reader:local-reader-secret";
+	return docker(
+		"run",
+		"--rm",
+		"--network",
+		network,
+		"--user",
+		"0",
+		"-e",
+		`MC_HOST_local=https://${credentials}@minio:9000`,
+		"-v",
+		`${certificates}:/certs:ro`,
+		minioClientImage,
+		"--insecure",
+		...args,
+	);
+}
+
 function pause(seconds: number): void {
 	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, seconds * 1000);
 }
 
 function waitForObjectStore(): void {
 	for (let attempt = 0; attempt < 60; attempt += 1) {
-		if (
-			spawnSync("docker", [
-				"exec",
-				objectStore,
-				"curl",
-				"-kfsS",
-				"https://localhost:9000/minio/health/live",
-			]).status === 0
-		) {
+		try {
+			mc("writer", "admin", "info", "local");
 			return;
+		} catch {
+			pause(1);
 		}
-		pause(1);
 	}
 	throw new Error(`S3 test service did not become ready:\n${docker("logs", objectStore)}`);
 }
@@ -125,6 +141,8 @@ function startObjectStore(): void {
 		network,
 		"--network-alias",
 		"minio",
+		"--user",
+		"0",
 		"-e",
 		"MINIO_ROOT_USER=backup-writer",
 		"-e",
@@ -132,62 +150,26 @@ function startObjectStore(): void {
 		"-v",
 		`${objects}:/data`,
 		"-v",
-		`${certificates}:/root/.minio/certs:ro`,
+		`${certificates}:/certs:ro`,
 		minioImage,
+		"--certs-dir",
+		"/certs",
 		"server",
 		"/data",
 	);
 	waitForObjectStore();
-	docker(
-		"exec",
-		objectStore,
-		"mc",
-		"alias",
-		"set",
-		"--insecure",
-		"local",
-		"https://localhost:9000",
-		"backup-writer",
-		"local-writer-secret",
-	);
-	docker("exec", objectStore, "mc", "mb", "--insecure", "local/hephaestus");
-	docker(
-		"exec",
-		objectStore,
-		"mc",
-		"admin",
-		"user",
-		"add",
-		"--insecure",
-		"local",
-		"restore-reader",
-		"local-reader-secret",
-	);
-	docker(
-		"exec",
-		objectStore,
-		"mc",
+	mc("writer", "mb", "local/hephaestus");
+	mc("writer", "admin", "user", "add", "local", "restore-reader", "local-reader-secret");
+	mc(
+		"writer",
 		"admin",
 		"policy",
 		"create",
-		"--insecure",
 		"local",
 		"restore-reader",
-		"/root/.minio/certs/restore-policy.json",
+		"/certs/restore-policy.json",
 	);
-	docker(
-		"exec",
-		objectStore,
-		"mc",
-		"admin",
-		"policy",
-		"attach",
-		"--insecure",
-		"local",
-		"restore-reader",
-		"--user",
-		"restore-reader",
-	);
+	mc("writer", "admin", "policy", "attach", "local", "restore-reader", "--user", "restore-reader");
 }
 
 function sql(query: string): string {
@@ -350,29 +332,13 @@ try {
 	);
 	sidecar("ro", false, "--type=full", "backup");
 	sidecar("ro", true, "verify");
-	docker(
-		"exec",
-		objectStore,
-		"mc",
-		"alias",
-		"set",
-		"--insecure",
-		"reader",
-		"https://localhost:9000",
-		"restore-reader",
-		"local-reader-secret",
-	);
-	if (
-		spawnSync("docker", [
-			"exec",
-			objectStore,
-			"mc",
-			"cp",
-			"--insecure",
-			"/etc/hosts",
-			"reader/hephaestus/forbidden-write",
-		]).status === 0
-	) {
+	let readerWriteRejected = false;
+	try {
+		mc("reader", "cp", "/etc/hosts", "local/hephaestus/forbidden-write");
+	} catch {
+		readerWriteRejected = true;
+	}
+	if (!readerWriteRejected) {
 		throw new Error("restore identity was able to write to the backup bucket");
 	}
 	docker("stop", objectStore);

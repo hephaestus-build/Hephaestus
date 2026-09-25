@@ -1,24 +1,53 @@
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { Chat } from "@/components/mentor/Chat";
-import { Copilot } from "@/components/mentor/Copilot";
-import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { useMentorChat } from "@/hooks/use-mentor-chat";
-import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { copyToClipboard } from "@/lib/clipboard";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 
+import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
+import { Chat } from "@/components/mentor/Chat";
+import { Copilot } from "@/components/mentor/Copilot";
+import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { useMentorChat } from "@/hooks/use-mentor-chat";
+import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
+import { mentorPreferenceReason } from "@/lib/mentor-preference";
+
+/**
+ * Keyed on the workspace so a conversation never carries over into the next workspace, and gated on
+ * the member's own AI choice there: "No AI" hides the composer rather than letting a send fail.
+ */
 export default function GlobalCopilot() {
+	const { workspaceSlug } = useActiveWorkspaceSlug();
+	const { isAuthenticated, isLoading } = useAuth();
+	const { enabled: hasMentorAccess, isLoading: accessLoading } = useFeatureFlag("MENTOR_ACCESS");
+	const { features, isLoading: featuresLoading } = useWorkspaceFeatures(workspaceSlug);
+	const preference = useQuery({
+		...getMemberOnboardingOptions({ path: { workspaceSlug: workspaceSlug ?? "" } }),
+		enabled: Boolean(workspaceSlug),
+	});
+	if (
+		!hasText(workspaceSlug) ||
+		isLoading ||
+		!isAuthenticated ||
+		accessLoading ||
+		!hasMentorAccess ||
+		featuresLoading ||
+		features?.mentorEnabled !== true ||
+		!preference.isSuccess ||
+		mentorPreferenceReason(preference.data)
+	) {
+		return null;
+	}
+	return <WorkspaceCopilot key={workspaceSlug} workspaceSlug={workspaceSlug} />;
+}
+
+function WorkspaceCopilot({ workspaceSlug }: { workspaceSlug: string }) {
 	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
 	// already is, rather than as a toast away from the conversation that failed.
 	const mentorChat = useMentorChat({});
 
 	const router = useRouter();
-	const { isAuthenticated, isLoading } = useAuth();
-	const { enabled: hasMentorAccess } = useFeatureFlag("MENTOR_ACCESS");
-	const { workspaceSlug } = useActiveWorkspaceSlug();
-	const { features, isLoading: featuresLoading } = useWorkspaceFeatures(workspaceSlug);
 
 	const handleMessageSubmit = ({ text }: { text: string }) => {
 		if (!text.trim()) {
@@ -39,17 +68,6 @@ export default function GlobalCopilot() {
 		mentorChat.setMessages(mentorChat.messages.slice(0, messageIndex));
 		mentorChat.sendMessage(content);
 	};
-
-	if (
-		isLoading ||
-		featuresLoading ||
-		!isAuthenticated ||
-		!hasText(workspaceSlug) ||
-		!hasMentorAccess ||
-		features?.mentorEnabled !== true
-	) {
-		return null;
-	}
 
 	return (
 		<Copilot

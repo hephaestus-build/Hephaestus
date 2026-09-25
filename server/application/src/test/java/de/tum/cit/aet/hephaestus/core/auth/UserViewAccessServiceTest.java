@@ -9,9 +9,10 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventData;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
-import de.tum.cit.aet.hephaestus.core.auth.domain.LinkedAccountRow;
 import de.tum.cit.aet.hephaestus.core.auth.spi.UserViewAccess;
+import de.tum.cit.aet.hephaestus.core.auth.stepup.RecentSignInPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import java.util.Map;
@@ -33,8 +34,8 @@ import tools.jackson.databind.json.JsonMapper;
 class UserViewAccessServiceTest extends BaseUnitTest {
     private final IdentityLinkRepository identityLinks = mock(IdentityLinkRepository.class);
     private final AuthEventWriter writer = mock(AuthEventWriter.class);
-    private final UserViewAccessService service =
-            new UserViewAccessService(identityLinks, new AuthEventLogger(writer), new JsonMapper());
+    private final UserViewAccessService service = new UserViewAccessService(
+            identityLinks, new AuthEventLogger(writer), new JsonMapper(), mock(RecentSignInPolicy.class));
 
     @BeforeEach
     void signInAsAdministrator() {
@@ -54,8 +55,7 @@ class UserViewAccessServiceTest extends BaseUnitTest {
     void shouldRecordTheAdministratorAsActingAndTheViewedUserWhenTheUserHasNoAccount() {
         when(writer.write(any())).thenReturn(true);
 
-        service.record(
-                7L, 99L, null, "Investigate%20missing%20feedback", "/workspaces/acme/user-view/users/99/practices");
+        service.record(7L, 99L, null, "Investigate%20missing%20feedback", "/workspaces/acme/practices/standings");
 
         AuthEventData event = written();
         assertThat(event.actingAccountId()).isEqualTo(42L);
@@ -64,7 +64,7 @@ class UserViewAccessServiceTest extends BaseUnitTest {
         assertThat(event.workspaceId()).isEqualTo(7L);
         assertThat(event.details())
                 .contains("\"reason\":\"Investigate missing feedback\"")
-                .contains("\"read\":\"/workspaces/acme/user-view/users/99/practices\"");
+                .contains("\"read\":\"/workspaces/acme/practices/standings\"");
     }
 
     @Test
@@ -106,11 +106,21 @@ class UserViewAccessServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldMapEachLinkedUserToItsAccountAndStatus() {
-        when(identityLinks.findLinkedAccountsByExternalActorIds(List.of(99L, 100L)))
-                .thenReturn(List.of(new LinkedAccountRow(99L, 3L, Account.Status.DELETING)));
+    void shouldMapByProviderSubjectRatherThanCachedActorId() {
+        var account = new Account("Viewed account");
+        account.setId(3L);
+        account.setStatus(Account.Status.DELETING);
+        var link = new IdentityLink();
+        link.setAccount(account);
+        link.setProviderId(55L);
+        link.setSubject("123");
+        link.setExternalActorId(100L);
+        when(identityLinks.findActiveScmLinks(List.of(55L), List.of("123", "124")))
+                .thenReturn(List.of(link));
 
-        assertThat(service.linkedAccounts(List.of(99L, 100L)))
+        assertThat(service.linkedAccounts(List.of(
+                        new UserViewAccess.ActorIdentity(99L, 55L, "123"),
+                        new UserViewAccess.ActorIdentity(100L, 55L, "124"))))
                 .containsExactly(Map.entry(99L, new UserViewAccess.LinkedAccount(3L, "DELETING")));
     }
 

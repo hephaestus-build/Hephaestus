@@ -1,9 +1,12 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { InAppFeedback } from "@/api/types.gen";
+import type { Wire } from "@/lib/dates";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { clearUserView } from "@/runtime/user-view/session";
 import { detailObservation, detailRun } from "@/stories/practice-detail-story-mock-data";
 import {
 	groups,
@@ -13,6 +16,7 @@ import {
 	practiceStandings,
 } from "@/stories/practice-profile-story-mock-data";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { storeUserView } from "@/test/user-view";
 
 // Mounting the real route pulls in the whole app shell and its lazy modules.
 vi.setConfig({ testTimeout: 15_000 });
@@ -245,5 +249,55 @@ describe("practice profile route", () => {
 		expect(router.history).toHaveLength(entries);
 		router.history.back();
 		await waitFor(() => expect(router.state.location.search.detail).toBeUndefined());
+	});
+});
+
+/** One piece of feedback on the page, about the practice the level opens. */
+const feedback: Wire<InAppFeedback> = {
+	id: "00000000-0000-0000-0000-000000000201",
+	headline: "Pull requests bundle a fix with a refactor",
+	body: "Reviewers had to follow two intentions in one diff.",
+	practiceSlug: practice.slug,
+	practiceName: practice.name,
+	groupSlug: packagingGroup.slug,
+	groupName: packagingGroup.name,
+	preparedAt: "2026-09-09T14:10:00Z",
+	cleanNeeded: 3,
+	cleanWork: [],
+	evidence: [],
+};
+
+/**
+ * A user view is an administrator reading the developer's page: everything the developer would
+ * answer — a rating, a comment, a response to an observation — is theirs alone, so none of it is
+ * offered. The developer's own visit is the control that shows the same controls are there.
+ */
+describe("practice profile in a user view", () => {
+	beforeEach(() => {
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practices/feedback/in-app", () =>
+				HttpResponse.json([feedback]),
+			),
+		);
+	});
+	afterEach(clearUserView);
+
+	/** The card's rating buttons on the page, then the observation's on the practice level. */
+	async function responseControls() {
+		const router = await renderProfile();
+		await screen.findByText(feedback.headline, undefined, ROUTE_RENDER_WAIT);
+		const ratings = screen.queryAllByRole("button", { name: "Helpful" }).length;
+		await openPractice(router);
+		await screen.findByText("Why it was noted", undefined, ROUTE_RENDER_WAIT);
+		return { ratings, observationResponse: screen.queryAllByText("Your response").length };
+	}
+
+	it("offers the developer a rating and a response", async () => {
+		await expect(responseControls()).resolves.toStrictEqual({ ratings: 1, observationResponse: 1 });
+	});
+
+	it("offers an administrator viewing as the developer neither", async () => {
+		storeUserView({ workspaceSlug: "acme", login: "ada", name: "Ada" });
+		await expect(responseControls()).resolves.toStrictEqual({ ratings: 0, observationResponse: 0 });
 	});
 });

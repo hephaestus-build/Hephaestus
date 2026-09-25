@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -22,18 +24,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-/**
- * Real-Postgres proof that {@link MentorSlackThreadService#purgeSlackThreads} erases exactly the workspace's
- * {@code SLACK_DM} mentor threads and nothing else — the surface-scoped erasure an app uninstall relies on. The one
- * load-bearing assertion is that {@code WEB} history survives: flip {@code ThreadSurface.SLACK_DM} to {@code WEB}
- * inside {@code DefaultMentorSlackThreadService#purgeSlackThreads} (the exact inversion) and this fails — the SLACK_DM
- * row survives while the WEB row is wrongly erased. Also pins workspace scoping (a second workspace's SLACK_DM thread
- * is untouched).
- *
- * <p>Deliberately seeds no {@code chat_message}: the {@code chat_thread → chat_message} {@code ON DELETE CASCADE} that
- * {@code purgeSlackThreads} relies on exists only in the Liquibase production schema, not on this entity-derived
- * ({@code ddl-auto: create}) test schema, so a message here would trip a spurious FK violation.
- */
+/** No chat messages are seeded: this entity-derived schema lacks the Liquibase-only delete cascade.
+ * Message cascade behavior is not covered here. */
 class DefaultMentorSlackThreadServiceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
@@ -79,12 +71,53 @@ class DefaultMentorSlackThreadServiceIntegrationTest extends BaseIntegrationTest
         int purged = mentorSlackThreadService.purgeSlackThreads(a.getId());
 
         assertThat(purged).isEqualTo(1);
-        // A's SLACK_DM thread is gone …
+
         assertThat(chatThreadRepository.findById(aSlackDm)).isEmpty();
-        // … but A's WEB mentor history survives …
+
         assertThat(chatThreadRepository.findById(aWeb)).isPresent();
-        // … and another workspace's SLACK_DM thread is untouched (workspace scoping).
+
         assertThat(chatThreadRepository.findById(bSlackDm)).isPresent();
+    }
+
+    @Test
+    void shouldKeepVerifiedActorWhenAnotherProviderHasTheSameLogin() {
+        var provider = identityProviderRepository.save(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://mentor-identity.example.com"));
+        var verifiedActor =
+                userRepository.save(TestUserFactory.createUser(USER_SEQ.incrementAndGet(), user.getLogin(), provider));
+        var actorId = verifiedActor.getId();
+        assertNotNull(actorId);
+        var workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("slack-verified-actor"));
+        var workspaceId = workspace.getId();
+        assertNotNull(workspaceId);
+
+        UUID threadId = mentorSlackThreadService.ensureSlackThread(workspaceId, null, actorId);
+        assertThat(chatThreadRepository.findById(threadId))
+                .get()
+                .extracting(thread -> thread.getUser().getId())
+                .isEqualTo(actorId);
+
+        CurrentScmIdentityHolder.set(actorId, verifiedActor.getLogin());
+        try {
+            assertThat(userRepository.getCurrentUser())
+                    .get()
+                    .extracting(User::getId)
+                    .isEqualTo(actorId);
+        } finally {
+            CurrentScmIdentityHolder.clear();
+        }
+        assertThat(CurrentScmIdentityHolder.getUserId()).isEmpty();
+        assertThat(CurrentScmIdentityHolder.getLogin()).isEmpty();
+    }
+
+    @Test
+    void shouldNotFallBackToLoginWhenPinnedActorNoLongerExists() {
+        CurrentScmIdentityHolder.set(-1L, user.getLogin());
+        try {
+            assertThat(userRepository.getCurrentUser()).isEmpty();
+        } finally {
+            CurrentScmIdentityHolder.clear();
+        }
     }
 
     private UUID seedThread(Workspace workspace, ThreadSurface surface) {

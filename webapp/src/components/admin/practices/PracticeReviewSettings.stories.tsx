@@ -9,6 +9,7 @@ import { PracticeReviewSettings } from "./PracticeReviewSettings";
 
 const settings = mockReviewSettings({ deliverToMerged: false });
 const readyBinding: AgentBinding = {
+	dataHandlingTier: "IN_HOUSE",
 	purpose: "PRACTICE_REVIEW",
 	enabled: true,
 	ready: true,

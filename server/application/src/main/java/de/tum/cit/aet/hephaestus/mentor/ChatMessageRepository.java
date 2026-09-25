@@ -20,6 +20,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 @WorkspaceAgnostic("Crash-recovery sweep only; thread-scoped access goes through ChatThreadService")
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> {
+    @Query("SELECT m.thread.user.id FROM ChatMessage m WHERE m.id = :id AND m.thread.workspace.id = :workspaceId")
+    Optional<Long> findDeveloperIdByIdAndWorkspaceId(UUID id, Long workspaceId);
+
     @Query("""
         SELECT m
         FROM ChatMessage m

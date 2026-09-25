@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
 import { Spinner } from "@/components/ui/spinner";
 import { consentIsPending, resolveCurrentUser } from "@/runtime/auth/guard";
+import { getUserViewSession } from "@/runtime/user-view/session";
 
 export const Route = createFileRoute("/_authenticated")({
 	beforeLoad: async ({ context, location }) => {
@@ -18,6 +19,22 @@ export const Route = createFileRoute("/_authenticated")({
 				search: { returnTo: location.href },
 				mask: { to: location.pathname, search: location.search, hash: location.hash },
 			});
+		}
+		const viewed = getUserViewSession();
+		if (viewed) {
+			const workspacePath = `/w/${viewed.workspaceSlug}`;
+			if (
+				(location.pathname !== workspacePath &&
+					!location.pathname.startsWith(`${workspacePath}/`)) ||
+				location.pathname.startsWith(`${workspacePath}/admin`) ||
+				location.pathname === `${workspacePath}/onboarding`
+			) {
+				throw redirect({
+					to: "/w/$workspaceSlug/user/$username",
+					params: { workspaceSlug: viewed.workspaceSlug, username: viewed.login },
+					replace: true,
+				});
+			}
 		}
 	},
 	pendingComponent: () => (

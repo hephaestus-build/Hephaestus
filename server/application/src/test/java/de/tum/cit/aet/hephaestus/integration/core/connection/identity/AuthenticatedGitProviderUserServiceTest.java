@@ -33,11 +33,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.server.ResponseStatusException;
 
-/**
- * Locks the identity resolution: {@code sub → Account → active IdentityLink → User}.
- * The Hephaestus cookie-JWT carries no {@code gitlab_id} / {@code github_id} claim, so the SCM
- * actor mirror must be provisioned from {@link AccountIdentityQuery}, never from JWT claims.
- */
 class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
 
     private static final long ACCOUNT_ID = 42L;
@@ -75,7 +70,6 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
 
     @Test
     void resolveOrProvision_provisionsGitLabUserFromIdentityLink_whenNoClaimPresent() {
-        when(userRepository.getCurrentUser()).thenReturn(Optional.empty());
         IdentityLinkView gitlab = view(100L, GITLAB_PROVIDER_ID, "18024", "gitlabuser");
         when(accountIdentityQuery.activeLinksForAccount(ACCOUNT_ID)).thenReturn(List.of(gitlab));
         IdentityProvider provider =
@@ -83,14 +77,15 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
         when(gitProviderRepository.findById(GITLAB_PROVIDER_ID)).thenReturn(Optional.of(provider));
 
         User provisioned = user(555L, "gitlabuser", 18024L, provider);
-        when(userRepository.findByLoginAndProviderId("gitlabuser", GITLAB_PROVIDER_ID))
+        when(userRepository.findByNativeIdAndProviderId(18024L, GITLAB_PROVIDER_ID))
+                .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(provisioned));
         when(userRepository.findById(555L)).thenReturn(Optional.of(provisioned));
 
         Optional<User> result = service.resolveOrProvisionCurrentUser();
 
         assertThat(result).containsSame(provisioned);
-        // native_id = numeric subject; login = usernameAtSignup; never reads a JWT claim.
+
         verify(userRepository)
                 .upsertUser(
                         eq(18024L),
@@ -103,39 +98,25 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
                         any(),
                         any(),
                         any());
-        // IdentityLink → ExternalActor wiring is closed idempotently.
+
         verify(accountIdentityQuery).linkExternalActor(100L, 555L);
     }
 
     @Test
-    void resolveOrProvision_prefersGitLabOverGitHub_whenAccountHasBoth() {
-        when(userRepository.getCurrentUser()).thenReturn(Optional.empty());
-        IdentityLinkView github = view(200L, GITHUB_PROVIDER_ID, "999", "ghuser");
-        IdentityLinkView gitlab = view(100L, GITLAB_PROVIDER_ID, "18024", "gitlabuser");
+    void shouldResolveFirstLinkedScmActorWithoutOverwritingSyncedProfile() {
+        IdentityLinkView github = view(200L, GITHUB_PROVIDER_ID, "999", "former-login");
+        IdentityLinkView gitlab = view(300L, GITLAB_PROVIDER_ID, "18024", "gitlabuser");
         when(accountIdentityQuery.activeLinksForAccount(ACCOUNT_ID)).thenReturn(List.of(github, gitlab));
-        IdentityProvider gh = gitProvider(GITHUB_PROVIDER_ID, IdentityProviderType.GITHUB, "https://github.com");
-        IdentityProvider gl = gitProvider(GITLAB_PROVIDER_ID, IdentityProviderType.GITLAB, "https://gitlab.lrz.de");
-        lenient().when(gitProviderRepository.findById(GITHUB_PROVIDER_ID)).thenReturn(Optional.of(gh));
-        when(gitProviderRepository.findById(GITLAB_PROVIDER_ID)).thenReturn(Optional.of(gl));
-        User provisioned = user(555L, "gitlabuser", 18024L, gl);
-        when(userRepository.findByLoginAndProviderId("gitlabuser", GITLAB_PROVIDER_ID))
-                .thenReturn(Optional.of(provisioned));
-        when(userRepository.findById(555L)).thenReturn(Optional.of(provisioned));
+        IdentityProvider provider = gitProvider(GITHUB_PROVIDER_ID, IdentityProviderType.GITHUB, "https://github.com");
+        when(gitProviderRepository.findById(GITHUB_PROVIDER_ID)).thenReturn(Optional.of(provider));
+        User existing = user(555L, "renamed-login", 999L, provider);
+        when(userRepository.findByNativeIdAndProviderId(999L, GITHUB_PROVIDER_ID))
+                .thenReturn(Optional.of(existing));
 
-        service.resolveOrProvisionCurrentUser();
-
-        verify(userRepository)
-                .upsertUser(
-                        eq(18024L),
-                        eq(GITLAB_PROVIDER_ID),
-                        eq("gitlabuser"),
-                        anyString(),
-                        anyString(),
-                        anyString(),
-                        eq("USER"),
-                        any(),
-                        any(),
-                        any());
+        assertThat(service.resolveOrProvisionCurrentUser()).containsSame(existing);
+        assertThat(existing.getLogin()).isEqualTo("renamed-login");
+        verify(userRepository, never()).getCurrentUser();
+        verify(userRepository, never()).acquireLoginLock(anyString(), anyLong());
     }
 
     @Test
@@ -145,7 +126,8 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
         IdentityProvider gl = gitProvider(GITLAB_PROVIDER_ID, IdentityProviderType.GITLAB, "https://gitlab.lrz.de");
         when(gitProviderRepository.findById(GITLAB_PROVIDER_ID)).thenReturn(Optional.of(gl));
         User provisioned = user(555L, "gitlabuser", 18024L, gl);
-        when(userRepository.findByLoginAndProviderId("gitlabuser", GITLAB_PROVIDER_ID))
+        when(userRepository.findByNativeIdAndProviderId(18024L, GITLAB_PROVIDER_ID))
+                .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(provisioned));
         lenient().when(userRepository.findById(555L)).thenReturn(Optional.of(provisioned));
 
@@ -182,11 +164,7 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
 
     @Test
     void resolveOrProvision_nonNumericSubject_throwsConflict() {
-        // IdentityLink.subject must be the IdP-stable NUMERIC provider id (the nOAuth defence, enforced
-        // via userNameAttributeName("id")). A non-numeric subject means a mis-configured registration
-        // mapped a mutable username; the provisioner must refuse (409), never mint an SCM actor keyed on
-        // a forgeable handle.
-        when(userRepository.getCurrentUser()).thenReturn(Optional.empty());
+
         IdentityLinkView poisoned = view(100L, GITLAB_PROVIDER_ID, "attacker-handle", "attacker-handle");
         when(accountIdentityQuery.activeLinksForAccount(ACCOUNT_ID)).thenReturn(List.of(poisoned));
         IdentityProvider provider =
@@ -215,7 +193,6 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
 
     @Test
     void resolveOrProvision_returnsEmpty_whenAccountHasNoLinks() {
-        when(userRepository.getCurrentUser()).thenReturn(Optional.empty());
         when(accountIdentityQuery.activeLinksForAccount(ACCOUNT_ID)).thenReturn(List.of());
 
         assertThat(service.resolveOrProvisionCurrentUser()).isEmpty();

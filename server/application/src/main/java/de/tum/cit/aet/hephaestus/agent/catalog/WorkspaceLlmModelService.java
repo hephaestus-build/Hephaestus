@@ -83,6 +83,8 @@ public class WorkspaceLlmModelService {
         model.setContextWindow(request.contextWindow());
         model.setMaxOutputTokens(request.maxOutputTokens());
         model.setReasoningEffort(request.reasoningEffort());
+        model.setBrand(request.brand());
+        model.setDataHandling(DataHandlingFacts.of(request.operatedBy(), request.dataHandlingNote()));
         if (request.enabled() != null) {
             model.setEnabled(request.enabled());
         }
@@ -146,6 +148,9 @@ public class WorkspaceLlmModelService {
         } else if (request.reasoningEffort() != null) {
             model.setReasoningEffort(request.reasoningEffort());
         }
+        if (Boolean.TRUE.equals(request.clearBrand())) model.setBrand(null);
+        else if (request.brand() != null) model.setBrand(request.brand());
+        model.setDataHandling(DataHandlingFacts.of(request.operatedBy(), request.dataHandlingNote()));
         if (request.enabled() != null) {
             model.setEnabled(request.enabled());
         }

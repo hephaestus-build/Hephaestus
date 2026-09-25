@@ -6,6 +6,7 @@ import type {
 	WorkspaceLlmModel,
 } from "@/api/types.gen";
 import {
+	modelDetailsBodyOf,
 	LlmModelFields,
 	type LlmModelFieldsValue,
 	modelFieldsValueOf,
@@ -18,6 +19,7 @@ import {
 	DialogBody,
 	DialogClose,
 	DialogContent,
+	DialogDescription,
 	DialogFooter,
 	DialogForm,
 	DialogHeader,
@@ -97,6 +99,7 @@ function WorkspaceLlmModelFormDialogContent({
 			displayName: fields.displayName.trim(),
 			contextWindow: fields.contextWindow.trim() ? Number(fields.contextWindow) : undefined,
 			maxOutputTokens: fields.maxOutputTokens.trim() ? Number(fields.maxOutputTokens) : undefined,
+			...modelDetailsBodyOf(fields),
 			enabled: isEdit ? fields.enabled : false,
 			pricingMode: price.pricingMode,
 			per1mInputUsd: price.pricingMode === "PRICED" ? price.per1mInputUsd : undefined,
@@ -109,6 +112,7 @@ function WorkspaceLlmModelFormDialogContent({
 		if (isEdit) {
 			onUpdate(editing.id, {
 				...shared,
+				clearBrand: fields.brand === undefined,
 				...reasoningEffortUpdateOf(fields.reasoningEffort),
 			} satisfies UpdateWorkspaceLlmModelRequest);
 			return;
@@ -125,6 +129,10 @@ function WorkspaceLlmModelFormDialogContent({
 			<DialogForm onSubmit={handleSubmit}>
 				<DialogHeader>
 					<DialogTitle>{isEdit ? "Edit model" : "Add model"}</DialogTitle>
+					<DialogDescription>
+						Name the model and declare how it handles data. Workspaces and developers see the
+						declaration as a badge.
+					</DialogDescription>
 				</DialogHeader>
 
 				{/* This form outgrows a 320 px viewport; without an internal scroll region the popup hangs
@@ -135,6 +143,7 @@ function WorkspaceLlmModelFormDialogContent({
 						idPrefix="wm"
 						isEdit={isEdit}
 						wasEnabled={editing?.enabled ?? false}
+						savedTier={editing?.dataHandlingTier}
 						value={fields}
 						onChange={setFields}
 						errors={errors}

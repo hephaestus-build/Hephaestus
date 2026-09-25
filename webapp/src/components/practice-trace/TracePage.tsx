@@ -19,7 +19,7 @@ export interface TracePageProps {
 	isLoading: boolean;
 	error: unknown;
 	onRetry: () => void;
-	onRequestReview: () => void;
+	onRequestReview?: () => void;
 	requestPending: boolean;
 	/**
 	 * The refused outcome of the last ask, if the last ask was refused. Derived by the route from the

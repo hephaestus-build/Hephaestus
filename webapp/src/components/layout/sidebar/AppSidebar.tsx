@@ -37,8 +37,10 @@ export type SidebarContext = "main" | "mentor" | "admin";
 export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	username: string;
 	isAdmin: boolean;
+	isOwner?: boolean;
 	isAppAdmin: boolean;
 	hasMentorAccess: boolean;
+	readOnly?: boolean;
 	integrationKinds: readonly IntegrationCatalogEntry["kind"][];
 	context: SidebarContext;
 	workspaces: WorkspaceListItem[];
@@ -54,8 +56,10 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 export function AppSidebar({
 	username,
 	isAdmin,
+	isOwner = false,
 	isAppAdmin,
 	hasMentorAccess,
+	readOnly = false,
 	integrationKinds,
 	context,
 	workspaces,
@@ -107,17 +111,19 @@ export function AppSidebar({
 					<Link to="/w/$workspaceSlug" params={{ workspaceSlug: activeWorkspace.workspaceSlug }} />
 				}
 			>
-				<SidebarMenuButton
-					render={
-						<Link
-							to="/w/$workspaceSlug/mentor"
-							params={{ workspaceSlug: activeWorkspace.workspaceSlug }}
-						/>
-					}
-				>
-					<SquarePen />
-					New chat
-				</SidebarMenuButton>
+				{!readOnly && (
+					<SidebarMenuButton
+						render={
+							<Link
+								to="/w/$workspaceSlug/mentor"
+								params={{ workspaceSlug: activeWorkspace.workspaceSlug }}
+							/>
+						}
+					>
+						<SquarePen />
+						New chat
+					</SidebarMenuButton>
+				)}
 			</NavContextHeader>
 		);
 		sidebarContent = (
@@ -142,6 +148,7 @@ export function AppSidebar({
 				)}
 				{isAdmin && (
 					<NavAdmin
+						isOwner={isOwner}
 						workspaceSlug={activeWorkspace.workspaceSlug}
 						integrationKinds={integrationKinds}
 						scmProviderType={activeWorkspace.providerType === "GITLAB" ? "GITLAB" : "GITHUB"}
@@ -161,7 +168,7 @@ export function AppSidebar({
 						workspaces={workspaces}
 						activeWorkspace={activeWorkspace}
 						onWorkspaceChange={onWorkspaceChange}
-						onAddWorkspace={onAddWorkspace}
+						onAddWorkspace={readOnly ? undefined : onAddWorkspace}
 						isAppAdmin={isAppAdmin}
 					/>
 				)}
@@ -169,7 +176,9 @@ export function AppSidebar({
 			</SidebarHeader>
 			<SidebarContent onClick={handleSectionClick}>{sidebarContent}</SidebarContent>
 			<SidebarFooter onClick={handleSectionClick}>
-				<NavFooter isAppAdmin={isAppAdmin} />
+				{!readOnly && (
+					<NavFooter isAppAdmin={isAppAdmin} workspaceSlug={activeWorkspace?.workspaceSlug} />
+				)}
 			</SidebarFooter>
 			<SidebarRail />
 		</Sidebar>

@@ -36,6 +36,7 @@ import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { workspaceHead } from "@/lib/page-title";
 import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-profile")({
 	component: PracticeProfile,
@@ -56,6 +57,8 @@ const PRACTICE_LEVEL_PARAMS = [
 ] as const satisfies readonly (keyof PracticeGroupDetailSelection)[];
 
 function PracticeProfile() {
+	// A user view reads the developer's page and answers nothing on their behalf.
+	const readOnly = useAuth().userView !== undefined;
 	const { workspaceSlug } = Route.useParams();
 	const search = Route.useSearch();
 	const setSearch = useSearchState();
@@ -125,7 +128,7 @@ function PracticeProfile() {
 				practices={practiceStandings}
 				groups={groups}
 				feedbackCards={feedback.cards}
-				ratingProps={feedback.ratingProps}
+				ratingProps={readOnly ? undefined : feedback.ratingProps}
 				onOpenGroup={openGroup}
 				onOpenPractice={openPractice}
 				feedbackTab={search.feedback}
@@ -133,7 +136,7 @@ function PracticeProfile() {
 				state={page}
 			/>
 			<PracticeGroupDetailDrawer
-				detail={detail}
+				detail={readOnly ? { ...detail, respond: undefined } : detail}
 				detailStack={detailStack}
 				allPracticeGroups={{
 					practicesByGroup,
@@ -152,7 +155,7 @@ function PracticeProfile() {
 					...composeGroupOverview(overview, groupSlug),
 					nextStep: composeNextStep(feedback.cards, groupSlug),
 				})}
-				ratingProps={feedback.ratingProps}
+				ratingProps={readOnly ? undefined : feedback.ratingProps}
 				onOpenPractice={(practiceSlug) => stackControls.open(practiceLevel(practiceSlug))}
 				practiceTab={search.practiceTab}
 				skeletonRows={REVIEW_RUN_PAGE_SIZE}

@@ -58,7 +58,7 @@ class ObservationAdmissionControllerTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"did_not_read_the_diff", "incoherent_assessment"})
+    @ValueSource(strings = {"did_not_read_the_diff", "incoherent_assessment", "member_ai_declined"})
     void aRefusedReviewIsAnsweredAsADecisionAndCounted(String reasonCode) {
         UUID id = UUID.randomUUID();
         when(service.admit(eq(identity(id)), any()))

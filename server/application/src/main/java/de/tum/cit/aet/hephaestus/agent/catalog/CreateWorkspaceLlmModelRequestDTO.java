@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -32,6 +33,13 @@ public record CreateWorkspaceLlmModelRequestDTO(
         @Schema(description = "Reasoning effort to request; null sends none, so the provider's own default applies")
         ReasoningEffort reasoningEffort,
 
+        @Nullable
+        @Schema(description = "Who operates the systems the work is sent to; omit to leave the model undeclared")
+        LlmDataOperator operatedBy,
+
+        @Nullable @Size(max = 200) @Schema(description = "Admin-only note: region, agreement, renewal date")
+        String dataHandlingNote,
+
         @Nullable @Schema(description = "Whether the model is active (default false)")
         Boolean enabled,
 
@@ -53,4 +61,7 @@ public record CreateWorkspaceLlmModelRequestDTO(
         @Nullable
         @Size(max = 500)
         @Schema(description = "Note; required when the model is free (e.g. self-hosted, no cost)")
-        String priceNote) {}
+        String priceNote,
+
+        @Nullable @Schema(description = "Model brand declared by an admin; display only")
+        AiModelBrand brand) {}

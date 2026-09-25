@@ -27,15 +27,15 @@ public interface ProfilePullRequestQueryRepository extends JpaRepository<PullReq
         LEFT JOIN FETCH p.assignees
         LEFT JOIN FETCH p.repository r
         JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = r.nameWithOwner
-        WHERE p.author.login ILIKE :authorLogin
+        WHERE p.author.id = :authorId
             AND p.state IN :states
             AND (CAST(:since AS Instant) IS NULL OR p.createdAt >= :since)
             AND (CAST(:until AS Instant) IS NULL OR p.createdAt < :until)
             AND rtm.workspace.id = :workspaceId
         ORDER BY p.createdAt DESC
         """)
-    List<PullRequest> findAuthoredByLoginAndStates(
-            @Param("authorLogin") String authorLogin,
+    List<PullRequest> findAuthoredByUserIdAndStates(
+            @Param("authorId") Long authorId,
             @Param("states") Set<PullRequest.State> states,
             @Param("workspaceId") Long workspaceId,
             @Param("since") @Nullable Instant since,

@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,6 +28,9 @@ public record WorkspaceLlmModelDTO(
         @NonNull @Schema(description = "Human-readable name")
         String displayName,
 
+        @Nullable @Schema(description = "Model brand declared by an admin; display only")
+        AiModelBrand brand,
+
         @NonNull @Schema(description = "Upstream provider model id")
         String upstreamModelId,
 
@@ -40,6 +45,15 @@ public record WorkspaceLlmModelDTO(
                 description =
                         "Reasoning effort requested of the model; null sends none, the provider's default applies")
         ReasoningEffort reasoningEffort,
+
+        @Nullable @Schema(description = "Who operates the systems the work is sent to; null until declared")
+        LlmDataOperator operatedBy,
+
+        @Nullable @Schema(description = "Admin-only note: region, agreement, renewal date")
+        String dataHandlingNote,
+
+        @NonNull @Schema(description = "Data-handling tier derived from the operator; UNDECLARED until it is set")
+        DataHandlingTier dataHandlingTier,
 
         @NonNull @Schema(description = "Active toggle") Boolean enabled,
         @NonNull @Schema(description = "Pricing mode") PricingMode pricingMode,
@@ -69,10 +83,14 @@ public record WorkspaceLlmModelDTO(
                 model.getConnection().getDisplayName(),
                 model.getSlug(),
                 model.getDisplayName(),
+                model.getBrand(),
                 model.getUpstreamModelId(),
                 model.getContextWindow(),
                 model.getMaxOutputTokens(),
                 model.getReasoningEffort(),
+                model.getDataHandling().getOperatedBy(),
+                model.getDataHandling().getNote(),
+                model.getDataHandlingTier(),
                 model.isEnabled(),
                 model.getPricingMode(),
                 model.getPer1mInputUsd(),

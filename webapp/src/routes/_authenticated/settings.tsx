@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 
 import {
+	getAccountAiChoiceOptions,
+	getAccountAiChoiceQueryKey,
 	getConsentStatusOptions,
 	getConsentStatusQueryKey,
 	getCurrentUserQueryKey,
@@ -17,6 +19,7 @@ import {
 	listLinkedIdentitiesOptions,
 	listLinkedIdentitiesQueryKey,
 	unlinkIdentityMutation,
+	updateAccountAiChoiceMutation,
 	updateResearchConsentMutation,
 	updateNotificationPreferencesMutation,
 	updateSlackUserPreferencesMutation,
@@ -33,6 +36,7 @@ import type { EmailPreferencesSectionProps } from "@/components/settings/EmailPr
 import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAccountsSection";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
+import { memberOnboardingQueryScope } from "@/hooks/use-member-onboarding";
 import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
@@ -199,6 +203,19 @@ function RouteComponent() {
 			},
 		});
 
+	const aiChoiceQuery = useQuery(getAccountAiChoiceOptions({}));
+	const aiChoiceMutation = useMutation({
+		...updateAccountAiChoiceMutation(),
+		onSuccess: (data) => {
+			queryClient.setQueryData(getAccountAiChoiceQueryKey({}), data);
+			// Every workspace's setup page reads the same answer.
+			void queryClient.invalidateQueries({ queryKey: memberOnboardingQueryScope() });
+		},
+		onError: () => {
+			toast.error("Couldn’t save your AI choice. Please try again.");
+		},
+	});
+
 	// After deletion: end the session. `logout()` performs a full reload to "/",
 	// so no further navigation is needed here.
 	const handleAccountDeleted = async () => {
@@ -347,6 +364,17 @@ function RouteComponent() {
 				error: consentQuery.error,
 				onRetry: () => {
 					void consentQuery.refetch();
+				},
+			}}
+			aiChoiceProps={{
+				choice: aiChoiceQuery.data?.choice,
+				onSave: (choice) => aiChoiceMutation.mutate({ body: { choice } }),
+				isSaving: aiChoiceMutation.isPending,
+				isLoading: aiChoiceQuery.isLoading,
+				isError: aiChoiceQuery.isError,
+				error: aiChoiceQuery.error,
+				onRetry: () => {
+					void aiChoiceQuery.refetch();
 				},
 			}}
 			linkedAccountsProps={linkedAccountsProps}

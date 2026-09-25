@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.account.userview;
 import de.tum.cit.aet.hephaestus.core.UserViewRead;
 import de.tum.cit.aet.hephaestus.core.auth.spi.UserViewAccess;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Parameter;
@@ -28,8 +29,6 @@ import org.springframework.web.server.ResponseStatusException;
 @Configuration(proxyBeanMethods = false)
 public class UserViewAuthorizationConfig {
 
-    public static final String REASON_HEADER = "X-User-View-Reason";
-
     @Bean
     @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
     static Advisor userViewAuthorizationAdvisor(
@@ -37,9 +36,10 @@ public class UserViewAuthorizationConfig {
         AuthorizationManager<MethodInvocation> manager = (authentication, invocation) -> {
             HttpServletRequest request =
                     ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest();
-            String reason = request.getHeader(REASON_HEADER);
+            String reason = request.getHeader(UserViewContextHolder.REASON_HEADER);
             if (reason == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing " + REASON_HEADER + " header");
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "Missing " + UserViewContextHolder.REASON_HEADER + " header");
             }
             long workspaceId = WorkspaceContextHolder.getContext().id();
             long userId = viewedUserId(invocation);

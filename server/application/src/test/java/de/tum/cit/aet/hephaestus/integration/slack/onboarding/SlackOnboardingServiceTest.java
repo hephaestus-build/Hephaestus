@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.slack.api.model.block.LayoutBlock;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
@@ -20,10 +21,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 
-/**
- * App Home onboarding CTA. Deterministic: the Slack round-trip is mocked, so these lock the routing
- * decisions (unknown team / already-linked / unlinked) and the deep-link the account-linking button carries.
- */
 class SlackOnboardingServiceTest extends BaseUnitTest {
 
     @Mock
@@ -63,7 +60,7 @@ class SlackOnboardingServiceTest extends BaseUnitTest {
     @Test
     void alreadyLinkedMember_postsNoCta() {
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
-        when(identityResolver.resolveDeveloperLogin(7L, "T1", "U1")).thenReturn(Optional.of("octocat"));
+        when(identityResolver.resolveDeveloper(7L, "T1", "U1")).thenReturn(Optional.of(developer()));
 
         service.onHomeOpened("T1", "U1");
 
@@ -73,11 +70,10 @@ class SlackOnboardingServiceTest extends BaseUnitTest {
     @Test
     void unlinkedMember_dmsTheLinkCtaToTheOpeningUser() {
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
-        when(identityResolver.resolveDeveloperLogin(7L, "T1", "U1")).thenReturn(Optional.empty());
+        when(identityResolver.resolveDeveloper(7L, "T1", "U1")).thenReturn(Optional.empty());
 
         service.onHomeOpened("T1", "U1");
 
-        // CTA is DM'd to the member (channel == their U… id), never to a shared channel.
         verify(messageService).sendForWorkspace(eq(7L), eq("U1"), any(), any());
     }
 
@@ -102,5 +98,12 @@ class SlackOnboardingServiceTest extends BaseUnitTest {
 
         assertThat(blocks).isNotEmpty();
         assertThat(blocks.toString()).contains("/auth/login?provider=slack&mode=link");
+    }
+
+    private static User developer() {
+        var user = new User();
+        user.setId(314L);
+        user.setLogin("octocat");
+        return user;
     }
 }

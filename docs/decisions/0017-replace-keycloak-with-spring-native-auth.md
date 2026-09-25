@@ -156,3 +156,14 @@ Corrects § Decision "Data-model split", "JWT format" and "GDPR" against the sch
 - The issuer is `hephaestus.auth.issuer` (`${HEPHAESTUS_AUTH_ISSUER:http://localhost:8080}` in
   `application.yml`), not a fixed `https://hephaestus.aet.cit.tum.de`;
   `core.auth.web.WellKnownController` serves the public keys at `/.well-known/jwks.json`.
+
+## Update — 2026-09-24
+
+Supersedes the separate user-view endpoints of the 2026-09-11 update. Administrators need to see
+the normal app, and a parallel endpoint per page drifts from the page it copies, so the normal
+routes now serve the view. The browser sends the selection with every request rather than the
+server holding a view session: the stateless cookie session and the per-request audit row remain
+the only state. Read-only is therefore enforced rather than true by construction: Spring Security
+admits only an instance administrator's `GET` during a view. The rejection of `SwitchUserFilter`
+stands.
+Mechanics: [read-only user views](../contributor/instance-admin.md#read-only-user-views).

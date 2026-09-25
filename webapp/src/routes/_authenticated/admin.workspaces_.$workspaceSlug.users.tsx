@@ -1,233 +1,140 @@
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeftIcon, Users } from "lucide-react";
-import { useState } from "react";
 import { z } from "zod";
 
+import { getUserViewUser } from "@/api/sdk.gen";
 import type { UserViewUser } from "@/api/types.gen";
-import { UserViewBanner } from "@/components/admin/users/UserViewBanner";
-import { UserViewConversations } from "@/components/admin/users/UserViewConversations";
-import { UserViewConversationThread } from "@/components/admin/users/UserViewConversationThread";
 import { UserViewDialog } from "@/components/admin/users/UserViewDialog";
-import { UserViewNotices } from "@/components/admin/users/UserViewNotices";
-import { UserViewPractices } from "@/components/admin/users/UserViewPractices";
 import { UserViewUsersTable } from "@/components/admin/users/UserViewUsersTable";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { buttonVariants } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useClampedPage } from "@/hooks/use-clamped-page";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
-import {
-	USER_VIEW_RUNS_PAGE_SIZE,
-	type ViewedUser,
-	type UserViewWorkspaceState,
-	useUserPracticeView,
-	useUserViewConversation,
-	useUserViewConversations,
-	useUserViewGroup,
-	useUserViewUsers,
-	useUserViewWorkspace,
-} from "@/hooks/use-user-view";
+import { useUserViewUsers, useUserViewWorkspace } from "@/hooks/use-user-view";
 import { instanceAdminHead } from "@/lib/page-title";
-import { stepUpChallengeOf } from "@/lib/problem-detail";
+import { problemDetailOf, stepUpChallengeOf } from "@/lib/problem-detail";
 import { pageParam, useSearchPatch } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
+import { currentUserQueryOptions } from "@/runtime/auth/guard";
+import { startUserView } from "@/runtime/user-view/session";
 
-const userViewSearchSchema = z.object({
+const searchSchema = z.object({
 	page: z.number().int().nonnegative().optional().catch(undefined),
 	user: z.number().int().positive().optional().catch(undefined),
-	section: z.enum(["practices", "conversations"]).optional().catch(undefined),
-	group: z.string().optional().catch(undefined),
-	practice: z.string().optional().catch(undefined),
-	thread: z.string().optional().catch(undefined),
-	threadPage: z.number().int().nonnegative().optional().catch(undefined),
 });
-
-type UserViewSearch = z.infer<typeof userViewSearchSchema>;
-
-const DRILL_IN_RESET: Partial<UserViewSearch> = {
-	section: undefined,
-	group: undefined,
-	practice: undefined,
-	thread: undefined,
-	threadPage: undefined,
-};
+type Search = z.infer<typeof searchSchema>;
 
 export const Route = createFileRoute("/_authenticated/admin/workspaces_/$workspaceSlug/users")({
 	head: instanceAdminHead("View as user"),
-	validateSearch: userViewSearchSchema,
-	remountDeps: ({ params, search }) => [params.workspaceSlug, search.user],
+	validateSearch: searchSchema,
 	component: WorkspaceUsersRoute,
 });
 
-interface ActiveView {
-	user: UserViewUser;
-	reason: string;
-}
-
 function WorkspaceUsersRoute() {
 	const { workspaceSlug } = Route.useParams();
-	const search = Route.useSearch();
-	const updateSearch = useSearchPatch<UserViewSearch>();
-
-	// Component state on purpose: the reason must not reach the URL, the history or Sentry. The
-	// user id does, so a sign-in round trip lands back on them and asks for the reason again.
-	const [view, setView] = useState<ActiveView>();
-
+	const { page: searchPage, user: selectedId } = Route.useSearch();
+	const updateSearch = useSearchPatch<Search>();
+	const page = searchPage ?? 0;
 	const workspace = useUserViewWorkspace(workspaceSlug);
-	const workspaceName = workspace.status === "ready" ? workspace.displayName : workspaceSlug;
-	const page = search.page ?? 0;
 	const users = useUserViewUsers(workspaceSlug, page);
+	const operatorAccountId = useQuery(currentUserQueryOptions()).data?.id;
+	const target =
+		users.status === "ready" ? users.users.find((user) => user.userId === selectedId) : undefined;
+
 	useClampedPage(page, users.status === "ready" ? users.totalPages : undefined, (next) =>
 		updateSearch({ page: pageParam(next) }),
 	);
-	const target =
-		!view && users.status === "ready"
-			? users.users.find((candidate) => candidate.userId === search.user)
-			: undefined;
 
 	return (
 		<PageLayout>
 			<PageHeader
 				icon={<Users />}
 				title="View as user"
-				description={`View a user's private practices and conversations in ${workspaceName}, read-only. Instance administrators only.`}
+				description={`Open the app as a user in ${workspace.status === "ready" ? workspace.displayName : workspaceSlug}. All supported pages are read-only.`}
 			/>
 			<Link to="/admin/workspaces" className={buttonVariants({ variant: "outline" })}>
 				<ArrowLeftIcon aria-hidden />
 				Back to workspaces
 			</Link>
-			{view ? (
-				<UserViewPanel
-					viewed={{ workspaceSlug, userId: view.user.userId, reason: view.reason }}
-					user={view.user}
-					workspace={workspace}
-					search={search}
-					onSearchChange={updateSearch}
-					onExit={() => {
-						setView(undefined);
-						updateSearch({ ...DRILL_IN_RESET, user: undefined });
-					}}
-				/>
-			) : (
-				<UserViewUsersTable
-					state={users}
-					page={page}
-					onPageChange={(next) => updateSearch({ page: pageParam(next) })}
-					onView={(candidate) => updateSearch({ user: candidate.userId })}
-				/>
-			)}
-			{target && (
-				<UserViewDialog
-					name={target.name ?? target.login}
+			<UserViewUsersTable
+				state={users}
+				page={page}
+				onPageChange={(next) => updateSearch({ page: pageParam(next) })}
+				onView={(user) => updateSearch({ user: user.userId })}
+			/>
+			{target && operatorAccountId !== undefined && (
+				<UserViewEntry
+					key={`${workspaceSlug}:${target.userId}`}
+					workspaceSlug={workspaceSlug}
+					workspaceName={workspace.status === "ready" ? workspace.displayName : workspaceSlug}
+					user={target}
+					operatorAccountId={operatorAccountId}
 					onClose={() => updateSearch({ user: undefined })}
-					onConfirm={(reason) => {
-						setView({ user: target, reason });
-						updateSearch(DRILL_IN_RESET);
-					}}
 				/>
 			)}
 		</PageLayout>
 	);
 }
 
-interface UserViewPanelProps {
-	viewed: ViewedUser;
-	user: UserViewUser;
-	workspace: UserViewWorkspaceState;
-	search: UserViewSearch;
-	onSearchChange: (patch: Partial<UserViewSearch>) => void;
-	onExit: () => void;
-}
-
-function UserViewPanel({
-	viewed,
+function UserViewEntry({
+	workspaceSlug,
+	workspaceName,
 	user,
-	workspace,
-	search,
-	onSearchChange,
-	onExit,
-}: UserViewPanelProps) {
-	const section = search.section ?? "practices";
-	const selection = hasText(search.group)
-		? { groupSlug: search.group, practiceSlug: search.practice }
-		: undefined;
-	const practices = useUserPracticeView(viewed);
-	const group = useUserViewGroup(viewed, selection);
-	const showConversations = section === "conversations";
-	const threadPage = search.threadPage ?? 0;
-	const conversations = useUserViewConversations(viewed, threadPage, showConversations);
-	const conversation = useUserViewConversation(
-		viewed,
-		showConversations ? search.thread : undefined,
-	);
-	useClampedPage(
-		threadPage,
-		conversations.status === "ready" ? conversations.totalPages : undefined,
-		(next) => onSearchChange({ threadPage: pageParam(next) }),
-	);
-
-	// Dismissing the ask is remembered per refusal, so a retry that is refused again asks again.
-	const [dismissed, setDismissed] = useState<unknown>();
-	const refusal = [practices, group, conversations, conversation]
-		.map((state) => (state.status === "error" ? state.error : undefined))
-		.find((error) => stepUpChallengeOf(error) !== undefined);
-	const challenge = stepUpChallengeOf(refusal);
-	const askOpen = challenge !== undefined && refusal !== dismissed;
-	const confirmAccess = useConfirmAccess(askOpen);
+	operatorAccountId,
+	onClose,
+}: {
+	workspaceSlug: string;
+	workspaceName: string;
+	user: UserViewUser;
+	operatorAccountId: number;
+	onClose: () => void;
+}) {
+	const openView = useMutation({
+		mutationFn: async (reason: string) => {
+			const { data } = await getUserViewUser({
+				path: { workspaceSlug, userId: user.userId },
+				headers: { "X-User-View-Reason": encodeURIComponent(reason) },
+				throwOnError: true,
+			});
+			return data;
+		},
+	});
+	const challenge = stepUpChallengeOf(openView.error);
+	const confirmAccess = useConfirmAccess(challenge !== undefined);
 
 	return (
-		<div className="grid gap-6">
-			<UserViewBanner
-				name={user.name ?? user.login}
-				workspace={workspace.status === "ready" ? workspace.displayName : viewed.workspaceSlug}
-				hasAccount={user.accountId != null}
-				onExit={onExit}
-			/>
-			<UserViewNotices state={workspace} />
-			<Tabs
-				className="gap-4"
-				value={section}
-				onValueChange={(value) =>
-					onSearchChange({ section: userViewSearchSchema.shape.section.parse(value) })
-				}
-			>
-				<TabsList className="h-10 w-full p-1 sm:w-fit">
-					<TabsTrigger value="practices">Practices</TabsTrigger>
-					<TabsTrigger value="conversations">Conversations</TabsTrigger>
-				</TabsList>
-				<TabsContent value="practices">
-					<UserViewPractices
-						practices={practices}
-						view={selection ? { kind: "group", selection, group } : { kind: "overview" }}
-						skeletonRows={USER_VIEW_RUNS_PAGE_SIZE}
-						onOpenGroup={(groupSlug) => onSearchChange({ group: groupSlug })}
-						onSelectPractice={(practiceSlug) => onSearchChange({ practice: practiceSlug })}
-						onBack={() => onSearchChange({ group: undefined, practice: undefined })}
-					/>
-				</TabsContent>
-				<TabsContent value="conversations">
-					{hasText(search.thread) ? (
-						<UserViewConversationThread
-							state={conversation}
-							onBack={() => onSearchChange({ thread: undefined })}
-						/>
-					) : (
-						<UserViewConversations
-							state={conversations}
-							page={threadPage}
-							onPageChange={(next) => onSearchChange({ threadPage: pageParam(next) })}
-							onOpen={(threadId) => onSearchChange({ thread: threadId })}
-						/>
-					)}
-				</TabsContent>
-			</Tabs>
+		<>
+			{challenge === undefined && (
+				<UserViewDialog
+					name={user.name ?? user.login}
+					isPending={openView.isPending}
+					error={openView.isError ? problemDetailOf(openView.error) : undefined}
+					onClose={onClose}
+					onConfirm={(reason) =>
+						openView.mutate(reason, {
+							onSuccess: (data) =>
+								startUserView({
+									operatorAccountId,
+									workspaceSlug,
+									workspaceName,
+									userId: data.userId,
+									login: data.login,
+									name: hasText(data.name) ? data.name : data.login,
+									hasAccount: data.accountId != null,
+									reason,
+								}),
+						})
+					}
+				/>
+			)}
 			<ConfirmAccessDialog
-				open={askOpen}
+				open={challenge !== undefined}
 				onOpenChange={(open) => {
 					if (!open) {
-						setDismissed(refusal);
+						openView.reset();
 					}
 				}}
 				maxAgeSeconds={challenge?.maxAgeSeconds}
@@ -237,6 +144,6 @@ function UserViewPanel({
 				onRetry={confirmAccess.retry}
 				onSignIn={confirmAccess.signIn}
 			/>
-		</div>
+		</>
 	);
 }

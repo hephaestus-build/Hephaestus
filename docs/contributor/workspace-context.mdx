@@ -30,20 +30,23 @@ public class TeamController {
 }
 ```
 
-That's it. The filter handles slug resolution, membership checks, and 403/404 responses.
+The filter resolves the slug and checks workspace access. Controllers and repository queries must still
+scope their operations to the supplied workspace.
 
 ## What You Get
 
-| Annotation | Effect |
-|------------|--------|
-| `@WorkspaceScopedController` | Adds `/workspaces/{workspaceSlug}` prefix to all routes |
-| `WorkspaceContext` parameter | Auto-injected with workspace ID, slug, and user's roles |
-| `@RequireAtLeastWorkspaceAdmin` | Requires ADMIN or OWNER role |
-| `@RequireWorkspaceOwner` | Requires OWNER role only |
+| Annotation                      | Effect                                                  |
+| ------------------------------- | ------------------------------------------------------- |
+| `@WorkspaceScopedController`    | Adds `/workspaces/{workspaceSlug}` prefix to all routes |
+| `WorkspaceContext` parameter    | Auto-injected with workspace ID, slug, and user's roles |
+| `@RequireAtLeastWorkspaceAdmin` | Requires ADMIN or OWNER role                            |
+| `@RequireWorkspaceOwner`        | Requires OWNER role only                                |
 
 ## Authorization
 
-Super admins (accounts with the `APP_ADMIN` role — authority `app_admin` in the JWT, managed from `/admin/users`) are automatically elevated to workspace ADMIN level for workspaces where they have membership. They must be members of the workspace (any role) to access it, but their permissions are elevated to ADMIN. They cannot perform OWNER-only operations (ownership transfer remains explicit).
+Instance admins can access active workspaces as ADMIN without a membership or an SCM identity.
+Elevation does not grant OWNER; an explicit OWNER membership still permits owner-only operations.
+The privilege and audit policy lives in [Instance administration](./instance-admin.md#who-is-an-instance-admin).
 
 Check roles via the context:
 
@@ -53,8 +56,7 @@ if (ctx.hasRole(WorkspaceRole.OWNER)) {
 }
 
 if (!ctx.hasMembership()) {
-    // user has no role in this workspace
-    // Note: super admins still need workspace membership
+    // no effective workspace role (for example, a public read by a non-member)
 }
 ```
 
@@ -70,9 +72,54 @@ public void delete(WorkspaceContext ctx, @PathVariable Long id) { ... }
 public void updateSettings(WorkspaceContext ctx, @RequestBody SettingsDTO dto) { ... }
 ```
 
+## Account identity resolution
+
+Membership rows are keyed on SCM users, not accounts. The account-keyed schema in
+[ADR 0019](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0019-workspace-membership-keyed-on-account.md) is proposed, not implemented.
+`CurrentAccountUsers` resolves an account's non-disabled identity links to existing SCM actors by
+provider id and immutable provider subject. It does not provision actors or fall back to usernames,
+display names, or cached actor references. No resolvable links means no SCM actors, not a restriction
+on public reads or instance-admin elevation.
+
+`AccountWorkspaceMembershipQuery` uses that resolver for cross-module membership reads. The effective
+role is the strongest role across the account's linked workspace members. The representative actor is
+instead the first-linked actor that currently holds membership, using identity-link id order. HTTP
+requests and provider attribution use that same selection. Role changes and newly added links do not
+replace an existing eligible representative; losing or disabling its link or membership can change it.
+A failure in this cross-module query propagates rather than returning an empty membership list.
+
+Slack and Outline attribution first resolve the provider subject and provider workspace identity
+(Slack team or Outline team), then require membership in the target Hephaestus workspace. Account
+status and link status are separate checks:
+
+- Historical Slack/Outline attribution and account export queries require non-disabled links but do
+  not require an ACTIVE account. They do not restore erased data or disabled links.
+- Slack mentor admission, account-linked App Home reads, research preference changes, and outgoing
+  feedback recipient resolution require an ACTIVE account as well as non-disabled links.
+
+Account preference exports contain one actor's preferences: the first-linked actor that already
+resolves through `CurrentAccountUsers`. If that actor has no preferences row, the export omits
+preferences rather than trying another actor. Account settings instead select the first active
+GitHub or GitLab link and may provision its missing actor, so the two paths can select different
+actors before provisioning. Settings preserve an existing actor's provider-synced profile. If a
+missing actor's saved signup username belongs to another native id on the same provider, provisioning
+returns `409 Conflict` rather than reassigning the username. A non-numeric provider subject also
+returns `409`; this path does not fetch fresh provider data.
+
+Workspace creation resolves the authenticated account's verified actors directly because there is no
+workspace context to pin yet. Workspace-scoped developer reads require the pinned actor; an elevated
+instance administrator without membership has no developer identity and never inherits one from a
+display login. GitHub installation attachment follows the immutable identity requirements documented
+in [GitHub integration](../admin/github-integration#workspace-attachment).
+
 ## Async Work
 
-When spawning background tasks, wrap the runnable to preserve context:
+`WorkspaceContextExecutor.wrap` captures the workspace context and MDC for a background task; it does
+not propagate Spring authentication or `CurrentScmIdentityHolder`. Tasks that need the authenticated
+actor must carry that identity separately. Mentor turns do this explicitly: they copy the verified
+actor id and display login to the turn thread and clear them in `finally`.
+
+For work that needs only workspace context:
 
 ```java
 CompletableFuture.runAsync(

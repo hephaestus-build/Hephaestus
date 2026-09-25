@@ -73,14 +73,9 @@ public class PracticeStandingService {
     public StandingSnapshot getStandingSnapshot(Long workspaceId) {
         return currentDeveloperLookup
                 .currentDeveloperId()
-                .map(developerId -> getStandingSnapshot(workspaceId, developerId))
+                .map(developerId -> getStandingSnapshots(workspaceId, developerId, List.of(clock.instant()))
+                        .getFirst())
                 .orElse(StandingSnapshot.EMPTY);
-    }
-
-    /** One developer's standings as they stand now. */
-    public StandingSnapshot getStandingSnapshot(Long workspaceId, Long developerId) {
-        return getStandingSnapshots(workspaceId, developerId, List.of(clock.instant()))
-                .getFirst();
     }
 
     /**

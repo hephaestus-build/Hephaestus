@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus;
 
-import de.tum.cit.aet.hephaestus.account.userview.UserViewAuthorizationConfig;
 import de.tum.cit.aet.hephaestus.core.UserViewRead;
+import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
@@ -151,7 +151,7 @@ public class OpenAPIConfiguration {
         return (operation, handler) -> {
             if (handler.hasMethodAnnotation(UserViewRead.class)) {
                 operation.addParametersItem(new HeaderParameter()
-                        .name(UserViewAuthorizationConfig.REASON_HEADER)
+                        .name(UserViewContextHolder.REASON_HEADER)
                         .required(true)
                         .schema(new StringSchema())
                         .description("Why the administrator views this user: percent-encoded UTF-8, 1–500 characters"));

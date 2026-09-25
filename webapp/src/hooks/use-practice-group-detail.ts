@@ -37,7 +37,8 @@ export interface PracticeGroupDetail {
 	/** The open practice, whether or not a group level is open under it. */
 	practice?: PracticeStanding;
 	feed: ReviewRunFeedState;
-	respond: FeedbackResponseWrite["respond"];
+	/** Absent when this reader may not respond, which leaves no response controls. */
+	respond?: FeedbackResponseWrite["respond"];
 	pendingResponses: FeedbackResponseWrite["pendingResponses"];
 }
 

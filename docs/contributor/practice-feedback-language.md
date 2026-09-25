@@ -188,3 +188,19 @@ the named behavior and its assessment stay fixed; the evidence for presence chan
 has a concrete avoidance occasion. Merely failing to mention deletion on unrelated work does not
 earn that observation. If required guidance was not captured, none of these absence claims is
 available. If there is no material change to check, record the evidenced lack of occasion instead.
+
+## Member onboarding and AI choices
+
+**Member onboarding** is first-visit setup for a person who already belongs to a workspace. It is not a request for access, an approval flow, or research consent. A workspace *needs setup* while its page is still owed. The member-facing name for the account-wide answer is **your AI choice**; **Member onboarding** names the workspace owner's configuration page. Do not call either one a *workspace preference* or a *workspace default*.
+
+An admin declares a model's **Operated by** fact as **Your organisation** or **A provider**. Hephaestus derives **In-house** (`IN_HOUSE`) or **Cloud** (`CLOUD`) from that declaration; without it, the model is **Not declared** (`UNDECLARED`). The declaration does not verify a provider's location, retention, or training terms. An optional model brand is a separate display label selected by the admin, not evidence of who operates the model. Unknown brands have no logo. The [admin AI provider guide](/admin/ai-providers#data-handling-and-members-ai-choices) owns the configuration and routing details.
+
+A developer's **AI choice** is a ceiling held by the account across its workspaces:
+
+| Answer | Meaning |
+| --- | --- |
+| **In-house** (`IN_HOUSE_ONLY`) | Allow only declared In-house AI processing for practice reviews and Heph. |
+| **Cloud** (`CLOUD`) | Also allow declared Cloud processing; In-house still qualifies. |
+| **No AI** (`NO_AI`) | Stop new AI requests for this person's work in practice reviews and Heph. It does not stop source synchronisation, storage, authorised reads, or requests already sent. |
+
+A choice is a boundary, not a selection of today's models. A workspace can add or remove models without asking the member again. **Not declared** sits outside both explicit AI ceilings and can serve only someone who has not chosen where a choice is optional. **Members who haven't chosen** is the admin label for that row. An AI answer with no ready model here is **not set up here yet**; a broken account integration is **unavailable right now**. Keep both visible without silently changing the person's answer. The [user privacy guide](/user/privacy#your-ai-choice) owns the member-facing data boundary.

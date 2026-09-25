@@ -92,6 +92,26 @@ export const AdminUser: Story = {
 	},
 };
 
+export const ReadOnlyUserView: Story = {
+	args: {
+		username: "alex",
+		isAdmin: false,
+		isAppAdmin: false,
+		hasMentorAccess: true,
+		readOnly: true,
+		context: "mentor",
+		mentorThreads: [
+			{ id: "1", title: "React Hooks Best Practices", createdAt: new Date(STORY_NOW) },
+		] satisfies ChatThreadSummary[],
+		mentorThreadsLoading: false,
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("React Hooks Best Practices")).toBeVisible();
+		await expect(canvas.queryByText("New chat")).not.toBeInTheDocument();
+		await expect(canvas.queryByText("User settings")).not.toBeInTheDocument();
+	},
+};
+
 export const AdminContext: Story = {
 	args: {
 		username: "admin",

@@ -11,6 +11,11 @@
 
 import { HttpResponse, http, type PathParams } from "msw";
 
+import type { AccountAiChoice, AccountAiChoiceRequest } from "@/api/types.gen";
+import type { Wire } from "@/lib/dates";
+
+import { workspaceOnboarding } from "./fixtures/onboarding";
+
 import {
 	adminUsers,
 	currentUser,
@@ -31,6 +36,19 @@ interface AdminUserPatch {
 }
 
 export const handlers = [
+	http.get("*/workspaces/:workspaceSlug/onboarding/me", () =>
+		HttpResponse.json(workspaceOnboarding()),
+	),
+	// The account's AI choice: unanswered by default, so no story or test inherits an answer.
+	http.get("*/user/ai-choice", () => HttpResponse.json({})),
+	http.get("*/user/settings", () => HttpResponse.json({ practiceFeedbackDeliveryEnabled: true })),
+	http.put<PathParams, AccountAiChoiceRequest>("*/user/ai-choice", async ({ request }) => {
+		const body = await request.json();
+		return HttpResponse.json({
+			choice: body.choice,
+			updatedAt: new Date().toISOString(),
+		} satisfies Wire<AccountAiChoice>);
+	}),
 	// --- current user -------------------------------------------------------
 	http.get("*/user", () => HttpResponse.json(currentUser)),
 	http.get("*/user/notification-preferences", () =>

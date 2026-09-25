@@ -1,6 +1,24 @@
+import { ChevronsUpDownIcon } from "lucide-react";
 import { useId } from "react";
 
+import {
+	AI_CONNECTION_PLATFORM_META,
+	AI_CONNECTION_PLATFORMS,
+	type AiConnectionPlatform,
+} from "@/components/icons/ai-connection-platform-logos";
+import { AiMark } from "@/components/icons/AiMark";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+	Combobox,
+	ComboboxContent,
+	ComboboxEmpty,
+	ComboboxIcon,
+	ComboboxItem,
+	ComboboxItemIndicator,
+	ComboboxList,
+	ComboboxSearchInput,
+	ComboboxTrigger,
+} from "@/components/ui/combobox";
 import {
 	Field,
 	FieldContent,
@@ -45,11 +63,21 @@ export interface LlmConnectionFieldsValue {
 	/** Always blank on open: a stored key is never read back to the browser. */
 	apiKey: string;
 	clearApiKey: boolean;
+	connectionPlatform?: AiConnectionPlatform;
+}
+
+const PLATFORM_OPTIONS = ["NONE", ...AI_CONNECTION_PLATFORMS] as const;
+
+function platformLabel(platform: (typeof PLATFORM_OPTIONS)[number]): string {
+	return platform === "NONE"
+		? "Not listed or unknown"
+		: AI_CONNECTION_PLATFORM_META[platform].label;
 }
 
 type EditedConnection = OpenAiConnectionIdentity & {
 	displayName: string;
 	authMode?: LlmAuthMode;
+	connectionPlatform?: AiConnectionPlatform;
 };
 
 export function connectionFieldsValueOf(
@@ -63,6 +91,7 @@ export function connectionFieldsValueOf(
 		authMode: connection?.authMode ?? "BEARER",
 		apiKey: "",
 		clearApiKey: false,
+		connectionPlatform: connection?.connectionPlatform,
 	};
 }
 
@@ -101,6 +130,8 @@ export function LlmConnectionFields({
 	const presetLabelId = useId();
 	const responsesApiId = useId();
 	const baseUrlId = useId();
+	const connectionPlatformId = useId();
+	const connectionPlatformLabelId = useId();
 	const authModeId = useId();
 	const authModeLabelId = useId();
 	const apiKeyId = useId();
@@ -209,6 +240,50 @@ export function LlmConnectionFields({
 					</FieldDescription>
 				)}
 				{hasText(errors.baseUrl) && <FieldError id={baseUrlErrorId}>{errors.baseUrl}</FieldError>}
+			</Field>
+
+			<Field>
+				<FieldLabel id={connectionPlatformLabelId} htmlFor={connectionPlatformId}>
+					Service receiving requests{" "}
+					<span className="font-normal text-muted-foreground">(optional)</span>
+				</FieldLabel>
+				<Combobox
+					items={PLATFORM_OPTIONS}
+					value={value.connectionPlatform ?? "NONE"}
+					onValueChange={(platform) => {
+						if (platform !== null) {
+							update({ connectionPlatform: platform === "NONE" ? undefined : platform });
+						}
+					}}
+					itemToStringLabel={platformLabel}
+				>
+					<ComboboxTrigger id={connectionPlatformId} className="w-full justify-between">
+						<span className="flex min-w-0 items-center gap-2">
+							{value.connectionPlatform && <AiMark platform={value.connectionPlatform} size="sm" />}
+							<span className="truncate">{platformLabel(value.connectionPlatform ?? "NONE")}</span>
+						</span>
+						<ComboboxIcon render={<ChevronsUpDownIcon className="size-4 opacity-50" />} />
+					</ComboboxTrigger>
+					<ComboboxContent align="start">
+						<ComboboxSearchInput placeholder="Search services…" aria-label="Search services" />
+						<ComboboxEmpty>
+							No matching service. Leave this blank if it is not listed.
+						</ComboboxEmpty>
+						<ComboboxList aria-labelledby={connectionPlatformLabelId}>
+							{(platform: (typeof PLATFORM_OPTIONS)[number]) => (
+								<ComboboxItem key={platform} value={platform}>
+									{platform !== "NONE" && <AiMark platform={platform} size="sm" />}
+									<span className="truncate">{platformLabel(platform)}</span>
+									<ComboboxItemIndicator />
+								</ComboboxItem>
+							)}
+						</ComboboxList>
+					</ComboboxContent>
+				</Combobox>
+				<FieldDescription>
+					For example, Logos, Azure, or a gateway. Its mark does not say who operates the model or
+					where data stays.
+				</FieldDescription>
 			</Field>
 
 			{!isEdit && value.preset === "OTHER" && (

@@ -116,4 +116,18 @@ describe("validateLlmModelForm", () => {
 	it("skips the upstream id on edit, where the form cannot change it", () => {
 		expect(validateLlmModelForm({ ...validModel, upstreamModelId: undefined })).toStrictEqual({});
 	});
+
+	it("keeps an undeclared model saveable, so upgraded catalogs are not locked", () => {
+		expect(validateLlmModelForm(validModel)).toStrictEqual({});
+	});
+
+	it("accepts a declared operator without claiming to verify the provider agreement", () => {
+		const declared = { ...validModel, operatedBy: "PROVIDER" } as const;
+		expect(validateLlmModelForm(declared)).toStrictEqual({});
+	});
+
+	it("bounds the admin note to the column that stores it", () => {
+		const errors = validateLlmModelForm({ ...validModel, dataHandlingNote: "x".repeat(201) });
+		expect(errors.dataHandlingNote).toMatch(/200 characters or fewer/u);
+	});
 });

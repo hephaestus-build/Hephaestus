@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, fn } from "storybook/test";
+import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import { surveyInvitation } from "@/components/product-feedback/fixtures";
 import { ProductFeedbackMenu } from "@/components/product-feedback/ProductFeedbackMenu";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { expectSettledVisible } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
 import Header from "./Header";
@@ -122,6 +123,22 @@ export const NoWorkspace: Story = {
 		isAuthenticated: true,
 		isLoading: false,
 		workspaceSlug: undefined,
+	},
+};
+
+/** During a user view the menu holds only what acts on the signed-in administrator. */
+export const ReadOnly: Story = {
+	args: {
+		isAuthenticated: true,
+		isLoading: false,
+		readOnly: true,
+	},
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Account" }));
+		const menu = within(await screen.findByRole("menu"));
+		await expectSettledVisible(menu.getByRole("menuitem", { name: "Sign Out" }));
+		await expect(menu.queryByRole("menuitem", { name: "My Profile" })).not.toBeInTheDocument();
+		await expect(menu.queryByRole("menuitem", { name: "Settings" })).not.toBeInTheDocument();
 	},
 };
 

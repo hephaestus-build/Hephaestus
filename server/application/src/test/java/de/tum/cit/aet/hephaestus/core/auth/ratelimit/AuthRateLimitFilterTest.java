@@ -245,13 +245,15 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         AuthRateLimitFilter f = filter(props());
 
         f.doFilter(
-                new MockHttpServletRequest("GET", "/workspaces/example/user-view/users/1/practices"),
+                new MockHttpServletRequest("GET", "/workspaces/example/user-view/users/1"),
                 new MockHttpServletResponse(),
                 mock(FilterChain.class));
-        f.doFilter(
-                new MockHttpServletRequest("GET", "/workspaces/other/user-view/users/2/conversations"),
-                new MockHttpServletResponse(),
-                mock(FilterChain.class));
+        MockHttpServletRequest profile = new MockHttpServletRequest("GET", "/workspaces/example/profile/alex");
+        profile.addHeader("X-User-View-User", "1");
+        f.doFilter(profile, new MockHttpServletResponse(), mock(FilterChain.class));
+        MockHttpServletRequest conversation = new MockHttpServletRequest("GET", "/workspaces/other/mentor/threads/abc");
+        conversation.addHeader("X-User-View-User", "2");
+        f.doFilter(conversation, new MockHttpServletResponse(), mock(FilterChain.class));
         f.doFilter(new MockHttpServletRequest("GET", "/user"), new MockHttpServletResponse(), mock(FilterChain.class));
 
         assertThat(store).containsOnlyKeys("user-view:acct:99");
@@ -374,6 +376,24 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         FilterChain chain = mock(FilterChain.class);
 
         f.doFilter(request, response, chain);
+
+        verify(chain, never()).doFilter(request, response);
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());
+    }
+
+    @Test
+    void viewedReadFailsClosedWhenBucketBackendThrows() throws Exception {
+        authenticateAs("42");
+        BucketResolver throwing = (key, config) -> {
+            throw new RuntimeException("bucket store down");
+        };
+        AuthRateLimitFilter filter = new AuthRateLimitFilter(props(), throwing, objectMapper, metrics);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/workspaces/demo/profile/alex");
+        request.addHeader("X-User-View-User", "7");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
 
         verify(chain, never()).doFilter(request, response);
         assertThat(response.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());

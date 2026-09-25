@@ -17,7 +17,9 @@ import { useFeedbackResponseWrite } from "@/hooks/use-feedback-response-write";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { contributingPractices } from "@/lib/practice-standing";
 import { useSearchPatch } from "@/lib/search-params";
+import { useAuth } from "@/runtime/auth/AuthContext";
 import { resolveCurrentUser } from "@/runtime/auth/guard";
+import { getUserViewSession } from "@/runtime/user-view/session";
 
 const ACTIVITY_PAGE_SIZE = 10;
 
@@ -32,7 +34,9 @@ export const Route = createFileRoute(
 	remountDeps: ({ params }) => params,
 	beforeLoad: async ({ context, params }) => {
 		const user = await resolveCurrentUser(context.queryClient);
-		const isOwnProfile = user?.username?.toLowerCase() === params.username.toLowerCase();
+		const isOwnProfile =
+			(getUserViewSession()?.login ?? user?.username)?.toLowerCase() ===
+			params.username.toLowerCase();
 		if (!isOwnProfile) {
 			throw redirect({
 				to: "/w/$workspaceSlug/user/$username",
@@ -72,6 +76,7 @@ function PracticeGroupRoute() {
 }
 
 function PracticeGroupDetail() {
+	const readOnly = useAuth().userView !== undefined;
 	const { workspaceSlug, username, groupSlug } = Route.useParams();
 	const { practice: selectedPracticeSlug } = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
@@ -130,7 +135,7 @@ function PracticeGroupDetail() {
 			}}
 			feed={reviewRunFeedState(activityQuery)}
 			skeletonRows={ACTIVITY_PAGE_SIZE}
-			onRespond={respond}
+			onRespond={readOnly ? undefined : respond}
 			pendingResponses={pendingResponses}
 			{...loadProps(
 				combinePanelStates(

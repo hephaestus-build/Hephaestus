@@ -41,6 +41,7 @@ export interface HeaderProps {
 	username?: string;
 	avatarUrl?: string;
 	workspaceSlug?: string;
+	readOnly?: boolean;
 	feedbackDialog?: React.ReactNode;
 	onLogin: () => void;
 	onLogout: () => void;
@@ -57,6 +58,7 @@ export default function Header({
 	name,
 	username,
 	workspaceSlug,
+	readOnly = false,
 	feedbackDialog,
 	avatarUrl,
 	onLogin,
@@ -164,35 +166,39 @@ export default function Header({
 										</DropdownMenuLabel>
 									</DropdownMenuGroup>
 									<DropdownMenuSeparator />
-									<DropdownMenuGroup>
-										{hasWorkspace && hasUsername ? (
-											<Link
-												to="/w/$workspaceSlug/user/$username"
-												params={{
-													workspaceSlug: workspaceSlug ?? "",
-													username: username ?? "",
-												}}
-												className="[&]:no-underline"
-											>
-												<DropdownMenuItem>
-													<User />
-													<span>My Profile</span>
-												</DropdownMenuItem>
-											</Link>
-										) : (
-											<DropdownMenuItem disabled title="Join a workspace to view your profile">
-												<User />
-												<span>My Profile</span>
-											</DropdownMenuItem>
-										)}
-										<Link to="/settings" className="[&]:no-underline">
-											<DropdownMenuItem>
-												<Settings />
-												<span>Settings</span>
-											</DropdownMenuItem>
-										</Link>
-									</DropdownMenuGroup>
-									<DropdownMenuSeparator />
+									{!readOnly && (
+										<>
+											<DropdownMenuGroup>
+												{hasWorkspace && hasUsername ? (
+													<Link
+														to="/w/$workspaceSlug/user/$username"
+														params={{
+															workspaceSlug: workspaceSlug ?? "",
+															username: username ?? "",
+														}}
+														className="[&]:no-underline"
+													>
+														<DropdownMenuItem>
+															<User />
+															<span>My Profile</span>
+														</DropdownMenuItem>
+													</Link>
+												) : (
+													<DropdownMenuItem disabled title="Join a workspace to view your profile">
+														<User />
+														<span>My Profile</span>
+													</DropdownMenuItem>
+												)}
+												<Link to="/settings" className="[&]:no-underline">
+													<DropdownMenuItem>
+														<Settings />
+														<span>Settings</span>
+													</DropdownMenuItem>
+												</Link>
+											</DropdownMenuGroup>
+											<DropdownMenuSeparator />
+										</>
+									)}
 									<DropdownMenuItem onClick={onLogout}>
 										<LogOut />
 										<span>Sign Out</span>

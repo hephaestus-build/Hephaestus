@@ -4,37 +4,18 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.modulith.NamedInterface;
 
-/**
- * The mentor-owned seam for provisioning a {@code chat_thread} that a non-web surface (a Slack DM) will drive.
- * Exposed as part of the {@code mentor-chat} Modulith named interface so {@code integration.slack} can ask the
- * mentor module to create the thread — rather than reaching across the module boundary with a raw
- * {@code INSERT INTO chat_thread}. The Slack side then persists only its own {@code mentor_slack_thread} mapping
- * row (which carries the returned id as a scalar cross-module reference).
- */
+/** Owns Slack DM chat threads; the Slack integration owns their provider mapping rows. */
 @NamedInterface(name = "mentor-chat")
 public interface MentorSlackThreadService {
     /**
-     * Return the id of the {@code chat_thread} (surface {@code SLACK_DM}) that backs a Slack DM, creating it if
-     * necessary. When {@code chatThreadId} is non-null and already exists for {@code workspaceId}, it is returned
-     * unchanged; otherwise a fresh thread is created, owned by the developer resolved from {@code developerLogin}.
-     *
-     * @param workspaceId    the workspace the thread belongs to
-     * @param chatThreadId   an existing thread id to reuse, or {@code null} to mint a new one
-     * @param developerLogin the SCM login whose {@code User} owns the thread
-     * @return the id of the backing {@code chat_thread}
+     * Returns an existing thread in this workspace, or creates a Slack DM thread for the verified actor.
+     * A null thread id allocates a new id; callers must authenticate the actor before invoking this method.
      */
-    UUID ensureSlackThread(long workspaceId, @Nullable UUID chatThreadId, String developerLogin);
+    UUID ensureSlackThread(long workspaceId, @Nullable UUID chatThreadId, long developerId);
 
     /**
-     * Erase every Slack-originated ({@code SLACK_DM} surface) {@code chat_thread} — and its cascaded
-     * {@code chat_message} rows — for {@code workspaceId}. The mentor-owned counterpart to
-     * {@link #ensureSlackThread}: it lets {@code integration.slack} drop the derived mentor content a Slack DM
-     * created (a common GDPR-erasure trigger on app uninstall) without reaching across the module boundary with a
-     * raw {@code DELETE}. The workspace's web mentor history ({@code WEB} surface) is untouched.
-     *
-     * <p>Idempotent (a bulk delete is a no-op the second time), so it is safe under Slack's uninstall redelivery.
-     *
-     * @return the number of Slack DM threads deleted
+     * Deletes this workspace's Slack DM threads and their messages, leaving web threads untouched.
+     * Safe to repeat on uninstall redelivery; returns the number of threads deleted.
      */
     int purgeSlackThreads(long workspaceId);
 }

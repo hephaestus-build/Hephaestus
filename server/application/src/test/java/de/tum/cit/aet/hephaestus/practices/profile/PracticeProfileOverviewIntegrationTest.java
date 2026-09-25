@@ -35,6 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -64,6 +65,9 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private Workspace workspace;
     private User developer;
@@ -120,6 +124,26 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
 
         // The developer addressed the older feedback after the latest run had already spoken.
         markAddressed(olderFeedback, developer, LATEST_RUN_AT.plus(Duration.ofHours(2)));
+    }
+
+    @Test
+    @DisplayName("an instance administrator viewing as the developer reads their overview and delivers nothing")
+    void shouldServeTheViewedDevelopersOverviewAndDeliverNothingWhenAnAdministratorViewsIt() {
+        readAsUserView(OVERVIEW_URI, workspace, developer)
+                .jsonPath("$.latestRun.jobId")
+                .isEqualTo(latestRun.getId().toString())
+                .jsonPath("$.changes[?(@.type == 'FEEDBACK_NEW')].feedbackId")
+                .isEqualTo(latestFeedback.getId().toString());
+
+        assertThat(feedbackRepository.findById(latestFeedback.getId()))
+                .get()
+                .extracting(Feedback::getDeliveryState)
+                .isEqualTo(FeedbackDeliveryState.PREPARED);
+        Long viewsRecorded = jdbc.queryForObject(
+                "SELECT count(*) FROM auth_event WHERE event_type = 'USER_VIEW' AND viewed_user_id = ?",
+                Long.class,
+                developer.getId());
+        assertThat(viewsRecorded).isEqualTo(1L);
     }
 
     @Test

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProviderAvailability;
@@ -89,9 +90,15 @@ public class WorkspaceQueryService {
 
     /**
      * Builds {@link WorkspaceListItemDTO}s for every workspace accessible to the
-     * current authenticated user.
+     * current authenticated user. During a user view, only the viewed workspace.
      */
     public List<WorkspaceListItemDTO> findAccessibleWorkspaceListItems() {
+        var viewed = UserViewContextHolder.get();
+        if (viewed != null) {
+            return workspaceRepository.findById(viewed.workspaceId()).stream()
+                    .map(workspace -> WorkspaceListItemDTO.from(workspace, connectionService))
+                    .toList();
+        }
         return findAccessibleWorkspaces().stream()
                 .map(w -> WorkspaceListItemDTO.from(w, connectionService))
                 .toList();

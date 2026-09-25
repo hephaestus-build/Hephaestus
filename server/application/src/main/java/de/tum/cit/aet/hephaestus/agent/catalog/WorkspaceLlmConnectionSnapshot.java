@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
+import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import java.net.URI;
 import java.net.URISyntaxException;
 import org.jspecify.annotations.Nullable;
@@ -13,6 +14,7 @@ import org.jspecify.annotations.Nullable;
 record WorkspaceLlmConnectionSnapshot(
         String slug,
         String displayName,
+        @Nullable LlmConnectionPlatform connectionPlatform,
         @Nullable String baseUrl,
         String apiProtocol,
         LlmAuthMode authMode,
@@ -23,6 +25,7 @@ record WorkspaceLlmConnectionSnapshot(
         return new WorkspaceLlmConnectionSnapshot(
                 c.getSlug(),
                 c.getDisplayName(),
+                c.getConnectionPlatform(),
                 credentialFreeBaseUrl(c.getBaseUrl()),
                 c.getApiProtocol(),
                 c.getAuthMode(),
