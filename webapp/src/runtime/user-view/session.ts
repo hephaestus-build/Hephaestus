@@ -1,12 +1,13 @@
 import { z } from "zod";
 
-import environment from "@/environment";
+import { apiBasePath } from "@/runtime/api-base-path";
 
-const STORAGE_KEY = "hephaestus.user-view";
+export const USER_VIEW_STORAGE_KEY = "hephaestus.user-view";
 
 const userViewSchema = z.object({
 	operatorAccountId: z.number().int().positive(),
 	workspaceSlug: z.string().regex(/^[a-z0-9][a-z0-9-]{2,50}$/u),
+	workspaceName: z.string().min(1),
 	userId: z.number().int().positive(),
 	login: z.string().min(1),
 	name: z.string().min(1),
@@ -21,7 +22,7 @@ export function getUserViewSession(): UserViewSession | undefined {
 		return undefined;
 	}
 	try {
-		const stored = sessionStorage.getItem(STORAGE_KEY);
+		const stored = sessionStorage.getItem(USER_VIEW_STORAGE_KEY);
 		if (stored === null) {
 			return undefined;
 		}
@@ -33,7 +34,7 @@ export function getUserViewSession(): UserViewSession | undefined {
 }
 
 export function startUserView(session: UserViewSession): void {
-	sessionStorage.setItem(STORAGE_KEY, JSON.stringify(userViewSchema.parse(session)));
+	sessionStorage.setItem(USER_VIEW_STORAGE_KEY, JSON.stringify(userViewSchema.parse(session)));
 	window.location.assign(`/w/${session.workspaceSlug}/user/${encodeURIComponent(session.login)}`);
 }
 
@@ -48,7 +49,13 @@ export function exitUserView(): void {
 }
 
 export function clearUserView(): void {
-	sessionStorage.removeItem(STORAGE_KEY);
+	sessionStorage.removeItem(USER_VIEW_STORAGE_KEY);
+}
+
+export function clearUserViewUnlessOperator(accountId: number | undefined): void {
+	if (getUserViewSession()?.operatorAccountId !== accountId) {
+		clearUserView();
+	}
 }
 
 export function applyUserViewHeaders(request: Request): Request {
@@ -56,21 +63,21 @@ export function applyUserViewHeaders(request: Request): Request {
 	if (session === undefined) {
 		return request;
 	}
-	const basePath = new URL(environment.serverUrl, window.location.origin).pathname.replace(
-		/\/$/u,
-		"",
-	);
+	const basePath = apiBasePath();
 	const requestPath = new URL(request.url).pathname;
 	const path =
 		basePath && requestPath.startsWith(`${basePath}/`)
 			? requestPath.slice(basePath.length)
 			: requestPath;
+	// These are the administrator's own account; the server decides which reads accept the view.
 	if (
 		path.startsWith("/auth/") ||
 		path.startsWith("/oauth/") ||
 		path === "/user" ||
 		path === "/user/consent" ||
-		path === "/user/features"
+		path === "/user/features" ||
+		path === "/user/identities" ||
+		path === "/identity-providers"
 	) {
 		return request;
 	}

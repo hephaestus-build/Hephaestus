@@ -10,8 +10,8 @@ import {
 import { TracePage } from "@/components/practice-trace/TracePage";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
+import { useAuth } from "@/runtime/auth/AuthContext";
 import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
-import { getUserViewSession } from "@/runtime/user-view/session";
 
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/reviews/$artifactKind/$artifactId",
@@ -30,7 +30,7 @@ export const Route = createFileRoute(
 });
 
 function ReviewActivityDetailRoute() {
-	const readOnly = getUserViewSession() !== undefined;
+	const readOnly = useAuth().userView !== undefined;
 	const { workspaceSlug, artifactKind } = Route.useParams();
 	const { artifactId } = Route.useLoaderData();
 	const queryClient = useQueryClient();
@@ -70,8 +70,11 @@ function ReviewActivityDetailRoute() {
 			onRetry={() => {
 				void trace.refetch();
 			}}
-			onRequestReview={() =>
-				requestReview.mutate({ path: { workspaceSlug }, body: { artifactKind, artifactId } })
+			onRequestReview={
+				readOnly
+					? undefined
+					: () =>
+							requestReview.mutate({ path: { workspaceSlug }, body: { artifactKind, artifactId } })
 			}
 			requestPending={requestReview.isPending}
 			// Read off the mutation rather than mirrored into state: the next accepted ask replaces the

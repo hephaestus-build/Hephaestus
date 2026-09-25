@@ -1,6 +1,6 @@
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeftIcon, Users } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
 import { getUserViewUser } from "@/api/sdk.gen";
@@ -17,7 +17,8 @@ import { useUserViewUsers, useUserViewWorkspace } from "@/hooks/use-user-view";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, stepUpChallengeOf } from "@/lib/problem-detail";
 import { pageParam, useSearchPatch } from "@/lib/search-params";
-import { useAuth } from "@/runtime/auth/AuthContext";
+import { hasText } from "@/lib/text";
+import { currentUserQueryOptions } from "@/runtime/auth/guard";
 import { startUserView } from "@/runtime/user-view/session";
 
 const searchSchema = z.object({
@@ -39,6 +40,7 @@ function WorkspaceUsersRoute() {
 	const page = searchPage ?? 0;
 	const workspace = useUserViewWorkspace(workspaceSlug);
 	const users = useUserViewUsers(workspaceSlug, page);
+	const operatorAccountId = useQuery(currentUserQueryOptions()).data?.id;
 	const target =
 		users.status === "ready" ? users.users.find((user) => user.userId === selectedId) : undefined;
 
@@ -63,11 +65,13 @@ function WorkspaceUsersRoute() {
 				onPageChange={(next) => updateSearch({ page: pageParam(next) })}
 				onView={(user) => updateSearch({ user: user.userId })}
 			/>
-			{target && (
+			{target && operatorAccountId !== undefined && (
 				<UserViewEntry
 					key={`${workspaceSlug}:${target.userId}`}
 					workspaceSlug={workspaceSlug}
+					workspaceName={workspace.status === "ready" ? workspace.displayName : workspaceSlug}
 					user={target}
+					operatorAccountId={operatorAccountId}
 					onClose={() => updateSearch({ user: undefined })}
 				/>
 			)}
@@ -77,76 +81,60 @@ function WorkspaceUsersRoute() {
 
 function UserViewEntry({
 	workspaceSlug,
+	workspaceName,
 	user,
+	operatorAccountId,
 	onClose,
 }: {
 	workspaceSlug: string;
+	workspaceName: string;
 	user: UserViewUser;
+	operatorAccountId: number;
 	onClose: () => void;
 }) {
-	const { getUserId } = useAuth();
-	const [failure, setFailure] = useState<unknown>();
-	const [pending, setPending] = useState(false);
-	const request = useRef<AbortController | null>(null);
-	const challenge = stepUpChallengeOf(failure);
-	const confirmAccess = useConfirmAccess(challenge !== undefined);
-
-	useEffect(() => () => request.current?.abort(), []);
-
-	const openView = async (reason: string) => {
-		setPending(true);
-		setFailure(undefined);
-		const controller = new AbortController();
-		request.current = controller;
-		try {
+	const openView = useMutation({
+		mutationFn: async (reason: string) => {
 			const { data } = await getUserViewUser({
 				path: { workspaceSlug, userId: user.userId },
 				headers: { "X-User-View-Reason": encodeURIComponent(reason) },
-				signal: controller.signal,
 				throwOnError: true,
 			});
-			if (controller.signal.aborted) {
-				return;
-			}
-			startUserView({
-				operatorAccountId: Number(getUserId()),
-				workspaceSlug,
-				userId: data.userId,
-				login: data.login,
-				name: data.name ?? data.login,
-				hasAccount: data.accountId != null,
-				reason,
-			});
-		} catch (error) {
-			if (controller.signal.aborted) {
-				return;
-			}
-			setFailure(error);
-			setPending(false);
-		}
-	};
+			return data;
+		},
+	});
+	const challenge = stepUpChallengeOf(openView.error);
+	const confirmAccess = useConfirmAccess(challenge !== undefined);
 
 	return (
 		<>
 			{challenge === undefined && (
 				<UserViewDialog
 					name={user.name ?? user.login}
-					isPending={pending}
-					error={failure == null ? undefined : problemDetailOf(failure)}
-					onClose={() => {
-						request.current?.abort();
-						onClose();
-					}}
-					onConfirm={(reason) => {
-						void openView(reason);
-					}}
+					isPending={openView.isPending}
+					error={openView.isError ? problemDetailOf(openView.error) : undefined}
+					onClose={onClose}
+					onConfirm={(reason) =>
+						openView.mutate(reason, {
+							onSuccess: (data) =>
+								startUserView({
+									operatorAccountId,
+									workspaceSlug,
+									workspaceName,
+									userId: data.userId,
+									login: data.login,
+									name: hasText(data.name) ? data.name : data.login,
+									hasAccount: data.accountId != null,
+									reason,
+								}),
+						})
+					}
 				/>
 			)}
 			<ConfirmAccessDialog
 				open={challenge !== undefined}
 				onOpenChange={(open) => {
 					if (!open) {
-						setFailure(undefined);
+						openView.reset();
 					}
 				}}
 				maxAgeSeconds={challenge?.maxAgeSeconds}

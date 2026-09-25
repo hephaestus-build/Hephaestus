@@ -1,22 +1,24 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { MessagesSquare } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
 
 import { getThreadQueryKey, listThreadsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { ChatThreadSummary } from "@/api/types.gen";
+import { EmptyState } from "@/components/common/EmptyState";
 import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { Greeting } from "@/components/mentor/Greeting";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { hasText } from "@/lib/text";
-import { getUserViewSession } from "@/runtime/user-view/session";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/")({
 	component: MentorContainer,
 });
 
 function MentorContainer() {
-	const readOnly = getUserViewSession() !== undefined;
+	const readOnly = useAuth().userView !== undefined;
 	const queryClient = useQueryClient();
 	const navigate = useNavigate({ from: Route.fullPath });
 	const { workspaceSlug } = useActiveWorkspaceSlug();
@@ -73,8 +75,12 @@ function MentorContainer() {
 	}
 	if (readOnly) {
 		return (
-			<div className="flex h-full items-center justify-center p-6 text-muted-foreground">
-				Choose a saved conversation from the sidebar.
+			<div className="flex h-full items-center justify-center p-6">
+				<EmptyState
+					icon={<MessagesSquare />}
+					title="No conversation selected"
+					description="Open a saved conversation from the conversation list."
+				/>
 			</div>
 		);
 	}

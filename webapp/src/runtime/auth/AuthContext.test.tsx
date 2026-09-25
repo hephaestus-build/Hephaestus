@@ -1,35 +1,40 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { toast } from "sonner";
-import { afterEach, expect, it, vi } from "vitest";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { HttpResponse, http } from "msw";
+import { useState } from "react";
+import { afterEach, beforeEach, expect, it } from "vitest";
 
-import { applyUserViewHeaders, getUserViewSession } from "@/runtime/user-view/session";
+import { server } from "@/mocks/server";
+import { clearUserView, getUserViewSession } from "@/runtime/user-view/session";
+import { captureNavigation, restoreNavigation } from "@/test/navigation";
+import { testQueryClient } from "@/test/router-harness";
+import { storeUserView } from "@/test/user-view";
 
-import { authClient } from "./auth-client";
 import { AuthProvider, useAuth } from "./AuthContext";
 
-vi.mock("@tanstack/react-query", async (importOriginal) => ({
-	...(await importOriginal()),
-	useQuery: () => ({
-		data: { id: 7, username: "administrator", roles: [], appRole: "APP_ADMIN" },
-		isPending: false,
-		isError: false,
-	}),
-}));
+beforeEach(() => storeUserView());
 
 afterEach(() => {
-	sessionStorage.clear();
-	vi.restoreAllMocks();
+	clearUserView();
+	restoreNavigation();
 });
 
 function SignOut() {
 	const { logout, username } = useAuth();
+	const [settled, setSettled] = useState(false);
+	const signOut = async () => {
+		await logout();
+		setSettled(true);
+	};
 	return (
 		<>
-			<span>{username}</span>
+			<p>Acting as {username}</p>
+			{settled && <p>Sign-out settled</p>}
 			<button
 				type="button"
 				onClick={() => {
-					logout().catch(() => undefined);
+					void signOut();
 				}}
 			>
 				Sign out
@@ -38,36 +43,37 @@ function SignOut() {
 	);
 }
 
-it("keeps the viewed identity when sign-out fails", async () => {
-	sessionStorage.setItem(
-		"hephaestus.user-view",
-		JSON.stringify({
-			operatorAccountId: 7,
-			workspaceSlug: "acme",
-			userId: 42,
-			login: "alex",
-			name: "Alex",
-			hasAccount: false,
-			reason: "Check feedback",
-		}),
-	);
-	vi.spyOn(authClient, "logout").mockRejectedValue(new Error("Network unavailable"));
-	const error = vi.spyOn(toast, "error").mockReturnValue("");
-
+function renderSignOut() {
 	render(
-		<AuthProvider>
-			<SignOut />
-		</AuthProvider>,
+		<QueryClientProvider client={testQueryClient()}>
+			<AuthProvider>
+				<SignOut />
+			</AuthProvider>
+		</QueryClientProvider>,
 	);
-	fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
-	await waitFor(() =>
-		expect(error).toHaveBeenCalledWith("Could not confirm sign-out. Please try again."),
-	);
-	expect(getUserViewSession()?.userId).toBe(42);
-	expect(screen.getByText("alex")).not.toBeNull();
-	expect(
-		applyUserViewHeaders(
-			new Request("https://example.test/workspaces/acme/mentor/threads"),
-		).headers.get("X-User-View-User"),
-	).toBe("42");
+}
+
+it("keeps the view and the viewed user when sign-out fails", async () => {
+	server.use(http.post("*/auth/logout", () => HttpResponse.error()));
+	renderSignOut();
+	await screen.findByText("Acting as alex");
+
+	await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+	await screen.findByText("Sign-out settled");
+
+	expect(getUserViewSession()?.userId).toBe(11);
+	expect(screen.queryByText("Acting as alex")).not.toBeNull();
+});
+
+it("ends the view when sign-out succeeds", async () => {
+	server.use(http.post("*/auth/logout", () => new HttpResponse(null, { status: 204 })));
+	renderSignOut();
+	await screen.findByText("Acting as alex");
+	const assigned = captureNavigation();
+
+	await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+	await screen.findByText("Sign-out settled");
+
+	expect(getUserViewSession()).toBeUndefined();
+	expect(assigned).toStrictEqual(["/"]);
 });

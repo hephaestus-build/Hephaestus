@@ -2,10 +2,10 @@ package de.tum.cit.aet.hephaestus.account.userview;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
+import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.ChatThread;
 import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
@@ -16,13 +16,23 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.web.util.pattern.PathPattern;
 
 class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
@@ -36,6 +46,10 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private IdentityLinkRepository identityLinks;
+
+    @Autowired
+    @Qualifier("requestMappingHandlerMapping")
+    private RequestMappingHandlerMapping mappings;
 
     private Account administrator;
     private User viewed;
@@ -144,7 +158,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldRecordTheAdministratorAndTheSelectedUserAtPreflight() {
+    void shouldRecordTheAdministratorAndTheSelectedUserWhenTheSelectionIsConfirmed() {
         request(viewedPath())
                 .exchange()
                 .expectStatus()
@@ -184,7 +198,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         thread(workspace, other, "Other private conversation");
         Workspace elsewhere = createWorkspace("other-view", "Other view", other.getLogin(), AccountType.USER, other);
         thread(elsewhere, viewed, "Other workspace conversation");
-        var response = sessionRequest("/workspaces/acme/mentor/threads")
+        sessionRequest("/workspaces/acme/mentor/threads")
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -192,15 +206,22 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .jsonPath("$.length()")
                 .isEqualTo(1)
                 .jsonPath("$[0].id")
-                .isEqualTo(own.getId().toString())
-                .returnResult();
-        assertThat(response.getResponseHeaders().getOrEmpty(HttpHeaders.SET_COOKIE))
-                .noneMatch(cookie -> cookie.startsWith(AuthProperties.DEFAULT_COOKIE_NAME + "="));
-        assertThat(jdbc.queryForObject(
-                        "SELECT acting_account_id FROM auth_event WHERE event_type = 'USER_VIEW' AND viewed_user_id = ?",
-                        Long.class,
-                        viewed.getId()))
-                .isEqualTo(administrator.getId());
+                .isEqualTo(own.getId().toString());
+    }
+
+    @Test
+    void shouldListTheViewedUsersConversationsWhenTheAdministratorHasNoMentorAccess() {
+        ChatThread own = thread(workspace, viewed, "Viewed user's conversation");
+
+        sessionRequest("/workspaces/acme/mentor/threads", "mock-jwt-admin-" + administrator.getId())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.length()")
+                .isEqualTo(1)
+                .jsonPath("$[0].id")
+                .isEqualTo(own.getId().toString());
     }
 
     @Test
@@ -241,18 +262,12 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldDenyPrivateContentToAWorkspaceOwnerWhoIsNotAnInstanceAdministrator() {
-        Account member = persistAccount("Workspace owner");
-        IdentityLink link = new IdentityLink();
-        link.setAccount(member);
-        link.setProviderId(Objects.requireNonNull(ensureGitHubProvider().getId()));
-        link.setSubject(String.valueOf(viewed.getNativeId()));
-        link.setExternalActorId(viewed.getId());
-        identityLinks.save(link);
+        Account member = viewedUsersOwnAccount();
 
         client.get()
                 .uri("/workspaces/acme" + viewedPath())
                 .headers(h -> h.setBearerAuth("mock-jwt-member-" + member.getId()))
-                .header("X-User-View-Reason", "Support")
+                .header(UserViewContextHolder.REASON_HEADER, "Support")
                 .exchange()
                 .expectStatus()
                 .isForbidden()
@@ -263,13 +278,8 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldDenyNormalUserViewReadsToAWorkspaceOwnerWhoIsNotAnInstanceAdministrator() {
-        Account owner = persistAccount("Workspace owner");
-        IdentityLink link = new IdentityLink();
-        link.setAccount(owner);
-        link.setProviderId(Objects.requireNonNull(ensureGitHubProvider().getId()));
-        link.setSubject(String.valueOf(viewed.getNativeId()));
-        link.setExternalActorId(viewed.getId());
-        identityLinks.save(link);
+        Account owner = viewedUsersOwnAccount();
+
         sessionRequest("/workspaces/acme/mentor/threads", "mock-jwt-member-" + owner.getId())
                 .exchange()
                 .expectStatus()
@@ -278,12 +288,13 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(userViewRowsFor(viewed)).isZero();
     }
 
-    @Test
-    void shouldNotDiscloseSelectedUserWhenTheAuditInsertFails() {
+    @ParameterizedTest(name = "selection confirmation: {0}")
+    @ValueSource(booleans = {true, false})
+    void shouldDiscloseNothingWhenTheAuditInsertFails(boolean selection) {
         jdbc.execute("ALTER TABLE auth_event ADD CONSTRAINT reject_user_view_test "
                 + "CHECK (event_type <> 'USER_VIEW' OR viewed_user_id <> " + viewed.getId() + ") NOT VALID");
         try {
-            request(viewedPath())
+            (selection ? request(viewedPath()) : sessionRequest("/workspaces/acme/mentor/threads"))
                     .exchange()
                     .expectStatus()
                     .isEqualTo(503)
@@ -315,27 +326,29 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         User gitLabNamesake =
                 TestUserFactory.ensureUser(userRepository, viewed.getLogin(), 700_002L, ensureGitLabProvider());
         ensureWorkspaceMembership(workspace, gitLabNamesake, WorkspaceMembership.WorkspaceRole.MEMBER);
-        viewed = gitLabNamesake;
 
-        sessionRequest("/workspaces/acme/profile/" + viewed.getLogin())
+        sessionRequest("/workspaces/acme/profile/" + gitLabNamesake.getLogin(), token(), gitLabNamesake.getId())
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody()
                 .jsonPath("$.userInfo.id")
-                .isEqualTo(viewed.getId());
+                .isEqualTo(gitLabNamesake.getId());
     }
 
     @Test
-    void shouldNotReadAnotherMembersProfileInTheSelectedWorkspace() {
-        User other = persistUser("other-profile-member");
-        ensureWorkspaceMembership(workspace, other, WorkspaceMembership.WorkspaceRole.MEMBER);
+    void shouldReadATeammatesProfileAndRecordTheViewWhenViewingAMember() {
+        User teammate = persistUser("teammate-profile");
+        ensureWorkspaceMembership(workspace, teammate, WorkspaceMembership.WorkspaceRole.MEMBER);
 
-        sessionRequest("/workspaces/acme/profile/" + other.getLogin())
+        sessionRequest("/workspaces/acme/profile/" + teammate.getLogin())
                 .exchange()
                 .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
+                .isOk()
+                .expectBody()
+                .jsonPath("$.userInfo.id")
+                .isEqualTo(teammate.getId());
+        assertThat(userViewRowsFor(viewed)).isEqualTo(1);
     }
 
     @Test
@@ -352,39 +365,139 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isEqualTo(1)
                 .jsonPath("$[0].workspaceSlug")
                 .isEqualTo("acme");
-        sessionRequest("/workspaces/other-view").exchange().expectStatus().isNotFound();
     }
 
     @Test
-    void shouldRejectWritesAndUnsupportedReadsInTheNormalApp() {
-        client.post()
-                .uri("/workspaces/acme/mentor/chat")
-                .headers(h -> h.setBearerAuth(token()))
-                .header(UserViewSessionFilter.WORKSPACE_HEADER, "acme")
-                .header(UserViewSessionFilter.USER_HEADER, viewed.getId().toString())
-                .header(UserViewSessionFilter.REASON_HEADER, "Support")
+    void shouldHideAnotherWorkspaceAndRecordNothingWhenThePathLeavesTheViewedWorkspace() {
+        User other = persistUser("other-workspace-member");
+        createWorkspace("other-view", "Other view", other.getLogin(), AccountType.USER, other);
+
+        sessionRequest("/workspaces/other-view")
                 .exchange()
                 .expectStatus()
-                .isForbidden();
-        sessionRequest("/user/settings").exchange().expectStatus().isForbidden();
+                .isNotFound()
+                .expectBody(Void.class);
         assertThat(userViewRowsFor(viewed)).isZero();
     }
 
     @Test
-    void shouldNotReadTheNormalAppWhenItsAuditCannotCommit() {
-        jdbc.execute("ALTER TABLE auth_event ADD CONSTRAINT reject_session_view_test "
-                + "CHECK (event_type <> 'USER_VIEW' OR viewed_user_id <> " + viewed.getId() + ") NOT VALID");
-        try {
-            sessionRequest("/workspaces/acme/mentor/threads")
-                    .exchange()
-                    .expectStatus()
-                    .isEqualTo(503)
-                    .expectBody()
-                    .jsonPath("$.status")
-                    .isEqualTo(503);
-        } finally {
-            jdbc.execute("ALTER TABLE auth_event DROP CONSTRAINT reject_session_view_test");
-        }
+    void shouldRefuseToDeleteTheViewedUsersConversationAndRecordNothing() {
+        ChatThread own = thread(workspace, viewed, "Viewed user's conversation");
+
+        client.delete()
+                .uri("/workspaces/acme/mentor/threads/" + own.getId())
+                .headers(viewHeaders(token(), viewed.getId()))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+
+        assertThat(threads.existsById(own.getId())).isTrue();
+        assertThat(userViewRowsFor(viewed)).isZero();
+    }
+
+    @Test
+    void shouldRefuseAnOptionsRequestCarryingTheViewAndRecordNothing() {
+        client.options()
+                .uri("/workspaces/acme/mentor/threads")
+                .headers(viewHeaders(token(), viewed.getId()))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+
+        assertThat(userViewRowsFor(viewed)).isZero();
+    }
+
+    @Test
+    void shouldRefuseAHeadRequestCarryingTheViewAndRecordNothing() {
+        client.head()
+                .uri("/workspaces/acme/mentor/threads")
+                .headers(viewHeaders(token(), viewed.getId()))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+
+        assertThat(userViewRowsFor(viewed)).isZero();
+    }
+
+    @Test
+    void shouldRefuseAReadOutsideTheViewAllowlistThatTheAdministratorMayPerformOtherwise() {
+        sessionRequest("/user/features").exchange().expectStatus().isForbidden().expectBody(Void.class);
+        assertThat(userViewRowsFor(viewed)).isZero();
+
+        client.get()
+                .uri("/user/features")
+                .headers(h -> h.setBearerAuth(token()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldRecordTheReasonAndTheReadWithItsQueryWhenANormalAppReadIsViewed() {
+        sessionRequest("/workspaces/acme/mentor/threads?page=0")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+
+        String details = jdbc.queryForObject(
+                "SELECT details::text FROM auth_event WHERE event_type = 'USER_VIEW' AND viewed_user_id = ?",
+                String.class,
+                viewed.getId());
+        assertThat(details).contains("Support").contains("/workspaces/acme/mentor/threads?page=0");
+    }
+
+    @Test
+    void shouldReportTheViewedMembersOwnRoleWhenTheAdministratorViewsAMember() {
+        User member = persistUser("plain-member");
+        ensureWorkspaceMembership(workspace, member, WorkspaceMembership.WorkspaceRole.MEMBER);
+
+        sessionRequest("/workspaces/acme/members/me", token(), member.getId())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.userId")
+                .isEqualTo(member.getId())
+                .jsonPath("$.role")
+                .isEqualTo("MEMBER");
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = "not-a-user")
+    void shouldRejectAViewAndRecordNothingWhenTheViewedUserIsNotAnId(@Nullable String userHeader) {
+        client.get()
+                .uri("/workspaces/acme/mentor/threads")
+                .headers(headers -> {
+                    headers.setBearerAuth(token());
+                    headers.set(UserViewContextHolder.WORKSPACE_HEADER, "acme");
+                    headers.set(UserViewContextHolder.REASON_HEADER, "Support");
+                    if (userHeader != null) {
+                        headers.set(UserViewContextHolder.USER_HEADER, userHeader);
+                    }
+                })
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        assertThat(userViewRowsBy(administrator)).isZero();
+    }
+
+    @Test
+    void shouldServeEveryAllowedViewReadWithAGetHandler() {
+        var getRoutes = mappings.getHandlerMethods().keySet().stream()
+                .filter(mapping -> mapping.getMethodsCondition().getMethods().contains(RequestMethod.GET))
+                .flatMap(mapping -> mapping.getPatternValues().stream())
+                .collect(Collectors.toSet());
+
+        assertThat(UserViewSessionFilter.READ_PATHS)
+                .extracting(PathPattern::getPatternString)
+                .allSatisfy(path -> assertThat(getRoutes).contains(path));
     }
 
     private long userViewRowsFor(User user) {
@@ -392,6 +505,26 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 "SELECT count(*) FROM auth_event WHERE event_type = 'USER_VIEW' AND viewed_user_id = ?",
                 Long.class,
                 user.getId());
+        return rows == null ? 0 : rows;
+    }
+
+    /** The workspace owner signing in as themselves: a member, not an instance administrator. */
+    private Account viewedUsersOwnAccount() {
+        Account account = persistAccount("Workspace owner");
+        IdentityLink link = new IdentityLink();
+        link.setAccount(account);
+        link.setProviderId(Objects.requireNonNull(ensureGitHubProvider().getId()));
+        link.setSubject(String.valueOf(viewed.getNativeId()));
+        link.setExternalActorId(viewed.getId());
+        identityLinks.save(link);
+        return account;
+    }
+
+    private long userViewRowsBy(Account account) {
+        Long rows = jdbc.queryForObject(
+                "SELECT count(*) FROM auth_event WHERE event_type = 'USER_VIEW' AND acting_account_id = ?",
+                Long.class,
+                account.getId());
         return rows == null ? 0 : rows;
     }
 
@@ -407,7 +540,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         return client.get()
                 .uri("/workspaces/acme" + path)
                 .headers(h -> h.setBearerAuth(token()))
-                .header("X-User-View-Reason", "Investigate missing feedback");
+                .header(UserViewContextHolder.REASON_HEADER, "Investigate missing feedback");
     }
 
     private WebTestClient.RequestHeadersSpec<?> sessionRequest(String path) {
@@ -415,12 +548,20 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private WebTestClient.RequestHeadersSpec<?> sessionRequest(String path, String bearer) {
-        return client.get()
-                .uri(path)
-                .headers(h -> h.setBearerAuth(bearer))
-                .header(UserViewSessionFilter.WORKSPACE_HEADER, "acme")
-                .header(UserViewSessionFilter.USER_HEADER, viewed.getId().toString())
-                .header(UserViewSessionFilter.REASON_HEADER, "Support");
+        return sessionRequest(path, bearer, viewed.getId());
+    }
+
+    private WebTestClient.RequestHeadersSpec<?> sessionRequest(String path, String bearer, long userId) {
+        return client.get().uri(path).headers(viewHeaders(bearer, userId));
+    }
+
+    private static Consumer<HttpHeaders> viewHeaders(String bearer, long userId) {
+        return headers -> {
+            headers.setBearerAuth(bearer);
+            headers.set(UserViewContextHolder.WORKSPACE_HEADER, "acme");
+            headers.set(UserViewContextHolder.USER_HEADER, String.valueOf(userId));
+            headers.set(UserViewContextHolder.REASON_HEADER, "Support");
+        };
     }
 
     private ChatThread thread(Workspace ownerWorkspace, User owner, String title) {

@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
 import { Spinner } from "@/components/ui/spinner";
 import { consentIsPending, resolveCurrentUser } from "@/runtime/auth/guard";
-import { clearUserView, getUserViewSession } from "@/runtime/user-view/session";
+import { getUserViewSession } from "@/runtime/user-view/session";
 
 export const Route = createFileRoute("/_authenticated")({
 	beforeLoad: async ({ context, location }) => {
@@ -13,12 +13,6 @@ export const Route = createFileRoute("/_authenticated")({
 				search: { returnTo: location.href },
 			});
 		}
-		const viewed = getUserViewSession();
-		if (viewed && viewed.operatorAccountId !== user.id) {
-			clearUserView();
-			context.queryClient.clear();
-			throw redirect({ to: "/", replace: true });
-		}
 		if (await consentIsPending(context.queryClient)) {
 			throw redirect({
 				to: "/consent",
@@ -26,6 +20,7 @@ export const Route = createFileRoute("/_authenticated")({
 				mask: { to: location.pathname, search: location.search, hash: location.hash },
 			});
 		}
+		const viewed = getUserViewSession();
 		if (viewed) {
 			const workspacePath = `/w/${viewed.workspaceSlug}`;
 			if (

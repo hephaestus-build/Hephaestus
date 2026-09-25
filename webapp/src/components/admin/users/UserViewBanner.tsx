@@ -22,7 +22,7 @@ export function UserViewBanner({ name, workspace, hasAccount, onExit }: UserView
 			</AlertTitle>
 			<AlertDescription className="min-w-0 break-words">
 				You remain signed in as yourself. This access is audited. Account setup and personal choices
-				are not changed. If access expires, exit and start a new view.
+				are not changed.
 				{!hasAccount &&
 					" No linked Hephaestus account. Existing practice information is still available."}
 			</AlertDescription>

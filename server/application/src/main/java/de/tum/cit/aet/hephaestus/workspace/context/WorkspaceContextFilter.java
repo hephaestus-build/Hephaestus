@@ -51,9 +51,11 @@ import tools.jackson.databind.ObjectMapper;
  */
 @ConditionalOnServerRole
 @Component
-@Order(-5)
+@Order(WorkspaceContextFilter.ORDER)
 @Profile("!specs")
 public class WorkspaceContextFilter implements Filter {
+
+    public static final int ORDER = -5;
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceContextFilter.class);
 
@@ -143,13 +145,6 @@ public class WorkspaceContextFilter implements Filter {
             }
 
             var workspace = workspaceOpt.get();
-            var viewed = UserViewContextHolder.get();
-            if (viewed != null
-                    && (viewed.workspaceId() != workspace.getId()
-                            || !viewed.workspaceSlug().equals(slug))) {
-                sendWorkspaceNotFoundError(httpResponse, slug);
-                return;
-            }
 
             boolean isReadRequest = "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method);
             boolean allowLifecycleDelete = isBasePath && "DELETE".equalsIgnoreCase(method);
@@ -164,6 +159,7 @@ public class WorkspaceContextFilter implements Filter {
                 return;
             }
 
+            var viewed = UserViewContextHolder.get();
             var currentUsers = viewed == null
                     ? currentAccountUsers.resolve()
                     : userRepository.findById(viewed.userId()).stream().toList();

@@ -1,16 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import environment from "@/environment";
+import { apiBasePath } from "@/runtime/api-base-path";
 import { safeReturnTo } from "@/runtime/auth/guard";
 import { refreshAccessToken } from "@/runtime/auth/session-refresh";
-
-function apiBasePath(): string {
-	try {
-		return new URL(environment.serverUrl, window.location.origin).pathname.replace(/\/$/u, "");
-	} catch {
-		return "";
-	}
-}
 
 // Identity probes can return 401 anonymously; auth requests must not trigger recursive recovery.
 function isExemptFromSessionExpiry(pathname: string, url: string): boolean {

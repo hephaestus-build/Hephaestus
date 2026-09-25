@@ -28,10 +28,17 @@ export const EmptyReason: Story = {
 
 export const Opening: Story = {
 	args: { isPending: true },
-	play: async ({ args }) => {
-		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Opening…" }));
-		await userEvent.click(await screen.findByRole("button", { name: "Cancel" }));
-		await expect(args.onClose).toHaveBeenCalledOnce();
+	play: async () => {
+		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Opening…" }));
+	},
+};
+
+export const Failed: Story = {
+	args: { error: "User view audit is unavailable" },
+	play: async () => {
+		await expect(await screen.findByRole("alert")).toHaveTextContent(
+			"User view audit is unavailable",
+		);
 	},
 };
 

@@ -18,7 +18,8 @@ const REVIEWABLE_ON_DEMAND: ReadonlySet<string> = new Set([
 
 export interface TraceHeaderProps {
 	trace: ArtifactTrace;
-	onRequestReview: () => void;
+	/** Absent when this reader may not ask for a review, which leaves no button to press. */
+	onRequestReview?: () => void;
 	requestPending: boolean;
 }
 
@@ -57,7 +58,7 @@ export function TraceHeader({ trace, onRequestReview, requestPending }: TraceHea
 					)}
 				</div>
 			</div>
-			{REVIEWABLE_ON_DEMAND.has(trace.artifactKind) && (
+			{onRequestReview && REVIEWABLE_ON_DEMAND.has(trace.artifactKind) && (
 				<Button
 					variant="outline"
 					className="shrink-0 sm:self-start"

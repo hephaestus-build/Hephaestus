@@ -1,58 +1,47 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { storeUserView } from "@/test/user-view";
+
 import { applyUserViewHeaders, clearUserView, getUserViewSession } from "./session";
 
 vi.mock("@/environment", () => ({ default: { serverUrl: "https://example.test/api" } }));
-
-const session = {
-	operatorAccountId: 7,
-	workspaceSlug: "acme",
-	userId: 42,
-	login: "alex",
-	name: "Alex",
-	hasAccount: false,
-	reason: "Check practice page",
-};
 
 describe("user view request context", () => {
 	afterEach(clearUserView);
 
 	it("keeps the selected user and reason on normal app reads", () => {
-		sessionStorage.setItem("hephaestus.user-view", JSON.stringify(session));
+		storeUserView({ reason: "Check practice page" });
 		const request = applyUserViewHeaders(
-			new Request("https://example.test/workspaces/acme/practices"),
+			new Request("https://example.test/api/workspaces/engineering/practices"),
 		);
 
-		expect(request.headers.get("X-User-View-Workspace")).toBe("acme");
-		expect(request.headers.get("X-User-View-User")).toBe("42");
+		expect(request.headers.get("X-User-View-Workspace")).toBe("engineering");
+		expect(request.headers.get("X-User-View-User")).toBe("11");
 		expect(request.headers.get("X-User-View-Reason")).toBe("Check%20practice%20page");
 	});
 
-	it("does not attach the viewed identity to authentication requests", () => {
-		sessionStorage.setItem("hephaestus.user-view", JSON.stringify(session));
-		const request = applyUserViewHeaders(new Request("https://example.test/auth/refresh"));
+	it.each(["/auth/refresh", "/api/user", "/api/identity-providers", "/api/user/identities"])(
+		"keeps the administrator's own request %s outside the viewed identity",
+		(path) => {
+			storeUserView();
+			const request = applyUserViewHeaders(new Request(`https://example.test${path}`));
 
-		expect(request.headers.has("X-User-View-User")).toBe(false);
-	});
+			expect(request.headers.has("X-User-View-User")).toBe(false);
+		},
+	);
 
-	it("keeps the current account lookup outside the viewed identity", () => {
-		sessionStorage.setItem("hephaestus.user-view", JSON.stringify(session));
-		const request = applyUserViewHeaders(new Request("https://example.test/api/user"));
+	it.each([
+		"/workspaces/engineering/practices/standings",
+		"/api/workspaces/engineering/practices/standings",
+	])("attaches the viewed identity to the workspace read %s", (path) => {
+		storeUserView();
+		const request = applyUserViewHeaders(new Request(`https://example.test${path}`));
 
-		expect(request.headers.has("X-User-View-User")).toBe(false);
-	});
-
-	it("attaches the selected identity to workspace reads behind the production API prefix", () => {
-		sessionStorage.setItem("hephaestus.user-view", JSON.stringify(session));
-		const request = applyUserViewHeaders(
-			new Request("https://example.test/api/workspaces/acme/practices/standings"),
-		);
-
-		expect(request.headers.get("X-User-View-User")).toBe("42");
+		expect(request.headers.get("X-User-View-User")).toBe("11");
 	});
 
 	it("ignores invalid stored identities", () => {
-		sessionStorage.setItem("hephaestus.user-view", JSON.stringify({ ...session, userId: -1 }));
+		storeUserView({ userId: -1 });
 
 		expect(getUserViewSession()).toBeUndefined();
 	});

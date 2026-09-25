@@ -1,17 +1,20 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { client } from "@/api/client.gen";
+import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
-import { clearUserView, getUserViewSession, startUserView } from "@/runtime/user-view/session";
+import {
+	applyUserViewHeaders,
+	clearUserView,
+	getUserViewSession,
+} from "@/runtime/user-view/session";
 import { deferred } from "@/test/async";
+import { captureNavigation, restoreNavigation } from "@/test/navigation";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
-
-vi.mock("@/runtime/user-view/session", async (importOriginal) => ({
-	...(await importOriginal()),
-	startUserView: vi.fn(),
-}));
+import { storeUserView } from "@/test/user-view";
 
 const workspace = {
 	id: 1,
@@ -19,6 +22,7 @@ const workspace = {
 	displayName: "Engineering",
 };
 const users = { content: [{ userId: 11, login: "never-signed-in", name: "Sam" }], totalPages: 1 };
+const viewedProfile = "/w/engineering/user/never-signed-in";
 
 async function submitReason() {
 	const user = userEvent.setup();
@@ -34,15 +38,19 @@ async function submitReason() {
 }
 
 describe("view as user entry", () => {
+	let assigned: string[] = [];
 	beforeEach(() => {
-		vi.mocked(startUserView).mockClear();
+		assigned = captureNavigation();
 		server.use(
 			http.get("*/workspaces", () => HttpResponse.json([])),
 			http.get("*/workspaces/:workspaceSlug", () => HttpResponse.json(workspace)),
 			http.get("*/workspaces/:workspaceSlug/user-view/users", () => HttpResponse.json(users)),
 		);
 	});
-	afterEach(clearUserView);
+	afterEach(() => {
+		clearUserView();
+		restoreNavigation();
+	});
 
 	it("opens the normal app for an accountless user after an audited read", async () => {
 		let reasonHeader: string | null = null;
@@ -54,18 +62,18 @@ describe("view as user entry", () => {
 		);
 		renderRouteAt("/admin/workspaces/engineering/users");
 		await submitReason();
-		await waitFor(() => expect(startUserView).toHaveBeenCalledOnce());
+		await waitFor(() => expect(assigned).toStrictEqual([viewedProfile]));
 		expect(reasonHeader).toBe("Check%20Sam's%20profile");
-		expect(startUserView).toHaveBeenCalledWith({
+		expect(getUserViewSession()).toStrictEqual({
 			operatorAccountId: 42,
 			workspaceSlug: "engineering",
+			workspaceName: "Engineering",
 			userId: 11,
 			login: "never-signed-in",
 			name: "Sam",
 			hasAccount: false,
 			reason: "Check Sam's profile",
 		});
-		expect(screen.queryByRole("tab", { name: "Conversations" })).toBeNull();
 	});
 
 	it("does not start when the audited read fails", async () => {
@@ -80,7 +88,8 @@ describe("view as user entry", () => {
 		renderRouteAt("/admin/workspaces/engineering/users");
 		await submitReason();
 		await screen.findByText("User view audit is unavailable");
-		expect(startUserView).not.toHaveBeenCalled();
+		expect(getUserViewSession()).toBeUndefined();
+		expect(assigned).toStrictEqual([]);
 	});
 
 	it("asks for a new sign-in when the audited read requires it", async () => {
@@ -96,22 +105,21 @@ describe("view as user entry", () => {
 		await submitReason();
 		await screen.findByRole("dialog", { name: "Confirm access" });
 		expect(screen.queryByRole("dialog", { name: "View as Sam" })).toBeNull();
-		expect(startUserView).not.toHaveBeenCalled();
+		expect(getUserViewSession()).toBeUndefined();
+		expect(assigned).toStrictEqual([]);
 	});
 
 	it("cancels a pending read and lets the same user be selected again", async () => {
 		const pendingRead = deferred();
 		const started = deferred();
-		const aborted = deferred();
 		server.use(
-			http.get("*/workspaces/:workspaceSlug/user-view/users/:userId", async ({ request }) => {
-				request.signal.addEventListener("abort", () => aborted.resolve(), { once: true });
+			http.get("*/workspaces/:workspaceSlug/user-view/users/:userId", async () => {
 				started.resolve();
 				await pendingRead.promise;
 				return HttpResponse.json(users.content[0]);
 			}),
 		);
-		const { router } = renderRouteAtWithRouter("/admin/workspaces/engineering/users");
+		const { queryClient, router } = renderRouteAtWithRouter("/admin/workspaces/engineering/users");
 		await submitReason();
 		await started.promise;
 		await act(async () => {
@@ -121,9 +129,11 @@ describe("view as user entry", () => {
 				search: { page: 0 },
 			});
 		});
-		await aborted.promise;
-		const replacementRead = vi.fn(() => HttpResponse.json(users.content[0]));
-		server.use(http.get("*/workspaces/:workspaceSlug/user-view/users/:userId", replacementRead));
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/user-view/users/:userId", () =>
+				HttpResponse.json(users.content[0]),
+			),
+		);
 		await act(async () => {
 			await router.navigate({
 				to: "/admin/workspaces/$workspaceSlug/users",
@@ -138,31 +148,56 @@ describe("view as user entry", () => {
 			"Check again",
 		);
 		await user.click(within(dialog).getByRole("button", { name: "View as user" }));
-		await waitFor(() =>
-			expect(startUserView).toHaveBeenCalledExactlyOnceWith(
-				expect.objectContaining({ reason: "Check again" }),
-			),
-		);
+		await waitFor(() => expect(assigned).toStrictEqual([viewedProfile]));
+		// The cancelled read still answers; it must settle without starting a second view.
 		await act(async () => pendingRead.resolve());
-		expect(replacementRead).toHaveBeenCalledOnce();
-		expect(startUserView).toHaveBeenCalledOnce();
+		await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+		expect(assigned).toStrictEqual([viewedProfile]);
+		expect(getUserViewSession()?.reason).toBe("Check again");
+	});
+});
+
+describe("user view guard", () => {
+	beforeAll(() => client.interceptors.request.use(applyUserViewHeaders));
+	beforeEach(() => {
+		storeUserView();
+		server.use(http.get("*/workspaces", () => HttpResponse.json([workspace])));
+	});
+	afterEach(clearUserView);
+	afterAll(() => client.interceptors.request.eject(applyUserViewHeaders));
+
+	it("drops a view another account left in the tab before any request carries it", async () => {
+		storeUserView({ operatorAccountId: 7 });
+		server.use(http.get("*/user", () => HttpResponse.json({ ...currentUser, id: 8 })));
+		const requests: { path: string; viewedUser: string | null }[] = [];
+		const record = ({ request }: { request: Request }) => {
+			requests.push({
+				path: new URL(request.url).pathname,
+				viewedUser: request.headers.get("X-User-View-User"),
+			});
+		};
+		server.events.on("request:start", record);
+		const { router } = renderRouteAtWithRouter("/");
+		await waitFor(
+			() => expect(router.state.resolvedLocation?.pathname).toMatch(/^\/w\/engineering/u),
+			ROUTE_RENDER_WAIT,
+		);
+		server.events.removeListener("request:start", record);
+
+		expect(requests.filter(({ viewedUser }) => viewedUser !== null)).toStrictEqual([]);
+		expect(getUserViewSession()).toBeUndefined();
 	});
 
-	it("clears a view left by a different signed-in administrator", async () => {
-		sessionStorage.setItem(
-			"hephaestus.user-view",
-			JSON.stringify({
-				operatorAccountId: 99,
-				workspaceSlug: "engineering",
-				userId: 11,
-				login: "never-signed-in",
-				name: "Sam",
-				hasAccount: false,
-				reason: "Check profile",
-			}),
+	it.each([
+		["/settings", "/w/engineering/user/alex"],
+		["/w/other/user/alex", "/w/engineering/user/alex"],
+		["/w/engineering/admin", "/w/engineering/user/alex"],
+		["/w/engineering/user/sam", "/w/engineering/user/sam"],
+	])("resolves %s to %s", async (path, expected) => {
+		const { router } = renderRouteAtWithRouter(path);
+		await waitFor(
+			() => expect(router.state.resolvedLocation?.pathname).toBe(expected),
+			ROUTE_RENDER_WAIT,
 		);
-		renderRouteAt("/admin/workspaces/engineering/users");
-		await waitFor(() => expect(getUserViewSession()).toBeUndefined());
-		expect(startUserView).not.toHaveBeenCalled();
 	});
 });

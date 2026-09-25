@@ -90,13 +90,12 @@ public class WorkspaceQueryService {
 
     /**
      * Builds {@link WorkspaceListItemDTO}s for every workspace accessible to the
-     * current authenticated user.
+     * current authenticated user. During a user view, only the viewed workspace.
      */
     public List<WorkspaceListItemDTO> findAccessibleWorkspaceListItems() {
         var viewed = UserViewContextHolder.get();
         if (viewed != null) {
             return workspaceRepository.findById(viewed.workspaceId()).stream()
-                    .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
                     .map(workspace -> WorkspaceListItemDTO.from(workspace, connectionService))
                     .toList();
         }

@@ -4,7 +4,7 @@ import { Chat } from "@/components/mentor/Chat";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
 import { copyToClipboard } from "@/lib/clipboard";
-import { getUserViewSession } from "@/runtime/user-view/session";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/$threadId")({
 	component: ThreadContainer,
@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/$t
 
 function ThreadContainer() {
 	const { threadId } = Route.useParams();
-	const readOnly = getUserViewSession() !== undefined;
+	const readOnly = useAuth().userView !== undefined;
 
 	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
 	// already is, rather than as a toast away from the conversation that failed.

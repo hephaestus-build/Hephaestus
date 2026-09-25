@@ -28,6 +28,7 @@ import { contributingPractices } from "@/lib/practice-standing";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { useSearchPatch } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
 import { resolveCurrentUser } from "@/runtime/auth/guard";
 import { loadedPages } from "@/runtime/tanstack-query/spring-page";
 import { getUserViewSession } from "@/runtime/user-view/session";
@@ -88,7 +89,7 @@ function PracticeGroupRoute() {
 }
 
 function PracticeGroupDetail() {
-	const readOnly = getUserViewSession() !== undefined;
+	const readOnly = useAuth().userView !== undefined;
 	const { workspaceSlug, username, groupSlug } = Route.useParams();
 	const { practice: selectedPracticeSlug, observation: openObservationId } = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });

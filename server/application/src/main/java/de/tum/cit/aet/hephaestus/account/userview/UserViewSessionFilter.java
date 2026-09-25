@@ -7,13 +7,16 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextFilter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
@@ -31,23 +34,23 @@ import org.springframework.web.util.pattern.PathPattern;
 import org.springframework.web.util.pattern.PathPatternParser;
 import tools.jackson.databind.ObjectMapper;
 
+/**
+ * Binds a read-only user view to the normal app. Runs after Spring Security, which admits only an instance
+ * administrator's {@code GET} in view mode, and before {@link WorkspaceContextFilter}, which reads
+ * the view. A route outside {@link #READ_PATHS} is refused before a {@code USER_VIEW} row is written.
+ */
 @Component
 @ConditionalOnServerRole
 @Profile("!specs")
-@Order(-6)
+@Order(WorkspaceContextFilter.ORDER - 1)
 @RequiredArgsConstructor
 public class UserViewSessionFilter extends OncePerRequestFilter {
 
-    public static final String WORKSPACE_HEADER = "X-User-View-Workspace";
-    public static final String USER_HEADER = "X-User-View-User";
-    public static final String REASON_HEADER = UserViewAuthorizationConfig.REASON_HEADER;
-
     private static final Logger log = LoggerFactory.getLogger(UserViewSessionFilter.class);
     private static final PathPatternParser PATHS = new PathPatternParser();
-    private static final List<PathPattern> READ_PATHS = List.of(
+    static final List<PathPattern> READ_PATHS = List.of(
                     "/workspaces",
                     "/workspaces/{workspaceSlug}",
-                    "/workspaces/{workspaceSlug}/features",
                     "/workspaces/{workspaceSlug}/members/me",
                     "/workspaces/{workspaceSlug}/connections/catalog",
                     "/workspaces/{workspaceSlug}/team",
@@ -79,33 +82,26 @@ public class UserViewSessionFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        String workspaceSlug = request.getHeader(WORKSPACE_HEADER);
-        String userHeader = request.getHeader(USER_HEADER);
-        String reason = request.getHeader(REASON_HEADER);
-        if (workspaceSlug == null && userHeader == null) {
+        if (!UserViewContextHolder.USER_VIEW_REQUEST.matches(request)) {
             chain.doFilter(request, response);
             return;
         }
+        String workspaceSlug = request.getHeader(UserViewContextHolder.WORKSPACE_HEADER);
+        String userHeader = request.getHeader(UserViewContextHolder.USER_HEADER);
+        String reason = request.getHeader(UserViewContextHolder.REASON_HEADER);
 
         try {
             if (workspaceSlug == null || userHeader == null || reason == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Incomplete user view context");
             }
-            if (!"GET".equals(request.getMethod()) && !"HEAD".equals(request.getMethod())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User view is read-only");
-            }
             String path = request.getRequestURI();
-            PathContainer parsedPath = PathContainer.parsePath(path);
-            if (READ_PATHS.stream().noneMatch(pattern -> pattern.matches(parsedPath))) {
+            Map<String, String> pathVariables = readPathVariables(PathContainer.parsePath(path));
+            if (pathVariables == null) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This page is not available in user view");
             }
-            if (path.startsWith("/workspaces/")
-                    && !path.equals("/workspaces/" + workspaceSlug)
-                    && !path.startsWith("/workspaces/" + workspaceSlug + "/")) {
+            String pathSlug = pathVariables.get("workspaceSlug");
+            if (pathSlug != null && !pathSlug.equals(workspaceSlug)) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace not found in user view");
-            }
-            if (!SecurityUtils.isSuperAdmin()) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Instance administrator required");
             }
             long accountId = SecurityUtils.getCurrentAccountId()
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
@@ -125,8 +121,7 @@ public class UserViewSessionFilter extends OncePerRequestFilter {
             String query = request.getQueryString();
             access.record(
                     workspace.getId(), userId, user.accountId(), reason, query == null ? path : path + "?" + query);
-            UserViewContextHolder.set(
-                    new UserViewContextHolder.View(workspace.getId(), workspaceSlug, userId, user.login()));
+            UserViewContextHolder.set(new UserViewContextHolder.View(workspace.getId(), userId));
             response.setHeader("Cache-Control", "no-store");
         } catch (RuntimeException error) {
             writeFailure(response, error);
@@ -138,6 +133,17 @@ public class UserViewSessionFilter extends OncePerRequestFilter {
         } finally {
             UserViewContextHolder.clear();
         }
+    }
+
+    /** The URI variables of the allowed read this path is, or {@code null} when it is none. */
+    private static @Nullable Map<String, String> readPathVariables(PathContainer path) {
+        for (PathPattern pattern : READ_PATHS) {
+            PathPattern.PathMatchInfo match = pattern.matchAndExtract(path);
+            if (match != null) {
+                return match.getUriVariables();
+            }
+        }
+        return null;
     }
 
     private void writeFailure(HttpServletResponse response, RuntimeException error) throws IOException {

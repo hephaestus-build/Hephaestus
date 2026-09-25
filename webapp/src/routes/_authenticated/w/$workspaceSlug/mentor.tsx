@@ -8,7 +8,6 @@ import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { hasText } from "@/lib/text";
 import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
-import { getUserViewSession } from "@/runtime/user-view/session";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor")({
 	staticData: { surface: "fullscreen" },
@@ -16,13 +15,10 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor")(
 });
 
 function MentorLayout() {
-	const viewed = getUserViewSession() !== undefined;
 	const { workspaceSlug, isLoading: isWorkspaceLoading } = useActiveWorkspaceSlug();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
 	const mentorEnabled = featureState.features?.mentorEnabled;
 	const { enabled: hasMentorAccess, isLoading: accessLoading } = useFeatureFlag("MENTOR_ACCESS");
-	const canReadMentor = viewed || hasMentorAccess;
-	const isAccessLoading = !viewed && accessLoading;
 
 	if (!hasText(workspaceSlug) && !isWorkspaceLoading) {
 		return (
@@ -35,8 +31,8 @@ function MentorLayout() {
 	if (
 		!featureState.isLoading &&
 		!featureState.isError &&
-		!isAccessLoading &&
-		(mentorEnabled === false || !canReadMentor) &&
+		!accessLoading &&
+		(mentorEnabled === false || !hasMentorAccess) &&
 		hasText(workspaceSlug)
 	) {
 		return <Navigate to="/w/$workspaceSlug" params={{ workspaceSlug }} replace />;
@@ -54,7 +50,7 @@ function MentorLayout() {
 		);
 	}
 
-	if (featureState.isLoading || isAccessLoading || mentorEnabled !== true || !canReadMentor) {
+	if (featureState.isLoading || accessLoading || mentorEnabled !== true || !hasMentorAccess) {
 		return (
 			<div className="flex min-h-0 flex-1 items-center justify-center">
 				<Spinner className="h-8 w-8" />

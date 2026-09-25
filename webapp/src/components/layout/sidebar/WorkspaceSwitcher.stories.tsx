@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "storybook/test";
+import { expect, fn, screen, userEvent, within } from "storybook/test";
+
+import { expectSettledVisible } from "@/stories/overlay";
 
 import { withSidebarFrame } from "./sidebar-story-frame";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
@@ -57,8 +59,14 @@ type Story = StoryObj<typeof meta>;
 
 export const SingleWorkspace: Story = {};
 
-export const ReadOnly: Story = {
+export const WithoutAddWorkspace: Story = {
 	args: { onAddWorkspace: undefined },
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: /AET/u }));
+		const menu = within(await screen.findByRole("menu"));
+		await expectSettledVisible(menu.getByRole("menuitem", { name: /AET/u }));
+		await expect(menu.queryByRole("menuitem", { name: "Add workspace" })).not.toBeInTheDocument();
+	},
 };
 
 export const MultipleWorkspaces: Story = {

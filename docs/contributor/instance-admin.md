@@ -116,13 +116,13 @@ remains authenticated as themselves. The viewed person is the synced SCM user be
 membership ([auth glossary](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/auth-glossary.md));
 **Linked account** reads `identity_link.external_actor_id`.
 
-The browser stores the selected workspace, user ID and access reason in this tab's session storage.
-Starting or exiting the view reloads the app, so cached data from another identity cannot carry
-over. The normal workspace, profile, practice and saved-conversation routes use the selected SCM
-user. A persistent banner identifies the viewed user and provides an exit. Account settings and
-onboarding are not simulated. `/user` reads the administrator's account outside the viewed-user
-context; the browser shows
-the selected SCM user's display identity only while the view is active.
+The browser keeps the selected workspace, user ID and reason in the tab's session storage, and
+starting or exiting a view reloads the app, so no cached result crosses identities. Loading the
+current account drops a stored view that another account opened. `applyUserViewHeaders` adds
+`X-User-View-Workspace`, `X-User-View-User` and the reason header to every request except the
+administrator's own sign-in, account, consent, feature-flag and identity reads. During a view the
+administrator's feature flags do not apply. A banner names the viewed user and offers the exit;
+the account menu keeps naming the administrator, whom it signs out.
 
 The selection endpoints are the `User view` tag in `server/openapi.yaml`, all `GET` under
 `/workspaces/{slug}/user-view/users` and all `@PreAuthorize("hasAuthority('app_admin')")` like every
@@ -140,19 +140,19 @@ characters without control or format characters), resolves the viewed member thr
 `OpenAPIConfiguration.userViewReasonHeader` declares the header on every such operation, so the
 generated client requires it.
 
-Normal app reads in this mode carry `X-User-View-Workspace`, `X-User-View-User` and the same reason
-header. `UserViewSessionFilter` checks the administrator's authority, recent sign-in, active
-workspace and human membership on every request. It records a `USER_VIEW` event before a read and
-returns 503 if the audit write fails. The request then uses the selected member's workspace roles
-and verified SCM actor ID. Only the listed read routes are available; writes and account-only
-settings return 403. The in-app feedback read does not mark feedback delivered in this mode.
-When the recent-sign-in window expires, the administrator exits and starts a new view.
+`SecurityConfig` admits a request carrying a view header only as an instance administrator's `GET`,
+and does so ahead of the `mentor_access` rule, so saved conversations are readable whatever the
+administrator's own mentor access. `UserViewSessionFilter` then answers 403 for a route outside its
+`READ_PATHS`, and 404 for a workspace in the path other than the viewed one, both before any audit
+row. A teammate's profile is readable as it is for the member, and its row records that read. It requires a [recent sign-in](#recent-sign-in-gate) on every
+request, resolves the human member, and commits the `USER_VIEW` row before the handler runs,
+answering 503 when the row does not commit. `WorkspaceContextFilter` then gives the request the
+member's workspace roles and SCM actor ID, never instance-admin elevation. The in-app feedback read
+does not mark feedback delivered during a view. When the sign-in window lapses, the SPA opens the
+access confirmation; signing in again returns to the same page with the view intact.
 
 This is a view of existing content, not a user login. It does not enter onboarding, choose personal
-settings or create an account. Account-only features remain unavailable, so it cannot reproduce
-the selected person's complete first-login experience.
-Saved conversations remain readable without a linked account or the administrator's own mentor
-access when the workspace has mentor enabled.
+settings or create an account, so it cannot reproduce the member's first-login experience.
 
 A successful `USER_VIEW` row records authorization to attempt a read, not proof that the handler returned
 content: a missing observation or conversation can still produce a 404 after the row commits.

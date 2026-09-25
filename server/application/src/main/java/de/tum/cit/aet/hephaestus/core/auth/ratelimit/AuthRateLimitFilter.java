@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth.ratelimit;
 
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
+import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import io.github.bucket4j.ConsumptionProbe;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -145,10 +146,9 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && path.equals("/auth/refresh")) {
             return Endpoint.REFRESH;
         }
-        // The same administrator budget covers selection and every normal-app read in view mode.
-        if (("GET".equals(method) || "HEAD".equals(method))
-                && (path.matches("/workspaces/[^/]+/user-view/users(?:/.*)?")
-                        || request.getHeader("X-User-View-User") != null)) {
+        // Keyed on the administrator, not the viewed user, so switching users does not reset the budget.
+        if (("GET".equals(method) && path.matches("/workspaces/[^/]+/user-view/users(?:/.*)?"))
+                || UserViewContextHolder.USER_VIEW_REQUEST.matches(request)) {
             return Endpoint.USER_VIEW;
         }
         if ("DELETE".equals(method) && path.equals("/user")) {

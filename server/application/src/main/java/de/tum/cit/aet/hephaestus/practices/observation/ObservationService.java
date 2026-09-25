@@ -139,11 +139,6 @@ public class ObservationService {
         return detail(workspaceId, currentUser.get().getId(), observationId);
     }
 
-    @Transactional(readOnly = true)
-    public ObservationDetailDTO getObservationDetail(Long workspaceId, Long developerId, UUID observationId) {
-        return detail(workspaceId, developerId, observationId);
-    }
-
     private ObservationDetailDTO detail(Long workspaceId, Long developerId, UUID observationId) {
         Observation observation = observationRepository
                 .findByIdAndDeveloperAndWorkspace(observationId, developerId, workspaceId)

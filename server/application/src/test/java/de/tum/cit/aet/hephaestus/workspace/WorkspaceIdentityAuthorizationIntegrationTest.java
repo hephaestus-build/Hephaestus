@@ -173,6 +173,31 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
     }
 
     @Test
+    void shouldOpenTheSignedInActorsOwnProfileWhenAnEarlierMemberSharesItsLogin() {
+        var namesake = persistUser("shared-profile");
+        var provider = ensureGitLabProvider();
+        var actor = userRepository.saveAndFlush(TestUserFactory.createUser(989L, "shared-profile", provider));
+        var workspace = createWorkspace("identity-profile", "Profile", "profile", AccountType.ORG, namesake);
+        ensureWorkspaceMembership(workspace, actor, WorkspaceMembership.WorkspaceRole.MEMBER);
+        var account = accounts.saveAndFlush(new Account("GitLab namesake"));
+        var link = new IdentityLink();
+        link.setAccount(account);
+        link.setProviderId(Objects.requireNonNull(provider.getId()));
+        link.setSubject(actor.getNativeId().toString());
+        identities.saveAndFlush(link);
+
+        client.get()
+                .uri("/workspaces/identity-profile/profile/shared-profile")
+                .headers(headers -> headers.setBearerAuth("mock-jwt-user-sub-" + account.getId()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.userInfo.id")
+                .isEqualTo(actor.getId());
+    }
+
+    @Test
     void shouldReportUnionedRoleWithoutChangingTheFirstLinkedActor() {
         var olderActor = persistUser("older-http-actor");
         var firstActor = persistUser("first-http-actor");
