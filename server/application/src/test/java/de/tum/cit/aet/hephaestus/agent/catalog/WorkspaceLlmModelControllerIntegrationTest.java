@@ -11,6 +11,8 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +37,9 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
     @Autowired
     private LlmModelWorkspaceGrantRepository llmModelWorkspaceGrantRepository;
 
+    @Autowired
+    private WorkspaceLlmModelRepository workspaceLlmModelRepository;
+
     private Workspace setupWorkspace(String slug) {
         User owner = persistUser(slug + "-owner");
         Workspace workspace = createWorkspace(slug, "Workspace " + slug, slug + "-org", AccountType.ORG, owner);
@@ -50,7 +55,8 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 "openai-completions",
                 LlmAuthMode.BEARER,
                 "sk-workspace-secret",
-                true);
+                true,
+                null);
         return Objects.requireNonNull(webTestClient
                 .post()
                 .uri("/workspaces/{slug}/llm/connections", workspace.getWorkspaceSlug())
@@ -73,13 +79,16 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 null,
                 null,
                 null,
+                null,
+                null,
                 true,
                 PricingMode.NO_CHARGE,
                 null,
                 null,
                 null,
                 null,
-                "Test-owned model has no per-token charge");
+                "Test-owned model has no per-token charge",
+                null);
         return Objects.requireNonNull(webTestClient
                 .post()
                 .uri(
@@ -143,7 +152,22 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .isEqualTo(1);
 
         var updateRequest = new UpdateWorkspaceLlmModelRequestDTO(
-                "Renamed Model", null, null, null, null, null, null, null, null, null, null, null);
+                "Renamed Model",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
         webTestClient
                 .patch()
                 .uri("/workspaces/{slug}/llm/models/{id}", workspace.getWorkspaceSlug(), created.id())
@@ -174,6 +198,95 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .expectStatus()
                 .isNotFound()
                 .expectBody(Void.class);
+    }
+
+    @Test
+    @WithAdminUser
+    void workspaceAdminDeclaresDataHandlingAndTheTierIsDerivedOnEveryRead() {
+        Workspace workspace = setupWorkspace("wsmodel-declared-ws");
+        WorkspaceLlmConnectionDTO connection = createWorkspaceConnection(workspace, "conn-declared");
+        var request = new CreateWorkspaceLlmModelRequestDTO(
+                "declared-model",
+                "Declared Model",
+                "gpt-5-secret-upstream-id",
+                null,
+                null,
+                null,
+                LlmDataOperator.PROVIDER,
+                "EU region, DPA renews next spring",
+                true,
+                PricingMode.NO_CHARGE,
+                null,
+                null,
+                null,
+                null,
+                "Test-owned model has no per-token charge",
+                AiModelBrand.QWEN);
+        WorkspaceLlmModelDTO created = Objects.requireNonNull(webTestClient
+                .post()
+                .uri(
+                        "/workspaces/{slug}/llm/connections/{connectionId}/models",
+                        workspace.getWorkspaceSlug(),
+                        connection.id())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody(WorkspaceLlmModelDTO.class)
+                .returnResult()
+                .getResponseBody());
+        assertThat(created.operatedBy()).isEqualTo(LlmDataOperator.PROVIDER);
+        assertThat(created.dataHandlingNote()).isEqualTo("EU region, DPA renews next spring");
+        assertThat(created.dataHandlingTier()).isEqualTo(DataHandlingTier.CLOUD);
+        assertThat(created.brand()).isEqualTo(AiModelBrand.QWEN);
+        assertThat(workspaceLlmModelRepository
+                        .findByIdAndWorkspaceId(created.id(), workspace.getId())
+                        .orElseThrow()
+                        .getBrand())
+                .isEqualTo(AiModelBrand.QWEN);
+
+        DataHandlingFacts stored = workspaceLlmModelRepository
+                .findByIdAndWorkspaceId(created.id(), workspace.getId())
+                .orElseThrow()
+                .getDataHandling();
+        assertThat(stored.getOperatedBy()).isEqualTo(LlmDataOperator.PROVIDER);
+        assertThat(stored.getNote()).isEqualTo("EU region, DPA renews next spring");
+
+        // The declaration is replaced wholesale: an update naming only the operator drops the note.
+        webTestClient
+                .patch()
+                .uri("/workspaces/{slug}/llm/models/{id}", workspace.getWorkspaceSlug(), created.id())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("operatedBy", "PROVIDER"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.dataHandlingNote")
+                .doesNotExist()
+                .jsonPath("$.dataHandlingTier")
+                .isEqualTo("CLOUD")
+                .jsonPath("$.brand")
+                .isEqualTo("QWEN");
+
+        webTestClient
+                .patch()
+                .uri("/workspaces/{slug}/llm/models/{id}", workspace.getWorkspaceSlug(), created.id())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UpdateWorkspaceLlmModelRequestDTO(
+                        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.operatedBy")
+                .doesNotExist()
+                .jsonPath("$.dataHandlingTier")
+                .isEqualTo("UNDECLARED");
     }
 
     @Test
@@ -285,7 +398,8 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateWorkspaceLlmModelRequestDTO(
-                        null, null, null, null, null, false, null, null, null, null, null, null))
+                        null, null, null, null, null, null, null, false, null, null, null, null, null, null, null,
+                        null))
                 .exchange()
                 .expectStatus()
                 .isOk()

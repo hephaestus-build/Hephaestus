@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
+import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,7 +33,8 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 "openai-completions",
                 LlmAuthMode.BEARER,
                 "sk-test-secret-1234",
-                true);
+                true,
+                LlmConnectionPlatform.AZURE);
         return Objects.requireNonNull(webTestClient
                 .post()
                 .uri("/admin/llm/connections")
@@ -54,6 +56,7 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
         assertThat(created.slug()).isEqualTo("openai-prod");
         assertThat(created.hasApiKey()).isTrue();
         assertThat(created.apiKeyLast4()).isEqualTo("1234");
+        assertThat(created.connectionPlatform()).isEqualTo(LlmConnectionPlatform.AZURE);
 
         webTestClient
                 .get()
@@ -77,7 +80,7 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .jsonPath("$.length()")
                 .isEqualTo(1);
 
-        var updateRequest = new UpdateLlmConnectionRequestDTO("Renamed Connection", null, null, null);
+        var updateRequest = new UpdateLlmConnectionRequestDTO("Renamed Connection", null, null, null, null, true);
         webTestClient
                 .patch()
                 .uri("/admin/llm/connections/{id}", created.id())
@@ -94,7 +97,9 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .jsonPath("$.hasApiKey")
                 .isEqualTo(true)
                 .jsonPath("$.apiKeyLast4")
-                .isEqualTo("1234");
+                .isEqualTo("1234")
+                .jsonPath("$.connectionPlatform")
+                .doesNotExist();
 
         webTestClient
                 .delete()
@@ -129,7 +134,8 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                         "openai-completions",
                         LlmAuthMode.BEARER,
                         "sk-super-secret-value",
-                        true))
+                        true,
+                        null))
                 .exchange()
                 .expectStatus()
                 .isCreated()

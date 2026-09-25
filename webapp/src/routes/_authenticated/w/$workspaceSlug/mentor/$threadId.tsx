@@ -1,18 +1,28 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
 import { Chat } from "@/components/mentor/Chat";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
 import { copyToClipboard } from "@/lib/clipboard";
+import { mentorPreferenceReason } from "@/lib/mentor-preference";
 import { useAuth } from "@/runtime/auth/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/$threadId")({
+	remountDeps: ({ params }) => params,
 	component: ThreadContainer,
 });
 
 function ThreadContainer() {
-	const { threadId } = Route.useParams();
-	const readOnly = useAuth().userView !== undefined;
+	const { threadId, workspaceSlug } = Route.useParams();
+	const viewing = useAuth().userView !== undefined;
+	// The saved AI choice belongs to the signed-in account, so a user view never asks for it.
+	const preference = useQuery({
+		...getMemberOnboardingOptions({ path: { workspaceSlug } }),
+		enabled: !viewing,
+	});
+	const readonly = viewing || !preference.data || Boolean(mentorPreferenceReason(preference.data));
 
 	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
 	// already is, rather than as a toast away from the conversation that failed.
@@ -121,15 +131,15 @@ function ThreadContainer() {
 				messages={mentorChat.messages}
 				votes={mentorChat.votes}
 				status={mentorChat.status}
-				readonly={readOnly}
+				readonly={readonly}
 				attachments={[]}
 				onMessageSubmit={handleMessageSubmit}
-				onMessageEdit={readOnly ? undefined : handleMessageEdit}
+				onMessageEdit={readonly ? undefined : handleMessageEdit}
 				onStop={() => {
 					void mentorChat.stop();
 				}}
 				onReload={
-					readOnly
+					readonly
 						? undefined
 						: () => {
 								mentorChat.clearError();
@@ -137,7 +147,7 @@ function ThreadContainer() {
 							}
 				}
 				onCopy={copyToClipboard}
-				onVote={readOnly ? undefined : handleVote}
+				onVote={viewing ? undefined : handleVote}
 				inputPlaceholder="Continue the conversation..."
 				className="h-full"
 			/>

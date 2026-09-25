@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -12,6 +13,9 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Pricing is the exception: it is replaced wholesale, and only when {@code pricingMode} is given. A
  * rate sent without a {@code pricingMode} is ignored; a rate omitted alongside one is cleared.
+ *
+ * <p>Data handling is the other: the operator and the note are replaced wholesale on every update,
+ * so omitting the operator declares the model undeclared again.
  */
 @Schema(description = "Update a model on your AI provider (all fields optional)")
 public record UpdateWorkspaceLlmModelRequestDTO(
@@ -30,6 +34,13 @@ public record UpdateWorkspaceLlmModelRequestDTO(
 
         @Nullable @Schema(description = "True clears the reasoning effort, so the provider's own default applies")
         Boolean clearReasoningEffort,
+
+        @Nullable
+        @Schema(description = "Who operates the systems the work is sent to; omit to leave the model undeclared")
+        LlmDataOperator operatedBy,
+
+        @Nullable @Size(max = 200) @Schema(description = "Admin-only note: region, agreement, renewal date")
+        String dataHandlingNote,
 
         @Nullable @Schema(description = "Active toggle") Boolean enabled,
 
@@ -51,4 +62,10 @@ public record UpdateWorkspaceLlmModelRequestDTO(
         @Nullable
         @Size(max = 500)
         @Schema(description = "Note; required when the model is free (e.g. self-hosted, no cost)")
-        String priceNote) {}
+        String priceNote,
+
+        @Nullable @Schema(description = "Model brand declared by an admin; null keeps current")
+        AiModelBrand brand,
+
+        @Nullable @Schema(description = "Clear the declared model brand")
+        Boolean clearBrand) {}

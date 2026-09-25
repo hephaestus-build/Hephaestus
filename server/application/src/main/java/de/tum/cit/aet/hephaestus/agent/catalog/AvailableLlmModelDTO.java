@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import org.jspecify.annotations.NonNull;
@@ -20,6 +22,9 @@ public record AvailableLlmModelDTO(
         @NonNull @Schema(description = "Human-readable name")
         String displayName,
 
+        @Nullable @Schema(description = "Model brand declared by an admin; display only")
+        AiModelBrand brand,
+
         @NonNull @Schema(description = "Owning connection's display name")
         String connectionDisplayName,
 
@@ -28,6 +33,9 @@ public record AvailableLlmModelDTO(
                 description =
                         "Reasoning effort requested of the model; null sends none, the provider's default applies")
         ReasoningEffort reasoningEffort,
+
+        @NonNull @Schema(description = "Data-handling tier derived from the admin's declared facts")
+        DataHandlingTier dataHandlingTier,
 
         @NonNull @Schema(description = "Pricing mode") PricingMode pricingMode,
 
@@ -48,8 +56,10 @@ public record AvailableLlmModelDTO(
                 LlmModelScope.SHARED,
                 model.getId(),
                 model.getDisplayName(),
+                model.getBrand(),
                 model.getConnection().getDisplayName(),
                 model.getReasoningEffort(),
+                model.getDataHandlingTier(),
                 pricingMode,
                 currentPrice != null ? currentPrice.getPer1mInputUsd() : null,
                 currentPrice != null ? currentPrice.getPer1mOutputUsd() : null,
@@ -62,8 +72,10 @@ public record AvailableLlmModelDTO(
                 LlmModelScope.WORKSPACE,
                 model.getId(),
                 model.getDisplayName(),
+                model.getBrand(),
                 model.getConnection().getDisplayName(),
                 model.getReasoningEffort(),
+                model.getDataHandlingTier(),
                 model.getPricingMode(),
                 model.getPer1mInputUsd(),
                 model.getPer1mOutputUsd(),

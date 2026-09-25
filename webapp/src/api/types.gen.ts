@@ -11,6 +11,18 @@ export type AcceptPracticeReleaseRequest = {
 };
 
 /**
+ * One account-wide answer; model names belong only to workspace-specific views.
+ */
+export type AccountAiChoice = {
+  choice?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
+  updatedAt?: Date;
+};
+
+export type AccountAiChoiceRequest = {
+  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
+};
+
+/**
  * A human-readable account identity. <code>displayName</code>/<code>email</code> are null for deleted accounts.
  */
 export type AccountRef = {
@@ -112,6 +124,7 @@ export type AdminWorkspaceView = {
  */
 export type AgentBinding = {
   allowInternet?: boolean;
+  dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
   enabled: boolean;
   instanceModelId?: number;
   maxConcurrentJobs?: number;
@@ -392,9 +405,17 @@ export type AutonomyRollup = {
  */
 export type AvailableLlmModel = {
   /**
+   * Model brand declared by an admin; display only
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
+  /**
    * Owning connection's display name
    */
   connectionDisplayName: string;
+  /**
+   * Data-handling tier derived from the admin's declared facts
+   */
+  dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
   /**
    * Human-readable name
    */
@@ -861,6 +882,10 @@ export type CreateLlmConnectionRequest = {
    */
   baseUrl: string;
   /**
+   * Admin-declared connection platform; null when not declared
+   */
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
+  /**
    * Human-readable name
    */
   displayName: string;
@@ -879,9 +904,17 @@ export type CreateLlmConnectionRequest = {
  */
 export type CreateLlmModelRequest = {
   /**
+   * Model brand declared by an admin; display only
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
+  /**
    * Context window in tokens
    */
   contextWindow?: number;
+  /**
+   * Admin-only note: region, agreement, renewal date
+   */
+  dataHandlingNote?: string;
   /**
    * Human-readable name
    */
@@ -894,6 +927,10 @@ export type CreateLlmModelRequest = {
    * Maximum output tokens
    */
   maxOutputTokens?: number;
+  /**
+   * Who operates the systems the work is sent to; omit to leave the model undeclared
+   */
+  operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
    * Reasoning effort to request; null sends none, so the provider's own default applies
    */
@@ -1097,6 +1134,10 @@ export type CreateWorkspaceLlmConnectionRequest = {
    */
   baseUrl: string;
   /**
+   * Admin-declared connection platform; null when not declared
+   */
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
+  /**
    * Human-readable name
    */
   displayName: string;
@@ -1115,9 +1156,17 @@ export type CreateWorkspaceLlmConnectionRequest = {
  */
 export type CreateWorkspaceLlmModelRequest = {
   /**
+   * Model brand declared by an admin; display only
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
+  /**
    * Context window in tokens
    */
   contextWindow?: number;
+  /**
+   * Admin-only note: region, agreement, renewal date
+   */
+  dataHandlingNote?: string;
   /**
    * Human-readable name
    */
@@ -1130,6 +1179,10 @@ export type CreateWorkspaceLlmModelRequest = {
    * Maximum output tokens
    */
   maxOutputTokens?: number;
+  /**
+   * Who operates the systems the work is sent to; omit to leave the model undeclared
+   */
+  operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
    * Cache-read rate per 1M tokens (USD), if applicable
    */
@@ -2067,6 +2120,10 @@ export type LlmConnection = {
    */
   baseUrl: string;
   /**
+   * Admin-declared connection platform
+   */
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
+  /**
    * Creation timestamp
    */
   createdAt: Date;
@@ -2101,6 +2158,10 @@ export type LlmConnection = {
  */
 export type LlmModel = {
   /**
+   * Model brand declared by an admin; display only
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
+  /**
    * Owning connection's display name
    */
   connectionDisplayName: string;
@@ -2121,6 +2182,14 @@ export type LlmModel = {
    */
   currentPrice?: LlmModelPrice;
   /**
+   * Admin-only note: region, agreement, renewal date
+   */
+  dataHandlingNote?: string;
+  /**
+   * Data-handling tier derived from the operator; UNDECLARED until it is set
+   */
+  dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
+  /**
    * Human-readable name
    */
   displayName: string;
@@ -2140,6 +2209,10 @@ export type LlmModel = {
    * Maximum output tokens
    */
   maxOutputTokens?: number;
+  /**
+   * Who operates the systems the work is sent to; null until declared
+   */
+  operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
    * Reasoning effort requested of the model; null sends none, the provider's default applies
    */
@@ -2298,6 +2371,10 @@ export type LoginProviderView = {
   seededFromEnv?: boolean;
   type: string;
   updatedAt: Date;
+};
+
+export type MemberAiChoiceRequest = {
+  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
 };
 
 export type NotificationPreferences = {
@@ -4605,7 +4682,7 @@ export type ReviewRequestOutcome = {
   /**
    * The controlled-vocabulary reason nothing was started; absent when a review was started
    */
-  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
   /**
    * The reason as one sentence for the person who asked. Render it verbatim: it is written next to the reason it explains so that every surface says the same thing, and a re-worded copy is how a screen and a support answer come to disagree.
    */
@@ -5263,7 +5340,7 @@ export type TracedSignal = {
   /**
    * Why it ended in that state; null once it triggered a review
    */
-  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
 };
 
 export type TrendOpportunity = {
@@ -5387,6 +5464,14 @@ export type UpdateLlmConnectionRequest = {
    */
   clearApiKey?: boolean;
   /**
+   * Set true to clear the declared connection platform
+   */
+  clearConnectionPlatform?: boolean;
+  /**
+   * Admin-declared connection platform
+   */
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
+  /**
    * Human-readable name
    */
   displayName?: string;
@@ -5431,6 +5516,14 @@ export type UpdateLlmModelPriceRequest = {
  */
 export type UpdateLlmModelRequest = {
   /**
+   * Model brand declared by an admin; null keeps current
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
+  /**
+   * Clear the declared model brand
+   */
+  clearBrand?: boolean;
+  /**
    * True clears the reasoning effort, so the provider's own default applies
    */
   clearReasoningEffort?: boolean;
@@ -5438,6 +5531,10 @@ export type UpdateLlmModelRequest = {
    * Context window in tokens
    */
   contextWindow?: number;
+  /**
+   * Admin-only note: region, agreement, renewal date
+   */
+  dataHandlingNote?: string;
   /**
    * Human-readable name
    */
@@ -5450,6 +5547,10 @@ export type UpdateLlmModelRequest = {
    * Maximum output tokens
    */
   maxOutputTokens?: number;
+  /**
+   * Who operates the systems the work is sent to; omit to leave the model undeclared
+   */
+  operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
    * Reasoning effort to request; null keeps the current one (see clearReasoningEffort)
    */
@@ -5751,6 +5852,14 @@ export type UpdateWorkspaceLlmConnectionRequest = {
    */
   clearApiKey?: boolean;
   /**
+   * Set true to clear the declared connection platform
+   */
+  clearConnectionPlatform?: boolean;
+  /**
+   * Admin-declared connection platform
+   */
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
+  /**
    * Human-readable name
    */
   displayName?: string;
@@ -5765,6 +5874,14 @@ export type UpdateWorkspaceLlmConnectionRequest = {
  */
 export type UpdateWorkspaceLlmModelRequest = {
   /**
+   * Model brand declared by an admin; null keeps current
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
+  /**
+   * Clear the declared model brand
+   */
+  clearBrand?: boolean;
+  /**
    * True clears the reasoning effort, so the provider's own default applies
    */
   clearReasoningEffort?: boolean;
@@ -5772,6 +5889,10 @@ export type UpdateWorkspaceLlmModelRequest = {
    * Context window in tokens
    */
   contextWindow?: number;
+  /**
+   * Admin-only note: region, agreement, renewal date
+   */
+  dataHandlingNote?: string;
   /**
    * Human-readable name
    */
@@ -5784,6 +5905,10 @@ export type UpdateWorkspaceLlmModelRequest = {
    * Maximum output tokens
    */
   maxOutputTokens?: number;
+  /**
+   * Who operates the systems the work is sent to; omit to leave the model undeclared
+   */
+  operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
    * Cache-read rate per 1M tokens (USD), if applicable
    */
@@ -6061,6 +6186,23 @@ export type Workspace = {
 };
 
 /**
+ * A model this answer would use here.
+ */
+export type WorkspaceAiModel = {
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
+  dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
+  name: string;
+};
+
+export type WorkspaceAiOption = {
+  choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
+  mentorReady: boolean;
+  models: Array<WorkspaceAiModel>;
+  practiceReviewsReady: boolean;
+};
+
+/**
  * Summary information about a workspace for list views
  */
 export type WorkspaceListItem = {
@@ -6135,6 +6277,10 @@ export type WorkspaceLlmConnection = {
    */
   baseUrl: string;
   /**
+   * Admin-declared connection platform
+   */
+  connectionPlatform?: 'LOGOS' | 'VLLM' | 'OLLAMA' | 'AZURE' | 'AWS_BEDROCK' | 'GOOGLE_VERTEX' | 'OPENAI' | 'GOOGLE_AI_STUDIO' | 'ALIBABA_CLOUD' | 'GROQ' | 'FIREWORKS' | 'TOGETHER_AI' | 'DEEPINFRA' | 'NEBIUS' | 'OPENROUTER' | 'CLOUDFLARE_AI_GATEWAY' | 'VERCEL_AI_GATEWAY';
+  /**
    * Creation timestamp
    */
   createdAt: Date;
@@ -6169,6 +6315,10 @@ export type WorkspaceLlmConnection = {
  */
 export type WorkspaceLlmModel = {
   /**
+   * Model brand declared by an admin; display only
+   */
+  brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
+  /**
    * Owning connection's display name
    */
   connectionDisplayName: string;
@@ -6189,6 +6339,14 @@ export type WorkspaceLlmModel = {
    */
   currency: string;
   /**
+   * Admin-only note: region, agreement, renewal date
+   */
+  dataHandlingNote?: string;
+  /**
+   * Data-handling tier derived from the operator; UNDECLARED until it is set
+   */
+  dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
+  /**
    * Human-readable name
    */
   displayName: string;
@@ -6204,6 +6362,10 @@ export type WorkspaceLlmModel = {
    * Maximum output tokens
    */
   maxOutputTokens?: number;
+  /**
+   * Who operates the systems the work is sent to; null until declared
+   */
+  operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
   /**
    * Cache-read rate per 1M tokens (USD)
    */
@@ -6362,6 +6524,43 @@ export type WorkspaceMembership = {
    * Display name of the user
    */
   userName?: string;
+};
+
+/**
+ * One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in
+ *  every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is
+ *  what differs between workspaces.
+ */
+export type WorkspaceOnboarding = {
+  aiChoice?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
+  aiChoiceRequired: boolean;
+  aiOptions: Array<WorkspaceAiOption>;
+  enabled: boolean;
+  links: Array<WorkspaceOnboardingLink>;
+  needsSetup: boolean;
+  workspaceName: string;
+};
+
+export type WorkspaceOnboardingLink = {
+  available: boolean;
+  connectionId: number;
+  displayName: string;
+  linked: boolean;
+  providerType: string;
+  registrationId?: string;
+  required: boolean;
+  teamName?: string;
+};
+
+/**
+ * <code>aiChoiceRequired</code> is read on GET and ignored on PUT: the server latches it the first time
+ *  the setup page is enabled and never clears it.
+ */
+export type WorkspaceOnboardingSettings = {
+  aiChoiceRequired: boolean;
+  enabled: boolean;
+  requiredConnectionIds: Array<number>;
+  revision: number;
 };
 
 /**
@@ -8702,6 +8901,38 @@ export type GetCurrentUserResponses = {
 
 export type GetCurrentUserResponse = GetCurrentUserResponses[keyof GetCurrentUserResponses];
 
+export type GetAccountAiChoiceData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/ai-choice';
+};
+
+export type GetAccountAiChoiceResponses = {
+  /**
+   * OK
+   */
+  200: AccountAiChoice;
+};
+
+export type GetAccountAiChoiceResponse = GetAccountAiChoiceResponses[keyof GetAccountAiChoiceResponses];
+
+export type UpdateAccountAiChoiceData = {
+  body: AccountAiChoiceRequest;
+  path?: never;
+  query?: never;
+  url: '/user/ai-choice';
+};
+
+export type UpdateAccountAiChoiceResponses = {
+  /**
+   * OK
+   */
+  200: AccountAiChoice;
+};
+
+export type UpdateAccountAiChoiceResponse = UpdateAccountAiChoiceResponses[keyof UpdateAccountAiChoiceResponses];
+
 export type GetConsentStatusData = {
   body?: never;
   path?: never;
@@ -9295,7 +9526,9 @@ export type DeleteAgentData = {
     workspaceSlug: string;
     purpose: 'PRACTICE_REVIEW' | 'MENTOR';
   };
-  query?: never;
+  query?: {
+    dataHandlingTier?: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
+  };
   url: '/workspaces/{workspaceSlug}/agents/{purpose}';
 };
 
@@ -9317,7 +9550,9 @@ export type ConfigureAgentData = {
     workspaceSlug: string;
     purpose: 'PRACTICE_REVIEW' | 'MENTOR';
   };
-  query?: never;
+  query?: {
+    dataHandlingTier?: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
+  };
   url: '/workspaces/{workspaceSlug}/agents/{purpose}';
 };
 
@@ -9326,6 +9561,10 @@ export type ConfigureAgentErrors = {
    * Model not found
    */
   404: unknown;
+  /**
+   * The model is undeclared, or declared as another tier than this slot (problem type agent-binding-slot-mismatch, property declaredTier)
+   */
+  409: unknown;
 };
 
 export type ConfigureAgentResponses = {
@@ -10541,6 +10780,132 @@ export type UpdateNotificationsResponses = {
 };
 
 export type UpdateNotificationsResponse = UpdateNotificationsResponses[keyof UpdateNotificationsResponses];
+
+export type GetMemberOnboardingData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/me';
+};
+
+export type GetMemberOnboardingResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboarding;
+};
+
+export type GetMemberOnboardingResponse = GetMemberOnboardingResponses[keyof GetMemberOnboardingResponses];
+
+export type UpdateMemberAiChoiceData = {
+  body: MemberAiChoiceRequest;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/me/ai-choice';
+};
+
+export type UpdateMemberAiChoiceResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboarding;
+};
+
+export type UpdateMemberAiChoiceResponse = UpdateMemberAiChoiceResponses[keyof UpdateMemberAiChoiceResponses];
+
+export type DismissMemberOnboardingData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/me/dismissal';
+};
+
+export type DismissMemberOnboardingResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboarding;
+};
+
+export type DismissMemberOnboardingResponse = DismissMemberOnboardingResponses[keyof DismissMemberOnboardingResponses];
+
+export type GetMemberOnboardingSettingsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/settings';
+};
+
+export type GetMemberOnboardingSettingsResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboardingSettings;
+};
+
+export type GetMemberOnboardingSettingsResponse = GetMemberOnboardingSettingsResponses[keyof GetMemberOnboardingSettingsResponses];
+
+export type UpdateMemberOnboardingSettingsData = {
+  body: WorkspaceOnboardingSettings;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/settings';
+};
+
+export type UpdateMemberOnboardingSettingsResponses = {
+  /**
+   * OK
+   */
+  200: WorkspaceOnboardingSettings;
+};
+
+export type UpdateMemberOnboardingSettingsResponse = UpdateMemberOnboardingSettingsResponses[keyof UpdateMemberOnboardingSettingsResponses];
+
+export type GetMemberOnboardingLinkOptionsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/onboarding/settings/links';
+};
+
+export type GetMemberOnboardingLinkOptionsResponses = {
+  /**
+   * OK
+   */
+  200: Array<WorkspaceOnboardingLink>;
+};
+
+export type GetMemberOnboardingLinkOptionsResponse = GetMemberOnboardingLinkOptionsResponses[keyof GetMemberOnboardingLinkOptionsResponses];
 
 export type ListOutlineCollectionsData = {
   body?: never;

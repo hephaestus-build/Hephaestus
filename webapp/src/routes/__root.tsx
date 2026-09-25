@@ -528,6 +528,7 @@ function AppSidebarContainer() {
 		<AppSidebar
 			username={username}
 			isAdmin={workspaceAccess.isAdmin}
+			isOwner={workspaceAccess.role === "OWNER"}
 			isAppAdmin={isAppAdmin}
 			hasMentorAccess={hasMentorAccess}
 			readOnly={Boolean(userView)}

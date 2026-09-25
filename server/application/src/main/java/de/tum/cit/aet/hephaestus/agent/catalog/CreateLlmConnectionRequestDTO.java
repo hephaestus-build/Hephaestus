@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -35,4 +36,7 @@ public record CreateLlmConnectionRequestDTO(
         String apiKey,
 
         @Nullable @Schema(description = "Whether the connection is enabled (default false)")
-        Boolean enabled) {}
+        Boolean enabled,
+
+        @Nullable @Schema(description = "Admin-declared connection platform; null when not declared")
+        LlmConnectionPlatform connectionPlatform) {}

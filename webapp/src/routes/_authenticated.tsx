@@ -26,7 +26,8 @@ export const Route = createFileRoute("/_authenticated")({
 			if (
 				(location.pathname !== workspacePath &&
 					!location.pathname.startsWith(`${workspacePath}/`)) ||
-				location.pathname.startsWith(`${workspacePath}/admin`)
+				location.pathname.startsWith(`${workspacePath}/admin`) ||
+				location.pathname === `${workspacePath}/onboarding`
 			) {
 				throw redirect({
 					to: "/w/$workspaceSlug/user/$username",

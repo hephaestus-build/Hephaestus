@@ -30,6 +30,10 @@ beforeEach(() => {
 			]),
 		),
 		http.get("*/user/features", () => HttpResponse.json({ MENTOR_ACCESS: false })),
+		// The saved AI choice belongs to the signed-in account; the server refuses it in a view.
+		http.get("*/workspaces/:workspaceSlug/onboarding/me", () =>
+			HttpResponse.json({ status: 403 }, { status: 403 }),
+		),
 	);
 });
 afterEach(clearUserView);
@@ -47,6 +51,32 @@ it("opens saved conversations without using the administrator's mentor setting",
 	renderRouteAt("/w/engineering/mentor");
 	await screen.findByRole("heading", { name: "No conversation selected" }, ROUTE_RENDER_WAIT);
 	await waitFor(() => expect(viewedUser).toBe("11"));
+});
+
+it("opens a saved conversation read-only", async () => {
+	const threadId = "65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed";
+	server.use(
+		http.get("*/workspaces/:workspaceSlug/mentor/threads", () =>
+			HttpResponse.json([{ id: threadId, title: "Earlier conversation" }]),
+		),
+		http.get("*/workspaces/:workspaceSlug/mentor/threads/:threadId", () =>
+			HttpResponse.json({
+				id: threadId,
+				messages: [
+					{
+						id: "ea28a7c9-b17f-49be-ae98-a083fa99b2b2",
+						role: "assistant",
+						parts: [{ type: "text", text: "Earlier guidance remains readable." }],
+					},
+				],
+			}),
+		),
+	);
+
+	renderRouteAt(`/w/engineering/mentor/${threadId}`);
+	await screen.findByText("Earlier guidance remains readable.", {}, ROUTE_RENDER_WAIT);
+	expect(screen.queryByRole("textbox")).toBeNull();
+	expect(screen.queryByRole("heading", { name: "Heph is off for you" })).toBeNull();
 });
 
 const stepUpRequired = () =>

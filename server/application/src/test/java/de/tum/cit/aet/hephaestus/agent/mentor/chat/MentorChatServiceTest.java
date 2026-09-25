@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
@@ -95,6 +94,8 @@ import tools.jackson.databind.node.ObjectNode;
 /** Uses a real translator and lock with a recording emitter and synchronous sandbox stream. */
 @MockitoSettings(strictness = Strictness.LENIENT)
 class MentorChatServiceTest extends BaseUnitTest {
+    @org.mockito.Mock
+    private de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter memberAiRouting;
 
     private static final long WORKSPACE_ID = 1L;
     private static final long USER_ID = 99L;
@@ -110,9 +111,6 @@ class MentorChatServiceTest extends BaseUnitTest {
 
     @Mock
     ChatThreadRepository chatThreadRepository;
-
-    @Mock
-    WorkspaceAgentBindingRepository agentBindingRepository;
 
     @Mock
     WorkspaceContextBuilder workspaceContextBuilder;
@@ -195,7 +193,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         mentorBinding.setTimeoutSeconds(600);
         Workspace ws = new Workspace();
         ws.setWorkspaceSlug("acme");
-        when(agentBindingRepository.findByWorkspaceIdAndPurpose(WORKSPACE_ID, AgentPurpose.MENTOR))
+        when(memberAiRouting.binding(eq(WORKSPACE_ID), eq(AgentPurpose.MENTOR), any()))
                 .thenReturn(Optional.of(mentorBinding));
         ChatThread thread = new ChatThread();
         thread.setId(THREAD_ID);
@@ -229,7 +227,6 @@ class MentorChatServiceTest extends BaseUnitTest {
         return new MentorChatService(
                 userRepository,
                 chatThreadRepository,
-                agentBindingRepository,
                 workspaceContextBuilder,
                 mentorPiAdapter,
                 sandboxServiceProvider(interactiveSandboxService),
@@ -242,7 +239,8 @@ class MentorChatServiceTest extends BaseUnitTest {
                 new MentorChatMetrics(meterRegistry),
                 llmBudgetService,
                 llmAdmissionService,
-                proxyCredentialRegistry);
+                proxyCredentialRegistry,
+                memberAiRouting);
     }
 
     @Test
@@ -411,15 +409,14 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void runTurn_prefersBoundEnabledMentorConfig_overFallback() throws Exception {
-        Workspace boundWs = new Workspace();
+    void shouldUseTheMemberLocationBindingForMentorAdmission() throws Exception {
         WorkspaceAgentBinding boundBinding = new WorkspaceAgentBinding();
         // A distinct binding id detects accidentally using the default fixture binding.
         boundBinding.setId(4242L);
         boundBinding.setPurpose(AgentPurpose.MENTOR);
         boundBinding.setEnabled(true);
         boundBinding.setTimeoutSeconds(600);
-        when(agentBindingRepository.findByWorkspaceIdAndPurpose(WORKSPACE_ID, AgentPurpose.MENTOR))
+        when(memberAiRouting.binding(eq(WORKSPACE_ID), eq(AgentPurpose.MENTOR), any()))
                 .thenReturn(Optional.of(boundBinding));
 
         scheduleHappyPathResponses(sandbox).run();
@@ -431,26 +428,8 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void runTurn_disabledBoundConfig_failsClosedBeforeSandboxAttach() throws Exception {
-        Workspace boundWs = new Workspace();
-        WorkspaceAgentBinding disabled = new WorkspaceAgentBinding();
-        disabled.setId(99L);
-        disabled.setPurpose(AgentPurpose.MENTOR);
-        disabled.setEnabled(false);
-        when(agentBindingRepository.findByWorkspaceIdAndPurpose(WORKSPACE_ID, AgentPurpose.MENTOR))
-                .thenReturn(Optional.of(disabled));
-
-        runTurnSync();
-
-        assertThat(String.join("\n", emitter.rawData))
-                .contains(
-                        "Hephaestus is not ready to mentor in this workspace yet. Connect a mentor model, then try again.");
-        verify(interactiveSandboxService, never()).attach(any());
-    }
-
-    @Test
     void runTurn_noEnabledConfig_recordsErrorAndNeverAttaches() throws Exception {
-        when(agentBindingRepository.findByWorkspaceIdAndPurpose(WORKSPACE_ID, AgentPurpose.MENTOR))
+        when(memberAiRouting.binding(eq(WORKSPACE_ID), eq(AgentPurpose.MENTOR), any()))
                 .thenReturn(Optional.empty());
 
         runTurnSync();
@@ -458,7 +437,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(emitter.recordedTypes()).contains("error");
         assertThat(String.join("\n", emitter.rawData))
                 .contains(
-                        "Hephaestus is not ready to mentor in this workspace yet. Connect a mentor model, then try again.")
+                        "Heph isn't set up for your AI choice in this workspace yet. Ask a workspace owner, or change your choice under Your AI choice in the sidebar.")
                 .doesNotContain("workspace " + WORKSPACE_ID);
         try {
             verify(interactiveSandboxService, never()).attach(any());

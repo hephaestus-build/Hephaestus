@@ -22,6 +22,12 @@ erDiagram
         BIGINT version "NOT NULL"
     }
 
+    AccountAiChoice {
+        BIGINT account_id PK,FK
+        VARCHAR(24) ai_choice "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+    }
+
     AccountExport {
         BIGINT id PK
         BIGINT account_id FK "NOT NULL"
@@ -700,6 +706,7 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(32) connection_platform
     }
 
     LlmModel {
@@ -716,6 +723,9 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
         VARCHAR(16) reasoning_effort
+        VARCHAR(200) data_handling_note
+        VARCHAR(24) operated_by
+        VARCHAR(16) brand
     }
 
     LlmModelPrice {
@@ -1550,6 +1560,7 @@ erDiagram
         BIGINT workspace_model_id FK
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(24) data_handling_tier UK "NOT NULL"
     }
 
     WorkspaceLlmConnection {
@@ -1564,6 +1575,7 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
+        VARCHAR(32) connection_platform
     }
 
     WorkspaceLlmModel {
@@ -1587,6 +1599,17 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
         VARCHAR(16) reasoning_effort
+        VARCHAR(200) data_handling_note
+        VARCHAR(24) operated_by
+        VARCHAR(16) brand
+    }
+
+    WorkspaceMemberOnboarding {
+        BIGINT id PK
+        BIGINT account_id FK,UK "NOT NULL"
+        BIGINT seen_revision "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
     }
 
     WorkspaceMembership {
@@ -1596,6 +1619,14 @@ erDiagram
         BIGINT user_id PK,FK
         BIGINT workspace_id PK,FK
         BOOLEAN hidden "NOT NULL"
+    }
+
+    WorkspaceOnboardingSetting {
+        BIGINT workspace_id PK,FK
+        BOOLEAN ai_choice_required "NOT NULL"
+        BOOLEAN enabled "NOT NULL"
+        JSONB required_connection_ids "NOT NULL"
+        BIGINT revision "NOT NULL"
     }
 
     WorkspaceSlugHistory {
@@ -1628,6 +1659,7 @@ erDiagram
 
     %% Relationships
     %% One-to-One relationships
+    Account ||--|| AccountAiChoice : has
     ChatMessage ||--|| ChatMessageVote : has
     DiscussionComment ||--|| Discussion : references
     PracticeRevision ||--|| Practice : references
@@ -1636,6 +1668,7 @@ erDiagram
     PullRequestReviewComment ||--|| PullRequestReviewThread : reviewed
     User ||--|| UserPreference : has
     Organization ||--|| Workspace : has
+    Workspace ||--|| WorkspaceOnboardingSetting : has
 
     %% One-to-Many relationships
     Account ||--o{ AccountExport : has
@@ -1801,6 +1834,8 @@ erDiagram
     WorkspaceLlmConnection ||--o{ WorkspaceLlmModel : connection_id
     Workspace ||--o{ WorkspaceLlmModel : has
     WorkspaceLlmConnection ||--o{ WorkspaceLlmModel : connection_id
+    Workspace ||--o{ WorkspaceMemberOnboarding : belongs_to
+    Account ||--o{ WorkspaceMemberOnboarding : belongs_to
     User ||--o{ WorkspaceMembership : belongs_to
     Workspace ||--o{ WorkspaceMembership : belongs_to
     Workspace ||--o{ WorkspaceSlugHistory : has

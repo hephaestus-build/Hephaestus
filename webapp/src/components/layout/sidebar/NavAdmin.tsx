@@ -5,6 +5,7 @@ import {
 	ChevronRight,
 	CircleDollarSign,
 	ClipboardCheck,
+	Handshake,
 	LayoutGridIcon,
 	ListChecks,
 	PlugZapIcon,
@@ -34,6 +35,7 @@ import {
 
 export interface NavAdminProps {
 	workspaceSlug: string;
+	isOwner?: boolean;
 	integrationKinds: readonly IntegrationCatalogEntry["kind"][];
 	scmProviderType?: "GITHUB" | "GITLAB";
 }
@@ -60,6 +62,7 @@ function useSectionOpen(onSection: boolean) {
 export function NavAdmin({
 	workspaceSlug,
 	integrationKinds,
+	isOwner = false,
 	scmProviderType = "GITHUB",
 }: NavAdminProps) {
 	const matchRoute = useMatchRoute();
@@ -129,6 +132,18 @@ export function NavAdmin({
 						<span>Members</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
+				{isOwner && (
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							tooltip="Member onboarding"
+							isActive={Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/onboarding" }))}
+							render={<Link to="/w/$workspaceSlug/admin/onboarding" params={{ workspaceSlug }} />}
+						>
+							<Handshake />
+							<span>Member onboarding</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton
 						tooltip="Teams"
