@@ -281,7 +281,9 @@ interface AttentionPracticeProps {
 function AttentionPractice({ row, onOpenPractice, onReadFeedback }: AttentionPracticeProps) {
 	const AttentionIcon = row.def.icon;
 	return (
-		<li className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2.5 py-1">
+		// Below `sm` the link takes its own line under the sentence instead of squeezing it: a phone
+		// is too narrow for a pill, a sentence and a link on one row.
+		<li className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2.5 gap-y-1 py-1 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
 			<StatusTooltip
 				def={row.def}
 				render={<button type="button" />}
@@ -305,7 +307,7 @@ function AttentionPractice({ row, onOpenPractice, onReadFeedback }: AttentionPra
 			{onReadFeedback && (
 				<InlineLink
 					onClick={() => onReadFeedback(row.feedbackId)}
-					className="inline-flex items-center gap-1 pl-3 text-sm whitespace-nowrap"
+					className="col-start-2 inline-flex items-center gap-1 text-sm whitespace-nowrap sm:col-start-3 sm:pl-3"
 				>
 					<span aria-hidden>Read the feedback</span>
 					<span className="sr-only">Read the feedback for {row.practiceName}</span>
