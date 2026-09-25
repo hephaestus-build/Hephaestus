@@ -153,7 +153,8 @@ public class ObservationService {
      * the newest feedback unit that said something about each observation to this developer (ADR 0021: advice
      * lives on the delivered {@code Feedback}, not the immutable observation), which carries both the text the
      * developer reads and — when it delivered — the handle they answer it with, so the two can never come from
-     * different units. A caller hands in observations it has already loaded and gated: evidence
+     * different units. A caller hands in observations it has already loaded and gated, inside the
+     * transaction their lazy associations are read in: evidence
      * is included only for the ids in {@code evidencePermitted}, which is {@link EvidenceAuthorization}'s answer
      * for the delivery purpose, and the artifact link comes from the run target of the observation's job, absent
      * when the target is no longer resolvable.
@@ -161,7 +162,6 @@ public class ObservationService {
      * <p>Takes the workspace even though observation ids alone identify the rows: the units it loads are
      * feedback, and feedback is tenant-scoped whatever the observation is.
      */
-    @Transactional(readOnly = true)
     public List<ObservationDetailDTO> toDetails(
             Long workspaceId,
             Long developerId,
