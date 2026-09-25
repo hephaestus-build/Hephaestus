@@ -345,11 +345,11 @@ Supersession atomically retires a selected `PREPARED` item, but new feedback can
 On the conversation lane supersession only ever claims `PREPARED` feedback. Say **superseded** for
 feedback that was prepared but replaced before anybody read it, and **continued** for newer feedback
 written beside feedback that was already read: nothing received is ever un-said, and the newer row still
-records what it follows through `replaces_id`. The Practice profile keeps the ledger and not the page: a
-new card about a practice supersedes the card still **open** about it, read or not, because the page is a
-list of habits to work on and one habit gets one open card; a card that is closed — resolved by the work
-or by the developer, or closed because the practice changed — is never superseded and stays as the record
-beside the new one (`FeedbackSupersession#replaceOpen`, decided from `PreviousInAppFeedback`). Issue
+records what it follows through `replaces_id`. On the Practice profile a new card about a practice
+replaces the card still **open** about it, read or not, so the page holds one open card per practice; a
+card that is closed — resolved by the work or by the developer, or closed because the practice changed —
+is never superseded and stays as the record beside the new one (`FeedbackSupersession#replaceOpen`,
+decided from `PreviousInAppFeedback`). Issue
 reviews may edit the prior issue comment in place, so their ledger entry is retired when that visible text
 is replaced. Pull request reviews do not: every new review posts a new summary, while a retry of the same
 review reconciles its existing comment by marker.
@@ -370,16 +370,15 @@ ways, and the two are held apart everywhere the resolution is shown.
 | Term                     | Plain meaning                                                                                                                                                                                                                                                                                                                  | Do not use for this concept                         |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
 | **Resolved by the work** | Three pieces of the developer's reviewed work in a row, reviewed after the feedback was prepared, came back clean on the practice. Computed from the observations when the feedback is read and never stored; a problem starts the count over, and a piece of work reviewed several times counts once, at its newest review. | auto-resolved, closed by the system, streak, passed |
-| **Marked as addressed**  | The developer recorded `ADDRESSED` or `NOT_APPLICABLE` as their response to the feedback (`InAppFeedbackEvidence#resolvedByDeveloperAt` over `FeedbackResolution#resolves`; a dispute leaves it open). The other way a piece of feedback resolves; the earlier of the two is what the card and the summary report, and the card carries the moment as `resolvedByDeveloperAt` so no reader decides it again. | dismissed, acknowledged, done                       |
+| **Marked as addressed**  | The developer answered the feedback with *Addressed* or *Not applicable*. A dispute leaves it open. Whichever way resolved the feedback first is the one the card and the summary report.                                                                                                                                    | dismissed, acknowledged, done                       |
+| **Fell back**            | Open feedback the developer's work had started to answer, with at least one clean piece of work toward the three, until a piece of work reviewed in the overview's window raised the problem again and the count went back to none. Closed feedback never falls back.                                                        | reset, regressed, reopened                          |
 
-The count is a piece of reviewed work, bundled as the trend bundles it — one opportunity per piece of
-work, read off its latest run — so a re-review that changes what the latest run said changes the answer
-with it. A run of three that completed once stays a resolution: a later slip is new feedback's business.
+A run of three that completed once stays a resolution: a later slip is new feedback's business.
 The profile summary reports a `FEEDBACK_RESOLVED` change with who resolved it, `WORK` or `DEVELOPER`,
 and never merges the two into one count.
 
 A card is **closed** when it is resolved either way, and also when its practice changed its review rules
-after the card was prepared: the card stays on the page with `practiceChangedAt` set and says so, is not
+after the card was prepared: the card stays on the page with `closedBy: PRACTICE_CHANGED` and says so, is not
 resolved by anything, and its evidence is kept even though it is no longer current, whereas evidence whose
 source may no longer be cited still hides the card. A closed card leaves the Practice profile 30 days after
 it closed, applied when the page is read and never by changing the row
@@ -394,18 +393,18 @@ resolution rule. Its rules, in one place:
 - **The window** every change is measured over opens at the review run before the latest one and
   closes now. With fewer than two runs it spans the standing's own look-back of 90 days, and a previous
   run older than that is clamped to it, since no standing reaches further back.
+- **Only feedback prepared inside the look-back** is reported. Older feedback is left out even when
+  the developer answers it inside the window, because the work that may have closed it first lies
+  before anything the overview reads.
 - **One change per practice and type, the newest.** A practice that got two pieces of feedback in the
   window is reported once for each type of change, by the newer piece.
-- **Precedence** when the page names one event per practice: resolved feedback, then new feedback, then
-  a standing that slipped, then one that moved up, then a first observation, then a trend that turned,
-  then a practice that held.
-- **A held practice is dropped** from what held when the same practice slipped or got new feedback in
-  the window: holding and moving up are not a contradiction, holding and slipping are.
+- **Precedence** when the page names one event per practice: resolved feedback, then feedback that
+  fell back, then new feedback, then a standing that slipped, then one that moved up, then a first
+  observation, then a trend that turned, then a practice that held.
+- **A held practice is dropped** from what held when the same practice slipped, fell back or got new
+  feedback in the window: holding and moving up are not a contradiction, holding and slipping are.
 
 ## Machine names
-
-The `artifact` → `reviewedWork` rename is scoped to the HTTP DTOs, so the webapp's `artifactKind`
-and `artifactId` search params and its `$artifactKind` route segment keep their names on purpose.
 
 | Concept                      | JSON / API                         | Java                                       | Database                                                                      |
 | ---------------------------- | ---------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
@@ -418,6 +417,7 @@ and `artifactId` search params and its `$artifactKind` route segment keep their 
 | Evidence requirement         | `needs[]`                          | `PracticeEvidenceRequirement`              | inside `bindings`                                                             |
 | Evidence stance              | `stance`                           | `EvidenceStance`                           | inside `bindings`                                                             |
 | Artifact kind                | `artifactKind`                     | `ArtifactKind`                             | `applies_to`                                                                  |
+| Reviewed work                | `reviewedWork` in the HTTP DTOs; `artifactKind`, `artifactId` in webapp search params and routes | `ReviewedWorkRefDTO` | `artifact_kind`, `artifact_id`                                              |
 | Source display name          | `displayName`                      | `ArtifactSourceContract.displayName`       | source catalog                                                                |
 | Required capture quality     | `requiredQuality`                  | `RequiredCaptureQuality`                   | source catalog                                                                |
 | Identity policy              | `identity`                         | `IdentityPolicy`                           | source catalog                                                                |
@@ -459,9 +459,12 @@ and `artifactId` search params and its `$artifactKind` route segment keep their 
 | Conversation move            | not on the HTTP API                | `ConversationBriefBody`                    | JSON inside `feedback.body`                                                   |
 | Thread key                   | not on the HTTP API                | `FeedbackThreadKey`                        | `feedback.thread_key` (not unique)                                            |
 | What feedback follows        | not on the HTTP API                | —                                          | `feedback.replaces_id`                                                        |
-| Resolved by the work         | `cleanWork`, `cleanNeeded`, `resolvedByWorkAt` | `WorkResolution`            | derived, never stored                                                         |
-| Marked as addressed          | `resolution: ADDRESSED`, `resolvedByDeveloperAt` | `Reaction.resolution`        | `reaction.action`                                                             |
+| Resolved by the work         | `cleanWork`, `cleanNeeded`, `closedBy: WORK` | `WorkResolution`            | derived, never stored                                                         |
+| Marked as addressed          | `resolution: ADDRESSED`, `closedBy: DEVELOPER` | `Reaction.resolution`        | `reaction.action`                                                             |
+| Closed feedback              | `closedAt`, `closedBy`             | `FeedbackClosure`                          | derived, never stored                                                         |
 | Who resolved feedback        | `resolvedBy`                       | `ProfileChangeDTO.ResolvedBy`              | derived, never stored                                                         |
+| Fell back                    | `FEEDBACK_RESET`                   | `ProfileChangeDTO.Type.FEEDBACK_RESET`     | derived, never stored                                                         |
+| Standing move direction      | `direction: UP`, `DOWN` on a standing or group move; absent for a move into or out of a silence | `ProfileChangeDTO.Direction`, from `PracticeStandingDTO.Standing.rank()` | derived, never stored |
 | Holds as                     | `holdsAs`                          | `BundledPracticeCatalog`                   | bundled catalog, never stored — defined in the [feedback language](./practice-feedback-language.md) |
 | Signal refusal reason        | —                                  | `SignalStateReason`                        | `artifact_signal.state_reason`                                                |
 | Group dashboard visibility    | `visibleInPracticeDashboards`      | `PracticeGroup.visibleInPracticeDashboards` | `visible_in_practice_dashboards`                                              |
