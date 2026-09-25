@@ -402,7 +402,7 @@ describe("workspace member onboarding route", () => {
 				params: { workspaceSlug: "other" },
 			});
 		});
-		await screen.findByText(/in Other workspace/u, undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText(/start in Other workspace/u, undefined, ROUTE_RENDER_WAIT);
 		expect(checked(/^No AI /u)).toBe(false);
 	});
 
@@ -454,7 +454,7 @@ describe("onboarding mutations across workspace navigation", () => {
 				params: { workspaceSlug: "other" },
 			});
 		});
-		await screen.findByText(/in Other workspace/u, undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText(/start in Other workspace/u, undefined, ROUTE_RENDER_WAIT);
 		await act(async () => {
 			release();
 		});
@@ -495,7 +495,7 @@ describe("onboarding mutations across workspace navigation", () => {
 				params: { workspaceSlug: "other" },
 			});
 		});
-		await screen.findByText(/in Other workspace/u, undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText(/start in Other workspace/u, undefined, ROUTE_RENDER_WAIT);
 		await act(async () => {
 			release();
 		});

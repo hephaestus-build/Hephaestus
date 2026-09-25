@@ -20,6 +20,7 @@ import type {
 import { type Fact, FactList } from "@/components/auth/FactList";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { AiMark } from "@/components/icons/AiMark";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import {
@@ -401,13 +402,15 @@ function BindingPreview({
 		if (!binding) {
 			return "Nothing runs for them";
 		}
+		const model = modelOf(binding, availableModels);
 		return (
-			<>
+			<span className="inline-flex flex-wrap items-center gap-x-1.5">
+				<AiMark brand={model?.brand} size="sm" />
 				<span className="font-medium text-foreground">
-					{modelOf(binding, availableModels)?.displayName ?? "A model no longer offered here"}
+					{model?.displayName ?? "A model no longer offered here"}
 				</span>{" "}
 				({DATA_HANDLING_DEFS[binding.dataHandlingTier].label})
-			</>
+			</span>
 		);
 	};
 	const facts: Fact[] = PREVIEWED_CHOICES.map((choice) => ({

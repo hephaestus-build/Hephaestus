@@ -25,7 +25,7 @@ export interface DataHandlingDef extends StatusDef {
 export const DATA_HANDLING_DEFS: Record<DataHandlingTier, DataHandlingDef> = {
 	IN_HOUSE: {
 		label: "In-house",
-		icon: Building2Icon,
+		icon: HouseIcon,
 		badgeVariant: "secondary",
 		description: "Runs on systems your organisation operates.",
 		facts: [
@@ -97,61 +97,58 @@ export const OPERATED_BY_DEFS: StatusDefs<OperatedBy> = {
 	},
 };
 
-export interface MemberAiChoiceDef extends StatusDef {
-	facts: readonly [MemberAiChoiceFact, MemberAiChoiceFact, MemberAiChoiceFact, MemberAiChoiceFact];
-	ceiling: DataHandlingTier | null;
-}
+/** The rows every answer is compared on, in the order the cards show them. */
+export const MEMBER_AI_CHOICE_DIMENSIONS = ["AI help", "Models", "Speed", "Sent to"] as const;
+export type MemberAiChoiceDimension = (typeof MEMBER_AI_CHOICE_DIMENSIONS)[number];
 
 export interface MemberAiChoiceFact {
-	tone: "pro" | "caveat" | "con" | "neutral";
+	tone: "pro" | "caveat" | "con" | "none";
 	text: string;
 }
 
-export const MEMBER_AI_CHOICE_DIMENSIONS = [
-	"AI help",
-	"Models",
-	"Capacity",
-	"New requests",
-] as const;
+export interface MemberAiChoiceDef extends StatusDef {
+	facts: Record<MemberAiChoiceDimension, MemberAiChoiceFact>;
+	ceiling: DataHandlingTier | null;
+}
 
 export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = {
 	IN_HOUSE_ONLY: {
 		label: "In-house",
 		icon: HouseIcon,
 		badgeVariant: "secondary",
-		description: "Use models declared in-house.",
-		facts: [
-			{ tone: "pro", text: "Feedback and Heph, when ready." },
-			{ tone: "caveat", text: "Only in-house models." },
-			{ tone: "caveat", text: "In-house capacity may limit model size or speed." },
-			{ tone: "pro", text: "Only in-house models receive them." },
-		],
+		description: "Models your organisation runs",
+		facts: {
+			"AI help": { tone: "pro", text: "Feedback and Heph" },
+			Models: { tone: "caveat", text: "Usually smaller models" },
+			Speed: { tone: "caveat", text: "Limited capacity, can be slower" },
+			"Sent to": { tone: "pro", text: "Only your organisation" },
+		},
 		ceiling: "IN_HOUSE",
 	},
 	CLOUD: {
 		label: "Cloud",
 		icon: CloudIcon,
 		badgeVariant: "secondary",
-		description: "Also use provider-operated models.",
-		facts: [
-			{ tone: "pro", text: "Feedback and Heph, when ready." },
-			{ tone: "pro", text: "In-house and provider models." },
-			{ tone: "neutral", text: "May offer stronger models or more capacity." },
-			{ tone: "caveat", text: "A configured provider may receive them." },
-		],
+		description: "Adds models from cloud providers",
+		facts: {
+			"AI help": { tone: "pro", text: "Feedback and Heph" },
+			Models: { tone: "pro", text: "Strongest models on offer" },
+			Speed: { tone: "pro", text: "More capacity, usually faster" },
+			"Sent to": { tone: "caveat", text: "Also a cloud provider" },
+		},
 		ceiling: "CLOUD",
 	},
 	NO_AI: {
 		label: "No AI",
 		icon: CircleOffIcon,
 		badgeVariant: "secondary",
-		description: "No new AI for your work. Sync and stored work stay.",
-		facts: [
-			{ tone: "con", text: "No new feedback or Heph replies." },
-			{ tone: "con", text: "No model is used." },
-			{ tone: "neutral", text: "No model capacity needed." },
-			{ tone: "pro", text: "None sent for your work." },
-		],
+		description: "Hephaestus without AI",
+		facts: {
+			"AI help": { tone: "con", text: "No feedback or Heph" },
+			Models: { tone: "none", text: "None" },
+			Speed: { tone: "none", text: "Not applicable" },
+			"Sent to": { tone: "pro", text: "Nowhere" },
+		},
 		ceiling: null,
 	},
 };

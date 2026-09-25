@@ -8,6 +8,7 @@ import {
 	AI_MODEL_BRAND_META,
 	type AiModelBrand,
 } from "@/components/icons/ai-model-brand-logos";
+import { AiMark } from "@/components/icons/AiMark";
 import {
 	DATA_HANDLING_DEFS,
 	type DataHandlingTier,
@@ -345,13 +346,7 @@ export function LlmModelFields({
 				>
 					<ComboboxTrigger id={`${idPrefix}-brand`} className="w-full justify-between">
 						<span className="flex min-w-0 items-center gap-2">
-							{value.brand && (
-								<img
-									src={AI_MODEL_BRAND_META[value.brand].src}
-									alt=""
-									className="size-5 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
-								/>
-							)}
+							{value.brand && <AiMark brand={value.brand} size="sm" />}
 							<span className="truncate">{brandLabel(value.brand ?? "NONE")}</span>
 						</span>
 						<ComboboxIcon render={<ChevronsUpDownIcon className="size-4 opacity-50" />} />
@@ -365,13 +360,7 @@ export function LlmModelFields({
 						<ComboboxList aria-labelledby={`${idPrefix}-brand-label`}>
 							{(brand: (typeof BRAND_OPTIONS)[number]) => (
 								<ComboboxItem key={brand} value={brand}>
-									{brand !== "NONE" && (
-										<img
-											src={AI_MODEL_BRAND_META[brand].src}
-											alt=""
-											className="size-5 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
-										/>
-									)}
+									{brand !== "NONE" && <AiMark brand={brand} size="sm" />}
 									<span className="truncate">{brandLabel(brand)}</span>
 									<ComboboxItemIndicator />
 								</ComboboxItem>

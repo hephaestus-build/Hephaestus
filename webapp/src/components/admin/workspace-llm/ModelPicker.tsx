@@ -1,6 +1,7 @@
 import { cn } from "cn";
 import type { AvailableLlmModel } from "@/api/types.gen";
 import { statusToneClass } from "@/components/common/status-def";
+import { AiMark } from "@/components/icons/AiMark";
 import {
 	DATA_HANDLING_DEFS,
 	type DataHandlingTier,
@@ -78,7 +79,8 @@ function ModelOptions({ models }: { models: AvailableLlmModel[] }) {
 			>
 				<span className="flex min-w-0 flex-1 flex-col gap-0.5">
 					<span className="flex min-w-0 items-center justify-between gap-2">
-						<span className="min-w-0 truncate">
+						<AiMark brand={model.brand} size="sm" />
+						<span className="min-w-0 flex-1 truncate">
 							{model.displayName}
 							<span className="text-muted-foreground"> · {model.connectionDisplayName}</span>
 						</span>

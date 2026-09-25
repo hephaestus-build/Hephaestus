@@ -1,24 +1,24 @@
-import { BotIcon, CheckIcon, InfoIcon, Link2Icon, RefreshCwIcon, SparklesIcon } from "lucide-react";
+import { CheckIcon, InfoIcon, Link2Icon, SparklesIcon } from "lucide-react";
 import { type SubmitEvent, useEffect, useId, useRef, useState } from "react";
 import { hasText } from "@/lib/text";
 
 import type { WorkspaceAiModel, WorkspaceOnboarding } from "@/api/types.gen";
-import { type Fact, FactList } from "@/components/auth/FactList";
 import { LegalLinks } from "@/components/auth/LegalLinks";
 import { StepMarker } from "@/components/auth/StepMarker";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { AI_CONNECTION_PLATFORM_META } from "@/components/icons/ai-connection-platform-logos";
 import { AI_MODEL_BRAND_META } from "@/components/icons/ai-model-brand-logos";
+import { AiMark } from "@/components/icons/AiMark";
 import { getProviderIcon } from "@/components/icons/integration-provider-icons";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
 import { HephSays } from "@/components/mentor/HephSays";
 import {
-	DATA_HANDLING_DEFS,
 	type MemberAiChoice,
 	memberAiChoiceTitle,
 } from "@/components/practice-vocabulary/data-handling-defs";
+import { DataHandlingBadge } from "@/components/practice-vocabulary/DataHandlingBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,25 +77,6 @@ export interface WorkspaceOnboardingPageProps {
 				onLeave: () => void;
 		  };
 }
-
-const AI_FACTS: readonly Fact[] = [
-	{
-		icon: BotIcon,
-		term: "What AI does",
-		detail:
-			"Hephaestus reviews your work against your team’s practices. Heph talks it through with you.",
-	},
-	{
-		icon: InfoIcon,
-		term: "What this choice controls",
-		detail: "Future AI requests for practice reviews and Heph. Sync and stored work are separate.",
-	},
-	{
-		icon: RefreshCwIcon,
-		term: "Change it any time",
-		detail: "From the sidebar or User settings. It applies in all your workspaces.",
-	},
-];
 
 function joinNames(names: readonly string[]): string {
 	return names.join(" and ");
@@ -222,21 +203,29 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 									</span>
 								</QuestionnaireTitle>
 								<QuestionnaireDescription>
-									Compare the three and pick one. Cloud also allows in-house AI.
+									Hephaestus reviews your work against your team’s practices, and Heph talks it
+									through with you. Choose which AI may do that. Cloud also allows in-house models.
+									Sync and stored work do not change.
 								</QuestionnaireDescription>
-								<FactList facts={AI_FACTS} />
 								<fieldset disabled={saving} className="min-w-0 disabled:opacity-50">
 									<AiChoiceCards
 										choice={choice}
 										saved={data?.aiChoice}
 										onChoice={setDraft}
-										modelsByChoice={Object.fromEntries(
-											state.data.aiOptions.map((option) => [option.choice, option.models]),
-										)}
+										workspace={{
+											name: state.data.workspaceName,
+											models: Object.fromEntries(
+												state.data.aiOptions.map((option) => [option.choice, option.models]),
+											),
+										}}
 									/>
 								</fieldset>
-								{models.length > 0 && (
-									<WorkspaceModels workspaceName={state.data.workspaceName} models={models} />
+								{choice !== undefined && models.length > 0 && (
+									<WorkspaceModels
+										workspaceName={state.data.workspaceName}
+										choice={choice}
+										models={models}
+									/>
 								)}
 								{hasText(coverage?.sentence) && (
 									<p className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -439,7 +428,7 @@ function onboardingNarration({
 		return `${uncovered}Save to apply your new choice in every workspace. Requests already sent cannot be recalled.`;
 	}
 	if (choice === undefined) {
-		return "Which AI may handle your work? Any answer is fine, including none.";
+		return "Compare the three below. Any answer is fine, including none.";
 	}
 	if (coverage === "none") {
 		return "Your choice isn't set up here yet. Nothing switches you anywhere else.";
@@ -519,67 +508,52 @@ function memberSetupState(
 
 function WorkspaceModels({
 	workspaceName,
+	choice,
 	models,
 }: {
 	workspaceName: string;
+	choice: MemberAiChoice;
 	models: readonly WorkspaceAiModel[];
 }) {
+	const headingId = useId();
 	return (
-		<section
-			aria-label={`Models for this answer in ${workspaceName}`}
-			className="rounded-lg border border-border bg-muted/30 p-4"
-		>
-			<p className="text-sm font-semibold text-foreground">Ready models in {workspaceName}</p>
-			<p className="mt-1 text-sm text-muted-foreground">
-				These models are set up for this answer. The marks show the model and connection; data
-				handling is declared separately.
-			</p>
-			<ul className="mt-3 grid gap-2 sm:grid-cols-2">
+		<section aria-labelledby={headingId} className="space-y-2">
+			<h2 id={headingId} className="text-sm font-medium text-foreground">
+				{memberAiChoiceTitle(choice)} models in {workspaceName}
+			</h2>
+			<ItemGroup className="grid gap-2 sm:grid-cols-2">
 				{models.map((model) => {
-					const brand = model.brand ? AI_MODEL_BRAND_META[model.brand] : undefined;
-					const platform = model.connectionPlatform
-						? AI_CONNECTION_PLATFORM_META[model.connectionPlatform]
-						: undefined;
-					const tier = DATA_HANDLING_DEFS[model.dataHandlingTier];
+					const detail = [
+						model.brand ? AI_MODEL_BRAND_META[model.brand].label : undefined,
+						model.connectionPlatform
+							? `via ${AI_CONNECTION_PLATFORM_META[model.connectionPlatform].label}`
+							: undefined,
+					].filter((part) => part !== undefined);
 					return (
-						<li
+						<Item
 							key={`${model.name}-${model.brand ?? "unknown"}-${model.connectionPlatform ?? "unknown"}`}
-							className="min-w-0 rounded-md border border-border bg-background p-3 text-sm"
+							variant="outline"
+							size="sm"
+							role="listitem"
 						>
-							<div className="flex items-center gap-2">
-								{brand !== undefined && (
-									<img
-										src={brand.src}
-										alt=""
-										className="size-6 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
-									/>
-								)}
-								<span className="min-w-0 font-medium break-words text-foreground">
-									{model.name}
-								</span>
-							</div>
-							<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-muted-foreground">
-								{brand !== undefined && <span>Model: {brand.label}</span>}
-								{platform !== undefined && (
-									<span className="inline-flex items-center gap-1.5">
-										<img
-											src={platform.src}
-											alt=""
-											className="size-4 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
-										/>
-										via {platform.label}
-									</span>
-								)}
-								<Badge variant={tier.badgeVariant}>
-									{model.dataHandlingTier === "UNDECLARED"
-										? tier.label
-										: `Declared ${tier.label.toLowerCase()}`}
-								</Badge>
-							</div>
-						</li>
+							<ItemMedia>
+								<AiMark brand={model.brand} platform={model.connectionPlatform} />
+							</ItemMedia>
+							<ItemContent>
+								<ItemTitle className="break-words">{model.name}</ItemTitle>
+								{detail.length > 0 && <ItemDescription>{detail.join(" · ")}</ItemDescription>}
+							</ItemContent>
+							<ItemActions>
+								<DataHandlingBadge tier={model.dataHandlingTier} />
+							</ItemActions>
+						</Item>
 					);
 				})}
-			</ul>
+			</ItemGroup>
+			<p className="text-xs text-muted-foreground">
+				Your admins declare whether each model is in-house or cloud. Logos name the maker and the
+				service; they do not decide where your work goes.
+			</p>
 		</section>
 	);
 }

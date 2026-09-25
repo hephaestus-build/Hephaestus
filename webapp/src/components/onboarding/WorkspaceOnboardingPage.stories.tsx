@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, waitFor } from "storybook/test";
+import { expect, fn, waitFor, within } from "storybook/test";
 
 import type { WorkspaceOnboarding, WorkspaceOnboardingLink } from "@/api/types.gen";
 import { expectNoPageOverflow } from "@/stories/reflow";
@@ -41,13 +41,22 @@ const allCovered = [
 		choice: "IN_HOUSE_ONLY",
 		practiceReviewsReady: true,
 		mentorReady: true,
-		models: [{ name: "Llama 3.3", brand: "META", dataHandlingTier: "IN_HOUSE" }],
+		models: [
+			{
+				name: "Qwen3.5",
+				brand: "QWEN",
+				connectionPlatform: "LOGOS",
+				dataHandlingTier: "IN_HOUSE",
+			},
+		],
 	},
 	{
 		choice: "CLOUD",
 		practiceReviewsReady: true,
 		mentorReady: true,
-		models: [{ name: "GPT-5", brand: "OPENAI", dataHandlingTier: "CLOUD" }],
+		models: [
+			{ name: "GPT-5", brand: "OPENAI", connectionPlatform: "AZURE", dataHandlingTier: "CLOUD" },
+		],
 	},
 ] satisfies WorkspaceOnboarding["aiOptions"];
 
@@ -162,20 +171,12 @@ export const Default: Story = {
 		}
 		await expect(first.top).toBe(second.top);
 		await expect(second.top).toBe(third.top);
-		for (const dimension of ["AI help", "Models", "Capacity", "New requests"]) {
+		for (const dimension of ["AI help", "Models", "Speed", "Sent to"]) {
 			const rows = canvas.getAllByText(dimension);
 			await expect(rows).toHaveLength(3);
 			await expect(rows[0]?.getBoundingClientRect().top).toBe(rows[1]?.getBoundingClientRect().top);
 			await expect(rows[1]?.getBoundingClientRect().top).toBe(rows[2]?.getBoundingClientRect().top);
 		}
-		const term = canvas.getByText("What AI does");
-		const detail = canvas.getByText(/Hephaestus reviews your work against/u);
-		await expect(detail.getBoundingClientRect().top).toBeGreaterThan(
-			term.getBoundingClientRect().bottom - 1,
-		);
-		await expect(detail.getBoundingClientRect().left).toBeGreaterThan(
-			term.getBoundingClientRect().left,
-		);
 	},
 };
 
@@ -186,7 +187,7 @@ export const FirstVisit: Story = {
 		}
 		await expect(canvas.getByRole("heading", { level: 1, name: "Your AI choice" })).toBeVisible();
 		await expect(
-			canvas.getByText("Which AI may handle your work? Any answer is fine, including none."),
+			canvas.getByText("Compare the three below. Any answer is fine, including none."),
 		).toBeVisible();
 		await expect(canvas.getByRole("heading", { name: /Connect your accounts/u })).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Skip for now" })).toBeEnabled();
@@ -198,10 +199,10 @@ export const AnswerAndContinue: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
 		await expect(canvas.getByRole("radio", { name: CLOUD })).toBeChecked();
-		const models = canvas.getByRole("region", { name: "Models for this answer in Engineering" });
+		const models = canvas.getByRole("region", { name: "Cloud models in Engineering" });
 		await expect(models).toHaveTextContent("GPT-5");
-		await expect(models).toHaveTextContent("Model: OpenAI");
-		await expect(models).toHaveTextContent("Declared cloud");
+		await expect(models).toHaveTextContent("OpenAI");
+		await expect(within(models).getByText("Cloud")).toBeVisible();
 		await expect(canvas.getByText("Press Continue and it holds in every workspace.")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
@@ -213,9 +214,9 @@ export const NoAi: Story = {
 	args: { state: { ...ready, data: { ...welcome, links: [] } } },
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleName(
-			/No AI.*Sync and stored work stay.*No new feedback or Heph replies.*None sent for your work/u,
+			/No AI.*Hephaestus without AI.*No feedback or Heph.*Sent to Nowhere/u,
 		);
-		await expect(canvas.queryByRole("region", { name: /Models for this answer/u })).toBeNull();
+		await expect(canvas.queryByRole("region", { name: /models in Engineering/u })).toBeNull();
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 		await expect(readyArgs(args).onSubmit).toHaveBeenCalledWith("NO_AI");
@@ -269,20 +270,19 @@ export const WorkspaceModels: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		const models = canvas.getByRole("region", { name: "Models for this answer in Engineering" });
+		const models = canvas.getByRole("region", { name: "Cloud models in Engineering" });
 		await expect(models).toHaveTextContent("Qwen3");
 		await expect(models).toHaveTextContent("gpt-6-luna");
-		await expect(models).toHaveTextContent("Model: OpenAI");
-		await expect(models).toHaveTextContent("via Microsoft Azure");
-		await expect(models).toHaveTextContent("Declared cloud");
+		await expect(models).toHaveTextContent("OpenAI · via Microsoft Azure");
 		await expect(models).toHaveTextContent("Team model");
 		await expect(models.querySelectorAll("img")).toHaveLength(4);
 		const cloud = canvas.getByRole("radio", { name: CLOUD });
-		await expect(cloud).toHaveAccessibleName(/gpt-6-luna.*Microsoft Azure/u);
-		const header = cloud.closest("label")?.querySelector('[data-slot="ai-choice-header"]');
-		await expect(header).toHaveTextContent("gpt-6-luna");
-		await expect(header).toHaveTextContent("via Microsoft Azure");
-		await expect(header?.querySelectorAll("img")).toHaveLength(2);
+		// The card leads with the model a cloud request reaches first, not the first one listed.
+		await expect(cloud).toHaveAccessibleName(/gpt-6-luna via Microsoft Azure \+2 more models/u);
+		const model = cloud.closest("label")?.querySelector('[data-slot="ai-choice-model"]');
+		await expect(model?.querySelectorAll("img")).toHaveLength(2);
+		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
+		await expect(inHouse).toHaveAccessibleName(/Qwen3 via Logos/u);
 	},
 };
 
@@ -314,10 +314,11 @@ export const ProviderOperatedLogos: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		const models = canvas.getByRole("region", { name: "Models for this answer in Engineering" });
+		const models = canvas.getByRole("region", { name: "Cloud models in Engineering" });
 		await expect(models).toHaveTextContent("Qwen3");
 		await expect(models).toHaveTextContent("via Logos");
-		await expect(models).toHaveTextContent("Declared cloud");
+		// Logos is where the requests go; the admin's declaration, not the mark, makes it cloud.
+		await expect(within(models).getByText("Cloud")).toBeVisible();
 	},
 };
 
@@ -414,7 +415,7 @@ export const OptionUncovered: Story = {
 	},
 	play: async ({ canvas, userEvent, args }) => {
 		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
-		await expect(inHouse).toHaveAccessibleName(/No model ready here/u);
+		await expect(inHouse).toHaveAccessibleName(/Not set up in Engineering yet/u);
 		await expect(canvas.queryByText(/is set up within this answer yet/u)).toBeNull();
 		await expect(inHouse).not.toHaveAttribute("aria-disabled");
 		await userEvent.click(inHouse);
@@ -762,7 +763,9 @@ export const Narrow: Story = {
 			await expect(card.left).toBe(above.left);
 		}
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
-		await expect(canvas.getByRole("region", { name: /Models for this answer/u })).toBeVisible();
+		await expect(
+			canvas.getByRole("region", { name: /models in International engineering collaboration/u }),
+		).toBeVisible();
 		await expectNoPageOverflow();
 	},
 };

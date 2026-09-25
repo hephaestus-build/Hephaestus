@@ -6,6 +6,7 @@ import {
 	AI_CONNECTION_PLATFORMS,
 	type AiConnectionPlatform,
 } from "@/components/icons/ai-connection-platform-logos";
+import { AiMark } from "@/components/icons/AiMark";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
 	Combobox,
@@ -258,13 +259,7 @@ export function LlmConnectionFields({
 				>
 					<ComboboxTrigger id={connectionPlatformId} className="w-full justify-between">
 						<span className="flex min-w-0 items-center gap-2">
-							{value.connectionPlatform && (
-								<img
-									src={AI_CONNECTION_PLATFORM_META[value.connectionPlatform].src}
-									alt=""
-									className="size-5 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
-								/>
-							)}
+							{value.connectionPlatform && <AiMark platform={value.connectionPlatform} size="sm" />}
 							<span className="truncate">{platformLabel(value.connectionPlatform ?? "NONE")}</span>
 						</span>
 						<ComboboxIcon render={<ChevronsUpDownIcon className="size-4 opacity-50" />} />
@@ -277,13 +272,7 @@ export function LlmConnectionFields({
 						<ComboboxList aria-labelledby={connectionPlatformLabelId}>
 							{(platform: (typeof PLATFORM_OPTIONS)[number]) => (
 								<ComboboxItem key={platform} value={platform}>
-									{platform !== "NONE" && (
-										<img
-											src={AI_CONNECTION_PLATFORM_META[platform].src}
-											alt=""
-											className="size-5 shrink-0 dark:rounded-sm dark:bg-white dark:p-0.5"
-										/>
-									)}
+									{platform !== "NONE" && <AiMark platform={platform} size="sm" />}
 									<span className="truncate">{platformLabel(platform)}</span>
 									<ComboboxItemIndicator />
 								</ComboboxItem>
