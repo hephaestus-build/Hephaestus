@@ -2,11 +2,12 @@
 "hephaestus": minor
 ---
 
-A piece of feedback on your Practice profile now resolves itself once three pieces of your work in
-a row come back clean on that practice, and the card names the pieces of work that did it. Marking
-the feedback as addressed yourself still resolves it, and so does marking it not applicable. Heph's
-summary of what changed since the review before reports a resolution by the work as the work's
-doing, naming those pieces, and keeps it apart from feedback you marked addressed.
+A piece of feedback on your Practice profile is now resolved by the work once three pieces of your
+reviewed work in a row come back clean on that practice, and the card names the pieces of work that
+did it. Marking the feedback as addressed yourself still resolves it, and so does marking it not
+applicable. Heph's summary of what changed since the review before reports feedback resolved by the
+work as the work's doing, naming those pieces, and keeps it apart from feedback you marked as
+addressed.
 
 Three more things now hold on the Practice profile. A newer card about a practice replaces the card
 still open about it, read or not, so one habit never has two open cards; a card that was already

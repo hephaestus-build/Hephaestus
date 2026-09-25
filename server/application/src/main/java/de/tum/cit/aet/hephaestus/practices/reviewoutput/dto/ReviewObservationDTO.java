@@ -27,7 +27,7 @@ public record ReviewObservationDTO(
         @Schema(description = "Practice group; null when the practice is Unassigned") @Nullable
         ReviewPracticeGroupDTO group,
 
-        @NonNull ReviewedWorkRefDTO artifact,
+        @NonNull ReviewedWorkRefDTO reviewedWork,
 
         @Schema(description = "Whose work the observation is about; null when the identity is no longer resolvable")
         @Nullable
@@ -71,7 +71,7 @@ public record ReviewObservationDTO(
     public static ReviewObservationDTO from(
             OperatorObservationRow row,
             @Nullable ObservationFeedbackDisposition disposition,
-            ReviewedWorkRefDTO artifact,
+            ReviewedWorkRefDTO reviewedWork,
             Map<Long, ReviewSubjectDTO> subjects) {
         return new ReviewObservationDTO(
                 row.getId(),
@@ -80,7 +80,7 @@ public record ReviewObservationDTO(
                 row.getPracticeName(),
                 ReviewPracticeGroupDTO.from(
                         row.getGroupSlug(), row.getGroupName(), row.getGroupIcon(), row.getGroupColor()),
-                artifact,
+                reviewedWork,
                 subjects.get(row.getAboutUserId()),
                 row.getSummary(),
                 row.getAssessmentStatus(),

@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.practices.observation;
 
-import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import java.util.Collection;
@@ -22,10 +21,19 @@ public final class LatestRun {
 
     private LatestRun() {}
 
-    /** The run that reviewed these rows' work last. The caller passes at least one row. */
+    /**
+     * The run that reviewed these rows' work last. The caller passes at least one row.
+     *
+     * <p>The tie-break compares the job id as its canonical string because the same rule is also written in SQL
+     * (`ORDER BY observed_at DESC, agent_job_id DESC`), and PostgreSQL orders {@code uuid} byte-wise while
+     * {@link UUID#compareTo} orders its two halves as signed longs — the two would disagree on exactly the tie
+     * this break exists for.
+     */
     public static UUID of(Collection<Observation> observations) {
         return observations.stream()
-                .max(Comparator.comparing(Observation::getObservedAt).thenComparing(Observation::getAgentJobId))
+                .max(Comparator.comparing(Observation::getObservedAt)
+                        .thenComparing(
+                                observation -> observation.getAgentJobId().toString()))
                 .map(Observation::getAgentJobId)
                 .orElseThrow();
     }
@@ -35,7 +43,7 @@ public final class LatestRun {
      * earlier run of the same work is dropped, so a problem a later review no longer found is not in the answer.
      */
     public static List<Observation> perWork(Collection<Observation> observations) {
-        return latest(observations, Work::of);
+        return latest(observations, ReviewedWorkKey::of);
     }
 
     /**
@@ -57,17 +65,11 @@ public final class LatestRun {
                 .toList();
     }
 
-    private record Work(ArtifactKind kind, Long id) {
-        static Work of(Observation observation) {
-            return new Work(observation.getArtifactKind(), observation.getArtifactId());
-        }
-    }
-
-    private record Claim(String practiceSlug, Work work, boolean backfilled) {
+    private record Claim(String practiceSlug, ReviewedWorkKey work, boolean backfilled) {
         static Claim of(Observation observation) {
             return new Claim(
                     observation.getPractice().getSlug(),
-                    Work.of(observation),
+                    ReviewedWorkKey.of(observation),
                     observation.getOrigin() == ObservationOrigin.BACKFILL);
         }
     }

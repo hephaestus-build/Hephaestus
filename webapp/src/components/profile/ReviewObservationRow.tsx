@@ -5,16 +5,13 @@ import { Fragment, type ReactNode, useState } from "react";
 import type { ObservationDetail } from "@/api/types.gen";
 import { FOCUS_RING, FOCUS_RING_INSET } from "@/components/common/focus";
 import { InlineLink } from "@/components/common/InlineLink";
-import {
-	ResponseButton,
-	ResponseCommentBand,
-	toneOf,
-} from "@/components/common/ResponseCommentBand";
+import { ResponseButton, toneOf } from "@/components/common/ResponseButton";
+import { ResponseCommentBand } from "@/components/common/ResponseCommentBand";
 import { SectionLabel } from "@/components/common/SectionLabel";
 import { statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
-import { CLAIM_CURRENTNESS_NOTES } from "@/components/practice-vocabulary/claim-currentness-notes";
+import { claimCurrentnessNote } from "@/components/practice-vocabulary/ClaimCurrentness";
 import {
 	FEEDBACK_RESOLUTION_DEFS,
 	type FeedbackResolution,
@@ -112,10 +109,7 @@ export function ReviewObservationRow({
 }: ReviewObservationRowProps) {
 	const outcome = OBSERVATION_OUTCOME_PRESENTATION[observationOutcome(observation)];
 	const OutcomeIcon = outcome.icon;
-	const note =
-		observation.claimCurrentness === "CURRENT"
-			? undefined
-			: CLAIM_CURRENTNESS_NOTES[observation.claimCurrentness];
+	const note = claimCurrentnessNote(observation.claimCurrentness);
 	const evidenceLocations = toEvidenceLocations(observation.evidence);
 	const checks = toEvidenceCheck(observation.evidence);
 	// The sentence the review wrote about this work stands over the one that was delivered: the
@@ -125,7 +119,7 @@ export function ReviewObservationRow({
 	const workLink = showWorkLink ? observation.artifactUrl : undefined;
 	const detector = observation.evidence?.detector;
 	// A response needs feedback to respond to and a route that records it.
-	const respondTo = hasText(observation.feedbackId) ? onRespond : undefined;
+	const respondTo = hasText(observation.feedbackResponse?.feedbackId) ? onRespond : undefined;
 	const hasWorkLine = rendersContent(work);
 	const hasBody =
 		note !== undefined ||
@@ -237,7 +231,9 @@ export function ReviewObservationRow({
 								<div className="flex min-w-0 flex-col gap-2">
 									{evidenceLocations.map((location) => (
 										<EvidenceFileBlock
-											key={`${location.sourceKind}-${location.path}-${location.revision ?? ""}-${location.startLine}`}
+											// A diff pair only folds when both sides carry a quote, so a redacted side leaves
+											// two citations of the same lines apart: the side and the redaction tell them apart.
+											key={`${location.sourceKind}-${location.path}-${location.revision ?? ""}-${location.startLine}-${location.side ?? ""}-${location.redacted}`}
 											location={location}
 											detector={detector}
 										/>

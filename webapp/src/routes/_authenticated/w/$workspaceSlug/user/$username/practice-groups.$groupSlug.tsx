@@ -177,7 +177,7 @@ function PracticeGroupDetail() {
 			feed={reviewRunFeed}
 			skeletonRows={ACTIVITY_PAGE_SIZE}
 			onRespond={(observation, response) => {
-				const { feedbackId } = observation;
+				const feedbackId = observation.feedbackResponse?.feedbackId;
 				if (!hasText(feedbackId)) {
 					return;
 				}

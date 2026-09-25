@@ -6,7 +6,7 @@ import type {
 	ReviewedWorkOutcome,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { formatDay } from "@/lib/dates";
-import { capitalise } from "@/lib/text";
+import { capitalise, hasText } from "@/lib/text";
 
 /** The line under an open card's next step, with the wire's own count. */
 const cleanCondition = (needed: number): FeedbackTextSegment[] => [
@@ -17,26 +17,28 @@ const cleanCondition = (needed: number): FeedbackTextSegment[] => [
 
 /**
  * How a piece of feedback closed, if it did — the server's rule, read off the wire: resolved by
- * the work coming back clean, resolved by the reader marking it addressed or not applicable, or
- * closed unresolved because the practice's review rules changed. When more than one happened,
- * the earliest is what closed it, and its date and wording are the card's.
+ * the work coming back clean, resolved by the reader's own answer, or closed unresolved because
+ * the practice's review rules changed. Which answers resolve is the server's to decide and it
+ * dates the one that did; the card reads that date and takes only the wording from the answer.
+ * When more than one happened, the earliest is what closed it, and its date and wording are the
+ * card's.
  */
 function closureOf(
 	feedback: InAppFeedback,
 ): { at: Date; state: "resolved" | "closed"; condition: FeedbackTextSegment[] } | undefined {
-	const { response } = feedback;
-	const byReader =
-		response?.resolution === "ADDRESSED" || response?.resolution === "NOT_APPLICABLE"
-			? {
-					at: response.respondedAt ?? feedback.preparedAt,
-					state: "resolved" as const,
-					condition: [
-						text(
-							`Marked as ${response.resolution === "ADDRESSED" ? "addressed" : "not applicable"} on ${formatDay(response.respondedAt ?? feedback.preparedAt)}`,
-						),
-					],
-				}
-			: undefined;
+	const { response, resolvedByDeveloperAt } = feedback;
+	// The server decides whether an answer resolves and says when; the card only picks the wording.
+	const byReader = resolvedByDeveloperAt
+		? {
+				at: resolvedByDeveloperAt,
+				state: "resolved" as const,
+				condition: [
+					text(
+						`Marked as ${response?.resolution === "NOT_APPLICABLE" ? "not applicable" : "addressed"} on ${formatDay(resolvedByDeveloperAt)}`,
+					),
+				],
+			}
+		: undefined;
 	const byWork = feedback.resolvedByWorkAt
 		? {
 				at: feedback.resolvedByWorkAt,
@@ -45,7 +47,7 @@ function closureOf(
 					feedback.cleanWork.length > 0
 						? [
 								text(`Resolved by the work on ${formatDay(feedback.resolvedByWorkAt)} · `),
-								...refs(feedback.cleanWork),
+								...refs(feedback.cleanWork.map((clean) => clean.reviewedWork)),
 								text(" came back clean"),
 							]
 						: [text(`Resolved by the work on ${formatDay(feedback.resolvedByWorkAt)}`)],
@@ -80,7 +82,7 @@ export function toFeedbackCard(
 	const group = groups.find((candidate) => candidate.slug === feedback.groupSlug);
 	const closure = closureOf(feedback);
 	const reviewedWork: ReviewedWorkOutcome[] = feedback.evidence.map((evidence) => ({
-		ref: evidence.work,
+		ref: evidence.reviewedWork,
 		date: evidence.observedAt.toISOString(),
 		outcome: evidence.outcome,
 	}));
@@ -88,10 +90,15 @@ export function toFeedbackCard(
 		feedbackId: feedback.id,
 		practiceSlug: feedback.practiceSlug,
 		practiceName: feedback.practiceName,
-		groupSlug: feedback.groupSlug ?? "",
-		groupName: feedback.groupName ?? "Unassigned",
-		groupColor: group?.color,
-		groupIcon: group ? getGroupVisual(group.icon, group.color).Icon : undefined,
+		// A practice in no group leaves the card's group out; the card names it itself.
+		group: hasText(feedback.groupSlug)
+			? {
+					slug: feedback.groupSlug,
+					name: feedback.groupName ?? feedback.groupSlug,
+					color: group?.color,
+					icon: group ? getGroupVisual(group.icon, group.color).Icon : undefined,
+				}
+			: undefined,
 		headline: feedback.headline,
 		// The composer's own Markdown; the card renders it and links the work it can vouch for.
 		body: feedback.body,
@@ -99,7 +106,10 @@ export function toFeedbackCard(
 		// The composer writes the step as a clause; the card shows it as a sentence.
 		nextStep: capitalise(feedback.nextStep ?? ""),
 		condition: closure?.condition ?? cleanCondition(feedback.cleanNeeded),
-		cleanWork: feedback.cleanWork,
+		cleanWork: feedback.cleanWork.map((clean) => ({
+			ref: clean.reviewedWork,
+			date: clean.reviewedAt.toISOString(),
+		})),
 		cleanNeeded: feedback.cleanNeeded,
 		state: closure?.state ?? (feedback.readAt ? "open" : "new"),
 		timestamp: (closure?.at ?? feedback.preparedAt).toISOString(),

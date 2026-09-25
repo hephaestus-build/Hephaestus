@@ -4,12 +4,9 @@ import { detailObservation } from "@/stories/practice-detail-story-mock-data";
 
 import { feedbackResponseOf, isEmptyFeedbackResponse } from "./review-runs";
 
-const observation = (overrides: Partial<ObservationDetail> = {}): ObservationDetail => ({
+const observation = (response?: ObservationDetail["feedbackResponse"]): ObservationDetail => ({
 	...detailObservation,
-	feedbackUsefulness: undefined,
-	feedbackResolution: undefined,
-	feedbackResponseComment: undefined,
-	...overrides,
+	feedbackResponse: response,
 });
 
 describe("feedbackResponseOf", () => {
@@ -17,9 +14,10 @@ describe("feedbackResponseOf", () => {
 		expect(
 			feedbackResponseOf(
 				observation({
-					feedbackUsefulness: "HELPFUL",
-					feedbackResolution: "ADDRESSED",
-					feedbackResponseComment: "Split into two commits.",
+					feedbackId: "00000000-0000-0000-0000-000000000103",
+					usefulness: "HELPFUL",
+					resolution: "ADDRESSED",
+					comment: "Split into two commits.",
 				}),
 			),
 		).toStrictEqual({
@@ -30,7 +28,14 @@ describe("feedbackResponseOf", () => {
 	});
 
 	it("carries the parts that are missing as undefined rather than dropping them", () => {
-		expect(feedbackResponseOf(observation({ feedbackUsefulness: "UNHELPFUL" }))).toStrictEqual({
+		expect(
+			feedbackResponseOf(
+				observation({
+					feedbackId: "00000000-0000-0000-0000-000000000103",
+					usefulness: "UNHELPFUL",
+				}),
+			),
+		).toStrictEqual({
 			usefulness: "UNHELPFUL",
 			resolution: undefined,
 			comment: undefined,

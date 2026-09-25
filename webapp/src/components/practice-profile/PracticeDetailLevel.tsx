@@ -1,8 +1,7 @@
-import { PulseIcon } from "@primer/octicons-react";
 import { MessageSquareTextIcon } from "lucide-react";
 
 import type { ReactNode } from "react";
-import type { PracticeGroupReviewRun, PracticeStanding } from "@/api/types.gen";
+import type { PracticeStanding } from "@/api/types.gen";
 import {
 	PracticeTabsList,
 	PracticeTabsRail,
@@ -25,9 +24,12 @@ import {
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { StandingBadge, TrendNote } from "@/components/practice-vocabulary/StandingBadge";
 import { WhereYouStand } from "@/components/practice-vocabulary/WhereYouStand";
-import type { ObservationControls, ReviewRunFeedState } from "@/components/profile/review-runs";
-import { ReviewRunTimeline } from "@/components/profile/ReviewRunTimeline";
-import { Button } from "@/components/ui/button";
+import {
+	EMPTY_REVIEW_RUN_FEED,
+	type ObservationControls,
+	type ReviewRunFeedState,
+} from "@/components/profile/review-runs";
+import { ReviewRunFeed, ReviewRunFeedSkeleton } from "@/components/profile/ReviewRunFeed";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
 import {
 	Empty,
@@ -36,19 +38,10 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";
 
 import { DEFAULT_PRACTICE_TAB, PRACTICE_TABS, type PracticeTab } from "./practice-profile-search";
-
-const EMPTY_FEED: ReviewRunFeedState = {
-	status: "ready",
-	runs: [],
-	hasMore: false,
-	isLoadingMore: false,
-	onLoadMore: () => undefined,
-};
 
 const TAB_LABELS: Record<PracticeTab, string> = {
 	observations: "Observations",
@@ -99,14 +92,14 @@ function feedbackCardsOf(cards: PracticeFeedbackCardEntry[], practiceSlug: strin
 	};
 }
 
+const NO_CARDS: PracticeFeedbackCardEntry[] = [];
+
 /**
  * One practice as the level over its group, in three tabs: what the reviews of the reader's work
  * found, the feedback written from it, and the catalog's words on why the practice matters. It is
  * the deepest level, so it is the one that carries the observations — the newest open on arrival
  * and every earlier one a press away, each opening and closing on its own.
  */
-const NO_CARDS: PracticeFeedbackCardEntry[] = [];
-
 export function PracticeDetailLevel({
 	nested,
 	path,
@@ -115,7 +108,7 @@ export function PracticeDetailLevel({
 	practice,
 	tab = DEFAULT_PRACTICE_TAB,
 	onTabChange,
-	feed = EMPTY_FEED,
+	feed = EMPTY_REVIEW_RUN_FEED,
 	feedbackCards = NO_CARDS,
 	ratingProps,
 	skeletonRows = 3,
@@ -137,16 +130,20 @@ export function PracticeDetailLevel({
 					}))
 					.filter((run) => run.observations.length > 0)
 			: [];
-	const observationCount =
-		feed.status === "ready"
-			? runs.reduce((count, run) => count + run.observations.length, 0)
-			: undefined;
 	const feedback = practice
 		? feedbackCardsOf(feedbackCards, practice.slug)
 		: { open: undefined, resolved: [] };
 	const feedbackCount = (feedback.open ? 1 : 0) + feedback.resolved.length;
+	// What each tab counts is what it can show. The feedback cards arrive in one piece, so that
+	// count is always known; the observations are paged, so a number taken from the loaded pages
+	// would be short while earlier runs are still a press away, and would grow under the reader as
+	// they press. An unnumbered tab says less and nothing wrong, so the count waits for the last
+	// page.
 	const counts: Partial<Record<PracticeTab, number>> = {
-		observations: observationCount,
+		observations:
+			feed.status === "ready" && !feed.hasMore
+				? runs.reduce((count, run) => count + run.observations.length, 0)
+				: undefined,
 		feedback: feedbackCount,
 	};
 	// A card on its own practice's level: the words about it are the neighbouring tab.
@@ -214,6 +211,13 @@ export function PracticeDetailLevel({
 							runs={runs}
 							skeletonRows={skeletonRows}
 							observations={observations}
+							// The rows are this practice's own, so none repeats its name under the summary.
+							showPracticeName={false}
+							// Every row here reviews the same practice, so the newest is the one the reader
+							// came for; the rest are its history and wait for a press.
+							initiallyOpen="newest"
+							emptyTitle="No observations yet."
+							emptyDescription="No review has reached this practice yet."
 						/>
 					</Section>
 				</TabsContent>
@@ -335,78 +339,5 @@ export function PracticeDetailLevel({
 			</DetailDrawerHeader>
 			<DrawerBody className="flex flex-col gap-4 pt-2">{body}</DrawerBody>
 		</>
-	);
-}
-
-interface ReviewRunFeedProps extends Pick<PracticeDetailLevelProps, "observations"> {
-	feed: ReviewRunFeedState;
-	/** The feed's runs narrowed to this practice's observations. */
-	runs: PracticeGroupReviewRun[];
-	skeletonRows: number;
-}
-
-function ReviewRunFeed({ feed, runs, skeletonRows, observations }: ReviewRunFeedProps) {
-	if (feed.status === "error") {
-		return (
-			<QueryErrorAlert
-				error={feed.error}
-				title="Could not load review runs"
-				onRetry={feed.onRetry}
-			/>
-		);
-	}
-	if (feed.status === "loading") {
-		return <ReviewRunFeedSkeleton rows={skeletonRows} />;
-	}
-	if (runs.length === 0) {
-		return (
-			<Empty>
-				<EmptyHeader>
-					<EmptyMedia variant="icon">
-						<PulseIcon />
-					</EmptyMedia>
-					<EmptyTitle>No observations yet.</EmptyTitle>
-					<EmptyDescription>No review has reached this practice yet.</EmptyDescription>
-				</EmptyHeader>
-			</Empty>
-		);
-	}
-	return (
-		<>
-			<ReviewRunTimeline
-				runs={runs}
-				observations={observations}
-				// The rows are this practice's own, so none repeats its name under the summary.
-				showPracticeName={false}
-				// Every row here reviews the same practice, so the newest is the one the reader came
-				// for; the rest are its history and wait for a press.
-				initiallyOpen="newest"
-				continues={feed.hasMore}
-			/>
-			{feed.hasMore && (
-				<Button
-					type="button"
-					variant="link"
-					size="inline"
-					className="w-fit text-sm"
-					onClick={feed.onLoadMore}
-					disabled={feed.isLoadingMore}
-				>
-					{feed.isLoadingMore ? "Loading…" : "View earlier reviews"}
-				</Button>
-			)}
-		</>
-	);
-}
-
-/** One block per run card the feed will show, so the level does not jump when they land. */
-function ReviewRunFeedSkeleton({ rows }: { rows: number }) {
-	return (
-		<div className="flex flex-col gap-2.5">
-			<span className="sr-only">Loading review runs</span>
-			{Array.from({ length: rows }, (_, index) => (
-				<Skeleton key={index} className="h-24 w-full" />
-			))}
-		</div>
 	);
 }

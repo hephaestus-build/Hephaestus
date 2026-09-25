@@ -6,7 +6,6 @@ import {
 } from "@/components/layout/detail-drawer/detail-stack";
 import {
 	DEFAULT_PRACTICE_GROUP_SORT,
-	type PracticeGroupSort,
 	type SortDirection,
 } from "@/components/practice-vocabulary/practice-group-list-order";
 
@@ -17,12 +16,12 @@ const SORT_DIRECTIONS = ["asc", "desc"] as const satisfies readonly SortDirectio
  * is dropped rather than applied; an absent one means the default, which is also what the route
  * writes back when a header press lands on it.
  */
-export const practiceGroupListSearchSchema = z.object({
+const practiceGroupListSearchSchema = z.object({
 	dir: z.enum(SORT_DIRECTIONS).optional().catch(undefined),
 });
 
-export function parsePracticeGroupListSort(search: { dir?: SortDirection }): PracticeGroupSort {
-	return { direction: search.dir ?? DEFAULT_PRACTICE_GROUP_SORT.direction };
+export function parsePracticeGroupListSort(search: { dir?: SortDirection }): SortDirection {
+	return search.dir ?? DEFAULT_PRACTICE_GROUP_SORT;
 }
 
 /**
@@ -51,7 +50,18 @@ export function practiceLevel(
 }
 
 /**
- * The "All practices" table as a level; there is one, so the id names the list rather than a row.
+ * The id of the open level of one kind, or `undefined` while no level of that kind is open. The
+ * stack is read by kind rather than by depth, so a route may stack its own levels between these.
+ */
+export function openLevelId(
+	stack: DetailStackEntry<PracticeProfileDetailLevelKind>[],
+	kind: PracticeProfileDetailLevelKind,
+): string | undefined {
+	return stack.find((entry) => entry.kind === kind)?.id;
+}
+
+/**
+ * The "All practice groups" table as a level; there is one, so the id names the list rather than a row.
  */
 export function allPracticesLevel(): DetailStackEntry<PracticeProfileDetailLevelKind> {
 	return { kind: "practices", id: "all" };
@@ -84,21 +94,23 @@ export type FeedbackTab = (typeof FEEDBACK_TABS)[number];
 
 export const DEFAULT_FEEDBACK_TAB: FeedbackTab = "newest";
 
-/** The params a drawer navigation keeps: the table's sort and the page's feedback tab. */
-export const PRACTICE_PROFILE_SEARCH_PARAMS = ["dir", "feedback"] as const;
-
-/** A hand-typed tab the page cannot show is dropped rather than applied. */
-export const feedbackTabSearchSchema = z.object({
+/**
+ * What the page itself reads out of the URL: the table's sort, the feedback tab, and the selection
+ * inside the open practice level — the tab shown. A hand-typed value a surface cannot show is
+ * dropped rather than applied. Which observations are open is not here: every one arrives open and
+ * closes on its own, and nothing addresses one.
+ */
+const practiceProfileFilterSchema = practiceGroupListSearchSchema.extend({
 	feedback: z.enum(FEEDBACK_TABS).optional().catch(undefined),
+	practiceTab: z.enum(PRACTICE_TABS).optional().catch(undefined),
 });
 
-/**
- * The search params the detail drawer reads: its `detail` stack and the selection inside the open
- * practice level — the tab shown, a hand-typed tab the level cannot show dropped rather than
- * applied. Which observations are open is not here: every one arrives open and closes on its own,
- * and nothing addresses one. The route spreads this into its search schema.
- */
-export const practiceProfileDetailSearchShape = {
-	practiceTab: z.enum(PRACTICE_TABS).optional().catch(undefined),
-	...detailStackSchema(PRACTICE_PROFILE_LEVEL_KINDS).shape,
-};
+/** The page's own params and the detail drawer's `detail` stack: the route's whole search. */
+export const practiceProfileSearchSchema = practiceProfileFilterSchema.extend(
+	detailStackSchema(PRACTICE_PROFILE_LEVEL_KINDS).shape,
+);
+
+export type PracticeProfileSearch = z.infer<typeof practiceProfileSearchSchema>;
+
+/** The params a drawer navigation keeps: the table's sort and the page's feedback tab. */
+export const PRACTICE_PROFILE_SEARCH_PARAMS: (keyof PracticeProfileSearch)[] = ["dir", "feedback"];

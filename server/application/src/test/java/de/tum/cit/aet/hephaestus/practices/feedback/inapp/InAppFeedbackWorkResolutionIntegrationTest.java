@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.feedback.PreviousInAppFeedback;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
-import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -36,16 +35,10 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  */
 class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
-    private static final String IN_APP = "/workspaces/{slug}/practices/feedback/in-app";
-    private static final String RESPONSE = "/workspaces/{slug}/practices/feedback/{feedbackId}/response";
-
     /** Whole seconds, so what Postgres stores is what the JSON says. */
     private static final Instant NOW = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
     private static final Instant PREPARED_AT = NOW.minus(Duration.ofDays(10));
-
-    @Autowired
-    private WebTestClient webTestClient;
 
     @Autowired
     private PreviousInAppFeedback previousInAppFeedback;
@@ -104,39 +97,41 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
     @WithUser
     @DisplayName("the evidence names the work it was observed on and what the review made of it")
     void shouldNameTheEvidenceLikeTheCleanWork() {
-        cleanReview(11, daysAfterPreparation(1));
+        cleanReview(practice, developer, 11, daysAfterPreparation(1));
 
         card().jsonPath("$[0].evidence.length()")
                 .isEqualTo(1)
-                .jsonPath("$[0].evidence[0].work.label")
+                .jsonPath("$[0].evidence[0].reviewedWork.label")
                 .isEqualTo("#10")
-                .jsonPath("$[0].evidence[0].work.kind")
+                .jsonPath("$[0].evidence[0].reviewedWork.kind")
                 .isEqualTo("scm.pull_request")
-                .jsonPath("$[0].evidence[0].work.id")
+                .jsonPath("$[0].evidence[0].reviewedWork.id")
                 .isEqualTo("10")
-                .jsonPath("$[0].evidence[0].work.url")
+                .jsonPath("$[0].evidence[0].reviewedWork.url")
                 .isEqualTo("https://github.com/acme/api/pull/10")
                 .jsonPath("$[0].evidence[0].outcome")
                 .isEqualTo("OMISSION_GAP")
                 .jsonPath("$[0].evidence[0].observedAt")
                 .isEqualTo(PREPARED_AT.minus(Duration.ofHours(1)).toString())
-                .jsonPath("$[0].cleanWork[0].label")
+                .jsonPath("$[0].cleanWork[0].reviewedWork.label")
                 .isEqualTo("#11")
-                .jsonPath("$[0].cleanWork[0].url")
-                .isEqualTo("https://github.com/acme/api/pull/11");
+                .jsonPath("$[0].cleanWork[0].reviewedWork.url")
+                .isEqualTo("https://github.com/acme/api/pull/11")
+                .jsonPath("$[0].cleanWork[0].reviewedAt")
+                .isEqualTo(daysAfterPreparation(1).toString());
     }
 
     @Test
     @WithUser
     @DisplayName("a problem starts the count over")
     void shouldStartTheCountOverAfterAProblem() {
-        cleanReview(11, daysAfterPreparation(1));
-        cleanReview(12, daysAfterPreparation(2));
+        cleanReview(practice, developer, 11, daysAfterPreparation(1));
+        cleanReview(practice, developer, 12, daysAfterPreparation(2));
         AgentJob slip = persistPullRequestReview(workspace, 13, daysAfterPreparation(3));
         observe(practice, slip, 13L, developer, "ABSENT", "GOOD", "MAJOR", daysAfterPreparation(3));
-        cleanReview(14, daysAfterPreparation(4));
+        cleanReview(practice, developer, 14, daysAfterPreparation(4));
 
-        card().jsonPath("$[0].cleanWork[*].label")
+        card().jsonPath("$[0].cleanWork[*].reviewedWork.label")
                 .isEqualTo(List.of("#14"))
                 .jsonPath("$[0].resolvedByWorkAt")
                 .doesNotExist();
@@ -147,19 +142,19 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
     @DisplayName(
             "three clean pieces of work in a row resolve it, dated by the third, and a later slip does not undo that")
     void shouldResolveAfterThreeCleanPiecesOfWork() {
-        cleanReview(11, daysAfterPreparation(1));
-        cleanReview(12, daysAfterPreparation(2));
-        cleanReview(13, daysAfterPreparation(3));
+        cleanReview(practice, developer, 11, daysAfterPreparation(1));
+        cleanReview(practice, developer, 12, daysAfterPreparation(2));
+        cleanReview(practice, developer, 13, daysAfterPreparation(3));
         AgentJob later = persistPullRequestReview(workspace, 14, daysAfterPreparation(4));
         observe(practice, later, 14L, developer, "ABSENT", "GOOD", "MAJOR", daysAfterPreparation(4));
 
         card().jsonPath("$[0].resolvedByWorkAt")
                 .isEqualTo(daysAfterPreparation(3).toString())
-                .jsonPath("$[0].cleanWork[*].label")
+                .jsonPath("$[0].cleanWork[*].reviewedWork.label")
                 .isEqualTo(List.of("#11", "#12", "#13"))
-                .jsonPath("$[0].cleanWork[0].kind")
+                .jsonPath("$[0].cleanWork[0].reviewedWork.kind")
                 .isEqualTo("scm.pull_request")
-                .jsonPath("$[0].cleanWork[0].url")
+                .jsonPath("$[0].cleanWork[0].reviewedWork.url")
                 .isEqualTo("https://github.com/acme/api/pull/11");
     }
 
@@ -167,15 +162,15 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
     @WithUser
     @DisplayName("work the practice could not judge is skipped, not counted either way")
     void shouldSkipWorkWithoutAVerdict() {
-        cleanReview(11, daysAfterPreparation(1));
+        cleanReview(practice, developer, 11, daysAfterPreparation(1));
         AgentJob nothingToJudge = persistPullRequestReview(workspace, 12, daysAfterPreparation(2));
         observe(practice, nothingToJudge, 12L, developer, "NOT_APPLICABLE", null, null, daysAfterPreparation(2));
-        cleanReview(13, daysAfterPreparation(3));
-        cleanReview(14, daysAfterPreparation(4));
+        cleanReview(practice, developer, 13, daysAfterPreparation(3));
+        cleanReview(practice, developer, 14, daysAfterPreparation(4));
 
         card().jsonPath("$[0].resolvedByWorkAt")
                 .isEqualTo(daysAfterPreparation(4).toString())
-                .jsonPath("$[0].cleanWork[*].label")
+                .jsonPath("$[0].cleanWork[*].reviewedWork.label")
                 .isEqualTo(List.of("#11", "#13", "#14"));
     }
 
@@ -183,9 +178,9 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
     @WithUser
     @DisplayName("work reviewed before the feedback was prepared does not count")
     void shouldIgnoreWorkReviewedBeforeTheFeedback() {
-        cleanReview(7, PREPARED_AT.minus(Duration.ofDays(3)));
-        cleanReview(8, PREPARED_AT.minus(Duration.ofDays(2)));
-        cleanReview(9, PREPARED_AT.minus(Duration.ofHours(2)));
+        cleanReview(practice, developer, 7, PREPARED_AT.minus(Duration.ofDays(3)));
+        cleanReview(practice, developer, 8, PREPARED_AT.minus(Duration.ofDays(2)));
+        cleanReview(practice, developer, 9, PREPARED_AT.minus(Duration.ofHours(2)));
 
         card().jsonPath("$[0].cleanWork.length()")
                 .isEqualTo(0)
@@ -215,19 +210,15 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
         Instant respondedAt = PREPARED_AT.plus(Duration.ofDays(1));
         markAddressed(feedback, developer, respondedAt);
 
-        webTestClient
-                .get()
-                .uri(RESPONSE, workspace.getWorkspaceSlug(), feedback.getId())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.resolution")
+        // The card itself is where the reader sees it closed; the work never resolved it. The date the
+        // answer closed it is on the wire, so no reader has to decide again which answers resolve.
+        card().jsonPath("$[0].response.resolution")
                 .isEqualTo("ADDRESSED")
-                .jsonPath("$.respondedAt")
-                .isEqualTo(respondedAt.toString());
-        card().jsonPath("$[0].cleanWork.length()")
+                .jsonPath("$[0].response.respondedAt")
+                .isEqualTo(respondedAt.toString())
+                .jsonPath("$[0].resolvedByDeveloperAt")
+                .isEqualTo(respondedAt.toString())
+                .jsonPath("$[0].cleanWork.length()")
                 .isEqualTo(0)
                 .jsonPath("$[0].resolvedByWorkAt")
                 .doesNotExist();
@@ -255,9 +246,9 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
         assertThat(previous()).isEqualTo(daysAfterPreparation(2));
 
         // The work resolves it too, later: the earlier way stands.
-        cleanReview(11, daysAfterPreparation(3));
-        cleanReview(12, daysAfterPreparation(4));
-        cleanReview(13, daysAfterPreparation(5));
+        cleanReview(practice, developer, 11, daysAfterPreparation(3));
+        cleanReview(practice, developer, 12, daysAfterPreparation(4));
+        cleanReview(practice, developer, 13, daysAfterPreparation(5));
         assertThat(previous()).isEqualTo(daysAfterPreparation(2));
 
         // The response that currently stands is what counts; disputing it now leaves the work's resolution.
@@ -269,6 +260,8 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
                 .createdAt(daysAfterPreparation(6))
                 .build());
         assertThat(previous()).isEqualTo(daysAfterPreparation(5));
+        // And the card says the same: a dispute is an answer that leaves the feedback open.
+        card().jsonPath("$[0].resolvedByDeveloperAt").doesNotExist();
     }
 
     /** When the previous card about the practice closed, which the test expects to be set. */
@@ -280,14 +273,7 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
     }
 
     private WebTestClient.BodyContentSpec card() {
-        return webTestClient
-                .get()
-                .uri(IN_APP, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
+        return readInAppPage(workspace)
                 .jsonPath("$.length()")
                 .isEqualTo(1)
                 .jsonPath("$[0].id")
@@ -296,11 +282,5 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
 
     private static Instant daysAfterPreparation(int days) {
         return PREPARED_AT.plus(Duration.ofDays(days));
-    }
-
-    /** A review of one of the developer's pull requests on which the practice raised nothing. */
-    private void cleanReview(int number, Instant reviewedAt) {
-        AgentJob run = persistPullRequestReview(workspace, number, reviewedAt);
-        observe(practice, run, number, developer, "PRESENT", "GOOD", null, reviewedAt);
     }
 }

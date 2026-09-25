@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.curated.BundledPracticeCatalogLoader;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.inapp.InAppFeedbackEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -36,7 +37,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -99,7 +99,7 @@ public class PracticeProfileOverviewService {
                 developerId, workspaceId, window.since(), window.until(), Pageable.unpaged());
 
         List<StandingSnapshot> edges = practiceStandingService.getStandingSnapshots(
-                developerId, workspaceId, List.of(window.since(), window.until()));
+                workspaceId, developerId, List.of(window.since(), window.until()));
         StandingSnapshot before = edges.get(0);
         StandingSnapshot after = edges.get(1);
         List<PracticeGroup> groups = practiceGroupService.listGroups(workspaceContext, true);
@@ -111,8 +111,7 @@ public class PracticeProfileOverviewService {
                 observationRepository.findFirstObservedAtByPractice(developerId, workspaceId).stream()
                         .collect(Collectors.toMap(
                                 FirstObservedRow::getPracticeSlug, FirstObservedRow::getFirstObservedAt));
-        FeedbackFacts feedback =
-                readFeedback(workspaceId, developerId, now, window, windowRuns, after, windowWorkByPractice.keySet());
+        FeedbackFacts feedback = readFeedback(workspaceId, developerId, now, window, windowRuns, before, after);
 
         Map<UUID, Target> targets = reviewRunTargetLookup.findByJobIds(
                 workspaceId,
@@ -173,23 +172,29 @@ public class PracticeProfileOverviewService {
             Map<UUID, Instant> reviewedAtByRun,
             Map<UUID, List<Observation>> evidenceByFeedback,
             Map<UUID, WorkResolution> resolutionByFeedback,
+            Map<UUID, WorkResolution> resolutionBeforeByFeedback,
             Map<UUID, Instant> addressedAt) {
-        /** Every run a feedback change can cite: the evidence's and the clean work's. */
+        /** Every run a feedback change can cite: the evidence's, the clean work's and the problem work's. */
         Stream<UUID> citedJobIds() {
-            return Stream.concat(
-                    evidenceByFeedback.values().stream().flatMap(List::stream).map(Observation::getAgentJobId),
-                    resolutionByFeedback.values().stream()
-                            .flatMap(resolution -> resolution.cleanWork().stream())
-                            .map(Work::jobId));
+            return Stream.of(
+                            evidenceByFeedback.values().stream()
+                                    .flatMap(List::stream)
+                                    .map(Observation::getAgentJobId),
+                            resolutionByFeedback.values().stream()
+                                    .flatMap(resolution -> Stream.concat(
+                                            resolution.cleanWork().stream(), resolution.problemWork().stream()))
+                                    .map(Work::jobId))
+                    .flatMap(ids -> ids);
         }
     }
 
     /**
-     * Bounded by the standing's look-back: only feedback prepared inside it is read, and its work is read
-     * off the {@code after} snapshot, which holds every visible observation of the look-back as of the
-     * window's upper edge. A resolution inside the window needs a clean opportunity inside the window, so only
-     * feedback about a practice with work in the window can have resolved there; feedback prepared before the
-     * look-back cannot resolve through this path, and is not read.
+     * Feedback prepared inside the standing's look-back, plus feedback of any age the developer answered
+     * inside the window. Only the work-resolution path is look-back bounded: it reads work off the
+     * {@code after} snapshot, which holds every visible observation of the look-back as of the window's
+     * upper edge. It is read for every piece, not only those with work in the window: a resolution by
+     * work before the window is what makes a later answer inside it no change at all, and the window
+     * filter on the changes decides what is reported.
      */
     private FeedbackFacts readFeedback(
             Long workspaceId,
@@ -197,15 +202,15 @@ public class PracticeProfileOverviewService {
             Instant now,
             OverviewWindow window,
             List<DeveloperReviewRunRow> windowRuns,
-            StandingSnapshot after,
-            Set<String> practicesWithWindowWork) {
-        Instant lookback = now.minus(PracticeStandingService.LOOKBACK_DAYS, ChronoUnit.DAYS);
+            StandingSnapshot before,
+            StandingSnapshot after) {
+        Instant lookback = now.minus(OverviewWindow.LOOKBACK);
         List<Feedback> recent = feedbackRepository.findReadableInAppPreparedSince(workspaceId, developerId, lookback);
         // Responses from the feedback's start, not from the window's edge: feedback the developer marked
         // addressed before the window opened and whose work then resolved it inside the window resolved before
         // the window, once.
         List<AddressedFeedbackProjection> addressed = reactionRepository.findInAppResolvedByDeveloperBetween(
-                developerId, workspaceId, lookback, window.until());
+                developerId, workspaceId, lookback, window.until(), FeedbackResolution.resolvingNames());
         Map<UUID, List<Observation>> evidenceByFeedback = feedbackEvidence.visibleEvidence(
                 workspaceId,
                 Stream.concat(
@@ -214,21 +219,16 @@ public class PracticeProfileOverviewService {
                                         .filter(response -> window.contains(response.getRespondedAt()))
                                         .map(AddressedFeedbackProjection::getFeedbackId))
                         .collect(Collectors.toSet()));
-        List<Feedback> resolvable = recent.stream()
-                .filter(feedback -> {
-                    List<Observation> evidence = evidenceByFeedback.get(feedback.getId());
-                    return evidence != null
-                            && practicesWithWindowWork.contains(
-                                    evidence.getFirst().getPractice().getSlug());
-                })
-                .toList();
+        Map<UUID, WorkResolution> resolutions =
+                feedbackEvidence.workResolutions(recent, evidenceByFeedback, evidenceByPractice(after));
         return new FeedbackFacts(
                 recent,
                 windowRuns.stream()
                         .collect(Collectors.toMap(
                                 DeveloperReviewRunRow::getJobId, DeveloperReviewRunRow::getReviewedAt)),
                 evidenceByFeedback,
-                feedbackEvidence.workResolutions(resolvable, evidenceByFeedback, evidenceByPractice(after)),
+                resolutions,
+                resolutionsAsOf(recent, evidenceByFeedback, evidenceByPractice(before), resolutions.keySet()),
                 addressed.stream()
                         .collect(Collectors.toMap(
                                 AddressedFeedbackProjection::getFeedbackId,
@@ -236,7 +236,37 @@ public class PracticeProfileOverviewService {
     }
 
     /**
-     * New and resolved in-app feedback inside the window. New is what the window's runs composed, dated by its
+     * How the developer's work had answered each piece of feedback as of the window's lower edge, for the
+     * pieces the upper edge still reads: what a clean run that has since been put back to nothing stood at
+     * before. Bundled straight off the earlier snapshot rather than through
+     * {@link InAppFeedbackEvidence#workResolutions}, since which pieces are readable at all, and which the
+     * practice's own change has closed, are questions the upper edge's read has already answered — asking
+     * them twice would be a second round of queries for the same answer.
+     */
+    private static Map<UUID, WorkResolution> resolutionsAsOf(
+            List<Feedback> recent,
+            Map<UUID, List<Observation>> evidenceByFeedback,
+            Map<String, List<Observation>> observationsByPractice,
+            Set<UUID> readAtTheUpperEdge) {
+        Map<String, WorkResolution.Opportunities> opportunitiesByPractice = new LinkedHashMap<>();
+        Map<UUID, WorkResolution> resolutions = new LinkedHashMap<>();
+        for (Feedback piece : recent) {
+            List<Observation> evidence = evidenceByFeedback.get(piece.getId());
+            if (evidence == null || !readAtTheUpperEdge.contains(piece.getId())) {
+                continue;
+            }
+            String practiceSlug = evidence.getFirst().getPractice().getSlug();
+            WorkResolution.Opportunities opportunities = opportunitiesByPractice.computeIfAbsent(
+                    practiceSlug,
+                    slug -> WorkResolution.Opportunities.of(
+                            observationsByPractice.getOrDefault(slug, List.of()), Instant.EPOCH));
+            resolutions.put(piece.getId(), opportunities.resolve(piece.getCreatedAt()));
+        }
+        return resolutions;
+    }
+
+    /**
+     * New, reset and resolved in-app feedback inside the window. New is what the window's runs composed, dated by its
      * run rather than by its own timestamp, which is written moments after the run's newest observation and
      * can fall past the window's upper edge. Resolved is what the developer's work resolved inside the window,
      * and what the developer marked addressed inside the window, whichever run had said it. Feedback resolved
@@ -259,6 +289,12 @@ public class PracticeProfileOverviewService {
                         targets));
             }
         }
+        for (Feedback feedback : facts.recent()) {
+            ProfileChangeDTO reset = feedbackReset(facts, feedback, window, targets);
+            if (reset != null) {
+                changes.add(reset);
+            }
+        }
         Map<UUID, ProfileChangeDTO> resolvedByFeedback = new LinkedHashMap<>();
         facts.resolutionByFeedback().forEach((feedbackId, resolution) -> {
             Instant resolvedAt = resolution.resolvedAt();
@@ -271,6 +307,7 @@ public class PracticeProfileOverviewService {
                                 resolvedAt,
                                 feedbackId,
                                 ProfileChangeDTO.ResolvedBy.WORK,
+                                null,
                                 evidence.getFirst().getPractice(),
                                 ProfileChangeDetector.refs(Work.newestFirst(resolution.cleanWork().stream()), targets)),
                         PracticeProfileOverviewService::earlier);
@@ -297,6 +334,44 @@ public class PracticeProfileOverviewService {
         return changes;
     }
 
+    /**
+     * Open feedback the developer's work had started to answer and has now fallen back on: its clean run
+     * stood somewhere at the window's lower edge and stands at nothing at its upper edge, because work
+     * reviewed inside the window raised the problem again. Feedback already closed — by the work, by the
+     * developer's own answer — cannot fall back: what the work says about it afterwards is new feedback's
+     * business, exactly as {@link WorkResolution} puts it.
+     */
+    private static @Nullable ProfileChangeDTO feedbackReset(
+            FeedbackFacts facts, Feedback feedback, OverviewWindow window, Map<UUID, Target> targets) {
+        UUID feedbackId = feedback.getId();
+        WorkResolution atTheEnd = facts.resolutionByFeedback().get(feedbackId);
+        WorkResolution atTheStart = facts.resolutionBeforeByFeedback().get(feedbackId);
+        List<Observation> evidence = facts.evidenceByFeedback().get(feedbackId);
+        if (atTheEnd == null
+                || atTheStart == null
+                || evidence == null
+                || atTheEnd.resolvedAt() != null
+                || facts.addressedAt().containsKey(feedbackId)
+                || atTheStart.cleanWork().isEmpty()
+                || !atTheEnd.cleanWork().isEmpty()) {
+            return null;
+        }
+        List<Work> problems = atTheEnd.problemWork().stream()
+                .filter(work -> window.contains(work.at()))
+                .toList();
+        if (problems.isEmpty()) {
+            return null;
+        }
+        return feedbackChange(
+                ProfileChangeDTO.Type.FEEDBACK_RESET,
+                problems.getFirst().at(),
+                feedbackId,
+                null,
+                WorkResolution.CLEAN_NEEDED,
+                evidence.getFirst().getPractice(),
+                ProfileChangeDetector.refs(problems, targets));
+    }
+
     /** The way a piece of feedback resolved first — the one its card reports. */
     private static ProfileChangeDTO earlier(ProfileChangeDTO left, ProfileChangeDTO right) {
         return right.at().isBefore(left.at()) ? right : left;
@@ -315,6 +390,7 @@ public class PracticeProfileOverviewService {
                 at,
                 feedbackId,
                 resolvedBy,
+                null,
                 evidence.getFirst().getPractice(),
                 ProfileChangeDetector.refs(Work.newestFirst(evidence.stream().map(Work::of)), targets));
     }
@@ -325,6 +401,7 @@ public class PracticeProfileOverviewService {
             Instant at,
             UUID feedbackId,
             ProfileChangeDTO.@Nullable ResolvedBy resolvedBy,
+            @Nullable Integer cleanNeeded,
             Practice practice,
             List<ReviewedWorkRefDTO> work) {
         PracticeGroup group = practice.getGroup();
@@ -339,6 +416,7 @@ public class PracticeProfileOverviewService {
                 null,
                 feedbackId,
                 resolvedBy,
+                cleanNeeded,
                 work);
     }
 
@@ -366,7 +444,7 @@ public class PracticeProfileOverviewService {
             PracticeTrend.CleanWork cleanWork = practice.trend().cleanWork();
             ArtifactKind kind = cleanWork.kind();
             Instant since = cleanWork.since();
-            if (kind == null || since == null || !after.isHolding(practice.dto(), cleanWork)) {
+            if (kind == null || since == null || !practice.isHolding()) {
                 continue;
             }
             held.add(new HeldPracticeDTO(

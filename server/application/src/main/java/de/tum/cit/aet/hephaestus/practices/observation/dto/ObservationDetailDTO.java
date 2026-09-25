@@ -2,9 +2,8 @@ package de.tum.cit.aet.hephaestus.practices.observation.dto;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.DeliveredFeedbackBinding;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackUsefulness;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.ObservationFeedbackUnit;
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -62,8 +61,8 @@ public record ObservationDetailDTO(
 
         @Nullable
         @Schema(
-                description =
-                        "What to do — the delivered feedback for this observation (null if nothing was delivered)")
+                description = "What to do — the text of the newest feedback unit that said something about this "
+                        + "observation to this developer (null if nothing was said)")
         String deliveredFeedback,
 
         @Nullable
@@ -74,18 +73,10 @@ public record ObservationDetailDTO(
 
         @Nullable
         @Schema(
-                description = "The newest delivered feedback that carried this observation to the developer; "
-                        + "the handle for responding to it (null when none was delivered)")
-        UUID feedbackId,
-
-        @Nullable @Schema(description = "The developer's usefulness response to that feedback")
-        FeedbackUsefulness feedbackUsefulness,
-
-        @Nullable @Schema(description = "The developer's resolution response to that feedback")
-        FeedbackResolution feedbackResolution,
-
-        @Nullable @Schema(description = "The developer's comment on that feedback")
-        String feedbackResponseComment,
+                description = "The developer's standing answer to the very feedback whose text deliveredFeedback "
+                        + "shows, with that unit's id as the handle for responding (null when nothing was said, or "
+                        + "when the unit that said it failed to deliver and so cannot be answered)")
+        FeedbackResponseDTO feedbackResponse,
 
         @Nullable @Schema(description = "Cross-run locus key; null when continuity is unavailable")
         String recurrenceKey,
@@ -109,11 +100,16 @@ public record ObservationDetailDTO(
         return Outcome.of(presence, assessment);
     }
 
+    /**
+     * One feedback unit answers both {@code deliveredFeedback} and {@code feedbackResponse}, so the developer
+     * always rates the words they just read. A FAILED unit's text is still shown — it was composed and may have
+     * reached them on the artifact — but it carries no response handle, because only a DELIVERED unit can be
+     * answered.
+     */
     public static ObservationDetailDTO from(
             Observation observation,
-            @Nullable String deliveredFeedback,
+            @Nullable ObservationFeedbackUnit feedback,
             @Nullable String nextStep,
-            @Nullable DeliveredFeedbackBinding feedback,
             @Nullable String artifactUrl,
             boolean includeEvidence) {
         var practice = observation.getPractice();
@@ -130,20 +126,22 @@ public record ObservationDetailDTO(
                 observation.getSeverity(),
                 includeEvidence ? ObservationEvidenceDTO.from(observation.getEvidence()) : null,
                 observation.getEvidenceRationale(),
-                deliveredFeedback,
+                feedback == null ? null : feedback.getBody(),
                 nextStep,
-                feedback == null ? null : feedback.getFeedbackId(),
-                feedback == null || feedback.getResponseUsefulness() == null
-                        ? null
-                        : FeedbackUsefulness.valueOf(feedback.getResponseUsefulness()),
-                feedback == null || feedback.getResponseResolution() == null
-                        ? null
-                        : FeedbackResolution.valueOf(feedback.getResponseResolution()),
-                feedback == null ? null : feedback.getResponseComment(),
+                responseTo(feedback),
                 observation.getRecurrenceKey(),
                 ReviewClaimCurrentness.of(observation.getPracticeRevision(), practice, observation.getSupersededAt()),
                 observation.getOrigin(),
                 artifactUrl,
                 observation.getObservedAt());
+    }
+
+    /** No handle, no response: a unit that failed to deliver cannot be answered, so it carries none. */
+    private static @Nullable FeedbackResponseDTO responseTo(@Nullable ObservationFeedbackUnit feedback) {
+        if (feedback == null) {
+            return null;
+        }
+        UUID feedbackId = feedback.getFeedbackId();
+        return feedbackId == null ? null : FeedbackResponseDTO.from(feedbackId, feedback);
     }
 }

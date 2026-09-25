@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
 import java.time.Instant;
@@ -114,7 +115,23 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
 
         assertThat(route(List.of(first, second), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, null))
                 .isEqualTo(InAppRoutingDecision.UNCORROBORATED);
-        assertThat(InAppFeedbackRouter.problemsIn(List.of(first, second))).containsExactly(first);
+        // Which of the two stands for the pull request is the next test's subject; here it is that one does.
+        assertThat(InAppFeedbackRouter.problemsIn(List.of(first, second))).hasSize(1);
+    }
+
+    /**
+     * One run's several problems on one pull request all carry that run's moment, so the row the card cites
+     * as its example must be chosen by how bad it is. Picking the first row back would let the developer be
+     * shown the mildest problem on the work while the worst one goes unmentioned.
+     */
+    @Test
+    void citesTheWorstOfSeveralProblemsOneRunFoundOnOnePieceOfWork() {
+        UUID run = UUID.randomUUID();
+        Observation nit = problemOf(42L, run, Severity.MINOR);
+        Observation worst = problemOf(42L, run, Severity.CRITICAL);
+
+        assertThat(InAppFeedbackRouter.problemsIn(List.of(nit, worst))).containsExactly(worst);
+        assertThat(InAppFeedbackRouter.problemsIn(List.of(worst, nit))).containsExactly(worst);
     }
 
     /**
@@ -146,21 +163,6 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
 
         assertThat(InAppFeedbackRouter.problemsIn(List.of(recovered, slipped, second, first)))
                 .containsExactly(second, first);
-    }
-
-    private static Observation observation(
-            long artifactId, UUID run, Instant observedAt, ObservationOrigin origin, Assessment assessment) {
-        return Observation.builder()
-                .id(UUID.randomUUID())
-                .agentJobId(run)
-                .artifactKind(ArtifactKinds.PULL_REQUEST)
-                .artifactId(artifactId)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.PRESENT)
-                .assessment(assessment)
-                .origin(origin)
-                .observedAt(observedAt)
-                .build();
     }
 
     @Test
@@ -232,7 +234,38 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
                 .toList();
     }
 
+    /** A problem of the given severity on one piece of work, recorded by {@code run}. */
+    private static Observation problemOf(long artifactId, UUID run, Severity severity) {
+        return Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(run)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(artifactId)
+                .assessmentStatus(AssessmentStatus.ASSESSED)
+                .presence(Presence.PRESENT)
+                .assessment(Assessment.BAD)
+                .severity(severity)
+                .origin(ObservationOrigin.LIVE)
+                .observedAt(NOW)
+                .build();
+    }
+
     private static Observation observation(long artifactId, ObservationOrigin origin, Assessment assessment) {
         return observation(artifactId, UUID.randomUUID(), NOW, origin, assessment);
+    }
+
+    private static Observation observation(
+            long artifactId, UUID run, Instant observedAt, ObservationOrigin origin, Assessment assessment) {
+        return Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(run)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(artifactId)
+                .assessmentStatus(AssessmentStatus.ASSESSED)
+                .presence(Presence.PRESENT)
+                .assessment(assessment)
+                .origin(origin)
+                .observedAt(observedAt)
+                .build();
     }
 }

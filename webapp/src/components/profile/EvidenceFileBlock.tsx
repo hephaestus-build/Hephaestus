@@ -35,7 +35,9 @@ interface EvidenceFileBlockProps {
  * all. Which side of the diff a passage came from is said on the quoted lines themselves, where
  * the reader is looking at them, rather than once in the caption above them. A quote verified
  * against a commit in the repository's history names that commit under the caption, since the
- * lines may no longer read so at the reviewed one.
+ * lines may no longer read so at the reviewed one. A block showing both sides of a change
+ * names neither: each side was read at its own revision, so one range and one commit over the two
+ * of them would be true of one side only.
  */
 export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps) {
 	const source = evidenceSourceDef(location.sourceKind);
@@ -47,10 +49,13 @@ export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps
 	const firstLineNumber = location.startLine;
 	const hasSnippet = change !== undefined || lines.length > 0;
 	const SourceIcon = source.icon;
-	/** The side of the diff on the first line, the line number on a code quote, or nothing at all. */
-	const gutterOf = (index: number): number | string | undefined => {
-		if (side) {
-			return index === 0 ? DIFF_SIDE_LABELS[side] : "";
+	/**
+	 * The side of the diff on the first line it covers, the line number on a code quote, or nothing
+	 * at all.
+	 */
+	const gutterOf = (index: number, quotedSide = side): number | string | undefined => {
+		if (quotedSide) {
+			return index === 0 ? DIFF_SIDE_LABELS[quotedSide] : "";
 		}
 		return locatedByLine ? firstLineNumber + index : undefined;
 	};
@@ -75,7 +80,7 @@ export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps
 				) : (
 					<span className="min-w-0 flex-1 truncate text-xs font-medium">{source.label}</span>
 				)}
-				{locatedByLine && (
+				{locatedByLine && change === undefined && (
 					<span className="shrink-0 font-mono text-xs text-muted-foreground">
 						{evidenceLineRangeLabel(location)}
 					</span>
@@ -89,9 +94,7 @@ export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps
 			{location.redacted && (
 				<p className="flex items-start gap-2 border-t p-3 text-sm text-muted-foreground">
 					<ShieldAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
-					{detector === SECRET_SCANNER
-						? "Not quoted. This looked like a credential, so the text was never stored. The path and line above are where it sits."
-						: "Not quoted. The passage was withheld, so only its location was kept."}
+					{redactionSentence(locatedByLine, detector)}
 				</p>
 			)}
 			{hasSnippet && (
@@ -109,8 +112,7 @@ export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps
 										.map((line, index) => (
 											<QuoteLine
 												key={`${diffSide}-${index}`}
-												// The side is said once, on the first line it covers.
-												gutter={index === 0 ? DIFF_SIDE_LABELS[diffSide] : ""}
+												gutter={gutterOf(index, diffSide)}
 												tint={DIFF_SIDE_TINTS[diffSide]}
 											>
 												{line}
@@ -127,6 +129,22 @@ export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps
 			)}
 		</figure>
 	);
+}
+
+/**
+ * What a withheld quote may say about where it sits. A code citation names a path and a line in the
+ * caption above, so the sentence can point at them; an object citation shows the source's name and
+ * no numbers at all, so promising a path and a line there would point at nothing on screen.
+ */
+function redactionSentence(locatedByLine: boolean, detector?: string): string {
+	if (detector === SECRET_SCANNER) {
+		return locatedByLine
+			? "Not quoted. This looked like a credential, so the text was never stored. The path and line above are where it sits."
+			: "Not quoted. This looked like a credential, so the text was never stored.";
+	}
+	return locatedByLine
+		? "Not quoted. The passage was withheld, so only its location was kept."
+		: "Not quoted. The passage was withheld.";
 }
 
 /** One line of a quote: what the gutter says about it, then the line itself. */

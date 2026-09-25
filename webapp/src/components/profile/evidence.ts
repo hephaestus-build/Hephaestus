@@ -1,4 +1,4 @@
-import type { ObservationDetail } from "@/api/types.gen";
+import type { EvidenceCitation, ObservationDetail } from "@/api/types.gen";
 import { evidenceSourceDef } from "@/components/practice-vocabulary/evidence-source-defs";
 
 export interface EvidenceLocation {
@@ -12,67 +12,100 @@ export interface EvidenceLocation {
 	snippet?: string;
 	redacted: boolean;
 	/**
-	 * One changed passage, folded from the diff's two citations of the same lines: what the lines
-	 * read before the change and what they read after.
+	 * One changed passage, folded from the diff's two citations of it: what the lines read before
+	 * the change and what they read after. A folded block names no line range and no commit, since
+	 * each side carries its own and the block shows both.
 	 */
 	change?: { before: string; after: string };
 }
 export function toEvidenceLocations(evidence: ObservationDetail["evidence"]): EvidenceLocation[] {
-	return foldObjectSources(
-		foldDiffSides(
-			(evidence?.citations ?? []).map((citation) => ({
-				path: citation.path,
-				startLine: citation.startLine,
-				endLine: citation.endLine,
-				sourceKind: citation.sourceKind,
-				side: citation.side,
-				revision: citation.revision,
-				snippet: citation.quote,
-				redacted: citation.quoteRedacted,
-			})),
-		),
-	);
+	return foldObjectSources(foldDiffSides(evidence?.citations ?? []));
 }
 
-/** Two sides of one change: the same lines of the same file, quoted from either side of the diff. */
-const pairsWith = (kept: EvidenceLocation, next: EvidenceLocation) =>
-	kept.change === undefined &&
-	kept.side !== undefined &&
-	next.side !== undefined &&
-	kept.side !== next.side &&
-	kept.path === next.path &&
-	kept.startLine === next.startLine &&
-	kept.endLine === next.endLine;
+/** One block as the fold sees it: the citation it is built from, and the change it grew into. */
+interface DiffBlock {
+	citation: EvidenceCitation;
+	change?: { before: string; after: string };
+}
 
 /**
- * The OLD and the NEW quote of the same lines folded into one location. A changed line is cited
- * from both sides of the diff, and two blocks over one change read as two pieces of evidence; the
- * pair becomes the one block that says what the lines were and what they became. A withheld quote
- * never folds: a redacted block says something its counterpart cannot.
+ * Two sides of one change: the same passage of the same file, quoted from either side of the diff.
+ * The wire carries no hunk identity, so every other fact of a citation has to agree before two
+ * blocks may become one — the artifact they were read from, the source kind, the file, and the
+ * lines. The revision is deliberately not one of them: on a diff citation it names the commit of
+ * the side it was read from, so the two sides of one change carry two different ones.
  */
-function foldDiffSides(locations: EvidenceLocation[]): EvidenceLocation[] {
-	const folded: EvidenceLocation[] = [];
-	for (const location of locations) {
-		const index = folded.findIndex((kept) => pairsWith(kept, location));
-		const kept = folded[index];
-		if (kept?.snippet === undefined || location.snippet === undefined) {
-			folded.push(location);
+const pairsWith = (kept: DiffBlock, next: EvidenceCitation) =>
+	kept.change === undefined &&
+	kept.citation.side !== undefined &&
+	next.side !== undefined &&
+	kept.citation.side !== next.side &&
+	kept.citation.sourceKind === next.sourceKind &&
+	kept.citation.artifactPath === next.artifactPath &&
+	kept.citation.path === next.path &&
+	kept.citation.startLine === next.startLine &&
+	kept.citation.endLine === next.endLine;
+
+/** Before and after of one change, or nothing at all when either side's quote was withheld. */
+function changeBetween(
+	kept: EvidenceCitation,
+	next: EvidenceCitation,
+): { before: string; after: string } | undefined {
+	const [before, after] = kept.side === "OLD" ? [kept.quote, next.quote] : [next.quote, kept.quote];
+	if (before === undefined || after === undefined) {
+		return undefined;
+	}
+	return { before, after };
+}
+
+/**
+ * The OLD and the NEW quote of one passage folded into one location. A changed line is cited from
+ * both sides of the diff, and two blocks over one change read as two pieces of evidence; the pair
+ * becomes the one block that says what the lines were and what they became. A withheld quote never
+ * folds: a redacted block says something its counterpart cannot.
+ */
+function foldDiffSides(citations: EvidenceCitation[]): EvidenceLocation[] {
+	const blocks: DiffBlock[] = [];
+	for (const citation of citations) {
+		const index = blocks.findIndex((kept) => pairsWith(kept, citation));
+		const kept = blocks[index];
+		const change = kept === undefined ? undefined : changeBetween(kept.citation, citation);
+		if (kept === undefined || change === undefined) {
+			blocks.push({ citation });
 			continue;
 		}
-		const [before, after] =
-			kept.side === "OLD" ? [kept.snippet, location.snippet] : [location.snippet, kept.snippet];
-		folded[index] = {
-			path: kept.path,
-			startLine: kept.startLine,
-			endLine: kept.endLine,
-			sourceKind: kept.sourceKind,
-			revision: kept.revision,
+		blocks[index] = { citation: kept.citation, change };
+	}
+	return blocks.map(toLocation);
+}
+
+/**
+ * One citation as the profile reads it. A folded block keeps neither the side, the commit nor the
+ * quote of the citation it grew from: those are one side's, and the block now carries both.
+ */
+function toLocation({ citation, change }: DiffBlock): EvidenceLocation {
+	if (change !== undefined) {
+		return {
+			path: citation.path,
+			startLine: citation.startLine,
+			endLine: citation.endLine,
+			sourceKind: citation.sourceKind,
 			redacted: false,
-			change: { before, after },
+			change,
 		};
 	}
-	return folded;
+	return {
+		path: citation.path,
+		startLine: citation.startLine,
+		endLine: citation.endLine,
+		sourceKind: citation.sourceKind,
+		side: citation.side,
+		revision: citation.revision,
+		snippet: citation.quote,
+		redacted: citation.quoteRedacted,
+	};
 }
+
 /**
  * Two quotes of the same object source: not a place the reader could open, so the same registry
  * label over each of them reads as two pieces of evidence instead of one thing quoted twice. A

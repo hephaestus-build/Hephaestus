@@ -9,13 +9,13 @@ import type { StatusDef } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
+import { OBSERVATION_ORIGIN_DEFS } from "@/components/practice-vocabulary/observation-origin-defs";
 import {
 	type ObservationResultFacts,
 	observationResult,
 } from "@/components/practice-vocabulary/observation-result";
 import { derivedOutcome } from "@/components/practice-vocabulary/outcome-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import { Badge } from "@/components/ui/badge";
 import { hasText } from "@/lib/text";
 
 export function ObservationResultBadge({
@@ -49,19 +49,14 @@ export function observationSeverity(
 }
 
 /**
- * A backfilled observation and one somebody asked for by hand are both self-selected rather than a
- * random draw from the work, so reading either as though it were live is the mistake this prevents.
- * LIVE renders nothing: badging the ordinary case buries the exceptions.
+ * LIVE renders nothing: badging the ordinary case buries the exceptions. The words are the
+ * registry's, so the operator's console and the developer's own surface name an origin alike.
  */
 export function ObservationOriginBadge({ origin }: { origin: ReviewObservation["origin"] }) {
 	if (origin === "LIVE") {
 		return null;
 	}
-	return (
-		<Badge variant="outline">
-			{origin === "BACKFILL" ? "From a review of past work" : "Requested by hand"}
-		</Badge>
-	);
+	return <StatusBadge def={OBSERVATION_ORIGIN_DEFS[origin]} />;
 }
 
 type FeedbackCounts = ReviewFeedbackCounts | ReviewFeedbackDisposition;

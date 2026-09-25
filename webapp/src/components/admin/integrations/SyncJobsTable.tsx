@@ -2,7 +2,9 @@ import type { VariantProps } from "class-variance-authority";
 import { formatDistanceStrict } from "date-fns";
 import { AlertCircleIcon, ChevronDownIcon, HistoryIcon } from "lucide-react";
 
+import { cn } from "cn";
 import type { SyncJob } from "@/api/types.gen";
+import { FOCUS_RING } from "@/components/common/focus";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { TablePagination } from "@/components/common/TablePagination";
@@ -223,7 +225,7 @@ function JobRow({ job }: { job: SyncJob }) {
 								<button
 									type="button"
 									aria-label={`Error for job ${job.id}`}
-									className="inline-flex cursor-help rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+									className={cn("inline-flex cursor-help rounded-sm", FOCUS_RING)}
 								/>
 							}
 						>

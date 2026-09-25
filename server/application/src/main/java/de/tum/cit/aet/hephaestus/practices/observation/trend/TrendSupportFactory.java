@@ -26,21 +26,29 @@ final class TrendSupportFactory {
             int previousOpportunities,
             int opportunitiesUntilComparable,
             List<EvidenceOpportunity> trail) {
+        // One practice's bundles are disjoint, so no piece of reviewed work is in both.
         return build(
                 properties,
                 currentOpportunities,
                 previousOpportunities,
+                currentOpportunities + previousOpportunities,
                 opportunitiesUntilComparable,
                 null,
                 null,
                 trail);
     }
 
-    /** Support for an aggregate — additionally says how many of the group's practices could be compared. */
+    /**
+     * Support for an aggregate — additionally says how many of the group's practices could be compared.
+     *
+     * <p>{@code opportunities} is passed in rather than summed, because a group's two bundles can name the same
+     * piece of reviewed work through different practices.
+     */
     static TrendSupport forGroup(
             TrendProperties properties,
             int currentOpportunities,
             int previousOpportunities,
+            int opportunities,
             int opportunitiesUntilComparable,
             int comparablePractices,
             int eligiblePractices,
@@ -49,6 +57,7 @@ final class TrendSupportFactory {
                 properties,
                 currentOpportunities,
                 previousOpportunities,
+                opportunities,
                 opportunitiesUntilComparable,
                 comparablePractices,
                 eligiblePractices,
@@ -59,6 +68,7 @@ final class TrendSupportFactory {
             TrendProperties properties,
             int currentOpportunities,
             int previousOpportunities,
+            int opportunities,
             int opportunitiesUntilComparable,
             @Nullable Integer comparablePractices,
             @Nullable Integer eligiblePractices,
@@ -79,6 +89,7 @@ final class TrendSupportFactory {
         return new TrendSupport(
                 currentOpportunities,
                 previousOpportunities,
+                opportunities,
                 opportunitiesUntilComparable,
                 comparablePractices,
                 eligiblePractices,

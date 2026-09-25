@@ -13,8 +13,8 @@ import {
 } from "./fixtures";
 import { ReviewArtifactLabel, ReviewArtifactLink } from "./ReviewArtifact";
 
-/** The work as a run names it: the server's label, and the provider's mark since the run records one. */
-const onRun = ({ reviewedWork, provider }: ReviewWork) => ({ artifact: reviewedWork, provider });
+/** The work as the wire names it: the server's label, and the provider the ref itself carries. */
+const onRun = ({ reviewedWork }: ReviewWork) => ({ reviewedWork });
 
 /**
  * The glyph is the forge when the caller knows it, not the kind: the words already say `#1423` or
@@ -81,14 +81,14 @@ export const ExternalLink: Story = {
 	},
 };
 
-/** An observation or a piece of feedback records no provider, so the glyph is the kind's. */
-export const ReviewedWorkRef: Story = {
-	args: { artifact: reviewArtifact.reviewedWork, provider: undefined },
+/** A ref whose run is gone records no provider, so the glyph falls back to the kind's. */
+export const WithoutAProvider: Story = {
+	args: { reviewedWork: { ...reviewArtifact.reviewedWork, provider: undefined } },
 };
 
 export const WithoutAUrl: Story = {
 	render: (args) => <ReviewArtifactLink {...args} />,
-	args: { artifact: { ...reviewArtifact.reviewedWork, url: undefined } },
+	args: { reviewedWork: { ...reviewArtifact.reviewedWork, url: undefined } },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("link")).not.toBeInTheDocument();
 	},
@@ -96,7 +96,7 @@ export const WithoutAUrl: Story = {
 
 export const LongTitle: Story = {
 	args: {
-		artifact: {
+		reviewedWork: {
 			...reviewArtifact.reviewedWork,
 			repositoryName: "hephaestus-administration-and-practice-feedback-platform",
 		},
@@ -110,4 +110,4 @@ export const LongTitle: Story = {
 	},
 };
 
-export const Unresolved: Story = { args: { artifact: undefined } };
+export const Unresolved: Story = { args: { reviewedWork: undefined } };

@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -71,6 +72,48 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
         verifyNoInteractions(authorization);
     }
 
+    /**
+     * The card keeps a claim whose rules the practice has since changed — closed is something the developer
+     * may see — and drops only the one whose rules cannot be verified, which never reaches authorization.
+     */
+    @Test
+    void keepsStaleEvidenceAndDropsUnverifiableEvidenceFromWhatIsShown() {
+        EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
+        Observation current = observation("fingerprint", "fingerprint");
+        Observation stale = observation("old", "current");
+        Observation unverifiable = observation(null, "current");
+        when(authorization.permitsAll(7L, List.of(current, stale), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .thenReturn(Set.of(current.getId(), stale.getId()));
+
+        assertThat(new ObservationVisibilityPolicy(authorization)
+                        .permitsShown(
+                                7L, List.of(current, stale, unverifiable), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .containsExactlyInAnyOrder(current.getId(), stale.getId());
+    }
+
+    @Test
+    void asksNothingOfEvidenceAuthorizationWhenNothingShownCanBeVerified() {
+        EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
+
+        assertThat(new ObservationVisibilityPolicy(authorization)
+                        .permitsShown(
+                                7L, List.of(observation(null, "current")), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .isEmpty();
+        verifyNoInteractions(authorization);
+    }
+
+    @Test
+    void hidesShownEvidenceThatEvidenceAuthorizationRefuses() {
+        EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
+        Observation current = observation("fingerprint", "fingerprint");
+        when(authorization.permitsAll(7L, List.of(current), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .thenReturn(Set.of());
+
+        assertThat(new ObservationVisibilityPolicy(authorization)
+                        .permitsShown(7L, List.of(current), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .isEmpty();
+    }
+
     @Test
     void shouldNotAuthorizeSupersededIssueFeedbackForNewDelivery() {
         EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
@@ -94,7 +137,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
                 .containsExactly(historical.getId());
     }
 
-    private static Observation observation(String evaluatedFingerprint, String currentFingerprint) {
+    private static Observation observation(@Nullable String evaluatedFingerprint, @Nullable String currentFingerprint) {
         PracticeRevision evaluated = mock(PracticeRevision.class);
         PracticeRevision current = mock(PracticeRevision.class);
         Practice practice = mock(Practice.class);

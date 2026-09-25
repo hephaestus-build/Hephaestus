@@ -95,6 +95,7 @@ export const WithTrend: Story = {
 				trendSupport: {
 					currentOpportunities: 4,
 					previousOpportunities: 4,
+					opportunities: 8,
 					opportunitiesUntilComparable: 0,
 					bundleSize: 4,
 					ropeHalfWidth: 0.15,

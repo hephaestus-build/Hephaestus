@@ -23,7 +23,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 
-import { nextPracticeGroupSort, type PracticeGroupSort } from "./practice-group-list-order";
+import { nextPracticeGroupSort, type SortDirection } from "./practice-group-list-order";
 import type { TrendScope } from "./practice-trend-presentation";
 import { StandingBadge, TrendNote } from "./StandingBadge";
 
@@ -36,9 +36,9 @@ export interface PracticeTableProps<TRow> {
 	 * The table sorts by standing only; the caller orders `rows` under it and the Standing header
 	 * shows it.
 	 */
-	sort: PracticeGroupSort;
+	sort: SortDirection;
 	/** Called with the sort a press on the Standing header asks for. */
-	onSortChange: (sort: PracticeGroupSort) => void;
+	onSortChange: (sort: SortDirection) => void;
 	/** Heads between Standing and the subject column; a row renders the matching cells itself. */
 	heads?: ReactNode;
 	/** "Practice", "Practice group". */
@@ -118,12 +118,9 @@ export function PracticeTable<TRow>({
 			<Table aria-label={label} aria-busy={isLoading || undefined} className="min-w-152">
 				<TableHeader>
 					<TableRow>
-						<TableHead
-							aria-sort={sort.direction === "asc" ? "ascending" : "descending"}
-							className="w-60"
-						>
+						<TableHead aria-sort={sort === "asc" ? "ascending" : "descending"} className="w-60">
 							<SortButton
-								sorted={sort.direction}
+								sorted={sort}
 								onToggle={() => onSortChange(nextPracticeGroupSort(sort))}
 								className="text-foreground"
 							>

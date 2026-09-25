@@ -1,5 +1,6 @@
 // The palette this page and its levels share is `webapp/AGENTS.md` § Practice surfaces palette.
 import { MessageSquareTextIcon } from "lucide-react";
+import { useState } from "react";
 
 import type { PracticeGroup, PracticeStanding } from "@/api/types.gen";
 import {
@@ -24,7 +25,6 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 
@@ -64,7 +64,7 @@ export interface PracticeProfilePageProps {
 	/** The tab over the feedback cards, from the route's `feedback` search param. */
 	feedbackTab?: FeedbackTab;
 	onFeedbackTabChange?: (tab: FeedbackTab) => void;
-	/** The header's "See all practices": opens the level with the table of every practice. */
+	/** The header's "See all practice groups": opens the level with the table of every practice. */
 	onShowAllPractices?: () => void;
 	isLoading: boolean;
 	error?: unknown;
@@ -72,10 +72,9 @@ export interface PracticeProfilePageProps {
 }
 
 /**
- * "Newest" is the two newest open cards. Two is the maintainer's call after the user test of
- * 2026-09-17: on the wide layout two cards fit above the fold under the header, and a third
- * pushes "All" out of sight. `practice-profile-search` owns the tabs and points here for this
- * rule.
+ * "Newest" is the two newest open cards: on the wide layout two cards fit above the fold under
+ * the header, and a third pushes "All" out of sight. `practice-profile-search` owns the tabs and
+ * points here for this rule.
  */
 const NEWEST_CARD_COUNT = 2;
 
@@ -102,6 +101,13 @@ const EMPTY_TAB: Record<FeedbackTab, { title: string; description: string }> = {
 	},
 	all: { title: "No feedback yet.", description: APPEARS_WHEN_SEEN },
 };
+
+/**
+ * The tab a card the reader asked for is certainly on. "All" rather than the narrowest fit: the
+ * reader pressed a link about one card, and a tab that also hides the cards around it would answer
+ * by taking something else away.
+ */
+const CARDS_TAB: FeedbackTab = "all";
 
 /** The cards each tab lists, newest first. */
 function feedbackCardsByTab(
@@ -143,6 +149,22 @@ export function PracticeProfilePage({
 		}
 	};
 	const cardsByTab = feedbackCardsByTab(feedbackCards);
+	// Which card "Read the feedback" is still on its way to: the card may sit behind another tab,
+	// so the page moves to one that lists it and the card's own ref lands on it once it is drawn.
+	const [pendingFeedbackId, setPendingFeedbackId] = useState<string>();
+	const readFeedback = (feedbackId: string) => {
+		if (!cardsByTab[feedbackTab].some((card) => card.feedbackId === feedbackId)) {
+			onFeedbackTabChange?.(CARDS_TAB);
+		}
+		setPendingFeedbackId(feedbackId);
+	};
+	const landOnCard = (node: HTMLElement | null) => {
+		if (node) {
+			node.scrollIntoView({ block: "start" });
+			node.focus();
+			setPendingFeedbackId(undefined);
+		}
+	};
 
 	// The alert alone, as `profile/ProfilePage` does: the header's "No practices set up yet" and a
 	// tab's "No feedback yet" are claims about the workspace, and a failed load has none to make.
@@ -164,12 +186,12 @@ export function PracticeProfilePage({
 				onSeeAllPractices={onShowAllPractices}
 				isLoading={isLoading}
 			/>
-			<Separator />
 			<PracticeFeedbackOverview
 				overview={overview}
 				onOpenPractice={onOpenPractice}
 				groups={groups}
 				onOpenGroup={onOpenGroup && openGroupBySlug}
+				onReadFeedback={readFeedback}
 				isLoading={isLoading}
 			/>
 			<Section
@@ -222,6 +244,7 @@ export function PracticeProfilePage({
 							{cardsByTab[feedbackTab].map((card) => (
 								<PracticeFeedbackCard
 									key={card.feedbackId}
+									ref={card.feedbackId === pendingFeedbackId ? landOnCard : undefined}
 									card={card}
 									{...ratingProps?.(card.feedbackId)}
 									onLearnMore={onOpenPractice && (() => onOpenPractice(card.practiceSlug, "about"))}

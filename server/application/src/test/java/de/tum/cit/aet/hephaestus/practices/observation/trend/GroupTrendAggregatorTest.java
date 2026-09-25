@@ -1,15 +1,12 @@
 package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
+import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.judged;
+import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.noVerdict;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
-import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -36,14 +33,14 @@ class GroupTrendAggregatorTest {
         // sibling practice could otherwise date the whole group.
         PracticeTrend looked = PracticeTrendCalculator.calculatePractice(
                 "naming",
-                List.of(inapplicable(7L, "2026-03-01T09:00:00Z")),
+                List.of(noVerdict(7L, "2026-03-01T09:00:00Z")),
                 Instant.parse("2026-01-01T00:00:00Z"),
                 properties);
         PracticeTrend judged = PracticeTrendCalculator.calculatePractice(
                 "testing",
                 List.of(
-                        observation(40L, "2026-05-01T09:00:00Z", Assessment.BAD),
-                        observation(55L, "2026-06-01T09:00:00Z", Assessment.GOOD)),
+                        judged(40L, "2026-05-01T09:00:00Z", Assessment.BAD),
+                        judged(55L, "2026-06-01T09:00:00Z", Assessment.GOOD)),
                 Instant.parse("2026-01-01T00:00:00Z"),
                 properties);
 
@@ -62,12 +59,12 @@ class GroupTrendAggregatorTest {
         // opportunity counts from inflating with the number of practices rather than the amount of work.
         PracticeTrend naming = PracticeTrendCalculator.calculatePractice(
                 "naming",
-                List.of(observation(40L, "2026-05-01T09:00:00Z", Assessment.GOOD)),
+                List.of(judged(40L, "2026-05-01T09:00:00Z", Assessment.GOOD)),
                 Instant.parse("2026-01-01T00:00:00Z"),
                 properties);
         PracticeTrend testing = PracticeTrendCalculator.calculatePractice(
                 "testing",
-                List.of(observation(40L, "2026-05-01T10:00:00Z", Assessment.BAD)),
+                List.of(judged(40L, "2026-05-01T10:00:00Z", Assessment.BAD)),
                 Instant.parse("2026-01-01T00:00:00Z"),
                 properties);
 
@@ -78,35 +75,52 @@ class GroupTrendAggregatorTest {
         assertThat(group.opportunities().getFirst().outcomes().applicable()).isEqualTo(2);
     }
 
-    private static Observation observation(long artifactId, String observedAt, Assessment assessment) {
-        return Observation.builder()
-                .id(UUID.randomUUID())
-                .agentJobId(UUID.randomUUID())
-                .artifactKind(ArtifactKinds.PULL_REQUEST)
-                .artifactId(artifactId)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.PRESENT)
-                .assessment(assessment)
-                .observedAt(Instant.parse(observedAt))
-                .build();
-    }
+    @Test
+    void shouldCountOneArtifactOnceWhenPracticesPutItInDifferentBundles() {
+        // Pull request 100 is current evidence for naming and previous evidence for testing, which saw four
+        // newer pieces of work. Adding the two bundle counts would tell the reader the group rests on 16
+        // pieces of reviewed work when it rests on 15.
+        PracticeTrend naming = PracticeTrendCalculator.calculatePractice(
+                "naming",
+                List.of(
+                        judged(100L, "2026-06-10T09:00:00Z", Assessment.GOOD),
+                        judged(101L, "2026-06-09T09:00:00Z", Assessment.GOOD),
+                        judged(102L, "2026-06-08T09:00:00Z", Assessment.GOOD),
+                        judged(103L, "2026-06-07T09:00:00Z", Assessment.GOOD),
+                        judged(104L, "2026-06-06T09:00:00Z", Assessment.BAD),
+                        judged(105L, "2026-06-05T09:00:00Z", Assessment.BAD),
+                        judged(106L, "2026-06-04T09:00:00Z", Assessment.BAD),
+                        judged(107L, "2026-06-03T09:00:00Z", Assessment.BAD)),
+                Instant.parse("2026-01-01T00:00:00Z"),
+                properties);
+        PracticeTrend testing = PracticeTrendCalculator.calculatePractice(
+                "testing",
+                List.of(
+                        judged(200L, "2026-06-14T09:00:00Z", Assessment.GOOD),
+                        judged(201L, "2026-06-13T09:00:00Z", Assessment.GOOD),
+                        judged(202L, "2026-06-12T09:00:00Z", Assessment.GOOD),
+                        judged(203L, "2026-06-11T09:00:00Z", Assessment.GOOD),
+                        judged(100L, "2026-06-10T09:00:00Z", Assessment.BAD),
+                        judged(204L, "2026-06-09T09:00:00Z", Assessment.BAD),
+                        judged(205L, "2026-06-08T09:00:00Z", Assessment.BAD),
+                        judged(206L, "2026-06-07T09:00:00Z", Assessment.BAD)),
+                Instant.parse("2026-01-01T00:00:00Z"),
+                properties);
 
-    private static Observation inapplicable(long artifactId, String observedAt) {
-        return Observation.builder()
-                .id(UUID.randomUUID())
-                .agentJobId(UUID.randomUUID())
-                .artifactKind(ArtifactKinds.PULL_REQUEST)
-                .artifactId(artifactId)
-                .assessmentStatus(AssessmentStatus.NOT_APPLICABLE)
-                .presence(null)
-                .observedAt(Instant.parse(observedAt))
-                .build();
+        PracticeTrend group = GroupTrendAggregator.aggregate(
+                "quality", List.of("naming", "testing"), List.of(naming, testing), properties);
+
+        TrendSupport support = group.support();
+        assertThat(support.currentOpportunities() + support.previousOpportunities())
+                .isEqualTo(16);
+        assertThat(support.opportunities()).isEqualTo(15);
     }
 
     private PracticeTrend trend(String slug, BetaPosterior.Difference difference) {
         TrendSupport support = new TrendSupport(
                 4,
                 4,
+                8,
                 0,
                 null,
                 null,

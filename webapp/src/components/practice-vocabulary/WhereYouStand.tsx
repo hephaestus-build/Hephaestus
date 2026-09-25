@@ -2,7 +2,6 @@ import { useId } from "react";
 
 import type { TrendSupport } from "@/api/types.gen";
 import { SectionLabel } from "@/components/common/SectionLabel";
-
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { hasText } from "@/lib/text";
 import {
@@ -38,7 +37,9 @@ export interface WhereYouStandProps {
 export function WhereYouStand({ standing, basis, direction, support, scope }: WhereYouStandProps) {
 	const headingId = useId();
 	const settled = isSettledStanding(standing);
-	const shownDirection = direction ?? "INSUFFICIENT_EVIDENCE";
+	// One direction for the chip and the sentence beside it: a direction with no evidence behind it
+	// is what `TrendNote` draws as "not enough to compare", so the sentence must read it the same way.
+	const shownDirection = direction && support ? direction : "INSUFFICIENT_EVIDENCE";
 	const def = standingDefs(scope)[standing];
 	return (
 		<section className="flex flex-col gap-2.5" aria-labelledby={headingId}>

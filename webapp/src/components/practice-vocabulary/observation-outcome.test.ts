@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { ASSESSMENT_STATUS_DEFS } from "./assessment-status-defs";
 import { OBSERVATION_OUTCOME_PRESENTATION, observationOutcome } from "./observation-outcome";
 
 describe("observation outcome contract", () => {
@@ -27,9 +28,16 @@ describe("observation outcome contract", () => {
 		expect(OBSERVATION_OUTCOME_PRESENTATION.ABSENT_BAD.className).toBe("text-success");
 	});
 
-	it("keeps an undetermined verdict apart from work that offered no opportunity", () => {
+	it("keeps an unsettled observation apart from work that offered no opportunity", () => {
 		expect(observationOutcome({ assessmentStatus: "UNDETERMINED", presence: undefined })).toBe(
 			"UNDETERMINED",
+		);
+		// One vocabulary for the two statuses: the words are the assessment registry's.
+		expect(OBSERVATION_OUTCOME_PRESENTATION.UNDETERMINED.label).toBe(
+			ASSESSMENT_STATUS_DEFS.UNDETERMINED.label,
+		);
+		expect(OBSERVATION_OUTCOME_PRESENTATION.NOT_APPLICABLE.label).toBe(
+			ASSESSMENT_STATUS_DEFS.NOT_APPLICABLE.label,
 		);
 		expect(OBSERVATION_OUTCOME_PRESENTATION.UNDETERMINED.label).not.toBe(
 			OBSERVATION_OUTCOME_PRESENTATION.NOT_APPLICABLE.label,

@@ -60,16 +60,30 @@ export const External: Story = {
 
 /**
  * A reference with no address is a word in the running text: no hover promising a press it cannot
- * answer.
+ * answer. A url that arrives empty is no address either, `external` or not — an empty string must
+ * not buy the outbound icon and the "(opens in a new tab)" sentence for a word that opens nothing.
  */
 export const NoAddress: Story = {
 	args: { children: "!425" },
+	render: (args) => (
+		<p className="max-w-md text-sm">
+			Neither <InlineLink {...args} /> nor{" "}
+			<InlineLink {...args} href="" external>
+				#318
+			</InlineLink>{" "}
+			carries an address.
+		</p>
+	),
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("link")).toBeNull();
 		await expect(canvas.queryByRole("button")).toBeNull();
-		const word = canvas.getByText("!425");
-		await expect(word.tagName).toBe("SPAN");
-		await expect(word).not.toHaveClass("underline");
-		await expect(word).not.toHaveClass("hover:underline");
+		await expect(canvas.queryByText("(opens in a new tab)")).toBeNull();
+		for (const label of ["!425", "#318"]) {
+			const word = canvas.getByText(label);
+			await expect(word.tagName).toBe("SPAN");
+			await expect(word).not.toHaveAttribute("target");
+			await expect(word).not.toHaveClass("underline");
+			await expect(word).not.toHaveClass("hover:underline");
+		}
 	},
 };

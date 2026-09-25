@@ -1,8 +1,6 @@
-import { type ComponentProps, useId, useState } from "react";
+import { useId, useState } from "react";
 
 import { cn } from "cn";
-import { PrimaryButton } from "@/components/common/PrimaryButton";
-import type { BadgeVariant } from "@/components/common/status-def";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,67 +9,6 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 /** `FeedbackResponseRequestDTO.comment` caps the comment; a dispute has to carry one. */
 const FEEDBACK_COMMENT_MAX_LENGTH = 2000;
-
-/** What a response says: agreeing, disputing, or neither. */
-export type ResponseTone = "positive" | "negative" | "neutral";
-
-/**
- * The tone a response wears, read off its registry entry's badge variant: the success green
- * agrees, the destructive red and the warning amber both dispute — "Not helpful" and "Disputed"
- * press the same red — and every other variant says neither.
- */
-export function toneOf(variant: BadgeVariant): ResponseTone {
-	switch (variant) {
-		case "success": {
-			return "positive";
-		}
-		case "destructive":
-		case "warning": {
-			return "negative";
-		}
-		case "default":
-		case "outline":
-		case "secondary": {
-			return "neutral";
-		}
-	}
-}
-
-/**
- * A pressed response is tinted in its own colour — light green for the agreeing one, light red for
- * the disputing one, the muted ground for the one that says neither — on the ground, the text, the
- * icon and the border, so the choices read as opposites and none is mistaken for an unpressed
- * outline in either theme. The tints are the badge primitive's: the colour at a tenth over the
- * ground, a fifth in the dark theme. The dark-mode outline paints its own ground and border, so
- * both are restated here.
- */
-const PRESSED_TINT: Record<ResponseTone, string> = {
-	positive:
-		"border-success/40 bg-success/10 text-success hover:bg-success/15 hover:text-success dark:border-success/40 dark:bg-success/20 dark:hover:bg-success/25",
-	negative:
-		"border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive dark:border-destructive/40 dark:bg-destructive/20 dark:hover:bg-destructive/25",
-	neutral:
-		"border-foreground/25 bg-muted text-foreground hover:bg-muted hover:text-foreground dark:border-foreground/25 dark:bg-muted dark:hover:bg-muted",
-};
-
-export interface ResponseButtonProps extends Omit<ComponentProps<typeof Button>, "variant"> {
-	tone: ResponseTone;
-	/** Whether this is the response the reader chose; a pressed button wears its tone. */
-	pressed: boolean;
-}
-
-/** One of the responses a reader can give: a card's "Helpful", an observation's "Addressed". */
-export function ResponseButton({ tone, pressed, className, ...props }: ResponseButtonProps) {
-	return (
-		<Button
-			type="button"
-			variant="outline"
-			aria-pressed={pressed}
-			className={cn(pressed && PRESSED_TINT[tone], className)}
-			{...props}
-		/>
-	);
-}
 
 export interface ResponseReason<TValue extends string = string> {
 	value: TValue;
@@ -173,10 +110,10 @@ export function ResponseCommentBand<TReason extends string = string>({
 				>
 					Skip
 				</Button>
-				<PrimaryButton type="submit" disabled={isPending}>
+				<Button variant="mentor" type="submit" disabled={isPending}>
 					{isPending && <Spinner />}
 					{isPending ? "Sending…" : "Send"}
-				</PrimaryButton>
+				</Button>
 			</div>
 		</form>
 	);

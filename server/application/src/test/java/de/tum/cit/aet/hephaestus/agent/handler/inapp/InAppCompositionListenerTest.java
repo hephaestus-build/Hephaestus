@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler.inapp;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -32,6 +33,7 @@ import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvide
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -91,6 +93,7 @@ class InAppCompositionListenerTest extends BaseUnitTest {
 
         assertThat(message.decision()).isEqualTo(InAppRoutingDecision.ADMIT);
         assertThat(message.evidence()).containsExactly(alsoAfterTheAnswer, afterTheAnswer);
+        assertThat(capturedSince()).isEqualTo(resolvedAt);
         // A resolved card is the record of what was said; the new card is written beside it.
         assertThat(message.replaces()).isNull();
     }
@@ -116,6 +119,36 @@ class InAppCompositionListenerTest extends BaseUnitTest {
 
         assertThat(message.decision()).isEqualTo(InAppRoutingDecision.ADMIT);
         assertThat(message.evidence()).containsExactly(alsoSinceThen, sinceThen);
+        assertThat(capturedSince()).isEqualTo(preparedAt);
+        assertThat(message.replaces()).isEqualTo(open);
+    }
+
+    /**
+     * A card older than the window is still the card the new one replaces, but it cannot pull the evidence
+     * start back before the window: the read begins at the window start.
+     */
+    @Test
+    void anOpenCardOlderThanTheWindowStillGetsReplacedAndTheReadStartsAtTheWindow() {
+        Instant now = Instant.now();
+        Instant preparedAt = now.minus(Duration.ofDays(100));
+        Observation beforeTheWindow = problem(1L, now.minus(Duration.ofDays(95)));
+        Observation inTheWindow = problem(2L, now.minus(Duration.ofDays(40)));
+        Observation alsoInTheWindow = problem(3L, now.minus(Duration.ofDays(4)));
+        UUID jobId = composedJob();
+        UUID open = UUID.randomUUID();
+        when(previousInAppFeedback.find(WORKSPACE_ID, RECIPIENT_ID, PRACTICE))
+                .thenReturn(Optional.of(new PreviousInAppFeedback.Previous(open, preparedAt, null)));
+        windowReadsFrom(List.of(alsoInTheWindow, inTheWindow, beforeTheWindow));
+
+        InAppFeedbackPreparer.RoutedMessage message = routedMessage(jobId);
+
+        assertThat(message.decision()).isEqualTo(InAppRoutingDecision.ADMIT);
+        assertThat(message.evidence()).containsExactly(alsoInTheWindow, inTheWindow);
+        // The listener reads its own clock, so the edge is the window start to within the test's own tick.
+        assertThat(capturedSince())
+                .isCloseTo(
+                        now.minus(Duration.ofDays(InAppFeedbackRouter.PATTERN_WINDOW_DAYS)),
+                        within(10, ChronoUnit.SECONDS));
         assertThat(message.replaces()).isEqualTo(open);
     }
 
@@ -147,6 +180,15 @@ class InAppCompositionListenerTest extends BaseUnitTest {
                             .filter(observation -> !observation.getObservedAt().isBefore(since))
                             .toList();
                 });
+    }
+
+    /** The lower edge the lane actually asked the repository for. */
+    private Instant capturedSince() {
+        ArgumentCaptor<Instant> since = ArgumentCaptor.captor();
+        verify(observationRepository)
+                .findRecentForSubjectAndPractice(
+                        eq(WORKSPACE_ID), eq(RECIPIENT_ID), eq(PRACTICE), since.capture(), any());
+        return since.getValue();
     }
 
     /** Runs the lane for the job and returns the one message it handed the preparer. */

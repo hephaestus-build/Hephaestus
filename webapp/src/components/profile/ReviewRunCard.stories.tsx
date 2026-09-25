@@ -23,6 +23,7 @@ const run: PracticeGroupReviewRun = {
 	reviewedAt: daysBefore(2),
 	reviewedWork: {
 		kind: "scm.pull_request",
+		provider: "GITHUB",
 		id: "902",
 		label: "#902",
 		repositoryName: "HephaestusTest/practice-validation",
@@ -43,7 +44,7 @@ const run: PracticeGroupReviewRun = {
 		{
 			...onTheRun,
 			id: "00000000-0000-0000-0000-000000000103",
-			feedbackId: "00000000-0000-0000-0000-000000000104",
+			feedbackResponse: { feedbackId: "00000000-0000-0000-0000-000000000104" },
 			practiceSlug: "keeps-docs-current",
 			practiceName: "Keep linked documentation current",
 			summary: "A linked page still uses the old component name",
@@ -118,6 +119,10 @@ export const OutlineDocument: Story = {
 		},
 	},
 };
+/**
+ * The mark is the forge the work lives at, not its kind: beside `!128` a pull-request glyph would
+ * say the same thing twice and leave a GitLab request looking like a GitHub one.
+ */
 export const GitLabMergeRequest: Story = {
 	args: {
 		run: {
@@ -125,12 +130,18 @@ export const GitLabMergeRequest: Story = {
 			reviewId: "00000000-0000-0000-0000-000000000203",
 			reviewedWork: {
 				...run.reviewedWork,
+				provider: "GITLAB",
 				id: "128",
 				label: "!128",
 				repositoryName: "aet/hephaestus",
 				url: "https://gitlab.example.com/aet/hephaestus/-/merge_requests/128",
 			},
 		},
+	},
+	play: async ({ canvas }) => {
+		// The glyph is decorative, so the mark is read off the brand icon's own <title>.
+		canvas.getByTitle("GitlabIcon");
+		await expect(canvas.queryByTitle("GithubIcon")).toBeNull();
 	},
 };
 export const WithoutALink: Story = {
@@ -154,7 +165,7 @@ const soleRun: PracticeGroupReviewRun = {
 		{
 			...onTheRun,
 			id: "00000000-0000-0000-0000-000000000107",
-			feedbackId: "00000000-0000-0000-0000-000000000108",
+			feedbackResponse: { feedbackId: "00000000-0000-0000-0000-000000000108" },
 			practiceSlug: "small-changes",
 			practiceName: "Keep changes focused",
 			summary: "The refactor and the fix arrived together",

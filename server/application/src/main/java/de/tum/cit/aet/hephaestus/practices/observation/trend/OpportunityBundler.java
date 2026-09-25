@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
-import de.tum.cit.aet.hephaestus.practices.observation.trend.WorkResolution.Work.Key;
+import de.tum.cit.aet.hephaestus.practices.observation.ReviewedWorkKey;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,12 +24,12 @@ final class OpportunityBundler {
                 tagged(applicable.stream().limit(bundleSize).toList(), TrendBundle.CURRENT);
         List<EvidenceOpportunity> previous =
                 tagged(applicable.stream().skip(bundleSize).limit(bundleSize).toList(), TrendBundle.PREVIOUS);
-        Map<Key, TrendBundle> bundleByArtifact = new LinkedHashMap<>();
-        current.forEach(opportunity -> bundleByArtifact.put(Key.of(opportunity), TrendBundle.CURRENT));
-        previous.forEach(opportunity -> bundleByArtifact.put(Key.of(opportunity), TrendBundle.PREVIOUS));
+        Map<ReviewedWorkKey, TrendBundle> bundleByArtifact = new LinkedHashMap<>();
+        current.forEach(opportunity -> bundleByArtifact.put(opportunity.key(), TrendBundle.CURRENT));
+        previous.forEach(opportunity -> bundleByArtifact.put(opportunity.key(), TrendBundle.PREVIOUS));
         List<EvidenceOpportunity> trail = all.stream()
                 .map(opportunity ->
-                        opportunity.withBundle(bundleByArtifact.getOrDefault(Key.of(opportunity), TrendBundle.OLDER)))
+                        opportunity.withBundle(bundleByArtifact.getOrDefault(opportunity.key(), TrendBundle.OLDER)))
                 .sorted(Comparator.comparing(EvidenceOpportunity::occurredAt))
                 .toList();
         return new Bundles(current, previous, trail);
@@ -40,13 +40,11 @@ final class OpportunityBundler {
      * newest first.
      */
     static List<EvidenceOpportunity> opportunities(List<Observation> observations, Instant cutoff) {
-        Map<Key, List<Observation>> byArtifact = new LinkedHashMap<>();
+        Map<ReviewedWorkKey, List<Observation>> byArtifact = new LinkedHashMap<>();
         observations.stream()
                 .filter(observation -> !observation.getObservedAt().isBefore(cutoff))
                 .forEach(observation -> byArtifact
-                        .computeIfAbsent(
-                                new Key(observation.getArtifactKind(), observation.getArtifactId()),
-                                ignored -> new ArrayList<>())
+                        .computeIfAbsent(ReviewedWorkKey.of(observation), ignored -> new ArrayList<>())
                         .add(observation));
         return byArtifact.entrySet().stream()
                 .map(entry -> latestRunOpportunity(entry.getKey(), entry.getValue()))
@@ -57,7 +55,7 @@ final class OpportunityBundler {
                 .toList();
     }
 
-    private static EvidenceOpportunity latestRunOpportunity(Key artifact, List<Observation> observations) {
+    private static EvidenceOpportunity latestRunOpportunity(ReviewedWorkKey artifact, List<Observation> observations) {
         UUID latestJob = LatestRun.of(observations);
         List<Observation> latest = observations.stream()
                 .filter(row -> latestJob.equals(row.getAgentJobId()))

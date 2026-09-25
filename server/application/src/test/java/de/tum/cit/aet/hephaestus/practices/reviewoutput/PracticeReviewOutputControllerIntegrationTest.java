@@ -272,6 +272,10 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                 .isEqualTo("7")
                 .jsonPath(path + ".label")
                 .isEqualTo("#42")
+                .jsonPath(path + ".provider")
+                .isEqualTo("GITHUB")
+                .jsonPath(path + ".title")
+                .isEqualTo("Make review output visible")
                 .jsonPath(path + ".repositoryName")
                 .isEqualTo("detection-org/review-ui")
                 .jsonPath(path + ".url")
@@ -720,18 +724,18 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
 
             expectResolvedPullRequestArtifact(
                     OBSERVATIONS + "?artifactKind=scm.pull_request&artifactId={id}",
-                    "$.content[0].artifact",
+                    "$.content[0].reviewedWork",
                     workspace.getWorkspaceSlug(),
                     artifactId);
             expectResolvedPullRequestArtifact(
-                    OBSERVATIONS + "/{id}", "$.artifact", workspace.getWorkspaceSlug(), observationId);
+                    OBSERVATIONS + "/{id}", "$.reviewedWork", workspace.getWorkspaceSlug(), observationId);
             expectResolvedPullRequestArtifact(
                     FEEDBACK + "?artifactKind=scm.pull_request&artifactId={id}",
-                    "$.content[0].artifact",
+                    "$.content[0].reviewedWork",
                     workspace.getWorkspaceSlug(),
                     artifactId);
             expectResolvedPullRequestArtifact(
-                    FEEDBACK + "/{id}", "$.artifact", workspace.getWorkspaceSlug(), feedback.getId());
+                    FEEDBACK + "/{id}", "$.reviewedWork", workspace.getWorkspaceSlug(), feedback.getId());
         }
 
         @Test
@@ -759,13 +763,20 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     Instant.now());
 
             getOk(OBSERVATIONS + "/{id}", workspace.getWorkspaceSlug(), observationId)
-                    .jsonPath("$.artifact.kind")
+                    .jsonPath("$.reviewedWork.kind")
                     .isEqualTo("scm.pull_request")
-                    .jsonPath("$.artifact.id")
+                    .jsonPath("$.reviewedWork.id")
                     .isEqualTo("812")
-                    .jsonPath("$.artifact.label")
+                    .jsonPath("$.reviewedWork.label")
                     .isEqualTo("Pull request")
-                    .jsonPath("$.artifact.url")
+                    // The other workspace's run named the work; none of what it named may come back here.
+                    .jsonPath("$.reviewedWork.title")
+                    .doesNotExist()
+                    .jsonPath("$.reviewedWork.provider")
+                    .doesNotExist()
+                    .jsonPath("$.reviewedWork.repositoryName")
+                    .doesNotExist()
+                    .jsonPath("$.reviewedWork.url")
                     .doesNotExist()
                     // The observation resolves, but nothing about the other workspace's evidence may come
                     // with it: the citations and their captured content are the payload a leak would
@@ -792,13 +803,15 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     812L);
 
             getOk(FEEDBACK + "/{id}", workspace.getWorkspaceSlug(), feedback.getId())
-                    .jsonPath("$.artifact.kind")
+                    .jsonPath("$.reviewedWork.kind")
                     .isEqualTo("chat.conversation_thread")
-                    .jsonPath("$.artifact.id")
+                    .jsonPath("$.reviewedWork.id")
                     .isEqualTo("812")
-                    .jsonPath("$.artifact.label")
+                    .jsonPath("$.reviewedWork.label")
                     .isEqualTo("Conversation")
-                    .jsonPath("$.artifact.url")
+                    .jsonPath("$.reviewedWork.provider")
+                    .doesNotExist()
+                    .jsonPath("$.reviewedWork.url")
                     .doesNotExist();
         }
     }

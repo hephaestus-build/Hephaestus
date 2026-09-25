@@ -914,6 +914,68 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     observationRepository.countByPresenceForDeveloper(aboutUser.getId(), workspace.getId(), since);
             assertThat(presences).hasSize(1);
             assertThat(presences.get(0).getCount()).isEqualTo(1L);
+
+            // A run that found nothing to judge still ran, so the run list counts it; each of the two sits
+            // under its own job, which is what the hidden one has to be missing from.
+            AgentJob visibleRun = persistAgentJob();
+            AgentJob hiddenRun = persistAgentJob();
+            insertNotApplicable(
+                    "visible-repo-na", visibleRun.getId(), visiblePr.getId(), Instant.parse("2026-03-19T10:00:00Z"));
+            insertNotApplicable(
+                    "hidden-repo-na", hiddenRun.getId(), hiddenPr.getId(), Instant.parse("2026-03-18T09:00:00Z"));
+
+            List<Observation> window = observationRepository.findByDeveloperAndWorkspaceBetween(
+                    aboutUser.getId(), workspace.getId(), since, Instant.parse("2026-04-01T00:00:00Z"));
+            assertThat(window).extracting(Observation::getArtifactId).containsOnly(visiblePr.getId());
+
+            List<ObservationRepository.DeveloperReviewRunRow> runs = observationRepository.findDeveloperReviewRuns(
+                    aboutUser.getId(), workspace.getId(), null, null, PageRequest.of(0, 50));
+            assertThat(runs)
+                    .extracting(ObservationRepository.DeveloperReviewRunRow::getJobId)
+                    .containsExactlyInAnyOrder(agentJob.getId(), visibleRun.getId());
+            assertThat(runs)
+                    .filteredOn(run -> run.getJobId().equals(agentJob.getId()))
+                    .singleElement()
+                    .extracting(ObservationRepository.DeveloperReviewRunRow::getReviewedAt)
+                    .isEqualTo(Instant.parse("2026-03-20T10:00:00Z"));
+
+            List<ObservationRepository.FirstObservedRow> firstObserved =
+                    observationRepository.findFirstObservedAtByPractice(aboutUser.getId(), workspace.getId());
+            assertThat(firstObserved).singleElement().satisfies(row -> {
+                assertThat(row.getPracticeSlug()).isEqualTo(practice.getSlug());
+                assertThat(row.getFirstObservedAt()).isEqualTo(Instant.parse("2026-03-19T10:00:00Z"));
+            });
+        }
+
+        private AgentJob persistAgentJob() {
+            AgentJob job = new AgentJob();
+            job.setWorkspace(workspace);
+            job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+            job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
+            return agentJobRepository.save(job);
+        }
+
+        private void insertNotApplicable(String key, UUID jobId, long artifactId, Instant at) {
+            observationRepository.insertIfAbsent(
+                    UUID.randomUUID(),
+                    key,
+                    jobId,
+                    workspace.getId(),
+                    practice.getId(),
+                    null,
+                    "scm.pull_request",
+                    artifactId,
+                    aboutUser.getId(),
+                    "Hidden-repo exclusion run with nothing to judge",
+                    "NOT_APPLICABLE",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    at,
+                    "LIVE");
         }
 
         private void insertBad(String key, long artifactId, Instant at) {

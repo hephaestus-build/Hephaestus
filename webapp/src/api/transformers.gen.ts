@@ -919,7 +919,17 @@ export const setGroupAutonomyResponseTransformer = async (data: any): Promise<Se
   return data;
 };
 
+const feedbackResponseSchemaResponseTransformer = (data: any) => {
+  if (data.respondedAt) {
+    data.respondedAt = new Date(data.respondedAt);
+  }
+  return data;
+};
+
 const observationDetailSchemaResponseTransformer = (data: any) => {
+  if (data.feedbackResponse) {
+    data.feedbackResponse = feedbackResponseSchemaResponseTransformer(data.feedbackResponse);
+  }
   data.observedAt = new Date(data.observedAt);
   return data;
 };
@@ -1041,19 +1051,18 @@ export const updateBackfillRunStatusResponseTransformer = async (data: any): Pro
   return data;
 };
 
+const inAppCleanWorkSchemaResponseTransformer = (data: any) => {
+  data.reviewedAt = new Date(data.reviewedAt);
+  return data;
+};
+
 const inAppEvidenceSchemaResponseTransformer = (data: any) => {
   data.observedAt = new Date(data.observedAt);
   return data;
 };
 
-const feedbackResponseSchemaResponseTransformer = (data: any) => {
-  if (data.respondedAt) {
-    data.respondedAt = new Date(data.respondedAt);
-  }
-  return data;
-};
-
 const inAppFeedbackSchemaResponseTransformer = (data: any) => {
+  data.cleanWork = data.cleanWork.map((item: any) => inAppCleanWorkSchemaResponseTransformer(item));
   data.evidence = data.evidence.map((item: any) => inAppEvidenceSchemaResponseTransformer(item));
   if (data.practiceChangedAt) {
     data.practiceChangedAt = new Date(data.practiceChangedAt);
@@ -1061,6 +1070,9 @@ const inAppFeedbackSchemaResponseTransformer = (data: any) => {
   data.preparedAt = new Date(data.preparedAt);
   if (data.readAt) {
     data.readAt = new Date(data.readAt);
+  }
+  if (data.resolvedByDeveloperAt) {
+    data.resolvedByDeveloperAt = new Date(data.resolvedByDeveloperAt);
   }
   if (data.resolvedByWorkAt) {
     data.resolvedByWorkAt = new Date(data.resolvedByWorkAt);

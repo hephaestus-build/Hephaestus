@@ -79,7 +79,7 @@ public class PracticeStandingService {
 
     /** One developer's standings as they stand now. */
     public StandingSnapshot getStandingSnapshot(Long workspaceId, Long developerId) {
-        return getStandingSnapshots(developerId, workspaceId, List.of(clock.instant()))
+        return getStandingSnapshots(workspaceId, developerId, List.of(clock.instant()))
                 .getFirst();
     }
 
@@ -91,7 +91,7 @@ public class PracticeStandingService {
      * trend horizon are today's, so two snapshots of one developer differ in exactly the observations recorded
      * between the two moments. That is the property the practice profile's "what changed" reads off them.
      */
-    public List<StandingSnapshot> getStandingSnapshots(Long developerId, Long workspaceId, List<Instant> edges) {
+    public List<StandingSnapshot> getStandingSnapshots(Long workspaceId, Long developerId, List<Instant> edges) {
         Instant since = clock.instant().minus(LOOKBACK_DAYS, ChronoUnit.DAYS);
         Instant until = Collections.max(edges);
         // Verdictless observations distinguish NO_OPPORTUNITY from NOT_OBSERVED.
@@ -322,8 +322,9 @@ public class PracticeStandingService {
          * One practice as the snapshot read it.
          *
          * @param dto the developer-facing response
-         * @param evidence everything the practice's latest runs said, verdict or not, newest first; empty for a
-         *     practice nothing reached
+         * @param evidence everything the practice's latest runs said, verdict or not, in the order
+         *     {@link PracticeEvidence#observed()} builds it: problems worst severity first, then strengths, then
+         *     the rows that reached no verdict; empty for a practice nothing reached
          * @param trend the trend the standing was read off, for a reader that needs the opportunities behind a
          *     standing rather than the label — which practices are holding, and over how many pieces of work
          * @param share the continuous standing of a practice that has one, else null. The level above
@@ -334,20 +335,22 @@ public class PracticeStandingService {
                 PracticeStandingDTO dto,
                 List<Observation> evidence,
                 PracticeTrend trend,
-                @Nullable Double share) {}
+                @Nullable Double share) {
+
+            /**
+             * Whether a practice at {@code STRENGTH} is holding: every one of the newest opportunities its
+             * standing was read off came back clean, not merely enough of them. The standing's window is the
+             * bar, so a strength carried by an old slip that has decayed out of weight does not read as held.
+             */
+            public boolean isHolding() {
+                PracticeTrend.CleanWork cleanWork = trend.cleanWork();
+                return dto.standing() == PracticeStandingDTO.Standing.STRENGTH
+                        && cleanWork.count() >= Math.min(STANDING_WINDOW, cleanWork.applicableWork());
+            }
+        }
 
         public List<PracticeStandingDTO> dtos() {
             return practices.values().stream().map(PracticeStanding::dto).toList();
-        }
-
-        /**
-         * Whether a practice at {@code STRENGTH} is holding: every one of the newest opportunities its standing
-         * was read off came back clean, not merely enough of them. The standing's window is the bar, so a
-         * strength carried by an old slip that has decayed out of weight does not read as held.
-         */
-        public boolean isHolding(PracticeStandingDTO practice, PracticeTrend.CleanWork cleanWork) {
-            return practice.standing() == PracticeStandingDTO.Standing.STRENGTH
-                    && cleanWork.count() >= Math.min(STANDING_WINDOW, cleanWork.applicableWork());
         }
     }
 

@@ -112,8 +112,8 @@ function PageWithDrawer(args: PracticeProfilePageProps) {
 								const card = OPEN_FEEDBACK_CARDS.find(
 									(candidate) => candidate.practiceSlug === slug,
 								);
-								if (card) {
-									openPractice(card.groupSlug, slug);
+								if (card?.group) {
+									openPractice(card.group.slug, slug);
 								}
 							}}
 						/>
@@ -171,10 +171,10 @@ export const Default: Story = {
 	play: async ({ args, canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1, name: "Practice profile" })).toBeVisible();
 		await expect(
-			canvas.getByRole("heading", { name: "Practice development feedback" }),
-		).toBeVisible();
+			canvas.queryByRole("heading", { name: "Practice development feedback" }),
+		).toBeNull();
 		// The table of every practice is a level over the page, not a section of it.
-		await expect(canvas.queryByRole("table", { name: "All practices" })).toBeNull();
+		await expect(canvas.queryByRole("table", { name: "All practice groups" })).toBeNull();
 		// The cards sit under their own sub-heading and a tab row that opens on the newest ones.
 		await expect(canvas.getByRole("heading", { level: 2, name: "Your feedback" })).toBeVisible();
 		const tabs = within(canvas.getByRole("tablist", { name: "Feedback" })).getAllByRole("tab");
@@ -190,7 +190,7 @@ export const Default: Story = {
 		);
 		await expect(canvas.getAllByRole("article")).toHaveLength(2);
 		await expect(canvas.getByText("Newest first")).toBeVisible();
-		await expect(canvas.getByRole("button", { name: "See all practices" })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeVisible();
 		// The paragraph names two things and counts the rest, which unfolds in place.
 		await expect(canvas.getByRole("button", { name: /^Show the/u })).toBeVisible();
 		// A card's practice pill opens the level on its observations; "Learn more" on its About tab.
@@ -256,25 +256,63 @@ export const FeedbackTabs: Story = {
 
 		await userEvent.click(canvas.getByRole("tab", { name: /^Newest/u }));
 		await expect(articles()).toHaveLength(2);
-		await expect(articles()[0]).toHaveTextContent("Merge requests bundle a fix with a refactor");
+		await expect(articles()[0]).toHaveTextContent("Pull requests bundle a fix with a refactor");
 		await expect(within(first()).getByText("New")).toBeVisible();
 	},
 };
 
 /**
- * The header's "See all practices" opens the table as a level; a row opens its group over it,
+ * "Read the feedback ↓" in Heph's card lands the reader on the card it is about. The card the
+ * fall back names sits behind the "Newest" tab, so the page moves to a tab that lists it and puts
+ * the focus on the card, and the reader's next Tab continues from there rather than from the top.
+ */
+export const ReadTheFeedbackFromTheCard: Story = {
+	render: (args) => (
+		<Stateful initial={args.feedbackTab ?? DEFAULT_FEEDBACK_TAB}>
+			{(tab, setTab) => (
+				<PracticeProfilePage
+					{...args}
+					feedbackTab={tab}
+					onFeedbackTabChange={(next) => {
+						args.onFeedbackTabChange?.(next);
+						setTab(next);
+					}}
+				/>
+			)}
+		</Stateful>
+	),
+	play: async ({ canvas }) => {
+		await userEvent.click(
+			canvas.getByRole("button", {
+				name: "Read the feedback for Say which acceptance criteria are done",
+			}),
+		);
+		const card = canvas
+			.getByText("Pull requests closed their issue without saying what was met")
+			.closest("article");
+		if (!card) {
+			throw new Error("Every piece of feedback is an article");
+		}
+		await waitFor(async () => {
+			await expect(card).toHaveFocus();
+		});
+	},
+};
+
+/**
+ * The header's standing card opens the practice-groups table as a level; a row opens its group over it,
  * and every dismissal pops one level — the group, then the table, then the page.
  */
 export const AllPracticesOpened: Story = {
 	render: (args) => <PageWithDrawer {...args} />,
 	parameters: { chromatic: { disableSnapshot: true } },
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "See all practices" }));
+		await userEvent.click(canvas.getByRole("link", { name: "See all practice groups" }));
 		await expect(args.onShowAllPractices).toHaveBeenCalledOnce();
-		const table = await screen.findByRole("table", { name: "All practices" });
+		const table = await screen.findByRole("table", { name: "All practice groups" });
 		await expectSettledVisible(table);
 		await expect(popups()).toHaveLength(1);
-		await expect(screen.getByRole("heading", { name: "All practices" })).toBeVisible();
+		await expect(screen.getByRole("heading", { name: "All practice groups" })).toBeVisible();
 
 		await userEvent.click(
 			screen.getByRole("button", { name: "Open group Communicating in the open" }),
@@ -288,7 +326,7 @@ export const AllPracticesOpened: Story = {
 		// Back from the group lands on the table, not on the page.
 		await userEvent.click(screen.getByRole("button", { name: "Back" }));
 		await waitFor(async () => expect(popups()).toHaveLength(1));
-		await expect(screen.getByRole("table", { name: "All practices" })).toBeVisible();
+		await expect(screen.getByRole("table", { name: "All practice groups" })).toBeVisible();
 
 		await userEvent.keyboard("{Escape}");
 		await waitFor(async () => expect(popups()).toHaveLength(0));

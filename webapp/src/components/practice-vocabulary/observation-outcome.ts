@@ -6,13 +6,19 @@ import {
 	ShieldCheckIcon,
 } from "lucide-react";
 
-import type { PracticeStandingObservation } from "@/api/types.gen";
+import type { InAppEvidence } from "@/api/types.gen";
 import type { StatusDef } from "@/components/common/status-def";
 
 import type { Assessment } from "./assessment-defs";
 import { ASSESSMENT_STATUS_DEFS, type AssessmentStatus } from "./assessment-status-defs";
 import { OUTCOME_DEFS } from "./outcome-defs";
 import type { Presence } from "./presence-defs";
+
+/**
+ * What a review made of one piece of reviewed work, as the wire spells it: the four assessed
+ * outcomes and the two statuses under which nothing was judged.
+ */
+export type ReviewedWorkKind = InAppEvidence["outcome"];
 
 /** The three wire facts an outcome is read from; `presence` and `assessment` only when assessed. */
 export interface ObservationOutcomeInput {
@@ -68,13 +74,13 @@ export const OBSERVATION_OUTCOME_PRESENTATION = {
 		description: "The practice should have been applied in this work and was not.",
 	},
 	NOT_APPLICABLE: {
-		label: "Not assessed",
+		label: ASSESSMENT_STATUS_DEFS.NOT_APPLICABLE.label,
 		icon: CircleDashedIcon,
 		className: "text-muted-foreground",
 		description: ASSESSMENT_STATUS_DEFS.NOT_APPLICABLE.description,
 	},
 	UNDETERMINED: {
-		label: "Not certain enough to say",
+		label: ASSESSMENT_STATUS_DEFS.UNDETERMINED.label,
 		icon: CircleHelpIcon,
 		className: "text-muted-foreground",
 		description: ASSESSMENT_STATUS_DEFS.UNDETERMINED.description,
@@ -96,16 +102,17 @@ export function observationOutcome(observation: ObservationOutcomeInput): Observ
 }
 
 /**
- * The kind the wire records on a piece of reviewed work is one of the four assessed cells: a
- * strength shown, a risk avoided, a problem seen, an expected practice missing. Mapped once, so a
- * feedback card's strip and an observation row say the same words for the same thing.
+ * The outcome the wire records on a piece of reviewed work, mapped once, so a feedback card's strip
+ * and an observation row say the same words for the same thing. The four assessed cells are what a
+ * surface normally shows — a strength shown, a risk avoided, a problem seen, an expected practice
+ * missing — and the two statuses are here because the wire's outcome is the whole enum: a piece of
+ * work nothing was judged on says so rather than borrowing another cell's words.
  */
-export const OBSERVATION_OUTCOME_OF_WORK: Record<
-	PracticeStandingObservation["kind"],
-	ObservationOutcome
-> = {
+export const OBSERVATION_OUTCOME_OF_WORK: Record<ReviewedWorkKind, ObservationOutcome> = {
 	DEMONSTRATED_STRENGTH: "PRESENT_GOOD",
 	SAFE_AVOIDANCE: "ABSENT_BAD",
 	COMMISSION_PROBLEM: "PRESENT_BAD",
 	OMISSION_GAP: "ABSENT_GOOD",
+	NOT_APPLICABLE: "NOT_APPLICABLE",
+	UNDETERMINED: "UNDETERMINED",
 };

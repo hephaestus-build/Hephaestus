@@ -3,6 +3,9 @@ import styles from "./HephIcon.module.css";
 
 import { hasText } from "@/lib/text";
 
+/** What Heph is called wherever the mark carries its own name: the sidebar entry, its tooltips. */
+export const HEPH_LABEL = "Heph, AI mentor";
+
 interface HephIconProps {
 	size?: number;
 	strokeWidth?: number;

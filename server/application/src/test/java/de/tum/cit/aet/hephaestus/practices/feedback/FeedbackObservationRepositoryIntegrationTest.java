@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.ObservationFeedbackBody;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.ObservationFeedbackUnit;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -204,6 +205,59 @@ class FeedbackObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                 .extracting(ObservationFeedbackBody::getBody)
                 .asString()
                 .startsWith("### You keep shipping untested changes");
+    }
+
+    @Test
+    @DisplayName("findLatestFeedbackUnitByObservationIds reads the text and the response handle off one unit: the "
+            + "newest on the named lanes, and a FAILED one carries its words without a handle")
+    void findLatestFeedbackUnitReadsTextAndHandleFromOneUnit() {
+        Observation delivered = saveObservation("obs-unit-delivered");
+        Observation failed = saveObservation("obs-unit-failed");
+
+        Feedback older = saveFeedback(
+                null,
+                30,
+                FeedbackDeliveryState.DELIVERED,
+                "The note posted on the pull request",
+                Instant.parse("2026-01-01T00:00:00Z"));
+        bind(older, delivered);
+        // Newer, delivered and bound to the same observation, but on the cross-artifact lane the caller did
+        // not name: it must decide neither the text nor the handle.
+        bind(
+                saveFeedback(
+                        null,
+                        7001,
+                        FeedbackDeliveryState.DELIVERED,
+                        "### You keep shipping untested changes",
+                        Instant.parse("2026-02-01T00:00:00Z"),
+                        FeedbackChannel.IN_APP),
+                delivered);
+        bind(
+                saveFeedback(
+                        null,
+                        31,
+                        FeedbackDeliveryState.FAILED,
+                        "The advice the direct post could not place",
+                        Instant.parse("2026-01-01T00:00:00Z")),
+                failed);
+
+        Map<UUID, ObservationFeedbackUnit> units = feedbackObservationRepository
+                .findLatestFeedbackUnitByObservationIds(
+                        workspace.getId(),
+                        recipient.getId(),
+                        List.of(delivered.getId(), failed.getId()),
+                        IN_CONTEXT_ONLY)
+                .stream()
+                .collect(Collectors.toMap(ObservationFeedbackUnit::getObservationId, unit -> unit));
+
+        assertThat(units.get(delivered.getId())).isNotNull().satisfies(unit -> {
+            assertThat(unit.getBody()).isEqualTo("The note posted on the pull request");
+            assertThat(unit.getFeedbackId()).isEqualTo(older.getId());
+        });
+        assertThat(units.get(failed.getId())).isNotNull().satisfies(unit -> {
+            assertThat(unit.getBody()).isEqualTo("The advice the direct post could not place");
+            assertThat(unit.getFeedbackId()).isNull();
+        });
     }
 
     @Test

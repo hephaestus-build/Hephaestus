@@ -89,6 +89,7 @@ describe("contributingPractices", () => {
 		credibilityThreshold: 0.8,
 		currentOpportunities: 5,
 		previousOpportunities: 5,
+		opportunities: 10,
 		opportunitiesUntilComparable: 0,
 		ropeHalfWidth: 0.1,
 	};

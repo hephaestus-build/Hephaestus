@@ -39,7 +39,9 @@ export const PracticeNotObserved: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.hover(canvas.getByRole("button", { name: "Not observed yet" }));
 		const tooltip = await settledPopup();
-		await expect(tooltip).toHaveTextContent("This practice has no current verdict for you yet.");
+		await expect(tooltip).toHaveTextContent(
+			"No review has observed this practice in your work yet.",
+		);
 	},
 };
 

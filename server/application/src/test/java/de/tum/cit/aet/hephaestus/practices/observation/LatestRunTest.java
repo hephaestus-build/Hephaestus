@@ -19,7 +19,7 @@ class LatestRunTest extends BaseUnitTest {
     private static final Instant NOW = Instant.parse("2026-08-15T12:00:00Z");
 
     @Test
-    void keepsOnlyEachPieceOfWorksNewestRunInTheWindowsOrder() {
+    void shouldKeepOnlyEachPieceOfWorksNewestRunWhenAWorkWasReviewedTwice() {
         UUID earlier = UUID.randomUUID();
         UUID later = UUID.randomUUID();
         Observation slipped = observation(7L, earlier, NOW.minus(Duration.ofDays(1)), Assessment.BAD);
@@ -29,7 +29,17 @@ class LatestRunTest extends BaseUnitTest {
 
         assertThat(LatestRun.perWork(List.of(recovered, alsoRecovered, other, slipped)))
                 .containsExactly(recovered, alsoRecovered, other);
-        assertThat(LatestRun.of(List.of(slipped, recovered))).isEqualTo(later);
+    }
+
+    @Test
+    void shouldNameTheNewestRunWhenAWorkWasReviewedTwice() {
+        UUID earlier = UUID.randomUUID();
+        UUID later = UUID.randomUUID();
+
+        assertThat(LatestRun.of(List.of(
+                        observation(7L, earlier, NOW.minus(Duration.ofDays(1)), Assessment.BAD),
+                        observation(7L, later, NOW, Assessment.GOOD))))
+                .isEqualTo(later);
     }
 
     /**
@@ -62,13 +72,29 @@ class LatestRunTest extends BaseUnitTest {
     }
 
     @Test
-    void breaksATimestampTieOnTheJobId() {
+    void shouldBreakATimestampTieOnTheJobIdWhenTwoRunsShareATimestamp() {
         UUID smaller = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID larger = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
         assertThat(LatestRun.of(List.of(
                         observation(1L, larger, NOW, Assessment.BAD), observation(1L, smaller, NOW, Assessment.GOOD))))
                 .isEqualTo(larger);
+    }
+
+    /**
+     * The same tie is broken in SQL by {@code ORDER BY agent_job_id DESC} over PostgreSQL's byte-wise
+     * {@code uuid} ordering, under which {@code ff…} is the larger id; {@link UUID#compareTo} would call it
+     * the smaller one, since it compares the two halves as signed longs.
+     */
+    @Test
+    void shouldBreakATimestampTieTheWayPostgresOrdersUuidsWhenTheHighBitDiffers() {
+        UUID highBitSet = UUID.fromString("ff000000-0000-0000-0000-000000000000");
+        UUID highBitClear = UUID.fromString("0f000000-0000-0000-0000-000000000000");
+
+        assertThat(LatestRun.of(List.of(
+                        observation(1L, highBitClear, NOW, Assessment.GOOD),
+                        observation(1L, highBitSet, NOW, Assessment.BAD))))
+                .isEqualTo(highBitSet);
     }
 
     private static Observation observation(long artifactId, UUID run, Instant observedAt, Assessment assessment) {

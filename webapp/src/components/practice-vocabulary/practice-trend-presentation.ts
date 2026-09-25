@@ -1,15 +1,10 @@
 import type { TrendSupport } from "@/api/types.gen";
 import { count as counted, spell } from "@/components/common/feedback-text";
-import { statusValues } from "@/components/common/status-def";
 import { capitalise } from "@/lib/text";
 
-import {
-	PRACTICE_GROUP_STANDING_DEFS,
-	type PracticeGroupStandingValue,
-	type StandingScope,
-} from "./practice-group-standing-defs";
+import type { PracticeGroupStandingValue, StandingScope } from "./practice-group-standing-defs";
 import type { TrendDirection } from "./practice-trend-defs";
-import type { StandingCounts } from "./PracticeGroupStandingRing";
+import { type StandingCounts, summarizeStandingCounts } from "./PracticeGroupStandingRing";
 
 /** "four pieces of reviewed work", under the number rule of `feedback-text`. */
 function reviewedWork(count: number, digits?: boolean): string {
@@ -48,18 +43,15 @@ const STANDING_PREDICATES: Record<PracticeGroupStandingValue, { one: string; man
  * same counts the ring beside the title draws. Nothing to name for a group with no practices.
  */
 export function formatGroupStandingBasis(counts: StandingCounts): string | undefined {
-	const present = statusValues(PRACTICE_GROUP_STANDING_DEFS).flatMap((standing) => {
-		const n = counts[standing] ?? 0;
-		return n > 0 ? [{ standing, n }] : [];
-	});
-	const total = present.reduce((sum, { n }) => sum + n, 0);
+	const present = summarizeStandingCounts(counts);
+	const total = present.reduce((sum, { count }) => sum + count, 0);
 	if (total === 0) {
 		return undefined;
 	}
 	const digits = total >= 10;
-	const parts = present.map(({ standing, n }) => {
+	const parts = present.map(({ standing, count }) => {
 		const { one, many } = STANDING_PREDICATES[standing];
-		return counted(n, one, many, digits);
+		return counted(count, one, many, digits);
 	});
 	const last = parts.pop();
 	const joined = parts.length > 0 ? `${parts.join(", ")} and ${last}` : last;
@@ -73,7 +65,10 @@ export function formatTrendProvenance(
 ): string {
 	const current = support.currentOpportunities;
 	const previous = support.previousOpportunities;
-	if (current + previous === 0) {
+	// Not the sum of the bundles: a group's practices can bundle one piece of work two ways, and the
+	// wire already counts it once.
+	const { opportunities } = support;
+	if (opportunities === 0) {
 		return "No reviewed work is available yet.";
 	}
 
@@ -87,7 +82,7 @@ export function formatTrendProvenance(
 			missing > 0
 				? ` ${capitalise(spell(missing))} more with something to judge ${missing === 1 ? "is" : "are"} needed before a direction can be shown.`
 				: "";
-		return `Based on ${reviewedWork(current + previous)}.${needed}${spanSentence}`;
+		return `Based on ${reviewedWork(opportunities)}.${needed}${spanSentence}`;
 	}
 
 	if (scope === "group") {
@@ -100,7 +95,7 @@ export function formatTrendProvenance(
 			comparable !== undefined && eligible !== undefined
 				? ` ${capitalise(spell(comparable, digits))} of ${counted(eligible, "practice", "practices", digits)} here had enough evidence to compare.`
 				: "";
-		return `Across ${reviewedWork(current + previous)} in this group.${coverage}${spanSentence}`;
+		return `Across ${reviewedWork(opportunities)} in this group.${coverage}${spanSentence}`;
 	}
 
 	if (previous === 0) {

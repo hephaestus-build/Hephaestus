@@ -9,7 +9,7 @@ import { ReviewObservationRow, type ReviewObservationRowProps } from "./ReviewOb
 const observation: ObservationDetail = {
 	...detailObservation,
 	id: "00000000-0000-0000-0000-000000000001",
-	feedbackId: "00000000-0000-0000-0000-000000000002",
+	feedbackResponse: { feedbackId: "00000000-0000-0000-0000-000000000002", usefulness: "HELPFUL" },
 	practiceSlug: "explain-decisions",
 	practiceName: "Explain significant decisions",
 	summary: "The reason for the timeout is missing",
@@ -17,7 +17,6 @@ const observation: ObservationDetail = {
 	presence: "PRESENT",
 	assessment: "BAD",
 	severity: "MINOR",
-	feedbackUsefulness: "HELPFUL",
 };
 
 /** The row as a review run's card mounts it: under the work's own head, so it links no work. */
@@ -65,6 +64,33 @@ describe("ReviewObservationRow", () => {
 		screen.getByText("first.ts");
 		screen.getByText("second.ts");
 		expect(screen.getAllByText("secret-diff-scanner")).toHaveLength(1);
+	});
+
+	it("keeps a diff pair that could not fold as two blocks, each with its own key", () => {
+		// A key collision is only ever reported on the console, so the diagnostic is the assertion.
+		using keyWarning = vi.spyOn(console, "error").mockReturnValue(undefined);
+		renderOpen({
+			observation: {
+				...observation,
+				evidence: {
+					detector: "secret-diff-scanner",
+					citations: [
+						{ ...citation("src/config.ts"), side: "OLD", quote: "const timeout = 30;" },
+						{
+							...citation("src/config.ts"),
+							side: "NEW",
+							quote: undefined,
+							quoteRedacted: true,
+						},
+					],
+				},
+			},
+		});
+
+		expect(keyWarning).not.toHaveBeenCalled();
+		expect(screen.getAllByText("config.ts")).toHaveLength(2);
+		screen.getByText("const timeout = 30;");
+		screen.getByText(/This looked like a credential/u);
 	});
 
 	it("shows what the feed carries, each block under its label, and no label over nothing", () => {
@@ -115,7 +141,7 @@ describe("ReviewObservationRow", () => {
 		renderOpen({
 			observation: {
 				...observation,
-				feedbackId: undefined,
+				feedbackResponse: undefined,
 				evidenceRationale: undefined,
 				deliveredFeedback: undefined,
 				evidence: {
@@ -150,7 +176,7 @@ describe("ReviewObservationRow", () => {
 		renderOpen({ observation: { ...observation, origin: "BACKFILL", claimCurrentness: "STALE" } });
 
 		screen.getByText("Backfilled");
-		screen.getByText("Reviewed under earlier rules for this practice.");
+		screen.getByText("The practice or the reviewed work changed after this observation.");
 		screen.getByText("Why it was noted");
 	});
 
@@ -166,7 +192,7 @@ describe("ReviewObservationRow", () => {
 		renderOpen({
 			observation: {
 				...observation,
-				feedbackId: undefined,
+				feedbackResponse: undefined,
 				evidenceRationale: undefined,
 				deliveredFeedback: undefined,
 				evidence: undefined,
@@ -279,8 +305,12 @@ describe("ReviewObservationRow", () => {
 		renderOpen({
 			observation: {
 				...observation,
-				feedbackResolution: "ADDRESSED",
-				feedbackResponseComment: "Applied in the next revision.",
+				feedbackResponse: {
+					...observation.feedbackResponse,
+					feedbackId: "00000000-0000-0000-0000-000000000002",
+					resolution: "ADDRESSED",
+					comment: "Applied in the next revision.",
+				},
 			},
 			onRespond,
 		});
@@ -296,8 +326,12 @@ describe("ReviewObservationRow", () => {
 		expect(onRespond).toHaveBeenCalledExactlyOnceWith(
 			{
 				...observation,
-				feedbackResolution: "ADDRESSED",
-				feedbackResponseComment: "Applied in the next revision.",
+				feedbackResponse: {
+					...observation.feedbackResponse,
+					feedbackId: "00000000-0000-0000-0000-000000000002",
+					resolution: "ADDRESSED",
+					comment: "Applied in the next revision.",
+				},
 			},
 			{ comment: undefined, resolution: undefined, usefulness: "HELPFUL" },
 		);

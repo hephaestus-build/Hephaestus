@@ -2,22 +2,16 @@ package de.tum.cit.aet.hephaestus.practices;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
-import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
-import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
-import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
@@ -40,16 +34,10 @@ import tools.jackson.databind.ObjectMapper;
  * then their observations) must agree. And an undecided observation has to survive to the payload — this surface is
  * the inspectable record, so a practice that ran and hedged must not read like one that never ran.
  */
-class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegrationTest {
+class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String REVIEW_RUNS_URI = "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/review-runs";
-
-    /** Delivery authorization reads the run's evidence contract, so every fixture observation cites a source. */
-    private static final String DIFF_EVIDENCE_JSON =
-            "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":\"inputs/context/diff.patch\","
-                    + "\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":42,\"endLine\":42,\"quote\":\"example\","
-                    + "\"quoteRedacted\":false}]}";
 
     /**
      * A citation of a source the shipped contract does not know. Delivery authorization refuses it, which is
@@ -61,28 +49,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
                     + "\"quoteRedacted\":false}]}";
 
     @Autowired
-    private WebTestClient webTestClient;
-
-    @Autowired
     private PracticeGroupRepository groupRepository;
-
-    @Autowired
-    private PracticeRepository practiceRepository;
-
-    @Autowired
-    private PracticeRevisionRepository practiceRevisionRepository;
-
-    @Autowired
-    private ObservationRepository observationRepository;
-
-    @Autowired
-    private AgentJobRepository agentJobRepository;
-
-    @Autowired
-    private FeedbackRepository feedbackRepository;
-
-    @Autowired
-    private FeedbackObservationRepository feedbackObservationRepository;
 
     private Workspace workspace;
     private PracticeGroup group;
@@ -99,7 +66,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
         ensureWorkspaceMembership(workspace, developer, WorkspaceMembership.WorkspaceRole.MEMBER);
 
         group = persistGroup(workspace, "code-quality", "Code Quality");
-        practice = persistPractice(workspace, group, "pr-description-quality", "PR Description Quality");
+        practice = persistPractice(workspace, group, "pr-description-quality", "PR Description Quality", null);
         agentJob = persistAgentJob(workspace);
     }
 
@@ -111,19 +78,6 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
         return groupRepository.save(a);
     }
 
-    private Practice persistPractice(Workspace ws, PracticeGroup boundGroup, String slug, String name) {
-        Practice p = new Practice();
-        p.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
-        p.setWorkspace(ws);
-        p.setSlug(slug);
-        p.setName(name);
-        p.setCriteria("Description for " + slug);
-        p.setGroup(boundGroup);
-        p = practiceRepository.saveAndFlush(p);
-        p.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(p, 1)));
-        return practiceRepository.saveAndFlush(p);
-    }
-
     private AgentJob persistAgentJob(Workspace ws) {
         AgentJob job = new AgentJob();
         job.setWorkspace(ws);
@@ -133,94 +87,40 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
         return agentJobRepository.save(job);
     }
 
-    private UUID insertObservation(
+    /** One observation of this group's practice, recorded now by this test's run. */
+    private UUID observe(
             String title,
             String presence,
             @Nullable String assessment,
             @Nullable String severity,
             String artifactKind,
-            Long artifactId) {
-        return insertObservation(
-                practice, agentJob, title, presence, assessment, severity, artifactKind, artifactId, Instant.now());
-    }
-
-    private UUID insertObservation(
-            Practice observedPractice,
-            AgentJob reviewJob,
-            String title,
-            String presence,
-            @Nullable String assessment,
-            @Nullable String severity,
-            String artifactKind,
-            Long artifactId,
-            Instant observedAt) {
-        return insertObservation(
-                observedPractice,
-                reviewJob,
+            long artifactId) {
+        return observe(
+                practice,
+                agentJob,
+                artifactKind,
+                artifactId,
+                developer,
                 title,
                 presence,
                 assessment,
                 severity,
-                artifactKind,
-                artifactId,
-                observedAt,
+                Instant.now(),
                 DIFF_EVIDENCE_JSON,
                 null);
     }
 
-    private UUID insertObservation(
-            Practice observedPractice,
-            AgentJob reviewJob,
-            String title,
-            String presence,
-            @Nullable String assessment,
-            @Nullable String severity,
-            String artifactKind,
-            Long artifactId,
-            Instant observedAt,
-            String evidenceJson,
-            @Nullable String recurrenceKey) {
-        UUID id = UUID.randomUUID();
-        observationRepository.insertIfAbsent(
-                id,
-                "key-" + id,
-                reviewJob.getId(),
-                observedPractice.getWorkspace().getId(),
-                observedPractice.getId(),
-                observedPractice.getCurrentRevision().getId(),
-                artifactKind,
-                artifactId,
-                developer.getId(),
-                title,
-                assessment == null ? presence : "ASSESSED",
-                assessment == null ? null : presence,
-                assessment,
-                severity,
-                evidenceJson,
-                "Test reasoning for " + title,
-                recurrenceKey,
-                observedAt,
-                "LIVE");
-        return id;
-    }
-
     /** Advice lives on the delivered {@link Feedback}, not the observation (ADR 0021); the feed reads it from here. */
     private Feedback deliverFeedbackFor(UUID observationId, String body) {
-        Feedback feedback = feedbackRepository.save(Feedback.builder()
-                .agentJobId(agentJob.getId())
-                .workspaceId(workspace.getId())
-                .artifactKind(ArtifactKinds.PULL_REQUEST)
-                .artifactId(1L)
-                .recipientUserId(developer.getId())
-                .aboutUserId(developer.getId())
-                .channel(FeedbackChannel.IN_CONTEXT)
-                .position(0)
-                .deliveryState(FeedbackDeliveryState.DELIVERED)
-                .body(body)
-                .source(FeedbackSource.AGENT)
-                .createdAt(Instant.now())
-                .build());
-        feedbackObservationRepository.insertIfAbsent(feedback.getId(), observationId, "PRIMARY", 0);
+        Feedback feedback = persistFeedback(
+                agentJob,
+                developer,
+                FeedbackChannel.IN_CONTEXT,
+                0,
+                FeedbackDeliveryState.DELIVERED,
+                body,
+                Instant.now());
+        bind(feedback, observationId);
         return feedback;
     }
 
@@ -239,8 +139,8 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("returns a review run whole, with every observation that explains it")
     void shouldReturnCompleteRun() {
-        insertObservation("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
-        insertObservation("No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
+        observe("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        observe("No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
 
         getHistory()
                 .jsonPath("$.content.length()")
@@ -255,7 +155,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("carries an undecided observation with a null assessment rather than dropping it")
     void shouldCarryInconclusiveObservationWithoutAnAssessment() {
-        insertObservation("Could not tell from the diff", "UNDETERMINED", null, null, "scm.pull_request", 1L);
+        observe("Could not tell from the diff", "UNDETERMINED", null, null, "scm.pull_request", 1L);
 
         getHistory()
                 .jsonPath("$.content.length()")
@@ -274,8 +174,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("an unfiltered request is not silently narrowed to pull requests")
     void shouldNotDefaultToPullRequestsWhenNoKindFilterIsGiven() {
-        insertObservation(
-                "Issue lacks acceptance criteria", "ABSENT", "GOOD", "MINOR", ArtifactKinds.ISSUE.value(), 7L);
+        observe("Issue lacks acceptance criteria", "ABSENT", "GOOD", "MINOR", ArtifactKinds.ISSUE.value(), 7L);
 
         getHistory()
                 .jsonPath("$.content.length()")
@@ -290,8 +189,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("a run that produced nothing to judge is absent from the history")
     void shouldOmitRunsWithoutAnythingToJudge() {
-        insertObservation(
-                "Nothing to judge here", "NOT_APPLICABLE", null, null, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        observe("Nothing to judge here", "NOT_APPLICABLE", null, null, ArtifactKinds.PULL_REQUEST.value(), 1L);
 
         getHistory().jsonPath("$.content.length()").isEqualTo(0);
     }
@@ -299,7 +197,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @Test
     @WithUser
     void shouldSelectRunsByMatchingSeverityWithoutTreatingStrengthsAsMatches() {
-        insertObservation("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        observe("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
 
         webTestClient
                 .get()
@@ -320,29 +218,35 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     void shouldPageHistoricalAndCurrentRunsWithoutLosingEither() {
         AgentJob olderJob = persistAgentJob(workspace);
-        insertObservation(
+        observe(
                 practice,
                 olderJob,
+                ArtifactKinds.PULL_REQUEST.value(),
+                1L,
+                developer,
                 "Visible observation",
                 "PRESENT",
                 "GOOD",
                 null,
-                ArtifactKinds.PULL_REQUEST.value(),
-                1L,
-                Instant.parse("2025-01-01T00:00:00Z"));
+                Instant.parse("2025-01-01T00:00:00Z"),
+                DIFF_EVIDENCE_JSON,
+                null);
 
-        Practice superseded = persistPractice(workspace, group, "superseded", "Superseded");
+        Practice superseded = persistPractice(workspace, group, "superseded", "Superseded", null);
         AgentJob newerJob = persistAgentJob(workspace);
-        insertObservation(
+        observe(
                 superseded,
                 newerJob,
+                ArtifactKinds.PULL_REQUEST.value(),
+                2L,
+                developer,
                 "Historical observation",
                 "PRESENT",
                 "GOOD",
                 null,
-                ArtifactKinds.PULL_REQUEST.value(),
-                2L,
-                Instant.parse("2025-01-02T00:00:00Z"));
+                Instant.parse("2025-01-02T00:00:00Z"),
+                DIFF_EVIDENCE_JSON,
+                null);
         superseded.setCriteria("New criteria");
         superseded.setGroup(group);
         superseded.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(superseded, 2)));
@@ -390,7 +294,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("a run measured against older review rules stays in history")
     void shouldKeepARunMeasuredAgainstSupersededReviewRulesAsHistorical() {
-        insertObservation("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        observe("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
         practice.setCriteria("Rewritten criteria, which is what makes the fingerprint differ");
         practice.setGroup(group);
         practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 2)));
@@ -407,15 +311,16 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("carries each observation complete enough to open in place, so a row needs no detail request")
     void shouldCarryEachObservationCompleteEnoughToOpen() {
-        UUID observationId = insertObservation(
+        UUID observationId = observe(
                 practice,
                 agentJob,
+                ArtifactKinds.PULL_REQUEST.value(),
+                1L,
+                developer,
                 "No testing notes",
                 "ABSENT",
                 "GOOD",
                 "MAJOR",
-                ArtifactKinds.PULL_REQUEST.value(),
-                1L,
                 Instant.parse("2025-03-04T05:06:07Z"),
                 DIFF_EVIDENCE_JSON,
                 "locus-testing-notes");
@@ -427,10 +332,10 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
                 .jsonPath("$.content[0].observations[0].summary")
                 .isEqualTo("No testing notes")
                 .jsonPath("$.content[0].observations[0].evidenceRationale")
-                .isEqualTo("Test reasoning for No testing notes")
+                .isEqualTo("Reasoning for No testing notes")
                 .jsonPath("$.content[0].observations[0].deliveredFeedback")
                 .isEqualTo("Add a Testing section that names what you ran.")
-                .jsonPath("$.content[0].observations[0].feedbackId")
+                .jsonPath("$.content[0].observations[0].feedbackResponse.feedbackId")
                 .isEqualTo(feedback.getId().toString())
                 .jsonPath("$.content[0].observations[0].evidence.citations.length()")
                 .isEqualTo(1)
@@ -459,8 +364,8 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("a run carries its opening sentence, its coverage, its duration and the next step it wrote")
     void shouldCarryWhatTheRunWroteAboutItself() {
-        UUID observationId = insertObservation(
-                "No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
+        UUID observationId =
+                observe("No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
         agentJob.setStartedAt(Instant.parse("2025-03-04T05:06:07Z"));
         agentJob.setCompletedAt(Instant.parse("2025-03-04T05:08:29Z"));
         agentJob.setOutput(OBJECT_MAPPER.readTree("""
@@ -494,7 +399,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("a run that wrote no opening sentence says so rather than inventing one")
     void shouldLeaveTheRunNarrativeEmptyWhenTheRunComposedNothing() {
-        insertObservation("No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
+        observe("No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
 
         getHistory()
                 .jsonPath("$.content[0].lead")
@@ -511,16 +416,17 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractWorkspaceIntegration
     @WithUser
     @DisplayName("an observation whose evidence is not authorised for delivery is withheld, never shown bare")
     void shouldWithholdAnObservationWhoseEvidenceIsNotAuthorisedForDelivery() {
-        insertObservation("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
-        insertObservation(
+        observe("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        observe(
                 practice,
                 agentJob,
+                ArtifactKinds.PULL_REQUEST.value(),
+                1L,
+                developer,
                 "Cites a source nobody may show",
                 "ABSENT",
                 "GOOD",
                 "MAJOR",
-                ArtifactKinds.PULL_REQUEST.value(),
-                1L,
                 Instant.now(),
                 UNKNOWN_SOURCE_EVIDENCE_JSON,
                 null);

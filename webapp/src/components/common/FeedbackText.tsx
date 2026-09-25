@@ -20,6 +20,8 @@ export interface FeedbackTextProps {
 	className?: string;
 }
 
+const NO_GROUPS: PracticeGroup[] = [];
+
 /**
  * Running text with its practice names as pills, its groups as their own icon and colour, and its
  * work references as links. A practice is the one grey pill every practice surface names it with,
@@ -28,8 +30,6 @@ export interface FeedbackTextProps {
  * a work reference is a link only when it has an address — the provider's page for the work, so it
  * opens in a new tab — and a word otherwise.
  */
-const NO_GROUPS: PracticeGroup[] = [];
-
 export function FeedbackText({
 	segments,
 	onOpenPractice,

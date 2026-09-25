@@ -109,11 +109,15 @@ export const ManyEvents: Story = {
 		}
 		await expect(within(cell).getByRole("list")).toHaveClass("marker:text-muted-foreground");
 		const items = within(cell).getAllByRole("listitem");
-		await expect(items).toHaveLength(5);
-		await expect(items[0]).toHaveTextContent("Scope the change to one concern has new feedback.");
+		await expect(items).toHaveLength(6);
+		// Feedback the work fell back on comes first, then new feedback, then the resolutions.
+		await expect(items[0]).toHaveTextContent(
+			"Say which acceptance criteria are done is back to 0 of 3 clean.",
+		);
+		await expect(items[1]).toHaveTextContent("Scope the change to one concern has new feedback.");
 		// Each reference carries its own "(opens in a new tab)", so the sentence is matched to its
 		// first.
-		await expect(items[1]).toHaveTextContent(
+		await expect(items[2]).toHaveTextContent(
 			/^Describe what changed and why resolved by the work after #22/u,
 		);
 		const pill = within(cell).getByRole("button", { name: "Scope the change to one concern" });
@@ -177,7 +181,7 @@ export const Sorting: Story = {
 		await expect(standing).toHaveAttribute("aria-sort", "ascending");
 
 		await userEvent.click(within(standing).getByRole("button", { name: "Standing" }));
-		await expect(args.onSortChange).toHaveBeenLastCalledWith({ direction: "desc" });
+		await expect(args.onSortChange).toHaveBeenLastCalledWith("desc");
 		await expect(standing).toHaveAttribute("aria-sort", "descending");
 		const rows = canvas.getAllByRole("button", { name: /^Open group /u });
 		await expect(rows[0]).toHaveAccessibleName("Open group Testing your changes");
@@ -188,7 +192,7 @@ export const Sorting: Story = {
 };
 
 export const SortedDescending: Story = {
-	args: { sort: { direction: "desc" } },
+	args: { sort: "desc" },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("columnheader", { name: "Standing" })).toHaveAttribute(
 			"aria-sort",
@@ -234,7 +238,7 @@ export const Empty: Story = {
 export const Loading: Story = {
 	args: { isLoading: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("table", { name: "All practices" })).toHaveAttribute(
+		await expect(canvas.getByRole("table", { name: "All practice groups" })).toHaveAttribute(
 			"aria-busy",
 			"true",
 		);

@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
-import de.tum.cit.aet.hephaestus.practices.observation.trend.WorkResolution.Work.Key;
+import de.tum.cit.aet.hephaestus.practices.observation.ReviewedWorkKey;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -42,7 +42,14 @@ final class GroupTrendAggregator {
                     TrendScope.GROUP,
                     TrendDirection.INSUFFICIENT_EVIDENCE,
                     TrendSupportFactory.forGroup(
-                            properties, current, previous, missing, 0, eligiblePracticeSlugs.size(), trail),
+                            properties,
+                            current,
+                            previous,
+                            distinctComparedOpportunities(practiceTrends),
+                            missing,
+                            0,
+                            eligiblePracticeSlugs.size(),
+                            trail),
                     null,
                     null,
                     trail,
@@ -60,6 +67,7 @@ final class GroupTrendAggregator {
                         properties,
                         distinctOpportunityCount(comparable, TrendBundle.CURRENT),
                         distinctOpportunityCount(comparable, TrendBundle.PREVIOUS),
+                        distinctComparedOpportunities(comparable),
                         0,
                         comparable.size(),
                         eligiblePracticeSlugs.size(),
@@ -122,10 +130,10 @@ final class GroupTrendAggregator {
      * two: an artifact that is current evidence for any practice is current evidence for the group.
      */
     private static List<EvidenceOpportunity> mergedTrail(Collection<PracticeTrend> trends, int bundleSize) {
-        Map<Key, EvidenceOpportunity> combined = new LinkedHashMap<>();
+        Map<ReviewedWorkKey, EvidenceOpportunity> combined = new LinkedHashMap<>();
         for (PracticeTrend trend : trends) {
             for (EvidenceOpportunity opportunity : trend.opportunities()) {
-                combined.merge(Key.of(opportunity), opportunity, (left, right) -> {
+                combined.merge(opportunity.key(), opportunity, (left, right) -> {
                     EvidenceOpportunity newer = left.occurredAt().isAfter(right.occurredAt()) ? left : right;
                     return new EvidenceOpportunity(
                             left.artifactKind(),
@@ -149,11 +157,28 @@ final class GroupTrendAggregator {
         return TrendBundle.OLDER;
     }
 
+    /**
+     * The pieces of reviewed work the comparison rests on, counted once each.
+     *
+     * <p>Not the sum of the two bundle counts: a practice group's bundles are built per practice, so one pull
+     * request can be current evidence for one practice and previous evidence for another. Adding the counts
+     * would report it twice and tell the reader the group saw more work than it did.
+     */
+    private static int distinctComparedOpportunities(Collection<PracticeTrend> trends) {
+        return (int) trends.stream()
+                .flatMap(trend -> trend.opportunities().stream())
+                .filter(opportunity ->
+                        opportunity.bundle() == TrendBundle.CURRENT || opportunity.bundle() == TrendBundle.PREVIOUS)
+                .map(EvidenceOpportunity::key)
+                .distinct()
+                .count();
+    }
+
     private static int distinctOpportunityCount(Collection<PracticeTrend> trends, TrendBundle bundle) {
         return (int) trends.stream()
                 .flatMap(trend -> trend.opportunities().stream())
                 .filter(opportunity -> opportunity.bundle() == bundle)
-                .map(opportunity -> Key.of(opportunity))
+                .map(EvidenceOpportunity::key)
                 .distinct()
                 .count();
     }

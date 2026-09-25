@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.observation.ReviewedWorkKey;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -28,23 +29,17 @@ import org.jspecify.annotations.Nullable;
  *     empty again after a problem, and exactly the resolving pieces once the feedback is resolved
  * @param resolvedAt when the piece of work that completed the run was reviewed, or null while the work has
  *     not resolved the feedback
+ * @param problemWork the pieces of work that raised a problem since the last clean one, newest first: what
+ *     the clean run stands at zero because of. Empty whenever {@code cleanWork} is not, so the two together
+ *     say both how far the run got and what put it back.
  */
-public record WorkResolution(List<Work> cleanWork, @Nullable Instant resolvedAt) {
+public record WorkResolution(List<Work> cleanWork, @Nullable Instant resolvedAt, List<Work> problemWork) {
 
     /** Clean pieces of work in a row that resolve a piece of feedback. */
     public static final int CLEAN_NEEDED = 3;
 
     /** No clean work yet. */
-    public static final WorkResolution NONE = new WorkResolution(List.of(), null);
-
-    /**
-     * @param observations the practice's observations about the developer, any order; those observed at or
-     *     before {@code preparedAt} are ignored, since they are what the feedback was written from
-     * @param preparedAt when the feedback was prepared
-     */
-    public static WorkResolution of(List<Observation> observations, Instant preparedAt) {
-        return Opportunities.of(observations, preparedAt).resolve(preparedAt);
-    }
+    public static final WorkResolution NONE = new WorkResolution(List.of(), null, List.of());
 
     /**
      * One practice's opportunities since a horizon, bundled once and read by every piece of feedback about
@@ -67,24 +62,32 @@ public record WorkResolution(List<Work> cleanWork, @Nullable Instant resolvedAt)
         /** How the work has answered feedback prepared at {@code preparedAt}. */
         public WorkResolution resolve(Instant preparedAt) {
             List<Work> clean = new ArrayList<>();
+            List<Work> problems = new ArrayList<>();
             for (EvidenceOpportunity opportunity : oldestFirst) {
                 if (!opportunity.occurredAt().isAfter(preparedAt) || !opportunity.applicable()) {
                     continue;
                 }
-                if (!opportunity.clean()) {
-                    clean.clear();
-                    continue;
-                }
-                clean.add(new Work(
+                Work work = new Work(
                         opportunity.artifactKind(),
                         opportunity.artifactId(),
                         opportunity.jobId(),
-                        opportunity.occurredAt()));
+                        opportunity.occurredAt());
+                if (!opportunity.clean()) {
+                    clean.clear();
+                    problems.add(work);
+                    continue;
+                }
+                // A clean piece starts the run over, so the problems behind it are no longer what the
+                // count stands at zero because of.
+                problems.clear();
+                clean.add(work);
                 if (clean.size() == CLEAN_NEEDED) {
-                    return new WorkResolution(List.copyOf(clean), opportunity.occurredAt());
+                    return new WorkResolution(List.copyOf(clean), opportunity.occurredAt(), List.of());
                 }
             }
-            return clean.isEmpty() ? NONE : new WorkResolution(List.copyOf(clean), null);
+            return clean.isEmpty() && problems.isEmpty()
+                    ? NONE
+                    : new WorkResolution(List.copyOf(clean), null, Work.newestFirst(problems.stream()));
         }
     }
 
@@ -102,25 +105,18 @@ public record WorkResolution(List<Work> cleanWork, @Nullable Instant resolvedAt)
                     observation.getObservedAt());
         }
 
+        public ReviewedWorkKey key() {
+            return new ReviewedWorkKey(kind, id);
+        }
+
         /** One entry per piece of work, at its newest review, newest first. */
         public static List<Work> newestFirst(Stream<Work> work) {
-            Map<Key, Work> byWork = new LinkedHashMap<>();
+            Map<ReviewedWorkKey, Work> byWork = new LinkedHashMap<>();
             work.forEach(ref ->
-                    byWork.merge(Key.of(ref), ref, (left, right) -> left.at().isAfter(right.at()) ? left : right));
+                    byWork.merge(ref.key(), ref, (left, right) -> left.at().isAfter(right.at()) ? left : right));
             return byWork.values().stream()
                     .sorted(Comparator.comparing(Work::at).reversed())
                     .toList();
-        }
-
-        /** Identity of a piece of work: the same pull request reviewed twice is one piece of work. */
-        public record Key(ArtifactKind kind, long id) {
-            public static Key of(Work work) {
-                return new Key(work.kind(), work.id());
-            }
-
-            static Key of(EvidenceOpportunity opportunity) {
-                return new Key(opportunity.artifactKind(), opportunity.artifactId());
-            }
         }
     }
 }

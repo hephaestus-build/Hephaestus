@@ -55,6 +55,7 @@ export const conversation = (label: string): ReviewedWorkRef => ({
 export const wellSupported: TrendSupport = {
 	currentOpportunities: 4,
 	previousOpportunities: 4,
+	opportunities: 8,
 	opportunitiesUntilComparable: 0,
 	bundleSize: 4,
 	ropeHalfWidth: 0.15,
@@ -293,7 +294,7 @@ const PACKAGING_CHANGES: ProfileChange[] = [
 		PACKAGING,
 		{ practiceSlug: "describe-what-and-why", practiceName: "Describe what changed and why" },
 		{
-			feedbackId: "describe-what-and-why",
+			feedbackId: "describe-what-and-why-resolved",
 			resolvedBy: "WORK",
 			evidence: [22, 21, 20].map(pullRequest),
 		},
@@ -306,6 +307,15 @@ const PACKAGING_CHANGES: ProfileChange[] = [
 			practiceName: "Scope the change to one concern",
 		},
 		{ feedbackId: "scope-one-concern-new", evidence: [20, 22].map(pullRequest) },
+	),
+	change(
+		"FEEDBACK_RESET",
+		PACKAGING,
+		{
+			practiceSlug: "honours-linked-issue-acceptance-criteria",
+			practiceName: "Say which acceptance criteria are done",
+		},
+		{ feedbackId: "acceptance-criteria", cleanNeeded: 3, evidence: [pullRequest(22)] },
 	),
 	change(
 		"STANDING_MOVED",
@@ -379,20 +389,26 @@ const REVIEWING_CHANGES: ProfileChange[] = [
 		{
 			at: new Date("2026-09-02T11:40:00"),
 			feedbackId: "review-comments-specific-resolved",
-			resolvedBy: "DEVELOPER",
-			evidence: [],
+			resolvedBy: "WORK",
+			evidence: [1, 4, 23].map(pullRequest),
 		},
 	),
 	change(
 		"STANDING_MOVED",
 		REVIEWING,
-		{ practiceSlug: "reviews-promptly", practiceName: "Review within a working day" },
+		{
+			practiceSlug: "reviews-respectfully-asks-rather-than-demands",
+			practiceName: "Comment on the code, not the person",
+		},
 		{ from: "MIXED", to: "STRENGTH", evidence: [4, 23].map(pullRequest) },
 	),
 	change(
 		"STANDING_MOVED",
 		REVIEWING,
-		{ practiceSlug: "points-at-the-line", practiceName: "Point at the line, not the file" },
+		{
+			practiceSlug: "reviews-substantively-with-understanding",
+			practiceName: "Read the change before approving it",
+		},
 		{ from: "DEVELOPING", to: "MIXED", evidence: [23].map(pullRequest) },
 	),
 ];
@@ -466,7 +482,7 @@ export const SHARED_TRANSITION_OVERVIEW: PracticeProfileOverview = {
 	reviewedWork: [pullRequest(21), pullRequest(22)],
 };
 
-/** The overview the stories show: one run, three groups moved, nine changes in all. */
+/** The overview the stories show: one run, eleven changes, one of them a group moving. */
 export const OVERVIEW_FIXTURE: PracticeProfileOverview = {
 	latestRun: { jobId: "run-2026-09-09", at: LATEST_RUN_AT, reviewedWork: pullRequest(22) },
 	window: { since: new Date("2026-09-02T09:00:00"), until: LATEST_RUN_AT },
@@ -475,7 +491,7 @@ export const OVERVIEW_FIXTURE: PracticeProfileOverview = {
 			practiceSlug: "ready-and-traceable-handoff",
 			practiceName: "Mark the change ready and link its issue",
 			groupSlug: PACKAGING.groupSlug,
-			holdsAs: "every merge request names its issue",
+			holdsAs: "every pull request names its issue",
 			cleanWork: 9,
 			workKind: ARTIFACT_KIND.pullRequest,
 			since: new Date("2026-07-14T10:00:00"),
@@ -484,7 +500,7 @@ export const OVERVIEW_FIXTURE: PracticeProfileOverview = {
 			practiceSlug: "engaging-with-inline-review-comments",
 			practiceName: "Respond to each review comment",
 			groupSlug: "acting-on-review-feedback",
-			holdsAs: "every comment got an answer before the next push",
+			holdsAs: "every reviewer comment gets a visible answer",
 			cleanWork: 4,
 			workKind: ARTIFACT_KIND.pullRequest,
 			since: new Date("2026-08-20T10:00:00"),

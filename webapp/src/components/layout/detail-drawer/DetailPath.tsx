@@ -27,7 +27,7 @@ export interface LevelPath {
 }
 
 export interface DetailPathProps extends Partial<LevelPath> {
-	/** What this level is: "Group", "Practice", "All practices". */
+	/** What this level is: "Group", "Practice", "All practice groups". */
 	current: string;
 	className?: string;
 }

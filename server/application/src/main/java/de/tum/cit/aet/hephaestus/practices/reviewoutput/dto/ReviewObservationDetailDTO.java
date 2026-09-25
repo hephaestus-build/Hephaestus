@@ -29,7 +29,7 @@ public record ReviewObservationDetailDTO(
         @Schema(description = "Criteria revision selected as of job start, when available") @Nullable
         Long practiceRevisionId,
 
-        @NonNull ReviewedWorkRefDTO artifact,
+        @NonNull ReviewedWorkRefDTO reviewedWork,
 
         @Schema(description = "Whose work the observation is about; null when the identity is no longer resolvable")
         @Nullable
@@ -69,7 +69,7 @@ public record ReviewObservationDetailDTO(
 
     public static ReviewObservationDetailDTO from(
             Observation observation,
-            ReviewedWorkRefDTO artifact,
+            ReviewedWorkRefDTO reviewedWork,
             @Nullable ReviewSubjectDTO subject,
             List<ReviewBoundFeedbackDTO> feedback,
             boolean includeEvidence) {
@@ -82,7 +82,7 @@ public record ReviewObservationDetailDTO(
                 practice.getName(),
                 practice.getGroup() == null ? null : ReviewPracticeGroupDTO.from(practice.getGroup()),
                 revision == null ? null : revision.getId(),
-                artifact,
+                reviewedWork,
                 subject,
                 observation.getSummary(),
                 observation.getAssessmentStatus(),

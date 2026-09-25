@@ -98,13 +98,37 @@ describe("toEvidenceLocations", () => {
 				endLine: 4,
 				sourceKind: "scm.pull-request.diff",
 				redacted: false,
-				revision: undefined,
 				change: {
 					before: "-export const PAGE_SIZE = 25;",
 					after: "+export const PAGE_SIZE = 20;",
 				},
 			},
 		]);
+	});
+
+	it("never folds two citations of different artifacts, whose line numbers say nothing about each other", () => {
+		const locations = toEvidenceLocations({
+			citations: [
+				citation({ artifactPath: "owner/repo#1", side: "OLD", quote: "-a();" }),
+				citation({ artifactPath: "owner/repo#2", side: "NEW", quote: "+a();" }),
+			],
+		});
+
+		expect(locations).toHaveLength(2);
+		expect(locations.every((location) => location.change === undefined)).toBe(true);
+	});
+
+	it("keeps neither side's commit on a folded block: each side was read at its own", () => {
+		const [location] = toEvidenceLocations({
+			citations: [
+				citation({ side: "OLD", revision: "a".repeat(40), quote: "-a();" }),
+				citation({ side: "NEW", revision: "b".repeat(40), quote: "+a();" }),
+			],
+		});
+
+		expect(location?.change).toStrictEqual({ before: "-a();", after: "+a();" });
+		expect(location?.revision).toBeUndefined();
+		expect(location?.side).toBeUndefined();
 	});
 
 	it("folds a pair cited new side first, and keeps before before after", () => {

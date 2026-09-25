@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.inapp.InAppFeedbackEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
-import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository.CurrentResponseProjection;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.WorkResolution;
 import java.time.Instant;
 import java.util.List;
@@ -68,14 +67,10 @@ public class PreviousInAppFeedback {
                 .workResolutions(workspaceId, recipientUserId, List.of(unit), evidence)
                 .getOrDefault(unit.getId(), WorkResolution.NONE)
                 .resolvedAt();
-        Instant byDeveloper = reactionRepository
+        Instant byDeveloper = InAppFeedbackEvidence.resolvedByDeveloperAt(reactionRepository
                 .findCurrentResponse(unit.getId(), recipientUserId)
-                .filter(response -> response.getResolution() != null
-                        && FeedbackResolution.valueOf(response.getResolution()).resolves())
-                .map(CurrentResponseProjection::getRespondedAt)
-                .orElse(null);
-        Instant practiceChangedAt =
-                InAppFeedbackEvidence.practiceChangedAt(evidence.getOrDefault(unit.getId(), List.of()));
+                .orElse(null));
+        Instant practiceChangedAt = feedbackEvidence.practiceChangedAt(evidence).get(unit.getId());
         return Optional.of(new Previous(
                 unit.getId(),
                 unit.getCreatedAt(),

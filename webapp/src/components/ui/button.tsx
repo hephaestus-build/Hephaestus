@@ -13,6 +13,8 @@ import { cn } from "cn";
  * 4. The `shape` axis.
  * 5. `aria-pressed` is styled wherever `aria-expanded` is: a pressed toggle rendered as a Button has
  *    to look pressed, and upstream styles only the expanded case.
+ * 6. `mentor`, the accent a practice surface carries at most one of — `webapp/AGENTS.md`
+ *    § Practice surfaces palette owns when a surface may wear it.
  */
 const buttonVariants = cva(
 	"group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
@@ -37,6 +39,7 @@ const buttonVariants = cva(
 				"warning-outline":
 					"border-warning/30 bg-background text-warning hover:bg-warning/10 hover:text-warning focus-visible:ring-warning/20 dark:bg-input/30 dark:hover:bg-warning/20 dark:focus-visible:ring-warning/40",
 				link: "text-primary underline-offset-4 hover:underline",
+				mentor: "bg-mentor text-mentor-foreground hover:bg-mentor/90",
 			},
 			size: {
 				default:

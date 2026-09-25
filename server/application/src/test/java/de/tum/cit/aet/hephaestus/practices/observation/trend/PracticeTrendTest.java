@@ -1,16 +1,14 @@
 package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
+import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.clean;
+import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.noVerdict;
+import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.problem;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -76,47 +74,5 @@ class PracticeTrendTest {
 
     private PracticeTrend trend(Observation... observations) {
         return PracticeTrendCalculator.calculatePractice("testing", List.of(observations), CUTOFF, properties);
-    }
-
-    private static Observation clean(long artifactId, String observedAt) {
-        return clean(artifactId, observedAt, ArtifactKinds.PULL_REQUEST);
-    }
-
-    private static Observation clean(long artifactId, String observedAt, ArtifactKind kind) {
-        return observation(artifactId, observedAt, kind, AssessmentStatus.ASSESSED, Presence.PRESENT, Assessment.GOOD);
-    }
-
-    private static Observation problem(long artifactId, String observedAt) {
-        return observation(
-                artifactId,
-                observedAt,
-                ArtifactKinds.PULL_REQUEST,
-                AssessmentStatus.ASSESSED,
-                Presence.ABSENT,
-                Assessment.GOOD);
-    }
-
-    private static Observation noVerdict(long artifactId, String observedAt) {
-        return observation(
-                artifactId, observedAt, ArtifactKinds.PULL_REQUEST, AssessmentStatus.NOT_APPLICABLE, null, null);
-    }
-
-    private static Observation observation(
-            long artifactId,
-            String observedAt,
-            ArtifactKind kind,
-            AssessmentStatus status,
-            @org.jspecify.annotations.Nullable Presence presence,
-            @org.jspecify.annotations.Nullable Assessment assessment) {
-        return Observation.builder()
-                .id(UUID.randomUUID())
-                .agentJobId(UUID.randomUUID())
-                .artifactKind(kind)
-                .artifactId(artifactId)
-                .assessmentStatus(status)
-                .presence(presence)
-                .assessment(assessment)
-                .observedAt(Instant.parse(observedAt))
-                .build();
     }
 }

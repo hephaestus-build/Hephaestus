@@ -16,14 +16,19 @@ public final class ReviewedWorkLabels {
 
     private ReviewedWorkLabels() {}
 
+    /** No kind or no anchored work means there is nothing to name, so there is no reference either. */
+    public static @Nullable ReviewedWorkRefDTO refOrNull(
+            @Nullable ArtifactKind kind, @Nullable Long id, @Nullable Target target) {
+        return kind == null || id == null ? null : ref(kind, id.longValue(), target);
+    }
+
     public static ReviewedWorkRefDTO ref(ArtifactKind kind, long id, @Nullable Target target) {
         if (target == null || !target.type().equals(kind) || (target.id() != null && target.id() != id)) {
-            return new ReviewedWorkRefDTO(
-                    Long.toString(id), kind.value(), null, fallbackLabel(kind, null), null, null, null);
+            return new ReviewedWorkRefDTO(Long.toString(id), kind, null, fallbackLabel(kind, null), null, null, null);
         }
         return new ReviewedWorkRefDTO(
                 Long.toString(id),
-                kind.value(),
+                kind,
                 target.provider(),
                 label(kind, target),
                 title(kind, target),

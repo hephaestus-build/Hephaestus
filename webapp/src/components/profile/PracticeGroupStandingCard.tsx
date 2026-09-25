@@ -4,9 +4,13 @@ import { useState } from "react";
 
 import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { statusToneClass, statusValues } from "@/components/common/status-def";
+import { statusToneClass } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
+import {
+	DEFAULT_PRACTICE_GROUP_SORT,
+	sortPracticeGroups,
+} from "@/components/practice-vocabulary/practice-group-list-order";
 import { PRACTICE_GROUP_STANDING_DEFS } from "@/components/practice-vocabulary/practice-group-standing-defs";
 import {
 	countPracticeStandings,
@@ -21,7 +25,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { artifactKindIcon, artifactKindNoun } from "@/lib/artifact-kinds";
 
 const COLLAPSED_GROUP_COUNT = 3;
-const STANDING_ORDER = statusValues(PRACTICE_GROUP_STANDING_DEFS);
 
 export interface PracticeGroupStandingSectionProps {
 	groups: PracticeGroup[];
@@ -60,11 +63,7 @@ export function PracticeGroupStandingCard({
 		return <p className="text-sm text-muted-foreground">No practice groups are configured yet.</p>;
 	}
 
-	const orderedGroups = [...groups].sort((left, right) => {
-		const leftStanding = standings[left.slug]?.standing ?? "NOT_OBSERVED";
-		const rightStanding = standings[right.slug]?.standing ?? "NOT_OBSERVED";
-		return STANDING_ORDER.indexOf(leftStanding) - STANDING_ORDER.indexOf(rightStanding);
-	});
+	const orderedGroups = sortPracticeGroups(groups, standings, DEFAULT_PRACTICE_GROUP_SORT);
 	const collapsible = orderedGroups.length > COLLAPSED_GROUP_COUNT;
 	const visibleGroups = showAll ? orderedGroups : orderedGroups.slice(0, COLLAPSED_GROUP_COUNT);
 	const showsRing = Object.values(practicesByGroup ?? {}).some(

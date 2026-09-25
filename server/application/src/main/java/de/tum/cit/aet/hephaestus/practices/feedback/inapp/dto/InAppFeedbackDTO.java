@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.inapp.dto;
 
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -23,18 +22,18 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>No counts either. "Three of your last five" is evidence for a claim about a strategy and belongs
  * inside the message the composer wrote; a number on the card would be a score, which this surface is
- * not. {@link #occurrenceCount} is how many distinct pieces of work {@link #evidence} names and exists so a
- * card can say "3 pieces of work" beside the list, not as a metric to track over time.
+ * not. A card that says how many pieces of work it rests on counts {@link #evidence} itself.
  *
  * <p>The work resolves the feedback, not the developer: {@link #cleanWork} are the pieces of work in a row
  * that have come back clean on the practice since it was prepared, {@link #cleanNeeded} of them resolve it,
  * and once the run is complete {@link #resolvedByWorkAt} says when. Marking it addressed is the developer's
- * own, second way to resolve it, carried by {@link #response} — the same answer the response endpoint
- * returns, so a page of cards does not fetch it once per card.
+ * own, second way to resolve it: {@link #resolvedByDeveloperAt} says when their answer resolved it, and
+ * {@link #response} carries the answer itself — the same answer the response endpoint returns, so a page of
+ * cards does not fetch it once per card, and no reader re-derives which answers resolve.
  *
  * <p>A card whose practice was changed after it was prepared is closed rather than resolved:
  * {@link #practiceChangedAt} says when, and nothing the work or the developer does reopens it. A closed
- * card, resolved or not, leaves the page thirty days later ({@code InAppFeedbackService}).
+ * card, resolved or not, leaves the page once {@code InAppFeedbackService#CLOSED_CARD_STAYS} has passed.
  */
 @Schema(description = "A process-level message on the developer's own practice pages")
 public record InAppFeedbackDTO(
@@ -46,7 +45,7 @@ public record InAppFeedbackDTO(
         @NonNull @Schema(description = "The message, as Markdown, without the headline and the next step")
         String body,
 
-        @Schema(description = "The habit to try next, on its own; null for a message written without one") @Nullable
+        @Schema(description = "The habit to try next, on its own; null for feedback prepared without one") @Nullable
         String nextStep,
 
         @NonNull @Schema(description = "Practice this habit belongs to")
@@ -69,9 +68,6 @@ public record InAppFeedbackDTO(
         @NonNull @Schema(description = "The pieces of work the habit was observed on, newest first")
         List<InAppEvidenceDTO> evidence,
 
-        @NonNull @Schema(description = "How many distinct pieces of work the evidence names")
-        Integer occurrenceCount,
-
         @NonNull @Schema(description = "When the message was composed")
         Instant preparedAt,
 
@@ -84,15 +80,22 @@ public record InAppFeedbackDTO(
         @NonNull
         @Schema(
                 description = "The pieces of work in a row that came back clean on the practice since the"
-                        + " feedback was prepared, oldest first, at most cleanNeeded of them; a problem empties"
-                        + " it, and once resolved these are exactly the pieces that resolved it")
-        List<ReviewedWorkRefDTO> cleanWork,
+                        + " feedback was prepared, each with the date it was reviewed, oldest first, at most"
+                        + " cleanNeeded of them; a problem empties it, and once resolved these are exactly the"
+                        + " pieces that resolved it")
+        List<InAppCleanWorkDTO> cleanWork,
 
         @Nullable
         @Schema(
                 description = "When the work resolved it: the review of the piece of work that completed the"
                         + " clean run; null while the work has not")
         Instant resolvedByWorkAt,
+
+        @Nullable
+        @Schema(
+                description = "When the developer's own answer resolved it: they marked it addressed or not"
+                        + " applicable; null while they have not answered or their answer disputes it")
+        Instant resolvedByDeveloperAt,
 
         @Nullable
         @Schema(

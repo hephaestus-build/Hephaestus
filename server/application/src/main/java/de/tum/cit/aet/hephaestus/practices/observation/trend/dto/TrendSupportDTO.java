@@ -8,6 +8,12 @@ import org.jspecify.annotations.Nullable;
 public record TrendSupportDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int currentOpportunities,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int previousOpportunities,
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Distinct pieces of reviewed work the trend rests on, across both bundles")
+        int opportunities,
+
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int opportunitiesUntilComparable,
         @Nullable Integer comparablePractices,
         @Nullable Integer eligiblePractices,
@@ -21,6 +27,7 @@ public record TrendSupportDTO(
         return new TrendSupportDTO(
                 support.currentOpportunities(),
                 support.previousOpportunities(),
+                support.opportunities(),
                 support.opportunitiesUntilComparable(),
                 support.comparablePractices(),
                 support.eligiblePractices(),

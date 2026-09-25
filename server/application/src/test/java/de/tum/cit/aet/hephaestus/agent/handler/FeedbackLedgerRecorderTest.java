@@ -39,6 +39,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
@@ -553,8 +555,12 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         verify(feedbackRepository, org.mockito.Mockito.never()).save(any());
     }
 
+    /**
+     * Silence stops the note on the work, not the developer's own pages: the lanes are woken now, not when the
+     * hourly sweeper next passes.
+     */
     @Test
-    void shouldRecordOneSuppressionWithoutConversationWhenUndeliveredDuringSilentMode() {
+    void recordUndelivered_recordsOneSuppressionAndWakesTheLanes_duringSilentMode() {
         Observation bad = problem();
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(bad));
@@ -567,32 +573,23 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         verify(feedbackRepository).save(saved.capture());
         assertThat(saved.getValue().getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
         assertThat(saved.getValue().getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.INSTANCE_SILENCED);
-        // Silence stops the note on the work, not the developer's own pages: the lanes are woken now, not
-        // when the hourly sweeper next passes.
         verify(eventPublisher)
                 .publishEvent(any(
                         de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
     }
 
-    @Test
-    void recordSuppressedUnit_wakesTheLanesOnlyForSilentMode() {
+    /** Silence stops the note on the work; a gate decision on the work applies to every channel. */
+    @ParameterizedTest
+    @CsvSource({"INSTANCE_SILENCED,true", "ARTIFACT_CLOSED,false"})
+    void recordSuppressedUnit_wakesTheLanesOnlyForSilentMode(FeedbackSuppressionReason reason, boolean wakes) {
         Observation bad = problem();
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(bad));
         FeedbackLedgerRecorder rec = recorder();
 
-        rec.recordSuppressedUnit(
-                job(), new DeliveryContent("body", List.of(), List.of()), FeedbackSuppressionReason.INSTANCE_SILENCED);
-        verify(eventPublisher)
-                .publishEvent(any(
-                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
+        rec.recordSuppressedUnit(job(), new DeliveryContent("body", List.of(), List.of()), reason);
 
-        // A gate decision on the work applies to every channel, so nothing is woken for it.
-        org.mockito.Mockito.clearInvocations(eventPublisher);
-        when(feedbackRepository.existsByAgentJobIdAndPosition(any(), anyInt())).thenReturn(false);
-        rec.recordSuppressedUnit(
-                job(), new DeliveryContent("body", List.of(), List.of()), FeedbackSuppressionReason.ARTIFACT_CLOSED);
-        verify(eventPublisher, org.mockito.Mockito.never())
+        verify(eventPublisher, wakes ? org.mockito.Mockito.times(1) : org.mockito.Mockito.never())
                 .publishEvent(any(
                         de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
     }

@@ -16,12 +16,6 @@ export interface TimelineItemProps {
 	 * "there is more below the fold". Collapsed lists set it; expanded lists end plain.
 	 */
 	tailContinues?: boolean;
-	/**
-	 * The dot's colour. The practice surfaces' palette keeps the rail and its dots in the grey of
-	 * structure (`webapp/AGENTS.md` § Practice surfaces palette); the user profile, which predates
-	 * that rule and is not redesigned with it, keeps its accent dots.
-	 */
-	dot?: "structure" | "accent";
 	children: ReactNode;
 }
 
@@ -31,13 +25,7 @@ export interface TimelineItemProps {
  * dots are structure, in the grey the practice surfaces' palette gives them, so the accent stays
  * with the one control per surface.
  */
-export function TimelineItem({
-	at,
-	label,
-	tailContinues = false,
-	dot = "structure",
-	children,
-}: TimelineItemProps) {
+export function TimelineItem({ at, label, tailContinues = false, children }: TimelineItemProps) {
 	const labelClassName =
 		"col-start-2 mb-1 flex w-fit gap-1 text-xs text-muted-foreground sm:col-start-1 sm:row-start-1 sm:mt-3 sm:flex-col sm:items-end sm:text-right";
 	return (
@@ -53,10 +41,7 @@ export function TimelineItem({
 			<div className="relative col-start-1 row-start-1 row-end-3 sm:col-start-2">
 				{label !== undefined && (
 					<span
-						className={cn(
-							"absolute top-3 left-1/2 z-10 size-2.5 -translate-x-1/2 rounded-full border-2 border-background",
-							dot === "accent" ? "bg-mentor" : "bg-muted-foreground",
-						)}
+						className="absolute top-3 left-1/2 z-10 size-2.5 -translate-x-1/2 rounded-full border-2 border-background bg-muted-foreground"
 						aria-hidden
 					/>
 				)}

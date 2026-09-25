@@ -1,10 +1,10 @@
 import { CircleCheckIcon, CircleSlashIcon, MessageCircleQuestionMarkIcon } from "lucide-react";
 
-import type { ObservationDetail } from "@/api/types.gen";
+import type { FeedbackResponse } from "@/api/types.gen";
 
 import type { StatusDefs } from "@/components/common/status-def";
 
-export type FeedbackResolution = NonNullable<ObservationDetail["feedbackResolution"]>;
+export type FeedbackResolution = NonNullable<FeedbackResponse["resolution"]>;
 export const FEEDBACK_RESOLUTION_DEFS: StatusDefs<FeedbackResolution> = {
 	ADDRESSED: {
 		label: "Addressed",

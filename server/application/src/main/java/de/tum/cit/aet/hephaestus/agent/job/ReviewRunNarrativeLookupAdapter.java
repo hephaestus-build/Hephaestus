@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.handler.PracticeCoverageLedger;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.ReviewRunNarrativeRow;
@@ -47,10 +48,11 @@ class ReviewRunNarrativeLookupAdapter implements ReviewRunNarrativeLookup {
 
     private ReviewRunNarrative toNarrative(ReviewRunNarrativeRow row) {
         JsonNode output = row.getOutput();
+        PracticeCoverageLedger coverage = PracticeCoverageLedger.from(output);
         return new ReviewRunNarrative(
                 composition.lead(output),
-                coverage(output, "evaluated"),
-                coverage(output, "eligible"),
+                coverage.evaluated(),
+                coverage.eligible(),
                 durationSeconds(row.getStartedAt(), row.getCompletedAt()),
                 nextStepsByObservation(output));
     }
@@ -78,14 +80,6 @@ class ReviewRunNarrativeLookupAdapter implements ReviewRunNarrativeLookup {
             }
         }
         return Map.copyOf(nextSteps);
-    }
-
-    private static @Nullable Integer coverage(@Nullable JsonNode output, String field) {
-        if (output == null) {
-            return null;
-        }
-        JsonNode count = output.path("practiceCoverage").path(field);
-        return count.isIntegralNumber() && count.asInt() >= 0 ? count.asInt() : null;
     }
 
     /** Null while a run has not finished, and for a pair of timestamps that cannot both be true. */

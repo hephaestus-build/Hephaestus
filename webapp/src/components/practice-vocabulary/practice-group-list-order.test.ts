@@ -40,7 +40,7 @@ describe("sortPracticeGroups", () => {
 	};
 
 	it("puts what needs attention first when ascending, what no review reached last", () => {
-		expect(slugsOf(sortPracticeGroups(groups, standings, { direction: "asc" }))).toStrictEqual([
+		expect(slugsOf(sortPracticeGroups(groups, standings, "asc"))).toStrictEqual([
 			"attention",
 			"mixed",
 			"well",
@@ -49,7 +49,7 @@ describe("sortPracticeGroups", () => {
 	});
 
 	it("reverses the standings when descending", () => {
-		expect(slugsOf(sortPracticeGroups(groups, standings, { direction: "desc" }))).toStrictEqual([
+		expect(slugsOf(sortPracticeGroups(groups, standings, "desc"))).toStrictEqual([
 			"silent",
 			"well",
 			"mixed",
@@ -62,16 +62,8 @@ describe("sortPracticeGroups", () => {
 		const all = Object.fromEntries(
 			tied.map((entry) => [entry.slug, standing(entry.slug, "MIXED")]),
 		);
-		expect(slugsOf(sortPracticeGroups(tied, all, { direction: "asc" }))).toStrictEqual([
-			"a",
-			"c",
-			"b",
-		]);
-		expect(slugsOf(sortPracticeGroups(tied, all, { direction: "desc" }))).toStrictEqual([
-			"a",
-			"c",
-			"b",
-		]);
+		expect(slugsOf(sortPracticeGroups(tied, all, "asc"))).toStrictEqual(["a", "c", "b"]);
+		expect(slugsOf(sortPracticeGroups(tied, all, "desc"))).toStrictEqual(["a", "c", "b"]);
 	});
 
 	it("returns a copy", () => {
@@ -83,7 +75,7 @@ describe("sortPracticeGroups", () => {
 
 describe("nextPracticeGroupSort", () => {
 	it("flips the direction and never returns to unsorted", () => {
-		expect(nextPracticeGroupSort({ direction: "asc" })).toStrictEqual({ direction: "desc" });
-		expect(nextPracticeGroupSort({ direction: "desc" })).toStrictEqual({ direction: "asc" });
+		expect(nextPracticeGroupSort("asc")).toBe("desc");
+		expect(nextPracticeGroupSort("desc")).toBe("asc");
 	});
 });

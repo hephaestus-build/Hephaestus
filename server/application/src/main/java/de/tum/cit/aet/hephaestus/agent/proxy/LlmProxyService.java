@@ -201,12 +201,11 @@ class LlmProxyService {
         }
         boolean served = upstream.status() >= 200 && upstream.status() < 300;
         if (!served) {
-            // The sandbox only sees "error" from its model client, so this line is the one place an
-            // operator learns that the provider itself refused the call (no credit, a revoked key, a
-            // rate limit) rather than the network. Status and principal only: the body can quote the
-            // request.
+            // The sandbox only sees "error" from its model client; the trace carries the status on the
+            // span and this is its log-side counterpart, for an operator reading logs rather than
+            // traces. Status and principal only: the body can quote the request.
             log.warn(
-                    "LLM upstream refused a call for principal {}: status={}",
+                    "LLM upstream answered a call for principal {} with status={}",
                     routing.principalDescription(),
                     upstream.status());
         }

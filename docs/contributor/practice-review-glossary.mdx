@@ -370,7 +370,7 @@ ways, and the two are held apart everywhere the resolution is shown.
 | Term                     | Plain meaning                                                                                                                                                                                                                                                                                                                  | Do not use for this concept                         |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
 | **Resolved by the work** | Three pieces of the developer's reviewed work in a row, reviewed after the feedback was prepared, came back clean on the practice. Computed from the observations when the feedback is read and never stored; a problem starts the count over, and a piece of work reviewed several times counts once, at its newest review. | auto-resolved, closed by the system, streak, passed |
-| **Marked as addressed**  | The developer recorded `ADDRESSED` or `NOT_APPLICABLE` as their response to the feedback (`FeedbackResolution#resolves`; a dispute leaves it open). The other way a piece of feedback resolves; the earlier of the two is what the card and the summary report.                                                              | dismissed, acknowledged, done                       |
+| **Marked as addressed**  | The developer recorded `ADDRESSED` or `NOT_APPLICABLE` as their response to the feedback (`InAppFeedbackEvidence#resolvedByDeveloperAt` over `FeedbackResolution#resolves`; a dispute leaves it open). The other way a piece of feedback resolves; the earlier of the two is what the card and the summary report, and the card carries the moment as `resolvedByDeveloperAt` so no reader decides it again. | dismissed, acknowledged, done                       |
 
 The count is a piece of reviewed work, bundled as the trend bundles it — one opportunity per piece of
 work, read off its latest run — so a re-review that changes what the latest run said changes the answer
@@ -403,6 +403,9 @@ resolution rule. Its rules, in one place:
   the window: holding and moving up are not a contradiction, holding and slipping are.
 
 ## Machine names
+
+The `artifact` → `reviewedWork` rename is scoped to the HTTP DTOs, so the webapp's `artifactKind`
+and `artifactId` search params and its `$artifactKind` route segment keep their names on purpose.
 
 | Concept                      | JSON / API                         | Java                                       | Database                                                                      |
 | ---------------------------- | ---------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
@@ -457,7 +460,7 @@ resolution rule. Its rules, in one place:
 | Thread key                   | not on the HTTP API                | `FeedbackThreadKey`                        | `feedback.thread_key` (not unique)                                            |
 | What feedback follows        | not on the HTTP API                | —                                          | `feedback.replaces_id`                                                        |
 | Resolved by the work         | `cleanWork`, `cleanNeeded`, `resolvedByWorkAt` | `WorkResolution`            | derived, never stored                                                         |
-| Marked as addressed          | `resolution: ADDRESSED`            | `Reaction.resolution`                      | `reaction.resolution`                                                         |
+| Marked as addressed          | `resolution: ADDRESSED`, `resolvedByDeveloperAt` | `Reaction.resolution`        | `reaction.action`                                                             |
 | Who resolved feedback        | `resolvedBy`                       | `ProfileChangeDTO.ResolvedBy`              | derived, never stored                                                         |
 | Holds as                     | `holdsAs`                          | `BundledPracticeCatalog`                   | bundled catalog, never stored — defined in the [feedback language](./practice-feedback-language.md) |
 | Signal refusal reason        | —                                  | `SignalStateReason`                        | `artifact_signal.state_reason`                                                |
@@ -488,13 +491,6 @@ read DTOs; the [feedback schema](./practice-feedback-schema.md#evidence-warrants
 A readiness refusal belongs to the capture stage and creates no observation. It is not an assessment
 status. NOT_APPLICABLE and UNDETERMINED describe distinct facts established by reading available
 evidence, and neither contributes to the assessed-result denominator.
-
-A warrant is written under one name and read under another: `report_observation` takes
-`evidence.exhaustiveSearch`, `evidence.exclusion` and `evidence.missingEvidence`, and the observation
-stores and serves them as `evidence.search` (`lookedFor`, `consulted`, `boundary`),
-`evidence.inapplicability` (`subject`, `consulted`, `ruledOutBy`) and `evidence.undecidability`
-(`openQuestion`, `wouldSettleIt`) — one per observation, decided by its outcome, beside the citations
-every observation owes.
 
 ## Lifecycle
 

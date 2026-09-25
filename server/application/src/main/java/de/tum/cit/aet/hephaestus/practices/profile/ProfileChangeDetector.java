@@ -72,13 +72,19 @@ final class ProfileChangeDetector {
                         evidence));
             }
             TrendDirection directionBefore = was == null ? null : was.direction();
-            if (directionBefore != null && now.direction() != null && directionBefore != now.direction()) {
+            TrendDirection direction = now.direction();
+            // Only a turn one side of which points somewhere: crossing the minimum evidence into UNCERTAIN, or
+            // falling back out of it, changes what the trend may claim, not where the developer's work is going.
+            if (directionBefore != null
+                    && direction != null
+                    && directionBefore != direction
+                    && (directionBefore.isDirectional() || direction.isDirectional())) {
                 changes.add(practiceChange(
                         ProfileChangeDTO.Type.TREND_TURNED,
                         at,
                         now,
                         directionBefore.name(),
-                        now.direction().name(),
+                        direction.name(),
                         evidence));
             }
             Instant first = firstObservedAt.get(now.slug());
@@ -109,6 +115,7 @@ final class ProfileChangeDetector {
                     now.standing().name(),
                     null,
                     null,
+                    null,
                     refs(work, targets)));
         }
         return changes;
@@ -137,6 +144,7 @@ final class ProfileChangeDetector {
                 practice.groupName(),
                 from,
                 to,
+                null,
                 null,
                 null,
                 evidence);

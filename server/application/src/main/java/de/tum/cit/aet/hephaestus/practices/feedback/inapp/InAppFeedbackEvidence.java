@@ -1,20 +1,24 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.inapp;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository.CurrentResponseProjection;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.WorkResolution;
-import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,8 +44,8 @@ public class InAppFeedbackEvidence {
 
     private final FeedbackObservationRepository feedbackObservationRepository;
     private final ObservationRepository observationRepository;
+    private final PracticeRevisionRepository practiceRevisionRepository;
     private final ObservationVisibilityPolicy visibilityPolicy;
-    private final EvidenceAuthorization evidenceAuthorization;
 
     /**
      * The observations behind these pieces of feedback that may still be shown, per piece, newest first.
@@ -53,7 +57,7 @@ public class InAppFeedbackEvidence {
      * measured by review rules the practice has since changed stays, and {@link #practiceChangedAt} says
      * when the practice moved on: the card is closed by that, and closed is something the developer may
      * see. A claim whose rules cannot be verified at all is hidden as before. One batch query and one
-     * authorization round trip, as {@link EvidenceAuthorization#permitsAll} is built for.
+     * authorization round trip, as {@link ObservationVisibilityPolicy#permitsShown} is built for.
      */
     public Map<UUID, List<Observation>> visibleEvidence(Long workspaceId, Collection<UUID> feedbackIds) {
         if (feedbackIds.isEmpty()) {
@@ -61,12 +65,10 @@ public class InAppFeedbackEvidence {
         }
         List<FeedbackObservationVisibility> rows =
                 feedbackObservationRepository.findForVisibility(workspaceId, List.copyOf(feedbackIds));
-        List<Observation> verifiable = rows.stream()
-                .map(FeedbackObservationVisibility::getObservation)
-                .filter(observation -> currentness(observation) != ReviewClaimCurrentness.UNVERIFIABLE)
-                .toList();
+        List<Observation> observations =
+                rows.stream().map(FeedbackObservationVisibility::getObservation).toList();
         Set<UUID> authorized =
-                evidenceAuthorization.permitsAll(workspaceId, verifiable, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+                visibilityPolicy.permitsShown(workspaceId, observations, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         Map<UUID, List<Observation>> byFeedback = new LinkedHashMap<>();
         for (FeedbackObservationVisibility row : rows) {
             Observation observation = row.getObservation();
@@ -85,20 +87,86 @@ public class InAppFeedbackEvidence {
     }
 
     /**
-     * When the practice behind this evidence changed its review rules after the evidence was measured, or
-     * {@code null} while the rules are the ones it was measured by. Read off the practice's current
-     * revision, which every edit appends: the instant is when the practice last changed, and the evidence
-     * being stale against it is what says the change reached the rules.
+     * When the practice behind each piece of feedback's evidence changed its review rules after the evidence
+     * was measured, by feedback id. Feedback still measured by the rules in force is absent.
+     *
+     * <p>The moment is the first revision after the one the evidence was measured against whose review rules
+     * actually differ from it — not the practice's newest revision, which a later edit to a name, a
+     * why-it-matters or a group moves without touching a rule. The developer is shown this instant as the
+     * date the card closed, so it has to be the date the rules moved.
+     *
+     * <p>The history is asked once per revision the evidence was measured against, however many observations
+     * and however many cards were measured against it: a page of cards about one practice is one query, not
+     * one per observation on it.
      */
-    public static @Nullable Instant practiceChangedAt(List<Observation> evidence) {
+    public Map<UUID, Instant> practiceChangedAt(Map<UUID, List<Observation>> evidenceByFeedback) {
+        Map<MeasuredBy, Optional<Instant>> rulesChangedAt = new HashMap<>();
+        Map<UUID, Instant> changedAt = new LinkedHashMap<>();
+        evidenceByFeedback.forEach((feedbackId, evidence) -> {
+            Instant changed = practiceChangedAt(evidence, rulesChangedAt);
+            if (changed != null) {
+                changedAt.put(feedbackId, changed);
+            }
+        });
+        return changedAt;
+    }
+
+    /** The revision one observation was measured against: what the moment the rules moved depends on. */
+    private record MeasuredBy(Long practiceId, int revisionNumber) {}
+
+    private @Nullable Instant practiceChangedAt(
+            List<Observation> evidence, Map<MeasuredBy, Optional<Instant>> rulesChangedAt) {
         return evidence.stream()
                 .filter(observation -> currentness(observation) == ReviewClaimCurrentness.STALE)
-                .map(observation -> observation.getPractice().getCurrentRevision())
-                .filter(Objects::nonNull)
-                .map(PracticeRevision::getCreatedAt)
+                .map(observation -> rulesChangedAt(observation, rulesChangedAt))
                 .filter(Objects::nonNull)
                 .findFirst()
                 .orElse(null);
+    }
+
+    private @Nullable Instant rulesChangedAt(
+            Observation observation, Map<MeasuredBy, Optional<Instant>> rulesChangedAt) {
+        PracticeRevision measuredBy = observation.getPracticeRevision();
+        if (measuredBy != null && measuredBy.getReviewRuleFingerprint() != null) {
+            String fingerprint = measuredBy.getReviewRuleFingerprint();
+            Optional<Instant> changed = rulesChangedAt.computeIfAbsent(
+                    new MeasuredBy(observation.getPractice().getId(), measuredBy.getRevisionNumber()),
+                    key -> practiceRevisionRepository
+                            .findFirstByPracticeIdAndRevisionNumberGreaterThanAndReviewRuleFingerprintNotOrderByRevisionNumberAsc(
+                                    key.practiceId(), key.revisionNumber(), fingerprint)
+                            .map(PracticeRevision::getCreatedAt));
+            if (changed.isPresent()) {
+                return changed.get();
+            }
+        }
+        // Nothing in the history names the moment: evidence from before revisions carried a fingerprint, or a
+        // staleness the fingerprints alone do not explain. The practice's current revision is then the only
+        // instant we can stand behind.
+        PracticeRevision current = observation.getPractice().getCurrentRevision();
+        return current == null ? null : current.getCreatedAt();
+    }
+
+    /**
+     * When the developer's own answer closed this piece of feedback, or {@code null} while their answer
+     * leaves it open. One rule, since the page, the ledger and the lane that writes the next card must not
+     * disagree about whether a developer has answered: an answer resolves unless it disputes the feedback.
+     */
+    public static @Nullable Instant resolvedByDeveloperAt(@Nullable CurrentResponseProjection response) {
+        return response == null
+                ? null
+                : resolvedByDeveloperAt(
+                        response.getResolution() == null ? null : FeedbackResolution.valueOf(response.getResolution()),
+                        response.getRespondedAt());
+    }
+
+    /** {@link #resolvedByDeveloperAt(CurrentResponseProjection)} over the answer as the page carries it. */
+    public static @Nullable Instant resolvedByDeveloperAt(@Nullable FeedbackResponseDTO response) {
+        return response == null ? null : resolvedByDeveloperAt(response.resolution(), response.respondedAt());
+    }
+
+    private static @Nullable Instant resolvedByDeveloperAt(
+            @Nullable FeedbackResolution resolution, @Nullable Instant respondedAt) {
+        return resolution != null && resolution.resolves() ? respondedAt : null;
     }
 
     /**
@@ -165,11 +233,12 @@ public class InAppFeedbackEvidence {
             Collection<Feedback> feedback,
             Map<UUID, List<Observation>> evidenceByFeedback,
             Map<String, List<Observation>> observationsByPractice) {
+        Map<UUID, Instant> practiceChangedAt = practiceChangedAt(evidenceByFeedback);
         Map<String, WorkResolution.Opportunities> opportunitiesByPractice = new LinkedHashMap<>();
         Map<UUID, WorkResolution> resolutions = new LinkedHashMap<>();
         for (Feedback piece : feedback) {
             List<Observation> evidence = evidenceByFeedback.get(piece.getId());
-            if (evidence == null || practiceChangedAt(evidence) != null) {
+            if (evidence == null || practiceChangedAt.containsKey(piece.getId())) {
                 continue;
             }
             String practiceSlug = evidence.getFirst().getPractice().getSlug();

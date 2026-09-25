@@ -198,8 +198,6 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                         java.util.Set.of());
         assertThat(inApp.allowed()).isTrue();
         assertThat(inApp.suppressionReason()).isNull();
-        assertThat(policy().allowsComposition(job, DeliveryPolicySurface.IN_APP))
-                .isTrue();
     }
 
     @ParameterizedTest

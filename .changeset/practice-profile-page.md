@@ -3,7 +3,7 @@
 ---
 
 A new Practice profile page shows you how your recent work stands across practice groups and the
-feedback written from it, with the cards split into recommended, open, resolved and all. Every
+feedback written from it, with the cards split into newest, open, resolved and all. Every
 practice group is a row in a table ordered by standing, which you can reverse. Opening a group
 shows what it is about, its next step and its practices; the reviews and observations behind a
 practice open one level deeper when you select it, and you can respond to each observation there.

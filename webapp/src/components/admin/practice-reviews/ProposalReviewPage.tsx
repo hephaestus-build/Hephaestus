@@ -118,9 +118,9 @@ export function ProposalReviewPage({
 				</ReviewFact>
 				<ReviewFact label="Reviewed work">
 					<div className="space-y-1">
-						<ReviewArtifactLink artifact={feedback.artifact} />
-						{hasText(feedback.artifact?.title) && (
-							<p className="break-words text-muted-foreground">{feedback.artifact.title}</p>
+						<ReviewArtifactLink reviewedWork={feedback.reviewedWork} />
+						{hasText(feedback.reviewedWork?.title) && (
+							<p className="break-words text-muted-foreground">{feedback.reviewedWork.title}</p>
 						)}
 					</div>
 				</ReviewFact>

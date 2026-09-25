@@ -82,7 +82,7 @@ class ReviewObservationQueryService {
                         .toList();
         ReviewSubjectDTO subject =
                 subjectResolver.resolve(List.of(observation.getAboutUserId())).get(observation.getAboutUserId());
-        ReviewedWorkRefDTO artifact = ReviewedWorkLabels.ref(
+        ReviewedWorkRefDTO reviewedWork = ReviewedWorkLabels.ref(
                 observation.getArtifactKind(),
                 observation.getArtifactId(),
                 reviewRunTargetLookup
@@ -90,6 +90,6 @@ class ReviewObservationQueryService {
                         .get(observation.getAgentJobId()));
         boolean includeEvidence =
                 evidenceAuthorization.permits(workspaceId, observation, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
-        return ReviewObservationDetailDTO.from(observation, artifact, subject, feedback, includeEvidence);
+        return ReviewObservationDetailDTO.from(observation, reviewedWork, subject, feedback, includeEvidence);
     }
 }

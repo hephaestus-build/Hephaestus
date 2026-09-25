@@ -19,6 +19,7 @@ import type {
 	FeedbackRatingProps,
 	PracticeFeedbackCardEntry,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
+import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 
@@ -26,6 +27,11 @@ export interface InAppFeedbackRequest {
 	workspaceSlug: string;
 	/** The workspace's groups; a card's colour and icon are its group's. */
 	groups: PracticeGroup[];
+	/**
+	 * Whether to read the cards at all. Reading them delivers them, so a page that may yet send the
+	 * reader away holds the request until it knows it will not.
+	 */
+	enabled?: boolean;
 }
 
 export interface InAppFeedback {
@@ -62,21 +68,39 @@ export function invalidateFeedbackResponses(
 }
 
 /**
+ * Every write of a feedback response, whatever surface it was made on, so the rating buttons of
+ * the piece of feedback being written wait wherever it is on screen — a card on the page and the
+ * same feedback on a practice level are one write.
+ */
+export const FEEDBACK_RESPONSE_WRITE_KEY = ["feedback-response", "write"];
+
+/**
  * The response a press on a rating writes: the pressed rating, keeping the resolution and the
  * comment the reader gave before; pressed on the rating already chosen, the rating withdrawn,
- * comment and all. The comment band is open exactly while a rating stands.
+ * comment and all. A dispute stands or falls with its comment, so withdrawing drops it too — the
+ * server rejects a DISPUTED response that carries no comment. The comment band is open exactly
+ * while a rating stands.
  */
 export function nextRating(
 	current: FeedbackResponseRequest | undefined,
 	pressed: FeedbackUsefulness,
 ): FeedbackResponseRequest {
 	const withdrawing = current?.usefulness === pressed;
+	const resolution = current?.resolution;
 	return {
 		usefulness: withdrawing ? undefined : pressed,
-		resolution: current?.resolution,
+		resolution: withdrawing && resolution === "DISPUTED" ? undefined : resolution,
 		comment: withdrawing ? undefined : current?.comment,
 	};
 }
+
+/**
+ * Nothing in flight and nothing to wait for. A query held back by `enabled` reports `isPending`
+ * for as long as it is held, which a page reads as a skeleton that never resolves; with the
+ * reading disabled the feedback is settled and empty instead, as `usePracticeGroupDetail`'s feed
+ * is while its level is closed.
+ */
+const SETTLED_EMPTY: LoadState = { status: "ready" };
 
 /**
  * The developer's in-app practice feedback and the ratings on it.
@@ -91,10 +115,17 @@ export function nextRating(
  * feedback when the reason is "Not accurate"), and pressing the chosen rating again withdraws it.
  * Whether the comment band is open is the page's alone.
  */
-export function useInAppFeedback({ workspaceSlug, groups }: InAppFeedbackRequest): InAppFeedback {
+export function useInAppFeedback({
+	workspaceSlug,
+	groups,
+	enabled = true,
+}: InAppFeedbackRequest): InAppFeedback {
 	const queryClient = useQueryClient();
 	const [openComment, setOpenComment] = useState<string>();
-	const feedbackQuery = useQuery(getInAppFeedbackOptions({ path: { workspaceSlug } }));
+	const feedbackQuery = useQuery({
+		...getInAppFeedbackOptions({ path: { workspaceSlug } }),
+		enabled,
+	});
 	const feedback = feedbackQuery.data ?? [];
 	const responseOf = (feedbackId: string) =>
 		feedback.find((item) => item.id === feedbackId)?.response;
@@ -105,12 +136,12 @@ export function useInAppFeedback({ workspaceSlug, groups }: InAppFeedbackRequest
 			feedback.find((item) => item.id === variables.path.feedbackId)?.groupSlug,
 		);
 	const replaceMutation = useMutation({
-		...replaceFeedbackResponseMutation(),
+		...filedUnder(FEEDBACK_RESPONSE_WRITE_KEY, replaceFeedbackResponseMutation()),
 		onSuccess: written,
 		onError: (error) => toast.error(problemDetailOf(error, "Could not save your rating")),
 	});
 	const deleteMutation = useMutation({
-		...deleteFeedbackResponseMutation(),
+		...filedUnder(FEEDBACK_RESPONSE_WRITE_KEY, deleteFeedbackResponseMutation()),
 		onSuccess: written,
 		onError: (error) => toast.error(problemDetailOf(error, "Could not withdraw your rating")),
 	});
@@ -139,19 +170,20 @@ export function useInAppFeedback({ workspaceSlug, groups }: InAppFeedbackRequest
 		});
 		setOpenComment(undefined);
 	};
-	const pendingFeedbackId = [replaceMutation, deleteMutation].find((mutation) => mutation.isPending)
-		?.variables.path.feedbackId;
+	const pendingFeedbackIds = usePendingMutationIds(FEEDBACK_RESPONSE_WRITE_KEY, (variables) =>
+		pathString(variables, "feedbackId"),
+	);
 
 	return {
 		cards: feedback.map((item) => toFeedbackCard(item, groups)),
 		ratingProps: (feedbackId) => ({
 			usefulness: responseOf(feedbackId)?.usefulness,
 			commentOpen: openComment === feedbackId,
-			isPending: pendingFeedbackId === feedbackId,
+			isPending: pendingFeedbackIds.has(feedbackId),
 			onRate: (usefulness) => rate(feedbackId, usefulness),
 			onSendComment: (comment) => send(feedbackId, comment),
 			onSkipComment: () => setOpenComment(undefined),
 		}),
-		state: queryLoadState(feedbackQuery),
+		state: enabled ? queryLoadState(feedbackQuery) : SETTLED_EMPTY,
 	};
 }

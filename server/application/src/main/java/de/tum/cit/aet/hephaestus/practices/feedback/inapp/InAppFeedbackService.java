@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.inapp.dto.InAppCleanWorkDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.inapp.dto.InAppEvidenceDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.inapp.dto.InAppFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -122,6 +123,9 @@ public class InAppFeedbackService {
                 .stream()
                 .collect(Collectors.toMap(
                         CurrentResponseRow::getFeedbackId, row -> FeedbackResponseDTO.from(row.getFeedbackId(), row)));
+        // When each card's practice changed its review rules, for the whole page at once: a page of cards
+        // about one practice asks its history once.
+        Map<UUID, Instant> practiceChangedAt = feedbackEvidence.practiceChangedAt(evidenceByFeedback);
         Instant now = clock.instant();
         List<InAppFeedbackDTO> cards = shown.stream()
                 .map(feedback -> toCard(
@@ -129,6 +133,7 @@ public class InAppFeedbackService {
                         Objects.requireNonNull(evidenceByFeedback.get(feedback.getId())),
                         resolutionByFeedback.getOrDefault(feedback.getId(), WorkResolution.NONE),
                         responseByFeedback.get(feedback.getId()),
+                        practiceChangedAt.get(feedback.getId()),
                         targets))
                 .filter(card -> stillOnThePage(card, now))
                 .toList();
@@ -146,23 +151,17 @@ public class InAppFeedbackService {
 
     /** Open, or closed for less than {@link #CLOSED_CARD_STAYS}. */
     private static boolean stillOnThePage(InAppFeedbackDTO card, Instant now) {
-        FeedbackResponseDTO response = card.response();
         Instant closedAt = InAppFeedbackEvidence.closedAt(
-                card.resolvedByWorkAt(),
-                response != null
-                                && response.resolution() != null
-                                && response.resolution().resolves()
-                        ? response.respondedAt()
-                        : null,
-                card.practiceChangedAt());
+                card.resolvedByWorkAt(), card.resolvedByDeveloperAt(), card.practiceChangedAt());
         return closedAt == null || !closedAt.plus(CLOSED_CARD_STAYS).isBefore(now);
     }
 
-    private static InAppFeedbackDTO toCard(
+    private InAppFeedbackDTO toCard(
             Feedback feedback,
             List<Observation> evidence,
             WorkResolution resolution,
             @Nullable FeedbackResponseDTO response,
+            @Nullable Instant practiceChangedAt,
             Map<UUID, Target> targets) {
         Practice practice = evidence.getFirst().getPractice();
         PracticeGroup group = practice.getGroup();
@@ -182,19 +181,16 @@ public class InAppFeedbackService {
                         .map(observation ->
                                 InAppEvidenceDTO.from(observation, targets.get(observation.getAgentJobId())))
                         .toList(),
-                (int) evidence.stream()
-                        .map(Work::of)
-                        .map(Work.Key::of)
-                        .distinct()
-                        .count(),
                 feedback.getCreatedAt(),
                 feedback.getDeliveredAt(),
                 WorkResolution.CLEAN_NEEDED,
                 resolution.cleanWork().stream()
-                        .map(work -> ReviewedWorkLabels.ref(work.kind(), work.id(), targets.get(work.jobId())))
+                        .map(work -> new InAppCleanWorkDTO(
+                                ReviewedWorkLabels.ref(work.kind(), work.id(), targets.get(work.jobId())), work.at()))
                         .toList(),
                 resolution.resolvedAt(),
-                InAppFeedbackEvidence.practiceChangedAt(evidence),
+                InAppFeedbackEvidence.resolvedByDeveloperAt(response),
+                practiceChangedAt,
                 response);
     }
 }

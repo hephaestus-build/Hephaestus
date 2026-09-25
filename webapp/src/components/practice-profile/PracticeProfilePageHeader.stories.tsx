@@ -35,6 +35,8 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas, args, userEvent }) => {
 		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent("Practice profile");
+		await expect(canvas.queryByText(/visible only to you/u)).toBeNull();
+		await expect(canvas.getByText(/resolves once your work comes back clean/u)).toBeVisible();
 		await expect(canvas.getByText("9 September, 2:10 pm")).toBeVisible();
 		await expect(canvas.getByRole("link", { name: /^#releases/u })).toBeVisible();
 		await expect(canvas.getByText("16 practices in 5 groups")).toBeVisible();
@@ -50,7 +52,11 @@ export const Default: Story = {
 			"3Not observed",
 		]);
 
-		await userEvent.click(canvas.getByRole("button", { name: "See all practices" }));
+		// One destination, and the card is all of it: the words are the keyboard path and their
+		// pseudo-element covers the card for the pointer.
+		const destination = canvas.getByRole("link", { name: "See all practice groups" });
+		await expect(destination).toBeEnabled();
+		await userEvent.click(destination);
 		await expect(args.onSeeAllPractices).toHaveBeenCalledOnce();
 	},
 };
@@ -63,6 +69,23 @@ export const SomeStandingsAbsent: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getAllByRole("listitem")).toHaveLength(2);
 		await expect(canvas.queryByText("Needs attention")).toBeNull();
+	},
+};
+
+/**
+ * Nothing reviewed yet: every practice stands at "Not observed", so the ring is one grey arc and
+ * the legend one line, and the card still names its destination.
+ */
+export const NothingObservedYet: Story = {
+	args: {
+		latestRun: undefined,
+		counts: { STRENGTH: 0, MIXED: 0, DEVELOPING: 0, NO_OPPORTUNITY: 0, NOT_OBSERVED: 16 },
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+			"16Not observed",
+		]);
+		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeEnabled();
 	},
 };
 
@@ -86,7 +109,7 @@ export const LongWorkLabel: Story = {
 	},
 };
 
-/** A workspace with no practices: there is no chip, and the box has nothing to count. */
+/** A workspace with no practices: there is no chip, and the card has nothing to count. */
 export const Empty: Story = {
 	args: {
 		latestRun: undefined,
@@ -98,15 +121,15 @@ export const Empty: Story = {
 		await expect(canvas.queryByText("Latest run")).toBeNull();
 		await expect(canvas.getByText("No practices set up yet")).toBeVisible();
 		await expect(canvas.queryByRole("list")).toBeNull();
-		await expect(canvas.getByRole("button", { name: "See all practices" })).toBeEnabled();
+		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeEnabled();
 	},
 };
 
-/** Without a handler the button stays where it is, disabled, so the box keeps its shape. */
+/** Without a handler the destination stays where it is, disabled, so the card keeps its shape. */
 export const NoSeeAllHandler: Story = {
 	args: { onSeeAllPractices: undefined },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "See all practices" })).toBeDisabled();
+		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeDisabled();
 	},
 };
 
@@ -114,10 +137,14 @@ export const Loading: Story = {
 	args: { isLoading: true },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("heading", { level: 1 })).toBeNull();
-		await expect(canvas.getByRole("button", { name: "See all practices" })).toBeDisabled();
+		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeDisabled();
 	},
 };
 
+/**
+ * The five standings at 390 px: the legend wraps and the destination takes the row under it,
+ * without widening the page.
+ */
 export const MobileReflow: Story = {
 	parameters: {
 		viewport: { defaultViewport: "reflow" },

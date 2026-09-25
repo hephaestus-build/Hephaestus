@@ -6,14 +6,19 @@
  *
  * Each of these is a rule rather than a wording choice:
  *
- * 1. One event per practice per block, by a fixed precedence — resolved, new, slipped, moved up,
- *    first seen, trend, held. Holding and moving are not a contradiction, so the good block and
- *    the change block dedupe separately; holding and slipping are, so a practice that slipped or
- *    got new feedback is never also shown as holding.
+ * 1. One event per practice per block, by a fixed precedence — resolved, fell back, new, slipped,
+ *    moved up, first seen, trend, held. Holding and moving are not a contradiction, so the good
+ *    block and the change block dedupe separately; holding and slipping are, so a practice that
+ *    slipped, fell back or got new feedback is never also shown as holding.
  * 2. Counts read as words below ten and as digits from ten, and never both inside one clause.
  * 3. A bundled paragraph names at most a few subjects, then counts the rest in one sentence: three
- *    held rows, two pieces of new feedback and one slip in the paragraph, four per kind in the
- *    unfolded rest. Bad news is never a run of count sentences.
+ *    held rows, two attention rows and one slip in the paragraph, four per kind in the unfolded
+ *    rest. Bad news is never a run of count sentences.
+ * 3a. A negative event gets a row of its own only where the reader can act on it today: a piece of
+ *    feedback the work fell back on, then new feedback, at most two rows, each with the card it
+ *    belongs to one link away. A standing that slipped stays a sentence in the paragraph on
+ *    purpose — a standing is a balance over several runs rather than a thing to do, and it owns no
+ *    feedback card to send anyone to.
  * 4. Subjects that made the same move are one sentence, whichever surface says it: a column of
  *    sentences repeating one predicate reads as more news than there is. So every limit above
  *    counts subjects, not sentences, and the count that closes a paragraph is the subjects it
@@ -30,8 +35,8 @@ import type {
 	ReviewRunRef,
 } from "@/api/types.gen";
 import {
-	count,
 	countedWork,
+	countsTogether,
 	type FeedbackTextSegment,
 	group as groupSegment,
 	list,
@@ -41,8 +46,10 @@ import {
 	text,
 } from "@/components/common/feedback-text";
 import { statusValues } from "@/components/common/status-def";
+import { ATTENTION_DEFS } from "@/components/practice-vocabulary/attention-defs";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
 import type {
+	AttentionPracticeRow,
 	HeldPracticeRow,
 	ReviewedWorkGroup,
 } from "@/components/practice-vocabulary/HephFeedbackCard";
@@ -80,8 +87,13 @@ export interface ComposedOverview {
 	latestRun?: ReviewRunRef;
 	/** Resolved feedback first, then the practices that held longest; at most three. */
 	holdingUp: HeldPracticeRow[];
-	/** "Another two practices held too." when the rows could not name every held practice. */
+	/** "Another two practices held too." when the rows could not show every row they composed. */
 	holdingUpNote?: string;
+	/**
+	 * What needs the developer next — feedback the work fell back on, then new feedback, at most
+	 * two rows. Empty when the run raised nothing to act on, and then the block is not drawn.
+	 */
+	needsAttention: AttentionPracticeRow[];
 	/** The paragraph on what moved since the latest run; empty when there was no run to compare. */
 	changed: FeedbackTextSegment[];
 	/** What the paragraph only counted, by kind; empty when it named everything. */
@@ -110,7 +122,7 @@ export interface ComposedGroupOverview {
 	practiceSentences: Record<string, FeedbackTextSegment[] | undefined>;
 }
 
-type EventKind = "resolved" | "new" | "down" | "up" | "first" | "trend" | "held";
+type EventKind = "resolved" | "reset" | "new" | "down" | "up" | "first" | "trend" | "held";
 type EventLevel = "practice" | "group";
 
 interface ProfileEvent {
@@ -126,6 +138,10 @@ interface ProfileEvent {
 	 * addressed.
 	 */
 	resolvedBy?: ProfileChange["resolvedBy"];
+	/** The piece of feedback the event is about, for the kinds that have one. */
+	feedbackId?: string;
+	/** For a fall back: the clean run the count fell back from, as the wire reports it. */
+	cleanNeeded?: number;
 	evidence: ReviewedWorkRef[];
 	at?: Date;
 	holdsAs?: string;
@@ -136,6 +152,7 @@ interface ProfileEvent {
 
 const PRECEDENCE: readonly EventKind[] = [
 	"resolved",
+	"reset",
 	"new",
 	"down",
 	"up",
@@ -146,15 +163,35 @@ const PRECEDENCE: readonly EventKind[] = [
 const rank = (event: ProfileEvent) => PRECEDENCE.indexOf(event.kind);
 
 const HELD_ROW_LIMIT = 3;
-const NEW_NAMED_LIMIT = 2;
+/**
+ * Rule 3a's cap. Two rows is what keeps the block a shortlist rather than the second list of
+ * feedback the cards below already are; everything past it stays counted in the paragraph.
+ */
+const ATTENTION_ROW_LIMIT = 2;
 const REST_NAMED_LIMIT = 4;
 /** The table's reading order: what needs the reader first, then what it can be glad about. */
-const SENTENCE_ORDER: readonly EventKind[] = ["new", "resolved", "down", "up", "first", "trend"];
+const SENTENCE_ORDER: readonly EventKind[] = [
+	"reset",
+	"new",
+	"resolved",
+	"down",
+	"up",
+	"first",
+	"trend",
+];
 
 /** The kinds the paragraph counts rather than names, in the order the unfolded rest lists them. */
-const REST_KINDS = ["new", "down", "up", "first", "trend"] as const satisfies readonly EventKind[];
+const REST_KINDS = [
+	"reset",
+	"new",
+	"down",
+	"up",
+	"first",
+	"trend",
+] as const satisfies readonly EventKind[];
 type RestKind = (typeof REST_KINDS)[number];
 const REST_TITLES: Record<RestKind, string> = {
+	reset: "Back to no clean work",
 	new: "New feedback",
 	down: "Moved down",
 	up: "Moved up",
@@ -229,7 +266,15 @@ function changeEvent(change: ProfileChange): ProfileEvent | undefined {
 	} satisfies Partial<ProfileEvent>;
 	switch (change.type) {
 		case "FEEDBACK_NEW": {
-			return { ...base, kind: "new" };
+			return { ...base, kind: "new", feedbackId: change.feedbackId };
+		}
+		case "FEEDBACK_RESET": {
+			return {
+				...base,
+				kind: "reset",
+				feedbackId: change.feedbackId,
+				cleanNeeded: change.cleanNeeded,
+			};
 		}
 		case "FEEDBACK_RESOLVED": {
 			return { ...base, kind: "resolved", resolvedBy: change.resolvedBy };
@@ -255,7 +300,8 @@ function changeEvent(change: ProfileChange): ProfileEvent | undefined {
 
 const subjectKey = (event: ProfileEvent) => `${event.level}:${event.slug}`;
 const isGood = (event: ProfileEvent) => event.kind === "held" || event.kind === "resolved";
-const isSlip = (event: ProfileEvent) => event.kind === "down" || event.kind === "new";
+const isSlip = (event: ProfileEvent) =>
+	event.kind === "down" || event.kind === "new" || event.kind === "reset";
 
 /**
  * One event per subject within a block. The good block (held, resolved) and the change block
@@ -298,8 +344,6 @@ function groupByTransition(
 	}
 	return groups;
 }
-
-const plainCapitalised = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
 /**
  * The subject as itself: a practice as its grey pill, a group as its own icon and colour. A group
@@ -411,19 +455,81 @@ function composeHeldRows(deduped: ProfileEvent[]): {
 				: {
 						practiceSlug: event.slug,
 						practiceName: event.name,
-						statement: plainCapitalised(event.holdsAs),
+						statement: capitalise(event.holdsAs),
 						note: heldAcross ? [text(heldAcross)] : [],
 					};
 		}),
 	];
-	const hidden = rows.length - HELD_ROW_LIMIT;
-	let note: string | undefined;
-	if (hidden === 1) {
-		note = "Another practice held too.";
-	} else if (hidden > 1) {
-		note = plainCapitalised(`another ${count(hidden, "practice", "practices")} held too.`);
-	}
+	// The rows are one list under one limit, but the note counts what it hid by kind: resolved
+	// feedback and a practice that held are different news, and a note naming the wrong one claims
+	// something that did not happen.
+	const resolvedShown = Math.min(resolved.length, HELD_ROW_LIMIT);
+	const note = heldRowsNote(
+		resolved.length - resolvedShown,
+		Math.max(held.length - (HELD_ROW_LIMIT - resolvedShown), 0),
+	);
 	return { rows: rows.slice(0, HELD_ROW_LIMIT), note };
+}
+
+/**
+ * The sentence under the rows: what the limit left out, counted by kind and said in one sentence.
+ * Feedback is uncountable, so it is counted in pieces. The first count of one is named rather than
+ * numbered — "Another practice held too.", never "another one practice".
+ */
+function heldRowsNote(resolvedHidden: number, heldHidden: number): string | undefined {
+	const [feedbackClause, practiceClause] = countsTogether([
+		{ n: resolvedHidden, one: "piece of feedback", many: "pieces of feedback" },
+		{ n: heldHidden, one: "practice", many: "practices" },
+	]);
+	const clauses: string[] = [];
+	if (resolvedHidden === 1) {
+		clauses.push("piece of feedback resolved");
+	} else if (resolvedHidden > 1 && feedbackClause !== undefined) {
+		clauses.push(`${feedbackClause} resolved`);
+	}
+	if (heldHidden === 1 && clauses.length === 0) {
+		clauses.push("practice held");
+	} else if (heldHidden > 0 && practiceClause !== undefined) {
+		clauses.push(`${practiceClause} held`);
+	}
+	return clauses.length === 0 ? undefined : capitalise(`another ${clauses.join(" and ")} too.`);
+}
+
+/**
+ * Rule 3a's block: the negatives the reader can act on today, each with the card that says what to
+ * do one link away. Feedback the work fell back on first, then new feedback, each newest first,
+ * and at most {@link ATTENTION_ROW_LIMIT} rows. `named` is what the block took off the paragraph's
+ * hands, so the paragraph counts the rest instead of saying it twice.
+ */
+function composeAttentionRows(deduped: ProfileEvent[]): {
+	rows: AttentionPracticeRow[];
+	named: ProfileEvent[];
+} {
+	// A row exists to open a card, so an event the wire sent without one has nothing to open and
+	// stays in the paragraph.
+	const withCard = (kind: EventKind) =>
+		deduped.filter((event) => event.kind === kind && hasText(event.feedbackId)).sort(byAtDesc);
+	const named = [...withCard("reset"), ...withCard("new")].slice(0, ATTENTION_ROW_LIMIT);
+	return {
+		named,
+		rows: named.map((event) => ({
+			feedbackId: event.feedbackId ?? "",
+			practiceSlug: event.slug,
+			practiceName: event.name,
+			def: event.kind === "reset" ? ATTENTION_DEFS.reset : ATTENTION_DEFS.new,
+			sentence: attentionSentence(event),
+		})),
+	};
+}
+
+/**
+ * What the row says beside the pill, without the full stop the paragraph's sentences carry: the
+ * row ends in a link, and a stop between the two would read as the link's own sentence starting.
+ */
+function attentionSentence(event: ProfileEvent): FeedbackTextSegment[] {
+	return event.kind === "reset"
+		? sentence(capitalise(backToClean(event)), seenOn(event, " after "))
+		: sentence("There is new feedback", seenOn(event, ", seen on "));
 }
 
 /**
@@ -431,14 +537,14 @@ function composeHeldRows(deduped: ProfileEvent[]): {
  * one group".
  */
 function counted(practices: number, groups: number, adjective = ""): string {
-	const digits = Math.max(practices, groups) >= 10;
-	const parts = [];
-	if (practices > 0) {
-		parts.push(count(practices, "practice", "practices", digits));
-	}
-	if (groups > 0) {
-		parts.push(count(groups, "group", "groups", digits));
-	}
+	const [practiceClause, groupClause] = countsTogether([
+		{ n: practices, one: "practice", many: "practices" },
+		{ n: groups, one: "group", many: "groups" },
+	]);
+	const parts = [
+		...(practices > 0 && practiceClause !== undefined ? [practiceClause] : []),
+		...(groups > 0 && groupClause !== undefined ? [groupClause] : []),
+	];
 	const [first, ...rest] = parts;
 	if (first === undefined) {
 		return "";
@@ -454,6 +560,17 @@ const countByLevel = (items: ProfileEvent[]) => ({
 /** The work the event was seen on, linked and led in by `joiner`; nothing when it names none. */
 const seenOn = (event: ProfileEvent, joiner: string): FeedbackTextSegment[] =>
 	event.evidence.length > 0 ? [text(joiner), ...refs(event.evidence)] : [];
+
+/**
+ * "Back to 0 of 3 clean": where the clean run that resolves a piece of feedback now stands. The
+ * meter's own reading rather than prose, so rule 2 does not apply — the card below shows the same
+ * two numbers as a meter, and spelling them out here would say something the meter does not.
+ * A change the wire sent without the run's length says only that the run is empty.
+ */
+const backToClean = (event: ProfileEvent): string =>
+	event.cleanNeeded === undefined
+		? "back to no clean work"
+		: `back to 0 of ${event.cleanNeeded} clean`;
 
 /**
  * One sentence about the subjects that made one move, in that kind's own words: a practice is not
@@ -473,6 +590,14 @@ function movedSentence(
 				"There is new feedback on ",
 				subjects(events),
 				seenOn(lead, ", seen on "),
+				".",
+			);
+		}
+		case "reset": {
+			return sentence(
+				subjects(events),
+				` ${many ? "are" : "is"} ${backToClean(lead)}`,
+				seenOn(lead, " after "),
 				".",
 			);
 		}
@@ -505,15 +630,16 @@ function movedSentence(
 }
 
 /**
- * The paragraph on what moved: at most two pieces of new feedback and one slip named, then one
- * sentence counting everything else, so the bad news is never a run of counts. `hadRun` decides
- * whether nothing moving is a sentence or silence.
+ * The paragraph on what moved: one slip named, then one sentence counting everything else, so the
+ * bad news is never a run of counts. What the attention block took — feedback the work fell back
+ * on, new feedback — is `inRows` and is not said twice; a standing that slipped stays here by rule
+ * 3a. `hadRun` decides whether nothing moving is a sentence or silence.
  */
 function composeChange(
 	deduped: ProfileEvent[],
 	hadRun: boolean,
+	inRows: ProfileEvent[],
 ): { changed: FeedbackTextSegment[]; named: ProfileEvent[]; restCount: number } {
-	const fresh = deduped.filter((event) => event.kind === "new");
 	const down = deduped.filter((event) => event.kind === "down");
 	const rest = deduped.filter((event) => (REST_KINDS as readonly EventKind[]).includes(event.kind));
 	if (rest.length === 0) {
@@ -523,13 +649,8 @@ function composeChange(
 			restCount: 0,
 		};
 	}
-	const named = [...fresh.slice(0, NEW_NAMED_LIMIT), ...down.slice(0, 1)];
+	const named = [...inRows, ...down.slice(0, 1)];
 	const sentences: FeedbackTextSegment[][] = [];
-	// The limit counts the subjects named, not the sentences: two practices that got feedback on
-	// the same work are named together rather than in two sentences that differ only in the pill.
-	for (const together of groupByTransition(fresh.slice(0, NEW_NAMED_LIMIT), movedKey).values()) {
-		sentences.push(movedSentence("new", together));
-	}
 	const [slip] = down;
 	if (slip) {
 		sentences.push(
@@ -552,12 +673,32 @@ function composeChange(
 
 /**
  * The sentence that closes a kind's paragraph when it named fewer than it counted, in that kind's
- * own words: a practice is not "moved" the first time it is seen.
+ * own words and agreeing with what it counted: a practice is not "moved" the first time it is seen,
+ * new feedback is news about the subject rather than a move it made, and a trend turns. Only a
+ * standing moves, so only a standing's paragraph says so.
  */
-const restOverflow = (kind: RestKind, hiddenSubjects: string, hidden: number): string =>
-	kind === "first"
-		? `${hiddenSubjects} ${hidden === 1 ? "was" : "were"} seen for the first time; the practices table lists them.`
-		: `${hiddenSubjects} moved the same way; the practices table lists them.`;
+function restOverflow(kind: RestKind, hiddenSubjects: string, hidden: number): string {
+	const many = hidden > 1;
+	const lists = "the practices table lists them.";
+	switch (kind) {
+		case "new": {
+			return `${hiddenSubjects} ${many ? "have" : "has"} new feedback; ${lists}`;
+		}
+		case "reset": {
+			return `${hiddenSubjects} ${many ? "are" : "is"} back to no clean work; ${lists}`;
+		}
+		case "first": {
+			return `${hiddenSubjects} ${many ? "were" : "was"} seen for the first time; ${lists}`;
+		}
+		case "trend": {
+			return `${hiddenSubjects} saw ${many ? "their trends" : "its trend"} turn; ${lists}`;
+		}
+		case "down":
+		case "up": {
+			return `${hiddenSubjects} moved the same way; ${lists}`;
+		}
+	}
+}
 
 /**
  * What the paragraph only counted, unfolded by kind: at most four subjects named per kind, then a
@@ -642,6 +783,9 @@ function predicate(event: ProfileEvent, plural = false): FeedbackTextSegment[] {
 		}
 		case "new": {
 			return [text(`${plural ? "have" : "has"} new feedback`)];
+		}
+		case "reset": {
+			return [text(`${plural ? "are" : "is"} ${backToClean(event)}`)];
 		}
 	}
 }
@@ -767,6 +911,9 @@ function practiceSentence(event: ProfileEvent): FeedbackTextSegment[] {
 		case "new": {
 			return sentence("There is new feedback", seenOn(event, ", seen on "), ".");
 		}
+		case "reset": {
+			return sentence(capitalise(backToClean(event)), seenOn(event, " after "), ".");
+		}
 		case "resolved": {
 			return sentence("Feedback ", predicate(event), ".");
 		}
@@ -793,7 +940,7 @@ export function composeNextStep(
 ): FeedbackTextSegment[] | undefined {
 	const card = newestFirst(cards).find(
 		(candidate) =>
-			candidate.groupSlug === groupSlug &&
+			candidate.group?.slug === groupSlug &&
 			isOpenFeedback(candidate.state) &&
 			hasText(candidate.nextStep),
 	);
@@ -814,13 +961,19 @@ export function composeNextStep(
 export function composeOverview(overview: PracticeProfileOverview): ComposedOverview {
 	const deduped = eventsOf(overview);
 	const held = composeHeldRows(deduped);
-	const { changed, named, restCount } = composeChange(deduped, overview.latestRun !== undefined);
+	const attention = composeAttentionRows(deduped);
+	const { changed, named, restCount } = composeChange(
+		deduped,
+		overview.latestRun !== undefined,
+		attention.named,
+	);
 	const reviewedWork = composeReviewedWork(overview.reviewedWork);
 	const groupSlugs = groupSlugsOf(overview);
 	return {
 		latestRun: overview.latestRun,
 		holdingUp: held.rows,
 		holdingUpNote: held.note,
+		needsAttention: attention.rows,
 		changed,
 		rest: composeRest(deduped, named),
 		restCount,

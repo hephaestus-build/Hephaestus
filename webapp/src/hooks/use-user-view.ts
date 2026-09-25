@@ -26,10 +26,13 @@ import type {
 } from "@/components/admin/users/UserViewPractices";
 import type { UserViewUsersState } from "@/components/admin/users/UserViewUsersTable";
 import { type PanelState, panelState } from "@/components/common/panel-state";
-import type { ReviewRunFeedState } from "@/components/profile/review-runs";
+import {
+	nextReviewRunPage,
+	type ReviewRunFeedState,
+	reviewRunFeedState,
+} from "@/components/profile/review-runs";
 import { parseThreadMessages } from "@/lib/chat-validation";
 import { stepUpChallengeOf } from "@/lib/problem-detail";
-import { loadedPages } from "@/runtime/tanstack-query/spring-page";
 
 export const USER_VIEW_PAGE_SIZE = 25;
 export const USER_VIEW_RUNS_PAGE_SIZE = 10;
@@ -135,7 +138,7 @@ export function useUserViewGroup(
 		...PRIVATE_READ,
 		enabled: selection !== undefined,
 		initialPageParam: 0,
-		getNextPageParam: (last) => (last.hasNext === true ? (last.page ?? 0) + 1 : undefined),
+		getNextPageParam: nextReviewRunPage,
 	});
 
 	const refused = [trend.error, runs.error].find((error) => stepUpChallengeOf(error) !== undefined);
@@ -156,28 +159,7 @@ export function useUserViewGroup(
 	if (trend.isPending) {
 		return { status: "loading" };
 	}
-	let feed: ReviewRunFeedState;
-	if (runs.isError) {
-		feed = {
-			status: "error",
-			error: runs.error,
-			onRetry: () => {
-				void runs.refetch();
-			},
-		};
-	} else if (runs.isPending) {
-		feed = { status: "loading" };
-	} else {
-		feed = {
-			status: "ready",
-			runs: loadedPages(runs.data).flatMap((page) => page.content),
-			hasMore: runs.hasNextPage,
-			isLoadingMore: runs.isFetchingNextPage,
-			onLoadMore: () => {
-				void runs.fetchNextPage();
-			},
-		};
-	}
+	const feed: ReviewRunFeedState = reviewRunFeedState(runs);
 	return {
 		status: "ready",
 		trend: trend.data,

@@ -315,15 +315,17 @@ The practice profile, the levels over it and the feedback cards share one 60-30-
 surfaces**: `bg-background`, `bg-card`, `bg-sidebar` — the page ground, the cards, a card's footer or
 next-step band, a table's box, the comment band; nothing else paints a ground. **30, structure**:
 `border`, `text-muted-foreground`, the grey practice pills, the tabs' active bar, the timeline rail and
-its dots. **10, the accent** (`mentor`), and only for: the one `PrimaryButton` per surface at rest
-("See all practices", "Send" in an open comment band), a new card's "New" badge and its wash, the open
-row's leading bar in `PracticeTable`, the sorted arrow of `SortButton`, and a link on hover or focus —
-`InlineLink` and a row's "Open …" are plain text at rest, nothing dashed and nothing visible, then
-mentor blue with a solid underline. Status colours (`success`, `warning`, `destructive`) are semantic,
-not accent: only in the registry badges, the outcome and standing icons, the ring's segments, the
-pressed rating tints and the card's meter and tick — never coloured prose. A status colour is a card
-wash in exactly two states, a new card's mentor-blue wash and a resolved card's success-green wash,
-and nowhere else. The user profile (`profile/ProfilePage`) predates this palette and is not covered.
+its dots. **10, the accent** (`mentor`), and only for: the one `<Button variant="mentor">` per surface
+at rest ("Send" in an open comment band is the only one left on these surfaces), a new card's "New"
+badge and its wash, the open row's leading bar in `PracticeTable`, the sorted arrow of `SortButton`,
+and a link on hover or focus — `InlineLink`, a row's "Open …" and the profile header's "See all
+practice groups", a `variant="link"`, are plain text at rest, nothing dashed and nothing visible,
+then mentor blue with a solid underline. Status colours (`success`, `warning`,
+`destructive`) are semantic, not accent: only in the registry badges, the outcome and standing icons,
+the ring's segments, the pressed rating tints and the card's meter and tick — never coloured prose.
+A card wash exists in exactly two states: the new card's mentor-blue wash, which is the accent, and
+the resolved card's success-green wash, the one status colour that paints a surface; nowhere else.
+The user profile (`profile/ProfilePage`) predates this palette and is not covered.
 
 ## Testing
 

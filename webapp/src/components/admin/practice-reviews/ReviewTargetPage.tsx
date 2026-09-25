@@ -48,7 +48,7 @@ export function ReviewTargetPage({
 	const scope = { artifactKind, artifactId };
 	const feedbackItems = itemsOf(feedback);
 	const observationItems = itemsOf(observations);
-	const artifact = feedbackItems[0]?.artifact ?? observationItems[0]?.artifact;
+	const reviewedWork = feedbackItems[0]?.reviewedWork ?? observationItems[0]?.reviewedWork;
 	const stillLoading = feedback.status === "loading" || observations.status === "loading";
 	// Both sections have to have answered before "nothing here" is an honest thing to say: one of them
 	// failing is not evidence that the other found nothing.
@@ -78,10 +78,10 @@ export function ReviewTargetPage({
 			) : (
 				<>
 					<ReviewDetailHeader
-						title={artifact?.title ?? artifactKindLabel(artifactKind)}
+						title={reviewedWork?.title ?? artifactKindLabel(artifactKind)}
 						provenance={
-							artifact ? (
-								<ReviewArtifactLink artifact={artifact} className="text-sm" />
+							reviewedWork ? (
+								<ReviewArtifactLink reviewedWork={reviewedWork} className="text-sm" />
 							) : (
 								stillLoading && <Skeleton className="h-5 w-72 max-w-full" />
 							)

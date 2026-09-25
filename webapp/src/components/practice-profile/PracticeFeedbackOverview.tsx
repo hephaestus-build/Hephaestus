@@ -4,7 +4,6 @@ import { useState } from "react";
 import type { PracticeGroup } from "@/api/types.gen";
 import { count } from "@/components/common/feedback-text";
 import { FeedbackText } from "@/components/common/FeedbackText";
-import { Section } from "@/components/layout/Section";
 import {
 	type FeedbackBlock,
 	HephFeedbackCard,
@@ -21,23 +20,29 @@ export interface PracticeFeedbackOverviewProps {
 	/** The workspace's groups: where a group the paragraph names reads its icon and colour. */
 	groups?: PracticeGroup[];
 	onOpenGroup?: (groupSlug: string) => void;
+	/**
+	 * Takes the reader from an attention row to the feedback card it is about. Without it the rows
+	 * carry no link.
+	 */
+	onReadFeedback?: (feedbackId: string) => void;
 	isLoading?: boolean;
 	className?: string;
 }
 
 /**
- * The page's overview: the section heading, then Heph's card with the "What changed" block and
- * its unfolded rest.
+ * The page's overview: the section heading, then Heph's card with what needs the developer's
+ * attention, the "What changed" block and its unfolded rest.
  */
 export function PracticeFeedbackOverview({
 	overview,
 	onOpenPractice,
 	groups,
 	onOpenGroup,
+	onReadFeedback,
 	isLoading = false,
 	className,
 }: PracticeFeedbackOverviewProps) {
-	const { holdingUp, holdingUpNote, reviewedWork, changed } = overview;
+	const { holdingUp, holdingUpNote, needsAttention, reviewedWork, changed } = overview;
 	const changedBlock: FeedbackBlock = {
 		label: "What changed",
 		content: (
@@ -49,22 +54,20 @@ export function PracticeFeedbackOverview({
 			/>
 		),
 	};
+	// Heph's card needs no heading over it: the mark says who speaks, and the page's intro under the
+	// title already says what the card reports and how a piece of feedback ends.
 	return (
-		<Section
-			size="lg"
-			title="Practice development feedback"
-			description="What holds and what moved across your work since the latest run. A piece of feedback resolves once your work comes back clean."
+		<HephFeedbackCard
+			holdingUp={holdingUp}
+			holdingUpNote={holdingUpNote}
+			needsAttention={needsAttention}
+			onReadFeedback={onReadFeedback}
+			reviewedWork={reviewedWork}
+			onOpenPractice={onOpenPractice}
+			blocks={changed.length > 0 ? [changedBlock] : []}
+			isLoading={isLoading}
 			className={className}
-		>
-			<HephFeedbackCard
-				holdingUp={holdingUp}
-				holdingUpNote={holdingUpNote}
-				reviewedWork={reviewedWork}
-				onOpenPractice={onOpenPractice}
-				blocks={changed.length > 0 ? [changedBlock] : []}
-				isLoading={isLoading}
-			/>
-		</Section>
+		/>
 	);
 }
 

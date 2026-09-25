@@ -63,12 +63,11 @@ class ReviewFeedbackQueryService {
                         .toList());
         return rows.map(row -> {
             String artifactKind = row.getArtifactKind();
-            Long artifactId = row.getArtifactId();
-            ReviewedWorkRefDTO artifact = artifactKind == null || artifactId == null
-                    ? null
-                    : ReviewedWorkLabels.ref(
-                            ArtifactKind.of(artifactKind), artifactId, targets.get(row.getAgentJobId()));
-            return ReviewFeedbackDTO.from(row, artifact, subjects);
+            ReviewedWorkRefDTO reviewedWork = ReviewedWorkLabels.refOrNull(
+                    artifactKind == null ? null : ArtifactKind.of(artifactKind),
+                    row.getArtifactId(),
+                    targets.get(row.getAgentJobId()));
+            return ReviewFeedbackDTO.from(row, reviewedWork, subjects);
         });
     }
 
@@ -87,16 +86,12 @@ class ReviewFeedbackQueryService {
                         .toList();
         Map<Long, ReviewSubjectDTO> subjects =
                 subjectResolver.resolve(List.of(feedback.getRecipientUserId(), feedback.getAboutUserId()));
-        ArtifactKind artifactKind = feedback.getArtifactKind();
-        Long artifactId = feedback.getArtifactId();
-        ReviewedWorkRefDTO artifact = artifactKind == null || artifactId == null
-                ? null
-                : ReviewedWorkLabels.ref(
-                        artifactKind,
-                        artifactId,
-                        reviewRunTargetLookup
-                                .findByJobIds(workspaceId, List.of(feedback.getAgentJobId()))
-                                .get(feedback.getAgentJobId()));
+        ReviewedWorkRefDTO reviewedWork = ReviewedWorkLabels.refOrNull(
+                feedback.getArtifactKind(),
+                feedback.getArtifactId(),
+                reviewRunTargetLookup
+                        .findByJobIds(workspaceId, List.of(feedback.getAgentJobId()))
+                        .get(feedback.getAgentJobId()));
         var evaluations =
                 policyEvaluations.findByWorkspaceIdAndFeedbackIdOrderByEvaluatedAtAsc(workspaceId, feedbackId);
         if (evaluations.isEmpty()) {
@@ -113,7 +108,7 @@ class ReviewFeedbackQueryService {
                 .orElse(null);
         return ReviewFeedbackDetailDTO.from(
                 feedback,
-                artifact,
+                reviewedWork,
                 subjects.get(feedback.getRecipientUserId()),
                 subjects.get(feedback.getAboutUserId()),
                 observations,

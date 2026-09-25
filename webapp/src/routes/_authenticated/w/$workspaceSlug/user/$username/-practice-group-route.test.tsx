@@ -99,6 +99,7 @@ beforeEach(() => {
 						credibilityThreshold: 0.95,
 						currentOpportunities: 0,
 						previousOpportunities: 0,
+						opportunities: 0,
 						opportunitiesUntilComparable: 10,
 						ropeHalfWidth: 0.1,
 					},
@@ -227,7 +228,6 @@ it("refreshes every cached filter of the group after responding to feedback", as
 						observations: [
 							{
 								id: "00000000-0000-0000-0000-000000000001",
-								feedbackId: "00000000-0000-0000-0000-000000000002",
 								practiceSlug: "small-changes",
 								practiceName: "Keep changes focused",
 								summary: "Two concerns in one change",
@@ -239,7 +239,10 @@ it("refreshes every cached filter of the group after responding to feedback", as
 								observedAt: "2026-09-01T10:00:00Z",
 								artifactId: 1,
 								artifactKind: "scm.pull_request",
-								feedbackResolution: resolution,
+								feedbackResponse: {
+									feedbackId: "00000000-0000-0000-0000-000000000002",
+									resolution,
+								},
 							},
 						],
 					},

@@ -6,22 +6,17 @@ import { PRACTICE_GROUP_STANDING_DEFS } from "./practice-group-standing-defs";
 export type SortDirection = "asc" | "desc";
 
 /**
- * The practices tables sort by standing alone; the direction is the one thing a header press
- * changes.
+ * What needs attention first: the reading order of the registry. The practices tables sort by
+ * standing alone, so the direction is the whole of their sort.
  */
-export interface PracticeGroupSort {
-	direction: SortDirection;
-}
-
-/** What needs attention first: the reading order of the registry. */
-export const DEFAULT_PRACTICE_GROUP_SORT: PracticeGroupSort = { direction: "asc" };
+export const DEFAULT_PRACTICE_GROUP_SORT: SortDirection = "asc";
 
 /**
  * The sort a header press produces: the other way round, never "unsorted" — the list always has an
  * order.
  */
-export function nextPracticeGroupSort(current: PracticeGroupSort): PracticeGroupSort {
-	return { direction: current.direction === "asc" ? "desc" : "asc" };
+export function nextPracticeGroupSort(current: SortDirection): SortDirection {
+	return current === "asc" ? "desc" : "asc";
 }
 
 /** Registry declaration order: what needs attention first, what no review has reached last. */
@@ -34,11 +29,11 @@ const STANDING_ORDER = statusValues(PRACTICE_GROUP_STANDING_DEFS);
  */
 export function sortByStanding<T>(
 	items: readonly T[],
-	sort: PracticeGroupSort,
+	sort: SortDirection,
 	standingOf: (item: T) => PracticeStanding["standing"],
 	tieBreak: (left: T, right: T) => number,
 ): T[] {
-	const sign = sort.direction === "asc" ? 1 : -1;
+	const sign = sort === "asc" ? 1 : -1;
 	const rank = (item: T) => STANDING_ORDER.indexOf(standingOf(item));
 	return [...items].sort(
 		(left, right) => sign * (rank(left) - rank(right)) || tieBreak(left, right),
@@ -52,7 +47,7 @@ export function sortByStanding<T>(
 export function sortPracticeGroups(
 	groups: PracticeGroup[],
 	standings: Record<string, PracticeGroupStanding | undefined>,
-	sort: PracticeGroupSort,
+	sort: SortDirection,
 ): PracticeGroup[] {
 	return sortByStanding(
 		groups,

@@ -34,6 +34,26 @@ public class ObservationVisibilityPolicy {
         return permitted(workspaceId, observations, purpose, true);
     }
 
+    /**
+     * The ids of the observations that may still be shown to the developer they are about: evidence
+     * measured by review rules the practice has since changed stays, since a card closed by that change is
+     * something the developer may see, and only a claim whose rules cannot be verified at all is dropped.
+     * The rest are authorized in one batch, as {@link #permitsAll} does.
+     */
+    public Set<UUID> permitsShown(long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose) {
+        List<Observation> verifiable = new ArrayList<>(observations.size());
+        for (Observation observation : observations) {
+            if (ReviewClaimCurrentness.of(observation.getPracticeRevision(), observation.getPractice())
+                    != ReviewClaimCurrentness.UNVERIFIABLE) {
+                verifiable.add(observation);
+            }
+        }
+        if (verifiable.isEmpty()) {
+            return Set.of();
+        }
+        return evidenceAuthorization.permitsAll(workspaceId, verifiable, purpose);
+    }
+
     /** Read-only history keeps superseded rows, but still enforces evidence authorization. */
     public Set<UUID> permitsHistory(long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose) {
         return evidenceAuthorization.permitsAll(workspaceId, observations, purpose);

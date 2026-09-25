@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.profile;
 
+import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.PracticeProfileOverviewDTO;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -32,7 +33,8 @@ public class PracticeProfileOverviewController {
             description = "Returns the practices holding as a strength, every change to a standing, trend, group or"
                     + " piece of feedback inside the window, and the work reviewed inside it, as structured"
                     + " events. The window opens at the run before the latest one and closes now; with no such"
-                    + " run it spans the standing's look-back of 90 days.")
+                    + " run it spans the standing's look-back of " + PracticeStandingService.LOOKBACK_DAYS
+                    + " days.")
     @ApiResponse(responseCode = "200", description = "Practice profile overview returned")
     public ResponseEntity<PracticeProfileOverviewDTO> getOverview(WorkspaceContext workspaceContext) {
         return ResponseEntity.ok(overviewService.getOverview(workspaceContext));

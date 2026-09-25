@@ -16,13 +16,17 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackUsefulness;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationDetailDTO;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -74,6 +78,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
     @Autowired
     private FeedbackObservationRepository feedbackObservationRepository;
 
+    @Autowired
+    private ReactionRepository reactionRepository;
+
     private Workspace workspace;
     private Practice practiceA;
     private Practice practiceB;
@@ -115,7 +122,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         return practiceRepository.saveAndFlush(practice);
     }
 
-    private UUID insertFinding(
+    private UUID insertObservation(
             Practice practice,
             User user,
             String title,
@@ -157,8 +164,36 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         return "GOOD";
     }
 
+    /**
+     * The next step the run composed about this observation. It lives in the run's own output rather than in the
+     * feedback ledger, because a withheld unit records the whole rendered note and not the sentence about one
+     * observation.
+     */
+    private void composeNextStep(UUID findingId, String nextStep) {
+        agentJob.setOutput(OBJECT_MAPPER.readTree("""
+                {"feedback":{"lead":"This change lands the retry.",
+                  "observations":[{"id":"%s","practiceSlug":"pr-description-quality","anchorable":false,
+                   "citations":[]}],
+                  "units":[{"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"pr-description-quality",
+                   "basedOn":["%s"],"title":"Detailed observation","nextStep":"%s",
+                   "placement":{"kind":"ARTIFACT"}}]}}
+                """.formatted(findingId, findingId, nextStep)));
+        agentJob = agentJobRepository.saveAndFlush(agentJob);
+    }
+
     /** Binds delivered guidance because observations do not own advice. */
     private Feedback deliverFeedbackFor(UUID findingId, String body, Instant createdAt) {
+        return deliverFeedbackFor(findingId, body, createdAt, 0);
+    }
+
+    /** {@link #deliverFeedbackFor} at a given position, so one run may carry two pieces of feedback. */
+    private Feedback deliverFeedbackFor(UUID findingId, String body, Instant createdAt, int position) {
+        return deliverFeedbackFor(findingId, body, createdAt, position, FeedbackChannel.IN_CONTEXT);
+    }
+
+    /** {@link #deliverFeedbackFor} on a named lane, so one observation may be carried by two of them. */
+    private Feedback deliverFeedbackFor(
+            UUID findingId, String body, Instant createdAt, int position, FeedbackChannel channel) {
         Feedback feedback = feedbackRepository.save(Feedback.builder()
                 .agentJobId(agentJob.getId())
                 .workspaceId(workspace.getId())
@@ -166,8 +201,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 .artifactId(42L)
                 .recipientUserId(developer.getId())
                 .aboutUserId(developer.getId())
-                .channel(FeedbackChannel.IN_CONTEXT)
-                .position(0)
+                .channel(channel)
+                .position(position)
                 .deliveryState(FeedbackDeliveryState.DELIVERED)
                 .body(body)
                 .source(FeedbackSource.AGENT)
@@ -182,7 +217,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
     void shouldGiveAnInstanceAdminTheSameObservationProjectionAsTheDeveloper() {
         Long accountId = Objects.requireNonNull(
                 persistInstanceAdmin("Observation view operator").getId());
-        UUID own = insertFinding(
+        UUID own = insertObservation(
                 practiceA,
                 developer,
                 "Missing context",
@@ -223,7 +258,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
     void shouldNotDiscloseAnotherDevelopersObservationThroughAUserView() {
         Long accountId = Objects.requireNonNull(
                 persistInstanceAdmin("Observation view operator").getId());
-        UUID foreign = insertFinding(
+        UUID foreign = insertObservation(
                 practiceA,
                 persistUser("someone-else"),
                 "Other person's feedback",
@@ -271,11 +306,12 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldReturnOnlyOwnFindings() {
             Instant now = Instant.now();
-            insertFinding(practiceA, developer, "My finding", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "My finding", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
 
             // Other user's finding should NOT appear
             User otherUser = persistUser("other-user");
-            insertFinding(practiceA, otherUser, "Other finding", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
+            insertObservation(
+                    practiceA, otherUser, "Other finding", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
 
             webTestClient
                     .get()
@@ -297,8 +333,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldFilterByPracticeSlug() {
             Instant now = Instant.now();
-            insertFinding(practiceA, developer, "Practice A", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
-            insertFinding(practiceB, developer, "Practice B", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
+            insertObservation(practiceA, developer, "Practice A", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceB, developer, "Practice B", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
 
             webTestClient
                     .get()
@@ -329,9 +365,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
             practiceRepository.save(practiceA);
 
             Instant now = Instant.now();
-            insertFinding(practiceA, developer, "In group", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "In group", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
             // practiceB has NO group — the LEFT JOIN must keep it visible when no filter is set.
-            insertFinding(practiceB, developer, "No group", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
+            insertObservation(practiceB, developer, "No group", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
 
             webTestClient
                     .get()
@@ -363,8 +399,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("filters by artifact kind so a single integration's events can be shown")
         void shouldFilterByArtifactKinds() {
             Instant now = Instant.now();
-            insertFinding(practiceA, developer, "From a PR", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
-            insertFinding(
+            insertObservation(practiceA, developer, "From a PR", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(
                     practiceA, developer, "From Slack", "ABSENT", "MINOR", 0.8f, "chat.conversation_thread", 2L, now);
 
             webTestClient
@@ -386,9 +422,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("filters gaps by severity while keeping strengths visible")
         void shouldFilterBySeverities() {
             Instant now = Instant.now();
-            insertFinding(practiceA, developer, "Major gap", "ABSENT", "MAJOR", 0.9f, "scm.pull_request", 1L, now);
-            insertFinding(practiceA, developer, "Minor nit", "ABSENT", "MINOR", 0.9f, "scm.pull_request", 2L, now);
-            insertFinding(
+            insertObservation(practiceA, developer, "Major gap", "ABSENT", "MAJOR", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "Minor nit", "ABSENT", "MINOR", 0.9f, "scm.pull_request", 2L, now);
+            insertObservation(
                     practiceA,
                     developer,
                     "Recent strength",
@@ -420,8 +456,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("sorts most-severe-first when sort=SEVERITY, ties broken newest-first")
         void shouldSortBySeverity() {
             Instant now = Instant.now();
-            insertFinding(practiceA, developer, "Newest minor", "ABSENT", "MINOR", 0.9f, "scm.pull_request", 1L, now);
-            insertFinding(
+            insertObservation(
+                    practiceA, developer, "Newest minor", "ABSENT", "MINOR", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(
                     practiceA,
                     developer,
                     "Older critical",
@@ -431,7 +468,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "scm.pull_request",
                     2L,
                     now.minus(3, ChronoUnit.DAYS));
-            insertFinding(
+            insertObservation(
                     practiceA,
                     developer,
                     "Strength without severity",
@@ -463,10 +500,10 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("reverses the severity order with direction=ASC (strengths lead)")
         void shouldSortBySeverityAscending() {
             Instant now = Instant.now();
-            insertFinding(
+            insertObservation(
                     practiceA, developer, "Critical gap", "ABSENT", "CRITICAL", 0.9f, "scm.pull_request", 1L, now);
-            insertFinding(practiceA, developer, "Minor nit", "ABSENT", "MINOR", 0.9f, "scm.pull_request", 2L, now);
-            insertFinding(practiceA, developer, "Strength", "PRESENT", null, 0.9f, "scm.pull_request", 3L, now);
+            insertObservation(practiceA, developer, "Minor nit", "ABSENT", "MINOR", 0.9f, "scm.pull_request", 2L, now);
+            insertObservation(practiceA, developer, "Strength", "PRESENT", null, 0.9f, "scm.pull_request", 3L, now);
 
             webTestClient
                     .get()
@@ -489,8 +526,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("drops NOT_APPLICABLE rows when displayableOnly is set")
         void shouldDropNotApplicableWhenDisplayableOnly() {
             Instant now = Instant.now();
-            insertFinding(practiceA, developer, "Observed", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
-            insertFinding(
+            insertObservation(practiceA, developer, "Observed", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(
                     practiceA, developer, "Did not apply", "NOT_APPLICABLE", null, 0.9f, "scm.pull_request", 2L, now);
 
             webTestClient
@@ -511,8 +548,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldFilterByObservation() {
             Instant now = Instant.now();
-            insertFinding(practiceA, developer, "Good", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
-            insertFinding(practiceA, developer, "Bad", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
+            insertObservation(practiceA, developer, "Good", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "Bad", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
 
             webTestClient
                     .get()
@@ -532,9 +569,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldFilterByPracticeSlugAndObservation() {
             Instant now = Instant.now();
-            insertFinding(practiceA, developer, "A pos", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
-            insertFinding(practiceA, developer, "A neg", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
-            insertFinding(practiceB, developer, "B neg", "ABSENT", "MINOR", 0.7f, "scm.pull_request", 3L, now);
+            insertObservation(practiceA, developer, "A pos", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "A neg", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
+            insertObservation(practiceB, developer, "B neg", "ABSENT", "MINOR", 0.7f, "scm.pull_request", 3L, now);
 
             webTestClient
                     .get()
@@ -563,7 +600,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldPaginate() {
             Instant base = Instant.now();
             for (int i = 0; i < 5; i++) {
-                insertFinding(
+                insertObservation(
                         practiceA,
                         developer,
                         "Finding " + i,
@@ -624,7 +661,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldReturnCorrectShapeWithoutInternalFields() {
             Instant now = Instant.now();
-            insertFinding(practiceA, developer, "Shape check", "ABSENT", "MAJOR", 0.85f, "scm.pull_request", 42L, now);
+            insertObservation(
+                    practiceA, developer, "Shape check", "ABSENT", "MAJOR", 0.85f, "scm.pull_request", 42L, now);
 
             webTestClient
                     .get()
@@ -682,7 +720,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("orders findings by detected_at descending")
         void shouldOrderByDetectedAtDesc() {
             Instant now = Instant.now();
-            insertFinding(
+            insertObservation(
                     practiceA,
                     developer,
                     "Oldest",
@@ -692,8 +730,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "scm.pull_request",
                     1L,
                     now.minus(2, ChronoUnit.HOURS));
-            insertFinding(practiceA, developer, "Newest", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
-            insertFinding(
+            insertObservation(practiceA, developer, "Newest", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
+            insertObservation(
                     practiceA,
                     developer,
                     "Middle",
@@ -724,7 +762,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldNotReturnFindingsFromDifferentWorkspace() {
             Instant now = Instant.now();
-            insertFinding(practiceA, developer, "My WS finding", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(
+                    practiceA, developer, "My WS finding", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
 
             // Create a second workspace with its own practice and finding
             User otherOwner = persistUser("other-ws-owner");
@@ -813,8 +852,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldReturnCorrectCountsAndFields() {
             Instant now = Instant.now();
             Instant oldest = now.minus(2, ChronoUnit.HOURS);
-            insertFinding(practiceA, developer, "A pos 1", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
-            insertFinding(
+            insertObservation(practiceA, developer, "A pos 1", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(
                     practiceA,
                     developer,
                     "A pos 2",
@@ -824,8 +863,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "scm.pull_request",
                     2L,
                     now.minus(1, ChronoUnit.HOURS));
-            insertFinding(practiceA, developer, "A neg 1", "ABSENT", "MAJOR", 0.7f, "scm.pull_request", 3L, oldest);
-            insertFinding(
+            insertObservation(practiceA, developer, "A neg 1", "ABSENT", "MAJOR", 0.7f, "scm.pull_request", 3L, oldest);
+            insertObservation(
                     practiceB,
                     developer,
                     "B neg 1",
@@ -888,10 +927,10 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldExcludeOtherUsersFindings() {
             Instant now = Instant.now();
-            insertFinding(practiceA, developer, "Mine", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "Mine", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, now);
 
             User otherUser = persistUser("someone-else");
-            insertFinding(practiceA, otherUser, "Theirs", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
+            insertObservation(practiceA, otherUser, "Theirs", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
 
             webTestClient
                     .get()
@@ -919,8 +958,16 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldReturnDetailForOwnFinding() {
             Instant now = Instant.now();
-            UUID findingId = insertFinding(
-                    practiceA, developer, "Detailed finding", "ABSENT", "MAJOR", 0.85f, "scm.pull_request", 42L, now);
+            UUID findingId = insertObservation(
+                    practiceA,
+                    developer,
+                    "Detailed observation",
+                    "ABSENT",
+                    "MAJOR",
+                    0.85f,
+                    "scm.pull_request",
+                    42L,
+                    now);
             // Advice lives on the delivered Feedback, not the finding (ADR 0021): the detail view sources
             // guidance from here.
             Feedback feedback = deliverFeedbackFor(findingId, "Split this PR so each change reviews on its own.", now);
@@ -936,7 +983,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .jsonPath("$.id")
                     .isEqualTo(findingId.toString())
                     .jsonPath("$.summary")
-                    .isEqualTo("Detailed finding")
+                    .isEqualTo("Detailed observation")
                     .jsonPath("$.presence")
                     .isEqualTo("ABSENT")
                     .jsonPath("$.severity")
@@ -950,12 +997,12 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .jsonPath("$.artifactId")
                     .isEqualTo(42)
                     .jsonPath("$.evidenceRationale")
-                    .isEqualTo("Test reasoning for Detailed finding")
+                    .isEqualTo("Test reasoning for Detailed observation")
                     .jsonPath("$.deliveredFeedback")
                     .isEqualTo("Split this PR so each change reviews on its own.")
-                    .jsonPath("$.feedbackId")
+                    .jsonPath("$.feedbackResponse.feedbackId")
                     .isEqualTo(feedback.getId().toString())
-                    .jsonPath("$.feedbackUsefulness")
+                    .jsonPath("$.feedbackResponse.usefulness")
                     .doesNotExist()
                     .jsonPath("$.observedAt")
                     .isNotEmpty()
@@ -968,9 +1015,130 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
 
         @Test
         @WithUser
+        @DisplayName("carries the step the review wrote and the response the developer gave back to them")
+        void shouldReturnTheNextStepAndTheRecordedResponse() {
+            Instant now = Instant.now();
+            UUID findingId = insertObservation(
+                    practiceA,
+                    developer,
+                    "Detailed observation",
+                    "ABSENT",
+                    "MAJOR",
+                    0.85f,
+                    "scm.pull_request",
+                    42L,
+                    now);
+            Feedback feedback = deliverFeedbackFor(findingId, "Split this PR so each change reviews on its own.", now);
+            composeNextStep(findingId, "Split the retry out into its own pull request.");
+            reactionRepository.save(Reaction.builder()
+                    .feedback(feedback)
+                    .reactorUserId(developer.getId())
+                    .usefulness(FeedbackUsefulness.HELPFUL)
+                    .resolution(FeedbackResolution.ADDRESSED)
+                    .explanation("Opened a follow-up for the retry.")
+                    .createdAt(now)
+                    .build());
+
+            webTestClient
+                    .get()
+                    .uri(BASE_URI + "/{findingId}", workspace.getWorkspaceSlug(), findingId)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.nextStep")
+                    .isEqualTo("Split the retry out into its own pull request.")
+                    .jsonPath("$.feedbackResponse.feedbackId")
+                    .isEqualTo(feedback.getId().toString())
+                    .jsonPath("$.feedbackResponse.usefulness")
+                    .isEqualTo("HELPFUL")
+                    .jsonPath("$.feedbackResponse.resolution")
+                    .isEqualTo("ADDRESSED")
+                    .jsonPath("$.feedbackResponse.comment")
+                    .isEqualTo("Opened a follow-up for the retry.")
+                    .jsonPath("$.feedbackResponse.respondedAt")
+                    .isNotEmpty();
+        }
+
+        @Test
+        @WithUser
+        @DisplayName("answers about the newest delivered piece of feedback when two carried the observation")
+        void shouldAnswerAboutTheNewestDeliveredFeedback() {
+            Instant now = Instant.now();
+            UUID findingId = insertObservation(
+                    practiceA,
+                    developer,
+                    "Detailed observation",
+                    "ABSENT",
+                    "MAJOR",
+                    0.85f,
+                    "scm.pull_request",
+                    42L,
+                    now);
+            deliverFeedbackFor(findingId, "The first note the run posted.", now.minus(1, ChronoUnit.HOURS), 0);
+            Feedback newest = deliverFeedbackFor(findingId, "The note that replaced it.", now, 1);
+
+            webTestClient
+                    .get()
+                    .uri(BASE_URI + "/{findingId}", workspace.getWorkspaceSlug(), findingId)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.feedbackResponse.feedbackId")
+                    .isEqualTo(newest.getId().toString())
+                    .jsonPath("$.deliveredFeedback")
+                    .isEqualTo("The note that replaced it.");
+        }
+
+        @Test
+        @WithUser
+        @DisplayName("the text and the handle to answer it come from one feedback unit, even when a newer "
+                + "cross-artifact unit is also bound to the observation")
+        void shouldAnswerAboutTheUnitWhoseTextItShows() {
+            Instant now = Instant.now();
+            UUID findingId = insertObservation(
+                    practiceA,
+                    developer,
+                    "Detailed observation",
+                    "ABSENT",
+                    "MAJOR",
+                    0.85f,
+                    "scm.pull_request",
+                    42L,
+                    now);
+            Feedback onTheWork = deliverFeedbackFor(
+                    findingId,
+                    "Split this PR so each change reviews on its own.",
+                    now.minus(1, ChronoUnit.HOURS),
+                    0,
+                    FeedbackChannel.IN_CONTEXT);
+            // Newer, delivered and bound to the same observation, but about a habit across several pieces of
+            // work: its words are never the ones this page shows, so its id must never be the one it rates.
+            deliverFeedbackFor(
+                    findingId, "You keep shipping pull requests that do three things.", now, 1, FeedbackChannel.IN_APP);
+
+            webTestClient
+                    .get()
+                    .uri(BASE_URI + "/{findingId}", workspace.getWorkspaceSlug(), findingId)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.deliveredFeedback")
+                    .isEqualTo("Split this PR so each change reviews on its own.")
+                    .jsonPath("$.feedbackResponse.feedbackId")
+                    .isEqualTo(onTheWork.getId().toString());
+        }
+
+        @Test
+        @WithUser
         void shouldReturn404ForOtherUserFinding() {
             User otherUser = persistUser("other-developer");
-            UUID otherId = insertFinding(
+            UUID otherId = insertObservation(
                     practiceA, otherUser, "Not mine", "PRESENT", "INFO", 0.9f, "scm.pull_request", 1L, Instant.now());
 
             webTestClient
@@ -1098,7 +1266,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldReturn404ForFindingInDifferentWorkspace() {
             // Create finding in current workspace
-            UUID findingId = insertFinding(
+            UUID findingId = insertObservation(
                     practiceA,
                     developer,
                     "WS1 finding",
@@ -1137,8 +1305,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("returns all findings for a pull request")
         void shouldReturnPrFindings() {
             Instant now = Instant.now();
-            insertFinding(practiceA, developer, "PR finding 1", "PRESENT", "INFO", 0.9f, "scm.pull_request", 100L, now);
-            insertFinding(
+            insertObservation(
+                    practiceA, developer, "PR finding 1", "PRESENT", "INFO", 0.9f, "scm.pull_request", 100L, now);
+            insertObservation(
                     practiceB,
                     developer,
                     "PR finding 2",
@@ -1150,7 +1319,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     now.minus(1, ChronoUnit.HOURS));
 
             // Different PR — should not appear
-            insertFinding(practiceA, developer, "Other PR", "PRESENT", "INFO", 0.7f, "scm.pull_request", 200L, now);
+            insertObservation(practiceA, developer, "Other PR", "PRESENT", "INFO", 0.7f, "scm.pull_request", 200L, now);
 
             webTestClient
                     .get()
@@ -1172,11 +1341,11 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldIncludeOtherUsersFindingsForSamePr() {
             Instant now = Instant.now();
-            insertFinding(
+            insertObservation(
                     practiceA, developer, "My PR finding", "PRESENT", "INFO", 0.9f, "scm.pull_request", 100L, now);
 
             User otherUser = persistUser("pr-collaborator");
-            insertFinding(
+            insertObservation(
                     practiceA,
                     otherUser,
                     "Their PR finding",
@@ -1238,7 +1407,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("orders findings by detected_at descending")
         void shouldOrderByDetectedAtDesc() {
             Instant now = Instant.now();
-            insertFinding(
+            insertObservation(
                     practiceA,
                     developer,
                     "Old",
@@ -1248,7 +1417,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "scm.pull_request",
                     100L,
                     now.minus(2, ChronoUnit.HOURS));
-            insertFinding(practiceB, developer, "New", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 100L, now);
+            insertObservation(practiceB, developer, "New", "ABSENT", "MAJOR", 0.8f, "scm.pull_request", 100L, now);
 
             webTestClient
                     .get()
@@ -1268,7 +1437,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldNotReturnPrFindingsFromDifferentWorkspace() {
             Instant now = Instant.now();
-            insertFinding(
+            insertObservation(
                     practiceA, developer, "WS1 PR finding", "PRESENT", "INFO", 0.9f, "scm.pull_request", 100L, now);
 
             // Create second workspace with its own practice and finding for same PR ID
@@ -1340,9 +1509,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("returns per-practice practice standings with the standing/toWorkOn/strengths shape")
         void shouldReturnPracticeStandings() {
             Instant now = Instant.now();
-            insertFinding(
+            insertObservation(
                     practiceA, developer, "Thin PR description", "ABSENT", "MAJOR", 0.9f, "scm.pull_request", 1L, now);
-            insertFinding(
+            insertObservation(
                     practiceB, developer, "Thorough review", "PRESENT", "INFO", 0.9f, "scm.pull_request", 2L, now);
 
             webTestClient
@@ -1379,7 +1548,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("a watched practice with nothing to say appears, and says which silence it is")
         void shouldReportWhyAWatchedPracticeHasNothingToSay() {
-            insertFinding(
+            insertObservation(
                     practiceA,
                     developer,
                     "Thin PR description",

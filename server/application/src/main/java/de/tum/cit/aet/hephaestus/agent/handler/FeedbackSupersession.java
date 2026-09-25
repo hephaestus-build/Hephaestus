@@ -10,7 +10,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Replaces PREPARED in-app and conversation feedback without retiring DELIVERED feedback.
+ * Retires the feedback a newer piece of feedback takes the place of: on the conversation lane only feedback
+ * still PREPARED ({@link #supersede}), on the in-app lane the card still open, read or not
+ * ({@link #replaceOpen}).
  *
  * <p>On the in-app lane the page, not the ledger, is what must hold one live card per habit: the card still
  * open about a habit is retired by the newer card about it, read or not ({@link #replaceOpen}). A closed card

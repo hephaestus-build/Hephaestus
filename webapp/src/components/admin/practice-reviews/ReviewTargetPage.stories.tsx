@@ -22,11 +22,11 @@ import { ReviewTargetPage } from "./ReviewTargetPage";
  * The section shows a preview and links on to the full list, so `total` is the whole count while
  * `items` is only the first page of it.
  */
-const outputFor = <T extends { artifact?: { id: string } }>(
+const outputFor = <T extends { reviewedWork?: { id: string } }>(
 	rows: T[],
 	{ reviewedWork }: ReviewWork,
 ): ReviewSectionState<T> => {
-	const matching = rows.filter((row) => row.artifact?.id === reviewedWork.id);
+	const matching = rows.filter((row) => row.reviewedWork?.id === reviewedWork.id);
 	return {
 		status: "ready",
 		items: matching.slice(0, REVIEW_PREVIEW_SIZE),

@@ -26,7 +26,7 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "One piece of work the pattern was observed on")
 public record InAppEvidenceDTO(
         @NonNull @Schema(description = "The piece of work, as every surface names it")
-        ReviewedWorkRefDTO work,
+        ReviewedWorkRefDTO reviewedWork,
 
         @NonNull @Schema(description = "When the measurement behind this occurrence was taken")
         Instant observedAt,
@@ -34,8 +34,7 @@ public record InAppEvidenceDTO(
         @NonNull
         @Schema(
                 description = "What the review made of this piece of work: a behaviour demonstrated, a trap"
-                        + " avoided, something harmful done, or something needed left out",
-                allowableValues = {"DEMONSTRATED_STRENGTH", "SAFE_AVOIDANCE", "COMMISSION_PROBLEM", "OMISSION_GAP"})
+                        + " avoided, something harmful done, or something needed left out")
         ObservationKind outcome,
 
         @Schema(description = "What the review recorded on this piece of work") @Nullable

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.spi;
 
+import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.NonNull;
@@ -11,7 +12,7 @@ public record ReviewedWorkRefDTO(
         @NonNull @Schema(description = "Identifier of the work within its kind")
         String id,
 
-        @NonNull @Schema(description = "Artifact kind id") String kind,
+        @NonNull @Schema(description = "Artifact kind id") ArtifactKind kind,
 
         @Nullable
         @Schema(

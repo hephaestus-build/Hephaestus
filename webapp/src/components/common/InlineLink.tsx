@@ -45,7 +45,7 @@ export function InlineLink({
 	// too.
 	const interactive = defaultTagName !== "span" || render !== undefined;
 	// Only a real address opens elsewhere; a reference with no address is a word, icon and all.
-	const outbound = href !== undefined && external;
+	const outbound = hasText(href) && external;
 	const ownProps: Record<string, unknown> = {
 		className: cn(
 			"text-foreground",

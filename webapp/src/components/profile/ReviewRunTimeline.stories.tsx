@@ -104,7 +104,7 @@ export const Continues: Story = {
 	play: async ({ canvas }) => {
 		// The runs, not the observation rows inside each card, which are list items of their own.
 		const [first, last] = canvas
-			.getByRole("list", { name: "Observations" })
+			.getByRole("list", { name: "Review runs" })
 			.querySelectorAll(":scope > li");
 		await expect(first?.querySelector(".border-dashed")).toBeNull();
 		await expect(last?.querySelector(".border-dashed")).not.toBeNull();

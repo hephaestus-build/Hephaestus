@@ -63,21 +63,21 @@ export const PRACTICE_GROUP_STANDING_DEFS: Record<
 		label: "Not observed yet",
 		icon: CircleDashedIcon,
 		badgeVariant: "outline",
-		description: "No practice in this group has a current verdict for you.",
+		description: "No practice in this group has been observed in your work yet.",
 	},
 };
 
 /**
  * The same standings read for one practice. The sentences are the group's, except where the
- * group's names its practices: a practice no review has settled is one practice with no verdict,
- * not a group with none.
+ * group's names its practices: a practice no review has settled is one practice nothing has
+ * observed, not a group of them.
  */
 export const PRACTICE_STANDING_DEFS: Record<PracticeGroupStandingValue, PracticeGroupStandingDef> =
 	{
 		...PRACTICE_GROUP_STANDING_DEFS,
 		NOT_OBSERVED: {
 			...PRACTICE_GROUP_STANDING_DEFS.NOT_OBSERVED,
-			description: "This practice has no current verdict for you yet.",
+			description: "No review has observed this practice in your work yet.",
 		},
 	};
 

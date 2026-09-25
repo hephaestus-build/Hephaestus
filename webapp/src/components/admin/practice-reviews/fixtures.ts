@@ -55,18 +55,18 @@ export type ReviewWork = ReviewRunTarget & {
 };
 
 const reviewOf = (
-	provider: ReviewRunTarget["provider"],
+	provider: ReviewedWorkRef["provider"],
 	title: string,
 	reviewedWork: ReviewWork["reviewedWork"],
 ): ReviewWork => ({
 	type: reviewedWork.kind,
-	provider,
 	title,
-	// The server names the work on the ref as well; a conversation thread has no title of its own.
+	// The server names the work on the ref as well, provider included; a conversation thread has no
+	// title of its own.
 	reviewedWork:
 		reviewedWork.kind === ARTIFACT_KIND.conversationThread
-			? reviewedWork
-			: { ...reviewedWork, title },
+			? { ...reviewedWork, provider }
+			: { ...reviewedWork, provider, title },
 });
 
 // Every list row and every detail header draws its glyph from the provider and its words from the
@@ -955,7 +955,7 @@ function toObservation(run: RunSpec, spec: ObservationSpec): ReviewObservation {
 	return {
 		id: spec.id,
 		agentJobId: run.id,
-		artifact: run.work.reviewedWork,
+		reviewedWork: run.work.reviewedWork,
 		group: group(spec.group),
 		assessment: spec.assessment,
 		claimCurrentness: spec.claimCurrentness ?? "CURRENT",
@@ -976,7 +976,7 @@ function toFeedback(run: RunSpec, spec: FeedbackSpec): ReviewFeedback {
 	return {
 		id: spec.id,
 		agentJobId: run.id,
-		artifact: run.work.reviewedWork,
+		reviewedWork: run.work.reviewedWork,
 		...preview(spec.body),
 		channel: spec.channel,
 		createdAt: new Date(spec.composedAt),
@@ -1137,7 +1137,7 @@ export function feedbackDetail(feedbackId: string): ReviewFeedbackDetail {
 	return {
 		id: item.id,
 		agentJobId: run.id,
-		artifact: run.work.reviewedWork,
+		reviewedWork: run.work.reviewedWork,
 		body: item.body,
 		channel: item.channel,
 		createdAt: new Date(item.composedAt),
@@ -1276,11 +1276,11 @@ export function manyFeedback(count: number): ReviewFeedback[] {
 
 const pullRequestTarget: AgentJob["target"] = {
 	type: "scm.pull_request",
-	provider: "GITHUB",
 	title: "Make practice review output visible",
 	reviewedWork: {
 		id: "42",
 		kind: "scm.pull_request",
+		provider: "GITHUB",
 		label: "#1423",
 		repositoryName: "ls1intum/Hephaestus",
 		url: "https://github.com/ls1intum/Hephaestus/pull/1423",
@@ -1288,11 +1288,11 @@ const pullRequestTarget: AgentJob["target"] = {
 };
 const issueTarget: AgentJob["target"] = {
 	type: "scm.issue",
-	provider: "GITHUB",
 	title: "Admin read surface for observations and prepared feedback",
 	reviewedWork: {
 		id: "43",
 		kind: "scm.issue",
+		provider: "GITHUB",
 		label: "#1420",
 		repositoryName: "ls1intum/Hephaestus",
 	},

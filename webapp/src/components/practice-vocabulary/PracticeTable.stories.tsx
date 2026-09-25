@@ -10,7 +10,7 @@ import { Stateful } from "@/stories/stateful";
 
 import {
 	DEFAULT_PRACTICE_GROUP_SORT,
-	type PracticeGroupSort,
+	type SortDirection,
 	sortByStanding,
 } from "./practice-group-list-order";
 import { PracticePill } from "./PracticePill";
@@ -40,7 +40,7 @@ const loadingRow = (
 );
 
 /**
- * The frame every practice table on the profile shares: the sortable Status column, the subject
+ * The frame every practice table on the profile shares: the sortable Standing column, the subject
  * and its sentence, the row's own "Open …" link. The caller renders its rows from the cells
  * exported beside it and orders them under the sort the header shows.
  */
@@ -71,7 +71,7 @@ const meta = {
 	},
 	render: (args) => (
 		<Stateful initial={args.sort}>
-			{(sort: PracticeGroupSort, setSort) => (
+			{(sort: SortDirection, setSort) => (
 				<PracticeTable
 					{...args}
 					rows={sortByStanding(
@@ -94,7 +94,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** What needs attention first; a press on Status turns the order around. */
+/** What needs attention first; a press on Standing turns the order around. */
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
 		const links = () =>
@@ -113,7 +113,7 @@ export const Default: Story = {
 			canvas.getByText("Scope the change to one concern").closest('[data-slot="badge"]'),
 		).not.toBeNull();
 		await userEvent.click(canvas.getByRole("button", { name: "Standing" }));
-		await expect(args.onSortChange).toHaveBeenCalledWith({ direction: "desc" });
+		await expect(args.onSortChange).toHaveBeenCalledWith("desc");
 		await expect(links()[0]).toBe("Open Mark the change ready and link its issue");
 		// The row's link follows the one link rule: plain at rest, blue with a solid underline
 		// when the row is hovered.
@@ -128,7 +128,7 @@ export const Default: Story = {
  * The standing badge and the trend chip are buttons only so a keyboard reaches their sentences;
  * they answer nothing of their own, so a press on either is the row's.
  */
-export const OpensFromTheStatusCell: Story = {
+export const OpensFromTheStandingCell: Story = {
 	play: async ({ canvas }) => {
 		onOpen.mockClear();
 		const row = canvas

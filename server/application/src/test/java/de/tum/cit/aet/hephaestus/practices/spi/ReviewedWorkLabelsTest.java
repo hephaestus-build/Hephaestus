@@ -29,7 +29,7 @@ class ReviewedWorkLabelsTest {
                                 "https://github.com/acme/api/pull/22")))
                 .isEqualTo(new ReviewedWorkRefDTO(
                         "22",
-                        "scm.pull_request",
+                        ArtifactKinds.PULL_REQUEST,
                         IntegrationKind.GITHUB,
                         "#22",
                         "Cache user lookups",
@@ -48,7 +48,13 @@ class ReviewedWorkLabelsTest {
                                 null,
                                 null)))
                 .isEqualTo(new ReviewedWorkRefDTO(
-                        "425", "scm.pull_request", IntegrationKind.GITLAB, "!425", "Retry uploads", null, "acme/api"));
+                        "425",
+                        ArtifactKinds.PULL_REQUEST,
+                        IntegrationKind.GITLAB,
+                        "!425",
+                        "Retry uploads",
+                        null,
+                        "acme/api"));
         assertThat(ReviewedWorkLabels.ref(
                                 ArtifactKinds.ISSUE,
                                 13L,
@@ -76,7 +82,13 @@ class ReviewedWorkLabelsTest {
                                 "backend-review",
                                 null)))
                 .isEqualTo(new ReviewedWorkRefDTO(
-                        "7", "chat.conversation_thread", IntegrationKind.SLACK, "#backend-review", null, null, null));
+                        "7",
+                        ArtifactKinds.CONVERSATION_THREAD,
+                        IntegrationKind.SLACK,
+                        "#backend-review",
+                        null,
+                        null,
+                        null));
         assertThat(ReviewedWorkLabels.ref(
                         ArtifactKinds.DOCUMENT,
                         3L,
@@ -91,7 +103,7 @@ class ReviewedWorkLabelsTest {
                                 null)))
                 .isEqualTo(new ReviewedWorkRefDTO(
                         "3",
-                        "docs.document",
+                        ArtifactKinds.DOCUMENT,
                         IntegrationKind.OUTLINE,
                         "Queue retry policy",
                         "Queue retry policy",
@@ -103,7 +115,8 @@ class ReviewedWorkLabelsTest {
     @DisplayName("work whose run is gone, or whose run names other work, is named by its kind and nothing invented")
     void fallsBackToTheKindWithoutAMatchingRun() {
         assertThat(ReviewedWorkLabels.ref(ArtifactKinds.PULL_REQUEST, 22L, null))
-                .isEqualTo(new ReviewedWorkRefDTO("22", "scm.pull_request", null, "Pull request", null, null, null));
+                .isEqualTo(new ReviewedWorkRefDTO(
+                        "22", ArtifactKinds.PULL_REQUEST, null, "Pull request", null, null, null));
         assertThat(ReviewedWorkLabels.ref(
                                 ArtifactKinds.ISSUE,
                                 13L,
@@ -138,5 +151,15 @@ class ReviewedWorkLabelsTest {
                 .isEqualTo("Merge request");
         assertThat(ReviewedWorkLabels.ref(ArtifactKinds.DOCUMENT, 3L, null).label())
                 .isEqualTo("Document");
+    }
+
+    @Test
+    @DisplayName("work that is not anchored to a kind and an id is not named at all")
+    void namesNothingWithoutAnchoredWork() {
+        assertThat(ReviewedWorkLabels.refOrNull(null, 22L, null)).isNull();
+        assertThat(ReviewedWorkLabels.refOrNull(ArtifactKinds.PULL_REQUEST, null, null))
+                .isNull();
+        assertThat(ReviewedWorkLabels.refOrNull(ArtifactKinds.PULL_REQUEST, 22L, null))
+                .isEqualTo(ReviewedWorkLabels.ref(ArtifactKinds.PULL_REQUEST, 22L, null));
     }
 }

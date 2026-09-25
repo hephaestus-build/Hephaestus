@@ -1,5 +1,4 @@
 import { createFileRoute, Navigate, retainSearchParams } from "@tanstack/react-router";
-import { z } from "zod";
 
 import type { PracticeGroup } from "@/api/types.gen";
 import { combinePanelStates, loadProps, queryLoadState } from "@/components/common/panel-state";
@@ -14,16 +13,15 @@ import { composeNextStep, groupOverviewOf } from "@/components/practice-profile/
 import {
 	allPracticesLevel,
 	DEFAULT_FEEDBACK_TAB,
-	feedbackTabSearchSchema,
 	parsePracticeGroupListSort,
 	PRACTICE_PROFILE_LEVEL_KINDS,
+	openLevelId,
 	PRACTICE_PROFILE_SEARCH_PARAMS,
 	type PracticeGroupDetailSelection,
 	type PracticeProfileDetailLevelKind,
 	practiceGroupLevel,
-	practiceGroupListSearchSchema,
 	practiceLevel,
-	practiceProfileDetailSearchShape,
+	practiceProfileSearchSchema,
 	type PracticeTab,
 } from "@/components/practice-profile/practice-profile-search";
 import { PracticeGroupDetailDrawer } from "@/components/practice-profile/PracticeGroupDetailDrawer";
@@ -33,7 +31,7 @@ import {
 	sortPracticeGroups,
 } from "@/components/practice-vocabulary/practice-group-list-order";
 import { useInAppFeedback } from "@/hooks/use-in-app-feedback";
-import { usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
+import { REVIEW_RUN_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
 import { usePracticeProfileOverview } from "@/hooks/use-practice-profile-overview";
 import { usePracticeStandings } from "@/hooks/use-practice-standings";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
@@ -41,18 +39,12 @@ import { workspaceHead } from "@/lib/page-title";
 import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 
-const practiceProfileSearchSchema = z.object({
-	...practiceGroupListSearchSchema.shape,
-	...feedbackTabSearchSchema.shape,
-	...practiceProfileDetailSearchShape,
-});
-
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-profile")({
 	component: PracticeProfile,
 	head: workspaceHead("Practice profile"),
 	validateSearch: practiceProfileSearchSchema,
 	search: {
-		middlewares: [retainSearchParams([...PRACTICE_PROFILE_SEARCH_PARAMS])],
+		middlewares: [retainSearchParams(PRACTICE_PROFILE_SEARCH_PARAMS)],
 	},
 });
 
@@ -82,12 +74,18 @@ function PracticeProfile() {
 	const { groups, groupStandings, practiceStandings, practicesByGroup, ...standings } =
 		usePracticeStandings(workspaceSlug);
 	const { overview, ...overviewQuery } = usePracticeProfileOverview(workspaceSlug);
-	// The cards: read here, which is also what delivers the unread ones.
-	const feedback = useInAppFeedback({ workspaceSlug, groups });
+	// The cards: read here, which is also what delivers the unread ones — so the read waits for a
+	// definite "this workspace reviews practices", or it would mark feedback delivered for a reader
+	// the answer below is about to send away.
+	const feedback = useInAppFeedback({
+		workspaceSlug,
+		groups,
+		enabled: featureState.features?.practicesEnabled === true,
+	});
 	const detail = usePracticeGroupDetail({
 		workspaceSlug,
-		groupSlug: detailStack.find((entry) => entry.kind === "practice-group")?.id,
-		practiceSlug: detailStack.find((entry) => entry.kind === "practice")?.id,
+		groupSlug: openLevelId(detailStack, "practice-group"),
+		practiceSlug: openLevelId(detailStack, "practice"),
 		practiceStandings,
 	});
 
@@ -169,7 +167,7 @@ function PracticeProfile() {
 			<PracticeGroupDetailDrawer
 				detail={detail}
 				detailStack={detailStack}
-				levelLabel={() => "All practices"}
+				levelLabel={() => "All practice groups"}
 				renderLevel={(entry, level, path) =>
 					entry.kind === "practices" ? (
 						<AllPracticesLevel
@@ -182,19 +180,19 @@ function PracticeProfile() {
 							sort={sort}
 							onSortChange={(next) => {
 								// The default sort is the URL's silence, so a header press that lands back
-								// on it leaves a clean address.
-								void setSearch((previous) => ({
-									...previous,
-									dir:
-										next.direction === DEFAULT_PRACTICE_GROUP_SORT.direction
-											? undefined
-											: next.direction,
-								}));
+								// on it leaves a clean address. Sorting a level's table is a view of the
+								// level, not a place: written in place, keeping the entry's `detailPush`
+								// stamp, so Back still dismisses the level in one step.
+								void setSearch(
+									(previous) => ({
+										...previous,
+										dir: next === DEFAULT_PRACTICE_GROUP_SORT ? undefined : next,
+									}),
+									{ state: true, replace: true },
+								);
 							}}
 							onOpenGroup={openGroup}
-							openGroupSlug={
-								detailStack.find((candidate) => candidate.kind === "practice-group")?.id
-							}
+							openGroupSlug={openLevelId(detailStack, "practice-group")}
 							onOpenPractice={(slug) => {
 								void openPractice(slug);
 							}}
@@ -214,6 +212,7 @@ function PracticeProfile() {
 				ratingProps={feedback.ratingProps}
 				onOpenPractice={(practiceSlug) => stackControls.open(practiceLevel(practiceSlug))}
 				practiceTab={search.practiceTab}
+				skeletonRows={REVIEW_RUN_PAGE_SIZE}
 				onSelectionChange={updateSelection}
 			/>
 		</>

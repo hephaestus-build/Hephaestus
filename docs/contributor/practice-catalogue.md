@@ -297,8 +297,8 @@ standard as an experiment or a convention as a proven outcome.
    library owns is in [Precompute scripts](#precompute-scripts) below. Give the practice a `holdsAs`
    sentence — [Holds as](./practice-feedback-language.md) in the feedback language: one present-tense
    line without dashes, within the length the schema (`default-catalog.schema.json`) sets, naming what
-   the developer keeps doing when the practice holds, such as *Every comment got an answer before the
-   next push*. It is read from the bundled catalog by slug and is not part of the definition a workspace
+   the developer keeps doing when the practice holds, such as *Every reviewer comment gets a visible
+   answer*. It is read from the bundled catalog by slug and is not part of the definition a workspace
    copies, customizes or compares, so a better sentence reaches every workspace with the next release.
 6. Add or update focused automated-review tests, including required-source skipping and valid-empty evidence.
 7. Review the admin presentation and a representative piece of delivered feedback.

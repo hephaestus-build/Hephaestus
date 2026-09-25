@@ -9,6 +9,7 @@ import {
 	detailRun,
 	detailRuns,
 	focusedChanges,
+	unwrittenAbout,
 } from "@/stories/practice-detail-story-mock-data";
 import { ALL_FEEDBACK_CARDS } from "@/stories/practice-feedback-cards-story-mock-data";
 import { packagingGroup } from "@/stories/practice-profile-story-mock-data";
@@ -25,9 +26,6 @@ const emptyFeed = {
 } satisfies ReviewRunFeedState;
 
 const readyFeed = { ...emptyFeed, runs: [detailRun] } satisfies ReviewRunFeedState;
-
-/** The practice the preview fixtures write feedback about, over the group they belong to. */
-const scopedPractice = { ...focusedChanges, slug: "scope-one-reviewable-change" };
 
 /** The level as the drawer mounts it: second in the stack, over its group. */
 function levelAt(props: Partial<PracticeDetailLevelProps> = {}) {
@@ -75,7 +73,7 @@ describe("PracticeDetailLevel", () => {
 		expect(screen.getByRole("list", { name: "Path" }).textContent).toBe(
 			`Practice profile${packagingGroup.name}Practice`,
 		);
-		screen.getByText("Mixed feedback");
+		screen.getByText("Needs attention");
 		screen.getByText("More positive recently");
 		fireEvent.click(screen.getByRole("button", { name: packagingGroup.name }));
 		expect(onClose).toHaveBeenCalledWith(1);
@@ -155,17 +153,17 @@ describe("PracticeDetailLevel", () => {
 		await screen.findByText("Where you stand");
 		const section = screen.getByRole("region", { name: "Where you stand" });
 		within(section).getByText(
-			"Recent reviews found both strengths and problems here. Based on your latest six pieces of reviewed work.",
+			"Recent reviews here were mostly problems. Based on your latest six pieces of reviewed work.",
 		);
 		within(section).getByText(
 			"Recent reviewed work carried more strengths than the stretch before it. Compared your latest six pieces of reviewed work with the five before them. Evidence spans 12 days.",
 		);
 		// The sentences are printed beside the badge and the chip, so neither is a tooltip's trigger.
-		within(section).getByText("Mixed feedback");
+		within(section).getByText("Needs attention");
 		within(section).getByText("More positive recently");
 		expect(within(section).queryByRole("button")).toBeNull();
 		// Both lines sit in one bordered box under the label.
-		const box = within(section).getByText(/^Recent reviews found/u).parentElement;
+		const box = within(section).getByText(/^Recent reviews here were/u).parentElement;
 		expect(box?.classList.contains("border")).toBe(true);
 		expect(within(section).getByText(/^Recent reviewed work carried/u).parentElement).toBe(box);
 	});
@@ -180,35 +178,35 @@ describe("PracticeDetailLevel", () => {
 				trendSupport: undefined,
 			},
 		});
-		await screen.findByText("This practice has no current verdict for you yet.");
+		await screen.findByText("No review has observed this practice in your work yet.");
 		expect(screen.queryByText(/Based on your latest/u)).toBeNull();
 		// The header's chip is the only one.
 		expect(screen.getAllByText("Not enough to compare yet")).toHaveLength(1);
 	});
 
 	it("lists the practice's feedback under a heading of the Observations tab's rank", async () => {
-		renderLevel({ tab: "feedback", practice: scopedPractice });
+		renderLevel({ tab: "feedback", practice: focusedChanges });
 		await screen.findByRole("tab", { name: "Feedback 1" });
 		screen.getByRole("heading", { level: 2, name: "Feedback" });
 		screen.getByRole("heading", { level: 3, name: "Current feedback" });
-		screen.getByRole("heading", { name: "Merge requests bundle a fix with a refactor" });
+		screen.getByRole("heading", { name: "Pull requests bundle a fix with a refactor" });
 		// Nothing resolved, so no label claims a list of it.
 		expect(screen.queryByText("Resolved feedback")).toBeNull();
 	});
 
 	it("opens a practice a card names only when told how", async () => {
 		const onOpenPractice = vi.fn();
-		const { rerender } = renderLevel({ tab: "feedback", practice: scopedPractice });
+		const { rerender } = renderLevel({ tab: "feedback", practice: focusedChanges });
 		await screen.findByText("Current feedback");
 		expect(screen.queryByRole("button", { name: "Scope the change to one concern" })).toBeNull();
 
-		rerender(levelAt({ tab: "feedback", practice: scopedPractice, onOpenPractice }));
+		rerender(levelAt({ tab: "feedback", practice: focusedChanges, onOpenPractice }));
 		fireEvent.click(await screen.findByRole("button", { name: "Scope the change to one concern" }));
 		expect(onOpenPractice).toHaveBeenCalledExactlyOnceWith("scope-one-reviewable-change");
 	});
 
 	it("says when no feedback was written about the practice, as the Observations tab does", async () => {
-		renderLevel({ tab: "feedback" });
+		renderLevel({ tab: "feedback", practice: unwrittenAbout });
 		await screen.findByText("No feedback yet.");
 		screen.getByText("Feedback appears once the same shortcoming keeps showing up on your work.");
 		expect(screen.queryByText("Current feedback")).toBeNull();
@@ -233,6 +231,9 @@ describe("PracticeDetailLevel", () => {
 	it("loads earlier reviews without losing the ones already shown", async () => {
 		const onLoadMore = vi.fn();
 		renderLevel({ feed: { ...readyFeed, hasMore: true, onLoadMore } });
+		// While earlier runs are still a page away, the tab counts nothing rather than a number that
+		// is short now and grows on the press.
+		screen.getByRole("tab", { name: "Observations" });
 		fireEvent.click(await screen.findByRole("button", { name: "View earlier reviews" }));
 		expect(onLoadMore).toHaveBeenCalledOnce();
 		screen.getByText(detailObservation.summary);
@@ -256,7 +257,15 @@ describe("PracticeDetailLevel", () => {
 				runs: [
 					{
 						...detailRun,
-						observations: [{ ...detailObservation, feedbackResolution: "ADDRESSED" }],
+						observations: [
+							{
+								...detailObservation,
+								feedbackResponse: {
+									feedbackId: "00000000-0000-0000-0000-000000000103",
+									resolution: "ADDRESSED",
+								},
+							},
+						],
 					},
 				],
 			},

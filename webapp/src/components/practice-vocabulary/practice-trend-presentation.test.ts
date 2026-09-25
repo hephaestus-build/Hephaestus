@@ -31,7 +31,7 @@ describe("practice trend copy", () => {
 		).toBe("Based on one piece of reviewed work. Evidence spans one day.");
 		expect(
 			formatTrendProvenance(
-				support({ currentOpportunities: 0, previousOpportunities: 0 }),
+				support({ currentOpportunities: 0, previousOpportunities: 0, opportunities: 0 }),
 				"INSUFFICIENT_EVIDENCE",
 				"practice",
 			),
@@ -40,7 +40,7 @@ describe("practice trend copy", () => {
 
 	it("claims no comparison when the server formed none", () => {
 		const sentence = formatTrendProvenance(
-			support({ previousOpportunities: 3, opportunitiesUntilComparable: 1 }),
+			support({ previousOpportunities: 3, opportunities: 7, opportunitiesUntilComparable: 1 }),
 			"INSUFFICIENT_EVIDENCE",
 			"practice",
 		);
@@ -89,6 +89,7 @@ describe("practice trend copy", () => {
 			support({
 				currentOpportunities: 7,
 				previousOpportunities: 5,
+				opportunities: 12,
 				comparablePractices: 3,
 				eligiblePractices: 5,
 			}),
@@ -99,6 +100,32 @@ describe("practice trend copy", () => {
 		expect(sentence).not.toContain("Compared");
 		expect(sentence).toBe(
 			"Across 12 pieces of reviewed work in this group. Three of five practices here had enough evidence to compare. Evidence spans 12 days.",
+		);
+	});
+
+	it("counts a piece of work both bundles claim once", () => {
+		// A group bundles per practice, so one pull request can be current evidence for one practice and
+		// previous evidence for another. The reader is told what the group saw, not what the bundles add up
+		// to.
+		const shared = {
+			currentOpportunities: 7,
+			previousOpportunities: 5,
+			opportunities: 10,
+			comparablePractices: 3,
+			eligiblePractices: 5,
+		};
+
+		expect(formatTrendProvenance(support(shared), "IMPROVING", "group")).toBe(
+			"Across 10 pieces of reviewed work in this group. Three of five practices here had enough evidence to compare. Evidence spans 12 days.",
+		);
+		expect(
+			formatTrendProvenance(
+				support({ ...shared, opportunitiesUntilComparable: 2 }),
+				"INSUFFICIENT_EVIDENCE",
+				"group",
+			),
+		).toBe(
+			"Based on 10 pieces of reviewed work. Two more with something to judge are needed before a direction can be shown. Evidence spans 12 days.",
 		);
 	});
 });

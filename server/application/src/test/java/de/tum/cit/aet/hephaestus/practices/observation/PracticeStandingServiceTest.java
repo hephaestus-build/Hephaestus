@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -16,6 +17,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
+import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService.StandingSnapshot;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingObservationDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.PracticeTrendService;
@@ -35,6 +37,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -70,7 +73,6 @@ class PracticeStandingServiceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        when(currentDeveloperLookup.currentDeveloperId()).thenReturn(Optional.of(USER_ID));
         when(clock.instant()).thenReturn(NOW);
         lenient().when(visibilityPolicy.permitsAll(anyLong(), any(), any())).thenAnswer(invocation -> {
             Collection<Observation> observations = invocation.getArgument(1);
@@ -155,9 +157,15 @@ class PracticeStandingServiceTest extends BaseUnitTest {
         return practice;
     }
 
+    /** The lookup the caller's own standings resolve through; the snapshot read is told whose they are. */
+    private void theCurrentDeveloper() {
+        when(currentDeveloperLookup.currentDeveloperId()).thenReturn(Optional.of(USER_ID));
+    }
+
     @Test
     @DisplayName("two clean newer pieces of reviewed work restore STRENGTH even though an older review found a problem")
     void recentCleanEvidenceOutweighsTheOlderRecord() {
+        theCurrentDeveloper();
         Practice practice = practice("robust-error-handling");
         when(observationRepository.findByDeveloperAndWorkspaceBetween(
                         eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
@@ -175,6 +183,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
     @Test
     @DisplayName("one clean piece of reviewed work after a problem does not outweigh it — the standing stays MIXED")
     void singleCleanOpportunityDoesNotRestoreStrength() {
+        theCurrentDeveloper();
         Practice practice = practice("robust-error-handling");
         when(observationRepository.findByDeveloperAndWorkspaceBetween(
                         eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
@@ -191,6 +200,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
     @Test
     @DisplayName("one problem on the newest piece of reviewed work moves the standing to MIXED, but does not condemn")
     void aSingleFreshProblemDoesNotCondemn() {
+        theCurrentDeveloper();
         Practice practice = practice("robust-error-handling");
         when(observationRepository.findByDeveloperAndWorkspaceBetween(
                         eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
@@ -211,6 +221,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
     @Test
     @DisplayName("two problems in a row do condemn — the mirror of two clean ones restoring a strength")
     void twoFreshProblemsInARowDropToDeveloping() {
+        theCurrentDeveloper();
         Practice practice = practice("robust-error-handling");
         when(observationRepository.findByDeveloperAndWorkspaceBetween(
                         eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
@@ -231,6 +242,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
     @Test
     @DisplayName("only the newest four pieces of reviewed work decide the standing, however long the older record is")
     void olderWorkItemsFallOutOfTheStandingWindow() {
+        theCurrentDeveloper();
         Practice practice = practice("robust-error-handling");
         when(observationRepository.findByDeveloperAndWorkspaceBetween(
                         eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
@@ -257,6 +269,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
     @Test
     @DisplayName("a BAD observation with null severity does not NPE the sort and ranks after a graded one")
     void nullSeverityDoesNotBreakStandingSort() {
+        theCurrentDeveloper();
         Practice practice = new Practice();
         practice.setSlug("robust-error-handling");
         practice.setName("Handling failure robustly");
@@ -279,6 +292,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
     @Test
     @DisplayName("a problem seen on a single piece of reviewed work is shown, not withheld for lack of corroboration")
     void singleArtifactProblemIsShownWorstFirst() {
+        theCurrentDeveloper();
         Practice practice = practice("robust-error-handling");
         Observation critical = bad(practice, Severity.CRITICAL, 42L);
         Observation minor = bad(practice, Severity.MINOR, 42L);
@@ -301,6 +315,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
     @DisplayName(
             "every problem in the window reaches the standing, whichever locus or piece of reviewed work it came from")
     void unrelatedProblemsAcrossLociAreAllListed() {
+        theCurrentDeveloper();
         Practice practice = practice("robust-error-handling");
         Observation locusA = bad(practice, Severity.CRITICAL, 42L, "locus-A");
         Observation locusB = bad(practice, Severity.MINOR, 43L, "locus-B");
@@ -316,5 +331,33 @@ class PracticeStandingServiceTest extends BaseUnitTest {
         assertThat(standings).hasSize(1);
         assertThat(standings.get(0).toWorkOn().stream().map(PracticeStandingObservationDTO::observationId))
                 .containsExactlyInAnyOrder(locusA.getId(), locusB.getId());
+    }
+
+    @Test
+    @DisplayName("each edge sees only the evidence recorded by then, and the window is loaded up to the newest edge")
+    void shouldCutTheEvidencePerEdgeAndLoadUpToTheNewestOne() {
+        Practice practice = practice("robust-error-handling");
+        Observation problem = bad(practice, Severity.MAJOR, 43L);
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
+                .thenReturn(List.of(good(practice, 40L), good(practice, 41L), good(practice, 42L), problem));
+        when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
+                .thenReturn(List.of());
+        Instant beforeTheProblem = observedAtOf(42L);
+
+        List<StandingSnapshot> snapshots =
+                practiceStandingService.getStandingSnapshots(WORKSPACE_ID, USER_ID, List.of(beforeTheProblem, NOW));
+
+        assertThat(snapshots).hasSize(2);
+        assertThat(snapshots.get(0).dtos().get(0).standing()).isEqualTo(PracticeStandingDTO.Standing.STRENGTH);
+        assertThat(snapshots.get(1).dtos().get(0).standing()).isEqualTo(PracticeStandingDTO.Standing.MIXED);
+        assertThat(snapshots.get(1).dtos().get(0).toWorkOn().stream()
+                        .map(PracticeStandingObservationDTO::observationId))
+                .containsExactly(problem.getId());
+
+        ArgumentCaptor<Instant> until = ArgumentCaptor.forClass(Instant.class);
+        verify(observationRepository)
+                .findByDeveloperAndWorkspaceBetween(eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), until.capture());
+        assertThat(until.getValue()).isEqualTo(NOW);
     }
 }

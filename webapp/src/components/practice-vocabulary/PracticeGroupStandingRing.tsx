@@ -59,6 +59,8 @@ const standingCountsListVariants = cva("", {
 			sm: "text-xs [&_svg]:size-3.5",
 			/** The summary box beside the large ring. */
 			md: "text-sm [&_svg]:size-4",
+			/** The profile header's legend: row text with the 14 px icon every row on the page uses. */
+			row: "text-sm [&_svg]:size-3.5",
 		},
 	},
 	defaultVariants: { size: "md" },

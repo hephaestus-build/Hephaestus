@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.handler.PracticeCoverageLedger;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.ReviewOutcomeRow;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup;
 import java.util.ArrayList;
@@ -47,9 +48,8 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
     }
 
     private static Map<String, PracticeCoverageOutcome> coverage(@Nullable JsonNode output) {
-        JsonNode outcomes =
-                output == null ? null : output.path("practiceCoverage").path("outcomes");
-        if (outcomes == null || !outcomes.isArray()) return Map.of();
+        JsonNode outcomes = PracticeCoverageLedger.from(output).outcomes();
+        if (!outcomes.isArray()) return Map.of();
         Map<String, PracticeCoverageOutcome> bySlug = new HashMap<>();
         for (JsonNode outcome : outcomes) {
             String slug = outcome.path("practiceSlug").asString(null);

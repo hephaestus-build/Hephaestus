@@ -10,23 +10,27 @@ import type { PracticeFeedbackCardEntry } from "@/components/practice-vocabulary
 
 import { conversation, pullRequest } from "./practice-profile-story-mock-data";
 
-const PACKAGING_GROUP = {
-	groupSlug: "review-ready-work",
-	groupName: "Packaging work for review",
-	groupColor: "sky",
-	groupIcon: PackageIcon,
+/** One clean piece of work in a card's strip: the work, and the day it came back clean. */
+const clean = (number: number, date: string) => ({ ref: pullRequest(number), date });
+
+/** The group three of the cards below belong to; the stories vary its colour from here. */
+export const PACKAGING_GROUP = {
+	slug: "review-ready-work",
+	name: "Packaging work for review",
+	color: "sky",
+	icon: PackageIcon,
 } as const;
 
 const CLEAN_CONDITION = [text("Ticks itself once three pieces of work in a row come back clean")];
 
 const SCOPE_ONE_CONCERN = {
-	...PACKAGING_GROUP,
+	group: PACKAGING_GROUP,
 	practiceSlug: "scope-one-reviewable-change",
 	practiceName: "Scope the change to one concern",
-	headline: "Merge requests bundle a fix with a refactor",
+	headline: "Pull requests bundle a fix with a refactor",
 	body: "In #19 the fix for the retry loop travelled with a rename of the module it lives in, and #20 carried a dependency bump alongside a behaviour change. Reviewers had to follow two intentions in one diff.",
 	nextStep:
-		"Next time a fix and a refactor meet in the same branch, open the fix first as its own merge request, let it be reviewed on its own, and put the refactor on top of it once the fix is in. The reviewer then reads one intention at a time.",
+		"Next time a fix and a refactor meet in the same branch, open the fix first as its own pull request, let it be reviewed on its own, and put the refactor on top of it once the fix is in. The reviewer then reads one intention at a time.",
 	condition: CLEAN_CONDITION,
 	cleanNeeded: 3,
 	timestamp: "2026-09-09T14:10:00",
@@ -53,7 +57,7 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 	{
 		// A second practice, not a second card for the first one: a practice carries one live card.
 		feedbackId: "ready-and-traceable-two-clean",
-		...PACKAGING_GROUP,
+		group: PACKAGING_GROUP,
 		practiceSlug: "ready-and-traceable-handoff",
 		practiceName: "Mark the change ready and link its issue",
 		headline: "Changes were marked ready while still carrying a draft label",
@@ -68,7 +72,7 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 			{ ref: pullRequest(19), date: "2026-09-06", outcome: "COMMISSION_PROBLEM" },
 			{ ref: pullRequest(20), date: "2026-09-03", outcome: "COMMISSION_PROBLEM" },
 		],
-		cleanWork: [21, 22].map(pullRequest),
+		cleanWork: [clean(21, "2026-09-07"), clean(22, "2026-09-09")],
 		state: "open",
 	},
 	{
@@ -76,14 +80,15 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		...PACKAGING_GROUP,
 		practiceSlug: "describe-what-and-why",
 		practiceName: "Describe what changed and why",
-		headline: "Descriptions named the what, rarely the why",
-		body: "#16 and #19 listed the files touched but not the problem behind them; the reviewer on #19 asked in the first comment what the change was for.",
+		headline: "Descriptions name the files, not the problem",
+		body: "#16 and #18 opened with the list of files touched and no sentence on the problem behind them; on #18 the first review comment asked what the change was for.",
 		reviewedWork: [
 			{ ref: pullRequest(16), date: "2026-08-24", outcome: "OMISSION_GAP" },
-			{ ref: pullRequest(19), date: "2026-09-06", outcome: "OMISSION_GAP" },
+			{ ref: pullRequest(18), date: "2026-09-01", outcome: "OMISSION_GAP" },
 		],
-		cleanWork: [pullRequest(20)],
-		nextStep: "Before the file list, write one paragraph on the problem and the decision you took.",
+		cleanWork: [clean(20, "2026-09-03")],
+		nextStep:
+			"Open the description with the problem and the decision you took, then the file list.",
 		condition: CLEAN_CONDITION,
 		cleanNeeded: 3,
 		state: "open",
@@ -94,7 +99,7 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		...PACKAGING_GROUP,
 		practiceSlug: "reviewable-diff-size",
 		practiceName: "Keep the diff reviewable in one sitting",
-		headline: "Two merge requests grew past what one review can hold",
+		headline: "Two pull requests grew past what one review can hold",
 		body: "#21 touched 41 files and #22 38; both went through two rounds of review, and the second round of each reopened a file the first had already approved.",
 		reviewedWork: [
 			{
@@ -109,7 +114,7 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		// since.
 		cleanWork: [],
 		nextStep:
-			"When a branch passes twenty files, stop and split it: land the shared groundwork first, then each behaviour change on top of it as its own merge request.",
+			"When a branch passes twenty files, stop and split it: land the shared groundwork first, then each behaviour change on top of it as its own pull request.",
 		condition: CLEAN_CONDITION,
 		cleanNeeded: 3,
 		state: "open",
@@ -119,19 +124,21 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		// The third of the three examples the cards are read against: the review dialogue, as the
 		// author of the change. A practice from another group, so the page shows one.
 		feedbackId: "unresolved-review-threads",
-		groupSlug: "acting-on-review-feedback",
-		groupName: "Acting on review feedback",
-		groupColor: "cyan",
-		groupIcon: MessageSquareReplyIcon,
+		group: {
+			slug: "acting-on-review-feedback",
+			name: "Acting on review feedback",
+			color: "cyan",
+			icon: MessageSquareReplyIcon,
+		},
 		practiceSlug: "merged-past-unresolved-review-threads",
 		practiceName: "Resolve open threads before merging",
-		headline: "Merge requests were merged over open review threads",
+		headline: "Pull requests were merged over open review threads",
 		body: "#17 merged with two threads still open, and on #20 the reviewer's question about the retry limit was never answered; the reviewer had to reopen it in the next review.",
 		reviewedWork: [
 			{ ref: pullRequest(17), date: "2026-08-28", outcome: "COMMISSION_PROBLEM" },
 			{ ref: pullRequest(20), date: "2026-09-03", outcome: "COMMISSION_PROBLEM" },
 		],
-		cleanWork: [21, 22].map(pullRequest),
+		cleanWork: [clean(21, "2026-09-07"), clean(22, "2026-09-09")],
 		nextStep:
 			"Before you merge, answer every open thread with a commit or a sentence and resolve it, so the reviewer sees what became of each comment.",
 		condition: CLEAN_CONDITION,
@@ -144,13 +151,16 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		...PACKAGING_GROUP,
 		practiceSlug: "honours-linked-issue-acceptance-criteria",
 		practiceName: "Say which acceptance criteria are done",
-		headline: "Merge requests closed their issue without saying what was met",
+		headline: "Pull requests closed their issue without saying what was met",
 		body: "#16 and #19 each closed an issue with three acceptance criteria and mentioned none of them; #13 was reopened a week later for the criterion the change had skipped.",
 		reviewedWork: [
 			{ ref: pullRequest(16), date: "2026-08-24", outcome: "OMISSION_GAP" },
 			{ ref: pullRequest(19), date: "2026-09-06", outcome: "OMISSION_GAP" },
+			{ ref: pullRequest(22), date: "2026-09-09", outcome: "OMISSION_GAP" },
 		],
-		cleanWork: [pullRequest(22)],
+		// Two clean pieces before #22 put the run at two of three; #22 emptied it again, which is
+		// the fall back the overview's "What needs your attention" reports.
+		cleanWork: [],
 		nextStep:
 			"Copy the issue's acceptance criteria into the description and tick the ones the change meets, so the reviewer and the issue's author see the same list.",
 		condition: CLEAN_CONDITION,
@@ -173,7 +183,7 @@ export const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		headline: "Descriptions named the what, rarely the why",
 		body: "#16 and #19 listed the files touched but not the problem behind them; the reviewer on #19 asked in the first comment what the change was for.",
 		reviewedWork: [{ ref: pullRequest(19), date: "2026-09-06", outcome: "OMISSION_GAP" }],
-		cleanWork: [20, 21, 22].map(pullRequest),
+		cleanWork: [clean(20, "2026-09-07"), clean(21, "2026-09-08"), clean(22, "2026-09-09")],
 		nextStep: "Before the file list, write one paragraph on the problem and the decision you took.",
 		condition: [
 			text("Resolved by the work on 9 September · "),
@@ -190,16 +200,18 @@ export const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 	},
 	{
 		feedbackId: "review-comments-specific-resolved",
-		groupSlug: "constructive-code-review",
-		groupName: "Reviewing a teammate's work constructively",
-		groupColor: "teal",
-		groupIcon: EyeIcon,
+		group: {
+			slug: "constructive-code-review",
+			name: "Reviewing a teammate's work constructively",
+			color: "teal",
+			icon: EyeIcon,
+		},
 		practiceSlug: "leaves-useful-specific-review-comments",
 		practiceName: "Leave specific, actionable review comments",
 		headline: "Review comments said something was off, not what",
 		body: 'On #2 the comments read "this looks wrong" and "can we do better here?", and the author replied to each one asking what to change.',
 		reviewedWork: [{ ref: pullRequest(2), date: "2026-08-20", outcome: "COMMISSION_PROBLEM" }],
-		cleanWork: [1, 4, 23].map(pullRequest),
+		cleanWork: [clean(1, "2026-08-25"), clean(4, "2026-08-29"), clean(23, "2026-09-02")],
 		nextStep:
 			"Name the line, say what is wrong with it and what you would do instead, so the author can act on the comment without asking back.",
 		condition: [
@@ -217,10 +229,12 @@ export const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 	},
 	{
 		feedbackId: "status-updates-resolved",
-		groupSlug: "communication",
-		groupName: "Communicating in the open",
-		groupColor: "violet",
-		groupIcon: MessageCircleIcon,
+		group: {
+			slug: "communication",
+			name: "Communicating in the open",
+			color: "violet",
+			icon: MessageCircleIcon,
+		},
 		practiceSlug: "posts-clear-status-and-blocker-updates",
 		practiceName: "Post clear status and blocker updates",
 		headline: "Blockers surfaced in stand-up, not in the channel",
@@ -234,7 +248,10 @@ export const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		],
 		// The one the reader resolved, before the work did: the clean work stays where the work
 		// left it.
-		cleanWork: [conversation("#releases"), conversation("#incidents")],
+		cleanWork: [
+			{ ref: conversation("#releases"), date: "2026-08-20" },
+			{ ref: conversation("#incidents"), date: "2026-08-25" },
+		],
 		nextStep:
 			"When something blocks you for more than an hour, post it in the channel the work lives in, with what you have tried and what you need.",
 		condition: [text("Marked as addressed on 27 August")],

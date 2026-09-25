@@ -19,8 +19,8 @@ public record ReviewFeedbackDetailDTO(
         @NonNull UUID id,
         @NonNull UUID agentJobId,
 
-        @Schema(description = "Work item the feedback targets; null when it is unanchored") @Nullable
-        ReviewedWorkRefDTO artifact,
+        @Schema(description = "Reviewed work the feedback targets; null when it is unanchored") @Nullable
+        ReviewedWorkRefDTO reviewedWork,
 
         @Schema(description = "Who the feedback is addressed to; null when the identity is no longer resolvable")
         @Nullable
@@ -72,7 +72,7 @@ public record ReviewFeedbackDetailDTO(
         List<DeliveryPolicyTraceDTO> deliveryPolicy) {
     public static ReviewFeedbackDetailDTO from(
             Feedback feedback,
-            @Nullable ReviewedWorkRefDTO artifact,
+            @Nullable ReviewedWorkRefDTO reviewedWork,
             @Nullable ReviewSubjectDTO recipient,
             @Nullable ReviewSubjectDTO subject,
             List<ReviewBoundObservationDTO> observations,
@@ -83,7 +83,7 @@ public record ReviewFeedbackDetailDTO(
         return new ReviewFeedbackDetailDTO(
                 feedback.getId(),
                 feedback.getAgentJobId(),
-                artifact,
+                reviewedWork,
                 recipient,
                 subject,
                 feedback.getChannel(),

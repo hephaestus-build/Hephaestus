@@ -11591,6 +11591,21 @@ components:
           type: string
         username:
           type: string
+    InAppCleanWork:
+      type: object
+      description: One piece of work that came back clean on the practice since the
+        feedback was prepared
+      properties:
+        reviewedAt:
+          type: string
+          format: date-time
+          description: When that piece was reviewed
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: "The piece of work, as every surface names it"
+      required:
+      - reviewedAt
+      - reviewedWork
     InAppEvidence:
       type: object
       description: One piece of work the pattern was observed on
@@ -11608,16 +11623,18 @@ components:
           - SAFE_AVOIDANCE
           - COMMISSION_PROBLEM
           - OMISSION_GAP
+          - NOT_APPLICABLE
+          - UNDETERMINED
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: "The piece of work, as every surface names it"
         summary:
           type: string
           description: What the review recorded on this piece of work
-        work:
-          $ref: "#/components/schemas/ReviewedWorkRef"
-          description: "The piece of work, as every surface names it"
       required:
       - observedAt
       - outcome
-      - work
+      - reviewedWork
     InAppFeedback:
       type: object
       description: A process-level message on the developer's own practice pages
@@ -11634,11 +11651,11 @@ components:
         cleanWork:
           type: array
           description: "The pieces of work in a row that came back clean on the practice\
-            \ since the feedback was prepared, oldest first, at most cleanNeeded of\
-            \ them; a problem empties it, and once resolved these are exactly the\
-            \ pieces that resolved it"
+            \ since the feedback was prepared, each with the date it was reviewed,\
+            \ oldest first, at most cleanNeeded of them; a problem empties it, and\
+            \ once resolved these are exactly the pieces that resolved it"
           items:
-            $ref: "#/components/schemas/ReviewedWorkRef"
+            $ref: "#/components/schemas/InAppCleanWork"
         evidence:
           type: array
           description: "The pieces of work the habit was observed on, newest first"
@@ -11658,12 +11675,8 @@ components:
           format: uuid
         nextStep:
           type: string
-          description: "The habit to try next, on its own; null for a message written\
+          description: "The habit to try next, on its own; null for feedback prepared\
             \ without one"
-        occurrenceCount:
-          type: integer
-          format: int32
-          description: How many distinct pieces of work the evidence names
         practiceChangedAt:
           type: string
           format: date-time
@@ -11684,6 +11697,12 @@ components:
           type: string
           format: date-time
           description: When this developer first opened it; null until they have
+        resolvedByDeveloperAt:
+          type: string
+          format: date-time
+          description: "When the developer's own answer resolved it: they marked it\
+            \ addressed or not applicable; null while they have not answered or their\
+            \ answer disputes it"
         resolvedByWorkAt:
           type: string
           format: date-time
@@ -11706,7 +11725,6 @@ components:
       - evidence
       - headline
       - id
-      - occurrenceCount
       - practiceName
       - practiceSlug
       - preparedAt
@@ -12405,35 +12423,20 @@ components:
           - UNVERIFIABLE
         deliveredFeedback:
           type: string
-          description: What to do — the delivered feedback for this observation (null
-            if nothing was delivered)
+          description: What to do — the text of the newest feedback unit that said
+            something about this observation to this developer (null if nothing was
+            said)
         evidence:
           $ref: "#/components/schemas/ObservationEvidence"
         evidenceRationale:
           type: string
           description: Evidence-based rationale for the observation
-        feedbackId:
-          type: string
-          format: uuid
-          description: The newest delivered feedback that carried this observation
-            to the developer; the handle for responding to it (null when none was
-            delivered)
-        feedbackResolution:
-          type: string
-          description: The developer's resolution response to that feedback
-          enum:
-          - ADDRESSED
-          - DISPUTED
-          - NOT_APPLICABLE
-        feedbackResponseComment:
-          type: string
-          description: The developer's comment on that feedback
-        feedbackUsefulness:
-          type: string
-          description: The developer's usefulness response to that feedback
-          enum:
-          - HELPFUL
-          - UNHELPFUL
+        feedbackResponse:
+          $ref: "#/components/schemas/FeedbackResponse"
+          description: "The developer's standing answer to the very feedback whose\
+            \ text deliveredFeedback shows, with that unit's id as the handle for\
+            \ responding (null when nothing was said, or when the unit that said it\
+            \ failed to deliver and so cannot be answered)"
         id:
           type: string
           format: uuid
@@ -14075,19 +14078,23 @@ components:
       properties:
         deliveredFeedback:
           type: string
-          description: What to do — the delivered feedback for this observation (null
-            if nothing was delivered)
+          description: What to do — the text of the newest feedback unit that said
+            something about this observation to this developer (null if nothing was
+            said)
         kind:
           type: string
           description: "What this observation says about the developer: a behaviour\
             \ demonstrated, a trap avoided, something harmful done, or something needed\
             \ left out. The lists only separate positive from negative, so this is\
-            \ what tells the two kinds of each apart."
+            \ what tells the two kinds of each apart. Only assessed observations reach\
+            \ a standing, so NOT_APPLICABLE and UNDETERMINED never appear here."
           enum:
           - DEMONSTRATED_STRENGTH
           - SAFE_AVOIDANCE
           - COMMISSION_PROBLEM
           - OMISSION_GAP
+          - NOT_APPLICABLE
+          - UNDETERMINED
         locator:
           type: string
           description: "Where in the work, e.g. \"FrameRecorder.swift:212\", when\
@@ -14579,10 +14586,18 @@ components:
           format: date-time
           description: "When it changed: the observation, the run that composed the\
             \ feedback, or the response that did it"
+        cleanNeeded:
+          type: integer
+          format: int32
+          description: "How many pieces of work in a row have to come back clean to\
+            \ resolve the feedback, for a FEEDBACK_RESET change: what the count fell\
+            \ back from"
         evidence:
           type: array
           description: "The reviewed work that drove the change, newest first: for\
-            \ feedback the work resolved, the pieces of work that came back clean"
+            \ feedback the work resolved, the pieces of work that came back clean;\
+            \ for feedback the work fell back on, the pieces that raised the problem\
+            \ again"
           items:
             $ref: "#/components/schemas/ReviewedWorkRef"
         feedbackId:
@@ -14617,6 +14632,7 @@ components:
           enum:
           - FEEDBACK_NEW
           - FEEDBACK_RESOLVED
+          - FEEDBACK_RESET
           - STANDING_MOVED
           - TREND_TURNED
           - GROUP_MOVED
@@ -15412,9 +15428,6 @@ components:
         agentJobId:
           type: string
           format: uuid
-        artifact:
-          $ref: "#/components/schemas/ReviewedWorkRef"
-          description: Work item the feedback targets; null when it is unanchored
         bodyPreview:
           type: string
           description: Leading characters of the composed body; null when the feedback
@@ -15461,6 +15474,9 @@ components:
           type: string
           format: uuid
           description: The feedback this one replaced; null on a first delivery
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: Reviewed work the feedback targets; null when it is unanchored
         subject:
           $ref: "#/components/schemas/ReviewSubject"
           description: Whose work the feedback addresses; may equal the recipient
@@ -15535,9 +15551,6 @@ components:
           $ref: "#/components/schemas/FeedbackApproval"
           description: "Immutable human decision for this proposal, when one has been\
             \ made"
-        artifact:
-          $ref: "#/components/schemas/ReviewedWorkRef"
-          description: Work item the feedback targets; null when it is unanchored
         body:
           type: string
           description: "Stored composed body; null when none was produced, and always\
@@ -15603,6 +15616,9 @@ components:
         reviewedRevision:
           type: string
           description: Reviewed source revision for an immutable approval package
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: Reviewed work the feedback targets; null when it is unanchored
         subject:
           $ref: "#/components/schemas/ReviewSubject"
           description: Whose work the feedback addresses; may equal the recipient
@@ -15683,8 +15699,6 @@ components:
         agentJobId:
           type: string
           format: uuid
-        artifact:
-          $ref: "#/components/schemas/ReviewedWorkRef"
         assessment:
           type: string
           description: "Specified behavior in context: GOOD means desirable, BAD means\
@@ -15747,6 +15761,8 @@ components:
         recurrenceKey:
           type: string
           description: Cross-run locus key; null when continuity is unavailable
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
         severity:
           type: string
           description: Severity band (null unless outcome is NEGATIVE)
@@ -15763,7 +15779,6 @@ components:
           type: string
       required:
       - agentJobId
-      - artifact
       - assessmentStatus
       - claimCurrentness
       - feedbackDisposition
@@ -15772,6 +15787,7 @@ components:
       - origin
       - practiceName
       - practiceSlug
+      - reviewedWork
       - summary
     ReviewObservationCounts:
       type: object
@@ -15805,8 +15821,6 @@ components:
         agentJobId:
           type: string
           format: uuid
-        artifact:
-          $ref: "#/components/schemas/ReviewedWorkRef"
         assessment:
           type: string
           description: "Specified behavior in context: GOOD means desirable, BAD means\
@@ -15870,6 +15884,8 @@ components:
         recurrenceKey:
           type: string
           description: Cross-run locus key; null when continuity is unavailable
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
         severity:
           type: string
           description: Severity band (null unless outcome is NEGATIVE)
@@ -15886,7 +15902,6 @@ components:
           type: string
       required:
       - agentJobId
-      - artifact
       - assessmentStatus
       - claimCurrentness
       - feedback
@@ -15894,6 +15909,7 @@ components:
       - observedAt
       - practiceName
       - practiceSlug
+      - reviewedWork
       - summary
     ReviewPlacement:
       type: object
@@ -16102,19 +16118,14 @@ components:
       type: object
       description: Work reviewed by an agent job
       properties:
-        provider:
-          type: string
-          enum:
-          - GITHUB
-          - GITLAB
-          - SLACK
-          - OUTLINE
         reviewedWork:
           $ref: "#/components/schemas/ReviewedWorkRef"
           description: The reviewed work as every surface names it; absent when the
             run recorded no work
         title:
           type: string
+          description: "Heading the run is listed under, which a run without recorded\
+            \ work still needs"
         type:
           type: string
       required:
@@ -17133,6 +17144,11 @@ components:
         lastOpportunityAt:
           type: string
           format: date-time
+        opportunities:
+          type: integer
+          format: int32
+          description: "Distinct pieces of reviewed work the trend rests on, across\
+            \ both bundles"
         opportunitiesUntilComparable:
           type: integer
           format: int32
@@ -17146,6 +17162,7 @@ components:
       - bundleSize
       - credibilityThreshold
       - currentOpportunities
+      - opportunities
       - opportunitiesUntilComparable
       - previousOpportunities
       - ropeHalfWidth

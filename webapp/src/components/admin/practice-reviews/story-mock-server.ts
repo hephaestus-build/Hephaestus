@@ -41,7 +41,7 @@ function matches(selected: string[], actual: string | undefined): boolean {
 
 function withinScope(
 	url: URL,
-	row: { agentJobId: string; artifact?: { id: string; kind: string } },
+	row: { agentJobId: string; reviewedWork?: { id: string; kind: string } },
 ) {
 	const agentJobId = single(url, "agentJobId");
 	const artifactKind = single(url, "artifactKind");
@@ -49,10 +49,10 @@ function withinScope(
 	if (hasText(agentJobId) && row.agentJobId !== agentJobId) {
 		return false;
 	}
-	if (hasText(artifactKind) && row.artifact?.kind !== artifactKind) {
+	if (hasText(artifactKind) && row.reviewedWork?.kind !== artifactKind) {
 		return false;
 	}
-	if (hasText(artifactId) && row.artifact?.id !== artifactId) {
+	if (hasText(artifactId) && row.reviewedWork?.id !== artifactId) {
 		return false;
 	}
 	return true;

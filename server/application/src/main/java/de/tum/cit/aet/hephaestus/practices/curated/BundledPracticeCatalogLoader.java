@@ -56,7 +56,7 @@ public class BundledPracticeCatalogLoader {
      * What the developer keeps doing when this bundled practice holds, as one present-tense sentence.
      *
      * <p>Keyed by the bundled slug, which a workspace copy retains as its source slug, so the phrase reaches
-     * every workspace adopted from the catalog and follows a release rather than an adoption. Empty for a
+     * every workspace adopted from the catalog and follows a Hephaestus release rather than an adoption. Empty for a
      * practice the catalog does not ship.
      */
     public Optional<String> holdsAs(String bundledSlug) {

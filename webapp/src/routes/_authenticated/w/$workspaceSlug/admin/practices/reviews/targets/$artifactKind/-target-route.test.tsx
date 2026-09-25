@@ -17,8 +17,8 @@ vi.setConfig({ testTimeout: 15_000 });
 
 const URL_PATH = "/w/acme/admin/practices/reviews/targets/pull-request/42";
 
-const forArtifact = <T extends { artifact?: { id: string } }>(rows: T[]) =>
-	rows.filter((row) => row.artifact?.id === reviewArtifact.reviewedWork.id);
+const forArtifact = <T extends { reviewedWork?: { id: string } }>(rows: T[]) =>
+	rows.filter((row) => row.reviewedWork?.id === reviewArtifact.reviewedWork.id);
 
 /** The work as every row names it, and as the page links to it: the repository and the provider's own label. */
 const WORK_LINK = /ls1intum\/Hephaestus · #1423/u;

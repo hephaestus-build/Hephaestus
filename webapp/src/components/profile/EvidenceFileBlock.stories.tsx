@@ -78,6 +78,7 @@ export const AlwaysQuoted: Story = {
 		await expect(canvas.queryByRole("button")).toBeNull();
 	},
 };
+/** A code citation's caption still names the path and the lines, so the sentence may point at them. */
 export const Redacted: Story = {
 	args: {
 		location: {
@@ -87,6 +88,55 @@ export const Redacted: Story = {
 			sourceKind: "scm.pull-request.diff",
 			redacted: true,
 		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("lines 31 to 44")).toBeVisible();
+		await expect(canvas.getByText(/only its location was kept/u)).toBeVisible();
+	},
+};
+
+/**
+ * A withheld quote of an object source: the caption shows the source's name and no numbers, so the
+ * sentence cannot promise a path and a line the reader is not being shown.
+ */
+export const RedactedObjectSource: Story = {
+	args: {
+		location: {
+			path: "conversation_thread.json",
+			startLine: 62,
+			endLine: 70,
+			sourceKind: "slack.conversation.thread",
+			redacted: true,
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("The conversation")).toBeVisible();
+		await expect(canvas.getByText("Not quoted. The passage was withheld.")).toBeVisible();
+		await expect(canvas.queryByText(/location was kept/u)).toBeNull();
+		await expect(canvas.queryByText(/lines 62 to 70/u)).toBeNull();
+	},
+};
+
+/**
+ * The scanner's sentence on an object source: why nothing was stored, without pointing at a path
+ * and a line the caption does not carry.
+ */
+export const RedactedObjectSourceBySecretScanner: Story = {
+	args: {
+		location: {
+			path: "inputs/context/metadata.json",
+			startLine: 9,
+			endLine: 9,
+			sourceKind: "scm.pull-request.core",
+			redacted: true,
+		},
+		detector: "secret-diff-scanner",
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText("Not quoted. This looked like a credential, so the text was never stored."),
+		).toBeVisible();
+		await expect(canvas.queryByText(/where it sits/u)).toBeNull();
 	},
 };
 export const RedactedBySecretScanner: Story = {
@@ -100,6 +150,9 @@ export const RedactedBySecretScanner: Story = {
 			redacted: true,
 		},
 		detector: "secret-diff-scanner",
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/The path and line above are where it sits/u)).toBeVisible();
 	},
 };
 export const BareFileName: Story = {
@@ -179,8 +232,9 @@ export const CodeSourceKeepsItsLines: Story = {
 };
 
 /**
- * One changed line, cited from both sides of the diff: one block naming the file and the line
- * once, with what the line was above what it became.
+ * One changed line, cited from both sides of the diff: one block naming the file, with what the
+ * line was above what it became. The caption names no line range, because each side sits at its
+ * own coordinates in its own revision and the block shows both.
  */
 export const OneChangedLine: Story = {
 	args: {
@@ -198,8 +252,9 @@ export const OneChangedLine: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("pagination.ts")).toBeVisible();
-		// The file and its line are named once, in the caption, and neither side word is up there.
-		await expect(canvas.getAllByText("line 4")).toHaveLength(1);
+		// The file is named once, and neither a line range nor a side word is up there: a range over
+		// two sides would be true of one of them.
+		await expect(canvas.queryByText("line 4")).toBeNull();
 		const caption = canvas.getByText("pagination.ts").closest("figcaption");
 		if (!caption) {
 			throw new Error("The path is the block's caption");

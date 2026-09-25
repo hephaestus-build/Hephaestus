@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler.inapp;
 
+import de.tum.cit.aet.hephaestus.agent.handler.ObservationOrder;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
@@ -12,8 +13,11 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomyPolicy;
 import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
@@ -94,23 +98,32 @@ public final class InAppFeedbackRouter {
      * was done well — which reads as a false accusation to the one person who knows it is false. The same
      * goes for a pull request whose re-review came back clean: a piece of work counts once, at its newest
      * review ({@link LatestRun}), so a problem a later run no longer found is neither counted nor cited.
+     *
+     * <p>Which of a run's several problems on one piece of work stands for it is decided by
+     * {@link ObservationOrder#worstFirst()}, not by the order the rows came back in: they all carry that
+     * run's moment, so repository order would let the example the developer is shown be the mildest problem
+     * on that work. The pieces of work keep the window's order.
      */
     public static List<Observation> problemsIn(List<Observation> evidence) {
-        Set<String> cited = new HashSet<>();
-        return LatestRun.perWork(evidence).stream()
-                .filter(o -> o.getAssessmentStatus() == AssessmentStatus.ASSESSED)
-                .filter(o -> o.getOutcome() == Outcome.NEGATIVE)
-                .filter(o -> cited.add(workKey(o)))
-                .toList();
+        Comparator<Observation> worstFirst = ObservationOrder.worstFirst();
+        Map<String, Observation> worstPerWork = new LinkedHashMap<>();
+        for (Observation observation : LatestRun.perWork(evidence)) {
+            if (observation.getAssessmentStatus() != AssessmentStatus.ASSESSED
+                    || observation.getOutcome() != Outcome.NEGATIVE) {
+                continue;
+            }
+            worstPerWork.merge(
+                    workKey(observation),
+                    observation,
+                    (kept, next) -> worstFirst.compare(next, kept) < 0 ? next : kept);
+        }
+        return List.copyOf(worstPerWork.values());
     }
 
     /** How many separate pieces of work carry the problem — the unit of proof at the process level. */
     public static int distinctArtifacts(List<Observation> problems) {
         Set<String> artifacts = new HashSet<>();
         for (Observation problem : problems) {
-            if (problem.getArtifactKind() == null || problem.getArtifactId() == null) {
-                continue;
-            }
             artifacts.add(workKey(problem));
         }
         return artifacts.size();

@@ -43,8 +43,10 @@ export function work(ref: ReviewedWorkRef): FeedbackTextSegment {
 }
 
 /**
- * How the composer names a piece of work in a body: the provider's number after its sigil,
- * "#418" or "!421" — `feedback-composer.md` allows no other way to refer to work.
+ * How a piece of work is named in a body: the provider's number after its sigil, "#418" or "!421".
+ * `feedback-composer.md` writes the number the provider gave the work and nothing else, so the
+ * sigil the composer writes is "#"; the "!" a GitLab label carries is matched too, since a label is
+ * what a reference is compared against.
  */
 const WORK_REFERENCE = /[#!]\d+/gu;
 
@@ -52,17 +54,24 @@ const WORK_REFERENCE = /[#!]\d+/gu;
  * A run of the composer's own words with every reference to a piece of work the caller knows — a
  * card's evidence and its clean work — as a link to that piece. A number no known piece carries
  * stays words: a surface links what it can vouch for and invents nothing.
+ *
+ * A reference is read against the whole label first, sigil included, so "#21" reaches the issue and
+ * "!21" the merge request where a GitLab project numbers both independently. The sigil is dropped
+ * only when exactly one known piece carries that number, which is what lets a body written with "#"
+ * reach a merge request; where two do, the reference is ambiguous and stays words.
  */
 export function linkWork(body: string, known: ReviewedWorkRef[]): FeedbackTextSegment[] {
-	const byNumber = new Map(
-		known
-			.filter((ref) => /^[#!]\d+$/u.test(ref.label))
-			.map((ref) => [ref.label.slice(1), ref] as const),
-	);
+	const labelled = known.filter((ref) => /^[#!]\d+$/u.test(ref.label));
+	const byLabel = new Map(labelled.map((ref) => [ref.label, ref] as const));
+	const byNumber = new Map<string, ReviewedWorkRef | undefined>();
+	for (const ref of labelled) {
+		const number = ref.label.slice(1);
+		byNumber.set(number, byNumber.has(number) ? undefined : ref);
+	}
 	const segments: FeedbackTextSegment[] = [];
 	let cursor = 0;
 	for (const match of body.matchAll(WORK_REFERENCE)) {
-		const ref = byNumber.get(match[0].slice(1));
+		const ref = byLabel.get(match[0]) ?? byNumber.get(match[0].slice(1));
 		if (!ref) {
 			continue;
 		}
@@ -90,6 +99,19 @@ export const spell = (n: number, digits = n >= 10): string =>
  */
 export function count(n: number, one: string, many: string, digits = n >= 10): string {
 	return `${spell(n, digits)} ${n === 1 ? one : many}`;
+}
+
+/**
+ * Several counts in one clause, written under one rule: the clause goes to digits as soon as any
+ * of its counts does, so "16 practices and three groups" cannot happen. Each caller joins the
+ * pieces the way its own sentence reads — "16 practices in 5 groups" in the profile header, "three
+ * practices and one group" in the overview.
+ */
+export function countsTogether(
+	items: readonly { n: number; one: string; many: string }[],
+): string[] {
+	const digits = items.some((item) => item.n >= 10);
+	return items.map((item) => count(item.n, item.one, item.many, digits));
 }
 
 /**

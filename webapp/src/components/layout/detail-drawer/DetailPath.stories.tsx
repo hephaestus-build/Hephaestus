@@ -10,7 +10,7 @@ const meta = {
 	args: {
 		behind: [
 			{ label: "Practice profile", depth: 0 },
-			{ label: "All practices", depth: 1 },
+			{ label: "All practice groups", depth: 1 },
 			{ label: "Packaging work for review", depth: 2 },
 		],
 		current: "Practice",
@@ -27,12 +27,12 @@ export const ThreeDeep: Story = {
 	play: async ({ args, canvas }) => {
 		const path = canvas.getByRole("list", { name: "Path" });
 		await expect(path).toHaveTextContent(
-			"Practice profileAll practicesPackaging work for reviewPractice",
+			"Practice profileAll practice groupsPackaging work for reviewPractice",
 		);
 		await expect(canvas.getByText("Practice")).toHaveAttribute("aria-current", "location");
 		// A crumb follows the house link rule — plain at rest, blue and underlined on hover — and
 		// its pointer target reaches the 24 px minimum although the text is smaller.
-		const crumb = canvas.getByRole("button", { name: "All practices" });
+		const crumb = canvas.getByRole("button", { name: "All practice groups" });
 		await expect(crumb).not.toHaveClass("underline");
 		await expect(crumb).toHaveClass("hover:underline");
 		await expectTouchTarget(crumb);
@@ -74,6 +74,6 @@ export const WithoutAClose: Story = {
 	args: { onClose: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("button")).toBeNull();
-		await expect(canvas.getByText("All practices")).not.toHaveClass("hover:underline");
+		await expect(canvas.getByText("All practice groups")).not.toHaveClass("hover:underline");
 	},
 };

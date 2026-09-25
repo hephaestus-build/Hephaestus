@@ -5,7 +5,7 @@ import { parseArgs } from "node:util";
 
 import { Client } from "pg";
 
-import { positivePort, readEnvFile } from "./lib/env.ts";
+import { isLoopbackHost, positivePort, readEnvFile } from "./lib/env.ts";
 
 /**
  * Seeds the development database with practice reviews of one developer's work, so the Practice
@@ -68,7 +68,8 @@ const EVIDENCE_CONTRACT_VERSION = "1.0.0";
 /** `FeedbackLedgerRecorder.IN_APP_UNIT_ORDINAL_BASE`: the band an in-app unit's position sits in. */
 const IN_APP_POSITION_BASE = 7000;
 
-type Presence = "PRESENT" | "ABSENT" | "NOT_APPLICABLE" | "INCONCLUSIVE";
+type AssessmentStatus = "ASSESSED" | "NOT_APPLICABLE" | "UNDETERMINED";
+type Presence = "PRESENT" | "ABSENT";
 type Assessment = "GOOD" | "BAD";
 type Severity = "CRITICAL" | "MAJOR" | "MINOR" | "INFO";
 
@@ -89,8 +90,13 @@ interface Citation {
 
 interface SeedObservation {
 	practice: string;
-	presence: Presence;
+	/** `AssessmentStatus.validate`: only an ASSESSED observation carries a presence and an assessment. */
+	assessmentStatus: AssessmentStatus;
+	/** Whether the practice's behaviour was there, not whether that is good. */
+	presence?: Presence;
+	/** Whether that behaviour is desirable here, so ABSENT plus GOOD is the problem. */
 	assessment?: Assessment;
+	/** Set exactly on the negative outcomes: PRESENT with BAD, or ABSENT with GOOD. */
 	severity?: Severity;
 	/** The observation's title on the timeline; at most 255 characters. */
 	summary: string;
@@ -209,6 +215,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MAJOR",
@@ -224,6 +231,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "The change adds the notification service and nothing else.",
@@ -243,6 +251,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MAJOR",
@@ -258,6 +267,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "One fix, one file, one intention.",
@@ -266,6 +276,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "leaves-useful-specific-review-comments",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MINOR",
@@ -283,6 +294,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MINOR",
@@ -298,6 +310,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "The refactor stays inside the error handling it names.",
@@ -307,6 +320,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "leaves-useful-specific-review-comments",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MINOR",
@@ -324,6 +338,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MAJOR",
@@ -339,6 +354,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "The runner arrives on its own.",
@@ -346,8 +362,9 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "describe-what-and-why",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "MAJOR",
 				summary: "The description lists the files touched and not the problem behind them.",
 				rationale:
@@ -356,8 +373,9 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "honours-linked-issue-acceptance-criteria",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "MINOR",
 				summary: "The pull request closes its issue without naming a criterion.",
 				rationale:
@@ -373,8 +391,9 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "issue-has-checkable-outcome",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "MINOR",
 				summary: "The issue says the test is flaky and not what fixed looks like.",
 				rationale:
@@ -383,6 +402,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "issue-states-an-actionable-problem",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "The issue names the failing test and how often it fails.",
@@ -402,8 +422,9 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "GOOD",
+				assessment: "BAD",
 				summary: "The deactivation endpoint validates the id and binds it as a parameter.",
 				rationale:
 					"The id is parsed as a number before the lookup and the lookup binds it; nothing from the request reaches a sink as text.",
@@ -411,6 +432,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "One endpoint, one intention.",
@@ -418,8 +440,9 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "describe-what-and-why",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "MAJOR",
 				summary: "The description says what was added and not why.",
 				rationale:
@@ -435,8 +458,9 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "issue-has-checkable-outcome",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "MINOR",
 				summary: "The issue asks for backoff without saying how a maintainer would verify it.",
 				rationale:
@@ -445,6 +469,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "issue-states-an-actionable-problem",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "The issue states the failure a maintainer can reproduce.",
@@ -459,8 +484,9 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "GOOD",
+				assessment: "BAD",
 				summary: "The listing filter is parsed into an enum before it reaches the query.",
 				citation: diff(
 					USER_CONTROLLER,
@@ -471,6 +497,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MAJOR",
@@ -486,6 +513,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "describe-what-and-why",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "The description opens with the support request the listing answers.",
@@ -496,8 +524,9 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "ready-and-traceable-handoff",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "MINOR",
 				summary: "Marked ready with no link to the issue that asked for the listing.",
 				rationale:
@@ -506,6 +535,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "commit-subjects-explain-each-change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MINOR",
@@ -523,13 +553,15 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "GOOD",
+				assessment: "BAD",
 				summary: "The new role is validated against the enum before it is stored.",
 				citation: diff(ROLE_CONTROLLER, 40, 41, "Role role = Role.parse(request.role());"),
 			},
 			{
 				practice: "scope-one-reviewable-change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MAJOR",
@@ -540,6 +572,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "describe-what-and-why",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary:
@@ -551,6 +584,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "commit-subjects-explain-each-change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MAJOR",
@@ -561,8 +595,9 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "honours-linked-issue-acceptance-criteria",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "MAJOR",
 				summary: "Closes an issue with four acceptance criteria and names none of them.",
 				rationale:
@@ -571,8 +606,9 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "ships-tests-with-the-change",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "MAJOR",
 				summary: "No test exercises the new role change.",
 				rationale:
@@ -581,7 +617,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "changes-dependencies-deliberately",
-				presence: "NOT_APPLICABLE",
+				assessmentStatus: "NOT_APPLICABLE",
 				summary: "No dependency changed in this pull request.",
 				citation: files("No build file in the diff."),
 			},
@@ -594,6 +630,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "leaves-useful-specific-review-comments",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "Each comment names the line and the change to make.",
@@ -613,8 +650,9 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "GOOD",
+				assessment: "BAD",
 				summary: "Role inspection reads ids only and binds them.",
 				citation: diff(
 					"src/main/java/de/tum/cit/aet/users/RoleQueryRepository.java",
@@ -625,6 +663,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MINOR",
@@ -635,6 +674,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "describe-what-and-why",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "The description explains who inspects roles and why.",
@@ -645,8 +685,9 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "ready-and-traceable-handoff",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "MINOR",
 				summary: "Marked ready without a link to its issue.",
 				rationale:
@@ -655,8 +696,9 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "ships-tests-with-the-change",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "MAJOR",
 				summary: "The role listing has no test.",
 				rationale: "The diff adds the listing endpoint and touches no test file.",
@@ -664,7 +706,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "changes-dependencies-deliberately",
-				presence: "NOT_APPLICABLE",
+				assessmentStatus: "NOT_APPLICABLE",
 				summary: "No dependency changed in this pull request.",
 				citation: files("No build file in the diff."),
 			},
@@ -677,6 +719,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "scope-one-reviewable-change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MAJOR",
@@ -692,6 +735,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "leaves-useful-specific-review-comments",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "The review names the boundary case and the fix for it.",
@@ -709,6 +753,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "scope-one-reviewable-change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "BAD",
 				severity: "MAJOR",
@@ -724,6 +769,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "ready-and-traceable-handoff",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "Marked ready with its issue linked and the draft label gone.",
@@ -731,6 +777,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "commit-subjects-explain-each-change",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "Each commit subject says what it changes.",
@@ -738,8 +785,9 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "ships-tests-with-the-change",
+				assessmentStatus: "ASSESSED",
 				presence: "ABSENT",
-				assessment: "BAD",
+				assessment: "GOOD",
 				severity: "MINOR",
 				summary: "The sign-in stamp has no test that reads it back.",
 				rationale:
@@ -753,6 +801,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "leaves-useful-specific-review-comments",
+				assessmentStatus: "ASSESSED",
 				presence: "PRESENT",
 				assessment: "GOOD",
 				summary: "The one comment names the line and the change.",
@@ -1112,9 +1161,9 @@ async function insertReviews(client: Client, resolved: Resolved, counts: Counts)
 			await client.query(
 				`INSERT INTO observation (
 					id, occurrence_key, agent_job_id, practice_id, artifact_kind, artifact_id, about_user_id,
-					summary, presence, severity, evidence, evidence_rationale, observed_at,
+					summary, assessment_status, presence, severity, evidence, evidence_rationale, observed_at,
 					practice_revision_id, assessment, origin, workspace_id
-				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'LIVE', $16)`,
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'LIVE', $17)`,
 				[
 					observationId,
 					`seed-practice-profile-${observationOrdinal}`,
@@ -1124,7 +1173,8 @@ async function insertReviews(client: Client, resolved: Resolved, counts: Counts)
 					artifact.id,
 					developerId,
 					observation.summary,
-					observation.presence,
+					observation.assessmentStatus,
+					observation.presence ?? null,
 					observation.severity ?? null,
 					JSON.stringify({ detector: "practice-observer", citations: [citation] }),
 					observation.rationale ?? null,
@@ -1240,8 +1290,7 @@ async function main(): Promise<void> {
 	const env = { ...(await readEnvFile(path.join(server, ".env"))), ...process.env };
 	const host = env.POSTGRES_HOST ?? "localhost";
 	// The seed writes straight into the database, so it refuses every host but this machine's.
-	// The loopback rule lives in `scripts/e2e-setup.ts`, on E2E_DB_URL; this is the same list.
-	if (!["localhost", "127.0.0.1", "[::1]", "::1"].includes(host)) {
+	if (!isLoopbackHost(host)) {
 		throw new Error("POSTGRES_HOST must be a loopback address");
 	}
 	const client = new Client({

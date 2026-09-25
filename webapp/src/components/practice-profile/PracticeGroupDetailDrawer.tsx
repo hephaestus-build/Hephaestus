@@ -18,6 +18,7 @@ import { hasText } from "@/lib/text";
 
 import {
 	DEFAULT_PRACTICE_TAB,
+	openLevelId,
 	type PracticeGroupDetailSelection,
 	type PracticeProfileDetailLevelKind,
 	type PracticeTab,
@@ -81,6 +82,12 @@ export interface PracticeGroupDetailDrawerProps {
 	/** The practice level's tab, from the route's search params; the route owns the navigation. */
 	practiceTab?: PracticeTab;
 	/**
+	 * How many rows the practice level's review-run skeleton stands in for. Defaults to the page
+	 * size the route asks the feed for, `REVIEW_RUN_PAGE_SIZE`, so the skeleton is the size of what
+	 * arrives.
+	 */
+	skeletonRows?: number;
+	/**
 	 * Writes the selection in place — the tab is a view of the level, not a place — so Escape and
 	 * Back leave the level in one step however many were opened.
 	 */
@@ -109,11 +116,12 @@ export function PracticeGroupDetailDrawer({
 	groupOverview,
 	ratingProps,
 	practiceTab = DEFAULT_PRACTICE_TAB,
+	skeletonRows = REVIEW_RUN_PAGE_SIZE,
 	onSelectionChange,
 }: PracticeGroupDetailDrawerProps) {
 	const groupIndex = detailStack.findIndex((entry) => entry.kind === "practice-group");
-	const openGroupSlug = groupIndex === -1 ? undefined : detailStack[groupIndex]?.id;
-	const openPracticeSlug = detailStack.find((entry) => entry.kind === "practice")?.id;
+	const openGroupSlug = openLevelId(detailStack, "practice-group");
+	const openPracticeSlug = openLevelId(detailStack, "practice");
 	const openGroup = groups.find((candidate) => candidate.slug === openGroupSlug);
 	const openStanding = hasText(openGroupSlug) ? groupStandings[openGroupSlug] : undefined;
 	const load = loadProps(state);
@@ -157,7 +165,7 @@ export function PracticeGroupDetailDrawer({
 							feed={detail.feed}
 							feedbackCards={feedbackCards}
 							ratingProps={ratingProps}
-							skeletonRows={REVIEW_RUN_PAGE_SIZE}
+							skeletonRows={skeletonRows}
 							// The group level is under the practice's whenever the group is known, so a
 							// card's group name goes back to it.
 							onOpenGroup={openGroup && (() => onClose(groupIndex + 1))}

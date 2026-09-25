@@ -7,6 +7,7 @@ import type {
 	ReviewedWorkRef,
 } from "@/api/types.gen";
 import { count, type FeedbackTextSegment } from "@/components/common/feedback-text";
+import { ATTENTION_DEFS } from "@/components/practice-vocabulary/attention-defs";
 import type { PracticeFeedbackCardEntry } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { ARTIFACT_KIND } from "@/lib/artifact-kinds";
 
@@ -62,6 +63,10 @@ const change = (
 	practiceName: name,
 	groupSlug: "review-ready-work",
 	groupName: "Packaging work for review",
+	// A feedback change on the wire always names the piece it is about, and a fall back says what
+	// the clean run it emptied was: a row in "What needs your attention" is built from both.
+	...(type.startsWith("FEEDBACK_") ? { feedbackId: `${slug}-feedback` } : {}),
+	...(type === "FEEDBACK_RESET" ? { cleanNeeded: 3 } : {}),
 	evidence: [pullRequest(421), pullRequest(425)],
 	...extra,
 });
@@ -70,7 +75,7 @@ const held = (slug: string, name: string, cleanWork: number): HeldPractice => ({
 	practiceSlug: slug,
 	practiceName: name,
 	groupSlug: "review-ready-work",
-	holdsAs: "every comment got an answer before the next push",
+	holdsAs: "every reviewer comment gets a visible answer",
 	cleanWork,
 	workKind: ARTIFACT_KIND.pullRequest,
 	since: new Date("2026-08-20T09:00:00Z"),
@@ -171,25 +176,24 @@ describe("composeOverview", () => {
 		expect(composed.restCount).toBe(0);
 	});
 
-	it("names one change in full", () => {
+	it("gives new feedback a row rather than a sentence, and the paragraph nothing to say", () => {
 		const composed = composeOverview(
 			overview({
 				changes: [change("FEEDBACK_NEW", "scope-one-concern", "Scope the change to one concern")],
 			}),
 		);
-		expect(plain(composed.changed)).toBe(
-			"There is new feedback on Scope the change to one concern, seen on !421 and !425.",
-		);
-		expect(composed.changed).toContainEqual({
-			type: "practice",
-			slug: "scope-one-concern",
-			name: "Scope the change to one concern",
-		});
-		expect(composed.changed).toContainEqual({ type: "work", ref: pullRequest(421) });
+		expect(composed.needsAttention).toHaveLength(1);
+		const [row] = composed.needsAttention;
+		expect(row?.practiceName).toBe("Scope the change to one concern");
+		expect(row?.feedbackId).toBe("scope-one-concern-feedback");
+		expect(plain(row?.sentence)).toBe("There is new feedback, seen on !421 and !425");
+		expect(row?.sentence).toContainEqual({ type: "work", ref: pullRequest(421) });
+		// The block said it, so the paragraph neither repeats it nor counts it.
+		expect(plain(composed.changed)).toBe("");
 		expect(composed.rest).toStrictEqual([]);
 	});
 
-	it("names new feedback and one slip, then counts the rest — three events", () => {
+	it("names one slip and counts the rest, with the new feedback in a row — three events", () => {
 		const composed = composeOverview(
 			overview({
 				changes: [
@@ -206,9 +210,11 @@ describe("composeOverview", () => {
 				],
 			}),
 		);
+		expect(composed.needsAttention.map((row) => row.practiceName)).toStrictEqual([
+			"Scope the change to one concern",
+		]);
 		expect(plain(composed.changed)).toBe(
-			"There is new feedback on Scope the change to one concern, seen on !421 and !425. " +
-				"Keep the diff reviewable in one sitting moved to Needs attention after !423. " +
+			"Keep the diff reviewable in one sitting moved to Needs attention after !423. " +
 				"One more practice changed as well; the practices table lists them.",
 		);
 		expect(composed.restCount).toBe(1);
@@ -218,7 +224,7 @@ describe("composeOverview", () => {
 		);
 	});
 
-	it("keeps the paragraph to two pieces of new feedback, one slip and one count — nine events", () => {
+	it("keeps the paragraph to one slip and one count, the rows to two — nine events", () => {
 		const changes = [
 			...[1, 2, 3].map((n) => change("FEEDBACK_NEW", `new-${n}`, `New ${n}`)),
 			...[1, 2].map((n) =>
@@ -235,12 +241,14 @@ describe("composeOverview", () => {
 			}),
 		];
 		const composed = composeOverview(overview({ changes }));
-		// The further piece of new feedback, the other slip and the moves up are one count: the
-		// paragraph never adds bad news up sentence by sentence. The two it names got their
-		// feedback on the same work, so they are named together rather than twice over.
+		// Two pieces of new feedback take a row each; the further one, the other slip and the moves
+		// up are one count, since the paragraph never adds bad news up sentence by sentence.
+		expect(composed.needsAttention.map((row) => row.practiceName)).toStrictEqual([
+			"New 1",
+			"New 2",
+		]);
 		expect(plain(composed.changed)).toBe(
-			"There is new feedback on New 1 and New 2, seen on !421 and !425. " +
-				"Down 1 moved to Mixed feedback after !421 and !425. " +
+			"Down 1 moved to Mixed feedback after !421 and !425. " +
 				"Five more practices and one group changed as well; the practices table lists them.",
 		);
 		// What the paragraph counted is exactly what unfolds, the named events left out.
@@ -261,9 +269,9 @@ describe("composeOverview", () => {
 	it("unfolds the rest by kind, four named per kind then a count — 22 events", () => {
 		const composed = composeOverview(overview({ changes: synthetic(22) }));
 		const sentences = plain(composed.changed).split(". ");
-		// The paragraph never outgrows its budget, however many events there are: two named pieces
-		// of new feedback — one sentence, since they were seen on the same work — and one count.
-		expect(sentences).toHaveLength(2);
+		// The paragraph never outgrows its budget, however many events there are: nothing slipped
+		// here, the new feedback is two rows, so what is left is the one count.
+		expect(sentences).toHaveLength(1);
 		expect(composed.rest.map((paragraph) => paragraph.title)).toStrictEqual([
 			"New feedback",
 			"Moved up",
@@ -286,6 +294,40 @@ describe("composeOverview", () => {
 				"over !421 and !425.",
 		);
 		expect(trends).not.toMatch(/the same way/u);
+	});
+
+	it("closes the new-feedback rest in that kind's words, not as a move", () => {
+		// Two pieces take a row and four are named here, so one is left to count.
+		const composed = composeOverview(
+			overview({
+				changes: Array.from({ length: 7 }, (_, index) =>
+					change("FEEDBACK_NEW", `new-${index}`, `New ${index}`),
+				),
+			}),
+		);
+		const fresh = composed.rest.find((paragraph) => paragraph.title === "New feedback");
+		expect(plain(fresh?.segments)).toMatch(
+			/One further practice has new feedback; the practices table lists them\.$/u,
+		);
+		expect(plain(fresh?.segments)).not.toMatch(/moved/u);
+	});
+
+	it("closes the trend rest with the trends turning, not moving", () => {
+		const composed = composeOverview(
+			overview({
+				changes: Array.from({ length: 6 }, (_, index) =>
+					change("TREND_TURNED", `trend-${index}`, `Trend ${index}`, {
+						from: "STEADY",
+						to: "IMPROVING",
+					}),
+				),
+			}),
+		);
+		const trends = composed.rest.find((paragraph) => paragraph.title === "Trends turned");
+		expect(plain(trends?.segments)).toMatch(
+			/Two further practices saw their trends turn; the practices table lists them\.$/u,
+		);
+		expect(plain(trends?.segments)).not.toMatch(/moved/u);
 	});
 
 	it("names a group that moved as the group itself, not as a practice", () => {
@@ -377,7 +419,7 @@ describe("composeOverview held rows", () => {
 		expect(plain(composed.holdingUp[0]?.note)).toBe("on 9 September");
 		expect(composed.holdingUp[0]?.note.some((segment) => segment.type === "work")).toBe(false);
 		expect(composed.holdingUp[1]).toMatchObject({
-			statement: "Every comment got an answer before the next push",
+			statement: "Every reviewer comment gets a visible answer",
 		});
 		expect(plain(composed.holdingUp[1]?.note)).toBe("held across nine pull requests");
 		expect(composed.holdingUpNote).toBe("Another practice held too.");
@@ -444,9 +486,172 @@ describe("composeOverview held rows", () => {
 		});
 	});
 
+	it("counts the rows it hid by kind: resolved feedback is not a practice that held", () => {
+		const composed = composeOverview(
+			overview({
+				changes: Array.from({ length: 4 }, (_, index) =>
+					change("FEEDBACK_RESOLVED", `resolved-${index}`, `Resolved ${index}`, {
+						resolvedBy: "WORK",
+					}),
+				),
+			}),
+		);
+		expect(composed.holdingUp).toHaveLength(3);
+		expect(composed.holdingUpNote).toBe("Another piece of feedback resolved too.");
+	});
+
+	it("names both kinds in one sentence when the rows hid some of each", () => {
+		const composed = composeOverview(
+			overview({
+				holdingUp: [held("a", "A", 5), held("b", "B", 3)],
+				changes: Array.from({ length: 4 }, (_, index) =>
+					change("FEEDBACK_RESOLVED", `resolved-${index}`, `Resolved ${index}`, {
+						resolvedBy: "WORK",
+					}),
+				),
+			}),
+		);
+		expect(composed.holdingUpNote).toBe(
+			"Another piece of feedback resolved and two practices held too.",
+		);
+	});
+
 	it("has no note when every held practice fits", () => {
 		const composed = composeOverview(overview({ holdingUp: [held("a", "A", 3)] }));
 		expect(composed.holdingUpNote).toBeUndefined();
+	});
+});
+
+describe("what needs your attention", () => {
+	it("says where the clean run fell back to and on which work", () => {
+		const composed = composeOverview(
+			overview({
+				changes: [
+					change("FEEDBACK_RESET", "diff-size", "Keep the diff reviewable in one sitting", {
+						evidence: [pullRequest(425)],
+					}),
+				],
+			}),
+		);
+		const [row] = composed.needsAttention;
+		expect(row?.practiceName).toBe("Keep the diff reviewable in one sitting");
+		expect(row?.feedbackId).toBe("diff-size-feedback");
+		expect(plain(row?.sentence)).toBe("Back to 0 of 3 clean after !425");
+		expect(row?.sentence).toContainEqual({ type: "work", ref: pullRequest(425) });
+		// Status lives in the glyph the row carries, never in coloured words.
+		expect(row?.def).toBe(ATTENTION_DEFS.reset);
+	});
+
+	it("says only that the run is empty when the wire did not say how long it is", () => {
+		const composed = composeOverview(
+			overview({
+				changes: [
+					change("FEEDBACK_RESET", "diff-size", "Keep the diff", {
+						cleanNeeded: undefined,
+						evidence: [pullRequest(425)],
+					}),
+				],
+			}),
+		);
+		expect(plain(composed.needsAttention[0]?.sentence)).toBe("Back to no clean work after !425");
+	});
+
+	it("puts the fall backs first, then the new feedback, each newest first", () => {
+		const composed = composeOverview(
+			overview({
+				changes: [
+					change("FEEDBACK_NEW", "new-old", "New older", { at: new Date("2026-09-01T09:00:00Z") }),
+					change("FEEDBACK_RESET", "reset-one", "Reset one"),
+				],
+			}),
+		);
+		expect(composed.needsAttention.map((row) => row.practiceName)).toStrictEqual([
+			"Reset one",
+			"New older",
+		]);
+		expect(composed.needsAttention.map((row) => row.def)).toStrictEqual([
+			ATTENTION_DEFS.reset,
+			ATTENTION_DEFS.new,
+		]);
+	});
+
+	it("caps the rows at two and leaves the rest to the paragraph's count", () => {
+		const composed = composeOverview(
+			overview({
+				changes: [
+					...[1, 2].map((n) => change("FEEDBACK_RESET", `reset-${n}`, `Reset ${n}`)),
+					...[1, 2].map((n) => change("FEEDBACK_NEW", `new-${n}`, `New ${n}`)),
+				],
+			}),
+		);
+		expect(composed.needsAttention.map((row) => row.practiceName)).toStrictEqual([
+			"Reset 1",
+			"Reset 2",
+		]);
+		expect(plain(composed.changed)).toBe(
+			"Two more practices changed as well; the practices table lists them.",
+		);
+		expect(composed.restCount).toBe(2);
+		expect(composed.rest.map((paragraph) => paragraph.title)).toStrictEqual(["New feedback"]);
+	});
+
+	it("has no rows when nothing asks for the reader today", () => {
+		const composed = composeOverview(
+			overview({
+				changes: [
+					change("STANDING_MOVED", "diff-size", "Keep the diff reviewable in one sitting", {
+						from: "MIXED",
+						to: "DEVELOPING",
+					}),
+				],
+			}),
+		);
+		expect(composed.needsAttention).toStrictEqual([]);
+	});
+
+	it("leaves a standing that slipped in the paragraph: a standing is a balance, not a thing to do", () => {
+		const composed = composeOverview(
+			overview({
+				changes: [
+					change("FEEDBACK_RESET", "reset-one", "Reset one", { evidence: [pullRequest(425)] }),
+					change("STANDING_MOVED", "diff-size", "Keep the diff reviewable in one sitting", {
+						from: "MIXED",
+						to: "DEVELOPING",
+						evidence: [pullRequest(423)],
+					}),
+				],
+			}),
+		);
+		expect(composed.needsAttention.map((row) => row.practiceName)).toStrictEqual(["Reset one"]);
+		expect(plain(composed.changed)).toBe(
+			"Keep the diff reviewable in one sitting moved to Needs attention after !423.",
+		);
+	});
+
+	it("drops a held practice whose feedback the work fell back on", () => {
+		const composed = composeOverview(
+			overview({
+				holdingUp: [held("scope", "Scope", 4)],
+				changes: [change("FEEDBACK_RESET", "scope", "Scope")],
+			}),
+		);
+		expect(composed.holdingUp).toStrictEqual([]);
+	});
+
+	it("unfolds the fall backs it only counted in that kind's own words", () => {
+		const composed = composeOverview(
+			overview({
+				changes: Array.from({ length: 3 }, (_, index) =>
+					change("FEEDBACK_RESET", `reset-${index}`, `Reset ${index}`, {
+						evidence: [pullRequest(425)],
+					}),
+				),
+			}),
+		);
+		expect(composed.rest.map((paragraph) => paragraph.title)).toStrictEqual([
+			"Back to no clean work",
+		]);
+		expect(plain(composed.rest[0]?.segments)).toBe("Reset 2 is back to 0 of 3 clean after !425.");
 	});
 });
 
@@ -460,8 +665,23 @@ describe("dedupe", () => {
 				],
 			}),
 		);
-		expect(plain(composed.changed)).toBe("There is new feedback on Scope, seen on !421 and !425.");
+		expect(composed.needsAttention.map((row) => row.practiceName)).toStrictEqual(["Scope"]);
+		expect(plain(composed.changed)).toBe("");
 		expect(composed.restCount).toBe(0);
+	});
+
+	it("keeps the fall back over new feedback when one practice did both", () => {
+		const composed = composeOverview(
+			overview({
+				changes: [
+					change("FEEDBACK_NEW", "scope", "Scope"),
+					change("FEEDBACK_RESET", "scope", "Scope", { evidence: [pullRequest(425)] }),
+				],
+			}),
+		);
+		expect(composed.needsAttention.map((row) => plain(row.sentence))).toStrictEqual([
+			"Back to 0 of 3 clean after !425",
+		]);
 	});
 
 	it("drops a held practice that also slipped: holding and slipping contradict", () => {
@@ -877,8 +1097,7 @@ describe("composeNextStep", () => {
 		feedbackId: "f1",
 		practiceSlug: "scope",
 		practiceName: "Scope the change to one concern",
-		groupSlug: "review-ready-work",
-		groupName: "Packaging work for review",
+		group: { slug: "review-ready-work", name: "Packaging work for review" },
 		headline: "Merge requests bundle a fix with a refactor",
 		body: "",
 		reviewedWork: [
@@ -887,7 +1106,7 @@ describe("composeNextStep", () => {
 		],
 		nextStep: "Open the fix first as its own merge request.",
 		condition: [],
-		cleanWork: [pullRequest(423)],
+		cleanWork: [{ ref: pullRequest(423), date: "2026-09-08" }],
 		cleanNeeded: 3,
 		state: "open",
 		timestamp: "2026-09-09T14:10:00.000Z",

@@ -10,10 +10,12 @@ import { ReviewRunTimeline } from "./ReviewRunTimeline";
 
 const baseObservation = {
 	id: "00000000-0000-0000-0000-000000000102",
-	feedbackId: "00000000-0000-0000-0000-000000000103",
-	feedbackUsefulness: "HELPFUL",
-	feedbackResolution: "ADDRESSED",
-	feedbackResponseComment: "Applied in the next revision.",
+	feedbackResponse: {
+		feedbackId: "00000000-0000-0000-0000-000000000103",
+		usefulness: "HELPFUL",
+		resolution: "ADDRESSED",
+		comment: "Applied in the next revision.",
+	},
 	practiceSlug: "records-decisions",
 	practiceName: "Record significant decisions and the reasoning",
 	summary: "The workspace trade-off is documented",

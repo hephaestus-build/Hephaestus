@@ -1,11 +1,12 @@
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useState } from "react";
 
+import { cn } from "cn";
 import type { PracticeGroupReviewRun, ReviewedWorkRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
+import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { artifactKindIcon } from "@/lib/artifact-kinds";
 import { asDate, formatShortDay, formatTime } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
@@ -77,7 +78,7 @@ export function ReviewRunCard({
 			tailContinues={tailContinues}
 		>
 			<div className="min-w-0 overflow-hidden rounded-xl border bg-background">
-				{!merged && <ReviewedWorkHead work={run.reviewedWork} />}
+				{!merged && <ReviewedWork work={run.reviewedWork} tone="head" />}
 				<ul className="divide-y">
 					{visibleObservations.map((observation, index) => (
 						<ReviewObservationRow
@@ -88,9 +89,11 @@ export function ReviewRunCard({
 							// Either the card's head or the row's own work line links the work every
 							// observation here was seen on, so the evidence block never links it again.
 							showWorkLink={false}
-							work={merged ? <ReviewedWorkLine work={run.reviewedWork} /> : undefined}
+							work={merged ? <ReviewedWork work={run.reviewedWork} tone="line" /> : undefined}
 							onRespond={observations.onRespond}
-							isFeedbackResponsePending={observations.pendingFeedbackId === observation.feedbackId}
+							isFeedbackResponsePending={
+								observations.pendingFeedbackId === observation.feedbackResponse?.feedbackId
+							}
 						/>
 					))}
 				</ul>
@@ -118,64 +121,56 @@ export function ReviewRunCard({
 }
 
 /**
- * The work a run reviewed, at the head of a card whose observations are several: the link the
- * rows below it share, with the repository under it.
+ * The work a run reviewed, in the two shapes a card needs it.
+ *
+ * `head` is the head of a card whose observations are several: the link the rows below it share,
+ * with the repository under it. `line` is the same work under a merged card's summary, on one
+ * small line — "#902 · HephaestusTest/practice-validation" — where the summary is the block's
+ * anchor and the work it was seen on reads as the note beneath it rather than as a second head.
+ *
+ * One component, because the two differ in layout and type size only: whether the work is linked,
+ * how it is tooltipped and when the repository is printed are the same decisions, and a fix to one
+ * copy of them would have missed the other.
  */
-function ReviewedWorkHead({ work }: { work: ReviewedWorkRef }) {
-	const KindIcon = artifactKindIcon(work.kind);
+function ReviewedWork({ work, tone }: { work: ReviewedWorkRef; tone: "head" | "line" }) {
+	const Icon = reviewedWorkIcon(work.kind, work.provider);
 	// The wire names the work: "#902", "#backend-guild", a document's title.
 	const identity = work.label;
-	return (
-		<div className="flex min-w-0 items-start gap-2.5 border-b px-4 py-3">
-			<KindIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-			<div className="flex min-w-0 flex-col gap-0.5">
-				{hasText(work.url) ? (
-					<Tooltip>
-						<TooltipTrigger
-							render={
-								<InlineLink href={work.url} external className="flex min-w-0 text-sm font-medium">
-									<span className="truncate">{identity}</span>
-								</InlineLink>
-							}
-						/>
-						<TooltipContent className="max-w-80 text-pretty">{identity}</TooltipContent>
-					</Tooltip>
-				) : (
-					<p className="truncate text-sm font-medium">{identity}</p>
-				)}
-				{hasText(work.repositoryName) && (
-					<p className="truncate text-xs text-muted-foreground">{work.repositoryName}</p>
-				)}
-			</div>
-		</div>
+	const isHead = tone === "head";
+	const typography = isHead ? "text-sm font-medium" : "text-xs";
+	const name = hasText(work.url) ? (
+		<Tooltip>
+			<TooltipTrigger
+				render={
+					<InlineLink href={work.url} external className={cn("flex min-w-0", typography)}>
+						<span className="truncate">{identity}</span>
+					</InlineLink>
+				}
+			/>
+			<TooltipContent className="max-w-80 text-pretty">{identity}</TooltipContent>
+		</Tooltip>
+	) : (
+		<span className={cn("truncate", typography)}>{identity}</span>
 	);
-}
 
-/**
- * The same work under a merged card's summary, on one small line: "#902 ·
- * HephaestusTest/practice-validation". The summary is the block's anchor, so the work it was seen
- * on reads as the note beneath it rather than as a second head.
- */
-function ReviewedWorkLine({ work }: { work: ReviewedWorkRef }) {
-	const KindIcon = artifactKindIcon(work.kind);
-	const identity = work.label;
+	if (isHead) {
+		return (
+			<div className="flex min-w-0 items-start gap-2.5 border-b px-4 py-3">
+				<Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+				<div className="flex min-w-0 flex-col gap-0.5">
+					{name}
+					{hasText(work.repositoryName) && (
+						<span className="truncate text-xs text-muted-foreground">{work.repositoryName}</span>
+					)}
+				</div>
+			</div>
+		);
+	}
+
 	return (
 		<span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-			<KindIcon className="size-3.5 shrink-0" aria-hidden />
-			{hasText(work.url) ? (
-				<Tooltip>
-					<TooltipTrigger
-						render={
-							<InlineLink href={work.url} external className="flex min-w-0 text-xs">
-								<span className="truncate">{identity}</span>
-							</InlineLink>
-						}
-					/>
-					<TooltipContent className="max-w-80 text-pretty">{identity}</TooltipContent>
-				</Tooltip>
-			) : (
-				<span className="truncate">{identity}</span>
-			)}
+			<Icon className="size-3.5 shrink-0" aria-hidden />
+			{name}
 			{hasText(work.repositoryName) && (
 				<>
 					<span aria-hidden>·</span>

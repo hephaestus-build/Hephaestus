@@ -1842,6 +1842,20 @@ export type IdentityView = {
 };
 
 /**
+ * One piece of work that came back clean on the practice since the feedback was prepared
+ */
+export type InAppCleanWork = {
+  /**
+   * When that piece was reviewed
+   */
+  reviewedAt: Date;
+  /**
+   * The piece of work, as every surface names it
+   */
+  reviewedWork: ReviewedWorkRef;
+};
+
+/**
  * One piece of work the pattern was observed on
  */
 export type InAppEvidence = {
@@ -1852,15 +1866,15 @@ export type InAppEvidence = {
   /**
    * What the review made of this piece of work: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out
    */
-  outcome: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP';
+  outcome: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * The piece of work, as every surface names it
+   */
+  reviewedWork: ReviewedWorkRef;
   /**
    * What the review recorded on this piece of work
    */
   summary?: string;
-  /**
-   * The piece of work, as every surface names it
-   */
-  work: ReviewedWorkRef;
 };
 
 /**
@@ -1876,9 +1890,9 @@ export type InAppFeedback = {
    */
   cleanNeeded: number;
   /**
-   * The pieces of work in a row that came back clean on the practice since the feedback was prepared, oldest first, at most cleanNeeded of them; a problem empties it, and once resolved these are exactly the pieces that resolved it
+   * The pieces of work in a row that came back clean on the practice since the feedback was prepared, each with the date it was reviewed, oldest first, at most cleanNeeded of them; a problem empties it, and once resolved these are exactly the pieces that resolved it
    */
-  cleanWork: Array<ReviewedWorkRef>;
+  cleanWork: Array<InAppCleanWork>;
   /**
    * The pieces of work the habit was observed on, newest first
    */
@@ -1897,13 +1911,9 @@ export type InAppFeedback = {
   headline: string;
   id: string;
   /**
-   * The habit to try next, on its own; null for a message written without one
+   * The habit to try next, on its own; null for feedback prepared without one
    */
   nextStep?: string;
-  /**
-   * How many distinct pieces of work the evidence names
-   */
-  occurrenceCount: number;
   /**
    * When the practice's review rules changed after this was prepared, which closes it without a resolution: the evidence was measured by rules the practice no longer has; null while the rules are the ones it was measured by
    */
@@ -1921,6 +1931,10 @@ export type InAppFeedback = {
    * When this developer first opened it; null until they have
    */
   readAt?: Date;
+  /**
+   * When the developer's own answer resolved it: they marked it addressed or not applicable; null while they have not answered or their answer disputes it
+   */
+  resolvedByDeveloperAt?: Date;
   /**
    * When the work resolved it: the review of the piece of work that completed the clean run; null while the work has not
    */
@@ -2446,7 +2460,7 @@ export type ObservationDetail = {
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
-   * What to do — the delivered feedback for this observation (null if nothing was delivered)
+   * What to do — the text of the newest feedback unit that said something about this observation to this developer (null if nothing was said)
    */
   deliveredFeedback?: string;
   evidence?: ObservationEvidence;
@@ -2455,21 +2469,9 @@ export type ObservationDetail = {
    */
   evidenceRationale?: string;
   /**
-   * The newest delivered feedback that carried this observation to the developer; the handle for responding to it (null when none was delivered)
+   * The developer's standing answer to the very feedback whose text deliveredFeedback shows, with that unit's id as the handle for responding (null when nothing was said, or when the unit that said it failed to deliver and so cannot be answered)
    */
-  feedbackId?: string;
-  /**
-   * The developer's resolution response to that feedback
-   */
-  feedbackResolution?: 'ADDRESSED' | 'DISPUTED' | 'NOT_APPLICABLE';
-  /**
-   * The developer's comment on that feedback
-   */
-  feedbackResponseComment?: string;
-  /**
-   * The developer's usefulness response to that feedback
-   */
-  feedbackUsefulness?: 'HELPFUL' | 'UNHELPFUL';
+  feedbackResponse?: FeedbackResponse;
   /**
    * Observation ID
    */
@@ -3593,13 +3595,13 @@ export type PracticeStanding = {
  */
 export type PracticeStandingObservation = {
   /**
-   * What to do — the delivered feedback for this observation (null if nothing was delivered)
+   * What to do — the text of the newest feedback unit that said something about this observation to this developer (null if nothing was said)
    */
   deliveredFeedback?: string;
   /**
-   * What this observation says about the developer: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out. The lists only separate positive from negative, so this is what tells the two kinds of each apart.
+   * What this observation says about the developer: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out. The lists only separate positive from negative, so this is what tells the two kinds of each apart. Only assessed observations reach a standing, so NOT_APPLICABLE and UNDETERMINED never appear here.
    */
-  kind: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP';
+  kind: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
    * Where in the work, e.g. "FrameRecorder.swift:212", when known
    */
@@ -3900,7 +3902,11 @@ export type ProfileChange = {
    */
   at: Date;
   /**
-   * The reviewed work that drove the change, newest first: for feedback the work resolved, the pieces of work that came back clean
+   * How many pieces of work in a row have to come back clean to resolve the feedback, for a FEEDBACK_RESET change: what the count fell back from
+   */
+  cleanNeeded?: number;
+  /**
+   * The reviewed work that drove the change, newest first: for feedback the work resolved, the pieces of work that came back clean; for feedback the work fell back on, the pieces that raised the problem again
    */
   evidence: Array<ReviewedWorkRef>;
   /**
@@ -3926,7 +3932,7 @@ export type ProfileChange = {
   /**
    * What changed
    */
-  type: 'FEEDBACK_NEW' | 'FEEDBACK_RESOLVED' | 'STANDING_MOVED' | 'TREND_TURNED' | 'GROUP_MOVED' | 'FIRST_OBSERVED';
+  type: 'FEEDBACK_NEW' | 'FEEDBACK_RESOLVED' | 'FEEDBACK_RESET' | 'STANDING_MOVED' | 'TREND_TURNED' | 'GROUP_MOVED' | 'FIRST_OBSERVED';
 };
 
 /**
@@ -4434,10 +4440,6 @@ export type ReviewBoundObservation = {
 export type ReviewFeedback = {
   agentJobId: string;
   /**
-   * Work item the feedback targets; null when it is unanchored
-   */
-  artifact?: ReviewedWorkRef;
-  /**
    * Leading characters of the composed body; null when the feedback carries no body
    */
   bodyPreview?: string;
@@ -4462,6 +4464,10 @@ export type ReviewFeedback = {
    * The feedback this one replaced; null on a first delivery
    */
   replacesId?: string;
+  /**
+   * Reviewed work the feedback targets; null when it is unanchored
+   */
+  reviewedWork?: ReviewedWorkRef;
   /**
    * Whose work the feedback addresses; may equal the recipient
    */
@@ -4492,10 +4498,6 @@ export type ReviewFeedbackDetail = {
    * Immutable human decision for this proposal, when one has been made
    */
   approval?: FeedbackApproval;
-  /**
-   * Work item the feedback targets; null when it is unanchored
-   */
-  artifact?: ReviewedWorkRef;
   /**
    * Stored composed body; null when none was produced, and always null on the IN_APP and IN_CHAT channels — neither the developer's practice pages nor the mentor's prepared context is readable by an operator
    */
@@ -4536,6 +4538,10 @@ export type ReviewFeedbackDetail = {
    * Reviewed source revision for an immutable approval package
    */
   reviewedRevision?: string;
+  /**
+   * Reviewed work the feedback targets; null when it is unanchored
+   */
+  reviewedWork?: ReviewedWorkRef;
   /**
    * Whose work the feedback addresses; may equal the recipient
    */
@@ -4581,7 +4587,6 @@ export type ReviewFeedbackDisposition = {
  */
 export type ReviewObservation = {
   agentJobId: string;
-  artifact: ReviewedWorkRef;
   /**
    * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
@@ -4616,6 +4621,7 @@ export type ReviewObservation = {
    * Cross-run locus key; null when continuity is unavailable
    */
   recurrenceKey?: string;
+  reviewedWork: ReviewedWorkRef;
   /**
    * Severity band (null unless outcome is NEGATIVE)
    */
@@ -4648,7 +4654,6 @@ export type ReviewObservationCounts = {
  */
 export type ReviewObservationDetail = {
   agentJobId: string;
-  artifact: ReviewedWorkRef;
   /**
    * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
@@ -4685,6 +4690,7 @@ export type ReviewObservationDetail = {
    * Cross-run locus key; null when continuity is unavailable
    */
   recurrenceKey?: string;
+  reviewedWork: ReviewedWorkRef;
   /**
    * Severity band (null unless outcome is NEGATIVE)
    */
@@ -4829,11 +4835,13 @@ export type ReviewRunSummary = {
  * Work reviewed by an agent job
  */
 export type ReviewRunTarget = {
-  provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
   /**
    * The reviewed work as every surface names it; absent when the run recorded no work
    */
   reviewedWork?: ReviewedWorkRef;
+  /**
+   * Heading the run is listed under, which a run without recorded work still needs
+   */
   title: string;
   type: string;
 };
@@ -5508,6 +5516,10 @@ export type TrendSupport = {
   eligiblePractices?: number;
   firstOpportunityAt?: Date;
   lastOpportunityAt?: Date;
+  /**
+   * Distinct pieces of reviewed work the trend rests on, across both bundles
+   */
+  opportunities: number;
   opportunitiesUntilComparable: number;
   previousOpportunities: number;
   ropeHalfWidth: number;
@@ -6689,7 +6701,7 @@ export type ObservationDetailWritable = {
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
-   * What to do — the delivered feedback for this observation (null if nothing was delivered)
+   * What to do — the text of the newest feedback unit that said something about this observation to this developer (null if nothing was said)
    */
   deliveredFeedback?: string;
   evidence?: ObservationEvidence;
@@ -6698,21 +6710,9 @@ export type ObservationDetailWritable = {
    */
   evidenceRationale?: string;
   /**
-   * The newest delivered feedback that carried this observation to the developer; the handle for responding to it (null when none was delivered)
+   * The developer's standing answer to the very feedback whose text deliveredFeedback shows, with that unit's id as the handle for responding (null when nothing was said, or when the unit that said it failed to deliver and so cannot be answered)
    */
-  feedbackId?: string;
-  /**
-   * The developer's resolution response to that feedback
-   */
-  feedbackResolution?: 'ADDRESSED' | 'DISPUTED' | 'NOT_APPLICABLE';
-  /**
-   * The developer's comment on that feedback
-   */
-  feedbackResponseComment?: string;
-  /**
-   * The developer's usefulness response to that feedback
-   */
-  feedbackUsefulness?: 'HELPFUL' | 'UNHELPFUL';
+  feedbackResponse?: FeedbackResponse;
   /**
    * Observation ID
    */
@@ -6978,13 +6978,13 @@ export type PracticeStandingWritable = {
  */
 export type PracticeStandingObservationWritable = {
   /**
-   * What to do — the delivered feedback for this observation (null if nothing was delivered)
+   * What to do — the text of the newest feedback unit that said something about this observation to this developer (null if nothing was said)
    */
   deliveredFeedback?: string;
   /**
-   * What this observation says about the developer: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out. The lists only separate positive from negative, so this is what tells the two kinds of each apart.
+   * What this observation says about the developer: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out. The lists only separate positive from negative, so this is what tells the two kinds of each apart. Only assessed observations reach a standing, so NOT_APPLICABLE and UNDETERMINED never appear here.
    */
-  kind: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP';
+  kind: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
    * Where in the work, e.g. "FrameRecorder.swift:212", when known
    */
@@ -7062,10 +7062,6 @@ export type ReviewFeedbackDetailWritable = {
    */
   approval?: FeedbackApproval;
   /**
-   * Work item the feedback targets; null when it is unanchored
-   */
-  artifact?: ReviewedWorkRef;
-  /**
    * Stored composed body; null when none was produced, and always null on the IN_APP and IN_CHAT channels — neither the developer's practice pages nor the mentor's prepared context is readable by an operator
    */
   body?: string;
@@ -7106,6 +7102,10 @@ export type ReviewFeedbackDetailWritable = {
    */
   reviewedRevision?: string;
   /**
+   * Reviewed work the feedback targets; null when it is unanchored
+   */
+  reviewedWork?: ReviewedWorkRef;
+  /**
    * Whose work the feedback addresses; may equal the recipient
    */
   subject?: ReviewSubject;
@@ -7124,7 +7124,6 @@ export type ReviewFeedbackDetailWritable = {
  */
 export type ReviewObservationWritable = {
   agentJobId: string;
-  artifact: ReviewedWorkRef;
   /**
    * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
@@ -7155,6 +7154,7 @@ export type ReviewObservationWritable = {
    * Cross-run locus key; null when continuity is unavailable
    */
   recurrenceKey?: string;
+  reviewedWork: ReviewedWorkRef;
   /**
    * Severity band (null unless outcome is NEGATIVE)
    */
@@ -7171,7 +7171,6 @@ export type ReviewObservationWritable = {
  */
 export type ReviewObservationDetailWritable = {
   agentJobId: string;
-  artifact: ReviewedWorkRef;
   /**
    * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
    */
@@ -7204,6 +7203,7 @@ export type ReviewObservationDetailWritable = {
    * Cross-run locus key; null when continuity is unavailable
    */
   recurrenceKey?: string;
+  reviewedWork: ReviewedWorkRef;
   /**
    * Severity band (null unless outcome is NEGATIVE)
    */

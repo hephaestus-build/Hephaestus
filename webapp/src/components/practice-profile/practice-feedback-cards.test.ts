@@ -23,6 +23,12 @@ const pullRequest = (n: number): ReviewedWorkRef => ({
 	url: `https://github.example/pr/${n}`,
 });
 
+/** One clean piece of work on the wire: the ref the card links and the day it was reviewed. */
+const cleanWork = (n: number, reviewedAt: string) => ({
+	reviewedWork: pullRequest(n),
+	reviewedAt: new Date(reviewedAt),
+});
+
 const feedback: InAppFeedback = {
 	id: "f1",
 	headline: "Descriptions name the what, rarely the why",
@@ -33,18 +39,21 @@ const feedback: InAppFeedback = {
 	groupSlug: "review-ready-work",
 	groupName: "Packaging work for review",
 	evidence: [
-		{ work: pullRequest(6), observedAt: new Date("2026-08-19"), outcome: "OMISSION_GAP" },
-		{ work: pullRequest(7), observedAt: new Date("2026-08-13"), outcome: "COMMISSION_PROBLEM" },
+		{ reviewedWork: pullRequest(6), observedAt: new Date("2026-08-19"), outcome: "OMISSION_GAP" },
+		{
+			reviewedWork: pullRequest(7),
+			observedAt: new Date("2026-08-13"),
+			outcome: "COMMISSION_PROBLEM",
+		},
 	],
-	occurrenceCount: 2,
 	preparedAt: new Date("2026-08-20T10:05:00Z"),
-	cleanWork: [pullRequest(8)],
+	cleanWork: [cleanWork(8, "2026-08-25")],
 	cleanNeeded: 3,
 };
 
 const RESOLVED_BY_WORK = {
 	resolvedByWorkAt: new Date("2026-09-05T08:00:00Z"),
-	cleanWork: [pullRequest(8), pullRequest(9), pullRequest(10)],
+	cleanWork: [cleanWork(8, "2026-08-25"), cleanWork(9, "2026-08-30"), cleanWork(10, "2026-09-05")],
 };
 
 describe("toFeedbackCard", () => {
@@ -57,8 +66,8 @@ describe("toFeedbackCard", () => {
 			// The composer's Markdown reaches the card as it was written; the card renders it.
 			body: "#16 and #17 list the files touched.",
 			nextStep: "Write one paragraph on the problem.",
-			groupColor: "sky",
-			cleanWork: [pullRequest(8)],
+			group: { slug: "review-ready-work", name: "Packaging work for review", color: "sky" },
+			cleanWork: [{ ref: pullRequest(8), date: "2026-08-25T00:00:00.000Z" }],
 			cleanNeeded: 3,
 			timestamp: "2026-08-20T10:05:00.000Z",
 		});
@@ -75,7 +84,11 @@ describe("toFeedbackCard", () => {
 		const card = toFeedbackCard({ ...feedback, ...RESOLVED_BY_WORK }, [group]);
 		expect(card).toMatchObject({
 			state: "resolved",
-			cleanWork: RESOLVED_BY_WORK.cleanWork,
+			cleanWork: [
+				{ ref: pullRequest(8), date: "2026-08-25T00:00:00.000Z" },
+				{ ref: pullRequest(9), date: "2026-08-30T00:00:00.000Z" },
+				{ ref: pullRequest(10), date: "2026-09-05T00:00:00.000Z" },
+			],
 			timestamp: "2026-09-05T08:00:00.000Z",
 		});
 		expect(card.condition).toStrictEqual([
@@ -95,9 +108,15 @@ describe("toFeedbackCard", () => {
 			resolution: "ADDRESSED",
 			respondedAt: new Date("2026-09-01T14:10:00Z"),
 		} as const;
-		const byPerson = toFeedbackCard({ ...feedback, ...RESOLVED_BY_WORK, response: addressed }, [
-			group,
-		]);
+		const byPerson = toFeedbackCard(
+			{
+				...feedback,
+				...RESOLVED_BY_WORK,
+				response: addressed,
+				resolvedByDeveloperAt: addressed.respondedAt,
+			},
+			[group],
+		);
 		expect(byPerson.timestamp).toBe("2026-09-01T14:10:00.000Z");
 		expect(byPerson.condition).toStrictEqual([
 			{ type: "text", text: "Marked as addressed on 1 September" },
@@ -107,6 +126,7 @@ describe("toFeedbackCard", () => {
 				...feedback,
 				...RESOLVED_BY_WORK,
 				response: { ...addressed, respondedAt: new Date("2026-09-09T14:10:00Z") },
+				resolvedByDeveloperAt: new Date("2026-09-09T14:10:00Z"),
 			},
 			[group],
 		);
@@ -129,13 +149,14 @@ describe("toFeedbackCard", () => {
 					resolution: "ADDRESSED",
 					respondedAt: new Date("2026-09-09T14:10:00Z"),
 				},
+				resolvedByDeveloperAt: new Date("2026-09-09T14:10:00Z"),
 			},
 			[group],
 		);
 		// The meter stays where the work left it: marking it addressed fills nothing in.
 		expect(resolved).toMatchObject({
 			state: "resolved",
-			cleanWork: [pullRequest(8)],
+			cleanWork: [{ ref: pullRequest(8), date: "2026-08-25T00:00:00.000Z" }],
 			timestamp: "2026-09-09T14:10:00.000Z",
 		});
 		expect(resolved.condition).toStrictEqual([
@@ -153,6 +174,7 @@ describe("toFeedbackCard", () => {
 					resolution: "NOT_APPLICABLE",
 					respondedAt: new Date("2026-09-09T14:10:00Z"),
 				},
+				resolvedByDeveloperAt: new Date("2026-09-09T14:10:00Z"),
 			},
 			[group],
 		);
@@ -185,9 +207,41 @@ describe("toFeedbackCard", () => {
 		expect(toFeedbackCard({ ...feedback, nextStep: undefined }, [group]).nextStep).toBe("");
 	});
 
+	it("leaves a card whose feedback disputes the practice open, on the day it was written", () => {
+		const card = toFeedbackCard(
+			{
+				...feedback,
+				readAt: new Date("2026-08-21"),
+				response: {
+					feedbackId: "f1",
+					resolution: "DISPUTED",
+					respondedAt: new Date("2026-09-09T14:10:00Z"),
+				},
+			},
+			[group],
+		);
+		// A dispute is an answer, not a closure: the server dates no resolution, so the card keeps the
+		// condition that would tick it.
+		expect(card).toMatchObject({ state: "open", timestamp: "2026-08-20T10:05:00.000Z" });
+		expect(card.condition).toStrictEqual([
+			{ type: "text", text: "Ticks itself once three pieces of work in a row come back clean" },
+		]);
+	});
+
 	it("leaves the group's colour and icon out when the group is not among those given", () => {
 		const card = toFeedbackCard(feedback, []);
-		expect(card.groupColor).toBeUndefined();
-		expect(card.groupIcon).toBeUndefined();
+		expect(card.group).toMatchObject({
+			slug: "review-ready-work",
+			name: "Packaging work for review",
+		});
+		expect(card.group?.color).toBeUndefined();
+		expect(card.group?.icon).toBeUndefined();
+	});
+
+	it("gives a practice in no group no group at all, so nothing offers to open one", () => {
+		const card = toFeedbackCard({ ...feedback, groupSlug: undefined, groupName: undefined }, [
+			group,
+		]);
+		expect(card.group).toBeUndefined();
 	});
 });

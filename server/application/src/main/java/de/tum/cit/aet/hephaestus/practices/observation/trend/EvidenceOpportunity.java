@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.practices.observation.ReviewedWorkKey;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -22,6 +23,10 @@ record EvidenceOpportunity(
         @NonNull Instant occurredAt,
         @NonNull OutcomeVector outcomes,
         @NonNull TrendBundle bundle) {
+    ReviewedWorkKey key() {
+        return new ReviewedWorkKey(artifactKind, artifactId);
+    }
+
     boolean applicable() {
         return outcomes.applicable() > 0;
     }

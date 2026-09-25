@@ -20,12 +20,13 @@ export interface StatusTooltipProps {
 	children?: ReactNode;
 }
 
+/** The trigger `StatusBadgeWithSentence` renders when the caller names none. */
+const DEFAULT_TRIGGER = <button type="button" />;
+
 /**
  * The registry's label and one-line description over a status icon, so an icon that only its
  * colour and shape distinguish explains itself on hover or focus.
  */
-const DEFAULT_TRIGGER = <button type="button" />;
-
 export function StatusTooltip({ def, render, className, children }: StatusTooltipProps) {
 	return (
 		<Tooltip>
@@ -39,6 +40,13 @@ export function StatusTooltip({ def, render, className, children }: StatusToolti
 	);
 }
 
+export interface StatusBadgeWithSentenceProps {
+	def: StatusDef;
+	/** A `<span />` where the badge sits inside a control that is already a button. */
+	render?: ReactElement;
+	className?: string;
+}
+
 /**
  * A registry entry as its badge, with the registry's sentence on hover or focus — the shape
  * `StandingBadge` gives one enum, for any status the review console shows without its sentence
@@ -47,13 +55,6 @@ export function StatusTooltip({ def, render, className, children }: StatusToolti
  * hold the tooltip, and says so with `data-tooltip-only`, so a surface whose whole row is a
  * control treats a press on it as the row's (`PracticeTableRow`).
  */
-export interface StatusBadgeWithSentenceProps {
-	def: StatusDef;
-	/** A `<span />` where the badge sits inside a control that is already a button. */
-	render?: ReactElement;
-	className?: string;
-}
-
 export function StatusBadgeWithSentence({
 	def,
 	render = DEFAULT_TRIGGER,

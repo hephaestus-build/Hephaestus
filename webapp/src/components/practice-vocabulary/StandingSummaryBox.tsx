@@ -15,22 +15,19 @@ export interface StandingSummaryBoxProps {
 	 * order.
 	 */
 	counts: StandingCounts;
-	/** A control on the label's row, right-aligned. */
-	action?: ReactNode;
 	isLoading?: boolean;
 	className?: string;
 }
 
 /**
  * The hairline box that sums up a set of practices: a ring, the count of practices it stands
- * for, and one line per standing present with its count. The page header and the group level
- * share it so the two read as the same box.
+ * for, and one line per standing present with its count. A practice group's level wears it
+ * beside its title; the page header states the same counts as its own full-width card.
  */
 export function StandingSummaryBox({
 	ring,
 	label,
 	counts,
-	action,
 	isLoading = false,
 	className,
 }: StandingSummaryBoxProps) {
@@ -43,14 +40,11 @@ export function StandingSummaryBox({
 		>
 			{isLoading ? <Skeleton className="size-15 shrink-0 rounded-full" /> : ring}
 			<div className="flex min-w-0 flex-1 flex-col gap-1.5">
-				<div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5">
-					{isLoading ? (
-						<Skeleton className="h-4 w-36" />
-					) : (
-						<span className="text-xs font-semibold text-muted-foreground">{label}</span>
-					)}
-					{action}
-				</div>
+				{isLoading ? (
+					<Skeleton className="h-4 w-36" />
+				) : (
+					<span className="text-xs font-semibold text-muted-foreground">{label}</span>
+				)}
 				{isLoading ? (
 					<div className="grid grid-cols-[max-content] gap-x-4 gap-y-1.5 sm:grid-cols-[repeat(3,max-content)]">
 						<Skeleton className="h-5 w-24" />

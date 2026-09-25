@@ -2,7 +2,10 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { text, work } from "@/components/common/feedback-text";
-import { NEW_FEEDBACK_CARD } from "@/stories/practice-feedback-cards-story-mock-data";
+import {
+	NEW_FEEDBACK_CARD,
+	PACKAGING_GROUP,
+} from "@/stories/practice-feedback-cards-story-mock-data";
 import { conversation, issue, pullRequest } from "@/stories/practice-profile-story-mock-data";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { expectTouchTarget } from "@/test/controls";
@@ -10,8 +13,10 @@ import { expectTouchTarget } from "@/test/controls";
 import { PracticeFeedbackCard } from "./PracticeFeedbackCard";
 
 const card = NEW_FEEDBACK_CARD;
-const twoClean = [21, 22].map(pullRequest);
-const threeClean = [20, 21, 22].map(pullRequest);
+/** One clean piece of work, reviewed on the day given. */
+const clean = (number: number, date: string) => ({ ref: pullRequest(number), date });
+const twoClean = [clean(21, "2026-09-07"), clean(22, "2026-09-09")];
+const threeClean = [clean(20, "2026-09-07"), clean(21, "2026-09-08"), clean(22, "2026-09-09")];
 
 const meta = {
 	component: PracticeFeedbackCard,
@@ -53,8 +58,8 @@ export const New: Story = {
 		await expect(canvas.queryByText("Open")).toBeNull();
 		// The number rule and the two day rules of `feedback-text` and `lib/dates`: a word below ten,
 		// the short day in the strip, the full day and the minute in the footer. The label counts
-		// what the strip shows, by the kind every piece in it carries.
-		await expect(canvas.getByText("Seen on three pull requests")).toBeVisible();
+		// the wire's distinct pieces of evidence, by the kind every piece carries.
+		await expect(canvas.getByText("Newest three pull requests")).toBeVisible();
 		await expect(canvas.getByText("0 of 3 clean")).toBeVisible();
 		await expect(canvas.getByText("28 Aug")).toBeVisible();
 		await expect(canvas.getByText("Created 9 September, 2:10 pm")).toBeVisible();
@@ -86,7 +91,7 @@ export const New: Story = {
 		await userEvent.click(groupName);
 		await expect(args.onOpenGroup).toHaveBeenCalledWith("review-ready-work");
 		// The strip reads left to right in time: #17 on 28 Aug, #20 on 3 Sep, #19 on 6 Sep.
-		const strip = canvas.getByText("Seen on three pull requests").parentElement;
+		const strip = canvas.getByText("Newest three pull requests").parentElement;
 		if (!strip) {
 			throw new Error("Expected the strip around its label.");
 		}
@@ -148,8 +153,9 @@ export const MarkdownBody: Story = {
 };
 
 /**
- * Two of the three clean pieces of work are in: the strip lists them after the evidence, each a
- * strength shown, and the meter is two-thirds full.
+ * Two of the three clean pieces of work are in: the strip lists them where their review dates put
+ * them, each a strength shown, and the meter is two-thirds full. The label still counts the three
+ * pieces the habit was seen on; the clean work is what resolves the feedback.
  */
 export const TwoOfThreeClean: Story = {
 	args: { card: { ...card, state: "open", cleanWork: twoClean } },
@@ -158,7 +164,7 @@ export const TwoOfThreeClean: Story = {
 		await expect(canvas.getByText("Open").closest('[data-slot="badge"]')).not.toHaveClass(
 			"text-mentor",
 		);
-		await expect(canvas.getByText("Seen on five pull requests")).toBeVisible();
+		await expect(canvas.getByText("Newest five pull requests")).toBeVisible();
 		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
 		const outcomeNames = canvas
 			.getAllByText(/:$/u, { selector: ".sr-only" })
@@ -170,8 +176,9 @@ export const TwoOfThreeClean: Story = {
 			"Strength shown:",
 			"Strength shown:",
 		]);
-		// The wire names the clean work without a date, so the strip shows it by number alone.
+		// A clean piece is dated like the evidence beside it.
 		await expect(canvas.getByRole("link", { name: /^#22/u })).toBeVisible();
+		await expect(canvas.getByText("9 Sep")).toBeVisible();
 	},
 };
 
@@ -189,55 +196,84 @@ function stripLabels(label: HTMLElement): string[] {
 		.map((link) => link.textContent.replace(/\s*\(opens.*$/u, ""));
 }
 
+/** Seven pieces of evidence, one a day, more than the strip shows. */
+const sevenPieces = [11, 12, 13, 14, 15, 16, 17].map((number) => ({
+	ref: pullRequest(number),
+	date: `2026-08-${String(number).padStart(2, "0")}`,
+	outcome: "COMMISSION_PROBLEM" as const,
+}));
+
 /**
- * The strip is a glance, not a log: of seven pieces of evidence it shows the newest five, and with
- * two clean pieces the newest three, in order and counted as shown; the wire's occurrence count
- * is untouched.
+ * The strip is a glance, not a log: of seven pieces of evidence it shows the newest five, in
+ * order, and the label counts those five.
  */
 export const StripCapped: Story = {
-	args: {
-		card: {
-			...card,
-			reviewedWork: [11, 12, 13, 14, 15, 16, 17].map((number) => ({
-				ref: pullRequest(number),
-				date: `2026-08-${String(number).padStart(2, "0")}`,
-				outcome: "COMMISSION_PROBLEM" as const,
-			})),
-		},
-	},
+	args: { card: { ...card, reviewedWork: sevenPieces } },
 	play: async ({ canvas }) => {
-		await expect(stripLabels(canvas.getByText("Seen on five pull requests"))).toStrictEqual([
-			"#13",
-			"#14",
-			"#15",
-			"#16",
-			"#17",
-		]);
+		const label = canvas.getByText("Newest five pull requests");
+		await expect(stripLabels(label)).toStrictEqual(["#13", "#14", "#15", "#16", "#17"]);
 	},
 };
 
-/** Clean work always shows in full; the evidence gives way to it. */
+/**
+ * The window is the newest five reviews whatever they found: the two clean pieces are the newest,
+ * so the evidence gives way to them.
+ */
 export const StripCappedWithCleanWork: Story = {
 	args: {
 		card: {
 			...card,
 			state: "open",
-			reviewedWork: [11, 12, 13, 14, 15, 16, 17].map((number) => ({
-				ref: pullRequest(number),
-				date: `2026-08-${String(number).padStart(2, "0")}`,
-				outcome: "COMMISSION_PROBLEM" as const,
-			})),
+			reviewedWork: sevenPieces,
 			cleanWork: twoClean,
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(stripLabels(canvas.getByText("Seen on five pull requests"))).toStrictEqual([
-			"#15",
-			"#16",
-			"#17",
-			"#21",
-			"#22",
-		]);
+		const label = canvas.getByText("Newest five pull requests");
+		await expect(stripLabels(label)).toStrictEqual(["#15", "#16", "#17", "#21", "#22"]);
+	},
+};
+
+/**
+ * The strip is one run ordered by time, not evidence then clean work: a piece that came back
+ * clean on 1 September stands before the evidence reviewed after it.
+ */
+export const CleanWorkOlderThanTheEvidence: Story = {
+	args: {
+		card: {
+			...card,
+			state: "open",
+			reviewedWork: [
+				{ ref: pullRequest(17), date: "2026-08-28", outcome: "COMMISSION_PROBLEM" },
+				{ ref: pullRequest(19), date: "2026-09-06", outcome: "COMMISSION_PROBLEM" },
+			],
+			cleanWork: [clean(18, "2026-09-01"), clean(21, "2026-09-07")],
+		},
+	},
+	play: async ({ canvas }) => {
+		const label = canvas.getByText("Newest four pull requests");
+		await expect(stripLabels(label)).toStrictEqual(["#17", "#18", "#19", "#21"]);
+	},
+};
+
+/**
+ * The same pull request reviewed twice on different days is two pieces of evidence and one place
+ * the habit was seen: the strip shows both reviews, the label counts the distinct work.
+ */
+export const WorkReviewedTwice: Story = {
+	args: {
+		card: {
+			...card,
+			reviewedWork: [
+				{ ref: pullRequest(17), date: "2026-08-28", outcome: "COMMISSION_PROBLEM" },
+				{ ref: pullRequest(17), date: "2026-09-02", outcome: "COMMISSION_PROBLEM" },
+				{ ref: pullRequest(19), date: "2026-09-06", outcome: "COMMISSION_PROBLEM" },
+			],
+		},
+	},
+	play: async ({ canvas }) => {
+		const label = canvas.getByText("Newest two pull requests");
+		await expect(stripLabels(label)).toStrictEqual(["#17", "#17", "#19"]);
 	},
 };
 
@@ -386,15 +422,15 @@ export const EveryOutcome: Story = {
 				{ ref: pullRequest(16), date: "2026-08-24", outcome: "OMISSION_GAP" },
 				{ ref: pullRequest(19), date: "2026-09-06", outcome: "COMMISSION_PROBLEM" },
 				{ ref: pullRequest(20), date: "2026-09-03", outcome: "SAFE_AVOIDANCE" },
+				{ ref: pullRequest(21), date: "2026-09-08", outcome: "DEMONSTRATED_STRENGTH" },
 			],
-			cleanWork: [pullRequest(21)],
 			nextStep:
 				"Before the file list, write one paragraph on the problem and the decision you took.",
 		},
 	},
 	play: async ({ canvas }) => {
 		// Each outcome names itself once in the strip, oldest first whatever order the work was
-		// given in — #16 on 24 Aug, #20 on 3 Sep, #19 on 6 Sep — and the clean piece last.
+		// given in — #16 on 24 Aug, #20 on 3 Sep, #19 on 6 Sep, #21 on 8 Sep.
 		const outcomeNames = canvas
 			.getAllByText(/:$/u, { selector: ".sr-only" })
 			.map((name) => name.textContent.trim());
@@ -409,7 +445,8 @@ export const EveryOutcome: Story = {
 
 /**
  * Work at GitLab is named by the provider's noun: the strip counts merge requests, not pull
- * requests, and the wire's own labels carry the sigil.
+ * requests, the wire's own labels carry the sigil, and the glyph leading the label is the forge the
+ * work lives at rather than its kind.
  */
 export const GitLabWork: Story = {
 	args: {
@@ -423,14 +460,18 @@ export const GitLabWork: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Seen on three merge requests")).toBeVisible();
+		await expect(canvas.getByText("Newest three merge requests")).toBeVisible();
 		await expect(canvas.getByRole("link", { name: /^!17/u })).toBeVisible();
+		// The glyph is decorative, so the mark is read off the brand icon's own <title>.
+		canvas.getByTitle("GitlabIcon");
+		await expect(canvas.queryByTitle("GithubIcon")).toBeNull();
 	},
 };
 
 /**
- * Evidence of more than one kind — a pull request and an issue, and clean work of a third — is
- * counted as pieces of work: no kind is claimed for the strip that not every piece bears out.
+ * Evidence of more than one kind — a pull request and an issue, with clean work of a third — is
+ * counted as pieces of work: no kind is claimed for the evidence that not every piece bears out,
+ * and the clean conversation is not among what was seen.
  */
 export const MixedWork: Story = {
 	args: {
@@ -441,18 +482,33 @@ export const MixedWork: Story = {
 				{ ref: pullRequest(17), date: "2026-08-28", outcome: "COMMISSION_PROBLEM" },
 				{ ref: issue(13), date: "2026-09-03", outcome: "OMISSION_GAP" },
 			],
-			cleanWork: [conversation("#releases")],
+			cleanWork: [{ ref: conversation("#releases"), date: "2026-09-05" }],
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Seen on three pieces of work")).toBeVisible();
+		await expect(canvas.getByText("Newest three pieces of work")).toBeVisible();
 		await expect(canvas.queryByText(/pull requests/u)).toBeNull();
 	},
 };
 
 /** The pill and the group name fall back to neutral grey when the group has no colour. */
 export const WithoutGroupColor: Story = {
-	args: { card: { ...card, state: "open", groupColor: undefined } },
+	args: { card: { ...card, state: "open", group: { ...PACKAGING_GROUP, color: undefined } } },
+};
+
+/**
+ * A practice in no group: the head says the feedback is unassigned and leaves it at that, since
+ * there is no group level to open.
+ */
+export const WithoutGroup: Story = {
+	args: { card: { ...card, state: "open", group: undefined } },
+	play: async ({ args, canvas }) => {
+		await expect(canvas.getByText("Unassigned")).toBeVisible();
+		// A word, not a control: nothing to press and nowhere to go.
+		await expect(canvas.queryByRole("button", { name: "Unassigned" })).toBeNull();
+		await expect(canvas.queryByRole("link", { name: "Unassigned" })).toBeNull();
+		await expect(args.onOpenGroup).not.toHaveBeenCalled();
+	},
 };
 
 /**
@@ -472,11 +528,12 @@ export const WorkWithoutAnAddress: Story = {
 					outcome: "OMISSION_GAP",
 				},
 			],
-			cleanWork: [conversation("#releases")],
+			cleanWork: [{ ref: conversation("#releases"), date: "2026-08-20" }],
 		},
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("link")).toBeNull();
+		await expect(canvas.getByText("Newest two conversations")).toBeVisible();
 		// The body names it in its own words, since only a number carries an address to link to.
 		await expect(canvas.getByText(/^In #backend-review the outage/u)).toBeVisible();
 		for (const word of [canvas.getByText("#backend-review"), canvas.getByText("#releases")]) {

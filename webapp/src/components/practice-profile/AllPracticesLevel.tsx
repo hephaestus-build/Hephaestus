@@ -15,7 +15,7 @@ export interface AllPracticesLevelProps extends AllPracticesTableProps {
 }
 
 /**
- * Every practice group as a level over the practice profile: the "All practices" table under its
+ * Every practice group as a level over the practice profile: the "All practice groups" table under its
  * own heading. A row opens its group as the next level, so dismissing the group returns here.
  */
 export function AllPracticesLevel({ nested, path, ...table }: AllPracticesLevelProps) {
@@ -23,9 +23,9 @@ export function AllPracticesLevel({ nested, path, ...table }: AllPracticesLevelP
 		<>
 			<DetailDrawerHeader nested={nested}>
 				<div className="flex min-w-0 flex-1 flex-col gap-2">
-					<DetailPath {...path} current="All practices" />
+					<DetailPath {...path} current="All practice groups" />
 					<DrawerTitle className="text-2xl font-semibold tracking-tight break-words">
-						All practices
+						All practice groups
 					</DrawerTitle>
 					<DrawerDescription className="max-w-2xl">
 						Every practice this workspace reviews, in its group. What needs you is named; the rest

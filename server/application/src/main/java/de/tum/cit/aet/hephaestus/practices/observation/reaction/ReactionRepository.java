@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation.reaction;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -62,10 +63,11 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
     }
 
     /**
-     * The response that currently stands on each of these feedback units, for the units that have one: the
-     * batch form of {@link #findCurrentResponse}, so a page of cards is one query rather than one per card. A
-     * unit whose newest snapshot says nothing — the recipient deleted their response — is absent, exactly as
-     * the single form answers empty for it. The caller passes at least one id.
+     * The response that currently stands on each of these pieces of feedback, for the ones that have a
+     * response: the batch form of {@link #findCurrentResponse}, so a page of cards is one query rather than one
+     * per card. A piece of feedback whose newest snapshot says nothing — the recipient deleted their response —
+     * is absent here, whereas the single form returns that snapshot with every component null. The caller
+     * passes at least one id.
      */
     @Query(value = """
         SELECT latest.feedback_id AS "feedbackId", latest.usefulness AS "usefulness", latest.action AS "resolution",
@@ -117,13 +119,16 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
      * {@code FeedbackResolution#resolves} names — responded to inside a window: after {@code since}, at or
      * before {@code until}. Current, not ever: a response the recipient later replaced does not stand, and
      * the window is read off the response that does.
+     *
+     * <p>The resolving answers are bound as names rather than as {@link FeedbackResolution} values because
+     * this is a native query, where an enum parameter's JDBC mapping is not the string the column stores.
      */
     @Query(value = """
         SELECT latest.feedback_id AS "feedbackId", latest.created_at AS "respondedAt"
         FROM (
         """ + LATEST_RESPONSE + """
         ) latest
-        WHERE latest.action IN ('ADDRESSED', 'NOT_APPLICABLE')
+        WHERE latest.action IN (:resolving)
           AND latest.channel = 'IN_APP'
           AND latest.recipient_user_id = :reactorUserId
           AND latest.created_at > :since
@@ -134,7 +139,8 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
             @Param("reactorUserId") Long reactorUserId,
             @Param("workspaceId") Long workspaceId,
             @Param("since") Instant since,
-            @Param("until") Instant until);
+            @Param("until") Instant until,
+            @Param("resolving") Collection<String> resolving);
 
     interface AddressedFeedbackProjection {
         UUID getFeedbackId();

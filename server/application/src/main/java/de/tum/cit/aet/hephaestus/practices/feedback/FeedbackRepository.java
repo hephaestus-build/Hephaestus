@@ -629,9 +629,10 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             @Param("workspaceId") Long workspaceId, @Param("recipientUserId") Long recipientUserId, Pageable pageable);
 
     /**
-     * The readable IN_APP units about one practice for the recipient, newest first — the cards a new card about
-     * the same habit follows. The same readable states as {@link #findReadableInAppForRecipient}, and the same
-     * "about this practice" as {@link #lastInAppSurfacedAt}: the practice the unit's bound evidence measures.
+     * The readable IN_APP feedback about one practice for the recipient, newest first — the cards a new card
+     * about the same habit follows. The same readable states as {@link #findReadableInAppForRecipient}, and the
+     * same "about this practice" as {@link #lastInAppSurfacedAt}: the practice the card's bound evidence
+     * measures.
      */
     @Query("""
         SELECT f FROM Feedback f

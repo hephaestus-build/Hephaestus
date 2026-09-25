@@ -91,6 +91,42 @@ class ProfileChangeDetectorTest {
     }
 
     @Test
+    @DisplayName("crossing the minimum evidence into an unclear direction did not turn; leaving a direction did")
+    void shouldDetectATrendTurnOnlyWhenOneEdgePointsSomewhere() {
+        List<ProfileChangeDTO> enoughToCompare = ProfileChangeDetector.detect(
+                WINDOW,
+                List.of(practice(
+                        "describe-what-and-why",
+                        PracticeStandingDTO.Standing.MIXED,
+                        TrendDirection.INSUFFICIENT_EVIDENCE)),
+                List.of(practice(
+                        "describe-what-and-why", PracticeStandingDTO.Standing.MIXED, TrendDirection.UNCERTAIN)),
+                List.of(),
+                List.of(),
+                Map.of("describe-what-and-why", List.of(PR_22)),
+                Map.of(),
+                Map.of());
+        List<ProfileChangeDTO> noLongerImproving = ProfileChangeDetector.detect(
+                WINDOW,
+                List.of(practice(
+                        "describe-what-and-why", PracticeStandingDTO.Standing.MIXED, TrendDirection.IMPROVING)),
+                List.of(practice(
+                        "describe-what-and-why", PracticeStandingDTO.Standing.MIXED, TrendDirection.UNCERTAIN)),
+                List.of(),
+                List.of(),
+                Map.of("describe-what-and-why", List.of(PR_22)),
+                Map.of(),
+                Map.of());
+
+        assertThat(enoughToCompare).isEmpty();
+        assertThat(noLongerImproving).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ProfileChangeDTO.Type.TREND_TURNED);
+            assertThat(change.from()).isEqualTo("IMPROVING");
+            assertThat(change.to()).isEqualTo("UNCERTAIN");
+        });
+    }
+
+    @Test
     @DisplayName(
             "a practice observed for the first time inside the window is first observed, dated by that observation")
     void shouldDetectAFirstObservationWhenItFallsInsideTheWindow() {

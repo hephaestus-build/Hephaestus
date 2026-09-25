@@ -1,6 +1,6 @@
 /**
  * One practice group's practices and the reviews that reached one of them, as the detail levels
- * show them: three standings in the group the practice-profile fixtures open, one observation in
+ * show them: the standings of the group the practice-profile fixtures open, one observation in
  * full, and three runs on the same practice. Beside them, one observation per warrant a review
  * writes when it records neither a strength nor a problem — a search, an inapplicability, an
  * undecidability — which the row shows under "What was checked".
@@ -13,55 +13,66 @@ import type {
 } from "@/api/types.gen";
 import { daysBefore } from "@/stories/story-clock";
 
-import { packagingGroup, pullRequest } from "./practice-profile-story-mock-data";
+import { packagingGroup, practicesByGroup, pullRequest } from "./practice-profile-story-mock-data";
 
-const inPackaging = { groupSlug: packagingGroup.slug, groupName: packagingGroup.name };
+const packagingPractices = practicesByGroup[packagingGroup.slug] ?? [];
 
-export const focusedChanges: PracticeStanding = {
-	...inPackaging,
-	slug: "small-changes",
-	name: "Keep changes focused",
-	whyItMatters:
-		"A change that does one thing is faster to understand, safer to revert and easier to review well.",
-	whatGoodLooksLike:
-		"One concern per pull request; a refactor lands before the behaviour change that needed it.",
-	standing: "MIXED",
-	direction: "IMPROVING",
-	trendSupport: {
-		currentOpportunities: 6,
-		previousOpportunities: 5,
-		opportunitiesUntilComparable: 0,
-		calendarSpanDays: 12,
-		bundleSize: 4,
-		ropeHalfWidth: 0.15,
-		credibilityThreshold: 0.9,
+/**
+ * What the detail level shows and the profile's list does not: each practice's prose, and the
+ * trend of the one the runs below reviewed. The practices themselves come from
+ * `practicesByGroup`, so the group has one practice list across the story fixtures.
+ */
+const detailDepth: Record<string, Partial<PracticeStanding>> = {
+	"scope-one-reviewable-change": {
+		whyItMatters:
+			"A change that does one thing is faster to understand, safer to revert and easier to review well.",
+		whatGoodLooksLike:
+			"One concern per pull request; a refactor lands before the behaviour change that needed it.",
+		direction: "IMPROVING",
+		trendSupport: {
+			currentOpportunities: 6,
+			previousOpportunities: 5,
+			opportunities: 11,
+			opportunitiesUntilComparable: 0,
+			calendarSpanDays: 12,
+			bundleSize: 4,
+			ropeHalfWidth: 0.15,
+			credibilityThreshold: 0.9,
+		},
 	},
-	strengths: [],
-	toWorkOn: [],
-};
-
-export const detailPractices: PracticeStanding[] = [
-	focusedChanges,
-	{
-		...inPackaging,
-		slug: "describe-what-and-why",
-		name: "Describe what changed and why",
+	"reviewable-diff-size": {
+		whyItMatters: "A diff a reviewer can hold in their head is the one they read line by line.",
+		whatGoodLooksLike: "A few hundred lines of real change, with the mechanical parts split out.",
+	},
+	"describe-what-and-why": {
 		whyItMatters: "Reviewers need intent to judge whether the change solves the right problem.",
 		whatGoodLooksLike: "A concise summary, the motivation, and how it was verified.",
-		standing: "STRENGTH",
-		strengths: [],
-		toWorkOn: [],
 	},
-	{
-		...inPackaging,
-		slug: "link-the-issue",
-		name: "Link the issue the change resolves",
+	"ready-and-traceable-handoff": {
 		whyItMatters: "The issue carries the discussion a reviewer would otherwise have to ask for.",
-		standing: "NOT_OBSERVED",
-		strengths: [],
-		toWorkOn: [],
 	},
-];
+};
+
+export const detailPractices: PracticeStanding[] = packagingPractices.map((practice) => ({
+	...practice,
+	...detailDepth[practice.slug],
+}));
+
+/** The practice the runs below reviewed, as the practice level opens it. */
+export const focusedChanges: PracticeStanding = detailPractice("scope-one-reviewable-change");
+
+/** The group's practice no feedback card names: a level with nothing to list. */
+export const unwrittenAbout: PracticeStanding = detailPractice(
+	"commit-subjects-explain-each-change",
+);
+
+function detailPractice(slug: string): PracticeStanding {
+	const practice = detailPractices.find((candidate) => candidate.slug === slug);
+	if (practice === undefined) {
+		throw new Error(`${packagingGroup.slug} has no practice ${slug}.`);
+	}
+	return practice;
+}
 
 /** The pull request the runs below reviewed, as an observation names it. */
 const reviewedPullRequest = { artifactId: 902, artifactKind: "scm.pull_request" } as const;
@@ -97,7 +108,7 @@ const pullRequestItself: EvidenceCitation[] = [
 
 export const detailObservation: ObservationDetail = {
 	id: "00000000-0000-0000-0000-000000000102",
-	feedbackId: "00000000-0000-0000-0000-000000000103",
+	feedbackResponse: { feedbackId: "00000000-0000-0000-0000-000000000103" },
 	practiceSlug: focusedChanges.slug,
 	practiceName: focusedChanges.name,
 	summary: "The refactor and the fix arrived together",
@@ -183,7 +194,7 @@ export const detailRuns: PracticeGroupReviewRun[] = [
 		observations: [
 			{
 				id: "00000000-0000-0000-0000-000000000112",
-				feedbackId: "00000000-0000-0000-0000-000000000113",
+				feedbackResponse: { feedbackId: "00000000-0000-0000-0000-000000000113" },
 				practiceSlug: focusedChanges.slug,
 				practiceName: focusedChanges.name,
 				summary: "A dependency bump was carried alongside a behaviour change",
@@ -208,7 +219,7 @@ export const detailRuns: PracticeGroupReviewRun[] = [
 		observations: [
 			{
 				id: "00000000-0000-0000-0000-000000000122",
-				feedbackId: "00000000-0000-0000-0000-000000000123",
+				feedbackResponse: { feedbackId: "00000000-0000-0000-0000-000000000123" },
 				practiceSlug: focusedChanges.slug,
 				practiceName: focusedChanges.name,
 				summary: "One concern, one pull request: the export and nothing else",

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, within } from "storybook/test";
+import { expect, fn, within } from "storybook/test";
 
-import { expectSettledVisible } from "@/stories/overlay";
+import { settledPopup } from "@/stories/overlay";
 import {
 	groups,
 	OVERVIEW_FIXTURE,
@@ -9,7 +9,9 @@ import {
 } from "@/stories/practice-profile-story-mock-data";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
+import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
 import { composeOverview } from "./compose-overview";
+
 import { PracticeFeedbackOverview } from "./PracticeFeedbackOverview";
 
 /** The fixture's events through the composer: what the route hands the page. */
@@ -24,6 +26,7 @@ const meta = {
 		onOpenPractice: fn(),
 		groups,
 		onOpenGroup: fn(),
+		onReadFeedback: fn(),
 		isLoading: false,
 	},
 	argTypes: {
@@ -38,9 +41,8 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas, args, userEvent }) => {
-		await expect(canvas.getByRole("heading", { level: 2 })).toHaveTextContent(
-			"Practice development feedback",
-		);
+		// No heading over the card: the intro under the page title introduces it.
+		await expect(canvas.queryByRole("heading", { level: 2 })).toBeNull();
 		// The registry names the kind, and the count is what the component derived from the list.
 		await expect(canvas.getByText("4")).toBeVisible();
 		await expect(canvas.getByText("pull requests")).toBeVisible();
@@ -64,20 +66,35 @@ export const Default: Story = {
 		await userEvent.click(resolvedPill);
 		await expect(args.onOpenPractice).toHaveBeenLastCalledWith("describe-what-and-why");
 
-		// "What changed" names the new feedback and the one slip, in the registry's words, and every
-		// practice it names is the grey pill, a button that opens the practice's level.
+		// "What needs your attention" carries what the reader can act on today: the fall back first,
+		// then the new feedback, each with the card it belongs to one link away.
+		const attention = canvas.getByText("What needs your attention").parentElement;
+		if (!attention) {
+			throw new Error("The block's label sits in the block");
+		}
+		await expect(within(attention).getByText(/Back to 0 of 3 clean after/u)).toBeVisible();
+		await expect(within(attention).getByText(/There is new feedback, seen on/u)).toBeVisible();
+		const attentionPill = within(attention).getByRole("button", {
+			name: "Scope the change to one concern",
+		});
+		await expect(attentionPill).toHaveAttribute("data-slot", "badge");
+		await expect(resolvedPill).toHaveAttribute("data-slot", "badge");
+		await userEvent.click(attentionPill);
+		await expect(args.onOpenPractice).toHaveBeenLastCalledWith("scope-one-reviewable-change");
+		await userEvent.click(
+			within(attention).getByRole("button", {
+				name: "Read the feedback for Scope the change to one concern",
+			}),
+		);
+		await expect(args.onReadFeedback).toHaveBeenLastCalledWith("scope-one-concern-new");
+
+		// "What changed" keeps the standing that slipped: a standing is a balance over runs rather
+		// than something to do, so it stays a sentence and gets no row.
 		const changed = canvas.getByText("What changed").parentElement;
 		if (!changed) {
 			throw new Error("The block's label sits in the block");
 		}
 		await expect(within(changed).getByText(/moved to Needs attention after/u)).toBeVisible();
-		const changedPill = within(changed).getByRole("button", {
-			name: "Scope the change to one concern",
-		});
-		await expect(changedPill).toHaveAttribute("data-slot", "badge");
-		await expect(resolvedPill).toHaveAttribute("data-slot", "badge");
-		await userEvent.click(changedPill);
-		await expect(args.onOpenPractice).toHaveBeenLastCalledWith("scope-one-reviewable-change");
 		await userEvent.click(
 			within(changed).getByRole("button", { name: "Keep the diff reviewable in one sitting" }),
 		);
@@ -178,7 +195,7 @@ export const Empty: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("heading", { level: 2 })).toBeVisible();
+		await expect(canvas.queryByRole("heading", { level: 2 })).toBeNull();
 		await expect(canvas.queryByText("Heph")).toBeNull();
 		await expect(canvas.queryByText("What is holding up well")).toBeNull();
 		await expect(canvas.queryByText("What changed")).toBeNull();
@@ -203,20 +220,22 @@ export const OnlyReviewedWork: Story = {
 
 /** The held tick explains itself: the registry's words and sentence, reachable by keyboard. */
 export const HeldTickExplained: Story = {
-	play: async ({ canvas, userEvent }) => {
-		const [tick] = canvas.getAllByRole("button", { name: "Strength:" });
+	play: async ({ canvas }) => {
+		const [tick] = canvas.getAllByRole("button", { name: `${ASSESSMENT_DEFS.GOOD.label}:` });
 		if (!tick) {
 			throw new Error("Every held row carries its tick");
 		}
-		await userEvent.hover(tick);
-		await expectSettledVisible(await screen.findByText(/the author is told so/u));
+		// Keyboard path: focus opens the tooltip as it does for every status icon.
+		tick.focus();
+		const tooltip = await settledPopup();
+		await expect(tooltip).toHaveTextContent(ASSESSMENT_DEFS.GOOD.description);
 	},
 };
 
 export const Loading: Story = {
 	args: { isLoading: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("heading", { level: 2 })).toBeVisible();
+		await expect(canvas.queryByRole("heading", { level: 2 })).toBeNull();
 		await expect(canvas.queryByRole("button")).toBeNull();
 	},
 };

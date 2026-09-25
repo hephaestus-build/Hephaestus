@@ -77,6 +77,7 @@ const support: PracticeTrend["support"] = {
 	credibilityThreshold: 0.8,
 	currentOpportunities: 5,
 	previousOpportunities: 5,
+	opportunities: 10,
 	opportunitiesUntilComparable: 0,
 	ropeHalfWidth: 0.1,
 };
@@ -108,7 +109,7 @@ const run: PracticeGroupReviewRun = {
 	observations: [
 		{
 			id: "00000000-0000-0000-0000-000000000102",
-			feedbackId: "00000000-0000-0000-0000-000000000103",
+			feedbackResponse: { feedbackId: "00000000-0000-0000-0000-000000000103" },
 			practiceSlug: "small-changes",
 			practiceName: "Keep changes focused",
 			summary: "The refactor and the fix arrived together",

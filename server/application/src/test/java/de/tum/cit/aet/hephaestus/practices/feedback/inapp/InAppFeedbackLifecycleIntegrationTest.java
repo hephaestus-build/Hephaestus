@@ -16,8 +16,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.feedback.PreviousInAppFeedback;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
-import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
-import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -31,7 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.data.domain.PageRequest;
 
 /**
  * What becomes of a card on the developer's page once it is no longer the newest word on its habit: a
@@ -41,15 +39,10 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  */
 class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
-    private static final String IN_APP = "/workspaces/{slug}/practices/feedback/in-app";
-
     /** Whole seconds, so what Postgres stores is what the JSON says. */
     private static final Instant NOW = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
     private static final Instant FIRST_PREPARED_AT = NOW.minus(Duration.ofDays(20));
-
-    @Autowired
-    private WebTestClient webTestClient;
 
     @Autowired
     private PreviousInAppFeedback previousInAppFeedback;
@@ -85,11 +78,12 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
 
         assertThat(state(first)).isEqualTo(FeedbackDeliveryState.SUPERSEDED);
         assertThat(second.getReplacesId()).isEqualTo(first.getId());
-        page().jsonPath("$.length()")
+        readInAppPage(workspace)
+                .jsonPath("$.length()")
                 .isEqualTo(1)
                 .jsonPath("$[0].id")
                 .isEqualTo(second.getId().toString())
-                .jsonPath("$[0].evidence[*].work.label")
+                .jsonPath("$[0].evidence[*].reviewedWork.label")
                 .isEqualTo(List.of("#12", "#11"))
                 .jsonPath("$[0].resolvedByWorkAt")
                 .doesNotExist();
@@ -106,7 +100,8 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
 
         assertThat(state(first)).isEqualTo(FeedbackDeliveryState.DELIVERED);
         assertThat(second.getReplacesId()).isNull();
-        page().jsonPath("$.length()")
+        readInAppPage(workspace)
+                .jsonPath("$.length()")
                 .isEqualTo(2)
                 .jsonPath("$[0].id")
                 .isEqualTo(second.getId().toString())
@@ -124,9 +119,10 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
         Feedback gone = firstCard(preparedAt, FeedbackDeliveryState.DELIVERED);
         markAddressed(gone, developer, NOW.minus(Duration.ofDays(31)));
         Feedback stillThere = card(preparedAt.plus(Duration.ofHours(1)), FeedbackDeliveryState.DELIVERED, 20);
-        respond(stillThere, FeedbackResolution.NOT_APPLICABLE, NOW.minus(Duration.ofDays(29)));
+        respond(stillThere, developer, FeedbackResolution.NOT_APPLICABLE, NOW.minus(Duration.ofDays(29)));
 
-        page().jsonPath("$[*].id")
+        readInAppPage(workspace)
+                .jsonPath("$[*].id")
                 .isEqualTo(List.of(stillThere.getId().toString()))
                 .jsonPath("$[0].response.resolution")
                 .isEqualTo("NOT_APPLICABLE");
@@ -138,11 +134,11 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
     void shouldDropACardThirtyDaysAfterTheWorkResolvedIt() {
         Instant preparedAt = NOW.minus(Duration.ofDays(40));
         Feedback gone = firstCard(preparedAt, FeedbackDeliveryState.DELIVERED);
-        cleanReview(11, NOW.minus(Duration.ofDays(38)));
-        cleanReview(12, NOW.minus(Duration.ofDays(36)));
-        cleanReview(13, NOW.minus(Duration.ofDays(31)));
+        cleanReview(practice, developer, 11, NOW.minus(Duration.ofDays(38)));
+        cleanReview(practice, developer, 12, NOW.minus(Duration.ofDays(36)));
+        cleanReview(practice, developer, 13, NOW.minus(Duration.ofDays(31)));
 
-        page().jsonPath("$.length()").isEqualTo(0);
+        readInAppPage(workspace).jsonPath("$.length()").isEqualTo(0);
 
         assertThat(state(gone)).isEqualTo(FeedbackDeliveryState.DELIVERED);
     }
@@ -153,11 +149,12 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
     void shouldKeepACardTheWorkResolvedRecently() {
         Instant preparedAt = NOW.minus(Duration.ofDays(40));
         Feedback resolved = firstCard(preparedAt, FeedbackDeliveryState.DELIVERED);
-        cleanReview(11, NOW.minus(Duration.ofDays(38)));
-        cleanReview(12, NOW.minus(Duration.ofDays(36)));
-        cleanReview(13, NOW.minus(Duration.ofDays(29)));
+        cleanReview(practice, developer, 11, NOW.minus(Duration.ofDays(38)));
+        cleanReview(practice, developer, 12, NOW.minus(Duration.ofDays(36)));
+        cleanReview(practice, developer, 13, NOW.minus(Duration.ofDays(29)));
 
-        page().jsonPath("$[*].id")
+        readInAppPage(workspace)
+                .jsonPath("$[*].id")
                 .isEqualTo(List.of(resolved.getId().toString()))
                 .jsonPath("$[0].resolvedByWorkAt")
                 .isEqualTo(NOW.minus(Duration.ofDays(29)).toString());
@@ -224,29 +221,14 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
                         previous.isOpen() ? previous.id() : null)),
                 FeedbackLedgerRecorder.IN_APP_UNIT_ORDINAL_BASE);
         assertThat(prepared).isEqualTo(1);
-        return feedbackRepository.findAll().stream()
-                .filter(feedback -> run.getId().equals(feedback.getAgentJobId()))
-                .findFirst()
-                .orElseThrow();
+        return feedbackRepository
+                .findReadableInAppForPractice(
+                        workspace.getId(), developer.getId(), practice.getSlug(), PageRequest.of(0, 1))
+                .getFirst();
     }
 
     private Observation observation(UUID id) {
         return observationRepository.findById(id).orElseThrow();
-    }
-
-    /** A review of one of the developer's pull requests on which the practice raised nothing. */
-    private void cleanReview(int number, Instant reviewedAt) {
-        AgentJob run = persistPullRequestReview(workspace, number, reviewedAt);
-        observe(practice, run, number, developer, "PRESENT", "GOOD", null, reviewedAt);
-    }
-
-    private void respond(Feedback feedback, FeedbackResolution resolution, Instant respondedAt) {
-        reactionRepository.save(Reaction.builder()
-                .feedback(feedback)
-                .reactorUserId(developer.getId())
-                .resolution(resolution)
-                .createdAt(respondedAt)
-                .build());
     }
 
     private FeedbackDeliveryState state(Feedback feedback) {
@@ -254,16 +236,5 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
                 .findByIdAndWorkspaceId(feedback.getId(), workspace.getId())
                 .orElseThrow()
                 .getDeliveryState();
-    }
-
-    private WebTestClient.BodyContentSpec page() {
-        return webTestClient
-                .get()
-                .uri(IN_APP, workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody();
     }
 }

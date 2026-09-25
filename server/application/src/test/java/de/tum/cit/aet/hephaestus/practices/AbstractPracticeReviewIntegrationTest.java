@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
+import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
@@ -27,6 +28,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.web.reactive.server.WebTestClient;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -42,7 +44,13 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
                     + "\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":42,\"endLine\":42,\"quote\":\"example\","
                     + "\"quoteRedacted\":false}]}";
 
+    /** The developer's own in-app feedback page. */
+    protected static final String IN_APP = "/workspaces/{slug}/practices/feedback/in-app";
+
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    @Autowired
+    protected WebTestClient webTestClient;
 
     @Autowired
     protected PracticeRepository practiceRepository;
@@ -136,7 +144,41 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
             @Nullable String severity,
             Instant observedAt,
             String evidenceJson) {
+        return observe(
+                practice,
+                job,
+                ArtifactKinds.PULL_REQUEST.value(),
+                artifactId,
+                about,
+                null,
+                presence,
+                assessment,
+                severity,
+                observedAt,
+                evidenceJson,
+                null);
+    }
+
+    /**
+     * {@link #observe} on the given artifact kind, with the summary a test reads back out of the payload and the
+     * recurrence key that dates a repeat. A null title stands for "any summary", so a test that does not read one
+     * does not have to invent it.
+     */
+    protected UUID observe(
+            Practice practice,
+            AgentJob job,
+            String artifactKind,
+            long artifactId,
+            User about,
+            @Nullable String title,
+            String presence,
+            @Nullable String assessment,
+            @Nullable String severity,
+            Instant observedAt,
+            String evidenceJson,
+            @Nullable String recurrenceKey) {
         UUID id = UUID.randomUUID();
+        String summary = title == null ? "Observation " + id : title;
         observationRepository.insertIfAbsent(
                 id,
                 "occ-" + id,
@@ -144,31 +186,46 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
                 job.getWorkspace().getId(),
                 practice.getId(),
                 practice.getCurrentRevision().getId(),
-                ArtifactKinds.PULL_REQUEST.value(),
+                artifactKind,
                 artifactId,
                 about.getId(),
-                "Observation " + id,
+                summary,
                 assessment == null ? presence : "ASSESSED",
                 assessment == null ? null : presence,
                 assessment,
                 severity,
                 evidenceJson,
-                "Reasoning",
-                null,
+                "Reasoning for " + summary,
+                recurrenceKey,
                 observedAt,
                 "LIVE");
         return id;
     }
 
-    /** A readable in-app card {@code job} composed for {@code recipient}; a delivered one was read when it was prepared. */
+    /**
+     * One piece of in-app feedback {@code job} prepared for {@code recipient}; a DELIVERED row is stamped
+     * delivered at {@code createdAt}.
+     */
     protected Feedback persistInAppFeedback(
             AgentJob job, User recipient, int position, FeedbackDeliveryState state, String body, Instant createdAt) {
+        return persistFeedback(job, recipient, FeedbackChannel.IN_APP, position, state, body, createdAt);
+    }
+
+    /** {@link #persistInAppFeedback} on the given channel, for a test about where the feedback was meant to appear. */
+    protected Feedback persistFeedback(
+            AgentJob job,
+            User recipient,
+            FeedbackChannel channel,
+            int position,
+            FeedbackDeliveryState state,
+            String body,
+            Instant createdAt) {
         return feedbackRepository.save(Feedback.builder()
                 .agentJobId(job.getId())
                 .workspaceId(job.getWorkspace().getId())
                 .recipientUserId(recipient.getId())
                 .aboutUserId(recipient.getId())
-                .channel(FeedbackChannel.IN_APP)
+                .channel(channel)
                 .position(position)
                 .deliveryState(state)
                 .body(body)
@@ -178,18 +235,45 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
                 .build());
     }
 
-    /** Binds the observation the card was written from. */
+    /** Binds the observation the feedback was written from. */
     protected void bind(Feedback feedback, UUID observationId) {
         feedbackObservationRepository.insertIfAbsent(feedback.getId(), observationId, "PRIMARY", 0);
     }
 
-    /** The developer's response that marks the card addressed, as the response endpoint records it. */
-    protected Reaction markAddressed(Feedback feedback, User developer, Instant respondedAt) {
+    /**
+     * The developer's response as the response endpoint records it: a snapshot of what now stands on the card.
+     * A null resolution is the response they deleted, which the readers treat as no response at all.
+     */
+    protected Reaction respond(
+            Feedback feedback, User developer, @Nullable FeedbackResolution resolution, Instant respondedAt) {
         return reactionRepository.save(Reaction.builder()
                 .feedback(feedback)
                 .reactorUserId(developer.getId())
-                .resolution(FeedbackResolution.ADDRESSED)
+                .resolution(resolution)
                 .createdAt(respondedAt)
                 .build());
+    }
+
+    /** The developer's response that marks the card addressed. */
+    protected Reaction markAddressed(Feedback feedback, User developer, Instant respondedAt) {
+        return respond(feedback, developer, FeedbackResolution.ADDRESSED, respondedAt);
+    }
+
+    /** A review of one of the developer's pull requests on which the practice raised nothing. */
+    protected void cleanReview(Practice practice, User developer, int number, Instant reviewedAt) {
+        AgentJob run = persistPullRequestReview(practice.getWorkspace(), number, reviewedAt);
+        observe(practice, run, number, developer, "PRESENT", "GOOD", null, reviewedAt);
+    }
+
+    /** The in-app feedback page as the signed-in developer reads it. */
+    protected WebTestClient.BodyContentSpec readInAppPage(Workspace workspace) {
+        return webTestClient
+                .get()
+                .uri(IN_APP, workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody();
     }
 }

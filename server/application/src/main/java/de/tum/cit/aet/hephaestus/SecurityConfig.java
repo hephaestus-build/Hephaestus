@@ -406,8 +406,8 @@ public class SecurityConfig {
                 "Origin",
                 "X-XSRF-TOKEN",
                 UserViewAuthorizationConfig.REASON_HEADER,
-                // The settings endpoints take the ETag they handed out as a precondition (EntityTagPrecondition);
-                // without it here the browser blocks the cross-origin dev SPA's every save before the server sees it.
+                // Every endpoint that hands out an ETag reads it back from If-Match (EntityTagPrecondition); a
+                // header not listed here never leaves the browser when the SPA runs on another origin, as in dev.
                 "If-Match"));
         configuration.setExposedHeaders(
                 List.of(ReplicaIdentityFilter.HEADER_NAME, RequestCorrelationFilter.HEADER_NAME));

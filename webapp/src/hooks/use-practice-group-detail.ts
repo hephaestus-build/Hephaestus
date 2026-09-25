@@ -8,14 +8,20 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type { ObservationDetail, PracticeStanding } from "@/api/types.gen";
 import {
+	EMPTY_REVIEW_RUN_FEED,
 	type FeedbackResponse,
 	isEmptyFeedbackResponse,
+	nextReviewRunPage,
 	type ReviewRunFeedState,
+	reviewRunFeedState,
 } from "@/components/profile/review-runs";
-import { invalidateFeedbackResponses } from "@/hooks/use-in-app-feedback";
+import {
+	FEEDBACK_RESPONSE_WRITE_KEY,
+	invalidateFeedbackResponses,
+} from "@/hooks/use-in-app-feedback";
+import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
-import { loadedPages } from "@/runtime/tanstack-query/spring-page";
 
 /** Review runs per page of the feed; also the skeleton's row count while the first page loads. */
 export const REVIEW_RUN_PAGE_SIZE = 10;
@@ -68,47 +74,34 @@ export function usePracticeGroupDetail({
 			query: { size: REVIEW_RUN_PAGE_SIZE, practiceSlug },
 		}),
 		initialPageParam: 0,
-		getNextPageParam: (lastPage) =>
-			lastPage.hasNext === true ? (lastPage.page ?? 0) + 1 : undefined,
+		getNextPageParam: nextReviewRunPage,
 		enabled: practiceOpen,
 	});
 	const written = () => invalidateFeedbackResponses(queryClient, workspaceSlug, groupSlug);
 	const replaceResponseMutation = useMutation({
-		...replaceFeedbackResponseMutation(),
+		...filedUnder(FEEDBACK_RESPONSE_WRITE_KEY, replaceFeedbackResponseMutation()),
 		onSuccess: written,
 		onError: (error) =>
 			toast.error(problemDetailOf(error, "Could not save your feedback response")),
 	});
 	const deleteResponseMutation = useMutation({
-		...deleteFeedbackResponseMutation(),
+		...filedUnder(FEEDBACK_RESPONSE_WRITE_KEY, deleteFeedbackResponseMutation()),
 		onSuccess: written,
 		onError: (error) =>
 			toast.error(problemDetailOf(error, "Could not withdraw your feedback response")),
 	});
 
+	const pendingFeedbackIds = usePendingMutationIds(FEEDBACK_RESPONSE_WRITE_KEY, (variables) =>
+		pathString(variables, "feedbackId"),
+	);
+
 	const practices = practiceStandings.filter((practice) => practice.groupSlug === groupSlug);
-	let feed: ReviewRunFeedState;
-	if (activityQuery.isError) {
-		feed = {
-			status: "error",
-			error: activityQuery.error,
-			onRetry: () => {
-				void activityQuery.refetch();
-			},
-		};
-	} else if (activityQuery.isPending) {
-		feed = { status: "loading" };
-	} else {
-		feed = {
-			status: "ready",
-			runs: loadedPages(activityQuery.data).flatMap((page) => page.content),
-			hasMore: activityQuery.hasNextPage,
-			isLoadingMore: activityQuery.isFetchingNextPage,
-			onLoadMore: () => {
-				void activityQuery.fetchNextPage();
-			},
-		};
-	}
+	// With the query idle there is nothing in flight to resolve a skeleton, so the feed is settled
+	// and empty rather than pending: the drawer is closed, or the practice level opened without a
+	// group whose runs could be read, and that level says so instead of showing a feed.
+	const feed: ReviewRunFeedState = practiceOpen
+		? reviewRunFeedState(activityQuery)
+		: EMPTY_REVIEW_RUN_FEED;
 	return {
 		practices,
 		practice: practiceOpen
@@ -116,7 +109,7 @@ export function usePracticeGroupDetail({
 			: undefined,
 		feed,
 		respond: (observation, response) => {
-			const { feedbackId } = observation;
+			const feedbackId = observation.feedbackResponse?.feedbackId;
 			if (!hasText(feedbackId)) {
 				return;
 			}
@@ -129,8 +122,7 @@ export function usePracticeGroupDetail({
 				body: response,
 			});
 		},
-		pendingFeedbackId: [replaceResponseMutation, deleteResponseMutation].find(
-			(mutation) => mutation.isPending,
-		)?.variables.path.feedbackId,
+		// One row's buttons wait at a time: a response is written by a press on one observation.
+		pendingFeedbackId: [...pendingFeedbackIds][0],
 	};
 }

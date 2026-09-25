@@ -141,11 +141,7 @@ export function ReviewRunDetailPage({
 				title={job.target.title}
 				provenance={
 					<div className="space-y-1">
-						<ReviewArtifactLink
-							artifact={job.target.reviewedWork}
-							provider={job.target.provider}
-							className="text-sm"
-						/>
+						<ReviewArtifactLink reviewedWork={job.target.reviewedWork} className="text-sm" />
 						<p className="text-sm text-muted-foreground">
 							{job.startedAt ? "Started " : "Created "}
 							<RelativeTime value={job.startedAt ?? job.createdAt} />

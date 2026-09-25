@@ -7,7 +7,7 @@ import { FeedbackText } from "@/components/common/FeedbackText";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { GroupName } from "@/components/practice-vocabulary/GroupName";
-import type { PracticeGroupSort } from "@/components/practice-vocabulary/practice-group-list-order";
+import type { SortDirection } from "@/components/practice-vocabulary/practice-group-list-order";
 import {
 	countPracticeStandings,
 	PracticeGroupStandingRing,
@@ -35,9 +35,9 @@ export interface AllPracticesTableProps {
 	 */
 	sentences: Record<string, FeedbackTextSegment[][] | undefined>;
 	/** The table sorts by standing only; any other column leaves the Standing header unsorted. */
-	sort: PracticeGroupSort;
+	sort: SortDirection;
 	/** Called with the sort a press on the Standing header asks for. */
-	onSortChange: (sort: PracticeGroupSort) => void;
+	onSortChange: (sort: SortDirection) => void;
 	onOpenGroup?: (group: PracticeGroup) => void;
 	/** The group whose detail level is open over the page; its row stays marked. */
 	openGroupSlug?: string;
@@ -131,6 +131,8 @@ const loadingRow = (
 	</>
 );
 
+const NO_SENTENCES: FeedbackTextSegment[][] = [];
+
 /**
  * Every practice group as one row: its standing and trend, a ring of its practices by standing
  * with the counts spelt out beside it, then the group and what moved inside it, one bullet per
@@ -138,8 +140,6 @@ const loadingRow = (
  * row opens its group through the "Open group" at its end, and a practice's pill opens the
  * practice.
  */
-const NO_SENTENCES: FeedbackTextSegment[][] = [];
-
 export function AllPracticesTable({
 	groups,
 	standings,
@@ -162,7 +162,7 @@ export function AllPracticesTable({
 
 	return (
 		<PracticeTable
-			aria-label="All practices"
+			aria-label="All practice groups"
 			sort={sort}
 			onSortChange={onSortChange}
 			heads={

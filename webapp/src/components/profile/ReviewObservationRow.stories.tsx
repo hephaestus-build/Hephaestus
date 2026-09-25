@@ -25,7 +25,7 @@ const reviewedWork = {
 /** Everything the feed can carry about one observation, so every block has something to show. */
 const strength = {
 	id: "00000000-0000-0000-0000-000000000101",
-	feedbackId: "00000000-0000-0000-0000-000000000102",
+	feedbackResponse: { feedbackId: "00000000-0000-0000-0000-000000000102" },
 	practiceSlug: "explains-decisions",
 	practiceName: "Explain significant decisions",
 	summary: "The reasoning is recorded next to the changed behavior",
@@ -219,13 +219,15 @@ export const NotLive: Story = {
 };
 
 /**
- * Reviewed under rules that have since changed: the row says so in one line over its body and
- * hides nothing else.
+ * The practice or the work has changed since this was reviewed: the row says so in one line over
+ * its body and hides nothing else.
  */
 export const Stale: Story = {
 	args: { observation: { ...strength, claimCurrentness: "STALE" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Reviewed under earlier rules for this practice.")).toBeVisible();
+		await expect(
+			canvas.getByText("The practice or the reviewed work changed after this observation."),
+		).toBeVisible();
 		await expect(canvas.getByText("Why it was noted")).toBeVisible();
 		await expect(canvas.getByText("Next step")).toBeVisible();
 	},
@@ -268,10 +270,12 @@ export const Responded: Story = {
 	args: {
 		observation: {
 			...strength,
-			feedbackUsefulness: "HELPFUL",
-			feedbackResolution: "ADDRESSED",
-			feedbackResponseComment:
-				"Split the change into two commits so the reasoning reads on its own.",
+			feedbackResponse: {
+				feedbackId: "00000000-0000-0000-0000-000000000102",
+				usefulness: "HELPFUL",
+				resolution: "ADDRESSED",
+				comment: "Split the change into two commits so the reasoning reads on its own.",
+			},
 		},
 	},
 	play: async ({ canvas }) => {
@@ -308,14 +312,20 @@ export const OutcomeMatrix: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Risk avoided")).toBeVisible();
 		await expect(canvas.getByText("Expected practice missing")).toBeVisible();
-		await expect(canvas.getByText("Not assessed")).toBeVisible();
-		await expect(canvas.getByText("Not certain enough to say")).toBeVisible();
+		await expect(canvas.getByText("Not applicable")).toBeVisible();
+		await expect(canvas.getByText("Undetermined")).toBeVisible();
 	},
 };
 
 export const FeedbackPending: Story = {
 	args: {
-		observation: { ...strength, feedbackResolution: "ADDRESSED" },
+		observation: {
+			...strength,
+			feedbackResponse: {
+				feedbackId: "00000000-0000-0000-0000-000000000102",
+				resolution: "ADDRESSED",
+			},
+		},
 		isFeedbackResponsePending: true,
 	},
 };
@@ -446,7 +456,7 @@ export const SearchedAndFoundNothing: Story = {
 export const NothingToJudge: Story = {
 	args: { observation: nothingToJudge },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Not assessed")).toBeVisible();
+		await expect(canvas.getByText("Not applicable")).toBeVisible();
 		await expect(canvas.getByText("Looks for:")).toBeVisible();
 		await expect(
 			canvas.getByText("how a change handles a network call that times out"),
@@ -461,7 +471,7 @@ export const NothingToJudge: Story = {
 export const CouldNotSettleIt: Story = {
 	args: { observation: couldNotSettleIt },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Not certain enough to say")).toBeVisible();
+		await expect(canvas.getByText("Undetermined")).toBeVisible();
 		await expect(canvas.getByText("Open question:")).toBeVisible();
 		await expect(
 			canvas.getByText("whether a reviewer asked for the package move in this same request"),

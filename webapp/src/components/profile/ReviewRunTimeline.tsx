@@ -28,7 +28,7 @@ export function ReviewRunTimeline({
 	continues = false,
 }: ReviewRunTimelineProps) {
 	return (
-		<ol className="flex min-w-0 flex-col" aria-label="Observations">
+		<ol className="flex min-w-0 flex-col" aria-label="Review runs">
 			{runs.map((run, index) => (
 				<ReviewRunCard
 					key={run.reviewId}

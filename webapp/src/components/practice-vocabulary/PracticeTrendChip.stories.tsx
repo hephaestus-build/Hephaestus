@@ -12,6 +12,7 @@ const none: TrendSupport = {
 	...wellSupported,
 	currentOpportunities: 2,
 	previousOpportunities: 0,
+	opportunities: 2,
 	opportunitiesUntilComparable: 3,
 };
 

@@ -57,7 +57,7 @@ type Story = StoryObj<typeof meta>;
 
 const observation: ObservationDetail = {
 	id: "00000000-0000-0000-0000-000000000102",
-	feedbackId: "00000000-0000-0000-0000-000000000103",
+	feedbackResponse: { feedbackId: "00000000-0000-0000-0000-000000000103" },
 	practiceSlug: "small-changes",
 	practiceName: "Keep changes focused",
 	summary: "The refactor and the fix arrived together",

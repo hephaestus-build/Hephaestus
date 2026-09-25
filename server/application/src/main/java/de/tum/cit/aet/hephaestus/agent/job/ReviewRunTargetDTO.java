@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.ReviewRunTargetRow;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
@@ -18,8 +17,8 @@ public record ReviewRunTargetDTO(
         @Nullable
         ReviewedWorkRefDTO reviewedWork,
 
-        @Nullable IntegrationKind provider,
-        @NonNull String title) {
+        @NonNull @Schema(description = "Heading the run is listed under, which a run without recorded work still needs")
+        String title) {
     static ReviewRunTargetDTO from(AgentJob job) {
         return from(ReviewRunTargetMapper.from(job));
     }
@@ -29,11 +28,7 @@ public record ReviewRunTargetDTO(
     }
 
     private static ReviewRunTargetDTO from(Target target) {
-        Long id = target.id();
         return new ReviewRunTargetDTO(
-                target.type(),
-                id == null ? null : ReviewedWorkLabels.ref(target.type(), id, target),
-                target.provider(),
-                target.title());
+                target.type(), ReviewedWorkLabels.refOrNull(target.type(), target.id(), target), target.title());
     }
 }

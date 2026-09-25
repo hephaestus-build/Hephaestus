@@ -76,7 +76,7 @@ const practiceEntry = `practice:${practice.slug}`;
 /** Through the page to the first practice's level, one level per history entry. */
 async function openPractice(router: Awaited<ReturnType<typeof renderProfile>>) {
 	fireEvent.click(
-		await screen.findByRole("button", { name: "See all practices" }, ROUTE_RENDER_WAIT),
+		await screen.findByRole("link", { name: "See all practice groups" }, ROUTE_RENDER_WAIT),
 	);
 	fireEvent.click(
 		await screen.findByRole(
@@ -103,17 +103,22 @@ async function openPractice(router: Awaited<ReturnType<typeof renderProfile>>) {
  * silent at their defaults so the address a reader shares is the shortest one that means the same.
  */
 describe("practice profile route", () => {
-	it("sends a reader away when this workspace does not review practices", async () => {
+	it("sends a reader away when this workspace does not review practices, without delivering feedback", async () => {
+		const inApp = vi.fn(() => HttpResponse.json([]));
 		server.use(
 			http.get("*/workspaces", () =>
 				HttpResponse.json([workspaceListItem("acme", { practicesEnabled: false })]),
 			),
+			http.get("*/workspaces/:workspaceSlug/practices/feedback/in-app", inApp),
 		);
 		const { router } = renderRouteAtWithRouter(PAGE);
 
 		// With practices off the page does not exist here, so the reader lands on the workspace home
 		// rather than on a profile with nothing to be about.
 		await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme"), ROUTE_RENDER_WAIT);
+		// Reading the cards is what delivers them: a reader who is sent away must never have their
+		// unread feedback marked delivered on the way out.
+		expect(inApp).not.toHaveBeenCalled();
 	});
 
 	it("stacks the list, a group and a practice in the detail param, one history entry each", async () => {
@@ -123,7 +128,7 @@ describe("practice profile route", () => {
 		const detail = () => router.state.location.search.detail;
 
 		fireEvent.click(
-			await screen.findByRole("button", { name: "See all practices" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("link", { name: "See all practice groups" }, ROUTE_RENDER_WAIT),
 		);
 		await waitFor(() => expect(detail()).toStrictEqual(["practices:all"]));
 		fireEvent.click(
@@ -204,13 +209,14 @@ describe("practice profile route", () => {
 		expect(router.state.location.searchStr).toBe("");
 	});
 
-	it("keeps the URL silent on the default sort direction", async () => {
+	it("keeps the URL silent on the default sort direction, and the level a press from dismissed", async () => {
 		const router = await renderProfile(`${PAGE}?dir=asc`);
 
 		fireEvent.click(
-			await screen.findByRole("button", { name: "See all practices" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("link", { name: "See all practice groups" }, ROUTE_RENDER_WAIT),
 		);
-		const table = await screen.findByRole("table", { name: "All practices" });
+		const entries = router.history.length;
+		const table = await screen.findByRole("table", { name: "All practice groups" });
 		const standing = () => within(table).getByRole("button", { name: /Standing/u });
 		// One press flips the sort away from the default, the next lands back on it — once the
 		// header has read the first press back from the URL.
@@ -223,5 +229,10 @@ describe("practice profile route", () => {
 
 		await waitFor(() => expect(router.state.location.search.dir).toBeUndefined());
 		expect(router.state.location.searchStr).not.toContain("dir=");
+		// Sorting is a view of the open level, not a place: neither press left a history entry, and
+		// the level was pushed on this one, so Back still dismisses it in a single step.
+		expect(router.history).toHaveLength(entries);
+		router.history.back();
+		await waitFor(() => expect(router.state.location.search.detail).toBeUndefined());
 	});
 });
