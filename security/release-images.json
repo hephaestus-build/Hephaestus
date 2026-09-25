@@ -22,8 +22,8 @@
 		{
 			"name": "nginx",
 			"repository": "docker.io/library/nginx",
-			"tag": "1.31.5-alpine",
-			"digest": "sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3"
+			"tag": "1.31.6-alpine",
+			"digest": "sha256:d10753d9289b8e3f884386351f73554ce72b631378949deddd75e83ee296c427"
 		},
 		{
 			"name": "traefik",
