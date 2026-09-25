@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.practices.observation.dto;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.ObservationFeedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -16,8 +18,10 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Detail-view DTO for a single practice observation. Includes delivered feedback, evidence rationale,
- * and structured evidence that are omitted from the list view.
+ * The one observation shape a developer reads: what was observed, why it was noted, what to try next, the
+ * evidence behind it and the developer's own response to the feedback that carried it. Served on its own by
+ * the observation detail endpoint and per observation by the review-run feed, so a feed row never needs a
+ * second request to open.
  *
  * <p>Intentionally omits internal fields: {@code agentJobId}, {@code occurrenceKey},
  * and raw {@code aboutUserId}.
@@ -57,9 +61,25 @@ public record ObservationDetailDTO(
 
         @Nullable
         @Schema(
-                description =
-                        "What to do — the delivered feedback for this observation (null if nothing was delivered)")
+                description = "What to do — the text of the newest feedback that said something about this "
+                        + "observation to this developer (null if nothing was said)")
         String deliveredFeedback,
+
+        @Nullable
+        @Schema(
+                description = "The next step the review wrote about this observation, whether or not the "
+                        + "feedback carrying it was delivered (null when it wrote none)")
+        String nextStep,
+
+        @Nullable
+        @Schema(
+                description = "The developer's standing answer to the very feedback whose text deliveredFeedback "
+                        + "shows, with that feedback's id as the handle for responding (null when nothing was said, "
+                        + "or when the feedback that said it failed to deliver and so cannot be answered)")
+        FeedbackResponseDTO feedbackResponse,
+
+        @Nullable @Schema(description = "Cross-run locus key; null when continuity is unavailable")
+        String recurrenceKey,
 
         @NonNull ReviewClaimCurrentness claimCurrentness,
 
@@ -80,9 +100,16 @@ public record ObservationDetailDTO(
         return Outcome.of(presence, assessment);
     }
 
+    /**
+     * One piece of feedback answers both {@code deliveredFeedback} and {@code feedbackResponse}, so the
+     * developer always rates the words they just read. FAILED feedback's text is still shown — it was composed
+     * and may have reached them on the artifact — but it carries no response handle, because only DELIVERED
+     * feedback can be answered.
+     */
     public static ObservationDetailDTO from(
             Observation observation,
-            @Nullable String deliveredFeedback,
+            @Nullable ObservationFeedback feedback,
+            @Nullable String nextStep,
             @Nullable String artifactUrl,
             boolean includeEvidence) {
         var practice = observation.getPractice();
@@ -99,10 +126,22 @@ public record ObservationDetailDTO(
                 observation.getSeverity(),
                 includeEvidence ? ObservationEvidenceDTO.from(observation.getEvidence()) : null,
                 observation.getEvidenceRationale(),
-                deliveredFeedback,
+                feedback == null ? null : feedback.getBody(),
+                nextStep,
+                responseTo(feedback),
+                observation.getRecurrenceKey(),
                 ReviewClaimCurrentness.of(observation.getPracticeRevision(), practice, observation.getSupersededAt()),
                 observation.getOrigin(),
                 artifactUrl,
                 observation.getObservedAt());
+    }
+
+    /** No handle, no response: feedback that failed to deliver cannot be answered, so it carries none. */
+    private static @Nullable FeedbackResponseDTO responseTo(@Nullable ObservationFeedback feedback) {
+        if (feedback == null) {
+            return null;
+        }
+        UUID feedbackId = feedback.getFeedbackId();
+        return feedbackId == null ? null : FeedbackResponseDTO.from(feedbackId, feedback);
     }
 }

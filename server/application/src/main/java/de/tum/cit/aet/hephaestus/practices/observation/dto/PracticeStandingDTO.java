@@ -71,7 +71,22 @@ public record PracticeStandingDTO(
          * The practice was evaluated but produced nothing to report: the reviewed work offered no relevant
          * opportunity or the evidence did not settle the question.
          */
-        NO_OPPORTUNITY,
+        NO_OPPORTUNITY;
+
+        /**
+         * Where this standing sorts: the verdicts worst first, then the silences, {@code NO_OPPORTUNITY} before
+         * {@code NOT_OBSERVED} because a review that ran and found nothing to say is a working instrument, not
+         * an unconfigured one. Between two verdicts, the higher rank is the better standing.
+         */
+        public int rank() {
+            return switch (this) {
+                case DEVELOPING -> 0;
+                case MIXED -> 1;
+                case STRENGTH -> 2;
+                case NO_OPPORTUNITY -> 3;
+                case NOT_OBSERVED -> 4;
+            };
+        }
     }
 
     /** Whether this standing is a claim about the developer's work, rather than a reason none could be made. */

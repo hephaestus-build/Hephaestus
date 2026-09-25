@@ -41,8 +41,17 @@ export function useSearchState() {
 	const navigate = useNavigate();
 	return async (
 		update: (previous: Record<string, unknown>) => Record<string, unknown>,
-		state?: NonNullable<Parameters<typeof navigate>[0]>["state"],
-	) => navigate({ to: ".", search: update, state, resetScroll: false });
+		options?: {
+			/**
+			 * The history state of the entry written. Left out, the router starts the entry with none,
+			 * so a write that must keep what the current entry carries — the marker a drawer level was
+			 * pushed with — says `true`, the router's own "keep the current entry's".
+			 */
+			state?: NonNullable<Parameters<typeof navigate>[0]>["state"];
+			/** `replace` rewrites the current history entry: for a change to what an open panel shows, not to which is open. */
+			replace?: boolean;
+		},
+	) => navigate({ to: ".", search: update, resetScroll: false, ...options });
 }
 
 /** `useSearchState` for a patch: the keys given replace their current values, the rest stay. */

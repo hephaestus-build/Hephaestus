@@ -89,7 +89,7 @@ class InAppFeedbackPreparerTest extends BaseUnitTest {
                 WORKSPACE_ID,
                 11L,
                 List.of(new InAppFeedbackPreparer.RoutedMessage(
-                        message("x"), InAppRoutingDecision.UNCORROBORATED, List.of())),
+                        message("x"), InAppRoutingDecision.UNCORROBORATED, List.of(), null)),
                 BASE);
 
         assertThat(prepared).isZero();
@@ -129,7 +129,7 @@ class InAppFeedbackPreparerTest extends BaseUnitTest {
                 WORKSPACE_ID,
                 11L,
                 List.of(new InAppFeedbackPreparer.RoutedMessage(
-                        message("ships-tests"), InAppRoutingDecision.ADMIT, List.of(first, second))),
+                        message("ships-tests"), InAppRoutingDecision.ADMIT, List.of(first, second), null)),
                 BASE);
 
         verify(feedbackObservationRepository, times(2)).insertIfAbsent(any(), any(), eq("PRIMARY"), anyInt());
@@ -150,67 +150,43 @@ class InAppFeedbackPreparerTest extends BaseUnitTest {
     }
 
     @Test
-    void writesACardTheComposerDidNotMeanToReplaceAsFollowingNothing() {
+    void shouldReplaceNothingWhenNoCardAboutTheHabitIsOpen() {
         stubSave();
 
         preparer.prepare(JOB_ID, WORKSPACE_ID, 11L, List.of(admitted("ships-tests")), BASE);
 
         assertThat(captureSaved().getFirst().getReplacesId()).isNull();
-        verify(supersession, never()).supersede(anyLong(), anyLong(), any(), any());
+        verify(supersession, never()).replaceOpen(anyLong(), any());
     }
 
     @Test
-    void retiresTheQueuedCardAndPointsTheNewOneAtIt() {
+    void shouldRetireTheOpenCardAndPointTheNewOneAtItWhenOneIsOpen() {
         stubSave();
-        UUID retired = UUID.randomUUID();
-        String threadKey = threadKeyFor("ships-tests", 11L);
-        when(supersession.supersede(WORKSPACE_ID, 11L, FeedbackChannel.IN_APP, threadKey))
-                .thenReturn(new FeedbackSupersession.Outcome(FeedbackSupersession.Disposition.SUPERSEDED, retired));
+        UUID open = UUID.randomUUID();
+        when(supersession.replaceOpen(WORKSPACE_ID, open))
+                .thenReturn(new FeedbackSupersession.Outcome(FeedbackSupersession.Disposition.SUPERSEDED, open));
 
-        preparer.prepare(
-                JOB_ID, WORKSPACE_ID, 11L, List.of(admitted(supersedingMessage("ships-tests", threadKey))), BASE);
+        preparer.prepare(JOB_ID, WORKSPACE_ID, 11L, List.of(replacing("ships-tests", open)), BASE);
 
         Feedback written = captureSaved().getFirst();
-        assertThat(written.getReplacesId()).isEqualTo(retired);
-        assertThat(written.getThreadKey()).isEqualTo(threadKey);
+        assertThat(written.getReplacesId()).isEqualTo(open);
+        assertThat(written.getThreadKey()).isEqualTo(threadKeyFor("ships-tests", 11L));
     }
 
     /**
-     * The whole point of the zero-rows path: the card the composer aimed at was read, or claimed by
-     * another run, and the message it wrote is still owed to the developer. Losing the claim must cost
-     * the continuity link, not the message.
+     * The whole point of the zero-rows path: the card this one was to replace was claimed by another run,
+     * and the message it wrote is still owed to the developer. Losing the claim must cost the continuity
+     * link, not the message.
      */
     @Test
     void stillWritesTheCardWhenThereWasNothingLeftToRetire() {
         stubSave();
-        String threadKey = threadKeyFor("ships-tests", 11L);
-        when(supersession.supersede(WORKSPACE_ID, 11L, FeedbackChannel.IN_APP, threadKey))
-                .thenReturn(FeedbackSupersession.Outcome.standalone());
+        UUID open = UUID.randomUUID();
+        when(supersession.replaceOpen(WORKSPACE_ID, open)).thenReturn(FeedbackSupersession.Outcome.standalone());
 
-        int prepared = preparer.prepare(
-                JOB_ID, WORKSPACE_ID, 11L, List.of(admitted(supersedingMessage("ships-tests", threadKey))), BASE);
+        int prepared = preparer.prepare(JOB_ID, WORKSPACE_ID, 11L, List.of(replacing("ships-tests", open)), BASE);
 
         assertThat(prepared).isEqualTo(1);
-        assertThat(captureSaved().getFirst().getReplacesId()).isNull();
-    }
-
-    /**
-     * The composer picks a target off a file of opaque digests, so it can name a real key belonging to
-     * another habit. Acting on it would retire a message about something else and leave that thing
-     * unsaid — the one supersession failure with no recovery.
-     */
-    @Test
-    void refusesToRetireACardAboutADifferentHabit() {
-        stubSave();
-
-        preparer.prepare(
-                JOB_ID,
-                WORKSPACE_ID,
-                11L,
-                List.of(admitted(supersedingMessage("ships-tests", threadKeyFor("small-changes", 11L)))),
-                BASE);
-
-        verify(supersession, never()).supersede(anyLong(), anyLong(), any(), any());
         assertThat(captureSaved().getFirst().getReplacesId()).isNull();
     }
 
@@ -223,14 +199,9 @@ class InAppFeedbackPreparerTest extends BaseUnitTest {
         when(feedbackRepository.existsByAgentJobIdAndPosition(eq(JOB_ID), anyInt()))
                 .thenReturn(true);
 
-        preparer.prepare(
-                JOB_ID,
-                WORKSPACE_ID,
-                11L,
-                List.of(admitted(supersedingMessage("ships-tests", threadKeyFor("ships-tests", 11L)))),
-                BASE);
+        preparer.prepare(JOB_ID, WORKSPACE_ID, 11L, List.of(replacing("ships-tests", UUID.randomUUID())), BASE);
 
-        verify(supersession, never()).supersede(anyLong(), anyLong(), any(), any());
+        verify(supersession, never()).replaceOpen(anyLong(), any());
     }
 
     private void stubSave() {
@@ -244,20 +215,18 @@ class InAppFeedbackPreparerTest extends BaseUnitTest {
     }
 
     private static InAppFeedbackPreparer.RoutedMessage admitted(String practiceSlug) {
-        return new InAppFeedbackPreparer.RoutedMessage(message(practiceSlug), InAppRoutingDecision.ADMIT, List.of());
+        return new InAppFeedbackPreparer.RoutedMessage(
+                message(practiceSlug), InAppRoutingDecision.ADMIT, List.of(), null);
+    }
+
+    /** An admitted message about a habit whose previous card is still open on the page. */
+    private static InAppFeedbackPreparer.RoutedMessage replacing(String practiceSlug, UUID open) {
+        return new InAppFeedbackPreparer.RoutedMessage(
+                message(practiceSlug), InAppRoutingDecision.ADMIT, List.of(), open);
     }
 
     private static ComposedInAppMessage message(String practiceSlug) {
-        return new ComposedInAppMessage(practiceSlug, "A pattern", "What keeps happening.", "Do the thing", null);
-    }
-
-    private static ComposedInAppMessage supersedingMessage(String practiceSlug, String supersedesThreadKey) {
-        return new ComposedInAppMessage(
-                practiceSlug, "A pattern", "What keeps happening.", "Do the thing", supersedesThreadKey);
-    }
-
-    private static InAppFeedbackPreparer.RoutedMessage admitted(ComposedInAppMessage message) {
-        return new InAppFeedbackPreparer.RoutedMessage(message, InAppRoutingDecision.ADMIT, List.of());
+        return new ComposedInAppMessage(practiceSlug, "A pattern", "What keeps happening.", "Do the thing");
     }
 
     private static String threadKeyFor(String practiceSlug, long recipientUserId) {

@@ -1,25 +1,30 @@
 import { cn } from "cn";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
+
 import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { statusToneClass, statusValues } from "@/components/common/status-def";
+import { statusToneClass } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
+import {
+	DEFAULT_PRACTICE_GROUP_SORT,
+	sortPracticeGroups,
+} from "@/components/practice-vocabulary/practice-group-list-order";
 import { PRACTICE_GROUP_STANDING_DEFS } from "@/components/practice-vocabulary/practice-group-standing-defs";
+import { PracticeGroupStandingRing } from "@/components/practice-vocabulary/PracticeGroupStandingRing";
+import { PracticeTrendChip } from "@/components/practice-vocabulary/PracticeTrendChip";
+import {
+	countPracticeStandings,
+	STANDING_SEGMENTS,
+	summarizeStandingCounts,
+} from "@/components/practice-vocabulary/standing-counts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { artifactKindCountLabel, artifactKindIcon } from "@/lib/artifact-kinds";
-import {
-	PracticeGroupStandingRing,
-	STANDING_LEGEND,
-	summarizePracticeStandings,
-} from "./PracticeGroupStandingRing";
-import { PracticeTrendChip } from "./PracticeTrendChip";
+import { artifactKindIcon, artifactKindNoun } from "@/lib/artifact-kinds";
 
 const COLLAPSED_GROUP_COUNT = 3;
-const STANDING_ORDER = statusValues(PRACTICE_GROUP_STANDING_DEFS);
 
 export interface PracticeGroupStandingSectionProps {
 	groups: PracticeGroup[];
@@ -58,11 +63,7 @@ export function PracticeGroupStandingCard({
 		return <p className="text-sm text-muted-foreground">No practice groups are configured yet.</p>;
 	}
 
-	const orderedGroups = [...groups].sort((left, right) => {
-		const leftStanding = standings[left.slug]?.standing ?? "NOT_OBSERVED";
-		const rightStanding = standings[right.slug]?.standing ?? "NOT_OBSERVED";
-		return STANDING_ORDER.indexOf(leftStanding) - STANDING_ORDER.indexOf(rightStanding);
-	});
+	const orderedGroups = sortPracticeGroups(groups, standings, DEFAULT_PRACTICE_GROUP_SORT);
 	const collapsible = orderedGroups.length > COLLAPSED_GROUP_COUNT;
 	const visibleGroups = showAll ? orderedGroups : orderedGroups.slice(0, COLLAPSED_GROUP_COUNT);
 	const showsRing = Object.values(practicesByGroup ?? {}).some(
@@ -83,7 +84,7 @@ export function PracticeGroupStandingCard({
 						aria-label="Practice standing colours"
 						className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground"
 					>
-						{STANDING_LEGEND.map((segment) => (
+						{STANDING_SEGMENTS.map((segment) => (
 							<li key={segment.standing} className="flex items-center gap-1.5">
 								<span
 									className={cn("size-2 rounded-full bg-current", segment.colorClass)}
@@ -102,7 +103,8 @@ export function PracticeGroupStandingCard({
 					const presentation =
 						PRACTICE_GROUP_STANDING_DEFS[groupStanding?.standing ?? "NOT_OBSERVED"];
 					const practices = practicesByGroup?.[group.slug] ?? [];
-					const breakdown = summarizePracticeStandings(practices);
+					const counts = countPracticeStandings(practices);
+					const breakdown = summarizeStandingCounts(counts);
 					const { Icon, pill } = getGroupVisual(group.icon, group.color);
 					return (
 						<Card key={group.slug} className="relative flex h-full flex-col overflow-hidden">
@@ -136,7 +138,7 @@ export function PracticeGroupStandingCard({
 											/>
 										)}
 									</div>
-									{practices.length > 0 && <PracticeGroupStandingRing practices={practices} />}
+									{practices.length > 0 && <PracticeGroupStandingRing counts={counts} />}
 								</div>
 								{breakdown.length > 0 && (
 									<ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -166,7 +168,7 @@ export function PracticeGroupStandingCard({
 												return (
 													<li key={workKind} className="flex items-center gap-1">
 														<SourceIcon className="size-3.5 shrink-0" aria-hidden />
-														{artifactKindCountLabel(workKind, count)}
+														{count} {artifactKindNoun(workKind, count)}
 													</li>
 												);
 											})}

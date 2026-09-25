@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { firstNonBlank, hasText } from "./text";
+import { capitalise, firstNonBlank, hasText } from "./text";
 
 describe("hasText", () => {
 	it("rejects absence and the blank string alike", () => {
@@ -23,5 +23,30 @@ describe("firstNonBlank", () => {
 	it("reports undefined when every source is blank, so the caller supplies the fallback", () => {
 		expect(firstNonBlank(undefined, "", null)).toBeUndefined();
 		expect(firstNonBlank()).toBeUndefined();
+	});
+});
+
+describe("capitalise", () => {
+	it("opens a sentence with a capital and leaves the rest of it alone", () => {
+		expect(capitalise("before writing a description, find the work item")).toBe(
+			"Before writing a description, find the work item",
+		);
+		expect(capitalise("split the commit so the JAR is built once")).toBe(
+			"Split the commit so the JAR is built once",
+		);
+	});
+
+	it("leaves a sentence that already opens with a capital as it was written", () => {
+		expect(capitalise("Split the commit.")).toBe("Split the commit.");
+	});
+
+	it("leaves a sentence that opens with a digit or a symbol as it was written", () => {
+		expect(capitalise("3 of the checks have no test")).toBe("3 of the checks have no test");
+		expect(capitalise("`loader` is renamed twice")).toBe("`loader` is renamed twice");
+	});
+
+	it("has nothing to capitalise in the blank string", () => {
+		expect(capitalise("")).toBe("");
+		expect(capitalise("   ")).toBe("   ");
 	});
 });

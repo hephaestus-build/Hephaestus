@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	getInAppFeedbackQueryKey,
 	listPracticeGroupReviewRunsInfiniteQueryKey,
 	listWorkspacesQueryKey,
 } from "@/api/@tanstack/react-query.gen";
@@ -99,6 +100,7 @@ beforeEach(() => {
 						credibilityThreshold: 0.95,
 						currentOpportunities: 0,
 						previousOpportunities: 0,
+						opportunities: 0,
 						opportunitiesUntilComparable: 10,
 						ropeHalfWidth: 0.1,
 					},
@@ -208,29 +210,40 @@ it("does not label another developer's profile with the previous developer's dat
 	await screen.findByRole("heading", { name: "Developer bob" }, ROUTE_RENDER_WAIT);
 });
 
-it("refreshes every cached filter of the group after responding to feedback", async () => {
-	const observationId = "00000000-0000-0000-0000-000000000001";
-	let usefulness: "HELPFUL" | undefined;
+it("refreshes the group's every cached filter and the feedback cards after a response", async () => {
+	let resolution: "ADDRESSED" | undefined;
 	server.use(
+		// The feed carries each observation in full, so the row opens with nothing more to load.
 		http.get("*/workspaces/:workspaceSlug/practice-groups/:groupSlug/review-runs", () =>
 			HttpResponse.json({
 				content: [
 					{
 						reviewId: "00000000-0000-0000-0000-000000000003",
 						reviewedAt: "2026-09-01T10:00:00Z",
-						reviewedWork: { id: 1, type: "scm.pull_request", title: "A focused change" },
+						reviewedWork: {
+							id: "1",
+							kind: "scm.pull_request",
+							label: "#1",
+							title: "A focused change",
+						},
 						observations: [
 							{
-								observationId,
-								feedbackId: "00000000-0000-0000-0000-000000000002",
+								id: "00000000-0000-0000-0000-000000000001",
 								practiceSlug: "small-changes",
 								practiceName: "Keep changes focused",
-								title: "Two concerns in one change",
+								summary: "Two concerns in one change",
 								assessmentStatus: "ASSESSED",
 								presence: "PRESENT",
 								assessment: "BAD",
 								claimCurrentness: "CURRENT",
-								feedbackUsefulness: usefulness,
+								origin: "LIVE",
+								observedAt: "2026-09-01T10:00:00Z",
+								artifactId: 1,
+								artifactKind: "scm.pull_request",
+								feedbackResponse: {
+									feedbackId: "00000000-0000-0000-0000-000000000002",
+									resolution,
+								},
 							},
 						],
 					},
@@ -239,25 +252,32 @@ it("refreshes every cached filter of the group after responding to feedback", as
 				page: 0,
 			}),
 		),
-		http.get("*/workspaces/:workspaceSlug/practices/observations/:observationId", () =>
-			HttpResponse.json({ observedAt: "2026-09-01T10:00:00Z" }),
-		),
 		http.put("*/workspaces/:workspaceSlug/practices/feedback/:feedbackId/response", () => {
-			usefulness = "HELPFUL";
-			return HttpResponse.json({ usefulness: "HELPFUL" });
+			resolution = "ADDRESSED";
+			return HttpResponse.json({ resolution: "ADDRESSED" });
 		}),
 	);
-	const { queryClient } = renderRouteAtWithRouter(`${path}?observation=${observationId}`);
+	const { queryClient } = renderRouteAtWithRouter(path);
 	const main = await screen.findByRole("main");
-	const helpful = await within(main).findByRole("button", { name: "Helpful" }, ROUTE_RENDER_WAIT);
+	const addressed = await within(main).findByRole(
+		"button",
+		{ name: "Addressed" },
+		ROUTE_RENDER_WAIT,
+	);
 	const filtered = listPracticeGroupReviewRunsInfiniteQueryKey({
 		path: { workspaceSlug: "acme", groupSlug: group.slug },
 		query: { size: 10, practiceSlug: "small-changes" },
 	});
 	queryClient.setQueryData(filtered, { pages: [{ content: [], hasNext: false }], pageParams: [0] });
-	await userEvent.click(helpful);
-	await waitFor(() => expect(helpful.getAttribute("aria-pressed")).toBe("true"));
+	// The same feedback is a card on the practice profile, which must not keep the old response.
+	const cards = getInAppFeedbackQueryKey({ path: { workspaceSlug: "acme" } });
+	queryClient.setQueryData(cards, []);
+	// A resolution is recorded once its comment band is sent, with or without a comment.
+	await userEvent.click(addressed);
+	await userEvent.click(within(main).getByRole("button", { name: "Send" }));
+	await waitFor(() => expect(addressed.getAttribute("aria-pressed")).toBe("true"));
 	expect(queryClient.getQueryState(filtered)?.isInvalidated).toBe(true);
+	expect(queryClient.getQueryState(cards)?.isInvalidated).toBe(true);
 });
 
 it("restores the bookmarked custom timeframe on Back without scrolling on selection", async () => {

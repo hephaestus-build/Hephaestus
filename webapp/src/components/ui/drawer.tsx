@@ -11,7 +11,8 @@ import { cn } from "cn";
  * ⚠️ Diverges from the shadcn registry — `shadcn add drawer` drops the following; re-apply them.
  *
  * 1. `DrawerContent` takes `size`: `default` is upstream's width, `detail` a panel that replaces a
- *    page, `panel` a fixed tool column beside one. Each owns its width and `--peek`.
+ *    page, `detailWide` that panel for a surface that needs most of the viewport, `panel` a fixed
+ *    tool column beside one. Each owns its width and `--peek`.
  * 2. `DrawerContent` takes `dimWhenNested`, documented at its definition.
  * 3. `DrawerBody`, the scrollable middle, keyboard-focusable so a submitting form's disabled
  *    controls do not strand the overflow. `DrawerHeader` and `DrawerFooter` are sized for it: the
@@ -121,6 +122,17 @@ const drawerContentVariants = cva("", {
 			 */
 			detail:
 				"[--peek:6rem] data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:min(44rem,92vw)] data-[swipe-axis=x]:xl:[--drawer-content-width:min(62rem,75vw)]",
+			/**
+			 * `detail` for a surface whose content needs most of the viewport, e.g. a two-column
+			 * standing with a run feed. Same peek; from `sm` the width is 60rem where `detail` is 44rem,
+			 * and from `xl` it holds 75vw instead of capping at 62rem. Both widths are rounded to a
+			 * whole pixel, and `will-change-auto` replaces the base `will-change-transform`: at these
+			 * widths the panel edge is rarely on a whole pixel, and a panel kept on a GPU layer at rest
+			 * rasterises its text soft, so demoting the layer after the animation lets the text snap
+			 * back to the pixel grid.
+			 */
+			detailWide:
+				"will-change-auto [--peek:6rem] data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:round(min(60rem,92vw),1px)] data-[swipe-axis=x]:xl:[--drawer-content-width:round(75vw,1px)]",
 			/** A tool beside the page rather than a page over it: one fixed column, the page keeps the rest. */
 			panel:
 				"[--peek:1rem] data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:28rem]",

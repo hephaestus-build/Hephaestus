@@ -1,0 +1,94 @@
+import { mergeProps } from "@base-ui/react/merge-props";
+import { useRender } from "@base-ui/react/use-render";
+import { ExternalLinkIcon } from "lucide-react";
+import type { ReactNode } from "react";
+
+import { cn } from "cn";
+import { FOCUS_RING } from "@/components/common/focus";
+import { hasText } from "@/lib/text";
+
+export interface InlineLinkProps extends Omit<
+	useRender.ComponentProps<"a">,
+	"href" | "onClick" | "children"
+> {
+	/**
+	 * An address makes it an `<a>`; with `onClick` instead it is a `<button>`; with neither, a
+	 * `<span>` of plain text.
+	 */
+	href?: string;
+	/** Another site: the link opens in a new tab, says so, and carries the outbound icon. */
+	external?: boolean;
+	onClick?: () => void;
+	children: ReactNode;
+}
+
+/**
+ * A link inside running text — a practice name, a work reference, a crumb in a level's path —
+ * drawn to the practice surfaces' link rule (`webapp/AGENTS.md` § Practice surfaces palette), so a
+ * name that opens a level and one that opens the provider's page look alike. A reference with
+ * nowhere to go is a word, and a word that answers no press gets no hover. Rendered through
+ * `useRender`, so it can stand in a `render=` slot such as a tooltip trigger's.
+ */
+export function InlineLink({
+	href,
+	external = false,
+	onClick,
+	className,
+	children,
+	render,
+	...props
+}: InlineLinkProps) {
+	const defaultTagName = tagNameFor(href, onClick);
+	// A `render=` slot is a control of its own (a router link, say), so it takes the hover and ring
+	// too.
+	const interactive = defaultTagName !== "span" || render !== undefined;
+	// Only a real address opens elsewhere; a reference with no address is a word, icon and all.
+	const outbound = hasText(href) && external;
+	const ownProps: useRender.ElementProps<"a"> = {
+		className: cn(
+			"text-foreground",
+			interactive && [
+				"cursor-pointer rounded-sm text-left decoration-1 underline-offset-3 hover:text-mentor hover:underline focus-visible:text-mentor focus-visible:underline",
+				FOCUS_RING,
+			],
+			outbound && "inline-flex items-center gap-0.5",
+			className,
+		),
+	};
+	if (hasText(href)) {
+		ownProps.href = href;
+		if (outbound) {
+			ownProps.target = "_blank";
+			ownProps.rel = "noopener noreferrer";
+		}
+	} else if (onClick) {
+		ownProps.type = "button";
+		ownProps.onClick = onClick;
+	}
+	return useRender({
+		defaultTagName,
+		render,
+		props: mergeProps(ownProps, props, {
+			children: outbound ? (
+				<>
+					{children}
+					<ExternalLinkIcon className="size-3 shrink-0" aria-hidden />
+					<span className="sr-only"> (opens in a new tab)</span>
+				</>
+			) : (
+				children
+			),
+		}),
+	});
+}
+
+/** An address makes it a link and a handler a button; with neither it is a word. */
+function tagNameFor(
+	href: string | undefined,
+	onClick: InlineLinkProps["onClick"],
+): "a" | "button" | "span" {
+	if (hasText(href)) {
+		return "a";
+	}
+	return onClick ? "button" : "span";
+}

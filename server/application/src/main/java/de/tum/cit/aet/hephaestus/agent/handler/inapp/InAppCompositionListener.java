@@ -14,17 +14,20 @@ import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.PreviousInAppFeedback;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -60,6 +63,8 @@ public class InAppCompositionListener {
     private final FeedbackCompositionResultParser resultParser;
     private final InAppFeedbackPreparer preparer;
     private final PracticeFeedbackDeliveryPolicy deliveryPolicy;
+    private final PreviousInAppFeedback previousInAppFeedback;
+    private final Clock clock;
 
     public InAppCompositionListener(
             AgentJobRepository agentJobRepository,
@@ -69,7 +74,9 @@ public class InAppCompositionListener {
             WorkspaceReviewDefaultsProvider workspaceDefaults,
             FeedbackCompositionResultParser resultParser,
             InAppFeedbackPreparer preparer,
-            PracticeFeedbackDeliveryPolicy deliveryPolicy) {
+            PracticeFeedbackDeliveryPolicy deliveryPolicy,
+            PreviousInAppFeedback previousInAppFeedback,
+            Clock clock) {
         this.agentJobRepository = agentJobRepository;
         this.observationRepository = observationRepository;
         this.feedbackRepository = feedbackRepository;
@@ -78,6 +85,8 @@ public class InAppCompositionListener {
         this.resultParser = resultParser;
         this.preparer = preparer;
         this.deliveryPolicy = deliveryPolicy;
+        this.previousInAppFeedback = previousInAppFeedback;
+        this.clock = clock;
     }
 
     @Async(FeedbackLaneExecutor.BEAN_NAME)
@@ -108,7 +117,7 @@ public class InAppCompositionListener {
     /** Prepare source observations using a separate composition job's output. */
     public int prepare(UUID sourceJobId, UUID compositionJobId, Long workspaceId) {
         int prepared = route(sourceJobId, compositionJobId, workspaceId);
-        agentJobRepository.markInAppPrepared(compositionJobId, Instant.now());
+        agentJobRepository.markInAppPrepared(compositionJobId, clock.instant());
         return prepared;
     }
 
@@ -143,12 +152,13 @@ public class InAppCompositionListener {
         return resultParser.parse(jobOutput, FeedbackChannel.IN_APP).stream()
                 .filter(unit -> unit.action() != ComposedFeedbackUnit.Action.WITHHOLD)
                 .filter(ComposedFeedbackUnit::isComplete)
+                // The composer's supersession target is not carried: which card a new one replaces is the
+                // server's rule, read off the page's own view of the previous card in prepareFor.
                 .map(unit -> new ComposedInAppMessage(
                         unit.practiceSlug(),
                         Objects.requireNonNull(unit.title()),
                         Objects.requireNonNull(unit.body()),
-                        Objects.requireNonNull(unit.nextStep()),
-                        unit.supersedesThreadKey()))
+                        Objects.requireNonNull(unit.nextStep())))
                 .toList();
     }
 
@@ -160,10 +170,17 @@ public class InAppCompositionListener {
             int positionBase) {
         PracticeAutonomy workspaceDefault =
                 workspaceDefaults.forWorkspace(workspaceId).defaultAutonomy();
-        Instant now = Instant.now();
-        Instant since = now.minus(Duration.ofDays(InAppFeedbackRouter.PATTERN_WINDOW_DAYS));
+        Instant now = clock.instant();
+        Instant windowStart = now.minus(Duration.ofDays(InAppFeedbackRouter.PATTERN_WINDOW_DAYS));
         List<InAppFeedbackPreparer.RoutedMessage> routed = new ArrayList<>(messages.size());
         for (ComposedInAppMessage message : messages) {
+            // A new card about a habit starts where the previous card about it left off: work that resolved
+            // the last card, or that the developer answered it over, or that the last card already cited
+            // while it stays open, is never cited again. An open previous card is what the new one replaces.
+            Optional<PreviousInAppFeedback.Previous> previous =
+                    previousInAppFeedback.find(workspaceId, recipientUserId, message.practiceSlug(), now);
+            Instant since =
+                    previous.map(card -> card.nextEvidenceSince(windowStart)).orElse(windowStart);
             List<Observation> evidence = visibleEvidence(workspaceId, recipientUserId, message.practiceSlug(), since);
             InAppRoutingDecision decision = InAppFeedbackRouter.route(
                     message,
@@ -183,7 +200,12 @@ public class InAppCompositionListener {
             }
             // The card presents bound observations as examples of the problem, not the full review window.
             routed.add(new InAppFeedbackPreparer.RoutedMessage(
-                    message, decision, InAppFeedbackRouter.problemsIn(evidence)));
+                    message,
+                    decision,
+                    InAppFeedbackRouter.problemsIn(evidence),
+                    previous.filter(PreviousInAppFeedback.Previous::isOpen)
+                            .map(PreviousInAppFeedback.Previous::id)
+                            .orElse(null)));
         }
         return preparer.prepare(agentJobId, workspaceId, recipientUserId, List.copyOf(routed), positionBase);
     }

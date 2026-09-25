@@ -11,10 +11,15 @@ import org.jspecify.annotations.Nullable;
  * necessarily full whenever a comparison is possible at all, it had exactly one reachable value, and across
  * every combination reachable at four opportunities per bundle it never once changed a verdict. The counts
  * below say the same thing without pretending to grade it.
+ *
+ * <p>{@code opportunities} is not {@code currentOpportunities + previousOpportunities}. At group scope one
+ * piece of reviewed work can be current evidence for one practice and previous evidence for another, and a
+ * reader counts it once; at practice scope the two bundles are disjoint and the sum is the same number.
  */
 public record TrendSupport(
         int currentOpportunities,
         int previousOpportunities,
+        int opportunities,
         int opportunitiesUntilComparable,
         @Nullable Integer comparablePractices,
         @Nullable Integer eligiblePractices,

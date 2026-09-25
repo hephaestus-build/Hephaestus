@@ -307,9 +307,10 @@ run themselves once a sync finds the work again, and are dropped if it does not 
    `agent.queue.running` are **absent** from that pod's metrics rather than reading zero.
 9. **Are jobs being claimed at all?** Watch `agent.queue.oldest_age_seconds`. It should rise and fall.
    Climbing monotonically means the server is submitting and no worker is claiming.
-10. **Is instance-wide silent mode engaged?** Instance admin → **Instance settings**. While it is on, every
-   workspace's feedback is suppressed across the instance, and a banner says so on every instance-admin
-   page.
+10. **Is instance-wide silent mode engaged?** Instance admin → **Instance settings**. While it is on, no
+   workspace's feedback leaves the instance — no comments on the work, no feedback in conversations and
+   no email — while reviews still run and in-app feedback still reaches each developer's Practice
+   profile. A banner says so on every instance-admin page.
 
 The per-workspace review list under Administration → **Practices → Practice reviews** shows each review's
 status, the model it ran on, and its error message — the fastest way to tell "never submitted" from

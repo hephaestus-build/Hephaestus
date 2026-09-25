@@ -70,3 +70,11 @@ export function isHostname(value: string): boolean {
 			.every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/u.test(label))
 	);
 }
+
+/**
+ * Whether a host is this machine. Scripts that write straight into a database or reach a
+ * development server refuse every other host, so a stray production URL never gets through.
+ */
+export function isLoopbackHost(host: string): boolean {
+	return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+}

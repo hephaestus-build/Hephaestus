@@ -3,29 +3,28 @@ package de.tum.cit.aet.hephaestus.practices.groupdetail;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.DeliveredFeedbackBinding;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackUsefulness;
-import de.tum.cit.aet.hephaestus.practices.groupdetail.dto.PracticeGroupReviewObservationDTO;
 import de.tum.cit.aet.hephaestus.practices.groupdetail.dto.PracticeGroupReviewRunDTO;
 import de.tum.cit.aet.hephaestus.practices.groupdetail.dto.PracticeGroupReviewRunsPageDTO;
-import de.tum.cit.aet.hephaestus.practices.groupdetail.dto.PracticeGroupReviewedWorkDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.ReviewRunRow;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationService;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunNarrativeLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunNarrativeLookup.ReviewRunNarrative;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -41,8 +40,9 @@ public class PracticeGroupReviewRunService {
 
     private final PracticeGroupService practiceGroupService;
     private final ObservationRepository observationRepository;
-    private final FeedbackObservationRepository feedbackObservationRepository;
+    private final ObservationService observationService;
     private final ReviewRunTargetLookup reviewRunTargetLookup;
+    private final ReviewRunNarrativeLookup reviewRunNarrativeLookup;
     private final CurrentDeveloperLookup currentDeveloperLookup;
     private final ObservationVisibilityPolicy visibilityPolicy;
 
@@ -119,69 +119,30 @@ public class PracticeGroupReviewRunService {
                 visibilityPolicy.permitsHistory(workspaceId, found, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         List<Observation> observations =
                 found.stream().filter(row -> visible.contains(row.getId())).toList();
-        Map<UUID, List<Observation>> observationsByJob =
-                observations.stream().collect(Collectors.groupingBy(Observation::getAgentJobId));
-        Map<UUID, DeliveredFeedbackBinding> feedbackByObservation =
-                feedbackByObservation(workspaceId, developerId, observations);
+        Map<UUID, UUID> jobByObservation =
+                observations.stream().collect(Collectors.toMap(Observation::getId, Observation::getAgentJobId));
         Map<UUID, ReviewRunTargetLookup.Target> targets = reviewRunTargetLookup.findByJobIds(workspaceId, jobIds);
+        Map<UUID, ReviewRunNarrative> narratives = reviewRunNarrativeLookup.findByJobIds(workspaceId, jobIds);
+        // The visibility gate admitted every observation left, so each carries its evidence — the same
+        // authorization answer the detail endpoint reads, taken once for the page.
+        Map<UUID, List<ObservationDetailDTO>> detailsByJob =
+                observationService
+                        .toDetails(workspaceId, developerId, observations, visible, targets, narratives)
+                        .stream()
+                        .collect(Collectors.groupingBy(
+                                detail -> Objects.requireNonNull(jobByObservation.get(detail.id()))));
 
         List<PracticeGroupReviewRunDTO> reviewRuns = new ArrayList<>();
         for (ReviewRunRow run : runs) {
-            List<Observation> visibleObservations = observationsByJob.getOrDefault(run.getJobId(), List.of());
-            if (!visibleObservations.isEmpty()) {
-                reviewRuns.add(toReviewRun(run, visibleObservations, feedbackByObservation, targets));
+            List<ObservationDetailDTO> details = detailsByJob.getOrDefault(run.getJobId(), List.of());
+            if (!details.isEmpty()) {
+                ObservationDetailDTO first = details.getFirst();
+                ReviewedWorkRefDTO reviewedWork =
+                        ReviewedWorkLabels.ref(first.artifactKind(), first.artifactId(), targets.get(run.getJobId()));
+                reviewRuns.add(
+                        new PracticeGroupReviewRunDTO(run.getJobId(), run.getReviewedAt(), reviewedWork, details));
             }
         }
         return reviewRuns;
-    }
-
-    private Map<UUID, DeliveredFeedbackBinding> feedbackByObservation(
-            Long workspaceId, Long recipientUserId, Collection<Observation> observations) {
-        if (observations.isEmpty()) {
-            return Map.of();
-        }
-        return feedbackObservationRepository
-                .findDeliveredFeedbackBindings(
-                        workspaceId,
-                        recipientUserId,
-                        observations.stream().map(Observation::getId).toList())
-                .stream()
-                .collect(Collectors.toMap(DeliveredFeedbackBinding::getObservationId, Function.identity()));
-    }
-
-    private PracticeGroupReviewRunDTO toReviewRun(
-            ReviewRunRow run,
-            List<Observation> observations,
-            Map<UUID, DeliveredFeedbackBinding> feedbackByObservation,
-            Map<UUID, ReviewRunTargetLookup.Target> targets) {
-        Observation first = observations.getFirst();
-        var target = targets.get(run.getJobId());
-        PracticeGroupReviewedWorkDTO reviewedWork = target == null
-                ? PracticeGroupReviewedWorkDTO.fallback(first.getArtifactKind(), first.getArtifactId())
-                : PracticeGroupReviewedWorkDTO.from(target, first.getArtifactId());
-        List<PracticeGroupReviewObservationDTO> reviewObservations = observations.stream()
-                .map(observation -> {
-                    DeliveredFeedbackBinding binding = feedbackByObservation.get(observation.getId());
-                    return PracticeGroupReviewObservationDTO.from(
-                            observation,
-                            binding == null ? null : binding.getFeedbackId(),
-                            usefulness(binding),
-                            resolution(binding),
-                            binding == null ? null : binding.getResponseComment());
-                })
-                .toList();
-        return new PracticeGroupReviewRunDTO(run.getJobId(), run.getReviewedAt(), reviewedWork, reviewObservations);
-    }
-
-    private @Nullable FeedbackUsefulness usefulness(@Nullable DeliveredFeedbackBinding binding) {
-        return binding == null || binding.getResponseUsefulness() == null
-                ? null
-                : FeedbackUsefulness.valueOf(binding.getResponseUsefulness());
-    }
-
-    private @Nullable FeedbackResolution resolution(@Nullable DeliveredFeedbackBinding binding) {
-        return binding == null || binding.getResponseResolution() == null
-                ? null
-                : FeedbackResolution.valueOf(binding.getResponseResolution());
     }
 }

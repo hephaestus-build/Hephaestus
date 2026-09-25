@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationEvidenceDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -28,7 +29,7 @@ public record ReviewObservationDetailDTO(
         @Schema(description = "Criteria revision selected as of job start, when available") @Nullable
         Long practiceRevisionId,
 
-        @NonNull ReviewArtifactDTO artifact,
+        @NonNull ReviewedWorkRefDTO reviewedWork,
 
         @Schema(description = "Whose work the observation is about; null when the identity is no longer resolvable")
         @Nullable
@@ -68,7 +69,7 @@ public record ReviewObservationDetailDTO(
 
     public static ReviewObservationDetailDTO from(
             Observation observation,
-            ReviewArtifactDTO artifact,
+            ReviewedWorkRefDTO reviewedWork,
             @Nullable ReviewSubjectDTO subject,
             List<ReviewBoundFeedbackDTO> feedback,
             boolean includeEvidence) {
@@ -81,7 +82,7 @@ public record ReviewObservationDetailDTO(
                 practice.getName(),
                 practice.getGroup() == null ? null : ReviewPracticeGroupDTO.from(practice.getGroup()),
                 revision == null ? null : revision.getId(),
-                artifact,
+                reviewedWork,
                 subject,
                 observation.getSummary(),
                 observation.getAssessmentStatus(),

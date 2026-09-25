@@ -309,6 +309,19 @@ unlayered while Tailwind sits in `@layer utilities`. That inversion is the whole
 system, so **own a property in one place or the other, never both** — a margin the module changes at
 a breakpoint belongs to the module at every width, not to `mt-8` at one of them.
 
+### Practice surfaces palette
+
+The practice surfaces — the Practice profile, the levels over it and the feedback cards — share one
+60-30-10 palette. **60, grounds**: `bg-background`, `bg-card` and `bg-sidebar`; nothing else paints a
+ground. **30, structure**: `border` and `text-muted-foreground` carry the lines, pills, rails and
+secondary text. **10, the accent**: `mentor` marks only what the eye should land on — at most one
+`variant="mentor"` button per surface, what is new, the current selection or sort — and a link on
+hover or focus; a link is plain text at rest. Status colours (`success`, `warning`, `destructive`)
+are semantic, not accent: they reach a surface only through the registries — their badges and
+icons, and the rings, meters and pressed responses drawn from them — never as coloured prose. A
+card wears a wash in exactly two states: new, in the accent, and resolved, in `success` — the one
+status colour that paints a surface.
+
 ## Testing
 
 `getByRole` > `getByLabelText` > `getByText`, and the ladder ends there: a `data-testid` skips past the
@@ -395,6 +408,8 @@ reaches both edges of the panel; only `DrawerBody` scrolls.
   the full viewport at 320px and the dismiss, the padding and a leading chip already spend 40% of it.
   Anything that is itself text — a badge, a status, provenance — goes *below* the title, inside that
   block. The row wraps as a backstop, but a third column is a design mistake, not a wrap case.
+  A summary that is a picture rather than text, such as a ring and its counts, may sit beside the
+  title and wraps under it below `sm`.
 
 ### Guarded levels
 

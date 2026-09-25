@@ -99,8 +99,8 @@ export function FeedbackDetailPage({
 	}
 	const { feedback } = state;
 	const subjectDiffers = feedback.subject && feedback.subject.id !== feedback.recipient?.id;
-	const artifactSlug = feedback.artifact
-		? reviewArtifactTypeSlug(feedback.artifact.type)
+	const artifactSlug = feedback.reviewedWork
+		? reviewArtifactTypeSlug(feedback.reviewedWork.kind)
 		: undefined;
 	const anchoredPlacements = feedback.placements.filter((placement) =>
 		hasText(placement.anchorPath),
@@ -138,18 +138,18 @@ export function FeedbackDetailPage({
 				</ReviewFact>
 				<ReviewFact label="Reviewed work">
 					<div className="space-y-1">
-						<ReviewArtifactLink artifact={feedback.artifact} />
-						{feedback.artifact && (
-							<p className="break-words text-muted-foreground">{feedback.artifact.title}</p>
+						<ReviewArtifactLink reviewedWork={feedback.reviewedWork} />
+						{hasText(feedback.reviewedWork?.title) && (
+							<p className="break-words text-muted-foreground">{feedback.reviewedWork.title}</p>
 						)}
-						{feedback.artifact && artifactSlug && (
+						{feedback.reviewedWork && artifactSlug && (
 							<Link
 								className="font-medium underline underline-offset-4"
 								to="/w/$workspaceSlug/admin/practices/reviews/targets/$artifactKind/$artifactId"
 								params={{
 									workspaceSlug,
 									artifactKind: artifactSlug,
-									artifactId: String(feedback.artifact.id),
+									artifactId: feedback.reviewedWork.id,
 								}}
 							>
 								See everything reviewed on this work

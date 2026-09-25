@@ -22,8 +22,8 @@ public record PracticeStandingObservationDTO(
 
         @Nullable
         @Schema(
-                description =
-                        "What to do — the delivered feedback for this observation (null if nothing was delivered)")
+                description = "What to do — the text of the newest feedback that said something about this "
+                        + "observation to this developer (null if nothing was said)")
         String deliveredFeedback,
 
         @Nullable @Schema(description = "Impact level (null unless assessed BAD)")
@@ -31,11 +31,11 @@ public record PracticeStandingObservationDTO(
 
         @NonNull
         @Schema(
-                description =
-                        "What this observation says about the developer: a behaviour "
-                                + "demonstrated, a trap avoided, something harmful done, or something needed left out. The "
-                                + "lists only separate positive from negative, so this is what tells the two kinds of each apart.",
-                allowableValues = {"DEMONSTRATED_STRENGTH", "SAFE_AVOIDANCE", "COMMISSION_PROBLEM", "OMISSION_GAP"})
+                description = "What this observation says about the developer: a behaviour "
+                        + "demonstrated, a trap avoided, something harmful done, or something needed left out. The "
+                        + "lists only separate positive from negative, so this is what tells the two kinds of each apart. "
+                        + "Only assessed observations reach a standing, so NOT_APPLICABLE and UNDETERMINED "
+                        + "never appear here.")
         ObservationKind kind,
 
         @NonNull @Schema(description = "The kind of reviewed work this is about")

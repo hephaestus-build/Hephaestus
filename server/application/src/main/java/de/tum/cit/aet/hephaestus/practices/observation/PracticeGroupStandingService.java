@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.dto.FeedbackSourceCountDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
+import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService.StandingSnapshot.PracticeStanding;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingObservationDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.PracticeTrend;
@@ -20,8 +21,10 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -52,17 +55,23 @@ public class PracticeGroupStandingService {
      */
     @Transactional(readOnly = true)
     public List<PracticeGroupStandingDTO> getGroupStandings(Long workspaceId, List<PracticeGroup> groups) {
-        PracticeStandingService.StandingSnapshot snapshot = practiceStandingService.getStandingSnapshot(workspaceId);
-        Map<String, List<PracticeStandingDTO>> cardsByGroup = cardsByGroup(snapshot.practices());
-        Map<String, PracticeTrend> practiceTrends =
-                practiceTrendService.calculatePractices(snapshot.evidenceByPractice());
-        Map<String, GroupSignal> signalsByGroup =
-                groupSignals(snapshot.evidenceByPractice(), practiceTrends, snapshot.eligiblePracticesByGroup());
+        return summarize(groups, practiceStandingService.getStandingSnapshot(workspaceId));
+    }
+
+    /**
+     * The group standings rolled up from one practice snapshot, as of whatever moment that snapshot is. Pure
+     * over the snapshot, which already carries the workspace it was read for; the caller holds the
+     * transaction the snapshot's lazy associations are read in.
+     */
+    public List<PracticeGroupStandingDTO> summarize(
+            List<PracticeGroup> groups, PracticeStandingService.StandingSnapshot snapshot) {
+        Map<String, List<PracticeStandingDTO>> cardsByGroup = cardsByGroup(snapshot.dtos());
+        Map<String, GroupSignal> signalsByGroup = groupSignals(snapshot);
         return groups.stream()
                 .map(group -> toGroupStanding(
                         group,
                         cardsByGroup.getOrDefault(group.getSlug(), List.of()),
-                        snapshot.standingShareByPractice(),
+                        snapshot.practices(),
                         Set.copyOf(snapshot.eligiblePracticesByGroup().getOrDefault(group.getSlug(), List.of())),
                         signalsByGroup.getOrDefault(group.getSlug(), GroupSignal.NONE)))
                 .toList();
@@ -83,11 +92,11 @@ public class PracticeGroupStandingService {
     private static PracticeGroupStandingDTO toGroupStanding(
             PracticeGroup group,
             List<PracticeStandingDTO> cards,
-            Map<String, Double> standingShareByPractice,
+            Map<String, PracticeStanding> practices,
             Set<String> eligiblePracticeSlugs,
             GroupSignal signal) {
         List<PracticeStandingDTO> verdicts = votingVerdicts(cards, eligiblePracticeSlugs);
-        PracticeGroupStandingDTO.Standing standing = groupStanding(cards, verdicts, standingShareByPractice);
+        PracticeGroupStandingDTO.Standing standing = groupStanding(cards, verdicts, practices);
         boolean hasDisplayableData = PracticeGroupStandingDTO.isVerdict(standing);
         // Item-level, unlike the standing: the question here is which KINDS of evidence exist to show, which a
         // practice standing has already abstracted away.
@@ -123,14 +132,15 @@ public class PracticeGroupStandingService {
     private static PracticeGroupStandingDTO.Standing groupStanding(
             List<PracticeStandingDTO> cards,
             List<PracticeStandingDTO> verdicts,
-            Map<String, Double> standingShareByPractice) {
+            Map<String, PracticeStanding> practices) {
         if (verdicts.isEmpty()) {
             return cards.stream().anyMatch(card -> card.standing() == PracticeStandingDTO.Standing.NO_OPPORTUNITY)
                     ? PracticeGroupStandingDTO.Standing.NO_OPPORTUNITY
                     : PracticeGroupStandingDTO.Standing.NOT_OBSERVED;
         }
         double groupShare = verdicts.stream()
-                .mapToDouble(card -> standingShareByPractice.getOrDefault(card.slug(), 0.0))
+                .mapToDouble(card -> Objects.requireNonNull(
+                        Objects.requireNonNull(practices.get(card.slug())).share()))
                 .average()
                 .orElseThrow();
         return switch (StandingScale.classify(groupShare)) {
@@ -173,67 +183,58 @@ public class PracticeGroupStandingService {
         private static final GroupSignal NONE = new GroupSignal(null, null, null, null, List.of());
     }
 
-    private Map<String, GroupSignal> groupSignals(
-            Map<String, List<Observation>> evidenceByPractice,
-            Map<String, PracticeTrend> practiceTrends,
-            Map<String, List<String>> eligiblePracticesByGroup) {
+    /**
+     * One signal per group that has evidence or eligible practices. Only an eligible practice's trend joins
+     * the group's; the evidence stays unfiltered on purpose: a practice review is no longer admitted for still
+     * has observations worth showing, and the feedback span is still dated by them. Its VERDICT is what it has
+     * stopped casting, and the standing beside this already excludes it.
+     */
+    private Map<String, GroupSignal> groupSignals(PracticeStandingService.StandingSnapshot snapshot) {
         Map<String, List<Observation>> evidenceByGroup = new LinkedHashMap<>();
         Map<String, List<PracticeTrend>> trendsByGroup = new LinkedHashMap<>();
-        Set<String> eligibleSlugs =
-                eligiblePracticesByGroup.values().stream().flatMap(List::stream).collect(Collectors.toSet());
-        for (Map.Entry<String, List<Observation>> entry : evidenceByPractice.entrySet()) {
-            List<Observation> practiceEvidence = entry.getValue();
-            if (practiceEvidence.isEmpty()) {
+        Set<String> eligibleSlugs = snapshot.eligiblePracticesByGroup().values().stream()
+                .flatMap(List::stream)
+                .collect(Collectors.toSet());
+        for (PracticeStanding practice : snapshot.practices().values()) {
+            String groupSlug = practice.dto().groupSlug();
+            if (groupSlug == null) {
                 continue;
             }
-            PracticeGroup group = practiceEvidence.get(0).getPractice().getGroup();
-            if (group == null) {
-                continue;
+            if (!practice.evidence().isEmpty()) {
+                evidenceByGroup
+                        .computeIfAbsent(groupSlug, ignored -> new ArrayList<>())
+                        .addAll(practice.evidence());
             }
-            evidenceByGroup
-                    .computeIfAbsent(group.getSlug(), ignored -> new ArrayList<>())
-                    .addAll(practiceEvidence);
-            PracticeTrend practiceTrend = practiceTrends.get(entry.getKey());
-            // Only an eligible practice's trend joins the group's. The evidence map stays unfiltered on
-            // purpose: a practice review is no longer admitted for still has observations worth showing, and the
-            // feedback span is still dated by them. Its VERDICT is what it has stopped casting, and the
-            // standing beside this already excludes it.
-            if (practiceTrend != null && eligibleSlugs.contains(entry.getKey())) {
+            if (!practice.evidence().isEmpty()
+                    && eligibleSlugs.contains(practice.dto().slug())) {
                 trendsByGroup
-                        .computeIfAbsent(group.getSlug(), ignored -> new ArrayList<>())
-                        .add(practiceTrend);
+                        .computeIfAbsent(groupSlug, ignored -> new ArrayList<>())
+                        .add(practice.trend());
             }
         }
 
         Instant now = clock.instant();
         Map<String, GroupSignal> signals = new HashMap<>();
-        for (Map.Entry<String, List<Observation>> entry : evidenceByGroup.entrySet()) {
-            List<Observation> evidence = entry.getValue();
+        Set<String> groupSlugs = new LinkedHashSet<>(evidenceByGroup.keySet());
+        groupSlugs.addAll(snapshot.eligiblePracticesByGroup().keySet());
+        for (String groupSlug : groupSlugs) {
+            List<Observation> evidence = evidenceByGroup.getOrDefault(groupSlug, List.of());
             Instant oldest = evidence.stream()
                     .map(Observation::getObservedAt)
                     .min(Instant::compareTo)
                     .orElse(null);
-            Integer spanDays = oldest == null ? null : inclusiveUtcDaySpan(oldest, now);
             PracticeTrend direction = practiceTrendService.calculateGroup(
-                    entry.getKey(),
-                    eligiblePracticesByGroup.getOrDefault(entry.getKey(), List.of()),
-                    trendsByGroup.getOrDefault(entry.getKey(), List.of()));
+                    groupSlug,
+                    snapshot.eligiblePracticesByGroup().getOrDefault(groupSlug, List.of()),
+                    trendsByGroup.getOrDefault(groupSlug, List.of()));
             signals.put(
-                    entry.getKey(),
+                    groupSlug,
                     new GroupSignal(
                             direction.direction(),
                             TrendSupportDTO.from(direction.support()),
-                            spanDays,
+                            oldest == null ? null : inclusiveUtcDaySpan(oldest, now),
                             oldest,
                             sourceCounts(evidence)));
-        }
-        for (Map.Entry<String, List<String>> entry : eligiblePracticesByGroup.entrySet()) {
-            PracticeTrend direction = practiceTrendService.calculateGroup(
-                    entry.getKey(), entry.getValue(), trendsByGroup.getOrDefault(entry.getKey(), List.of()));
-            signals.putIfAbsent(
-                    entry.getKey(),
-                    new GroupSignal(
-                            direction.direction(), TrendSupportDTO.from(direction.support()), null, null, List.of()));
         }
         return signals;
     }

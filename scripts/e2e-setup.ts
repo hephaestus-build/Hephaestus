@@ -1,6 +1,6 @@
 import { Client } from "pg";
 
-import { isSet } from "./lib/env.ts";
+import { isLoopbackHost, isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { researchConsentFields } from "./lib/research-consent.ts";
 
@@ -101,11 +101,9 @@ function oneOf<const T extends string>(value: string, allowed: readonly T[], mes
 	return match;
 }
 
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
-
 function loopbackUrl(value: string, protocols: readonly string[], message: string): string {
 	const parsed = new URL(value);
-	if (!protocols.includes(parsed.protocol) || !LOOPBACK_HOSTS.has(parsed.hostname)) {
+	if (!protocols.includes(parsed.protocol) || !isLoopbackHost(parsed.hostname)) {
 		throw new Error(message);
 	}
 	return value;

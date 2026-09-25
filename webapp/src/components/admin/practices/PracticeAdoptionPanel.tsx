@@ -2,7 +2,6 @@ import { CircleAlert, Copy, ShieldCheck } from "lucide-react";
 
 import { cn } from "cn";
 import type { CatalogPracticePreview, PracticeDefinitionOptions } from "@/api/types.gen";
-import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
 import { PracticeDefinitionPreview } from "@/components/admin/practices/PracticeDefinitionPreview";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { DetailRow } from "@/components/common/DetailRow";
@@ -14,6 +13,7 @@ import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLi
 import { Section } from "@/components/layout/Section";
 import { AUTONOMY_DEFS } from "@/components/practice-vocabulary/autonomy-defs";
 import { CATALOG_AVAILABILITY_DEFS } from "@/components/practice-vocabulary/catalog-availability-defs";
+import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
 import {
 	Accordion,

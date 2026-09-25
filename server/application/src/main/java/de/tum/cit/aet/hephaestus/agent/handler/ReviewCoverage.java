@@ -22,20 +22,7 @@ final class ReviewCoverage {
      * reads as unevaluated on the developer's practice page.
      */
     static boolean withholdsAllClear(@Nullable JsonNode jobOutput, List<ValidatedObservation> composable) {
-        return !reachedEveryPractice(jobOutput) && composable.stream().noneMatch(DeliveryComposer::isProblem);
-    }
-
-    /**
-     * The ledger the runner writes and {@code PiResultParser} validates before it reaches the job
-     * output — the same record the practice trace reads to mark a practice unevaluated. A run with no
-     * ledger has not shown that it reached anything, so it does not get to claim it did: the parser
-     * drops a ledger it cannot validate, and a run that never wrote one admits no observations either.
-     */
-    private static boolean reachedEveryPractice(@Nullable JsonNode jobOutput) {
-        if (jobOutput == null) return false;
-        JsonNode coverage = jobOutput.path("practiceCoverage");
-        if (!coverage.isObject()) return false;
-        int eligible = coverage.path("eligible").asInt(-1);
-        return eligible >= 0 && coverage.path("evaluated").asInt(-1) == eligible;
+        return !PracticeCoverageLedger.from(jobOutput).reachedEveryPractice()
+                && composable.stream().noneMatch(DeliveryComposer::isProblem);
     }
 }

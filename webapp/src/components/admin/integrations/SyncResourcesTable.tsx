@@ -4,6 +4,7 @@ import { Fragment, useState } from "react";
 
 import { cn } from "cn";
 import type { SyncResourceCount, SyncResourceState } from "@/api/types.gen";
+import { FOCUS_RING } from "@/components/common/focus";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { SortButton } from "@/components/common/SortButton";
@@ -343,7 +344,7 @@ function ResourceNameCell({
 					render={
 						<button
 							type="button"
-							className="block min-w-0 cursor-help rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+							className={cn("block min-w-0 cursor-help rounded-sm text-left", FOCUS_RING)}
 						/>
 					}
 				>
@@ -466,7 +467,10 @@ function LastSyncedCell({
 					render={
 						<button
 							type="button"
-							className="inline-flex cursor-help items-center gap-1 rounded-sm text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+							className={cn(
+								"inline-flex cursor-help items-center gap-1 rounded-sm text-xs",
+								FOCUS_RING,
+							)}
 						/>
 					}
 				>
@@ -573,7 +577,7 @@ function ResourceErrorCell({ resource }: { resource: SyncResourceState }) {
 							<button
 								type="button"
 								aria-label={`Error for ${resource.name}`}
-								className="inline-flex cursor-help rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+								className={cn("inline-flex cursor-help rounded-sm", FOCUS_RING)}
 							/>
 						}
 					>

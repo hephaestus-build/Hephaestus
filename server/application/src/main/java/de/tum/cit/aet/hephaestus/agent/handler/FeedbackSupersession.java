@@ -10,7 +10,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Replaces PREPARED in-app and conversation feedback without retiring DELIVERED feedback.
+ * Retires the feedback a newer piece of feedback takes the place of: on the conversation lane only feedback
+ * still PREPARED ({@link #supersede}), on the in-app lane the card still open, read or not
+ * ({@link #replaceOpen}).
+ *
+ * <p>On the in-app lane the page, not the ledger, is what must hold one live card per habit: the card still
+ * open about a habit is retired by the newer card about it, read or not ({@link #replaceOpen}). A closed card
+ * — resolved by the work or the developer, or closed because the practice changed — is never replaced, and
+ * only the caller can tell which it is, so only the caller decides.
  *
  * <p>The caller must insert the replacement in the same transaction as the supersession claim.
  * In-context reconciliation is handled separately by {@link FeedbackLedgerRecorder}.
@@ -43,7 +50,10 @@ public class FeedbackSupersession {
     public enum Disposition {
         /** Prior feedback was retired; the replacement takes its place. */
         SUPERSEDED,
-        /** Prior feedback remains DELIVERED; the replacement links to it as a continuation. */
+        /**
+         * Prior feedback remains DELIVERED; the replacement links to it as a continuation. Only
+         * {@link #supersede} answers this; the in-app lane's {@link #replaceOpen} retires a read card too.
+         */
         CONTINUED,
         /** No replacement link was acquired. */
         NEW,
@@ -80,6 +90,27 @@ public class FeedbackSupersession {
         }
         // Keep the shared thread key without claiming a replacement link we did not acquire.
         log.info("Supersession found nothing live to claim: channel={}, threadKey={}", channel, threadKey);
+        return Outcome.standalone();
+    }
+
+    /**
+     * Retire the card still open on one in-app thread so a newer card about the same habit can take its
+     * place — queued or already read, but never closed, which the caller has established by reading the
+     * card the way the page reads it ({@code PreviousInAppFeedback}).
+     *
+     * <p>Two compare-and-sets, one per state a live card can be in, so a run racing this one claims it at
+     * most once; a card another run already retired, or that has since been withheld, matches neither, and
+     * the new card is written on its own. Never throws for the same reason {@link #supersede} does not:
+     * losing the claim is ordinary, and the composed words are still owed.
+     *
+     * @param openId the open card, found by the caller on the thread this card is about to be written on
+     */
+    public Outcome replaceOpen(long workspaceId, UUID openId) {
+        if (feedbackRepository.markSuperseded(workspaceId, openId) == 1
+                || feedbackRepository.supersedeDelivered(workspaceId, openId) == 1) {
+            return new Outcome(Disposition.SUPERSEDED, openId);
+        }
+        log.info("Open in-app card was already claimed by another run; written as new: target={}", openId);
         return Outcome.standalone();
     }
 }

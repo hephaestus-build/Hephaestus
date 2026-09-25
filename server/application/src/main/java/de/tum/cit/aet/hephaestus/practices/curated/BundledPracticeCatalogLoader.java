@@ -13,8 +13,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.core.io.ClassPathResource;
@@ -28,16 +31,36 @@ public class BundledPracticeCatalogLoader {
     private static final String CATALOG_RESOURCE = "practices/default-catalog.json";
 
     private final BundledPracticeCatalog catalog;
+    private final Map<String, String> holdsAsBySlug;
 
     BundledPracticeCatalogLoader(
             JsonMapper objectMapper,
             PracticeDefinitionValidator definitionValidator,
             PracticeEvidenceDefaults evidenceDefaults) {
         this.catalog = parse(objectMapper, definitionValidator, evidenceDefaults);
+        Map<String, String> phrases = new HashMap<>();
+        for (BundledEntry<PracticeDefinition> practice : catalog.practices()) {
+            String holdsAs = practice.holdsAs();
+            if (holdsAs != null) {
+                phrases.put(practice.slug(), holdsAs);
+            }
+        }
+        this.holdsAsBySlug = Map.copyOf(phrases);
     }
 
     BundledPracticeCatalog catalog() {
         return catalog;
+    }
+
+    /**
+     * What the developer keeps doing when this bundled practice holds, as one present-tense sentence.
+     *
+     * <p>Keyed by the bundled slug, which a workspace copy retains as its source slug, so the phrase reaches
+     * every workspace adopted from the catalog and follows a Hephaestus release rather than an adoption. Empty for a
+     * practice the catalog does not ship.
+     */
+    public Optional<String> holdsAs(String bundledSlug) {
+        return Optional.ofNullable(holdsAsBySlug.get(bundledSlug));
     }
 
     private static BundledPracticeCatalog parse(
@@ -66,7 +89,8 @@ public class BundledPracticeCatalogLoader {
                             text(groupNode, "description"),
                             text(groupNode, "icon"),
                             text(groupNode, "color")),
-                    groupPosition++));
+                    groupPosition++,
+                    null));
 
             JsonNode practicesNode = groupNode.path("practices");
             if (!practicesNode.isArray()) {
@@ -88,7 +112,8 @@ public class BundledPracticeCatalogLoader {
                                 groupSlug,
                                 practiceNode,
                                 slug),
-                        practicePosition++));
+                        practicePosition++,
+                        requiredText(practiceNode, "holdsAs")));
             }
         }
         if (groups.isEmpty() || practices.isEmpty()) {

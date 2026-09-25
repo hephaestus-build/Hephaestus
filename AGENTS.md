@@ -63,8 +63,8 @@ in one and cited from the other. The words you need on every task:
   addressed to a developer; uncountable, so write *3 pieces of feedback*, never *messages*.
 - **channel** and **delivery** — where one piece of feedback is meant to appear, and whether it was
   prepared, delivered, withheld, failed or replaced.
-- **reviewed work** — a pull request, merge request, issue or conversation under review. Say
-  *pull request* or *merge request* when the provider is known.
+- **reviewed work** — a pull request, merge request, issue, conversation or document under review.
+  Say *pull request* or *merge request* when the provider is known.
 - **developer** — the person an observation is about.
 - **Heph** — the conversational assistant; **mentor** is its product area. Neither Heph, the
   application nor a review is an *agent*; that word means the sandboxed runtime that executes a

@@ -1,10 +1,10 @@
 import { ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
 
-import type { PracticeGroupReviewObservation } from "@/api/types.gen";
+import type { FeedbackResponse } from "@/api/types.gen";
 
 import type { StatusDefs } from "@/components/common/status-def";
 
-export type FeedbackUsefulness = NonNullable<PracticeGroupReviewObservation["feedbackUsefulness"]>;
+export type FeedbackUsefulness = NonNullable<FeedbackResponse["usefulness"]>;
 export const FEEDBACK_USEFULNESS_DEFS: StatusDefs<FeedbackUsefulness> = {
 	HELPFUL: {
 		label: "Helpful",

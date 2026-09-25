@@ -75,7 +75,7 @@
 			"description": "One bundled engineering-practice definition.",
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["slug", "name", "on", "criteria"],
+			"required": ["slug", "name", "on", "criteria", "holdsAs"],
 			"properties": {
 				"slug": {
 					"description": "Stable practice identifier used for provenance, findings, and URLs.",
@@ -127,6 +127,13 @@
 					"type": "string",
 					"minLength": 1,
 					"maxLength": 2000
+				},
+				"holdsAs": {
+					"description": "One present-tense sentence naming what the developer keeps doing when this practice holds, shown on the practice profile beside a practice that stands as a strength, written without dashes. Read from the bundled catalog by slug, never copied into a workspace.",
+					"type": "string",
+					"pattern": "^[^\\-\u2014]+$",
+					"minLength": 20,
+					"maxLength": 80
 				},
 				"deliveryBehavior": {
 					"description": "How negative feedback from this practice is placed or deduplicated.",

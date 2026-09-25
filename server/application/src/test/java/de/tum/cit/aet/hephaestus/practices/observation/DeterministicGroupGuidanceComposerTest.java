@@ -52,7 +52,7 @@ class DeterministicGroupGuidanceComposerTest {
 
     @Test
     void shouldNotNameAPracticeItsOwnStandingCallsFixedAsTheNextFocus() {
-        // A clean streak has already moved this practice to STRENGTH. The older problems still on its card
+        // A run of clean work has already moved this practice to STRENGTH. The older problems still on its card
         // must not name it as the group's next focus — the sentence would contradict the card beside it.
         PracticeStandingDTO fixed = new PracticeStandingDTO(
                 "tests",

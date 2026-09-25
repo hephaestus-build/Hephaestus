@@ -1,4 +1,4 @@
-import type { ReviewArtifact } from "@/api/types.gen";
+import type { ReviewedWorkRef } from "@/api/types.gen";
 import { DateRangeFacet } from "@/components/common/DateRangeFacet";
 import { FacetMultiSelect } from "@/components/common/FacetMultiSelect";
 import { FilterToolbar } from "@/components/common/FilterToolbar";
@@ -73,7 +73,7 @@ export interface FeedbackFiltersProps {
 	 * The work `artifactKind`/`artifactId` points at, so the pill can name it rather than print an
 	 * id. Absent until a row carrying that artifact has arrived.
 	 */
-	scopedArtifact?: ReviewArtifact;
+	scopedArtifact?: ReviewedWorkRef;
 	/**
 	 * The name of the person `recipientUserId` identifies. It must name *that* person: reading it off
 	 * the first row is right only while the filter is on.

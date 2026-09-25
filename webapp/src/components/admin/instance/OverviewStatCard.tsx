@@ -1,6 +1,8 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 
+import { cn } from "cn";
+import { FOCUS_RING } from "@/components/common/focus";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -25,10 +27,7 @@ export function OverviewStatCard({
 	isError = false,
 }: OverviewStatCardProps) {
 	return (
-		<Link
-			to={to}
-			className="block rounded-xl outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-		>
+		<Link to={to} className={cn("block rounded-xl", FOCUS_RING)}>
 			<Card variant="interactive" className="h-full">
 				<CardContent className="flex items-start justify-between gap-3">
 					<div className="min-w-0 space-y-1">

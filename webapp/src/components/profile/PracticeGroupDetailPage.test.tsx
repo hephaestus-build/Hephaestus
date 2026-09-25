@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { PracticeGroup, PracticeGroupReviewRun, PracticeGroupStanding } from "@/api/types.gen";
-import { daysBefore } from "@/stories/story-clock";
+import type { PracticeGroup, PracticeGroupStanding } from "@/api/types.gen";
 import { PracticeGroupDetailPage } from "./PracticeGroupDetailPage";
 
 const group: PracticeGroup = {
@@ -20,13 +19,6 @@ const standing: PracticeGroupStanding = {
 	standing: "MIXED",
 	observations: [],
 	sources: [],
-};
-
-const run: PracticeGroupReviewRun = {
-	reviewId: "00000000-0000-0000-0000-000000000901",
-	reviewedAt: daysBefore(2),
-	reviewedWork: { id: 902, type: "scm.pull_request", provider: "GITHUB", number: 902 },
-	observations: [],
 };
 
 describe("PracticeGroupDetailPage", () => {
@@ -91,57 +83,6 @@ describe("PracticeGroupDetailPage", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "Show every review in this group" }));
 		expect(onSelectPractice).toHaveBeenCalledWith(undefined);
-	});
-
-	it("loads earlier reviews without losing the ones already shown", () => {
-		const onLoadMore = vi.fn();
-		const { rerender } = render(
-			<PracticeGroupDetailPage
-				group={group}
-				feed={{
-					status: "ready",
-					runs: [],
-					hasMore: true,
-					isLoadingMore: false,
-					onLoadMore,
-				}}
-				isLoading={false}
-			/>,
-		);
-
-		expect(screen.queryByRole("button", { name: "View earlier reviews" })).toBeNull();
-
-		rerender(
-			<PracticeGroupDetailPage
-				group={group}
-				feed={{ status: "ready", runs: [run], hasMore: true, isLoadingMore: false, onLoadMore }}
-				isLoading={false}
-			/>,
-		);
-		fireEvent.click(screen.getByRole("button", { name: "View earlier reviews" }));
-		expect(onLoadMore).toHaveBeenCalledOnce();
-
-		rerender(
-			<PracticeGroupDetailPage
-				group={group}
-				feed={{ status: "ready", runs: [run], hasMore: true, isLoadingMore: true, onLoadMore }}
-				isLoading={false}
-			/>,
-		);
-		expect(screen.getByRole("button", { name: "Loading…" }).hasAttribute("disabled")).toBe(true);
-	});
-
-	it("offers a retry when the feed itself failed", () => {
-		const onRetry = vi.fn();
-		render(
-			<PracticeGroupDetailPage
-				group={group}
-				feed={{ status: "error", error: new Error("Gateway timeout"), onRetry }}
-				isLoading={false}
-			/>,
-		);
-		fireEvent.click(screen.getByRole("button", { name: /retry/iu }));
-		expect(onRetry).toHaveBeenCalledOnce();
 	});
 
 	it("offers navigation when the group is missing", () => {

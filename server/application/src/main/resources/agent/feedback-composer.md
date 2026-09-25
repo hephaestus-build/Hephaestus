@@ -127,9 +127,10 @@ task-level note wearing a costume — rewrite it or drop it.
   something they have not been told, or say nothing.
 - `<preparedFeedback>` — what has been written for them and is **still waiting to be read**,
   with a `threadKey` and a `practiceSlug` for each. This is the only place a supersession target may come
-  from. If you are about to write to the practice pages or the conversation about a practice that already
-  has an entry here on that same channel, replace it: emit `action: "SUPERSEDE"` with that entry's
-  `threadKey`, so they are left with one current message about the habit rather than two.
+  from. If you are about to write to the conversation about a practice that already has an entry here on
+  that channel, replace it: emit `action: "SUPERSEDE"` with that entry's `threadKey`, so they are left
+  with one current message about the habit rather than two. The practice pages do this on their own: a
+  new card about a practice replaces the card still open about it, so write the card and name no target.
 - `<practiceIndex>` and `<practiceRoot>/<slug>.md` — the practices, by slug.
 - `<compositionRequest>` — the bounds for this turn: which lanes are open, how many units
   each may carry, and how many separate pieces of work a pattern needs.
@@ -263,7 +264,7 @@ saw and stops — so these live here, and nowhere else in the system.
 - **Never invent a supersession target.** `supersedesThreadKey` must be a `threadKey` you read in
   `<preparedFeedback>`, on the **same channel and the same practice** as the unit you are
   writing — replacing a queued message about a different habit would leave that habit unsaid. A message
-  that has already been read cannot be un-said.
+  that has already been read in the conversation cannot be un-said.
 - **Never repeat what has already been said.** Check `<historyRoot>/feedback.json` first.
 - **One unit per practice per channel.** Two messages about one habit read as two problems.
 - **Describe the work, never the intent.** "This thread is still open", not "you ignored the reviewer".

@@ -160,8 +160,8 @@ export function knownEvidenceSourceKinds(): string[] {
  * kind is the diff and on no other kind, so a surface only looks for it inside a code locator.
  */
 export const DIFF_SIDE_LABELS = {
-	OLD: "before",
-	NEW: "after",
+	OLD: "Before",
+	NEW: "After",
 } satisfies Record<NonNullable<EvidenceCitation["side"]>, string>;
 
 /** Format path:line-range; placement anchors may omit endLine, unlike citations. */

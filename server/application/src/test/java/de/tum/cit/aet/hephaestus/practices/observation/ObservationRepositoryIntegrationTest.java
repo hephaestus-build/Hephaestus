@@ -216,13 +216,92 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         assertThat(observationRepository.findById(unrelatedId).orElseThrow().getSupersededAt())
                 .isNull();
         assertThat(observationRepository.findRecentByDeveloperAndWorkspace(
-                        aboutUser.getId(), workspace.getId(), Instant.EPOCH, true, PageRequest.of(0, 10)))
+                        aboutUser.getId(), workspace.getId(), Instant.EPOCH, PageRequest.of(0, 10)))
                 .isEmpty();
         assertThat(observationRepository.findSummaryByDeveloperAndWorkspace(aboutUser.getId(), workspace.getId()))
                 .isEmpty();
     }
 
+    /**
+     * The developer's recent list and the in-memory window read a claim's latest run the same way: when the
+     * newest run's row was superseded, both answer with the newest run that still stands.
+     *
+     * <p>The writer normally prevents this state, since superseding a piece of work supersedes every run on it;
+     * the older run is inserted after the supersession only to pin that the SQL rule and {@link LatestRun}
+     * agree on it.
+     */
+    @Test
+    @Transactional
+    void shouldAnswerWithTheNewestStandingRunWhenTheNewestRunWasSuperseded() {
+        Issue issue = persistIssue();
+        AgentJob newerRun = new AgentJob();
+        newerRun.setWorkspace(workspace);
+        newerRun.setJobType(AgentJobType.ISSUE_REVIEW);
+        newerRun.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
+        newerRun = agentJobRepository.save(newerRun);
+        Instant newerAt = Instant.parse("2026-03-20T11:00:00Z");
+        insertIssueObservation(issue.getId(), workspace.getId(), practice.getId(), newerRun.getId(), newerAt);
+        observationRepository.supersedeIssueObservations(issue.getId(), newerAt.plusSeconds(1));
+        UUID standing = insertIssueObservation(
+                issue.getId(), workspace.getId(), practice.getId(), agentJob.getId(), newerAt.minusSeconds(3600));
+
+        List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
+                aboutUser.getId(), workspace.getId(), Instant.EPOCH, PageRequest.of(0, 10));
+        List<Observation> window = LatestRun.perClaim(observationRepository.findByDeveloperAndWorkspaceBetween(
+                aboutUser.getId(), workspace.getId(), Instant.EPOCH, newerAt.plusSeconds(60)));
+
+        assertThat(recent).extracting(Observation::getId).containsExactly(standing);
+        assertThat(window).extracting(Observation::getId).containsExactly(standing);
+    }
+
+    /**
+     * A run is named by the work its newest observation is on, kind and id from that one row: here the older
+     * row's kind and the newer row's id each sort first, so a per-column pick would pair an issue kind with a
+     * pull request's id.
+     */
+    @Test
+    void shouldNameTheNewestObservationsWorkWhenARunReviewedTwoPiecesOfWork() {
+        Instant olderAt = Instant.parse("2026-03-20T10:00:00Z");
+        insertIssueObservation(900L, workspace.getId(), practice.getId(), agentJob.getId(), olderAt);
+        observationRepository.insertIfAbsent(
+                UUID.randomUUID(),
+                "pull-request-newer",
+                agentJob.getId(),
+                workspace.getId(),
+                practice.getId(),
+                null,
+                "scm.pull_request",
+                100L,
+                aboutUser.getId(),
+                "Pull request observation",
+                "ASSESSED",
+                "PRESENT",
+                "GOOD",
+                null,
+                null,
+                null,
+                null,
+                olderAt.plusSeconds(60),
+                "LIVE");
+
+        List<ObservationRepository.DeveloperReviewRunRow> runs = observationRepository.findDeveloperReviewRuns(
+                aboutUser.getId(), workspace.getId(), null, null, PageRequest.of(0, 50));
+
+        assertThat(runs)
+                .filteredOn(run -> run.getJobId().equals(agentJob.getId()))
+                .singleElement()
+                .satisfies(run -> {
+                    assertThat(run.getArtifactKind()).isEqualTo("scm.pull_request");
+                    assertThat(run.getArtifactId()).isEqualTo(100L);
+                });
+    }
+
     private UUID insertIssueObservation(long issueId, long workspaceId, long practiceId, UUID jobId) {
+        return insertIssueObservation(issueId, workspaceId, practiceId, jobId, Instant.now());
+    }
+
+    private UUID insertIssueObservation(
+            long issueId, long workspaceId, long practiceId, UUID jobId, Instant observedAt) {
         UUID id = UUID.randomUUID();
         assertThat(observationRepository.insertIfAbsent(
                         id,
@@ -242,7 +321,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                         null,
                         null,
                         null,
-                        Instant.now(),
+                        observedAt,
                         "LIVE"))
                 .isOne();
         return id;
@@ -706,11 +785,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             assertThat(row.getNegativeCount()).isEqualTo(1L);
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                    aboutUser.getId(),
-                    workspace.getId(),
-                    Instant.parse("2026-01-01T00:00:00Z"),
-                    true,
-                    PageRequest.of(0, 50));
+                    aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"), PageRequest.of(0, 50));
 
             assertThat(recent).hasSize(1);
             assertThat(recent.get(0).getOccurrenceKey()).isEqualTo("bad-target");
@@ -816,11 +891,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             assertThat(summary.get(0).getNegativeCount()).isEqualTo(0L);
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                    aboutUser.getId(),
-                    workspace.getId(),
-                    Instant.parse("2026-01-01T00:00:00Z"),
-                    true,
-                    PageRequest.of(0, 10));
+                    aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"), PageRequest.of(0, 10));
             assertThat(recent).extracting(Observation::getPresence).containsExactly(Presence.PRESENT);
 
             List<SeverityCount> severities = observationRepository.countBySeverityForDeveloper(
@@ -901,7 +972,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             assertThat(summary.get(0).getLastObservedAt()).isEqualTo(Instant.parse("2026-03-20T10:00:00Z"));
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                    aboutUser.getId(), workspace.getId(), since, true, PageRequest.of(0, 50));
+                    aboutUser.getId(), workspace.getId(), since, PageRequest.of(0, 50));
             assertThat(recent).extracting(Observation::getArtifactId).containsExactly(visiblePr.getId());
 
             List<SeverityCount> severities =
@@ -914,6 +985,110 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     observationRepository.countByPresenceForDeveloper(aboutUser.getId(), workspace.getId(), since);
             assertThat(presences).hasSize(1);
             assertThat(presences.get(0).getCount()).isEqualTo(1L);
+        }
+
+        @Test
+        @DisplayName("observations on hidden-repository artifacts are excluded from the developer's window")
+        void shouldExcludeHiddenRepositoryObservationsWhenReadingTheDevelopersWindow() {
+            WorkOnBothRepositories work = seedWorkOnAVisibleAndAHiddenRepository();
+
+            List<Observation> window = observationRepository.findByDeveloperAndWorkspaceBetween(
+                    aboutUser.getId(),
+                    workspace.getId(),
+                    Instant.parse("2026-01-01T00:00:00Z"),
+                    Instant.parse("2026-04-01T00:00:00Z"));
+
+            assertThat(window)
+                    .extracting(Observation::getArtifactId)
+                    .containsOnly(work.visiblePr().getId());
+        }
+
+        /**
+         * A run that found nothing to judge still ran, so the run list counts it; each of the two sits under its
+         * own job, which is what the hidden one has to be missing from.
+         */
+        @Test
+        @DisplayName("runs on hidden-repository artifacts are excluded from the developer's run list")
+        void shouldExcludeHiddenRepositoryRunsWhenListingTheDevelopersRuns() {
+            WorkOnBothRepositories work = seedWorkOnAVisibleAndAHiddenRepository();
+
+            List<ObservationRepository.DeveloperReviewRunRow> runs = observationRepository.findDeveloperReviewRuns(
+                    aboutUser.getId(), workspace.getId(), null, null, PageRequest.of(0, 50));
+
+            assertThat(runs)
+                    .extracting(ObservationRepository.DeveloperReviewRunRow::getJobId)
+                    .containsExactlyInAnyOrder(
+                            agentJob.getId(), work.visibleRun().getId());
+            assertThat(runs)
+                    .filteredOn(run -> run.getJobId().equals(agentJob.getId()))
+                    .singleElement()
+                    .extracting(ObservationRepository.DeveloperReviewRunRow::getReviewedAt)
+                    .isEqualTo(Instant.parse("2026-03-20T10:00:00Z"));
+        }
+
+        @Test
+        @DisplayName("observations on hidden-repository artifacts do not date when a practice was first observed")
+        void shouldIgnoreHiddenRepositoryObservationsWhenDatingTheFirstObservation() {
+            seedWorkOnAVisibleAndAHiddenRepository();
+
+            List<ObservationRepository.FirstObservedRow> firstObserved =
+                    observationRepository.findFirstObservedAtByPractice(aboutUser.getId(), workspace.getId());
+
+            assertThat(firstObserved).singleElement().satisfies(row -> {
+                assertThat(row.getPracticeSlug()).isEqualTo(practice.getSlug());
+                assertThat(row.getFirstObservedAt()).isEqualTo(Instant.parse("2026-03-19T10:00:00Z"));
+            });
+        }
+
+        private record WorkOnBothRepositories(PullRequest visiblePr, AgentJob visibleRun) {}
+
+        /**
+         * A problem on each repository under this class's run, and a run with nothing to judge on each under a
+         * run of its own, dated so that any hidden row that leaked would change what a query returns.
+         */
+        private WorkOnBothRepositories seedWorkOnAVisibleAndAHiddenRepository() {
+            PullRequest visiblePr = persistPullRequest("test-org/visible-repo", 201L, false);
+            PullRequest hiddenPr = persistPullRequest("test-org/hidden-repo", 202L, true);
+            insertBad("visible-repo-bad", visiblePr.getId(), Instant.parse("2026-03-20T10:00:00Z"));
+            insertBad("hidden-repo-bad", hiddenPr.getId(), Instant.parse("2026-03-20T11:00:00Z"));
+            AgentJob visibleRun = persistAgentJob();
+            AgentJob hiddenRun = persistAgentJob();
+            insertNotApplicable(
+                    "visible-repo-na", visibleRun.getId(), visiblePr.getId(), Instant.parse("2026-03-19T10:00:00Z"));
+            insertNotApplicable(
+                    "hidden-repo-na", hiddenRun.getId(), hiddenPr.getId(), Instant.parse("2026-03-18T09:00:00Z"));
+            return new WorkOnBothRepositories(visiblePr, visibleRun);
+        }
+
+        private AgentJob persistAgentJob() {
+            AgentJob job = new AgentJob();
+            job.setWorkspace(workspace);
+            job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+            job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
+            return agentJobRepository.save(job);
+        }
+
+        private void insertNotApplicable(String key, UUID jobId, long artifactId, Instant at) {
+            observationRepository.insertIfAbsent(
+                    UUID.randomUUID(),
+                    key,
+                    jobId,
+                    workspace.getId(),
+                    practice.getId(),
+                    null,
+                    "scm.pull_request",
+                    artifactId,
+                    aboutUser.getId(),
+                    "Hidden-repo exclusion run with nothing to judge",
+                    "NOT_APPLICABLE",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    at,
+                    "LIVE");
         }
 
         private void insertBad(String key, long artifactId, Instant at) {
@@ -1023,11 +1198,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             insert("bf-only", campaignJob().getId(), 900L, Instant.parse("2026-03-20T10:00:00Z"), "BACKFILL");
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                    aboutUser.getId(),
-                    workspace.getId(),
-                    Instant.parse("2026-01-01T00:00:00Z"),
-                    true,
-                    PageRequest.of(0, 50));
+                    aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"), PageRequest.of(0, 50));
 
             assertThat(recent).extracting(Observation::getArtifactId).containsExactly(900L);
         }
@@ -1038,11 +1209,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             insert("campaign-reading", campaignJob().getId(), 901L, Instant.parse("2026-03-21T10:00:00Z"), "BACKFILL");
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                    aboutUser.getId(),
-                    workspace.getId(),
-                    Instant.parse("2026-01-01T00:00:00Z"),
-                    true,
-                    PageRequest.of(0, 50));
+                    aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"), PageRequest.of(0, 50));
 
             assertThat(recent)
                     .extracting(Observation::getOrigin)
@@ -1056,11 +1223,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             insert("bf-newer", campaignJob().getId(), 902L, Instant.parse("2026-03-21T10:00:00Z"), "BACKFILL");
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                    aboutUser.getId(),
-                    workspace.getId(),
-                    Instant.parse("2026-01-01T00:00:00Z"),
-                    true,
-                    PageRequest.of(0, 50));
+                    aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"), PageRequest.of(0, 50));
 
             assertThat(recent).hasSize(1);
             assertThat(recent.get(0).getObservedAt()).isEqualTo(Instant.parse("2026-03-21T10:00:00Z"));

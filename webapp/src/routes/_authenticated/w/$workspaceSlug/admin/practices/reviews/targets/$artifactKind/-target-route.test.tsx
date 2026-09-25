@@ -17,8 +17,11 @@ vi.setConfig({ testTimeout: 15_000 });
 
 const URL_PATH = "/w/acme/admin/practices/reviews/targets/pull-request/42";
 
-const forArtifact = <T extends { artifact?: { id: number } }>(rows: T[]) =>
-	rows.filter((row) => row.artifact?.id === reviewArtifact.id);
+const forArtifact = <T extends { reviewedWork?: { id: string } }>(rows: T[]) =>
+	rows.filter((row) => row.reviewedWork?.id === reviewArtifact.reviewedWork.id);
+
+/** The work as every row names it, and as the page links to it: the repository and the provider's own label. */
+const WORK_LINK = /ls1intum\/Hephaestus · #1423/u;
 
 const pageOf = <T,>(rows: T[]) => ({
 	content: rows.slice(0, 5),
@@ -63,7 +66,7 @@ describe("reviewed work route", () => {
 
 		renderRouteAt(URL_PATH);
 
-		await screen.findByRole("heading", { name: reviewArtifact.title, level: 2 }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("link", { name: WORK_LINK }, ROUTE_RENDER_WAIT);
 		expect(asked).toHaveLength(2);
 		for (const url of asked) {
 			expect(url.searchParams.get("artifactKind")).toBe("scm.pull_request");
@@ -87,7 +90,7 @@ describe("reviewed work route", () => {
 		renderRouteAt(URL_PATH);
 
 		await screen.findByText("Couldn't load observations", undefined, ROUTE_RENDER_WAIT);
-		screen.getByRole("heading", { name: reviewArtifact.title, level: 2 });
+		screen.getByRole("link", { name: WORK_LINK });
 		expect(screen.queryByText("Nothing has been reviewed on this work")).toBeNull();
 	});
 });

@@ -206,6 +206,15 @@ class LlmProxyService {
             return ResponseEntity.status(502).body("Upstream provider unavailable");
         }
         boolean served = upstream.status() >= 200 && upstream.status() < 300;
+        if (!served) {
+            // The sandbox only sees "error" from its model client; the trace carries the status on the
+            // span and this is its log-side counterpart, for an operator reading logs rather than
+            // traces. Status and principal only: the body can quote the request.
+            log.warn(
+                    "LLM upstream answered a call for principal {} with status={}",
+                    routing.principalDescription(),
+                    upstream.status());
+        }
         var outcome = upstream.streamOutcome();
         if (outcome != null) {
             span.tag("hephaestus.stream.outcome", outcome.name());
@@ -230,6 +239,9 @@ class LlmProxyService {
                 }
             }
             return null;
+        }
+        if (!served) {
+            incrementErrors(routing.apiProtocol());
         }
         // Attributed now, not at the run's terminal write, so an execution that dies still bills.
         if (upstream.body() != null && served) {

@@ -26,6 +26,8 @@ servers:
 security:
 - bearerAuth: []
 tags:
+- description: The current developer's practice profile
+  name: Practice Profile
 - description: Per-workspace LLM spend rollup and budget status
   name: LLM Usage
 - description: Practice group trends and review runs for the current developer
@@ -5388,6 +5390,33 @@ paths:
       summary: Get the evidence-supported trend for a practice group
       tags:
       - Practice Group Detail
+  /workspaces/{workspaceSlug}/practice-profile/overview:
+    get:
+      description: "Returns the practices holding as a strength, every change to a\
+        \ standing, trend, group or piece of feedback inside the window, and the work\
+        \ reviewed inside it, as structured events. The window opens at the run before\
+        \ the latest one and closes now; with no such run it spans the standing's\
+        \ look-back of 90 days."
+      operationId: getPracticeProfileOverview
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeProfileOverview"
+          description: Practice profile overview returned
+      summary: "What held, what changed and which work was reviewed since the run\
+        \ before the latest one"
+      tags:
+      - Practice Profile
   /workspaces/{workspaceSlug}/practices:
     get:
       description: "Returns this workspace's practices, each with the autonomy in\
@@ -11078,6 +11107,58 @@ components:
       - quoteRedacted
       - sourceKind
       - startLine
+    EvidenceInapplicability:
+      type: object
+      description: Why this practice had nothing to judge in this work
+      properties:
+        consulted:
+          type: array
+          description: "The sources the review read to conclude this, by source kind"
+          items:
+            type: string
+        ruledOutBy:
+          type: string
+          description: The fact about this work that means there was nothing to look
+            at
+        subject:
+          type: string
+          description: What this practice looks for
+      required:
+      - consulted
+      - ruledOutBy
+      - subject
+    EvidenceSearch:
+      type: object
+      description: Where the review looked when it found nothing
+      properties:
+        boundary:
+          type: string
+          description: How far the search reached — the work this absence holds over
+        consulted:
+          type: array
+          description: "The sources the review searched, by source kind"
+          items:
+            type: string
+        lookedFor:
+          type: string
+          description: What the review looked for in this work
+      required:
+      - boundary
+      - consulted
+      - lookedFor
+    EvidenceUndecidability:
+      type: object
+      description: "What the review could not settle, and what would settle it"
+      properties:
+        openQuestion:
+          type: string
+          description: The question this work left open
+        wouldSettleIt:
+          type: string
+          description: What would have answered it
+      required:
+      - openQuestion
+      - wouldSettleIt
     ExportCreated:
       type: object
       description: Acknowledgement returned when a data export is requested.
@@ -11493,6 +11574,47 @@ components:
       - autonomy
       - counts
       - overriddenCount
+    HeldPractice:
+      type: object
+      description: A practice the developer keeps holding
+      properties:
+        cleanWork:
+          type: integer
+          format: int32
+          description: How many of the newest pieces of work in a row came back clean
+        groupSlug:
+          type: string
+        holdsAs:
+          type: string
+          description: "What the developer keeps doing, in the catalog's words; absent\
+            \ for a practice the catalog does not ship"
+        practiceName:
+          type: string
+        practiceSlug:
+          type: string
+        since:
+          type: string
+          format: date-time
+          description: When the oldest piece of work of the clean run was reviewed
+        workKind:
+          type: string
+          description: Artifact kind id most of that work is
+        workProvider:
+          type: string
+          description: "The provider most of that work lives at, which decides its\
+            \ noun: a GitLab scm.pull_request is a merge request; absent when no run\
+            \ that reviewed the work is left"
+          enum:
+          - GITHUB
+          - GITLAB
+          - SLACK
+          - OUTLINE
+      required:
+      - cleanWork
+      - practiceName
+      - practiceSlug
+      - since
+      - workKind
     IdentityProviderView:
       type: object
       description: |-
@@ -11533,35 +11655,86 @@ components:
           type: string
         username:
           type: string
+    InAppCleanWork:
+      type: object
+      description: One piece of work that came back clean on the practice since the
+        feedback was prepared
+      properties:
+        reviewedAt:
+          type: string
+          format: date-time
+          description: When that piece was reviewed
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: "The piece of work, as every surface names it"
+      required:
+      - reviewedAt
+      - reviewedWork
     InAppEvidence:
       type: object
       description: One piece of work the pattern was observed on
       properties:
-        artifactId:
-          type: integer
-          format: int64
-          description: Identifier of the work within its kind
-        artifactKind:
-          type: string
-          description: "Kind of work, e.g. scm.pull_request"
         observedAt:
           type: string
           format: date-time
           description: When the measurement behind this occurrence was taken
+        outcome:
+          type: string
+          description: "What the review made of this piece of work: a behaviour demonstrated,\
+            \ a trap avoided, something harmful done, or something needed left out"
+          enum:
+          - DEMONSTRATED_STRENGTH
+          - SAFE_AVOIDANCE
+          - COMMISSION_PROBLEM
+          - OMISSION_GAP
+          - NOT_APPLICABLE
+          - UNDETERMINED
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: "The piece of work, as every surface names it"
         summary:
           type: string
           description: What the review recorded on this piece of work
       required:
-      - artifactId
-      - artifactKind
       - observedAt
+      - outcome
+      - reviewedWork
     InAppFeedback:
       type: object
       description: A process-level message on the developer's own practice pages
       properties:
         body:
           type: string
-          description: "The message, as Markdown; ends with the habit to try next"
+          description: "The message, as Markdown, without the headline and the next\
+            \ step"
+        cleanNeeded:
+          type: integer
+          format: int32
+          description: Clean pieces of work in a row on the practice that resolve
+            this feedback
+        cleanWork:
+          type: array
+          description: "The pieces of work in a row that came back clean on the practice\
+            \ since the feedback was prepared, each with the date it was reviewed,\
+            \ oldest first, at most cleanNeeded of them; a problem empties it, and\
+            \ once resolved these are exactly the pieces that resolved it"
+          items:
+            $ref: "#/components/schemas/InAppCleanWork"
+        closedAt:
+          type: string
+          format: date-time
+          description: "When it stopped being open: the earliest of the work completing\
+            \ its clean run, the developer answering that it is addressed or not applicable,\
+            \ and the practice changing its review rules after it was prepared; null\
+            \ while it is open"
+        closedBy:
+          type: string
+          description: "What closed it, for the moment closedAt names; on a tie the\
+            \ work, then the developer, then the practice; null while it is open"
+          enum:
+          - WORK
+          - DEVELOPER
+          - PRACTICE_CHANGED
         evidence:
           type: array
           description: "The pieces of work the habit was observed on, newest first"
@@ -11579,11 +11752,10 @@ components:
         id:
           type: string
           format: uuid
-        occurrenceCount:
-          type: integer
-          format: int32
-          description: How many pieces of work carry it — the length of the evidence
-            list
+        nextStep:
+          type: string
+          description: "The habit to try next, on its own; null for feedback prepared\
+            \ without one"
         practiceName:
           type: string
         practiceSlug:
@@ -11597,6 +11769,10 @@ components:
           type: string
           format: date-time
           description: When this developer first opened it; null until they have
+        response:
+          $ref: "#/components/schemas/FeedbackResponse"
+          description: The developer's current response to this feedback; null while
+            they have none
         whatGoodLooksLike:
           type: string
           description: "What good looks like, in the developer's framing"
@@ -11605,10 +11781,11 @@ components:
           description: "Why this practice matters, in the developer's framing"
       required:
       - body
+      - cleanNeeded
+      - cleanWork
       - evidence
       - headline
       - id
-      - occurrenceCount
       - practiceName
       - practiceSlug
       - preparedAt
@@ -12373,17 +12550,27 @@ components:
           - UNVERIFIABLE
         deliveredFeedback:
           type: string
-          description: What to do — the delivered feedback for this observation (null
-            if nothing was delivered)
+          description: What to do — the text of the newest feedback that said something
+            about this observation to this developer (null if nothing was said)
         evidence:
           $ref: "#/components/schemas/ObservationEvidence"
         evidenceRationale:
           type: string
           description: Evidence-based rationale for the observation
+        feedbackResponse:
+          $ref: "#/components/schemas/FeedbackResponse"
+          description: "The developer's standing answer to the very feedback whose\
+            \ text deliveredFeedback shows, with that feedback's id as the handle\
+            \ for responding (null when nothing was said, or when the feedback that\
+            \ said it failed to deliver and so cannot be answered)"
         id:
           type: string
           format: uuid
           description: Observation ID
+        nextStep:
+          type: string
+          description: "The next step the review wrote about this observation, whether\
+            \ or not the feedback carrying it was delivered (null when it wrote none)"
         observedAt:
           type: string
           format: date-time
@@ -12416,6 +12603,9 @@ components:
           enum:
           - PRESENT
           - ABSENT
+        recurrenceKey:
+          type: string
+          description: Cross-run locus key; null when continuity is unavailable
         severity:
           type: string
           description: Severity level (null unless outcome is NEGATIVE)
@@ -12448,6 +12638,18 @@ components:
             $ref: "#/components/schemas/EvidenceCitation"
         detector:
           type: string
+        inapplicability:
+          $ref: "#/components/schemas/EvidenceInapplicability"
+          description: Why this practice had nothing to judge here; null unless the
+            review recorded a reason
+        search:
+          $ref: "#/components/schemas/EvidenceSearch"
+          description: Where the review looked when it found nothing; null unless
+            it recorded a search
+        undecidability:
+          $ref: "#/components/schemas/EvidenceUndecidability"
+          description: What the review could not settle; null unless it recorded an
+            open question
       required:
       - citations
     ObservationList:
@@ -12709,6 +12911,23 @@ components:
             \ it) — sync is unaffected."
       required:
       - accepted
+    OverviewWindow:
+      type: object
+      description: The span the overview measured change over
+      properties:
+        since:
+          type: string
+          format: date-time
+          description: "The window opens after this moment: the run before the latest\
+            \ one"
+        until:
+          type: string
+          format: date-time
+          description: "The window closes at this moment, and the profile is read\
+            \ as of it"
+      required:
+      - since
+      - until
     PageMetadata:
       properties:
         number:
@@ -13500,93 +13719,16 @@ components:
       - name
       - slug
       - visibleInPracticeDashboards
-    PracticeGroupReviewObservation:
-      type: object
-      description: "One concrete, evidence-backed observation from a review run"
-      properties:
-        assessment:
-          type: string
-          description: Good or bad for the developer; null unless assessmentStatus
-            is ASSESSED
-          enum:
-          - GOOD
-          - BAD
-        assessmentStatus:
-          type: string
-          enum:
-          - ASSESSED
-          - NOT_APPLICABLE
-          - UNDETERMINED
-        claimCurrentness:
-          type: string
-          description: Whether an observation still has current review rules and supporting
-            work snapshot
-          enum:
-          - CURRENT
-          - STALE
-          - UNVERIFIABLE
-        feedbackId:
-          type: string
-          format: uuid
-        feedbackResolution:
-          type: string
-          enum:
-          - ADDRESSED
-          - DISPUTED
-          - NOT_APPLICABLE
-        feedbackResponseComment:
-          type: string
-        feedbackUsefulness:
-          type: string
-          enum:
-          - HELPFUL
-          - UNHELPFUL
-        observationId:
-          type: string
-          format: uuid
-        outcome:
-          type: string
-          description: Derived from presence and contextual behavior assessment; null
-            unless assessed
-          enum:
-          - POSITIVE
-          - NEGATIVE
-          readOnly: true
-        practiceName:
-          type: string
-        practiceSlug:
-          type: string
-        presence:
-          type: string
-          enum:
-          - PRESENT
-          - ABSENT
-        recurrenceKey:
-          type: string
-        severity:
-          type: string
-          enum:
-          - CRITICAL
-          - MAJOR
-          - MINOR
-          - INFO
-        title:
-          type: string
-      required:
-      - assessmentStatus
-      - claimCurrentness
-      - observationId
-      - practiceName
-      - practiceSlug
-      - title
     PracticeGroupReviewRun:
       type: object
       description: A complete review run in a developer's practice-group history
       properties:
         observations:
           type: array
+          description: "Every visible observation of the run, complete enough to open\
+            \ in place"
           items:
-            $ref: "#/components/schemas/PracticeGroupReviewObservation"
+            $ref: "#/components/schemas/ObservationDetail"
         reviewId:
           type: string
           format: uuid
@@ -13594,7 +13736,7 @@ components:
           type: string
           format: date-time
         reviewedWork:
-          $ref: "#/components/schemas/PracticeGroupReviewedWork"
+          $ref: "#/components/schemas/ReviewedWorkRef"
       required:
       - observations
       - reviewId
@@ -13618,36 +13760,6 @@ components:
           format: int32
       required:
       - content
-    PracticeGroupReviewedWork:
-      type: object
-      description: The work assessed in a developer-facing review run
-      properties:
-        channelName:
-          type: string
-        id:
-          type: integer
-          format: int64
-        number:
-          type: integer
-          format: int32
-        provider:
-          type: string
-          enum:
-          - GITHUB
-          - GITLAB
-          - SLACK
-          - OUTLINE
-        repositoryName:
-          type: string
-        title:
-          type: string
-        type:
-          type: string
-        url:
-          type: string
-      required:
-      - id
-      - type
     PracticeGroupStanding:
       type: object
       description: A developer's derived qualitative standing for one Group including
@@ -13743,6 +13855,41 @@ components:
       required:
       - displayName
       - signal
+    PracticeProfileOverview:
+      type: object
+      description: "What held, what changed and which work was reviewed over a window\
+        \ of the developer's reviews"
+      properties:
+        changes:
+          type: array
+          description: "Everything that changed in the window, newest first; one change\
+            \ per practice and type"
+          items:
+            $ref: "#/components/schemas/ProfileChange"
+        holdingUp:
+          type: array
+          description: "Practices standing as a strength whose newest pieces of work\
+            \ are all clean, longest run first"
+          items:
+            $ref: "#/components/schemas/HeldPractice"
+        latestRun:
+          $ref: "#/components/schemas/ReviewRunRef"
+          description: The newest review run on the developer's work; absent before
+            any ran
+        reviewedWork:
+          type: array
+          description: "The pieces of work whose runs fall in the window, deduplicated,\
+            \ newest first"
+          items:
+            $ref: "#/components/schemas/ReviewedWorkRef"
+        window:
+          $ref: "#/components/schemas/OverviewWindow"
+          description: The span every change below was measured over
+      required:
+      - changes
+      - holdingUp
+      - reviewedWork
+      - window
     PracticeReleaseField:
       type: object
       properties:
@@ -14004,19 +14151,22 @@ components:
       properties:
         deliveredFeedback:
           type: string
-          description: What to do — the delivered feedback for this observation (null
-            if nothing was delivered)
+          description: What to do — the text of the newest feedback that said something
+            about this observation to this developer (null if nothing was said)
         kind:
           type: string
           description: "What this observation says about the developer: a behaviour\
             \ demonstrated, a trap avoided, something harmful done, or something needed\
             \ left out. The lists only separate positive from negative, so this is\
-            \ what tells the two kinds of each apart."
+            \ what tells the two kinds of each apart. Only assessed observations reach\
+            \ a standing, so NOT_APPLICABLE and UNDETERMINED never appear here."
           enum:
           - DEMONSTRATED_STRENGTH
           - SAFE_AVOIDANCE
           - COMMISSION_PROBLEM
           - OMISSION_GAP
+          - NOT_APPLICABLE
+          - UNDETERMINED
         locator:
           type: string
           description: "Where in the work, e.g. \"FrameRecorder.swift:212\", when\
@@ -14498,6 +14648,79 @@ components:
       - numberOfReviewedPRs
       - numberOfUnknowns
       - score
+    ProfileChange:
+      type: object
+      description: One change on the developer's practice profile since the previous
+        review run
+      properties:
+        at:
+          type: string
+          format: date-time
+          description: "When it changed: the observation, the run that composed the\
+            \ feedback, or the response that did it"
+        cleanNeeded:
+          type: integer
+          format: int32
+          description: "How many pieces of work in a row have to come back clean to\
+            \ resolve the feedback, for a FEEDBACK_RESET change: what the count fell\
+            \ back from"
+        direction:
+          type: string
+          description: "Which way a STANDING_MOVED or GROUP_MOVED went on the standing\
+            \ scale, for a move between two verdicts; null for a move into or out\
+            \ of a standing that is not a verdict"
+          enum:
+          - UP
+          - DOWN
+        evidence:
+          type: array
+          description: "The reviewed work that drove the change, newest first: for\
+            \ feedback the work resolved, the pieces of work that came back clean;\
+            \ for feedback the work fell back on, the pieces that raised the problem\
+            \ again"
+          items:
+            $ref: "#/components/schemas/ReviewedWorkRef"
+        feedbackId:
+          type: string
+          format: uuid
+          description: "The feedback this is about, for a feedback change"
+        from:
+          type: string
+          description: "The standing or trend before, for a move or a turn"
+        groupName:
+          type: string
+        groupSlug:
+          type: string
+        practiceName:
+          type: string
+        practiceSlug:
+          type: string
+        resolvedBy:
+          type: string
+          description: "What resolved the feedback, for a FEEDBACK_RESOLVED change:\
+            \ the developer's work coming back clean, or the developer marking it\
+            \ addressed"
+          enum:
+          - WORK
+          - DEVELOPER
+        to:
+          type: string
+          description: "The standing or trend now, for a move or a turn"
+        type:
+          type: string
+          description: What changed
+          enum:
+          - FEEDBACK_NEW
+          - FEEDBACK_RESOLVED
+          - FEEDBACK_RESET
+          - STANDING_MOVED
+          - TREND_TURNED
+          - GROUP_MOVED
+          - FIRST_OBSERVED
+      required:
+      - at
+      - evidence
+      - type
     ProfileReviewActivity:
       type: object
       description: A scored review activity entry with XP score for profile display
@@ -15024,42 +15247,6 @@ components:
       - pending
       - stale
       - total
-    ReviewArtifact:
-      type: object
-      properties:
-        channelName:
-          type: string
-          description: Slack channel name for conversation artifacts
-        id:
-          type: integer
-          format: int64
-          description: Internal artifact entity ID
-        number:
-          type: integer
-          format: int32
-          description: Provider-visible work-item number
-        provider:
-          type: string
-          description: "Source provider, when recorded"
-          enum:
-          - GITHUB
-          - GITLAB
-          - SLACK
-          - OUTLINE
-        repositoryName:
-          type: string
-          description: Provider-qualified repository path for SCM artifacts
-        title:
-          type: string
-        type:
-          type: string
-        url:
-          type: string
-          description: "Provider URL, when one is available"
-      required:
-      - id
-      - title
-      - type
     ReviewBackfillRun:
       type: object
       description: "A campaign as an admin sees it — before confirming, while it runs,\
@@ -15321,9 +15508,6 @@ components:
         agentJobId:
           type: string
           format: uuid
-        artifact:
-          $ref: "#/components/schemas/ReviewArtifact"
-          description: Work item the feedback targets; null when it is unanchored
         bodyPreview:
           type: string
           description: Leading characters of the composed body; null when the feedback
@@ -15370,6 +15554,9 @@ components:
           type: string
           format: uuid
           description: The feedback this one replaced; null on a first delivery
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: Reviewed work the feedback targets; null when it is unanchored
         subject:
           $ref: "#/components/schemas/ReviewSubject"
           description: Whose work the feedback addresses; may equal the recipient
@@ -15444,9 +15631,6 @@ components:
           $ref: "#/components/schemas/FeedbackApproval"
           description: "Immutable human decision for this proposal, when one has been\
             \ made"
-        artifact:
-          $ref: "#/components/schemas/ReviewArtifact"
-          description: Work item the feedback targets; null when it is unanchored
         body:
           type: string
           description: "Stored composed body; null when none was produced, and always\
@@ -15512,6 +15696,9 @@ components:
         reviewedRevision:
           type: string
           description: Reviewed source revision for an immutable approval package
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: Reviewed work the feedback targets; null when it is unanchored
         subject:
           $ref: "#/components/schemas/ReviewSubject"
           description: Whose work the feedback addresses; may equal the recipient
@@ -15592,8 +15779,6 @@ components:
         agentJobId:
           type: string
           format: uuid
-        artifact:
-          $ref: "#/components/schemas/ReviewArtifact"
         assessment:
           type: string
           description: "Specified behavior in context: GOOD means desirable, BAD means\
@@ -15656,6 +15841,8 @@ components:
         recurrenceKey:
           type: string
           description: Cross-run locus key; null when continuity is unavailable
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
         severity:
           type: string
           description: Severity band (null unless outcome is NEGATIVE)
@@ -15672,7 +15859,6 @@ components:
           type: string
       required:
       - agentJobId
-      - artifact
       - assessmentStatus
       - claimCurrentness
       - feedbackDisposition
@@ -15681,6 +15867,7 @@ components:
       - origin
       - practiceName
       - practiceSlug
+      - reviewedWork
       - summary
     ReviewObservationCounts:
       type: object
@@ -15714,8 +15901,6 @@ components:
         agentJobId:
           type: string
           format: uuid
-        artifact:
-          $ref: "#/components/schemas/ReviewArtifact"
         assessment:
           type: string
           description: "Specified behavior in context: GOOD means desirable, BAD means\
@@ -15779,6 +15964,8 @@ components:
         recurrenceKey:
           type: string
           description: Cross-run locus key; null when continuity is unavailable
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
         severity:
           type: string
           description: Severity band (null unless outcome is NEGATIVE)
@@ -15795,7 +15982,6 @@ components:
           type: string
       required:
       - agentJobId
-      - artifact
       - assessmentStatus
       - claimCurrentness
       - feedback
@@ -15803,6 +15989,7 @@ components:
       - observedAt
       - practiceName
       - practiceSlug
+      - reviewedWork
       - summary
     ReviewPlacement:
       type: object
@@ -15958,6 +16145,24 @@ components:
           - REFUSED
       required:
       - status
+    ReviewRunRef:
+      type: object
+      description: One review run on the developer's work
+      properties:
+        at:
+          type: string
+          format: date-time
+          description: When the run recorded its newest observation
+        jobId:
+          type: string
+          format: uuid
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: The piece of work the run reviewed
+      required:
+      - at
+      - jobId
+      - reviewedWork
     ReviewRunSummary:
       type: object
       description: A review run with observation and feedback outcome counts
@@ -15994,30 +16199,15 @@ components:
       type: object
       description: Work reviewed by an agent job
       properties:
-        channelName:
-          type: string
-        id:
-          type: integer
-          format: int64
-          description: "Internal artifact entity ID, when recorded"
-        number:
-          type: integer
-          format: int32
-          description: Provider-visible work-item number
-        provider:
-          type: string
-          enum:
-          - GITHUB
-          - GITLAB
-          - SLACK
-          - OUTLINE
-        repositoryName:
-          type: string
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: The reviewed work as every surface names it; absent when the
+            run recorded no work
         title:
           type: string
+          description: "Heading the run is listed under, which a run without recorded\
+            \ work still needs"
         type:
-          type: string
-        url:
           type: string
       required:
       - title
@@ -16111,6 +16301,46 @@ components:
       required:
       - name
       - slug
+    ReviewedWorkRef:
+      type: object
+      description: "A piece of reviewed work as every surface names it: enough to\
+        \ print a link"
+      properties:
+        id:
+          type: string
+          description: Identifier of the work within its kind
+        kind:
+          type: string
+          description: Artifact kind id
+        label:
+          type: string
+          description: "Short label the page prints: \"#22\", \"!425\", \"#backend-review\"\
+            \ or a document title"
+        provider:
+          type: string
+          description: "The provider the work lives at, which decides its noun: a\
+            \ GitLab scm.pull_request is a merge request; absent when the run that\
+            \ named the work is gone"
+          enum:
+          - GITHUB
+          - GITLAB
+          - SLACK
+          - OUTLINE
+        repositoryName:
+          type: string
+          description: "Repository the work belongs to, for pull requests and issues"
+        title:
+          type: string
+          description: "The work's own title: a pull request's, an issue's or a document's;\
+            \ a conversation thread has none"
+        url:
+          type: string
+          description: "The work's page at its provider, when the provider exposes\
+            \ one"
+      required:
+      - id
+      - kind
+      - label
     RevokeSessionsResult:
       type: object
       properties:
@@ -16996,6 +17226,11 @@ components:
         lastOpportunityAt:
           type: string
           format: date-time
+        opportunities:
+          type: integer
+          format: int32
+          description: "Distinct pieces of reviewed work the trend rests on, across\
+            \ both bundles"
         opportunitiesUntilComparable:
           type: integer
           format: int32
@@ -17009,6 +17244,7 @@ components:
       - bundleSize
       - credibilityThreshold
       - currentOpportunities
+      - opportunities
       - opportunitiesUntilComparable
       - previousOpportunities
       - ropeHalfWidth

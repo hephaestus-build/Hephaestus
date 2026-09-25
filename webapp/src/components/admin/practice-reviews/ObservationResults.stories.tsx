@@ -63,8 +63,8 @@ export const Default: Story = {
 		await expect(canvas.getAllByText("Minor")).toHaveLength(3);
 		canvas.getByText("Not applicable");
 		await expect(canvas.queryByText("Undetermined")).not.toBeInTheDocument();
-		await expect(canvas.getAllByText("From a review of past work")).toHaveLength(2);
-		await expect(canvas.getAllByText("Requested by hand")).toHaveLength(2);
+		await expect(canvas.getAllByText("Backfilled")).toHaveLength(2);
+		await expect(canvas.getAllByText("Requested")).toHaveLength(2);
 		await expect(canvas.queryAllByText("No result")).toHaveLength(0);
 	},
 };

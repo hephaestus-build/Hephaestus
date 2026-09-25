@@ -1,5 +1,5 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
-import { Radar, Trophy, User, Users } from "lucide-react";
+import { Compass, Radar, Trophy, User, Users } from "lucide-react";
 
 import {
 	SidebarGroup,
@@ -21,6 +21,9 @@ export function NavDashboards({
 	practicesEnabled: boolean;
 }) {
 	const matchRoute = useMatchRoute();
+	const onPracticeProfile = Boolean(
+		matchRoute({ to: "/w/$workspaceSlug/practice-profile", fuzzy: true }),
+	);
 	const onProfile = Boolean(matchRoute({ to: "/w/$workspaceSlug/user/$username", fuzzy: true }));
 	const onLeaderboard = Boolean(matchRoute({ to: "/w/$workspaceSlug", fuzzy: false }));
 	const onTeams = Boolean(matchRoute({ to: "/w/$workspaceSlug/teams", fuzzy: true }));
@@ -30,6 +33,18 @@ export function NavDashboards({
 		<SidebarGroup>
 			<SidebarGroupLabel>Dashboards</SidebarGroupLabel>
 			<SidebarMenu>
+				{practicesEnabled && (
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							tooltip="Practice profile"
+							isActive={onPracticeProfile}
+							render={<Link to="/w/$workspaceSlug/practice-profile" params={{ workspaceSlug }} />}
+						>
+							<Compass />
+							<span>Practice profile</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton
 						tooltip="Profile"

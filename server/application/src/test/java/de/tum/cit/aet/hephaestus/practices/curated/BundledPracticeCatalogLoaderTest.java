@@ -161,6 +161,23 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
         });
     }
 
+    /**
+     * The practice profile prints this sentence beside a practice that holds, so it has to read as one line
+     * about what the developer keeps doing, in the same developer voice as the guidance and never in the
+     * review's own vocabulary. The catalog schema owns its shape — length and no dashes — and rejects a phrase
+     * that breaks it at authoring time.
+     */
+    @Test
+    void shouldGiveEveryPracticeOneSentenceForWhenItHolds() {
+        Pattern reviewVocabulary = Pattern.compile("\\b(?:PRESENT|ABSENT|GOOD|BAD|NOT_APPLICABLE)\\b");
+
+        assertThat(loader.catalog().practices())
+                .allSatisfy(practice -> assertThat(loader.holdsAs(practice.slug()))
+                        .as("holdsAs for '%s'", practice.slug())
+                        .hasValueSatisfying(phrase -> assertThat(phrase).doesNotContainPattern(reviewVocabulary)));
+        assertThat(loader.holdsAs("not-a-bundled-practice")).isEmpty();
+    }
+
     @Test
     void shouldUseRealNewlinesInCriteria() {
         assertThat(loader.catalog().practices())

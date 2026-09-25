@@ -133,17 +133,21 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .isEqualTo(job.getId().toString())
                 .jsonPath("$.content[0].target.type")
                 .isEqualTo("scm.pull_request")
-                .jsonPath("$.content[0].target.id")
-                .isEqualTo(7)
-                .jsonPath("$.content[0].target.provider")
+                .jsonPath("$.content[0].target.reviewedWork.provider")
                 .isEqualTo("GITHUB")
-                .jsonPath("$.content[0].target.number")
-                .isEqualTo(42)
                 .jsonPath("$.content[0].target.title")
                 .isEqualTo("Make review output visible")
-                .jsonPath("$.content[0].target.repositoryName")
+                .jsonPath("$.content[0].target.reviewedWork.id")
+                .isEqualTo("7")
+                .jsonPath("$.content[0].target.reviewedWork.kind")
+                .isEqualTo("scm.pull_request")
+                .jsonPath("$.content[0].target.reviewedWork.label")
+                .isEqualTo("#42")
+                .jsonPath("$.content[0].target.reviewedWork.title")
+                .isEqualTo("Make review output visible")
+                .jsonPath("$.content[0].target.reviewedWork.repositoryName")
                 .isEqualTo("review-summary-org/review-ui")
-                .jsonPath("$.content[0].target.url")
+                .jsonPath("$.content[0].target.reviewedWork.url")
                 .isEqualTo("https://github.com/review-summary-org/review-ui/pull/42")
                 .jsonPath("$.content[0].observations.strengths")
                 .isEqualTo(1)
@@ -161,6 +165,27 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .isEqualTo(1)
                 .jsonPath("$.content[0].feedback.failed")
                 .isEqualTo(1);
+    }
+
+    /** A run that recorded no work names its kind and nothing more, so no surface prints a number that was not there. */
+    @Test
+    @WithAdminUser
+    void shouldNameNoReviewedWorkWhenTheReviewRecordedNone() {
+        AgentJob withoutMetadata = persistJob(workspace, AgentPurpose.PRACTICE_REVIEW);
+        withoutMetadata.setStatus(AgentJobStatus.COMPLETED);
+        jobRepository.save(withoutMetadata);
+
+        listReviews("?status=COMPLETED")
+                .jsonPath("$.page.totalElements")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].id")
+                .isEqualTo(withoutMetadata.getId().toString())
+                .jsonPath("$.content[0].target.type")
+                .isEqualTo("scm.pull_request")
+                .jsonPath("$.content[0].target.title")
+                .isEqualTo("Pull request")
+                .jsonPath("$.content[0].target.reviewedWork")
+                .doesNotExist();
     }
 
     @Test

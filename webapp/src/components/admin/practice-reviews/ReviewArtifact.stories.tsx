@@ -7,62 +7,71 @@ import {
 	gitlabMergeRequest,
 	outlineDocument,
 	reviewArtifact,
+	type ReviewWork,
 	slackConversation,
 	trackerIssue,
 } from "./fixtures";
 import { ReviewArtifactLabel, ReviewArtifactLink } from "./ReviewArtifact";
 
+/** The work as the wire names it: the server's label, and the provider the ref itself carries. */
+const onRun = ({ reviewedWork }: ReviewWork) => ({ reviewedWork });
+
 /**
- * The glyph is the forge, not the kind: the words already say `PR #1423` or `#engineering`, so a
- * second pull-request icon would repeat them and leave a GitHub request indistinguishable from a
- * GitLab one.
+ * The glyph is the forge when the caller knows it, not the kind: the words already say `#1423` or
+ * `#engineering`, so a second pull-request icon would repeat them and leave a GitHub request
+ * indistinguishable from a GitLab one.
  */
 const meta = {
 	component: ReviewArtifactLabel,
 	parameters: { layout: "padded", chromatic: { viewports: [1440] } },
 	tags: ["autodocs"],
-	args: { artifact: reviewArtifact },
+	args: onRun(reviewArtifact),
 } satisfies Meta<typeof ReviewArtifactLabel>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const GitHubPullRequest: Story = { name: "GitHub pull request" };
+export const GitHubPullRequest: Story = {
+	name: "GitHub pull request",
+	play: async ({ canvas }) => {
+		canvas.getByText("ls1intum/Hephaestus · #1423");
+	},
+};
 
 export const GitLabMergeRequest: Story = {
 	name: "GitLab merge request",
-	args: { artifact: gitlabMergeRequest },
+	args: onRun(gitlabMergeRequest),
 	play: async ({ canvas }) => {
-		// GitLab calls it a merge request and numbers it with a bang; the words follow the forge.
-		canvas.getByText("platform/billing-service · MR !88");
+		// GitLab numbers a merge request with a bang; the label is the server's, and follows the forge.
+		canvas.getByText("platform/billing-service · !88");
 	},
 };
 
 /**
- * An issue and a pull request on one forge wear the same glyph, so the wording is the whole
+ * An issue and a pull request on one forge wear the same glyph, so the label is the whole
  * difference between them.
  */
 export const GitHubIssue: Story = {
 	name: "GitHub issue",
-	args: { artifact: trackerIssue },
+	args: onRun(trackerIssue),
 	play: async ({ canvas }) => {
-		canvas.getByText("ls1intum/Hephaestus · Issue #204");
+		canvas.getByText("ls1intum/Hephaestus · #204");
 	},
 };
 
-export const SlackConversation: Story = { args: { artifact: slackConversation } };
+export const SlackConversation: Story = { args: onRun(slackConversation) };
 
-export const OutlineDocument: Story = { args: { artifact: outlineDocument } };
+export const OutlineDocument: Story = { args: onRun(outlineDocument) };
 
 /**
- * The hover affordance is on the label alone. The title beside it is rendered by the caller, outside
+ * The hover affordance is on the label alone. A title beside it is rendered by the caller, outside
  * the anchor, so the underline can never reach text that is not the link's name.
  */
 export const ExternalLink: Story = {
 	render: (args) => (
 		<div className="space-y-1">
 			<ReviewArtifactLink {...args} />
-			<p className="text-sm text-muted-foreground">{args.artifact?.title}</p>
+			<p className="text-sm text-muted-foreground">{reviewArtifact.title}</p>
 		</div>
 	),
 	play: async ({ canvas }) => {
@@ -72,9 +81,14 @@ export const ExternalLink: Story = {
 	},
 };
 
+/** A ref whose run is gone records no provider, so the glyph falls back to the kind's. */
+export const WithoutAProvider: Story = {
+	args: { reviewedWork: { ...reviewArtifact.reviewedWork, provider: undefined } },
+};
+
 export const WithoutAUrl: Story = {
 	render: (args) => <ReviewArtifactLink {...args} />,
-	args: { artifact: { ...reviewArtifact, url: undefined } },
+	args: { reviewedWork: { ...reviewArtifact.reviewedWork, url: undefined } },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("link")).not.toBeInTheDocument();
 	},
@@ -82,8 +96,8 @@ export const WithoutAUrl: Story = {
 
 export const LongTitle: Story = {
 	args: {
-		artifact: {
-			...reviewArtifact,
+		reviewedWork: {
+			...reviewArtifact.reviewedWork,
 			repositoryName: "hephaestus-administration-and-practice-feedback-platform",
 		},
 	},
@@ -96,4 +110,4 @@ export const LongTitle: Story = {
 	},
 };
 
-export const Unresolved: Story = { args: { artifact: undefined } };
+export const Unresolved: Story = { args: { reviewedWork: undefined } };

@@ -1,3 +1,5 @@
+import { format } from "date-fns";
+
 export type DateLike = Date | string | undefined | null;
 
 /**
@@ -31,3 +33,31 @@ export type Wire<T> = T extends Date
 		: T extends object
 			? { [Key in keyof T]: Wire<T[Key]> }
 			: T;
+
+/**
+ * The day and the time of day as the practice surfaces write them, in one home so a card, a
+ * header and a timeline cannot each spell September their own way. date-fns rather than `Intl`,
+ * whose en-GB short month is "Sept".
+ *
+ * - `formatDay`, "9 September": a day named in prose.
+ * - `formatShortDay`, "9 Sep": a day in a row of them, where the full month would widen the row
+ *   past its words.
+ * - `formatDayTime`, "9 September, 2:10 pm", and `formatTime`, "2:10 pm": the moment a run
+ *   happened, the hour written the English way rather than on a 24-hour clock.
+ */
+export function formatDay(date: Date): string {
+	return format(date, "d MMMM");
+}
+
+export function formatShortDay(date: Date): string {
+	return format(date, "d MMM");
+}
+
+export function formatTime(date: Date): string {
+	// `aaa` is date-fns' lower-case "am"/"pm"; `a` would shout it.
+	return format(date, "h:mm aaa");
+}
+
+export function formatDayTime(date: Date): string {
+	return `${formatDay(date)}, ${formatTime(date)}`;
+}

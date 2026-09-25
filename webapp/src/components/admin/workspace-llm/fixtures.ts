@@ -59,21 +59,27 @@ export const mockPracticeReviewSettings: PracticeReviewSettings = {
 };
 
 const pullRequestTarget: AgentJob["target"] = {
-	id: 42,
 	type: "scm.pull_request",
-	provider: "GITHUB",
-	number: 1420,
-	repositoryName: "ls1intum/Hephaestus",
 	title: "Make practice review output visible",
-	url: "https://github.com/ls1intum/Hephaestus/pull/1423",
+	reviewedWork: {
+		id: "42",
+		kind: "scm.pull_request",
+		provider: "GITHUB",
+		label: "#1423",
+		repositoryName: "ls1intum/Hephaestus",
+		url: "https://github.com/ls1intum/Hephaestus/pull/1423",
+	},
 };
 const issueTarget: AgentJob["target"] = {
-	id: 43,
 	type: "scm.issue",
-	provider: "GITHUB",
-	number: 1420,
-	repositoryName: "ls1intum/Hephaestus",
 	title: "Admin read surface for observations and prepared feedback",
+	reviewedWork: {
+		id: "43",
+		kind: "scm.issue",
+		provider: "GITHUB",
+		label: "#1420",
+		repositoryName: "ls1intum/Hephaestus",
+	},
 };
 
 export const mockJobCompleted: AgentJob = {

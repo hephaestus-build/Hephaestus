@@ -41,6 +41,7 @@ import { Route as AuthenticatedWWorkspaceSlugIndexRouteImport } from './routes/_
 import { Route as AuthenticatedWWorkspaceSlugAdminRouteRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/route'
 import { Route as AuthenticatedWWorkspaceSlugMentorRouteImport } from './routes/_authenticated/w/$workspaceSlug/mentor'
 import { Route as AuthenticatedWWorkspaceSlugOnboardingRouteImport } from './routes/_authenticated/w/$workspaceSlug/onboarding'
+import { Route as AuthenticatedWWorkspaceSlugPracticeProfileRouteImport } from './routes/_authenticated/w/$workspaceSlug/practice-profile'
 import { Route as AuthenticatedWWorkspaceSlugReviewsRouteImport } from './routes/_authenticated/w/$workspaceSlug/reviews'
 import { Route as AuthenticatedWorkspacesNewIndexRouteImport } from './routes/_authenticated/workspaces/new/index'
 import { Route as AuthenticatedWorkspacesNewGithubRouteImport } from './routes/_authenticated/workspaces/new/github'
@@ -266,6 +267,12 @@ const AuthenticatedWWorkspaceSlugOnboardingRoute =
   AuthenticatedWWorkspaceSlugOnboardingRouteImport.update({
     id: '/onboarding',
     path: '/onboarding',
+    getParentRoute: () => AuthenticatedWWorkspaceSlugRouteRoute,
+  } as any)
+const AuthenticatedWWorkspaceSlugPracticeProfileRoute =
+  AuthenticatedWWorkspaceSlugPracticeProfileRouteImport.update({
+    id: '/practice-profile',
+    path: '/practice-profile',
     getParentRoute: () => AuthenticatedWWorkspaceSlugRouteRoute,
   } as any)
 const AuthenticatedWWorkspaceSlugReviewsRoute =
@@ -645,6 +652,7 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceSlug/admin': typeof AuthenticatedWWorkspaceSlugAdminRouteRouteWithChildren
   '/w/$workspaceSlug/mentor': typeof AuthenticatedWWorkspaceSlugMentorRouteWithChildren
   '/w/$workspaceSlug/onboarding': typeof AuthenticatedWWorkspaceSlugOnboardingRoute
+  '/w/$workspaceSlug/practice-profile': typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
   '/w/$workspaceSlug/reviews': typeof AuthenticatedWWorkspaceSlugReviewsRouteWithChildren
   '/workspaces/new/github': typeof AuthenticatedWorkspacesNewGithubRoute
   '/workspaces/new/gitlab': typeof AuthenticatedWorkspacesNewGitlabRoute
@@ -727,6 +735,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/w/$workspaceSlug/admin': typeof AuthenticatedWWorkspaceSlugAdminRouteRouteWithChildren
   '/w/$workspaceSlug/onboarding': typeof AuthenticatedWWorkspaceSlugOnboardingRoute
+  '/w/$workspaceSlug/practice-profile': typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
   '/workspaces/new/github': typeof AuthenticatedWorkspacesNewGithubRoute
   '/workspaces/new/gitlab': typeof AuthenticatedWorkspacesNewGitlabRoute
   '/admin/catalog': typeof AuthenticatedAdminCatalogIndexRoute
@@ -808,6 +817,7 @@ export interface FileRoutesById {
   '/_authenticated/w/$workspaceSlug/admin': typeof AuthenticatedWWorkspaceSlugAdminRouteRouteWithChildren
   '/_authenticated/w/$workspaceSlug/mentor': typeof AuthenticatedWWorkspaceSlugMentorRouteWithChildren
   '/_authenticated/w/$workspaceSlug/onboarding': typeof AuthenticatedWWorkspaceSlugOnboardingRoute
+  '/_authenticated/w/$workspaceSlug/practice-profile': typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
   '/_authenticated/w/$workspaceSlug/reviews': typeof AuthenticatedWWorkspaceSlugReviewsRouteWithChildren
   '/_authenticated/workspaces/new/github': typeof AuthenticatedWorkspacesNewGithubRoute
   '/_authenticated/workspaces/new/gitlab': typeof AuthenticatedWorkspacesNewGitlabRoute
@@ -896,6 +906,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/admin'
     | '/w/$workspaceSlug/mentor'
     | '/w/$workspaceSlug/onboarding'
+    | '/w/$workspaceSlug/practice-profile'
     | '/w/$workspaceSlug/reviews'
     | '/workspaces/new/github'
     | '/workspaces/new/gitlab'
@@ -978,6 +989,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/w/$workspaceSlug/admin'
     | '/w/$workspaceSlug/onboarding'
+    | '/w/$workspaceSlug/practice-profile'
     | '/workspaces/new/github'
     | '/workspaces/new/gitlab'
     | '/admin/catalog'
@@ -1058,6 +1070,7 @@ export interface FileRouteTypes {
     | '/_authenticated/w/$workspaceSlug/admin'
     | '/_authenticated/w/$workspaceSlug/mentor'
     | '/_authenticated/w/$workspaceSlug/onboarding'
+    | '/_authenticated/w/$workspaceSlug/practice-profile'
     | '/_authenticated/w/$workspaceSlug/reviews'
     | '/_authenticated/workspaces/new/github'
     | '/_authenticated/workspaces/new/gitlab'
@@ -1354,6 +1367,13 @@ declare module '@tanstack/react-router' {
       path: '/onboarding'
       fullPath: '/w/$workspaceSlug/onboarding'
       preLoaderRoute: typeof AuthenticatedWWorkspaceSlugOnboardingRouteImport
+      parentRoute: typeof AuthenticatedWWorkspaceSlugRouteRoute
+    }
+    '/_authenticated/w/$workspaceSlug/practice-profile': {
+      id: '/_authenticated/w/$workspaceSlug/practice-profile'
+      path: '/practice-profile'
+      fullPath: '/w/$workspaceSlug/practice-profile'
+      preLoaderRoute: typeof AuthenticatedWWorkspaceSlugPracticeProfileRouteImport
       parentRoute: typeof AuthenticatedWWorkspaceSlugRouteRoute
     }
     '/_authenticated/w/$workspaceSlug/reviews': {
@@ -2025,6 +2045,7 @@ interface AuthenticatedWWorkspaceSlugRouteRouteChildren {
   AuthenticatedWWorkspaceSlugAdminRouteRoute: typeof AuthenticatedWWorkspaceSlugAdminRouteRouteWithChildren
   AuthenticatedWWorkspaceSlugMentorRoute: typeof AuthenticatedWWorkspaceSlugMentorRouteWithChildren
   AuthenticatedWWorkspaceSlugOnboardingRoute: typeof AuthenticatedWWorkspaceSlugOnboardingRoute
+  AuthenticatedWWorkspaceSlugPracticeProfileRoute: typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
   AuthenticatedWWorkspaceSlugReviewsRoute: typeof AuthenticatedWWorkspaceSlugReviewsRouteWithChildren
   AuthenticatedWWorkspaceSlugIndexRoute: typeof AuthenticatedWWorkspaceSlugIndexRoute
   AuthenticatedWWorkspaceSlugTeamsIndexRoute: typeof AuthenticatedWWorkspaceSlugTeamsIndexRoute
@@ -2040,6 +2061,8 @@ const AuthenticatedWWorkspaceSlugRouteRouteChildren: AuthenticatedWWorkspaceSlug
       AuthenticatedWWorkspaceSlugMentorRouteWithChildren,
     AuthenticatedWWorkspaceSlugOnboardingRoute:
       AuthenticatedWWorkspaceSlugOnboardingRoute,
+    AuthenticatedWWorkspaceSlugPracticeProfileRoute:
+      AuthenticatedWWorkspaceSlugPracticeProfileRoute,
     AuthenticatedWWorkspaceSlugReviewsRoute:
       AuthenticatedWWorkspaceSlugReviewsRouteWithChildren,
     AuthenticatedWWorkspaceSlugIndexRoute:

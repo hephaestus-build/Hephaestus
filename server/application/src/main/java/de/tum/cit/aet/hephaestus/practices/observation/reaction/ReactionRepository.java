@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation.reaction;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -16,6 +17,22 @@ import org.springframework.stereotype.Repository;
 @Repository
 @WorkspaceAgnostic("Reaction scoped through Feedback.workspaceId relationship")
 public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
+    /**
+     * The response that currently stands on each piece of the reactor's feedback in the workspace: the
+     * newest snapshot per piece, with its channel and recipient beside it so a query can narrow the feedback
+     * without changing which snapshot stands. Binds {@code :reactorUserId} and {@code :workspaceId};
+     * a query wraps it as {@code (...) latest}.
+     */
+    String LATEST_RESPONSE = """
+            SELECT DISTINCT ON (r.feedback_id) r.feedback_id, r.usefulness, r.action, r.explanation, r.created_at,
+                   fb.channel, fb.recipient_user_id
+            FROM reaction r
+            JOIN feedback fb ON fb.id = r.feedback_id
+            WHERE r.reactor_user_id = :reactorUserId
+              AND fb.workspace_id = :workspaceId
+            ORDER BY r.feedback_id, r.created_at DESC, r.id DESC
+        """;
+
     @Query(value = """
         SELECT r.usefulness AS "usefulness", r.action AS "resolution",
                r.explanation AS "comment", r.created_at AS "respondedAt"
@@ -45,6 +62,30 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
         Instant getRespondedAt();
     }
 
+    /**
+     * The response that currently stands on each of these pieces of feedback, for the ones that have a
+     * response: the batch form of {@link #findCurrentResponse}, so a page of cards is one query rather than one
+     * per card. A piece of feedback whose newest snapshot says nothing — the recipient deleted their response —
+     * is absent here. The caller passes at least one id.
+     */
+    @Query(value = """
+        SELECT latest.feedback_id AS "feedbackId", latest.usefulness AS "usefulness", latest.action AS "resolution",
+               latest.explanation AS "comment", latest.created_at AS "respondedAt"
+        FROM (
+        """ + LATEST_RESPONSE + """
+        ) latest
+        WHERE latest.feedback_id IN (:feedbackIds)
+          AND (latest.usefulness IS NOT NULL OR latest.action IS NOT NULL)
+        """, nativeQuery = true)
+    List<CurrentResponseRow> findCurrentResponses(
+            @Param("reactorUserId") Long reactorUserId,
+            @Param("workspaceId") Long workspaceId,
+            @Param("feedbackIds") Collection<UUID> feedbackIds);
+
+    interface CurrentResponseRow extends CurrentResponseProjection {
+        UUID getFeedbackId();
+    }
+
     /** Current resolution for each requested observation. The caller passes at least one observation ID. */
     @Query(value = """
         SELECT DISTINCT ON (o.id) o.id AS "observationId", r.action AS "resolution"
@@ -72,16 +113,45 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
         String getResolution();
     }
 
+    /**
+     * The recipient's IN_APP feedback whose CURRENT response resolves it — the answers
+     * {@code FeedbackResolution#resolves} names — responded to inside a window: after {@code since}, at or
+     * before {@code until}. Current, not ever: a response the recipient later replaced does not stand, and
+     * the window is read off the response that does.
+     *
+     * <p>The resolving answers are bound as names rather than as {@link FeedbackResolution} values because
+     * this is a native query, where an enum parameter's JDBC mapping is not the string the column stores.
+     */
+    @Query(value = """
+        SELECT latest.feedback_id AS "feedbackId", latest.created_at AS "respondedAt"
+        FROM (
+        """ + LATEST_RESPONSE + """
+        ) latest
+        WHERE latest.action IN (:resolving)
+          AND latest.channel = 'IN_APP'
+          AND latest.recipient_user_id = :reactorUserId
+          AND latest.created_at > :since
+          AND latest.created_at <= :until
+        ORDER BY latest.created_at DESC
+        """, nativeQuery = true)
+    List<AddressedFeedbackProjection> findInAppResolvedByDeveloperBetween(
+            @Param("reactorUserId") Long reactorUserId,
+            @Param("workspaceId") Long workspaceId,
+            @Param("since") Instant since,
+            @Param("until") Instant until,
+            @Param("resolving") Collection<String> resolving);
+
+    interface AddressedFeedbackProjection {
+        UUID getFeedbackId();
+
+        Instant getRespondedAt();
+    }
+
     /** Resolution counts from each feedback unit's newest response snapshot. */
     @Query(value = """
         SELECT latest.action AS action, COUNT(*) AS count
         FROM (
-            SELECT DISTINCT ON (r.feedback_id) r.action AS action
-            FROM reaction r
-            JOIN feedback fb ON fb.id = r.feedback_id
-            WHERE r.reactor_user_id = :reactorUserId
-              AND fb.workspace_id = :workspaceId
-            ORDER BY r.feedback_id, r.created_at DESC, r.id DESC
+        """ + LATEST_RESPONSE + """
         ) latest
         WHERE latest.action IS NOT NULL
         GROUP BY latest.action

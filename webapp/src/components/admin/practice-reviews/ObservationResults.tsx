@@ -121,7 +121,7 @@ export function ObservationRow({
 								group={observation.group}
 								practice={practice}
 							/>,
-							<ReviewArtifactLabel key="work" artifact={observation.artifact} />,
+							<ReviewArtifactLabel key="work" reviewedWork={observation.reviewedWork} />,
 							<RelativeTime key="observed" value={observation.observedAt} tooltip={false} />,
 						]}
 					/>

@@ -1,46 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { PracticeGroupReviewObservation } from "@/api/types.gen";
-import { feedbackResponseOf, isEmptyFeedbackResponse } from "./review-runs";
 
-const observation = (
-	overrides: Partial<PracticeGroupReviewObservation> = {},
-): PracticeGroupReviewObservation => ({
-	observationId: "00000000-0000-0000-0000-000000000001",
-	claimCurrentness: "CURRENT",
-	practiceSlug: "records-decisions",
-	practiceName: "Record significant decisions",
-	title: "The workspace trade-off is documented",
-	assessmentStatus: "ASSESSED",
-	presence: "PRESENT",
-	assessment: "GOOD",
-	...overrides,
-});
-
-describe("feedbackResponseOf", () => {
-	it("reads back every part of a response the server already holds", () => {
-		expect(
-			feedbackResponseOf(
-				observation({
-					feedbackUsefulness: "HELPFUL",
-					feedbackResolution: "ADDRESSED",
-					feedbackResponseComment: "Split into two commits.",
-				}),
-			),
-		).toStrictEqual({
-			usefulness: "HELPFUL",
-			resolution: "ADDRESSED",
-			comment: "Split into two commits.",
-		});
-	});
-
-	it("carries the parts that are missing as undefined rather than dropping them", () => {
-		expect(feedbackResponseOf(observation({ feedbackUsefulness: "UNHELPFUL" }))).toStrictEqual({
-			usefulness: "UNHELPFUL",
-			resolution: undefined,
-			comment: undefined,
-		});
-	});
-});
+import { isEmptyFeedbackResponse } from "./review-runs";
 
 describe("isEmptyFeedbackResponse", () => {
 	it("treats an answer with nothing left in it as a withdrawal", () => {

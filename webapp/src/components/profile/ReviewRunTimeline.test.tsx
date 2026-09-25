@@ -1,106 +1,60 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import type { PracticeGroupReviewObservation, PracticeGroupReviewRun } from "@/api/types.gen";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import type { ObservationDetail, PracticeGroupReviewRun } from "@/api/types.gen";
+import { formatDay, formatShortDay } from "@/lib/dates";
 import { daysBefore } from "@/stories/story-clock";
-import { ReviewRunTimeline, type ReviewRunTimelineProps } from "./ReviewRunTimeline";
+
+import { ReviewRunTimeline } from "./ReviewRunTimeline";
 
 const baseObservation = {
-	observationId: "00000000-0000-0000-0000-000000000102",
-	claimCurrentness: "CURRENT",
-	feedbackId: "00000000-0000-0000-0000-000000000103",
-	feedbackUsefulness: "HELPFUL",
-	feedbackResolution: "ADDRESSED",
-	feedbackResponseComment: "Applied in the next revision.",
+	id: "00000000-0000-0000-0000-000000000102",
+	feedbackResponse: {
+		feedbackId: "00000000-0000-0000-0000-000000000103",
+		usefulness: "HELPFUL",
+		resolution: "ADDRESSED",
+		comment: "Applied in the next revision.",
+	},
 	practiceSlug: "records-decisions",
 	practiceName: "Record significant decisions and the reasoning",
-	title: "The workspace trade-off is documented",
+	summary: "The workspace trade-off is documented",
 	assessmentStatus: "ASSESSED",
 	presence: "PRESENT",
 	assessment: "GOOD",
-} satisfies PracticeGroupReviewObservation;
+	observedAt: daysBefore(2),
+	origin: "LIVE",
+	claimCurrentness: "CURRENT",
+	artifactId: 902,
+	artifactKind: "scm.pull_request",
+	evidenceRationale: "The description says why the trade-off was made, not only what it is.",
+} satisfies ObservationDetail;
 
 const run = {
 	reviewId: "00000000-0000-0000-0000-000000000101",
 	reviewedAt: daysBefore(2),
 	reviewedWork: {
-		type: "scm.pull_request",
-		id: 902,
-		provider: "GITHUB",
-		number: 902,
-		title: "Split the practice catalog loader per workspace",
+		kind: "scm.pull_request",
+		id: "902",
+		label: "#902",
 		repositoryName: "HephaestusTest/practice-validation",
 		url: "https://github.com/HephaestusTest/practice-validation/pull/902",
 	},
 	observations: [baseObservation],
 } satisfies PracticeGroupReviewRun;
 
-const runs = [run];
-
 describe("ReviewRunTimeline", () => {
-	it("renders the review-run boundary and its observations", () => {
-		render(<ReviewRunTimeline runs={runs} />);
-
-		screen.getByText("#902 · Split the practice catalog loader per workspace");
-		screen.getByText("The workspace trade-off is documented");
-		screen.getByText("Record significant decisions and the reasoning");
-		screen.getByText("Strength shown");
-	});
-
-	it("sends the whole response when one part of it changes", () => {
-		const onRespond = vi.fn<NonNullable<ReviewRunTimelineProps["onRespond"]>>();
-		render(
-			<ReviewRunTimeline
-				runs={runs}
-				onToggleObservation={vi.fn()}
-				openObservationId={baseObservation.observationId}
-				onRespond={onRespond}
-			/>,
-		);
-
-		fireEvent.click(screen.getByRole("button", { name: "Helpful" }));
-		expect(onRespond).toHaveBeenCalledWith(baseObservation, {
-			usefulness: undefined,
-			resolution: "ADDRESSED",
-			comment: "Applied in the next revision.",
-		});
-	});
-
-	it("records a resolution without disturbing the usefulness already given", () => {
-		const onRespond = vi.fn<NonNullable<ReviewRunTimelineProps["onRespond"]>>();
-		render(
-			<ReviewRunTimeline
-				runs={runs}
-				onToggleObservation={vi.fn()}
-				openObservationId={baseObservation.observationId}
-				onRespond={onRespond}
-			/>,
-		);
-
-		fireEvent.click(screen.getByRole("button", { name: "Disputed" }));
-		expect(onRespond).toHaveBeenCalledWith(baseObservation, {
-			usefulness: "HELPFUL",
-			resolution: "DISPUTED",
-			comment: "Applied in the next revision.",
-		});
-	});
-
-	it("keeps a dense review run compact until requested", () => {
+	it("names the day once, on the run's own card, and on none of its rows", () => {
 		const denseRun: PracticeGroupReviewRun = {
 			...run,
-			observations: Array.from({ length: 5 }, (_, index) => ({
+			observations: [1, 2, 3].map((n) => ({
 				...baseObservation,
-				observationId: `00000000-0000-0000-0000-00000000010${index}`,
-				claimCurrentness: "CURRENT",
-				practiceSlug: `practice-${index}`,
-				practiceName: `Practice ${index + 1}`,
-				title: `Observation ${index + 1}`,
+				id: `00000000-0000-0000-0000-00000000020${n}`,
+				summary: `Observation ${n}`,
 			})),
 		};
-
 		render(<ReviewRunTimeline runs={[denseRun]} />);
-		expect(screen.queryByText("Observation 4")).toBeNull();
-		fireEvent.click(screen.getByRole("button", { name: "Show more (2)" }));
-		screen.getByText("Observation 4");
-		screen.getByText("Observation 5");
+
+		expect(screen.getAllByText(formatShortDay(run.reviewedAt))).toHaveLength(1);
+		expect(screen.queryByText(formatDay(baseObservation.observedAt))).toBeNull();
 	});
 });

@@ -37,7 +37,7 @@ export function ReviewRunRow({ workspaceSlug, review, search }: ReviewRunRowProp
 				<>
 					<ReviewRowMeta
 						items={[
-							<ReviewArtifactLabel key="work" artifact={review.target} />,
+							<ReviewArtifactLabel key="work" reviewedWork={review.target.reviewedWork} />,
 							// See `ObservationRow`: no hover target under a stretched row link.
 							<RelativeTime key="created" value={review.createdAt} tooltip={false} />,
 						]}

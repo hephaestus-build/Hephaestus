@@ -68,6 +68,16 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     List<ReviewOutcomeRow> findReviewOutcomes(
             @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
+    /** What these runs wrote about themselves: the composed next steps live in {@code output}. */
+    List<ReviewRunNarrativeRow> findReviewRunNarrativesByWorkspaceIdAndIdIn(Long workspaceId, Collection<UUID> ids);
+
+    interface ReviewRunNarrativeRow {
+        UUID getId();
+
+        @Nullable
+        JsonNode getOutput();
+    }
+
     interface ReviewOutcomeRow {
         UUID getId();
 

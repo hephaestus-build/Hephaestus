@@ -658,6 +658,11 @@ public class PracticeFeedbackDeliveryPolicy {
         };
     }
 
+    /**
+     * Whether the surface leaves the instance. Silent mode stops what leaves the instance and leaves the
+     * developer's own page alone: the in-app surface goes on to the full evaluation, the external ones are
+     * refused before the work is loaded.
+     */
     private static boolean isExternalSurface(DeliveryPolicySurface surface) {
         return surface != DeliveryPolicySurface.IN_APP;
     }

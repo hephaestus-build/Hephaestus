@@ -1,12 +1,16 @@
-import {
-	CircleDotIcon,
-	FileTextIcon,
-	GitPullRequestIcon,
-	type LucideIcon,
-	MessagesSquareIcon,
-} from "lucide-react";
+import { GitPullRequestIcon } from "@primer/octicons-react";
+import { CircleDotIcon, FileTextIcon, MessagesSquareIcon } from "lucide-react";
+import type { ComponentType } from "react";
 
+import type { ReviewedWorkRef } from "@/api/types.gen";
 import { hasText } from "@/lib/text";
+
+/** Wide enough for both icon sets in use: lucide and the provider registry's octicons. */
+export type ArtifactKindIcon = ComponentType<{
+	size?: number;
+	className?: string;
+	"aria-hidden"?: boolean;
+}>;
 
 /**
  * Artifact kinds are an open vocabulary — a `<domain>.<kind>` string named by the owning server
@@ -28,7 +32,15 @@ export type KnownArtifactKind = (typeof ARTIFACT_KIND)[keyof typeof ARTIFACT_KIN
  */
 export type ArtifactKindId = string;
 
-export const ARTIFACT_KIND_VALUES = Object.values(ARTIFACT_KIND) as KnownArtifactKind[];
+/** The kinds in the one order every list of them keeps: the order `ARTIFACT_KIND` declares. */
+export const ARTIFACT_KIND_VALUES = Object.values(ARTIFACT_KIND);
+
+/** Where a kind sorts among the others; a kind this build does not know sorts after them all. */
+export function artifactKindRank(kind: string): number {
+	return isKnownArtifactKind(kind)
+		? ARTIFACT_KIND_VALUES.indexOf(kind)
+		: ARTIFACT_KIND_VALUES.length;
+}
 
 const ARTIFACT_KIND_LABELS: Record<KnownArtifactKind, string> = {
 	[ARTIFACT_KIND.pullRequest]: "Pull or merge request",
@@ -45,7 +57,7 @@ const ARTIFACT_KIND_PLURAL_LABELS: Record<KnownArtifactKind, string> = {
 };
 
 export function isKnownArtifactKind(kind: string | null | undefined): kind is KnownArtifactKind {
-	return kind != null && (ARTIFACT_KIND_VALUES as string[]).includes(kind);
+	return ARTIFACT_KIND_VALUES.some((known) => known === kind);
 }
 
 export function artifactKindLabel(kind: string | undefined): string {
@@ -62,6 +74,9 @@ export function artifactKindPluralLabel(kind: string | undefined): string {
 	return isKnownArtifactKind(kind) ? ARTIFACT_KIND_PLURAL_LABELS[kind] : kind;
 }
 
+/** The provider a piece of reviewed work lives at, as the wire names it on `ReviewedWorkRef`. */
+export type WorkProvider = ReviewedWorkRef["provider"];
+
 /**
  * The same kinds as they read mid-sentence — "Based on 4 pull requests" rather than the title-case
  * form a heading or a filter option wants. Kept beside those labels so a kind cannot gain one
@@ -74,19 +89,35 @@ const ARTIFACT_KIND_INLINE_LABELS: Record<KnownArtifactKind, { one: string; many
 	[ARTIFACT_KIND.document]: { one: "document", many: "documents" },
 };
 
+/** GitLab's word for the one kind whose noun the provider decides. */
+const MERGE_REQUEST = { one: "merge request", many: "merge requests" };
+
 /**
- * A counted phrase for running text. An unknown kind keeps its raw id rather than being dropped, so
- * a kind the server added before this build stays legible instead of vanishing from the total.
+ * The noun for `count` pieces of work of a kind, as it reads mid-sentence: "pull request", "pull
+ * requests", and "merge request" when the provider is GitLab — the provider-specific name where
+ * the provider is known (`docs/contributor/practice-feedback-language.md`). An unknown kind keeps
+ * its raw id rather than being dropped, so a kind the server added before this build stays
+ * legible instead of vanishing from the total.
  */
-export function artifactKindCountLabel(kind: string | undefined, count: number): string {
-	if (!hasText(kind) || !isKnownArtifactKind(kind)) {
-		return `${count} ${kind ?? "reviewed work"}`;
+export function artifactKindNoun(
+	kind: string | undefined,
+	count: number,
+	provider?: WorkProvider,
+): string {
+	if (!hasText(kind)) {
+		return "reviewed work";
 	}
-	const labels = ARTIFACT_KIND_INLINE_LABELS[kind];
-	return `${count} ${count === 1 ? labels.one : labels.many}`;
+	if (!isKnownArtifactKind(kind)) {
+		return kind;
+	}
+	const labels =
+		kind === ARTIFACT_KIND.pullRequest && provider === "GITLAB"
+			? MERGE_REQUEST
+			: ARTIFACT_KIND_INLINE_LABELS[kind];
+	return count === 1 ? labels.one : labels.many;
 }
 
-const ARTIFACT_KIND_ICONS: Record<KnownArtifactKind, LucideIcon> = {
+const ARTIFACT_KIND_ICONS: Record<KnownArtifactKind, ArtifactKindIcon> = {
 	[ARTIFACT_KIND.pullRequest]: GitPullRequestIcon,
 	[ARTIFACT_KIND.issue]: CircleDotIcon,
 	[ARTIFACT_KIND.conversationThread]: MessagesSquareIcon,
@@ -97,6 +128,6 @@ const ARTIFACT_KIND_ICONS: Record<KnownArtifactKind, LucideIcon> = {
  * A kind this build has never heard of gets the neutral page icon rather than a hole, and never
  * borrows the icon of a kind it is not.
  */
-export function artifactKindIcon(kind: string | undefined): LucideIcon {
+export function artifactKindIcon(kind: string | undefined): ArtifactKindIcon {
 	return hasText(kind) && isKnownArtifactKind(kind) ? ARTIFACT_KIND_ICONS[kind] : FileTextIcon;
 }

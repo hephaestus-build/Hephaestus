@@ -128,7 +128,7 @@ export const Default: Story = {
 		canvas.getByRole("heading", { name: "Review threads on the code", level: 4 });
 		// A code citation is the only one that gets a file coordinate, and the only one with a side.
 		canvas.getByText("webapp/src/components/admin/practice-reviews/ReviewRow.tsx:12–13");
-		canvas.getByText("before");
+		canvas.getByText("Before");
 		await expect(canvas.queryByText("scm.pull-request.diff")).not.toBeInTheDocument();
 	},
 };

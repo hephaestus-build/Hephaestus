@@ -13,12 +13,15 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.OperatorFeedbackRow;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.FeedbackApprovalDTO;
-import de.tum.cit.aet.hephaestus.practices.reviewoutput.ReviewArtifactResolver.ArtifactRef;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewBoundObservationDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewPlacementDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewSubjectDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import de.tum.cit.aet.hephaestus.practices.trace.dto.DeliveryPolicyTraceDTO;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,7 +42,7 @@ class ReviewFeedbackQueryService {
     private final FeedbackObservationRepository feedbackObservationRepository;
     private final FeedbackPlacementRepository feedbackPlacementRepository;
     private final ReviewSubjectResolver subjectResolver;
-    private final ReviewArtifactResolver artifactResolver;
+    private final ReviewRunTargetLookup reviewRunTargetLookup;
     private final FeedbackApprovalRepository approvalRepository;
     private final DeliveryPolicyEvaluationRepository policyEvaluations;
     private final ObjectMapper objectMapper;
@@ -53,19 +56,18 @@ class ReviewFeedbackQueryService {
             userIds.add(row.getAboutUserId());
         }
         Map<Long, ReviewSubjectDTO> subjects = subjectResolver.resolve(userIds);
-        var artifacts = artifactResolver.resolve(
+        Map<UUID, Target> targets = reviewRunTargetLookup.findByJobIds(
                 workspaceId,
                 rows.getContent().stream()
-                        .filter(row -> row.getArtifactKind() != null && row.getArtifactId() != null)
-                        .map(row -> new ArtifactRef(
-                                row.getAgentJobId(), ArtifactKind.of(row.getArtifactKind()), row.getArtifactId()))
+                        .map(OperatorFeedbackRow::getAgentJobId)
                         .toList());
         return rows.map(row -> {
-            var artifact = row.getArtifactKind() == null || row.getArtifactId() == null
-                    ? null
-                    : artifacts.get(new ArtifactRef(
-                            row.getAgentJobId(), ArtifactKind.of(row.getArtifactKind()), row.getArtifactId()));
-            return ReviewFeedbackDTO.from(row, artifact, subjects);
+            String artifactKind = row.getArtifactKind();
+            ReviewedWorkRefDTO reviewedWork = ReviewedWorkLabels.refOrNull(
+                    artifactKind == null ? null : ArtifactKind.of(artifactKind),
+                    row.getArtifactId(),
+                    targets.get(row.getAgentJobId()));
+            return ReviewFeedbackDTO.from(row, reviewedWork, subjects);
         });
     }
 
@@ -84,12 +86,12 @@ class ReviewFeedbackQueryService {
                         .toList();
         Map<Long, ReviewSubjectDTO> subjects =
                 subjectResolver.resolve(List.of(feedback.getRecipientUserId(), feedback.getAboutUserId()));
-        var artifactKey = feedback.getArtifactKind() == null || feedback.getArtifactId() == null
-                ? null
-                : new ArtifactRef(feedback.getAgentJobId(), feedback.getArtifactKind(), feedback.getArtifactId());
-        var artifact = artifactKey == null
-                ? null
-                : artifactResolver.resolve(workspaceId, List.of(artifactKey)).get(artifactKey);
+        ReviewedWorkRefDTO reviewedWork = ReviewedWorkLabels.refOrNull(
+                feedback.getArtifactKind(),
+                feedback.getArtifactId(),
+                reviewRunTargetLookup
+                        .findByJobIds(workspaceId, List.of(feedback.getAgentJobId()))
+                        .get(feedback.getAgentJobId()));
         var evaluations =
                 policyEvaluations.findByWorkspaceIdAndFeedbackIdOrderByEvaluatedAtAsc(workspaceId, feedbackId);
         if (evaluations.isEmpty()) {
@@ -106,7 +108,7 @@ class ReviewFeedbackQueryService {
                 .orElse(null);
         return ReviewFeedbackDetailDTO.from(
                 feedback,
-                artifact,
+                reviewedWork,
                 subjects.get(feedback.getRecipientUserId()),
                 subjects.get(feedback.getAboutUserId()),
                 observations,

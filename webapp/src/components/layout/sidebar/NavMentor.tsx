@@ -1,7 +1,7 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { ChevronRight, Sparkles } from "lucide-react";
 
-import { HephIcon } from "@/components/brand/HephIcon";
+import { HEPH_LABEL, HephIcon } from "@/components/brand/HephIcon";
 import { Badge } from "@/components/ui/badge";
 import {
 	SidebarGroup,
@@ -21,7 +21,7 @@ export function NavMentor({ workspaceSlug }: { workspaceSlug: string }) {
 			<SidebarMenu>
 				<SidebarMenuItem>
 					<SidebarMenuButton
-						tooltip="Heph, AI mentor"
+						tooltip={HEPH_LABEL}
 						isActive={onMentor}
 						render={
 							<Link

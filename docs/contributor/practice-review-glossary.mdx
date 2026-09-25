@@ -313,7 +313,7 @@ how it runs is in the [practice review pipeline](./practice-review-pipeline.mdx#
 | **Notes**                  | What is composed for the mentor conversation: `situation`, `capability`, `evidenceSummary`, and `inConversationSignal`. Notes *to* the mentor, never a sentence for it to say — it writes the turn from the live conversation and admitted evidence. | move, opener, conversation message, prepared reply, script |
 | **Placement**              | Where in-context feedback belongs: `DIFF` names an admitted observation and citation for server-resolved coordinates; `ARTIFACT` stays at summary level.                                                                                             | model-authored path, model-authored line number            |
 | **Thread key**             | The identity of one continuing conversation about one thing with one person on one channel.                                                                                                                                                          | correlation key, idempotency key                           |
-| **Supersession**           | Replacing prepared, still-unread feedback with newer feedback on the same thread.                                                                                                                                                                    | edit, update, delete                                       |
+| **Supersession**           | Replacing feedback with newer feedback on the same thread: prepared, still-unread feedback on the conversation lane, and the still-open card on the Practice profile.                                                                                | edit, update, delete                                       |
 
 **Withhold and suppress are two different refusals and must never be merged.** A withhold reason
 (`NO_MATERIAL_CHANGE`, `ALREADY_SAID`, `BELOW_BAR`) is the composer saying nothing was worth saying. A
@@ -342,12 +342,17 @@ habit claim is about the practice and not about one merge request; the in-contex
 artifact. `thread_key` groups related feedback; it does not enforce a unique `PREPARED` item.
 Supersession atomically retires a selected `PREPARED` item, but new feedback can coexist on the thread.
 
-Supersession only ever claims `PREPARED` feedback. Say **superseded** for feedback that was prepared but
-replaced before anybody read it, and **continued** for newer feedback written beside feedback that was
-already read: nothing received is ever un-said, and the newer row still records what it follows through
-`replaces_id`. Issue reviews may edit the prior issue comment in place, so their ledger entry is retired
-when that visible text is replaced. Pull request reviews do not: every new review posts a new summary,
-while a retry of the same review reconciles its existing comment by marker.
+On the conversation lane supersession only ever claims `PREPARED` feedback. Say **superseded** for
+feedback that was prepared but replaced before anybody read it, and **continued** for newer feedback
+written beside feedback that was already read: nothing received is ever un-said, and the newer row still
+records what it follows through `replaces_id`. On the Practice profile a new card about a practice
+replaces the card still **open** about it, read or not, so the page holds one open card per practice; a
+card that is closed — resolved by the work or by the developer, or closed because the practice changed —
+is never superseded and stays as the record beside the new one (`FeedbackSupersession#replaceOpen`,
+decided from `PreviousInAppFeedback`). Issue
+reviews may edit the prior issue comment in place, so their ledger entry is retired when that visible text
+is replaced. Pull request reviews do not: every new review posts a new summary, while a retry of the same
+review reconciles its existing comment by marker.
 
 ### Recorded review history
 
@@ -356,6 +361,48 @@ A location groups observations about the same piece of work; it does not establi
 between their behaviors. Comparing outcomes at a shared location or omitting a prior observation does
 not establish that a concern was resolved or regressed. Responses apply to the specific observations
 bound to the feedback the developer received.
+
+### How feedback resolves
+
+A piece of [feedback](./practice-feedback-language.md) on the Practice profile resolves in one of two
+ways, and the two are held apart everywhere the resolution is shown.
+
+| Term                     | Plain meaning                                                                                                                                                                                                                                                                                                                  | Do not use for this concept                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| **Resolved by the work** | Three pieces of the developer's reviewed work in a row, reviewed after the feedback was prepared, came back clean on the practice. Computed from the observations when the feedback is read and never stored; a problem starts the count over, and a piece of work reviewed several times counts once, at its newest review. | auto-resolved, closed by the system, streak, passed |
+| **Marked as addressed**  | The developer answered the card with *Addressed* or *Not applicable*; pressing the answer again takes it back and reopens the card. A dispute leaves it open. Whichever way resolved the feedback first is the one the card and the summary report.                                                                        | dismissed, acknowledged, done                       |
+| **Fell back**            | Open feedback the developer's work had started to answer, with at least one clean piece of work toward the three, until a piece of work reviewed in the overview's window raised the problem again and the count went back to none. Closed feedback never falls back.                                                        | reset, regressed, reopened                          |
+
+A run of three that completed once stays a resolution: a later slip is new feedback's business.
+The profile summary reports a `FEEDBACK_RESOLVED` change with who resolved it, `WORK` or `DEVELOPER`,
+and never merges the two into one count.
+
+A card is **closed** when it is resolved either way, and also when its practice changed its review rules
+after the card was prepared: the card stays on the page with `closedBy: PRACTICE_CHANGED` and says so, is not
+resolved by anything, and its evidence is kept even though it is no longer current, whereas evidence whose
+source may no longer be cited still hides the card. A closed card leaves the Practice profile 30 days after
+it closed, applied when the page is read and never by changing the row
+(`InAppFeedbackService.CLOSED_CARD_STAYS`); the ledger keeps it.
+
+### Practice profile overview
+
+The overview is the Practice profile's account of what held and what changed, read off the standings
+and the feedback ledger and composed into sentences on the page; nothing in it is a second standing or
+resolution rule. Its rules, in one place:
+
+- **The window** every change is measured over opens at the review run before the latest one and
+  closes now. With fewer than two runs it spans the standing's own look-back of 90 days, and a previous
+  run older than that is clamped to it, since no standing reaches further back.
+- **Only feedback prepared inside the look-back** is reported. Older feedback is left out even when
+  the developer answers it inside the window, because the work that may have closed it first lies
+  before anything the overview reads.
+- **One change per practice and type, the newest.** A practice that got two pieces of feedback in the
+  window is reported once for each type of change, by the newer piece.
+- **Precedence** when the page names one event per practice: resolved feedback, then feedback that
+  fell back, then new feedback, then a standing that slipped, then one that moved up, then a first
+  observation, then a trend that turned, then a practice that held.
+- **A held practice is dropped** from what held when the same practice slipped, fell back or got new
+  feedback in the window: holding and moving up are not a contradiction, holding and slipping are.
 
 ## Machine names
 
@@ -370,6 +417,7 @@ bound to the feedback the developer received.
 | Evidence requirement         | `needs[]`                          | `PracticeEvidenceRequirement`              | inside `bindings`                                                             |
 | Evidence stance              | `stance`                           | `EvidenceStance`                           | inside `bindings`                                                             |
 | Artifact kind                | `artifactKind`                     | `ArtifactKind`                             | `applies_to`                                                                  |
+| Reviewed work                | `reviewedWork` in the HTTP DTOs; `artifactKind`, `artifactId` in webapp search params and routes | `ReviewedWorkRefDTO` | `artifact_kind`, `artifact_id`                                              |
 | Source display name          | `displayName`                      | `ArtifactSourceContract.displayName`       | source catalog                                                                |
 | Required capture quality     | `requiredQuality`                  | `RequiredCaptureQuality`                   | source catalog                                                                |
 | Identity policy              | `identity`                         | `IdentityPolicy`                           | source catalog                                                                |
@@ -411,6 +459,13 @@ bound to the feedback the developer received.
 | Conversation move            | not on the HTTP API                | `ConversationBriefBody`                    | JSON inside `feedback.body`                                                   |
 | Thread key                   | not on the HTTP API                | `FeedbackThreadKey`                        | `feedback.thread_key` (not unique)                                            |
 | What feedback follows        | not on the HTTP API                | —                                          | `feedback.replaces_id`                                                        |
+| Resolved by the work         | `cleanWork`, `cleanNeeded`, `closedBy: WORK` | `WorkResolution`            | derived, never stored                                                         |
+| Marked as addressed          | `resolution: ADDRESSED`, `closedBy: DEVELOPER` | `Reaction.resolution`        | `reaction.action`                                                             |
+| Closed feedback              | `closedAt`, `closedBy`             | `FeedbackClosure`                          | derived, never stored                                                         |
+| Who resolved feedback        | `resolvedBy`                       | `ProfileChangeDTO.ResolvedBy`              | derived, never stored                                                         |
+| Fell back                    | `FEEDBACK_RESET`                   | `ProfileChangeDTO.Type.FEEDBACK_RESET`     | derived, never stored                                                         |
+| Standing move direction      | `direction: UP`, `DOWN` on a standing or group move; absent for a move into or out of a silence | `ProfileChangeDTO.Direction`, from `PracticeStandingDTO.Standing.rank()` | derived, never stored |
+| Holds as                     | `holdsAs`                          | `BundledPracticeCatalog`                   | bundled catalog, never stored — defined in the [feedback language](./practice-feedback-language.md) |
 | Signal refusal reason        | —                                  | `SignalStateReason`                        | `artifact_signal.state_reason`                                                |
 | Group dashboard visibility    | `visibleInPracticeDashboards`      | `PracticeGroup.visibleInPracticeDashboards` | `visible_in_practice_dashboards`                                              |
 | Claim currentness            | `claimCurrentness`                 | `ReviewClaimCurrentness`                   | derived API value                                                             |

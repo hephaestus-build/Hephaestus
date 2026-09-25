@@ -1,15 +1,12 @@
 package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
+import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.judged;
+import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.noVerdict;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
-import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -26,9 +23,9 @@ class PracticeTrendCalculatorTest {
         PracticeTrend trend = PracticeTrendCalculator.calculatePractice(
                 "testing",
                 List.of(
-                        inapplicable(7L, "2026-03-01T09:00:00Z"),
-                        observation(40L, "2026-05-01T09:00:00Z", Assessment.BAD),
-                        observation(55L, "2026-06-01T09:00:00Z", Assessment.GOOD)),
+                        noVerdict(7L, "2026-03-01T09:00:00Z"),
+                        judged(40L, "2026-05-01T09:00:00Z", Assessment.BAD),
+                        judged(55L, "2026-06-01T09:00:00Z", Assessment.GOOD)),
                 Instant.parse("2026-01-01T00:00:00Z"),
                 properties);
 
@@ -46,36 +43,11 @@ class PracticeTrendCalculatorTest {
         // optional arguments.
         PracticeTrend trend = PracticeTrendCalculator.calculatePractice(
                 "testing",
-                List.of(observation(40L, "2026-05-01T09:00:00Z", Assessment.GOOD)),
+                List.of(judged(40L, "2026-05-01T09:00:00Z", Assessment.GOOD)),
                 Instant.parse("2026-01-01T00:00:00Z"),
                 properties);
 
         assertThat(trend.support().comparablePractices()).isNull();
         assertThat(trend.support().eligiblePractices()).isNull();
-    }
-
-    private static Observation observation(long artifactId, String observedAt, Assessment assessment) {
-        return Observation.builder()
-                .id(UUID.randomUUID())
-                .agentJobId(UUID.randomUUID())
-                .artifactKind(ArtifactKinds.PULL_REQUEST)
-                .artifactId(artifactId)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.PRESENT)
-                .assessment(assessment)
-                .observedAt(Instant.parse(observedAt))
-                .build();
-    }
-
-    private static Observation inapplicable(long artifactId, String observedAt) {
-        return Observation.builder()
-                .id(UUID.randomUUID())
-                .agentJobId(UUID.randomUUID())
-                .artifactKind(ArtifactKinds.PULL_REQUEST)
-                .artifactId(artifactId)
-                .assessmentStatus(AssessmentStatus.NOT_APPLICABLE)
-                .presence(null)
-                .observedAt(Instant.parse(observedAt))
-                .build();
     }
 }

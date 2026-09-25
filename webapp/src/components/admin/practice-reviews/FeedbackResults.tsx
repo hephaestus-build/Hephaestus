@@ -118,7 +118,7 @@ export function FeedbackRow({ workspaceSlug, feedback, scope }: FeedbackRowProps
 					<ReviewRowMeta
 						items={[
 							place.label,
-							<ReviewArtifactLabel key="work" artifact={feedback.artifact} />,
+							<ReviewArtifactLabel key="work" reviewedWork={feedback.reviewedWork} />,
 							`${feedback.observationCount} ${feedback.observationCount === 1 ? "observation" : "observations"}`,
 							// See `ObservationRow`: no hover target under a stretched row link.
 							<RelativeTime key="composed" value={feedback.createdAt} tooltip={false} />,

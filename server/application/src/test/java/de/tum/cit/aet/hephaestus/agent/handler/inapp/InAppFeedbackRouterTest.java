@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.handler.inapp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
@@ -11,6 +10,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
 import java.time.Instant;
@@ -36,7 +36,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
 
     @Test
     void refusesAMessageMissingItsNextStep() {
-        ComposedInAppMessage incomplete = new ComposedInAppMessage("ships-tests", "Title", "Body", "  ", null);
+        ComposedInAppMessage incomplete = new ComposedInAppMessage("ships-tests", "Title", "Body", "  ");
 
         assertThat(InAppFeedbackRouter.route(
                         incomplete,
@@ -109,11 +109,60 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
     /** Twice on the same pull request is one occurrence — the unit of proof here is separate work. */
     @Test
     void countsTwoProblemsOnOneArtifactAsOneOccurrence() {
-        Observation first = observation(42L, ObservationOrigin.LIVE, Assessment.BAD);
-        Observation second = observation(42L, ObservationOrigin.LIVE, Assessment.BAD);
+        UUID run = UUID.randomUUID();
+        Observation first = observation(42L, run, NOW, ObservationOrigin.LIVE, Assessment.BAD);
+        Observation second = observation(42L, run, NOW, ObservationOrigin.LIVE, Assessment.BAD);
 
         assertThat(route(List.of(first, second), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, null))
                 .isEqualTo(InAppRoutingDecision.UNCORROBORATED);
+        // Which of the two stands for the pull request is the next test's subject; here it is that one does.
+        assertThat(InAppFeedbackRouter.problemsIn(List.of(first, second))).hasSize(1);
+    }
+
+    /**
+     * One run's several problems on one pull request all carry that run's moment, so the row the card cites
+     * as its example must be chosen by how bad it is. Picking the first row back would let the developer be
+     * shown the mildest problem on the work while the worst one goes unmentioned.
+     */
+    @Test
+    void shouldCiteTheWorstProblemWhenOneRunFoundSeveralOnOnePieceOfWork() {
+        UUID run = UUID.randomUUID();
+        Observation nit = problemOf(42L, run, Severity.MINOR);
+        Observation worst = problemOf(42L, run, Severity.CRITICAL);
+
+        assertThat(InAppFeedbackRouter.problemsIn(List.of(nit, worst))).containsExactly(worst);
+        assertThat(InAppFeedbackRouter.problemsIn(List.of(worst, nit))).containsExactly(worst);
+    }
+
+    /**
+     * A piece of work counts once, at its newest review. A pull request whose re-review came back clean is
+     * not a problem at its newest review, so it corroborates nothing: one slip on another pull request stays one.
+     */
+    @Test
+    void shouldNotCorroborateWhenTheReReviewCameBackClean() {
+        Observation slipped = observation(
+                7L, UUID.randomUUID(), NOW.minus(Duration.ofDays(2)), ObservationOrigin.LIVE, Assessment.BAD);
+        Observation recovered = observation(
+                7L, UUID.randomUUID(), NOW.minus(Duration.ofDays(1)), ObservationOrigin.LIVE, Assessment.GOOD);
+        Observation other = observation(8L, UUID.randomUUID(), NOW, ObservationOrigin.LIVE, Assessment.BAD);
+
+        assertThat(route(List.of(other, recovered, slipped), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, null))
+                .isEqualTo(InAppRoutingDecision.UNCORROBORATED);
+    }
+
+    /** Two pull requests that slipped and one that slipped and recovered: exactly two rows to cite. */
+    @Test
+    void shouldCiteOneRowPerPieceOfWorkWhenWorkWasReviewedTwice() {
+        Observation first = observation(
+                1L, UUID.randomUUID(), NOW.minus(Duration.ofDays(3)), ObservationOrigin.LIVE, Assessment.BAD);
+        Observation second = observation(
+                2L, UUID.randomUUID(), NOW.minus(Duration.ofDays(2)), ObservationOrigin.LIVE, Assessment.BAD);
+        Observation slipped = observation(
+                3L, UUID.randomUUID(), NOW.minus(Duration.ofDays(1)), ObservationOrigin.LIVE, Assessment.BAD);
+        Observation recovered = observation(3L, UUID.randomUUID(), NOW, ObservationOrigin.LIVE, Assessment.GOOD);
+
+        assertThat(InAppFeedbackRouter.problemsIn(List.of(recovered, slipped, second, first)))
+                .containsExactly(second, first);
     }
 
     @Test
@@ -149,6 +198,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
         Observation strength = observation(2L, ObservationOrigin.LIVE, Assessment.GOOD);
         Observation abstention = Observation.builder()
                 .id(UUID.randomUUID())
+                .agentJobId(UUID.randomUUID())
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(3L)
                 .assessmentStatus(AssessmentStatus.NOT_APPLICABLE)
@@ -174,8 +224,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
                 "ships-tests-with-the-change",
                 "Tests are arriving one commit late",
                 "On your last few changes the test landed a push after the behaviour did.",
-                "Write the assertion that distinguishes the new branch before you write the branch.",
-                null);
+                "Write the assertion that distinguishes the new branch before you write the branch.");
     }
 
     /** {@code count} problems, each on a different piece of work. */
@@ -185,17 +234,38 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
                 .toList();
     }
 
-    private static Observation observation(long artifactId, ObservationOrigin origin, Assessment assessment) {
-        ArtifactKind kind = ArtifactKinds.PULL_REQUEST;
+    /** A problem of the given severity on one piece of work, recorded by {@code run}. */
+    private static Observation problemOf(long artifactId, UUID run, Severity severity) {
         return Observation.builder()
                 .id(UUID.randomUUID())
-                .artifactKind(kind)
+                .agentJobId(run)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(artifactId)
+                .assessmentStatus(AssessmentStatus.ASSESSED)
+                .presence(Presence.PRESENT)
+                .assessment(Assessment.BAD)
+                .severity(severity)
+                .origin(ObservationOrigin.LIVE)
+                .observedAt(NOW)
+                .build();
+    }
+
+    private static Observation observation(long artifactId, ObservationOrigin origin, Assessment assessment) {
+        return observation(artifactId, UUID.randomUUID(), NOW, origin, assessment);
+    }
+
+    private static Observation observation(
+            long artifactId, UUID run, Instant observedAt, ObservationOrigin origin, Assessment assessment) {
+        return Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(run)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(artifactId)
                 .assessmentStatus(AssessmentStatus.ASSESSED)
                 .presence(Presence.PRESENT)
                 .assessment(assessment)
                 .origin(origin)
-                .observedAt(NOW)
+                .observedAt(observedAt)
                 .build();
     }
 }

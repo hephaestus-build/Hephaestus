@@ -1,9 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, fn, screen, userEvent, waitFor } from "storybook/test";
 
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { Button } from "@/components/ui/button";
 import { DrawerBody, DrawerDescription, DrawerFooter, DrawerTitle } from "@/components/ui/drawer";
+import { Input } from "@/components/ui/input";
 import { withPageBehind } from "@/stories/decorators";
 import { expectSettledVisible } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
@@ -139,6 +141,71 @@ export const PerLevelDataSurvivesDismissal: Story = {
 		await userEvent.click(screen.getByRole("button", { name: "Close" }));
 		await waitFor(async () => expect(popups()).toHaveLength(0));
 		await expect(args.onClose).toHaveBeenCalledWith(0);
+	},
+};
+
+/** A level's own state, seeded once at mount the way an editor seeds its form from the entry. */
+function DraftField() {
+	const [draft, setDraft] = useState("");
+	return (
+		<Input aria-label="Draft" value={draft} onChange={(event) => setDraft(event.target.value)} />
+	);
+}
+
+/**
+ * The entry is the level. The same kind at the same depth with another id is another level,
+ * mounted fresh, so a draft typed into the first never appears under the second's title — the
+ * trap `webapp/AGENTS.md` § Seeding a form from props describes, which every editor level relies
+ * on the stack to prevent rather than keying itself on the id.
+ */
+export const AnotherIdIsAnotherLevel: Story = {
+	parameters: { chromatic: { disableSnapshot: true } },
+	render: (args) => (
+		<Stateful initial={args.stack}>
+			{(stack, setStack) => (
+				<DetailDrawerStack
+					{...args}
+					stack={stack}
+					onClose={(depth) => {
+						args.onClose(depth);
+						setStack(stack.slice(0, depth));
+					}}
+				>
+					{(entry, level) => (
+						<>
+							<DetailDrawerHeader nested={level.nested}>
+								<DrawerTitle>{`${entry.kind} · ${entry.id}`}</DrawerTitle>
+							</DetailDrawerHeader>
+							<DrawerBody>
+								<DraftField />
+							</DrawerBody>
+							<DrawerFooter>
+								{/* Inside the level, since a press on the page would dismiss it instead. */}
+								<Button
+									variant="outline"
+									onClick={() =>
+										setStack([
+											...stack.slice(0, level.depth),
+											{ kind: entry.kind, id: "review-ready-work" },
+										])
+									}
+								>
+									Open a sibling
+								</Button>
+							</DrawerFooter>
+						</>
+					)}
+				</DetailDrawerStack>
+			)}
+		</Stateful>
+	),
+	play: async () => {
+		await expectSettledVisible(await screen.findByText("practice · describe-what-and-why"));
+		await userEvent.type(screen.getByRole("textbox", { name: "Draft" }), "the first level's draft");
+		await userEvent.click(screen.getByRole("button", { name: "Open a sibling" }));
+		await expectSettledVisible(await screen.findByText("practice · review-ready-work"));
+		await expect(popups()).toHaveLength(1);
+		await expect(screen.getByRole("textbox", { name: "Draft" })).toHaveValue("");
 	},
 };
 
@@ -285,6 +352,60 @@ export const DismissedLevelDoesNotComeBack: Story = {
 		}
 		await waitFor(async () => expect(popups()).toHaveLength(1));
 		await expect(nested.indexOf("1")).toBe(-1);
+	},
+};
+
+/** A press at a point of the page, on whatever is drawn there. */
+async function pressAt(clientX: number, clientY: number) {
+	const target = document.elementFromPoint(clientX, clientY);
+	if (!target) {
+		throw new Error(`Nothing is under ${clientX},${clientY}.`);
+	}
+	await userEvent.pointer({ target, coords: { clientX, clientY }, keys: "[MouseLeft]" });
+}
+
+/**
+ * A press on a visible layer brings that layer to the front. With three levels open, a press on
+ * the strip the middle level leaves showing closes the front level only; a press on the page
+ * beside the stack closes every level. The suite's reduced motion zeroes the peek, which would
+ * leave no strip to press, so this story alone restores it in a plain stylesheet — unlayered, so
+ * it outranks the utility.
+ */
+export const PressingALayerBringsItToTheFront: Story = {
+	args: {
+		stack: [
+			{ kind: "practices", id: "all" },
+			{ kind: "group", id: "review-ready-work" },
+			{ kind: "practice", id: "describe-what-and-why" },
+		],
+	},
+	parameters: { chromatic: { disableSnapshot: true } },
+	decorators: [
+		(Story) => (
+			<>
+				{/* oxlint-disable-next-line shadcn/no-inline-styles -- The popup is portaled and its peek is a utility the suite's reduced motion zeroes; only an unlayered rule outranks it, and only this story needs it. */}
+				<style>{`[data-slot="drawer-popup"] { --peek: 6rem; }`}</style>
+				<Story />
+			</>
+		),
+	],
+	play: async ({ args }) => {
+		await expectSettledVisible(await screen.findByText("practice · describe-what-and-why"));
+		await expect(popups()).toHaveLength(3);
+
+		// The middle level's strip: inside its panel, left of the front panel's edge.
+		const middle = popupAt(1).getBoundingClientRect();
+		const front = popupAt(2).getBoundingClientRect();
+		await expect(front.left).toBeGreaterThan(middle.left);
+		await pressAt(middle.left + (front.left - middle.left) / 2, 200);
+		await waitFor(async () => expect(popups()).toHaveLength(2));
+		await expect(args.onClose).toHaveBeenLastCalledWith(2);
+		await expect(popupAt(1).textContent).toContain("group · review-ready-work");
+
+		// The page beside the stack belongs to no level and clears it.
+		await pressAt(20, 200);
+		await waitFor(async () => expect(popups()).toHaveLength(0));
+		await expect(args.onClose).toHaveBeenLastCalledWith(0);
 	},
 };
 

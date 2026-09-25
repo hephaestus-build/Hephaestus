@@ -294,7 +294,12 @@ standard as an experiment or a convention as a proven outcome.
    occasion as `on` — a bare signal name is shorthand for a binding on that signal reading the
    artifact kind's default evidence. Reference any precompute script explicitly; a script must be named
    after the practice slug, and an unreferenced one fails validation. What a script is and what the
-   library owns is in [Precompute scripts](#precompute-scripts) below.
+   library owns is in [Precompute scripts](#precompute-scripts) below. Give the practice a `holdsAs`
+   sentence — [Holds as](./practice-feedback-language.md) in the feedback language: one present-tense
+   line without dashes, within the length the schema (`default-catalog.schema.json`) sets, naming what
+   the developer keeps doing when the practice holds, such as *Every reviewer comment gets a visible
+   answer*. It is read from the bundled catalog by slug and is not part of the definition a workspace
+   copies, customizes or compares, so a better sentence reaches every workspace with the next release.
 6. Add or update focused automated-review tests, including required-source skipping and valid-empty evidence.
 7. Review the admin presentation and a representative piece of delivered feedback.
 

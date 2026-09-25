@@ -215,13 +215,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     private List<Observation> visibleObservations(
             long workspaceId, Long subjectUserId, Instant since, @Nullable UUID excludedJobId) {
         List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                subjectUserId,
-                workspaceId,
-                since,
-                // Verdicts only: a run that produced none is nothing this context can quote, and it would spend
-                // the page budget burying the rows that can be.
-                true,
-                PageRequest.of(0, MAX_OBSERVATIONS));
+                subjectUserId, workspaceId, since, PageRequest.of(0, MAX_OBSERVATIONS));
         Set<UUID> visible =
                 visibilityPolicy.permitsAll(workspaceId, recent, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
         Map<String, Integer> perPractice = new HashMap<>();

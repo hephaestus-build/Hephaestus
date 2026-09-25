@@ -52,6 +52,15 @@ public interface PracticeRevisionRepository
     void setReviewRuleFingerprint(@Param("revisionId") long revisionId, @Param("fingerprint") String fingerprint);
 
     /**
+     * The first revision after {@code revisionNumber} whose review rules differ from {@code fingerprint}:
+     * when the rules a past observation was measured against stopped being the ones in force. A later edit
+     * that touches only prose leaves the fingerprint alone and is skipped, so the moment does not drift.
+     */
+    Optional<PracticeRevision>
+            findFirstByPracticeIdAndRevisionNumberGreaterThanAndReviewRuleFingerprintNotOrderByRevisionNumberAsc(
+                    Long practiceId, int revisionNumber, String fingerprint);
+
+    /**
      * Returns the definition available at {@code asOf}, so an edit during detection cannot change the
      * recorded provenance.
      */

@@ -74,6 +74,12 @@ hephaestus:
     runtime:
         worker:
             enabled: false
+    # Agent off in tests, pinned here rather than left to application.yml's AGENT_ENABLED default: the
+    # tests that need a resubmitter or the job event listener build it by hand, and some register a
+    # bean of the same type, so a leaked AGENT_ENABLED=true from server/.env would make the production
+    # bean a second candidate and let it settle signals before the test does.
+    agent:
+        enabled: false
     # Loud enforcement under test: any unguarded scoped-table query throws.
     # Production runs in 'log' mode for the staging canary period; this override
     # ensures tenancy bugs surface in CI rather than being masked.
