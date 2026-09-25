@@ -26,6 +26,22 @@ export const EmptyReason: Story = {
 	},
 };
 
+export const Opening: Story = {
+	args: { isPending: true },
+	play: async () => {
+		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Opening…" }));
+	},
+};
+
+export const Failed: Story = {
+	args: { error: "User view audit is unavailable" },
+	play: async () => {
+		await expect(await screen.findByRole("alert")).toHaveTextContent(
+			"User view audit is unavailable",
+		);
+	},
+};
+
 export const SubmitsTrimmedReason: Story = {
 	play: async ({ args }) => {
 		await userEvent.type(

@@ -48,6 +48,7 @@ describe("AdminLlmModelFormDialog", () => {
 	it("keeps model identity and effort, and can reset effort to the provider default", async () => {
 		const onSave = vi.fn<AdminLlmModelFormDialogProps["onSave"]>();
 		const editing: LlmModel = {
+			dataHandlingTier: "UNDECLARED",
 			id: 1,
 			slug: "gpt-5",
 			displayName: "GPT-5",
@@ -78,6 +79,7 @@ describe("AdminLlmModelFormDialog", () => {
 		expect(onSave.mock.calls[0]?.[0]).not.toHaveProperty("sharing");
 		expect(onSave.mock.calls[0]?.[0].metadata).toMatchObject({ reasoningEffort: "MEDIUM" });
 
+		fireEvent.click(screen.getByRole("button", { name: "Limits and capabilities" }));
 		const effort = screen.getByRole("combobox", {
 			name: "Reasoning effort",
 			description: /Supported levels and defaults depend on the model and provider/u,
@@ -117,6 +119,7 @@ describe("AdminLlmModelFormDialog", () => {
 		const onSave = renderDialog();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
 		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
+		fireEvent.click(screen.getByRole("button", { name: "Limits and capabilities" }));
 		const contextWindow = screen.getByLabelText(/^Context window/u);
 		const maxOutput = screen.getByLabelText(/^Max output tokens/u);
 		fireEvent.change(contextWindow, { target: { value: "3000000000" } });
@@ -156,6 +159,7 @@ describe("AdminLlmModelFormDialog", () => {
 	it("turns an active model off when its price becomes unknown", () => {
 		const onSave = vi.fn<AdminLlmModelFormDialogProps["onSave"]>();
 		const editing: LlmModel = {
+			dataHandlingTier: "UNDECLARED",
 			id: 2,
 			slug: "gpt-5-active",
 			displayName: "GPT-5 active",
@@ -196,6 +200,46 @@ describe("AdminLlmModelFormDialog", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onSave.mock.calls[0]?.[0].metadata).toStrictEqual(
 			expect.objectContaining({ enabled: false }),
+		);
+	});
+
+	it("sends the declared operator and note without claiming to verify provider terms", () => {
+		const onSave = renderDialog();
+		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
+		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
+		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
+		expect(onSave.mock.calls[0]?.[0].metadata).toStrictEqual(
+			expect.objectContaining({ operatedBy: undefined, dataHandlingNote: undefined }),
+		);
+
+		fireEvent.click(screen.getByRole("radio", { name: "A provider" }));
+		fireEvent.change(screen.getByLabelText(/^Note for admins/u), {
+			target: { value: "EU region, DPA renews 2027-01" },
+		});
+		screen.getByText("Cloud");
+		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
+		expect(onSave.mock.calls[1]?.[0].metadata).toStrictEqual(
+			expect.objectContaining({
+				operatedBy: "PROVIDER",
+				dataHandlingNote: "EU region, DPA renews 2027-01",
+			}),
+		);
+	});
+
+	it("lets a declared model go back to undeclared", () => {
+		const onSave = renderDialog();
+		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
+		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
+		fireEvent.click(screen.getByRole("radio", { name: "Your organisation" }));
+		fireEvent.click(screen.getByRole("button", { name: "Leave undeclared" }));
+		expect(screen.queryByRole("button", { name: "Leave undeclared" })).toBeNull();
+		// The cards clear too: the group stays controlled through the reset.
+		expect(
+			screen.getByRole("radio", { name: "Your organisation" }).getAttribute("aria-checked"),
+		).toBe("false");
+		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
+		expect(onSave.mock.calls[0]?.[0].metadata).toStrictEqual(
+			expect.objectContaining({ operatedBy: undefined }),
 		);
 	});
 });

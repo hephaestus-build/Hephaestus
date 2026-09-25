@@ -143,6 +143,21 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
                 .isEqualTo(afterFirstRead.getDeliveredAt());
     }
 
+    @Test
+    @DisplayName("an instance administrator viewing as the developer reads their feedback without delivering it")
+    void administratorViewDoesNotDeliverTheViewedDevelopersFeedback() {
+        Feedback unit = persistInAppCard(
+                job, developer, 7000, FeedbackDeliveryState.PREPARED, "A practice headline", "A practice body");
+        bind(unit, persistObservation(practice, job, developer, 101L));
+
+        readAsUserView(IN_APP, workspace, developer).jsonPath("$.length()").isEqualTo(1);
+
+        assertThat(feedbackRepository.findById(unit.getId()))
+                .get()
+                .extracting(Feedback::getDeliveryState)
+                .isEqualTo(FeedbackDeliveryState.PREPARED);
+    }
+
     /**
      * The card carries the developer's own answer so the page is one request, and it is the answer that
      * currently stands: a response they later deleted is no response. Both cards are read, and delivered, in

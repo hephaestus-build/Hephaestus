@@ -96,6 +96,7 @@ class AgentJobDTOTest extends BaseUnitTest {
                 null,
                 600,
                 false,
+                null,
                 null);
     }
 }

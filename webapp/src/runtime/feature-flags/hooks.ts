@@ -32,16 +32,29 @@ async function fetchFeatureFlags(): Promise<FeatureFlagsResponse> {
 	return parsed.data;
 }
 
-function useFeatureFlagsQuery() {
-	const { isAuthenticated } = useAuth();
+// The administrator's flags never apply in a view, and the server does not gate a view's mentor reads.
+const USER_VIEW_FLAGS: FeatureFlagsResponse = {
+	ADMIN: false,
+	GITLAB_WORKSPACE_CREATION: false,
+	MENTOR_ACCESS: true,
+	NOTIFICATION_ACCESS: false,
+};
 
-	return useQuery<FeatureFlagsResponse>({
+function useFeatureFlagsQuery(): {
+	data: FeatureFlagsResponse | undefined;
+	isLoading: boolean;
+	isError: boolean;
+} {
+	const { isAuthenticated, userView } = useAuth();
+
+	const query = useQuery<FeatureFlagsResponse>({
 		queryKey: FEATURE_FLAGS_QUERY_KEY,
 		queryFn: fetchFeatureFlags,
-		enabled: isAuthenticated,
+		enabled: isAuthenticated && !userView,
 		staleTime: 60_000,
 		retry: 3,
 	});
+	return userView ? { data: USER_VIEW_FLAGS, isLoading: false, isError: false } : query;
 }
 
 export function useFeatureFlag(flag: FeatureFlagName) {

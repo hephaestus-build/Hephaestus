@@ -129,11 +129,11 @@ function LeaderboardContainer() {
 		placeholderData: (previousData) => previousData,
 		enabled: hasWorkspace && Boolean(username),
 	});
-	const currentUserEntry = hasText(username)
-		? leaderboardQuery.data?.find(
-				(entry) => entry.user?.login.toLowerCase() === username.toLowerCase(),
-			)
-		: undefined;
+	const currentUserId = userProfileQuery.data?.userInfo.id;
+	const currentUserEntry =
+		currentUserId == null
+			? undefined
+			: leaderboardQuery.data?.find((entry) => entry.user?.id === currentUserId);
 
 	interface MetaTeam {
 		id: number;

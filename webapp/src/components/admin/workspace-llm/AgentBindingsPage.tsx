@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { BrainCircuit, ChevronDown } from "lucide-react";
+import { BrainCircuit, ChevronDown, CircleHelpIcon } from "lucide-react";
 import {
 	type ReactElement,
 	type ReactNode,
@@ -9,6 +9,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { hasText } from "@/lib/text";
 
 import type {
 	AgentBinding,
@@ -16,9 +17,25 @@ import type {
 	AvailableLlmModel,
 	WorkspaceLlmUsageReport,
 } from "@/api/types.gen";
+import { type Fact, FactList } from "@/components/auth/FactList";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { AiMark } from "@/components/icons/AiMark";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
+import {
+	BINDING_READINESS_DEFS,
+	bindingReadiness,
+} from "@/components/practice-vocabulary/binding-readiness-defs";
+import {
+	bindingFor,
+	DATA_HANDLING_DEFS,
+	DATA_HANDLING_TIERS,
+	type DataHandlingTier,
+	MEMBER_AI_CHOICE_DEFS,
+	type MemberAiChoice,
+} from "@/components/practice-vocabulary/data-handling-defs";
+import { DataHandlingBadge } from "@/components/practice-vocabulary/DataHandlingBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,12 +52,21 @@ import {
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
-import { hasText } from "@/lib/text";
 
 import { BudgetExhaustedAlert } from "./BudgetExhaustedAlert";
 import { ModelPicker, type ModelSelection } from "./ModelPicker";
 
 export type Purpose = AgentBinding["purpose"];
+
+/** One row on the page: a purpose's slot for one data-handling tier. */
+export interface BindingTarget {
+	purpose: Purpose;
+	tier: DataHandlingTier;
+}
+
+export function bindingTargetKey({ purpose, tier }: BindingTarget): string {
+	return `${purpose}:${tier}`;
+}
 
 interface PurposeMeta {
 	purpose: Purpose;
@@ -70,6 +96,11 @@ const PURPOSES: PurposeMeta[] = [
 	},
 ];
 
+/** The developer answers the preview walks, in card order; No AI is served by nothing. */
+const PREVIEWED_CHOICES = ["IN_HOUSE_ONLY", "CLOUD"] satisfies MemberAiChoice[];
+
+const UNCHOSEN_ROW_TITLE = "Members who haven't chosen";
+
 const MIN_TIMEOUT_SECONDS = 30;
 const MAX_TIMEOUT_SECONDS = 10_800;
 const MIN_CONCURRENT_JOBS = 1;
@@ -87,6 +118,14 @@ function bindingToSelection(binding?: AgentBinding): ModelSelection | null {
 		return { scope: "WORKSPACE", id: binding.workspaceModelId };
 	}
 	return null;
+}
+
+function modelOf(
+	binding: AgentBinding | undefined,
+	models: AvailableLlmModel[],
+): AvailableLlmModel | undefined {
+	const selection = bindingToSelection(binding);
+	return models.find((m) => m.scope === selection?.scope && m.id === selection.id);
 }
 
 interface ParsedNumber {
@@ -120,16 +159,22 @@ export interface AgentBindingsPageProps {
 	availableModels: AvailableLlmModel[];
 	practicesEnabled: boolean;
 	mentorEnabled: boolean;
-	providerPanel?: ReactElement | undefined;
+	/** Once a workspace requires the choice, the undeclared row serves nobody. */
+	aiChoiceRequired: boolean;
+	providerPanel?: ReactElement;
 	usage?: WorkspaceLlmUsageReport;
 	isLoading: boolean;
 	isError: boolean;
 	loadError: unknown;
-	pendingPurposes: ReadonlySet<Purpose>;
-	saveRevisions?: Partial<Record<Purpose, number>>;
+	/** Rows with a save or clear in flight, keyed by {@link bindingTargetKey}. */
+	pendingTargets: ReadonlySet<string>;
+	/** Bumped after a write lands so the row reseeds from what the server returned. */
+	saveRevisions?: Partial<Record<string, number>>;
+	/** The server's refusal of the last save, worded by the route, shown in the row it refused. */
+	saveErrors?: Partial<Record<string, string>>;
 	onRetry: () => void;
-	onSave: (purpose: Purpose, body: AgentBindingRequest) => void;
-	onTurnOff: (purpose: Purpose) => void;
+	onSave: (target: BindingTarget, body: AgentBindingRequest) => void;
+	onTurnOff: (target: BindingTarget) => void;
 }
 
 export function AgentBindingsPage({
@@ -138,60 +183,28 @@ export function AgentBindingsPage({
 	availableModels,
 	practicesEnabled,
 	mentorEnabled,
+	aiChoiceRequired,
 	providerPanel,
 	usage,
 	isLoading,
 	isError,
 	loadError,
-	pendingPurposes,
+	pendingTargets,
 	saveRevisions,
+	saveErrors,
 	onRetry,
 	onSave,
 	onTurnOff,
 }: AgentBindingsPageProps) {
-	const bindingFor = (purpose: Purpose) => bindings.find((b) => b.purpose === purpose);
 	const featureEnabled = (purpose: Purpose): boolean =>
 		purpose === "MENTOR" ? mentorEnabled : practicesEnabled;
-	let body: ReactNode;
-	if (isError) {
-		body = <QueryErrorAlert error={loadError} title="Couldn't load AI models" onRetry={onRetry} />;
-	} else if (isLoading) {
-		body = (
-			<div className="flex h-40 items-center justify-center">
-				<Spinner className="size-6" />
-			</div>
-		);
-	} else {
-		body = (
-			<div className="space-y-6">
-				<section className="space-y-4">
-					<h2 className="text-lg font-semibold">Model assignments</h2>
-					{PURPOSES.map((meta) => (
-						<AgentPurposeCard
-							key={`${meta.purpose}:${saveRevisions?.[meta.purpose] ?? 0}`}
-							meta={meta}
-							workspaceSlug={workspaceSlug}
-							binding={bindingFor(meta.purpose)}
-							availableModels={availableModels}
-							featureEnabled={featureEnabled(meta.purpose)}
-							pending={pendingPurposes.has(meta.purpose)}
-							onSave={onSave}
-							onTurnOff={onTurnOff}
-						/>
-					))}
-				</section>
-
-				{providerPanel !== undefined && <section className="space-y-4">{providerPanel}</section>}
-			</div>
-		);
-	}
 
 	return (
 		<PageLayout>
 			<PageHeader
 				icon={<BrainCircuit />}
 				title="AI models"
-				description="Choose the models that power workspace AI features."
+				description="Choose the models that run practice reviews and Heph."
 			/>
 
 			<div className="max-w-4xl space-y-6">
@@ -218,7 +231,47 @@ export function AgentBindingsPage({
 					</div>
 				)}
 
-				{body}
+				{isError && (
+					<QueryErrorAlert error={loadError} title="Couldn't load AI models" onRetry={onRetry} />
+				)}
+				{!isError && isLoading && (
+					<div className="flex h-40 items-center justify-center">
+						<Spinner className="size-6" />
+					</div>
+				)}
+				{!isError && !isLoading && (
+					<div className="space-y-6">
+						<section className="space-y-4">
+							<div className="space-y-1">
+								<h2 className="text-lg font-semibold">Model assignments</h2>
+								<p className="text-sm text-muted-foreground">
+									A member’s AI choice is a ceiling. The loosest ready row within it serves them.
+									Nothing moves them to a looser one.
+								</p>
+							</div>
+							{PURPOSES.map((meta) => (
+								<AgentPurposeCard
+									key={meta.purpose}
+									meta={meta}
+									workspaceSlug={workspaceSlug}
+									bindings={bindings.filter((binding) => binding.purpose === meta.purpose)}
+									availableModels={availableModels}
+									aiChoiceRequired={aiChoiceRequired}
+									featureEnabled={featureEnabled(meta.purpose)}
+									pendingTargets={pendingTargets}
+									saveRevisions={saveRevisions}
+									saveErrors={saveErrors}
+									onSave={onSave}
+									onTurnOff={onTurnOff}
+								/>
+							))}
+						</section>
+
+						{providerPanel !== undefined && (
+							<section className="space-y-4">{providerPanel}</section>
+						)}
+					</div>
+				)}
 			</div>
 		</PageLayout>
 	);
@@ -227,81 +280,32 @@ export function AgentBindingsPage({
 interface AgentPurposeCardProps {
 	meta: PurposeMeta;
 	workspaceSlug: string;
-	binding?: AgentBinding;
+	/** This purpose's bindings only. */
+	bindings: AgentBinding[];
 	availableModels: AvailableLlmModel[];
+	aiChoiceRequired: boolean;
 	featureEnabled: boolean;
-	pending: boolean;
-	onSave: (purpose: Purpose, body: AgentBindingRequest) => void;
-	onTurnOff: (purpose: Purpose) => void;
+	pendingTargets: ReadonlySet<string>;
+	saveRevisions?: Partial<Record<string, number>>;
+	saveErrors?: Partial<Record<string, string>>;
+	onSave: (target: BindingTarget, body: AgentBindingRequest) => void;
+	onTurnOff: (target: BindingTarget) => void;
 }
 
 function AgentPurposeCard({
 	meta,
 	workspaceSlug,
-	binding,
+	bindings,
 	availableModels,
+	aiChoiceRequired,
 	featureEnabled,
-	pending,
+	pendingTargets,
+	saveRevisions,
+	saveErrors,
 	onSave,
 	onTurnOff,
 }: AgentPurposeCardProps) {
 	const cardLabelId = useId();
-	const formRef = useRef<HTMLFormElement>(null);
-	const [selection, setSelection] = useState<ModelSelection | null>(bindingToSelection(binding));
-	const [enabled, setEnabled] = useState(binding?.enabled ?? true);
-	const [timeoutSeconds, setTimeoutSeconds] = useState(
-		String(binding?.timeoutSeconds ?? MAX_TIMEOUT_SECONDS),
-	);
-	const [maxConcurrentJobs, setMaxConcurrentJobs] = useState(
-		String(binding?.maxConcurrentJobs ?? 3),
-	);
-	const [allowInternet, setAllowInternet] = useState(binding?.allowInternet ?? false);
-	const [showAdvanced, setShowAdvanced] = useState(false);
-	// A practice review always runs on an internal network; the server rejects the flag for it.
-	const internetConfigurable = meta.purpose === "MENTOR";
-	const [submitAttempt, setSubmitAttempt] = useState(0);
-
-	const noModels = availableModels.length === 0;
-	const showErrors = submitAttempt > 0;
-
-	const timeout = parseWholeNumber(timeoutSeconds, MIN_TIMEOUT_SECONDS, "seconds", TIMEOUT_CEILING);
-	const concurrency = parseWholeNumber(maxConcurrentJobs, MIN_CONCURRENT_JOBS, "runs");
-	const modelError = showErrors && !selection ? "Choose the model this runs on." : null;
-	const timeoutError = showErrors ? timeout.error : null;
-	const concurrencyError = showErrors ? concurrency.error : null;
-
-	const modelHintId = `${meta.purpose}-model-hint`;
-	const modelErrorId = `${meta.purpose}-model-error`;
-	const timeoutErrorId = `${meta.purpose}-timeout-error`;
-	const concurrencyErrorId = `${meta.purpose}-concurrency-error`;
-	const modelDescribedBy =
-		[noModels ? modelHintId : null, modelError ? modelErrorId : null].filter(Boolean).join(" ") ||
-		undefined;
-
-	useEffect(() => {
-		if (submitAttempt > 0) {
-			formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
-		}
-	}, [submitAttempt]);
-
-	const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
-		event.preventDefault();
-		if (!selection || timeout.value == null || concurrency.value == null) {
-			setSubmitAttempt((attempt) => attempt + 1);
-			if (timeout.value == null || concurrency.value == null) {
-				setShowAdvanced(true);
-			}
-			return;
-		}
-		onSave(meta.purpose, {
-			instanceModelId: selection.scope === "SHARED" ? selection.id : undefined,
-			workspaceModelId: selection.scope === "WORKSPACE" ? selection.id : undefined,
-			timeoutSeconds: timeout.value,
-			maxConcurrentJobs: concurrency.value,
-			allowInternet: internetConfigurable && allowInternet,
-			enabled,
-		});
-	};
 
 	return (
 		<Card role="region" aria-labelledby={cardLabelId}>
@@ -336,94 +340,327 @@ function AgentPurposeCard({
 								))}
 						</CardDescription>
 					</div>
-					<div className="flex flex-wrap justify-end gap-2">
-						{binding &&
-							(binding.ready ? (
-								<Badge variant="secondary">Ready</Badge>
-							) : (
-								<Badge variant="destructive">Not ready</Badge>
-							))}
-						{!featureEnabled && <Badge variant="secondary">{meta.disabledLabel}</Badge>}
-					</div>
+					{!featureEnabled && (
+						<div className="flex flex-wrap justify-end gap-2">
+							<Badge variant="secondary">{meta.disabledLabel}</Badge>
+						</div>
+					)}
 				</div>
 			</CardHeader>
-			<form ref={formRef} onSubmit={handleSubmit} noValidate>
-				<CardContent className="space-y-4">
-					<FieldGroup>
-						<Field data-invalid={Boolean(modelError)}>
-							<FieldLabel id={`${meta.purpose}-model-label`} htmlFor={`${meta.purpose}-model`}>
-								{PURPOSE_TITLES[meta.purpose]} model
-							</FieldLabel>
-							<ModelPicker
-								id={`${meta.purpose}-model`}
-								aria-labelledby={`${meta.purpose}-model-label`}
-								availableModels={availableModels}
-								value={selection}
-								onChange={setSelection}
-								disabled={pending || noModels}
-								invalid={Boolean(modelError)}
-								aria-describedby={modelDescribedBy}
-							/>
-							{noModels && (
-								<FieldDescription id={modelHintId}>
-									No models are available yet. Ask your host to share one, or connect your own AI
-									provider below.
-								</FieldDescription>
-							)}
-							{modelError && <FieldError id={modelErrorId}>{modelError}</FieldError>}
-						</Field>
-
-						<Field orientation="horizontal">
-							<FieldLabel htmlFor={`${meta.purpose}-enabled`}>Use this model</FieldLabel>
-							<Switch
-								id={`${meta.purpose}-enabled`}
-								checked={selection != null && enabled}
-								onCheckedChange={setEnabled}
-								disabled={pending || selection == null}
-							/>
-						</Field>
-					</FieldGroup>
-
-					<Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
-						<CollapsibleTrigger
-							render={
-								<Button type="button" variant="ghost" size="sm" className="group/adv -ml-2">
-									Advanced
-									<ChevronDown
-										className="transition-transform group-aria-expanded/adv:rotate-180"
-										aria-hidden
-									/>
-								</Button>
-							}
+			<CardContent className="space-y-6">
+				<BindingPreview
+					bindings={bindings}
+					availableModels={availableModels}
+					aiChoiceRequired={aiChoiceRequired}
+					featureOffLabel={featureEnabled ? undefined : meta.disabledLabel}
+				/>
+				{DATA_HANDLING_TIERS.map((tier) => {
+					const target: BindingTarget = { purpose: meta.purpose, tier };
+					const key = bindingTargetKey(target);
+					return (
+						<BindingRow
+							key={`${key}:${saveRevisions?.[key] ?? 0}`}
+							target={target}
+							binding={bindings.find((binding) => binding.dataHandlingTier === tier)}
+							availableModels={availableModels}
+							aiChoiceRequired={aiChoiceRequired}
+							pending={pendingTargets.has(key)}
+							saveError={saveErrors?.[key]}
+							onSave={onSave}
+							onTurnOff={onTurnOff}
 						/>
-						<CollapsibleContent>
-							<FieldSet className="pt-4">
-								<FieldLegend variant="label">Run limits</FieldLegend>
-								<FieldGroup>
-									<Field data-invalid={Boolean(timeoutError)}>
-										<FieldLabel htmlFor={`${meta.purpose}-timeout`}>Timeout (seconds)</FieldLabel>
-										<Input
-											id={`${meta.purpose}-timeout`}
-											type="number"
-											inputMode="numeric"
-											min={MIN_TIMEOUT_SECONDS}
-											max={MAX_TIMEOUT_SECONDS}
-											value={timeoutSeconds}
-											aria-invalid={Boolean(timeoutError)}
-											aria-describedby={hasText(timeoutError) ? timeoutErrorId : undefined}
-											onChange={(e) => setTimeoutSeconds(e.target.value)}
-											disabled={pending}
-										/>
-										{hasText(timeoutError) && (
-											<FieldError id={timeoutErrorId}>{timeoutError}</FieldError>
-										)}
-									</Field>
+					);
+				})}
+			</CardContent>
+		</Card>
+	);
+}
+
+interface BindingPreviewProps {
+	bindings: AgentBinding[];
+	availableModels: AvailableLlmModel[];
+	aiChoiceRequired: boolean;
+	/** Set while the purpose is switched off: no row serves anyone, whatever it binds. */
+	featureOffLabel?: string;
+}
+
+/**
+ * Who gets which model, judged the way the server does: the ceiling rule over this purpose's rows,
+ * behind the purpose's own switch. The developer's card shows the same answer.
+ */
+function BindingPreview({
+	bindings,
+	availableModels,
+	aiChoiceRequired,
+	featureOffLabel,
+}: BindingPreviewProps) {
+	const served = (choice: MemberAiChoice | null): ReactNode => {
+		if (featureOffLabel !== undefined) {
+			return `Nothing runs for them (${featureOffLabel})`;
+		}
+		const binding = bindingFor(choice, bindings);
+		if (!binding) {
+			return "Nothing runs for them";
+		}
+		const model = modelOf(binding, availableModels);
+		return (
+			<span className="inline-flex flex-wrap items-center gap-x-1.5">
+				<AiMark brand={model?.brand} size="sm" />
+				<span className="font-medium text-foreground">
+					{model?.displayName ?? "A model no longer offered here"}
+				</span>{" "}
+				({DATA_HANDLING_DEFS[binding.dataHandlingTier].label})
+			</span>
+		);
+	};
+	const facts: Fact[] = PREVIEWED_CHOICES.map((choice) => ({
+		icon: MEMBER_AI_CHOICE_DEFS[choice].icon,
+		term: MEMBER_AI_CHOICE_DEFS[choice].label,
+		detail: served(choice),
+	}));
+	if (!aiChoiceRequired) {
+		facts.push({ icon: CircleHelpIcon, term: UNCHOSEN_ROW_TITLE, detail: served(null) });
+	}
+	return (
+		<div className="space-y-2">
+			<h3 className="text-sm font-medium">Who gets which model</h3>
+			<p className="text-sm text-muted-foreground">By the answer a member gave.</p>
+			<FactList facts={facts} />
+		</div>
+	);
+}
+
+interface BindingRowProps {
+	target: BindingTarget;
+	binding?: AgentBinding;
+	availableModels: AvailableLlmModel[];
+	aiChoiceRequired: boolean;
+	pending: boolean;
+	saveError?: string;
+	onSave: (target: BindingTarget, body: AgentBindingRequest) => void;
+	onTurnOff: (target: BindingTarget) => void;
+}
+
+function BindingRow({
+	target,
+	binding,
+	availableModels,
+	aiChoiceRequired,
+	pending,
+	saveError,
+	onSave,
+	onTurnOff,
+}: BindingRowProps) {
+	const { purpose, tier } = target;
+	const rowId = useId();
+	const headingId = `${rowId}-heading`;
+	const formRef = useRef<HTMLFormElement>(null);
+
+	const undeclared = tier === "UNDECLARED";
+	const { label: tierLabel, icon: TierIcon } = DATA_HANDLING_DEFS[tier];
+	const rowTitle = undeclared ? UNCHOSEN_ROW_TITLE : tierLabel;
+	// The undeclared row takes any model; a declared row holds only models of its own tier.
+	const pickerTier = undeclared ? undefined : tier;
+	const noModels = !availableModels.some(
+		(model) => pickerTier === undefined || model.dataHandlingTier === pickerTier,
+	);
+	const boundModel = modelOf(binding, availableModels);
+	// A bound model whose facts were re-declared has dropped out of this row: the picker still names
+	// it on the trigger, and the row says why it stopped serving.
+	const boundModelMoved =
+		boundModel !== undefined && pickerTier !== undefined && boundModel.dataHandlingTier !== tier;
+
+	const [selection, setSelection] = useState<ModelSelection | null>(bindingToSelection(binding));
+	const [enabled, setEnabled] = useState(binding?.enabled ?? true);
+	const [timeoutSeconds, setTimeoutSeconds] = useState(() =>
+		String(binding?.timeoutSeconds ?? MAX_TIMEOUT_SECONDS),
+	);
+	const [maxConcurrentJobs, setMaxConcurrentJobs] = useState(() =>
+		String(binding?.maxConcurrentJobs ?? 3),
+	);
+	const [allowInternet, setAllowInternet] = useState(binding?.allowInternet ?? false);
+	const [showAdvanced, setShowAdvanced] = useState(false);
+	// A practice review always runs on an internal network; the server rejects the flag for it.
+	const internetConfigurable = purpose === "MENTOR";
+	const [submitAttempt, setSubmitAttempt] = useState(0);
+
+	const showErrors = submitAttempt > 0;
+
+	const timeout = parseWholeNumber(timeoutSeconds, MIN_TIMEOUT_SECONDS, "seconds", TIMEOUT_CEILING);
+	const concurrency = parseWholeNumber(maxConcurrentJobs, MIN_CONCURRENT_JOBS, "runs");
+	const modelError = showErrors && !selection ? "Choose the model this runs on." : null;
+	const timeoutError = showErrors ? timeout.error : null;
+	const concurrencyError = showErrors ? concurrency.error : null;
+
+	const modelId = `${rowId}-model`;
+	const modelLabelId = `${rowId}-model-label`;
+	const modelHintId = `${rowId}-model-hint`;
+	const modelErrorId = `${rowId}-model-error`;
+	const saveErrorId = `${rowId}-save-error`;
+	const timeoutErrorId = `${rowId}-timeout-error`;
+	const concurrencyErrorId = `${rowId}-concurrency-error`;
+	const modelDescribedBy =
+		[
+			noModels || boundModelMoved ? modelHintId : null,
+			modelError ? modelErrorId : null,
+			hasText(saveError) ? saveErrorId : null,
+		]
+			.filter(Boolean)
+			.join(" ") || undefined;
+
+	useEffect(() => {
+		if (submitAttempt > 0) {
+			formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+		}
+	}, [submitAttempt]);
+
+	const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		if (!selection || timeout.value == null || concurrency.value == null) {
+			setSubmitAttempt((attempt) => attempt + 1);
+			if (timeout.value == null || concurrency.value == null) {
+				setShowAdvanced(true);
+			}
+			return;
+		}
+		onSave(target, {
+			instanceModelId: selection.scope === "SHARED" ? selection.id : undefined,
+			workspaceModelId: selection.scope === "WORKSPACE" ? selection.id : undefined,
+			timeoutSeconds: timeout.value,
+			maxConcurrentJobs: concurrency.value,
+			allowInternet: internetConfigurable && allowInternet,
+			enabled,
+		});
+	};
+
+	// Every row repeats the same controls, so each control names its row for a screen reader.
+	const forRow = <span className="sr-only"> for {rowTitle}</span>;
+
+	return (
+		<div role="group" aria-labelledby={headingId} className="space-y-4 rounded-lg border p-4">
+			<div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+				<div className="min-w-0 flex-1 space-y-1">
+					{/* A declared row wears its tier's icon and words, the same ones a developer's card shows. */}
+					<div className="flex flex-wrap items-center gap-2">
+						<h3 id={headingId} className="flex items-center gap-2 text-sm font-medium">
+							<TierIcon className="size-4 shrink-0 text-mentor" aria-hidden="true" />
+							{rowTitle}
+						</h3>
+						{undeclared && <DataHandlingBadge tier={tier} />}
+					</div>
+					<p className="text-sm text-muted-foreground">
+						{bindingAudience(undeclared, aiChoiceRequired, tierLabel)}
+					</p>
+				</div>
+				{binding && (
+					<div className="flex flex-wrap justify-end gap-2">
+						<StatusBadge def={BINDING_READINESS_DEFS[bindingReadiness(binding)]} />
+					</div>
+				)}
+			</div>
+			<form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4">
+				<FieldGroup>
+					<Field data-invalid={Boolean(modelError ?? saveError)}>
+						<FieldLabel id={modelLabelId} htmlFor={modelId}>
+							Model{forRow}
+						</FieldLabel>
+						<ModelPicker
+							id={modelId}
+							aria-labelledby={modelLabelId}
+							availableModels={availableModels}
+							tier={pickerTier}
+							value={selection}
+							onChange={setSelection}
+							disabled={pending || noModels}
+							invalid={Boolean(modelError ?? saveError)}
+							aria-describedby={modelDescribedBy}
+						/>
+						{boundModelMoved ? (
+							<FieldDescription id={modelHintId}>
+								{boundModel.displayName} is now declared as{" "}
+								<span className="font-medium">
+									{DATA_HANDLING_DEFS[boundModel.dataHandlingTier].label}
+								</span>{" "}
+								and no longer serves this row.{" "}
+								{noModels ? (
+									<>
+										Clear the assignment, or ask your host for a model declared as{" "}
+										<span className="font-medium">{tierLabel}</span>.
+									</>
+								) : (
+									"Choose another model, or clear the assignment."
+								)}
+							</FieldDescription>
+						) : (
+							noModels && (
+								<FieldDescription id={modelHintId}>
+									{undeclared ? (
+										"No models are available yet. Ask your host to share one, or connect your own AI provider below."
+									) : (
+										<>
+											No model declared as <span className="font-medium">{tierLabel}</span> is
+											available here yet. Ask your host, or add one under your own providers.
+										</>
+									)}
+								</FieldDescription>
+							)
+						)}
+						{modelError && <FieldError id={modelErrorId}>{modelError}</FieldError>}
+						{hasText(saveError) && <FieldError id={saveErrorId}>{saveError}</FieldError>}
+					</Field>
+
+					<Field orientation="horizontal">
+						<FieldLabel htmlFor={`${rowId}-enabled`}>Use this model{forRow}</FieldLabel>
+						<Switch
+							id={`${rowId}-enabled`}
+							checked={selection != null && enabled}
+							onCheckedChange={setEnabled}
+							disabled={pending || selection == null}
+						/>
+					</Field>
+				</FieldGroup>
+
+				<Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
+					<CollapsibleTrigger
+						render={
+							<Button type="button" variant="ghost" size="sm" className="group/adv -ml-2">
+								Advanced{forRow}
+								<ChevronDown
+									className="transition-transform group-aria-expanded/adv:rotate-180"
+									aria-hidden
+								/>
+							</Button>
+						}
+					/>
+					<CollapsibleContent>
+						<FieldSet className="pt-4">
+							<FieldLegend variant="label">Run limits</FieldLegend>
+							<FieldGroup>
+								<Field data-invalid={Boolean(timeoutError)}>
+									<FieldLabel htmlFor={`${rowId}-timeout`}>Timeout (seconds){forRow}</FieldLabel>
+									<Input
+										id={`${rowId}-timeout`}
+										type="number"
+										inputMode="numeric"
+										min={MIN_TIMEOUT_SECONDS}
+										max={MAX_TIMEOUT_SECONDS}
+										value={timeoutSeconds}
+										aria-invalid={Boolean(timeoutError)}
+										aria-describedby={hasText(timeoutError) ? timeoutErrorId : undefined}
+										onChange={(e) => setTimeoutSeconds(e.target.value)}
+										disabled={pending}
+									/>
+									{hasText(timeoutError) && (
+										<FieldError id={timeoutErrorId}>{timeoutError}</FieldError>
+									)}
+								</Field>
+								{purpose === "PRACTICE_REVIEW" && (
 									<Field data-invalid={Boolean(concurrencyError)}>
-										<FieldLabel htmlFor={`${meta.purpose}-concurrency`}>
-											Max concurrent runs
+										<FieldLabel htmlFor={`${rowId}-concurrency`}>
+											Max concurrent runs{forRow}
 										</FieldLabel>
 										<Input
-											id={`${meta.purpose}-concurrency`}
+											id={`${rowId}-concurrency`}
 											type="number"
 											inputMode="numeric"
 											min={MIN_CONCURRENT_JOBS}
@@ -437,40 +674,50 @@ function AgentPurposeCard({
 											<FieldError id={concurrencyErrorId}>{concurrencyError}</FieldError>
 										)}
 									</Field>
-									{internetConfigurable && (
-										<Field orientation="horizontal">
-											<FieldLabel htmlFor={`${meta.purpose}-internet`}>Internet access</FieldLabel>
-											<Switch
-												id={`${meta.purpose}-internet`}
-												checked={allowInternet}
-												onCheckedChange={setAllowInternet}
-												disabled={pending}
-											/>
-										</Field>
-									)}
-								</FieldGroup>
-							</FieldSet>
-						</CollapsibleContent>
-					</Collapsible>
+								)}
+								{internetConfigurable && (
+									<Field orientation="horizontal">
+										<FieldLabel htmlFor={`${rowId}-internet`}>Internet access{forRow}</FieldLabel>
+										<Switch
+											id={`${rowId}-internet`}
+											checked={allowInternet}
+											onCheckedChange={setAllowInternet}
+											disabled={pending}
+										/>
+									</Field>
+								)}
+							</FieldGroup>
+						</FieldSet>
+					</CollapsibleContent>
+				</Collapsible>
 
-					<div className="flex justify-end gap-2">
-						{binding && (
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={() => onTurnOff(meta.purpose)}
-								disabled={pending}
-							>
-								Clear assignment
-							</Button>
-						)}
-						<Button type="submit" size="sm" disabled={pending}>
-							Save assignment
+				<div className="flex flex-wrap justify-end gap-2">
+					{binding && (
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => onTurnOff(target)}
+							disabled={pending}
+						>
+							Clear assignment{forRow}
 						</Button>
-					</div>
-				</CardContent>
+					)}
+					<Button type="submit" size="sm" disabled={pending}>
+						Save assignment{forRow}
+					</Button>
+				</div>
 			</form>
-		</Card>
+		</div>
 	);
+}
+
+function bindingAudience(undeclared: boolean, required: boolean, tierLabel: string): string {
+	if (!undeclared) {
+		return `For members whose answer allows ${tierLabel}.`;
+	}
+	if (required) {
+		return "Serves only members who have not chosen yet, where the choice is optional. Every member here must choose, so it serves no one now.";
+	}
+	return "Serves only members who have not chosen yet, where the choice is optional. Never serves a member who chose.";
 }

@@ -51,14 +51,6 @@ public class SlackMentorService {
         this.mentorReadinessQuery = mentorReadinessQuery;
     }
 
-    private record Developer(String login) {}
-
-    private Optional<Developer> resolveDeveloper(long workspaceId, String teamId, String slackUserId) {
-        return identityResolver
-                .resolveDeveloperLogin(workspaceId, teamId, slackUserId)
-                .map(Developer::new);
-    }
-
     public void handleDm(
             String teamId, String channelId, String slackUserId, String text, String messageTs, String threadTs) {
         if (text == null || text.isBlank()) {
@@ -83,20 +75,20 @@ public class SlackMentorService {
             log.info("Slack DM diverted by input guard: workspace={} action={}", workspaceId, verdict.action());
             return;
         }
-        Optional<Developer> devOpt = resolveDeveloper(workspaceId, teamId, slackUserId);
+        Optional<Long> devOpt = identityResolver.resolveActiveMemberId(workspaceId, teamId, slackUserId);
         if (devOpt.isEmpty()) {
             slackMessageService.sendForWorkspace(
                     workspaceId,
                     channelId,
                     threadTs,
                     onboardingService.linkCtaBlocks(),
-                    "Connect your Slack account to Hephaestus so the mentor can find your work.");
+                    "Check your Hephaestus account status, Slack link, and workspace membership to use the mentor.");
             return;
         }
-        Developer dev = devOpt.get();
+        long developerId = devOpt.get();
         // Link the thread transactionally before starting remote Slack I/O.
         UUID threadId =
-                threadLinker.findOrCreateThread(workspaceId, teamId, channelId, threadTs, slackUserId, dev.login());
+                threadLinker.findOrCreateThread(workspaceId, teamId, channelId, threadTs, slackUserId, developerId);
         slackMessageService.setStatus(workspaceId, channelId, threadTs, "Reviewing recent feedback...");
         SlackStreamingMentorChannel channel =
                 new SlackStreamingMentorChannel(slackMessageService, workspaceId, channelId, threadTs);
@@ -104,8 +96,8 @@ public class SlackMentorService {
                 MentorTurnRequest.slackDm(
                         workspaceId, threadId, text, deterministicSlackMessageId(teamId, channelId, messageTs)),
                 channel,
-                dev.login());
-        log.info("Accepted Slack mentor turn: workspace={} thread={} developer={}", workspaceId, threadId, dev.login());
+                developerId);
+        log.info("Accepted Slack mentor turn: workspace={} thread={} developer={}", workspaceId, threadId, developerId);
     }
 
     private static UUID deterministicSlackMessageId(String teamId, String channelId, String messageTs) {

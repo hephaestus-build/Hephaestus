@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import org.jspecify.annotations.NonNull;
@@ -19,6 +20,9 @@ public record LlmConnectionDTO(
 
         @NonNull @Schema(description = "Human-readable name")
         String displayName,
+
+        @Nullable @Schema(description = "Admin-declared connection platform")
+        LlmConnectionPlatform connectionPlatform,
 
         @NonNull @Schema(description = "Provider base URL") String baseUrl,
 
@@ -48,6 +52,7 @@ public record LlmConnectionDTO(
                 connection.getId(),
                 connection.getSlug(),
                 connection.getDisplayName(),
+                connection.getConnectionPlatform(),
                 connection.getBaseUrl(),
                 connection.getApiProtocol(),
                 connection.getAuthMode(),

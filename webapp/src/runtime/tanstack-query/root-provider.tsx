@@ -1,6 +1,7 @@
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { captureException } from "@/runtime/sentry";
+import { getUserViewSession } from "@/runtime/user-view/session";
 
 import { QUERY_STALE_TIME_MS } from "./query-defaults";
 
@@ -20,6 +21,8 @@ const queryClient = new QueryClient({
 			 * `true`) must stay armed as the catch-up-after-absence healer.
 			 */
 			staleTime: QUERY_STALE_TIME_MS,
+			// A view starts and ends with a page load, and every retried view read is checked and audited again.
+			...(getUserViewSession() === undefined ? {} : { retry: false }),
 		},
 	},
 });

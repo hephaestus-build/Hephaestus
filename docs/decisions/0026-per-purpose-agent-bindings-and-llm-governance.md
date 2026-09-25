@@ -1,6 +1,6 @@
 # ADR 0026: Per-purpose agent bindings and governed OpenAI-compatible LLM catalog
 
-**Status:** Accepted (amended 2026-07-26 — named-agent-config model deleted)
+**Status:** Accepted, amended 2026-07-26 (named-agent-config model deleted) and 2026-09-22 (member AI choice is per account, and the tiers collapse to in-house and cloud from one declared fact)
 **Date:** 2026-07-24
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0006](0006-llm-proxy-on-coordinator-trust-model.md) (in-app LLM proxy as the sole credential path), [ADR 0025](0025-agent-job-queue-on-postgresql.md) (PostgreSQL agent job queue)
@@ -10,6 +10,36 @@
 > write-through `sync` are deleted; `WorkspaceAgentBinding` is the sole `ModelBindingSource` and the
 > practice-review settings page reads bindings directly. Text below that describes the mirror as
 > present is retained as the record of the decision, not as a description of the current code.
+>
+> **Amendment (2026-09-22):** a developer's AI choice — the data-handling ceiling over the tiers
+> the bindings are assigned by, or No AI — is stored once per account (`account_ai_choice`,
+> registered GLOBAL in the tenancy layer) and holds in every workspace the account is a member of
+> on the instance; `workspace_member_onboarding` keeps only the settings revision at which the
+> member finished or skipped a workspace's setup page. The tiers follow from who operates a
+> model, which does not vary by workspace, and comparable products keep
+> the person's data-use choice with the signed-in identity while organisations only tighten. The
+> workspace still owns what runs: one binding per purpose and tier, and the routing rule below is
+> unchanged — loosest ready binding within the ceiling, never looser. A person is asked on their
+> first visit to a workspace that turned member setup on, only if they have not answered; adding,
+> removing or re-declaring models never asks again, because the ceiling is enforced on every
+> request and a binding whose model loosened stops serving until reassigned. A change to what the
+> tiers *mean* ships with a migration that clears choices; a looser tier added later never touches
+> an existing ceiling. A developer no account resolves to counts as not having answered, and only a
+> workspace's "choice required" setting keeps AI off their work. A narrow-only per-workspace
+> override (effective ceiling = the stricter of workspace and account) would fit later without
+> changing this model; none was built, since no comparable product has one.
+>
+> **Amendment (2026-09-22, same day):** the tiers collapse to two, `IN_HOUSE` and `CLOUD`, with
+> `UNDECLARED` outside every ceiling, and an admin declares one fact per model, **Operated by**,
+> instead of two. The split between a provider that keeps nothing and one that keeps work for
+> safety checks is gone, together with the `kept_after_reply` columns. The maintainer's reasoning:
+> developers do not need the provider split. It asked them to weigh a retention detail they cannot
+> verify and that changes with the provider's terms, and it made the answers read as a ladder of
+> risk rather than a boundary. One cloud answer with honest caveats on its card (the work leaves the
+> organisation, a provider may keep or review it under its agreement) is clearer, and the retention detail lives in the admin-only note where the agreement
+> already is. A developer's choice is now `NO_AI`, `IN_HOUSE_ONLY` or `CLOUD`, still a ceiling, so
+> Cloud also admits in-house models. Both amendments land in the same unreleased changelog, so no
+> saved choice predates the two-tier meaning.
 
 ## Context
 
@@ -142,8 +172,8 @@ gate never kills a call already streaming; it acts only pre-forward.
 
 - **Concurrency.** Each execution is bounded on its own, so N running concurrently for one workspace
   can together reach N times the cap before any of them stops. For jobs N is the workspace's
-  `maxConcurrentJobs` — an operator-set number, not an open end; for mentor turns it is the number of
-  developers chatting at once.
+  sum of the per-location `maxConcurrentJobs` limits — operator-set numbers, not an open end; for mentor
+  turns it is the number of developers chatting at once.
 - **Calls the provider reports no usage for.** A streamed call whose provider rejects
   `stream_options.include_usage` (retried without it, counted as
   `llm.proxy.stream.usage.unsupported`), or any response with no usage block, contributes nothing to

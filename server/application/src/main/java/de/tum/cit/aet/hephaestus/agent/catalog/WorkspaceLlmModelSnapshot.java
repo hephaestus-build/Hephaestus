@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import java.math.BigDecimal;
 import org.jspecify.annotations.Nullable;
 
@@ -12,9 +13,12 @@ record WorkspaceLlmModelSnapshot(
         String slug,
         String displayName,
         String upstreamModelId,
+        @Nullable AiModelBrand brand,
         @Nullable Integer contextWindow,
         @Nullable Integer maxOutputTokens,
         @Nullable ReasoningEffort reasoningEffort,
+        @Nullable LlmDataOperator operatedBy,
+        @Nullable String dataHandlingNote,
         PricingMode pricingMode,
         @Nullable BigDecimal per1mInputUsd,
         @Nullable BigDecimal per1mOutputUsd,
@@ -29,9 +33,12 @@ record WorkspaceLlmModelSnapshot(
                 m.getSlug(),
                 m.getDisplayName(),
                 m.getUpstreamModelId(),
+                m.getBrand(),
                 m.getContextWindow(),
                 m.getMaxOutputTokens(),
                 m.getReasoningEffort(),
+                m.getDataHandling().getOperatedBy(),
+                m.getDataHandling().getNote(),
                 m.getPricingMode(),
                 m.getPer1mInputUsd(),
                 m.getPer1mOutputUsd(),

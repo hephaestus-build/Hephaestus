@@ -7,6 +7,7 @@ import { mockReviewSettings } from "./fixtures";
 import { PracticeReviewSettings } from "./PracticeReviewSettings";
 
 const readyBinding: AgentBinding = {
+	dataHandlingTier: "IN_HOUSE",
 	purpose: "PRACTICE_REVIEW",
 	enabled: true,
 	ready: true,

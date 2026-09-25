@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
@@ -44,7 +45,9 @@ public record ConfigSnapshot(
         @Nullable Long workspaceId,
         int timeoutSeconds,
         boolean allowInternet,
-        @Nullable LlmPriceSnapshot priceSnapshot) {
+        @Nullable LlmPriceSnapshot priceSnapshot,
+        // The slot the job was routed to; null in older rows reads as UNDECLARED.
+        @Nullable DataHandlingTier dataHandlingTier) {
     /**
      * Bump only for a reshape (field removal, type change, semantic reinterpretation). Adding a
      * nullable field is compatible both ways and needs no bump.
@@ -92,7 +95,8 @@ public record ConfigSnapshot(
                 ref.workspaceId(),
                 source.getTimeoutSeconds(),
                 source.isAllowInternet(),
-                null);
+                null,
+                source.getDataHandlingTier());
     }
 
     public ConfigSnapshot withPriceSnapshot(@Nullable LlmPriceSnapshot price) {
@@ -111,7 +115,8 @@ public record ConfigSnapshot(
                 workspaceId,
                 timeoutSeconds,
                 allowInternet,
-                price);
+                price,
+                dataHandlingTier);
     }
 
     public JsonNode toJson(ObjectMapper objectMapper) {
@@ -157,7 +162,8 @@ public record ConfigSnapshot(
                 workspaceId,
                 timeoutSeconds,
                 allowInternet,
-                priceSnapshot);
+                priceSnapshot,
+                dataHandlingTier);
     }
 
     /**
@@ -203,6 +209,7 @@ public record ConfigSnapshot(
                 null,
                 timeoutSeconds,
                 allowInternet,
-                null);
+                null,
+                DataHandlingTier.UNDECLARED);
     }
 }

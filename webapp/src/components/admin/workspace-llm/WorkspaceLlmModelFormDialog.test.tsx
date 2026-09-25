@@ -46,6 +46,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 				onUpdate={vi.fn()}
 			/>,
 		);
+		fireEvent.click(screen.getByRole("button", { name: "Limits and capabilities" }));
 		expect(screen.getByRole("combobox", { name: "Reasoning effort" }).textContent).toContain(
 			"Provider default",
 		);
@@ -60,6 +61,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 	it("keeps a model's effort on save and clears it when set back to the provider default", async () => {
 		const onUpdate = vi.fn<WorkspaceLlmModelFormDialogProps["onUpdate"]>();
 		const editing: WorkspaceLlmModel = {
+			dataHandlingTier: "UNDECLARED",
 			id: 3,
 			slug: "gpt-5-high",
 			displayName: "GPT-5 high",
@@ -82,6 +84,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 				onUpdate={onUpdate}
 			/>,
 		);
+		fireEvent.click(screen.getByRole("button", { name: "Limits and capabilities" }));
 		const select = screen.getByRole("combobox", { name: "Reasoning effort" });
 		expect(select.textContent).toContain("High");
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
@@ -97,6 +100,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 	it("keeps the upstream model identity immutable", () => {
 		const onUpdate = vi.fn<WorkspaceLlmModelFormDialogProps["onUpdate"]>();
 		const editing: WorkspaceLlmModel = {
+			dataHandlingTier: "UNDECLARED",
 			id: 1,
 			slug: "gpt-5",
 			displayName: "GPT-5",
@@ -127,6 +131,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 	it("turns an active model off when its price becomes unknown", () => {
 		const onUpdate = vi.fn<WorkspaceLlmModelFormDialogProps["onUpdate"]>();
 		const editing: WorkspaceLlmModel = {
+			dataHandlingTier: "UNDECLARED",
 			id: 2,
 			slug: "gpt-5-active",
 			displayName: "GPT-5 active",
@@ -159,5 +164,68 @@ describe("WorkspaceLlmModelFormDialog", () => {
 		screen.getByText("Work on this model stops immediately");
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onUpdate.mock.calls[0]?.[1]).toStrictEqual(expect.objectContaining({ enabled: false }));
+	});
+
+	it("opens a declared model with its operator selected and can clear its brand", async () => {
+		const onUpdate = vi.fn();
+		const editing: WorkspaceLlmModel = {
+			dataHandlingTier: "CLOUD",
+			operatedBy: "PROVIDER",
+			brand: "QWEN",
+			dataHandlingNote: "EU region",
+			id: 3,
+			slug: "gpt-5",
+			displayName: "GPT-5",
+			upstreamModelId: "gpt-5",
+			connectionId: 1,
+			connectionDisplayName: "OpenAI",
+			enabled: false,
+			pricingMode: "UNPRICED",
+			currency: "USD",
+			createdAt: new Date("2026-07-01T00:00:00Z"),
+		};
+		render(
+			<WorkspaceLlmModelFormDialog
+				open
+				onOpenChange={vi.fn()}
+				editing={editing}
+				isSubmitting={false}
+				onCreate={vi.fn()}
+				onUpdate={onUpdate}
+			/>,
+		);
+
+		expect(screen.getByRole("radio", { name: "A provider" }).getAttribute("aria-checked")).toBe(
+			"true",
+		);
+		expect(screen.getByRole("combobox", { name: "Model maker (optional)" }).textContent).toContain(
+			"Qwen",
+		);
+		screen.getByText("Cloud");
+		expect(screen.queryByText(/stop serving/u)).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		expect(onUpdate.mock.calls[0]?.[1]).toStrictEqual(
+			expect.objectContaining({
+				operatedBy: "PROVIDER",
+				brand: "QWEN",
+				clearBrand: false,
+				dataHandlingNote: "EU region",
+			}),
+		);
+		await userEvent.click(screen.getByRole("combobox", { name: "Model maker (optional)" }));
+		await userEvent.click(await screen.findByRole("option", { name: "Not listed or unknown" }));
+		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		expect(onUpdate.mock.calls[1]?.[1]).toStrictEqual(
+			expect.objectContaining({ brand: undefined, clearBrand: true }),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Leave undeclared" }));
+		screen.getByText("Rows holding this model as Cloud stop serving");
+		fireEvent.click(screen.getByRole("radio", { name: "Your organisation" }));
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		expect(onUpdate).toHaveBeenCalledTimes(3);
+		expect(onUpdate.mock.calls[2]?.[1]).toStrictEqual(
+			expect.objectContaining({ operatedBy: "OWN_ORGANISATION" }),
+		);
 	});
 });

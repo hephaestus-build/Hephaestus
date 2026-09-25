@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -15,9 +16,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 
-/**
- * Shared helpers for workspace-focused integration tests.
- */
 public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
@@ -40,6 +38,9 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
 
     @Autowired
     protected AccountRepository accountRepository;
+
+    @Autowired
+    private IdentityLinkRepository fixtureIdentities;
 
     private final AtomicLong userIdGenerator = new AtomicLong(50_000);
 
@@ -85,7 +86,11 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
         user.setType(User.Type.USER);
         user.setCreatedAt(Instant.now());
         user.setUpdatedAt(Instant.now());
-        return userRepository.save(user);
+        user = userRepository.save(user);
+        if (java.util.Set.of("admin", "mentor", "testuser").contains(login)) {
+            TestUserFactory.ensureAccountForUser(accountRepository, fixtureIdentities, user);
+        }
+        return user;
     }
 
     protected Workspace createWorkspace(
@@ -105,11 +110,13 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
 
     protected WorkspaceMembership ensureAdminMembership(Workspace workspace) {
         User adminUser = TestUserFactory.ensureUser(userRepository, "admin", 3L, ensureGitHubProvider());
+        TestUserFactory.ensureAccountForUser(accountRepository, fixtureIdentities, adminUser);
         return ensureWorkspaceMembership(workspace, adminUser, WorkspaceMembership.WorkspaceRole.ADMIN);
     }
 
     protected WorkspaceMembership ensureOwnerMembership(Workspace workspace) {
         User adminUser = TestUserFactory.ensureUser(userRepository, "admin", 3L, ensureGitHubProvider());
+        TestUserFactory.ensureAccountForUser(accountRepository, fixtureIdentities, adminUser);
         return ensureWorkspaceMembership(workspace, adminUser, WorkspaceMembership.WorkspaceRole.OWNER);
     }
 }

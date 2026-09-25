@@ -40,6 +40,13 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - Co-locate `*.stories.tsx` files. Show the states the component can actually reach, with realistic data. Run `vp run --filter webapp chromatic:ci` whenever stories change.
 - Defer analytics work to effects that run after paint.
 
+### Onboarding and choice screens
+
+- Use the shared questionnaire and native fieldset so one question has one accessible answer group. Do not pre-select a first answer; a saved answer may appear checked when the member returns. See [W3C grouping controls](https://www.w3.org/WAI/tutorials/forms/grouping/) and [GOV.UK radios](https://design-system.service.gov.uk/components/radios/).
+- Give the three AI answers equal prominence. State each consequence before the member chooses; do not make a logo stand in for a data-handling promise. A workspace may name a model it has configured, but the account-wide answer is not a model picker. See [EDPB guidance on deceptive design](https://www.edpb.europa.eu/system/files/documents/2023-02/edpb_03-2022_guidelines_on_deceptive_design_patterns_in_social_media_platform_interfaces_v2_en_0.pdf).
+- Keep account linking separate from the AI answer. A member can save either without the other, and an answer that is not set up in this workspace remains selectable with a clear consequence. Give disabled actions a visible reason, and test narrow screens and keyboard use.
+- Use the product terms in [practice-feedback language](./practice-feedback-language.md#member-onboarding-and-ai-choices). The current behavior and data boundaries belong in the [user privacy guide](/user/privacy#your-ai-choice), not in a second screen-by-screen specification here.
+
 ### Quality gates
 
 - Install dependencies with `vp install` at the repo root so optional binaries resolve.

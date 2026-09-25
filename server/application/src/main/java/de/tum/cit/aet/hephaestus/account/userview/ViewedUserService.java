@@ -2,12 +2,14 @@ package de.tum.cit.aet.hephaestus.account.userview;
 
 import de.tum.cit.aet.hephaestus.account.userview.UserViewUsersController.UserViewUserDTO;
 import de.tum.cit.aet.hephaestus.core.auth.spi.UserViewAccess;
+import de.tum.cit.aet.hephaestus.core.auth.spi.UserViewAccess.ActorIdentity;
 import de.tum.cit.aet.hephaestus.core.auth.spi.UserViewAccess.LinkedAccount;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
@@ -28,7 +30,7 @@ public class ViewedUserService {
     public Page<UserViewUserDTO> list(Long workspaceId, Pageable pageable) {
         var members = memberships.findHumanMembers(workspaceId, pageable);
         var accounts = access.linkedAccounts(
-                members.getContent().stream().map(m -> m.getUser().getId()).toList());
+                members.getContent().stream().map(ViewedUserService::identityOf).toList());
         return members.map(
                 member -> describe(member, accounts.get(member.getUser().getId())));
     }
@@ -37,9 +39,18 @@ public class ViewedUserService {
         return memberships
                 .findByWorkspace_IdAndUser_Id(workspaceId, userId)
                 .filter(WorkspaceMembership::hasHumanUser)
-                .map(member ->
-                        describe(member, access.linkedAccounts(List.of(userId)).get(userId)))
+                .map(member -> describe(
+                        member,
+                        access.linkedAccounts(List.of(identityOf(member))).get(userId)))
                 .orElseThrow(() -> new EntityNotFoundException("User", userId.toString()));
+    }
+
+    private static ActorIdentity identityOf(WorkspaceMembership membership) {
+        var user = membership.getUser();
+        return new ActorIdentity(
+                Objects.requireNonNull(user.getId()),
+                Objects.requireNonNull(user.getProvider().getId()),
+                user.getNativeId().toString());
     }
 
     private static UserViewUserDTO describe(WorkspaceMembership member, @Nullable LinkedAccount account) {

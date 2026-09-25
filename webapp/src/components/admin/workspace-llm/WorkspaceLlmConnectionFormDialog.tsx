@@ -90,6 +90,11 @@ function WorkspaceLlmConnectionFormDialogContent({
 				displayName: fields.displayName.trim(),
 				enabled,
 			};
+			if (fields.connectionPlatform) {
+				body.connectionPlatform = fields.connectionPlatform;
+			} else if (editing.connectionPlatform) {
+				body.clearConnectionPlatform = true;
+			}
 			if (fields.apiKey.trim()) {
 				body.apiKey = fields.apiKey.trim();
 			}
@@ -105,6 +110,7 @@ function WorkspaceLlmConnectionFormDialogContent({
 			baseUrl: fields.baseUrl.trim(),
 			apiProtocol: defaultProtocolFor(fields.useResponsesApi),
 			authMode: fields.authMode,
+			connectionPlatform: fields.connectionPlatform,
 			apiKey: fields.apiKey.trim() || undefined,
 			enabled: false,
 		});

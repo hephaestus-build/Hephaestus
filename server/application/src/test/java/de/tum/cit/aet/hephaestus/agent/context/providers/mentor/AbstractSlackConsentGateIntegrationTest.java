@@ -1,6 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -13,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.testconfig.AdmittedReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -36,6 +41,18 @@ abstract class AbstractSlackConsentGateIntegrationTest extends BaseIntegrationTe
 
     @Autowired
     AgentJobRepository agentJobRepository;
+
+    @Autowired
+    LlmConnectionRepository llmConnectionRepository;
+
+    @Autowired
+    LlmModelRepository llmModelRepository;
+
+    @Autowired
+    WorkspaceAgentBindingRepository workspaceAgentBindingRepository;
+
+    @Autowired
+    LlmModelResolver llmModelResolver;
 
     @Autowired
     UserRepository userRepository;
@@ -96,7 +113,13 @@ abstract class AbstractSlackConsentGateIntegrationTest extends BaseIntegrationTe
         job.setJobType(AgentJobType.CONVERSATION_REVIEW);
         job.setMetadata(OM.valueToTree(Map.of("about_user_id", recipient.getId())));
         job.setPracticeRolloutRevision(workspace.getReviewSettings().getRolloutRevision());
-        job.setConfigSnapshot(OM.valueToTree(Map.of("model", "test")));
+        job.setConfigSnapshot(AdmittedReviewJobFixtures.snapshot(
+                workspace,
+                llmConnectionRepository,
+                llmModelRepository,
+                workspaceAgentBindingRepository,
+                llmModelResolver,
+                OM));
         job.setEvidenceSnapshot(OM.readTree("{\"manifest\":{\"contractVersion\":\"1.2.0\"}}"));
         return agentJobRepository.save(job);
     }

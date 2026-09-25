@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.account.userview;
 
+import de.tum.cit.aet.hephaestus.core.UserViewRead;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -17,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -46,5 +48,12 @@ public class UserViewUsersController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(PageResponseDTO.from(users.list(workspace.id(), PageRequest.of(page, size))));
+    }
+
+    @GetMapping("/{userId}")
+    @UserViewRead
+    @Operation(summary = "Confirm access to a workspace user", operationId = "getUserViewUser")
+    public ResponseEntity<UserViewUserDTO> get(WorkspaceContext workspace, @PathVariable Long userId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(users.requireUser(workspace.id(), userId));
     }
 }

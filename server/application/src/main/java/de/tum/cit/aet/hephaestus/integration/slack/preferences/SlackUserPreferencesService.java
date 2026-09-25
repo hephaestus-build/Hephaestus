@@ -79,7 +79,7 @@ public class SlackUserPreferencesService {
             return new SlackUserPreferencesDTO(List.of());
         }
 
-        Set<Long> workspaceIds = accessibleWorkspaceIds(links, slackProviderId);
+        Set<Long> workspaceIds = accessibleWorkspaceIds(accountId);
         if (workspaceIds.isEmpty()) {
             return new SlackUserPreferencesDTO(List.of());
         }
@@ -145,16 +145,8 @@ public class SlackUserPreferencesService {
                         LinkedHashMap::new));
     }
 
-    private Set<Long> accessibleWorkspaceIds(List<AccountIdentityQuery.IdentityLinkView> links, long slackProviderId) {
-        Set<String> logins = links.stream()
-                .filter(link -> !Objects.equals(link.gitProviderId(), slackProviderId))
-                .map(AccountIdentityQuery.IdentityLinkView::usernameAtSignup)
-                .filter(SlackUserPreferencesService::hasText)
-                .collect(Collectors.toSet());
-        if (logins.isEmpty()) {
-            return Set.of();
-        }
-        return membershipQuery.membershipsForLogins(logins).stream()
+    private Set<Long> accessibleWorkspaceIds(long accountId) {
+        return membershipQuery.membershipsForAccount(accountId).stream()
                 .map(AccountWorkspaceMembershipQuery.WorkspaceMembershipView::workspaceId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());

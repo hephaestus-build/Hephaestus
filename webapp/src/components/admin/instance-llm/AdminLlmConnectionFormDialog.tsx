@@ -179,7 +179,14 @@ function AdminLlmConnectionFormDialogContent({
 		}
 
 		if (editing) {
-			const body: UpdateLlmConnectionRequest = { displayName: fields.displayName.trim() };
+			const body: UpdateLlmConnectionRequest = {
+				displayName: fields.displayName.trim(),
+			};
+			if (fields.connectionPlatform) {
+				body.connectionPlatform = fields.connectionPlatform;
+			} else if (editing.connectionPlatform) {
+				body.clearConnectionPlatform = true;
+			}
 			if (fields.apiKey.trim()) {
 				body.apiKey = fields.apiKey.trim();
 			}
@@ -195,6 +202,7 @@ function AdminLlmConnectionFormDialogContent({
 			baseUrl: fields.baseUrl.trim(),
 			apiProtocol,
 			authMode: fields.authMode,
+			connectionPlatform: fields.connectionPlatform,
 			apiKey: fields.apiKey.trim() || undefined,
 			enabled: false,
 		});

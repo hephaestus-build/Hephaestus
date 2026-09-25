@@ -124,7 +124,9 @@ A session ends at `hephaestus.auth.session-max-lifetime` (default `7d`, configur
 renewing an access token rolls within that deadline and never past it. Reads through a
 [user view](/contributor/instance-admin#read-only-user-views) are budgeted per instance
 administrator: `HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY` per
-`HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_PERIOD`, 120 per minute by default.
+`HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_PERIOD`, 120 per minute by default. Every read about the
+viewed member counts, so one page usually spends several. While the rate-limit store is
+unavailable, views are refused rather than left unbudgeted.
 
 ### Choosing session limits
 

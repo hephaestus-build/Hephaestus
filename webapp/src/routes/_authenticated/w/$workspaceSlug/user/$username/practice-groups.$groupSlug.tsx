@@ -21,8 +21,10 @@ import { contributingPractices } from "@/lib/practice-standing";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { useSearchPatch } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
 import { resolveCurrentUser } from "@/runtime/auth/guard";
 import { loadedPages } from "@/runtime/tanstack-query/spring-page";
+import { getUserViewSession } from "@/runtime/user-view/session";
 
 const ACTIVITY_PAGE_SIZE = 10;
 
@@ -37,7 +39,9 @@ export const Route = createFileRoute(
 	remountDeps: ({ params }) => params,
 	beforeLoad: async ({ context, params }) => {
 		const user = await resolveCurrentUser(context.queryClient);
-		const isOwnProfile = user?.username?.toLowerCase() === params.username.toLowerCase();
+		const isOwnProfile =
+			(getUserViewSession()?.login ?? user?.username)?.toLowerCase() ===
+			params.username.toLowerCase();
 		if (!isOwnProfile) {
 			throw redirect({
 				to: "/w/$workspaceSlug/user/$username",
@@ -77,6 +81,7 @@ function PracticeGroupRoute() {
 }
 
 function PracticeGroupDetail() {
+	const readOnly = useAuth().userView !== undefined;
 	const { workspaceSlug, username, groupSlug } = Route.useParams();
 	const { practice: selectedPracticeSlug } = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
@@ -176,20 +181,24 @@ function PracticeGroupDetail() {
 			}}
 			feed={reviewRunFeed}
 			skeletonRows={ACTIVITY_PAGE_SIZE}
-			onRespond={(observation, response) => {
-				const feedbackId = observation.feedbackResponse?.feedbackId;
-				if (!hasText(feedbackId)) {
-					return;
-				}
-				if (isEmptyFeedbackResponse(response)) {
-					deleteResponseMutation.mutate({ path: { workspaceSlug, feedbackId } });
-					return;
-				}
-				replaceResponseMutation.mutate({
-					path: { workspaceSlug, feedbackId },
-					body: response,
-				});
-			}}
+			onRespond={
+				readOnly
+					? undefined
+					: (observation, response) => {
+							const feedbackId = observation.feedbackResponse?.feedbackId;
+							if (!hasText(feedbackId)) {
+								return;
+							}
+							if (isEmptyFeedbackResponse(response)) {
+								deleteResponseMutation.mutate({ path: { workspaceSlug, feedbackId } });
+								return;
+							}
+							replaceResponseMutation.mutate({
+								path: { workspaceSlug, feedbackId },
+								body: response,
+							});
+						}
+			}
 			pendingFeedbackId={
 				[replaceResponseMutation, deleteResponseMutation].find((mutation) => mutation.isPending)
 					?.variables.path.feedbackId

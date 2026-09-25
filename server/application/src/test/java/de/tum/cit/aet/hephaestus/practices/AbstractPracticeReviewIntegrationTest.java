@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.practices;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -271,6 +273,22 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
                 .get()
                 .uri(IN_APP, workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody();
+    }
+
+    /** A workspace page read by an instance administrator in a read-only user view of {@code viewed}. */
+    protected WebTestClient.BodyContentSpec readAsUserView(String uri, Workspace workspace, User viewed) {
+        Account administrator = persistInstanceAdmin("Practice inspector");
+        return webTestClient
+                .get()
+                .uri(uri, workspace.getWorkspaceSlug())
+                .headers(headers -> headers.setBearerAuth("mock-jwt-sub-" + administrator.getId()))
+                .header(UserViewContextHolder.WORKSPACE_HEADER, workspace.getWorkspaceSlug())
+                .header(UserViewContextHolder.USER_HEADER, String.valueOf(viewed.getId()))
+                .header(UserViewContextHolder.REASON_HEADER, "Check the practice profile")
                 .exchange()
                 .expectStatus()
                 .isOk()

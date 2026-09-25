@@ -15,7 +15,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * <ul>
  *   <li>{@code GET /oauth2/authorization/*} — 20/min, keyed by client IP</li>
  *   <li>{@code POST /auth/refresh} — 60/min, keyed by account (JWT sub; IP fallback)</li>
- *   <li>{@code GET /workspaces/{slug}/user-view/users/**} — 120/min, keyed by admin account</li>
+ *   <li>User-view selection and normal-app reads — 120/min, keyed by admin account</li>
  *   <li>{@code DELETE /user} — 3/hour, keyed by account</li>
  *   <li>{@code POST /user/exports} — 10/hour, keyed by account</li>
  * </ul>

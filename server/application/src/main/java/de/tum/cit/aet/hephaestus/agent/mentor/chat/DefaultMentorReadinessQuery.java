@@ -54,11 +54,10 @@ class DefaultMentorReadinessQuery implements MentorReadinessQuery {
             return false;
         }
         try {
-            return agentBindingRepository
-                    .findByWorkspaceIdAndPurposeWithModels(workspaceId, AgentPurpose.MENTOR)
+            return agentBindingRepository.findByWorkspaceIdWithModels(workspaceId).stream()
+                    .filter(binding -> binding.getPurpose() == AgentPurpose.MENTOR)
                     .filter(WorkspaceAgentBinding::isEnabled)
-                    .map(llmModelResolver::isAvailable)
-                    .orElse(false);
+                    .anyMatch(llmModelResolver::isAvailable);
         } catch (RuntimeException exception) {
             log.debug(
                     "Could not resolve mentor readiness: workspaceId={}, error={}", workspaceId, exception.toString());

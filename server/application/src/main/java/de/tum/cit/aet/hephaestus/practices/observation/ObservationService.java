@@ -135,12 +135,6 @@ public class ObservationService {
         return detail(workspaceId, currentUser.get().getId(), observationId);
     }
 
-    /** The same detail read for a developer named by the caller, which a read-only user view is. */
-    @Transactional(readOnly = true)
-    public ObservationDetailDTO getObservationDetail(Long workspaceId, Long developerId, UUID observationId) {
-        return detail(workspaceId, developerId, observationId);
-    }
-
     private ObservationDetailDTO detail(Long workspaceId, Long developerId, UUID observationId) {
         Observation observation = observationRepository
                 .findByIdAndDeveloperAndWorkspace(observationId, developerId, workspaceId)

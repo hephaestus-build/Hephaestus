@@ -1,5 +1,6 @@
 import { type SubmitEvent, useId, useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -19,11 +20,19 @@ const REASON_MAX_LENGTH = 500;
 
 export interface UserViewDialogProps {
 	name: string;
+	isPending?: boolean;
+	error?: string;
 	onClose: () => void;
 	onConfirm: (reason: string) => void;
 }
 
-export function UserViewDialog({ name, onClose, onConfirm }: UserViewDialogProps) {
+export function UserViewDialog({
+	name,
+	isPending = false,
+	error,
+	onClose,
+	onConfirm,
+}: UserViewDialogProps) {
 	const fieldId = useId();
 	const descriptionId = useId();
 	const [reason, setReason] = useState("");
@@ -50,13 +59,18 @@ export function UserViewDialog({ name, onClose, onConfirm }: UserViewDialogProps
 					<DialogHeader>
 						<DialogTitle>View as {name}</DialogTitle>
 						<DialogDescription>
-							View this user’s private practices and existing conversations, read-only. You stay
-							signed in as yourself. Each access is audited. No account setup or personal choices
-							will be completed.
+							View this user’s workspace pages, including private feedback and saved Heph
+							conversations, read-only. You stay signed in as yourself. Each access is audited. No
+							account setup or personal choices will be completed.
 						</DialogDescription>
 					</DialogHeader>
 					<DialogBody className="py-1">
 						<FieldGroup>
+							{error != null && (
+								<Alert variant="destructive">
+									<AlertDescription>{error}</AlertDescription>
+								</Alert>
+							)}
 							<Field>
 								<FieldLabel htmlFor={fieldId}>Reason for access</FieldLabel>
 								<Textarea
@@ -77,8 +91,8 @@ export function UserViewDialog({ name, onClose, onConfirm }: UserViewDialogProps
 					</DialogBody>
 					<DialogFooter>
 						<DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
-						<Button type="submit" disabled={trimmed === ""}>
-							View as user
+						<Button type="submit" disabled={trimmed === "" || isPending}>
+							{isPending ? "Opening…" : "View as user"}
 						</Button>
 					</DialogFooter>
 				</DialogForm>

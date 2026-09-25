@@ -99,10 +99,6 @@ tags:
   name: workspace-registry-controller
 - description: Bounded campaigns that review work which already existed
   name: Practice Review Backfill
-- description: |-
-    Controller for managing workspace memberships and roles.
-     Handles CRUD operations for workspace members and role assignments.
-  name: workspace-membership-controller
 - description: Workspace-scoped per-purpose agent configuration
   name: Agents
 - description: Workspace-scoped agent job monitoring
@@ -2276,6 +2272,37 @@ paths:
       summary: Get the current user
       tags:
       - Account
+  /user/ai-choice:
+    get:
+      operationId: getAccountAiChoice
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountAiChoice"
+          description: OK
+      summary: Get your AI choice
+      tags:
+      - Account
+    put:
+      operationId: updateAccountAiChoice
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountAiChoiceRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountAiChoice"
+          description: OK
+      summary: Change your AI choice for every workspace you are in
+      tags:
+      - Account
   /user/consent:
     get:
       operationId: getConsentStatus
@@ -2901,6 +2928,16 @@ paths:
           enum:
           - PRACTICE_REVIEW
           - MENTOR
+      - in: query
+        name: dataHandlingTier
+        required: false
+        schema:
+          type: string
+          default: UNDECLARED
+          enum:
+          - IN_HOUSE
+          - CLOUD
+          - UNDECLARED
       responses:
         "204":
           description: Binding removed
@@ -2925,6 +2962,16 @@ paths:
           enum:
           - PRACTICE_REVIEW
           - MENTOR
+      - in: query
+        name: dataHandlingTier
+        required: false
+        schema:
+          type: string
+          default: UNDECLARED
+          enum:
+          - IN_HOUSE
+          - CLOUD
+          - UNDECLARED
       requestBody:
         content:
           application/json:
@@ -2940,6 +2987,9 @@ paths:
           description: Binding saved
         "404":
           description: Model not found
+        "409":
+          description: "The model is undeclared, or declared as another tier than\
+            \ this slot (problem type agent-binding-slot-mismatch, property declaredTier)"
       summary: Configure the agent for one purpose
       tags:
       - Agents
@@ -4094,9 +4144,6 @@ paths:
       - LLM Usage
   /workspaces/{workspaceSlug}/members:
     get:
-      description: |-
-        List all members of the workspace with pagination.
-         Accessible to all workspace members (MEMBER role and above).
       operationId: listMembers
       parameters:
       - description: Workspace slug
@@ -4106,7 +4153,7 @@ paths:
         schema:
           type: string
           pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: Page number (0-indexed)
+      - description: Zero-based page index
         in: query
         name: page
         required: false
@@ -4114,7 +4161,8 @@ paths:
           type: integer
           format: int32
           default: 0
-      - description: "Page size (default 50, max 100)"
+          minimum: 0
+      - description: "Results per page, capped at 100"
         in: query
         name: size
         required: false
@@ -4122,6 +4170,7 @@ paths:
           type: integer
           format: int32
           default: 50
+          minimum: 1
       responses:
         "200":
           content:
@@ -4130,16 +4179,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkspaceMembership"
-          description: List of workspace memberships
+          description: OK
       security: []
-      summary: List all members of the workspace with pagination.
       tags:
       - workspace-membership
   /workspaces/{workspaceSlug}/members/assign:
     post:
-      description: |-
-        Assign or update a role for a workspace member.
-         OWNER can assign any role. ADMIN can assign ADMIN or MEMBER roles.
       operationId: assignRole
       parameters:
       - description: Workspace slug
@@ -4154,7 +4199,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/AssignRoleRequest"
-        description: Role assignment request
         required: true
       responses:
         "200":
@@ -4162,17 +4206,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkspaceMembership"
-          description: Updated membership
-      summary: Assign or update a role for a workspace member.
+          description: OK
       tags:
       - workspace-membership
   /workspaces/{workspaceSlug}/members/me:
     get:
-      description: |-
-        Get the current user's membership in this workspace.
-         Super admins (the <code>admin</code> app role, APP_ADMIN) have their effective role elevated to ADMIN
-         if their database role is lower, matching the runtime authorization behaviour in
-         {@link WorkspaceAccessService WorkspaceAccessService}.
+      description: "One representative membership, with the account's effective workspace\
+        \ role."
       operationId: getCurrentUserMembership
       parameters:
       - description: Workspace slug
@@ -4188,17 +4228,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkspaceMembership"
-          description: the current user's membership details with effective role
+          description: OK
       security: []
-      summary: Get the current user's membership in this workspace.
+      summary: "One representative membership, with the account's effective workspace\
+        \ role."
       tags:
       - workspace-membership
   /workspaces/{workspaceSlug}/members/{userId}:
     delete:
-      description: |-
-        Revoke a user's membership (remove them from workspace).
-         OWNER can remove anyone except themselves if they are the last OWNER.
-         ADMIN can remove MEMBER and ADMIN roles.
       operationId: removeMember
       parameters:
       - description: Workspace slug
@@ -4208,23 +4245,18 @@ paths:
         schema:
           type: string
           pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: User ID to remove
-        in: path
+      - in: path
         name: userId
         required: true
         schema:
           type: integer
           format: int64
       responses:
-        "200":
-          description: 204 No Content on success
-      summary: Revoke a user's membership (remove them from workspace).
+        "204":
+          description: Membership removed
       tags:
       - workspace-membership
     get:
-      description: |-
-        Get a specific member's details.
-         Accessible to all workspace members.
       operationId: getMember
       parameters:
       - description: Workspace slug
@@ -4234,8 +4266,7 @@ paths:
         schema:
           type: string
           pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: User ID
-        in: path
+      - in: path
         name: userId
         required: true
         schema:
@@ -4247,16 +4278,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkspaceMembership"
-          description: Workspace membership details
+          description: OK
       security: []
-      summary: Get a specific member's details.
       tags:
       - workspace-membership
   /workspaces/{workspaceSlug}/members/{userId}/hidden:
     patch:
-      description: |-
-        Toggle the hidden flag for a workspace member.
-         Hidden members are excluded from the leaderboard.
       operationId: updateMemberVisibility
       parameters:
       - description: Workspace slug
@@ -4266,14 +4293,13 @@ paths:
         schema:
           type: string
           pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: User ID
-        in: path
+      - in: path
         name: userId
         required: true
         schema:
           type: integer
           format: int64
-      - description: whether the member should be hidden
+      - description: Whether to exclude the member from leaderboard rankings
         in: query
         name: hidden
         required: true
@@ -4285,8 +4311,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkspaceMembership"
-          description: Updated membership
-      summary: Toggle the hidden flag for a workspace member.
+          description: OK
       tags:
       - workspace-membership
   /workspaces/{workspaceSlug}/mentor/threads:
@@ -4463,6 +4488,145 @@ paths:
       summary: Update leaderboard notification preferences
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/onboarding/me:
+    get:
+      operationId: getMemberOnboarding
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboarding"
+          description: OK
+      summary: Get your first-visit setup and AI choice in this workspace
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/me/ai-choice:
+    put:
+      operationId: updateMemberAiChoice
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberAiChoiceRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboarding"
+          description: OK
+      summary: Change your AI choice without changing workspace membership
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/me/dismissal:
+    put:
+      operationId: dismissMemberOnboarding
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboarding"
+          description: OK
+      summary: Skip first-visit setup for now without treating that as an AI choice
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/settings:
+    get:
+      operationId: getMemberOnboardingSettings
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboardingSettings"
+          description: OK
+      summary: Get this workspace's member-onboarding settings
+      tags:
+      - workspace-onboarding
+    put:
+      operationId: updateMemberOnboardingSettings
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceOnboardingSettings"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceOnboardingSettings"
+          description: OK
+      summary: Configure first-visit setup and required workspace account links
+      tags:
+      - workspace-onboarding
+  /workspaces/{workspaceSlug}/onboarding/settings/links:
+    get:
+      operationId: getMemberOnboardingLinkOptions
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkspaceOnboardingLink"
+          description: OK
+      summary: List workspace account links available for onboarding requirements
+      tags:
+      - workspace-onboarding
   /workspaces/{workspaceSlug}/outline/collections:
     get:
       operationId: listOutlineCollections
@@ -8265,100 +8429,9 @@ paths:
       summary: List workspace users and their linked account status
       tags:
       - User view
-  /workspaces/{workspaceSlug}/user-view/users/{userId}/conversations:
+  /workspaces/{workspaceSlug}/user-view/users/{userId}:
     get:
-      operationId: listUserViewConversations
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: userId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - in: query
-        name: page
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 0
-          minimum: 0
-      - in: query
-        name: size
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 25
-          maximum: 100
-          minimum: 1
-      - description: "Why the administrator views this user: percent-encoded UTF-8,\
-          \ 1–500 characters"
-        in: header
-        name: X-User-View-Reason
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PageResponseDTOChatThreadSummary"
-          description: OK
-      summary: View a user's existing private conversations
-      tags:
-      - User view
-  /workspaces/{workspaceSlug}/user-view/users/{userId}/conversations/{threadId}:
-    get:
-      operationId: getUserViewConversation
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: userId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - in: path
-        name: threadId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - description: "Why the administrator views this user: percent-encoded UTF-8,\
-          \ 1–500 characters"
-        in: header
-        name: X-User-View-Reason
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ChatThreadDetail"
-          description: OK
-      summary: Read a user's private conversation without changing it
-      tags:
-      - User view
-  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices:
-    get:
-      operationId: getUserPracticeView
+      operationId: getUserViewUser
       parameters:
       - description: Workspace slug
         in: path
@@ -8385,172 +8458,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserPracticeSummary"
+                $ref: "#/components/schemas/UserViewUser"
           description: OK
-      summary: View a user's existing private practice profile without signing in
-        as them
-      tags:
-      - User view
-  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/runs:
-    get:
-      operationId: listUserViewRuns
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: userId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - in: path
-        name: groupSlug
-        required: true
-        schema:
-          type: string
-      - in: query
-        name: practiceSlug
-        required: false
-        schema:
-          type: string
-      - description: "Only reviews of these artifact kinds, e.g. scm.pull_request\
-          \ (repeatable)"
-        in: query
-        name: artifactKinds
-        required: false
-        schema:
-          type: array
-          items:
-            type: string
-      - in: query
-        name: severities
-        required: false
-        schema:
-          type: array
-          items:
-            type: string
-            enum:
-            - CRITICAL
-            - MAJOR
-            - MINOR
-            - INFO
-      - description: "Zero-based page, at most 100"
-        in: query
-        name: page
-        required: false
-        schema:
-          type: integer
-          format: int32
-          maximum: 100
-          minimum: 0
-      - description: Page size from 1 to 50
-        in: query
-        name: size
-        required: false
-        schema:
-          type: integer
-          format: int32
-          maximum: 50
-          minimum: 1
-      - description: "Why the administrator views this user: percent-encoded UTF-8,\
-          \ 1–500 characters"
-        in: header
-        name: X-User-View-Reason
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PracticeGroupReviewRunsPage"
-          description: OK
-      summary: View a user's private practice review history
-      tags:
-      - User view
-  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices/groups/{groupSlug}/trend:
-    get:
-      operationId: getUserViewTrend
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: userId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - in: path
-        name: groupSlug
-        required: true
-        schema:
-          type: string
-      - description: "Why the administrator views this user: percent-encoded UTF-8,\
-          \ 1–500 characters"
-        in: header
-        name: X-User-View-Reason
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PracticeGroupTrend"
-          description: OK
-      summary: View a user's private practice group trend
-      tags:
-      - User view
-  /workspaces/{workspaceSlug}/user-view/users/{userId}/practices/observations/{observationId}:
-    get:
-      operationId: getUserViewObservation
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: userId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - in: path
-        name: observationId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - description: "Why the administrator views this user: percent-encoded UTF-8,\
-          \ 1–500 characters"
-        in: header
-        name: X-User-View-Reason
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ObservationDetail"
-          description: OK
-      summary: View a user's private observation and feedback
+      summary: Confirm access to a workspace user
       tags:
       - User view
   /workspaces/{workspaceSlug}/users:
@@ -8591,6 +8501,31 @@ components:
             - OFFERED
       required:
       - choices
+    AccountAiChoice:
+      type: object
+      description: One account-wide answer; model names belong only to workspace-specific
+        views.
+      properties:
+        choice:
+          type: string
+          enum:
+          - NO_AI
+          - IN_HOUSE_ONLY
+          - CLOUD
+        updatedAt:
+          type: string
+          format: date-time
+    AccountAiChoiceRequest:
+      type: object
+      properties:
+        choice:
+          type: string
+          enum:
+          - NO_AI
+          - IN_HOUSE_ONLY
+          - CLOUD
+      required:
+      - choice
     AccountRef:
       type: object
       description: A human-readable account identity. <code>displayName</code>/<code>email</code>
@@ -8755,6 +8690,12 @@ components:
       properties:
         allowInternet:
           type: boolean
+        dataHandlingTier:
+          type: string
+          enum:
+          - IN_HOUSE
+          - CLOUD
+          - UNDECLARED
         enabled:
           type: boolean
         instanceModelId:
@@ -8778,6 +8719,7 @@ components:
           type: integer
           format: int64
       required:
+      - dataHandlingTier
       - enabled
       - purpose
       - ready
@@ -9149,9 +9091,32 @@ components:
       type: object
       description: A model available for this workspace to bind a Task to
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; display only
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
         connectionDisplayName:
           type: string
           description: Owning connection's display name
+        dataHandlingTier:
+          type: string
+          description: Data-handling tier derived from the admin's declared facts
+          enum:
+          - IN_HOUSE
+          - CLOUD
+          - UNDECLARED
         displayName:
           type: string
           description: Human-readable name
@@ -9202,6 +9167,7 @@ components:
           - WORKSPACE
       required:
       - connectionDisplayName
+      - dataHandlingTier
       - displayName
       - id
       - pricingMode
@@ -9986,6 +9952,27 @@ components:
           description: Provider base URL
           maxLength: 2048
           minLength: 0
+        connectionPlatform:
+          type: string
+          description: Admin-declared connection platform; null when not declared
+          enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
+          - VERCEL_AI_GATEWAY
         displayName:
           type: string
           description: Human-readable name
@@ -10007,11 +9994,32 @@ components:
       type: object
       description: Create a model on an instance LLM connection
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; display only
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
         contextWindow:
           type: integer
           format: int32
           description: Context window in tokens
           minimum: 1
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+          maxLength: 200
+          minLength: 0
         displayName:
           type: string
           description: Human-readable name
@@ -10025,6 +10033,13 @@ components:
           format: int32
           description: Maximum output tokens
           minimum: 1
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; omit to leave
+            the model undeclared
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         reasoningEffort:
           type: string
           description: "Reasoning effort to request; null sends none, so the provider's\
@@ -10338,6 +10353,27 @@ components:
           description: Provider base URL
           maxLength: 2048
           minLength: 0
+        connectionPlatform:
+          type: string
+          description: Admin-declared connection platform; null when not declared
+          enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
+          - VERCEL_AI_GATEWAY
         displayName:
           type: string
           description: Human-readable name
@@ -10359,11 +10395,32 @@ components:
       type: object
       description: Create a model on your AI provider
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; display only
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
         contextWindow:
           type: integer
           format: int32
           description: Context window in tokens
           minimum: 1
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+          maxLength: 200
+          minLength: 0
         displayName:
           type: string
           description: Human-readable name
@@ -10377,6 +10434,13 @@ components:
           format: int32
           description: Maximum output tokens
           minimum: 1
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; omit to leave
+            the model undeclared
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         per1mCacheReadUsd:
           type: number
           format: decimal
@@ -12038,6 +12102,27 @@ components:
         baseUrl:
           type: string
           description: Provider base URL
+        connectionPlatform:
+          type: string
+          description: Admin-declared connection platform
+          enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
+          - VERCEL_AI_GATEWAY
         createdAt:
           type: string
           format: date-time
@@ -12077,6 +12162,22 @@ components:
       type: object
       description: Instance catalog model
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; display only
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
         connectionDisplayName:
           type: string
           description: Owning connection's display name
@@ -12095,6 +12196,17 @@ components:
         currentPrice:
           $ref: "#/components/schemas/LlmModelPrice"
           description: Current price; null if none has ever been set
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+        dataHandlingTier:
+          type: string
+          description: Data-handling tier derived from the operator; UNDECLARED until
+            it is set
+          enum:
+          - IN_HOUSE
+          - CLOUD
+          - UNDECLARED
         displayName:
           type: string
           description: Human-readable name
@@ -12116,6 +12228,12 @@ components:
           type: integer
           format: int32
           description: Maximum output tokens
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; null until declared
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         reasoningEffort:
           type: string
           description: "Reasoning effort requested of the model; null sends none,\
@@ -12148,6 +12266,7 @@ components:
       - connectionDisplayName
       - connectionId
       - createdAt
+      - dataHandlingTier
       - displayName
       - enabled
       - grantedWorkspaceIds
@@ -12354,6 +12473,17 @@ components:
       - scopes
       - type
       - updatedAt
+    MemberAiChoiceRequest:
+      type: object
+      properties:
+        choice:
+          type: string
+          enum:
+          - NO_AI
+          - IN_HOUSE_ONLY
+          - CLOUD
+      required:
+      - choice
     NotificationPreferences:
       type: object
       properties:
@@ -12863,42 +12993,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AuthEventView"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-    PageResponseDTOChatThreadSummary:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ChatThreadSummary"
         empty:
           type: boolean
         first:
@@ -16043,6 +16137,7 @@ components:
           - PRACTICES_DISABLED
           - NO_ACTIVE_PRACTICE
           - REVIEW_MODEL_UNBOUND
+          - MEMBER_AI_DECLINED
           - PRACTICE_AUTONOMY_OFF
           - BUDGET_EXHAUSTED
           - SUBJECT_UNLINKED
@@ -17073,6 +17168,7 @@ components:
           - PRACTICES_DISABLED
           - NO_ACTIVE_PRACTICE
           - REVIEW_MODEL_UNBOUND
+          - MEMBER_AI_DECLINED
           - PRACTICE_AUTONOMY_OFF
           - BUDGET_EXHAUSTED
           - SUBJECT_UNLINKED
@@ -17279,6 +17375,30 @@ components:
         clearApiKey:
           type: boolean
           description: Set true to clear the stored API key
+        clearConnectionPlatform:
+          type: boolean
+          description: Set true to clear the declared connection platform
+        connectionPlatform:
+          type: string
+          description: Admin-declared connection platform
+          enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
+          - VERCEL_AI_GATEWAY
         displayName:
           type: string
           description: Human-readable name
@@ -17330,6 +17450,25 @@ components:
       description: Update a model's metadata (all fields optional; pricing and sharing
         are separate)
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; null keeps current
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
+        clearBrand:
+          type: boolean
+          description: Clear the declared model brand
         clearReasoningEffort:
           type: boolean
           description: "True clears the reasoning effort, so the provider's own default\
@@ -17339,6 +17478,11 @@ components:
           format: int32
           description: Context window in tokens
           minimum: 1
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+          maxLength: 200
+          minLength: 0
         displayName:
           type: string
           description: Human-readable name
@@ -17352,6 +17496,13 @@ components:
           format: int32
           description: Maximum output tokens
           minimum: 1
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; omit to leave
+            the model undeclared
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         reasoningEffort:
           type: string
           description: Reasoning effort to request; null keeps the current one (see
@@ -17749,6 +17900,30 @@ components:
         clearApiKey:
           type: boolean
           description: Set true to clear the stored API key
+        clearConnectionPlatform:
+          type: boolean
+          description: Set true to clear the declared connection platform
+        connectionPlatform:
+          type: string
+          description: Admin-declared connection platform
+          enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
+          - VERCEL_AI_GATEWAY
         displayName:
           type: string
           description: Human-readable name
@@ -17761,6 +17936,25 @@ components:
       type: object
       description: Update a model on your AI provider (all fields optional)
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; null keeps current
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
+        clearBrand:
+          type: boolean
+          description: Clear the declared model brand
         clearReasoningEffort:
           type: boolean
           description: "True clears the reasoning effort, so the provider's own default\
@@ -17770,6 +17964,11 @@ components:
           format: int32
           description: Context window in tokens
           minimum: 1
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+          maxLength: 200
+          minLength: 0
         displayName:
           type: string
           description: Human-readable name
@@ -17783,6 +17982,13 @@ components:
           format: int32
           description: Maximum output tokens
           minimum: 1
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; omit to leave
+            the model undeclared
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         per1mCacheReadUsd:
           type: number
           format: decimal
@@ -17925,30 +18131,6 @@ components:
       - id
       - login
       - name
-    UserPracticeSummary:
-      type: object
-      properties:
-        groupStandings:
-          type: array
-          items:
-            $ref: "#/components/schemas/PracticeGroupStanding"
-        groups:
-          type: array
-          items:
-            $ref: "#/components/schemas/PracticeGroup"
-        practices:
-          type: array
-          items:
-            $ref: "#/components/schemas/ReviewedPractice"
-        standings:
-          type: array
-          items:
-            $ref: "#/components/schemas/PracticeStanding"
-      required:
-      - groupStandings
-      - groups
-      - practices
-      - standings
     UserSettings:
       type: object
       description: User preferences and settings
@@ -18137,6 +18319,78 @@ components:
       - status
       - updatedAt
       - workspaceSlug
+    WorkspaceAiModel:
+      type: object
+      description: A model this answer would use here.
+      properties:
+        brand:
+          type: string
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
+        connectionPlatform:
+          type: string
+          enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
+          - VERCEL_AI_GATEWAY
+        dataHandlingTier:
+          type: string
+          enum:
+          - IN_HOUSE
+          - CLOUD
+          - UNDECLARED
+        name:
+          type: string
+      required:
+      - dataHandlingTier
+      - name
+    WorkspaceAiOption:
+      type: object
+      properties:
+        choice:
+          type: string
+          enum:
+          - NO_AI
+          - IN_HOUSE_ONLY
+          - CLOUD
+        mentorReady:
+          type: boolean
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAiModel"
+        practiceReviewsReady:
+          type: boolean
+      required:
+      - choice
+      - mentorReady
+      - models
+      - practiceReviewsReady
     WorkspaceListItem:
       type: object
       description: Summary information about a workspace for list views
@@ -18219,6 +18473,27 @@ components:
         baseUrl:
           type: string
           description: Provider base URL
+        connectionPlatform:
+          type: string
+          description: Admin-declared connection platform
+          enum:
+          - LOGOS
+          - VLLM
+          - OLLAMA
+          - AZURE
+          - AWS_BEDROCK
+          - GOOGLE_VERTEX
+          - OPENAI
+          - GOOGLE_AI_STUDIO
+          - ALIBABA_CLOUD
+          - GROQ
+          - FIREWORKS
+          - TOGETHER_AI
+          - DEEPINFRA
+          - NEBIUS
+          - OPENROUTER
+          - CLOUDFLARE_AI_GATEWAY
+          - VERCEL_AI_GATEWAY
         createdAt:
           type: string
           format: date-time
@@ -18258,6 +18533,22 @@ components:
       type: object
       description: A model on your AI provider
       properties:
+        brand:
+          type: string
+          description: Model brand declared by an admin; display only
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - GEMINI
+          - GEMMA
+          - META
+          - MISTRAL
+          - QWEN
+          - DEEPSEEK
+          - XAI
+          - COHERE
+          - Z_AI
+          - MOONSHOT
         connectionDisplayName:
           type: string
           description: Owning connection's display name
@@ -18276,6 +18567,17 @@ components:
         currency:
           type: string
           description: Currency code
+        dataHandlingNote:
+          type: string
+          description: "Admin-only note: region, agreement, renewal date"
+        dataHandlingTier:
+          type: string
+          description: Data-handling tier derived from the operator; UNDECLARED until
+            it is set
+          enum:
+          - IN_HOUSE
+          - CLOUD
+          - UNDECLARED
         displayName:
           type: string
           description: Human-readable name
@@ -18290,6 +18592,12 @@ components:
           type: integer
           format: int32
           description: Maximum output tokens
+        operatedBy:
+          type: string
+          description: Who operates the systems the work is sent to; null until declared
+          enum:
+          - OWN_ORGANISATION
+          - PROVIDER
         per1mCacheReadUsd:
           type: number
           format: decimal
@@ -18343,6 +18651,7 @@ components:
       - connectionId
       - createdAt
       - currency
+      - dataHandlingTier
       - displayName
       - enabled
       - id
@@ -18502,6 +18811,95 @@ components:
         userName:
           type: string
           description: Display name of the user
+    WorkspaceOnboarding:
+      type: object
+      description: |-
+        One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in
+         every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is
+         what differs between workspaces.
+      properties:
+        aiChoice:
+          type: string
+          enum:
+          - NO_AI
+          - IN_HOUSE_ONLY
+          - CLOUD
+        aiChoiceRequired:
+          type: boolean
+        aiOptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAiOption"
+        enabled:
+          type: boolean
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceOnboardingLink"
+        needsSetup:
+          type: boolean
+        workspaceName:
+          type: string
+      required:
+      - aiChoiceRequired
+      - aiOptions
+      - enabled
+      - links
+      - needsSetup
+      - workspaceName
+    WorkspaceOnboardingLink:
+      type: object
+      properties:
+        available:
+          type: boolean
+        connectionId:
+          type: integer
+          format: int64
+        displayName:
+          type: string
+        linked:
+          type: boolean
+        providerType:
+          type: string
+        registrationId:
+          type: string
+        required:
+          type: boolean
+        teamName:
+          type: string
+      required:
+      - available
+      - connectionId
+      - displayName
+      - linked
+      - providerType
+      - required
+    WorkspaceOnboardingSettings:
+      type: object
+      description: |-
+        <code>aiChoiceRequired</code> is read on GET and ignored on PUT: the server latches it the first time
+         the setup page is enabled and never clears it.
+      properties:
+        aiChoiceRequired:
+          type: boolean
+        enabled:
+          type: boolean
+        requiredConnectionIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+            exclusiveMinimum: 0
+          maxItems: 20
+          minItems: 0
+        revision:
+          type: integer
+          format: int64
+      required:
+      - aiChoiceRequired
+      - enabled
+      - requiredConnectionIds
+      - revision
     WorkspaceProviders:
       type: object
       description: Available workspace creation providers and their configuration

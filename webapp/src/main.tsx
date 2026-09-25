@@ -17,6 +17,7 @@ import { useCookieConsent } from "@/runtime/consent";
 import { TanstackDevtools } from "@/runtime/devtools/TanstackDevtools";
 import { disableSentry, initSentry } from "@/runtime/sentry";
 import { ThemeProvider } from "@/runtime/theme/ThemeContext";
+import { applyUserViewHeaders } from "@/runtime/user-view/session";
 
 import { routeTree } from "./routeTree.gen";
 import * as TanstackQuery from "./runtime/tanstack-query/root-provider";
@@ -37,7 +38,9 @@ client.setConfig({
 	document.head.append(manifestLink);
 }
 
-client.interceptors.request.use((request) => applyStateChangingHeaders(request));
+client.interceptors.request.use((request) =>
+	applyUserViewHeaders(applyStateChangingHeaders(request)),
+);
 
 client.interceptors.response.use((response) => {
 	handlePossibleSessionExpiry(response, TanstackQuery.getContext().queryClient);

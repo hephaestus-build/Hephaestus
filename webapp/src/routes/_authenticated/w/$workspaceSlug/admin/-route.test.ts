@@ -80,6 +80,18 @@ describe("workspace-admin route gate", () => {
 		await expect(land("/w/acme/admin/settings")).resolves.toBe("/w/acme/admin/settings");
 	});
 
+	// Member onboarding is the one admin page that needs OWNER: the route's own `beforeLoad` sends
+	// an ADMIN on to settings, which the layout gate above it cannot express.
+	it("sends an ADMIN from member onboarding to settings", async () => {
+		mockMembership("ADMIN");
+		await expect(land("/w/acme/admin/onboarding")).resolves.toBe("/w/acme/admin/settings");
+	});
+
+	it("admits an OWNER to member onboarding", async () => {
+		mockMembership("OWNER");
+		await expect(land("/w/acme/admin/onboarding")).resolves.toBe("/w/acme/admin/onboarding");
+	});
+
 	it("redirects a non-member", async () => {
 		mockMembership(null);
 		await expect(land("/w/acme/admin/settings")).resolves.toBe(WORKSPACE_HOME);

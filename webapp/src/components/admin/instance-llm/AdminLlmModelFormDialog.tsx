@@ -25,6 +25,7 @@ import type { FieldErrors, LlmModelFormField } from "@/lib/llm-form-validation";
 import { reasoningEffortOf, reasoningEffortUpdateOf } from "@/lib/reasoning-effort";
 
 import {
+	modelDetailsBodyOf,
 	LlmModelFields,
 	type LlmModelFieldsValue,
 	modelFieldsValueOf,
@@ -112,10 +113,15 @@ function AdminLlmModelFormDialogContent({
 			displayName: fields.displayName.trim(),
 			contextWindow: fields.contextWindow.trim() ? Number(fields.contextWindow) : undefined,
 			maxOutputTokens: fields.maxOutputTokens.trim() ? Number(fields.maxOutputTokens) : undefined,
+			...modelDetailsBodyOf(fields),
 			enabled: fields.enabled,
 		};
 		const metadata: CreateLlmModelRequest | UpdateLlmModelRequest = isEdit
-			? { ...metadataShared, ...reasoningEffortUpdateOf(fields.reasoningEffort) }
+			? {
+					...metadataShared,
+					clearBrand: fields.brand === undefined,
+					...reasoningEffortUpdateOf(fields.reasoningEffort),
+				}
 			: {
 					...metadataShared,
 					reasoningEffort: reasoningEffortOf(fields.reasoningEffort),
@@ -148,7 +154,8 @@ function AdminLlmModelFormDialogContent({
 				<DialogHeader>
 					<DialogTitle>{isEdit ? "Edit model" : "Add model"}</DialogTitle>
 					<DialogDescription>
-						Give the model a name workspaces will recognize. The upstream id is never shown to them.
+						Name the model and declare how it handles data. Workspaces and developers see the
+						declaration as a badge.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -160,6 +167,7 @@ function AdminLlmModelFormDialogContent({
 						idPrefix="llm-model"
 						isEdit={isEdit}
 						wasEnabled={editing?.enabled ?? false}
+						savedTier={editing?.dataHandlingTier}
 						value={fields}
 						onChange={setFields}
 						errors={errors}

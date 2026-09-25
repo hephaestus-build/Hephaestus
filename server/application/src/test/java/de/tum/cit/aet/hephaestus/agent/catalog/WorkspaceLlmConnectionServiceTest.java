@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -85,6 +86,7 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
                 "openai-completions",
                 LlmAuthMode.BEARER,
                 "sk-abc",
+                null,
                 null);
     }
 
@@ -183,6 +185,30 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
     class Update {
 
         @Test
+        void declaredConnectionPlatformCanBeChangedAndCleared() {
+            WorkspaceLlmConnection connection = new WorkspaceLlmConnection();
+            connection.setId(5L);
+            when(connectionRepository.findByIdAndWorkspaceIdForUpdate(5L, 1L)).thenReturn(Optional.of(connection));
+            when(connectionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            connectionService.update(
+                    workspaceContext,
+                    5L,
+                    new UpdateWorkspaceLlmConnectionRequestDTO(
+                            null, null, null, null, LlmConnectionPlatform.AZURE, null));
+            assertThat(connection.getConnectionPlatform()).isEqualTo(LlmConnectionPlatform.AZURE);
+            assertThat(WorkspaceLlmConnectionDTO.from(connection).connectionPlatform())
+                    .isEqualTo(LlmConnectionPlatform.AZURE);
+
+            connectionService.update(
+                    workspaceContext,
+                    5L,
+                    new UpdateWorkspaceLlmConnectionRequestDTO(
+                            null, null, null, null, LlmConnectionPlatform.OPENAI, true));
+            assertThat(connection.getConnectionPlatform()).isNull();
+        }
+
+        @Test
         @DisplayName("a PATCH serializes on the connection row, never a plain tenancy lookup")
         void patchTakesTheLockingRead() {
             // A PATCH writes back every column. Without the lock, a concurrent PATCH that only flips
@@ -197,7 +223,9 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
             when(connectionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             WorkspaceLlmConnection result = connectionService.update(
-                    workspaceContext, 5L, new UpdateWorkspaceLlmConnectionRequestDTO(null, null, true, null));
+                    workspaceContext,
+                    5L,
+                    new UpdateWorkspaceLlmConnectionRequestDTO(null, null, true, null, null, null));
 
             assertThat(result.getApiKey()).isNull();
             verify(connectionRepository).findByIdAndWorkspaceIdForUpdate(5L, 1L);
@@ -211,7 +239,7 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
             assertThatThrownBy(() -> connectionService.update(
                             workspaceContext,
                             5L,
-                            new UpdateWorkspaceLlmConnectionRequestDTO("Renamed", null, null, null)))
+                            new UpdateWorkspaceLlmConnectionRequestDTO("Renamed", null, null, null, null, null)))
                     .isInstanceOf(EntityNotFoundException.class);
         }
     }
