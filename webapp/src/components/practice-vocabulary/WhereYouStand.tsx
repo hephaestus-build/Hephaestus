@@ -8,10 +8,11 @@ import {
 	isSettledStanding,
 	type PracticeGroupStandingValue,
 	standingDefs,
+	type StandingScope,
 } from "./practice-group-standing-defs";
 import { PRACTICE_TREND_DEFS, type TrendDirection } from "./practice-trend-defs";
-import { formatTrendProvenance, type TrendScope } from "./practice-trend-presentation";
-import { TrendNote } from "./StandingBadge";
+import { formatTrendProvenance, shownTrendDirection } from "./practice-trend-presentation";
+import { PracticeTrendLabel } from "./PracticeTrendChip";
 
 export interface WhereYouStandProps {
 	standing: PracticeGroupStandingValue;
@@ -23,7 +24,7 @@ export interface WhereYouStandProps {
 	direction?: TrendDirection;
 	support?: TrendSupport;
 	/** Whose standing this is; the trend's provenance is worded for it. */
-	scope: TrendScope;
+	scope: StandingScope;
 }
 
 /**
@@ -37,9 +38,7 @@ export interface WhereYouStandProps {
 export function WhereYouStand({ standing, basis, direction, support, scope }: WhereYouStandProps) {
 	const headingId = useId();
 	const settled = isSettledStanding(standing);
-	// One direction for the chip and the sentence beside it: a direction with no evidence behind it
-	// is what `TrendNote` draws as "not enough to compare", so the sentence must read it the same way.
-	const shownDirection = direction && support ? direction : "INSUFFICIENT_EVIDENCE";
+	const shownDirection = shownTrendDirection(direction, support);
 	const def = standingDefs(scope)[standing];
 	return (
 		<section className="flex flex-col gap-2.5" aria-labelledby={headingId}>
@@ -54,12 +53,9 @@ export function WhereYouStand({ standing, basis, direction, support, scope }: Wh
 				</p>
 				{settled && (
 					<p className="text-sm">
-						<TrendNote
-							direction={direction}
-							support={support}
-							scope={scope}
-							render={<span />}
-							className="mr-2 inline-flex align-middle"
+						<PracticeTrendLabel
+							direction={shownDirection}
+							className="mr-2 inline-flex flex-nowrap gap-x-1.5 align-middle whitespace-nowrap"
 						/>
 						{PRACTICE_TREND_DEFS[shownDirection].description}
 						{support && ` ${formatTrendProvenance(support, shownDirection, scope)}`}

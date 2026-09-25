@@ -1080,19 +1080,13 @@ const inAppEvidenceSchemaResponseTransformer = (data: any) => {
 
 const inAppFeedbackSchemaResponseTransformer = (data: any) => {
   data.cleanWork = data.cleanWork.map((item: any) => inAppCleanWorkSchemaResponseTransformer(item));
-  data.evidence = data.evidence.map((item: any) => inAppEvidenceSchemaResponseTransformer(item));
-  if (data.practiceChangedAt) {
-    data.practiceChangedAt = new Date(data.practiceChangedAt);
+  if (data.closedAt) {
+    data.closedAt = new Date(data.closedAt);
   }
+  data.evidence = data.evidence.map((item: any) => inAppEvidenceSchemaResponseTransformer(item));
   data.preparedAt = new Date(data.preparedAt);
   if (data.readAt) {
     data.readAt = new Date(data.readAt);
-  }
-  if (data.resolvedByDeveloperAt) {
-    data.resolvedByDeveloperAt = new Date(data.resolvedByDeveloperAt);
-  }
-  if (data.resolvedByWorkAt) {
-    data.resolvedByWorkAt = new Date(data.resolvedByWorkAt);
   }
   if (data.response) {
     data.response = feedbackResponseSchemaResponseTransformer(data.response);

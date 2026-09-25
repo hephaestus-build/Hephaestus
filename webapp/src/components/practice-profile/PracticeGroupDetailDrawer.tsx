@@ -3,21 +3,20 @@ import type { ReactNode } from "react";
 import type { PracticeGroup, PracticeGroupStanding } from "@/api/types.gen";
 import { type LoadState, loadProps } from "@/components/common/panel-state";
 import type { DetailStackEntry } from "@/components/layout/detail-drawer/detail-stack";
-import {
-	type DetailDrawerLevel,
-	DetailDrawerStack,
-} from "@/components/layout/detail-drawer/DetailDrawerStack";
-import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { levelPathAt } from "@/components/layout/detail-drawer/level-path";
+import { sortPracticeGroups } from "@/components/practice-vocabulary/practice-group-list-order";
 import type {
 	FeedbackRatingProps,
 	PracticeFeedbackCardEntry,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
-import { type PracticeGroupDetail, REVIEW_RUN_PAGE_SIZE } from "@/hooks/use-practice-group-detail";
+import type { PracticeGroupDetail } from "@/hooks/use-practice-group-detail";
 import { hasText } from "@/lib/text";
 
+import { AllPracticeGroupsLevel } from "./AllPracticeGroupsLevel";
+import type { AllPracticeGroupsTableProps } from "./AllPracticeGroupsTable";
 import {
-	DEFAULT_PRACTICE_TAB,
+	ALL_PRACTICE_GROUPS,
 	openLevelId,
 	type PracticeGroupDetailSelection,
 	type PracticeProfileDetailLevelKind,
@@ -35,31 +34,26 @@ export type GroupLevelOverview = Pick<
 >;
 
 export interface PracticeGroupDetailDrawerProps {
-	/**
-	 * What the open group and practice levels show, fetched by the route with
-	 * `usePracticeGroupDetail`.
-	 */
+	/** What the open group and practice levels show. */
 	detail: PracticeGroupDetail;
 	/**
 	 * The parsed `detail` stack from the route's search params. The group level and, over it, the
-	 * practice level are found by kind, so a route may stack them on a level of its own.
+	 * practice level are found by kind, so either may sit on the "All practice groups" level.
 	 */
 	detailStack: DetailStackEntry<PracticeProfileDetailLevelKind>[];
 	/**
-	 * Renders a level of a kind this drawer does not own; the route that added the kind supplies it.
+	 * The "All practice groups" level's table; the drawer orders its groups under `sort` and marks
+	 * the one open over it.
 	 */
-	renderLevel?: (
-		entry: DetailStackEntry<PracticeProfileDetailLevelKind>,
-		level: DetailDrawerLevel,
-		path: LevelPath,
-	) => ReactNode;
-	/** Names a level of a kind this drawer does not own, for the path of the levels over it. */
-	levelLabel?: (entry: DetailStackEntry<PracticeProfileDetailLevelKind>) => string;
-	/** Called with the depth to close down to; `useDetailStack(...).close`. */
+	allPracticeGroups: Pick<
+		AllPracticeGroupsTableProps,
+		"practicesByGroup" | "sentences" | "sort" | "onSortChange" | "onOpenGroup" | "onOpenPractice"
+	>;
+	/** Called with the depth to close down to. */
 	onClose: (depth: number) => void;
-	/** Pushes the practice level over the group; `stackControls.open(practiceLevel(slug))`. */
+	/** Pushes the practice level over the group. */
 	onOpenPractice: (practiceSlug: string) => void;
-	/** The groups the levels name and the developer's standing in each, `usePracticeStandings`. */
+	/** The groups the levels name and the developer's standing in each. */
 	groups: PracticeGroup[];
 	groupStandings: Record<string, PracticeGroupStanding | undefined>;
 	/**
@@ -71,8 +65,7 @@ export interface PracticeGroupDetailDrawerProps {
 	feedbackCards?: PracticeFeedbackCardEntry[];
 	/**
 	 * What Heph says on a group's level — its held rows, next step, reviewed work and practice
-	 * sentences — composed by the route from the overview; a route without one shows the group
-	 * without the card.
+	 * sentences; without it the group shows without the card.
 	 */
 	groupOverview?: (groupSlug: string) => GroupLevelOverview;
 	/**
@@ -80,13 +73,9 @@ export interface PracticeGroupDetailDrawerProps {
 	 */
 	ratingProps?: (feedbackId: string) => FeedbackRatingProps;
 	/** The practice level's tab, from the route's search params; the route owns the navigation. */
-	practiceTab?: PracticeTab;
-	/**
-	 * How many rows the practice level's review-run skeleton stands in for. Defaults to the page
-	 * size the route asks the feed for, `REVIEW_RUN_PAGE_SIZE`, so the skeleton is the size of what
-	 * arrives.
-	 */
-	skeletonRows?: number;
+	practiceTab: PracticeTab;
+	/** How many rows the practice level's feed draws while its first page loads. */
+	skeletonRows: number;
 	/**
 	 * Writes the selection in place — the tab is a view of the level, not a place — so Escape and
 	 * Back leave the level in one step however many were opened.
@@ -98,15 +87,13 @@ export interface PracticeGroupDetailDrawerProps {
 const PAGE_LABEL = "Practice profile";
 
 /**
- * The detail drawer over the practice profile: a practice-group level and, over it, a practice
- * level, both addressed by the route's `detail` stack. The route's own levels come in through
- * `renderLevel`.
+ * The detail drawer over the practice profile, addressed by the route's `detail` stack: the
+ * "All practice groups" level, a practice-group level and, over it, a practice level.
  */
 export function PracticeGroupDetailDrawer({
 	detail,
 	detailStack,
-	renderLevel,
-	levelLabel,
+	allPracticeGroups,
 	onClose,
 	onOpenPractice,
 	groups,
@@ -115,8 +102,8 @@ export function PracticeGroupDetailDrawer({
 	feedbackCards,
 	groupOverview,
 	ratingProps,
-	practiceTab = DEFAULT_PRACTICE_TAB,
-	skeletonRows = REVIEW_RUN_PAGE_SIZE,
+	practiceTab,
+	skeletonRows,
 	onSelectionChange,
 }: PracticeGroupDetailDrawerProps) {
 	const groupIndex = detailStack.findIndex((entry) => entry.kind === "practice-group");
@@ -125,64 +112,79 @@ export function PracticeGroupDetailDrawer({
 	const openGroup = groups.find((candidate) => candidate.slug === openGroupSlug);
 	const openStanding = hasText(openGroupSlug) ? groupStandings[openGroupSlug] : undefined;
 	const load = loadProps(state);
-	// A level behind is named by what it shows: a group by its name, a route's own level by the
-	// route. The practice level is the deepest, so it is never behind another.
+	// A level behind is named by what it shows. The practice level is the deepest, so it is never
+	// behind another.
 	const labelOf = (entry: DetailStackEntry<PracticeProfileDetailLevelKind>): string => {
-		if (entry.kind === "practice-group") {
-			return groups.find((candidate) => candidate.slug === entry.id)?.name ?? "Group";
+		switch (entry.kind) {
+			case "practice-group": {
+				return groups.find((candidate) => candidate.slug === entry.id)?.name ?? "Group";
+			}
+			case "practice": {
+				return "Practice";
+			}
+			case "practice-groups": {
+				return ALL_PRACTICE_GROUPS;
+			}
 		}
-		if (entry.kind === "practice") {
-			return "Practice";
-		}
-		return levelLabel?.(entry) ?? entry.kind;
 	};
 	const pathAt = levelPathAt(detailStack, { pageLabel: PAGE_LABEL, labelOf, onClose });
 
 	return (
 		<DetailDrawerStack stack={detailStack} size="detailWide" onClose={onClose}>
 			{(entry, level): ReactNode => {
-				if (entry.kind === "practice-group") {
-					return (
-						<PracticeGroupDetailLevel
-							nested={level.nested}
-							path={pathAt(level.depth)}
-							group={openGroup}
-							standing={openStanding}
-							practices={detail.practices}
-							{...(hasText(openGroupSlug) ? groupOverview?.(openGroupSlug) : undefined)}
-							openPracticeSlug={openPracticeSlug}
-							onOpenPractice={onOpenPractice}
-							{...load}
-						/>
-					);
+				switch (entry.kind) {
+					case "practice-groups": {
+						return (
+							<AllPracticeGroupsLevel
+								nested={level.nested}
+								path={pathAt(level.depth)}
+								{...allPracticeGroups}
+								groups={sortPracticeGroups(groups, groupStandings, allPracticeGroups.sort)}
+								standings={groupStandings}
+								openGroupSlug={openGroupSlug}
+								state={state}
+							/>
+						);
+					}
+					case "practice-group": {
+						return (
+							<PracticeGroupDetailLevel
+								nested={level.nested}
+								path={pathAt(level.depth)}
+								group={openGroup}
+								standing={openStanding}
+								practices={detail.practices}
+								{...(hasText(openGroupSlug) ? groupOverview?.(openGroupSlug) : undefined)}
+								openPracticeSlug={openPracticeSlug}
+								onOpenPractice={onOpenPractice}
+								{...load}
+							/>
+						);
+					}
+					case "practice": {
+						return (
+							<PracticeDetailLevel
+								nested={level.nested}
+								path={pathAt(level.depth)}
+								practice={detail.practice}
+								feed={detail.feed}
+								feedbackCards={feedbackCards}
+								ratingProps={ratingProps}
+								skeletonRows={skeletonRows}
+								// The group level is under the practice's whenever the group is known, so a
+								// card's group name goes back to it.
+								onOpenGroup={openGroup && (() => onClose(groupIndex + 1))}
+								tab={practiceTab}
+								onTabChange={(tab) => onSelectionChange({ practiceTab: tab })}
+								observations={{
+									onRespond: detail.respond,
+									pendingResponses: detail.pendingResponses,
+								}}
+								{...load}
+							/>
+						);
+					}
 				}
-				if (entry.kind === "practice") {
-					return (
-						<PracticeDetailLevel
-							nested={level.nested}
-							path={pathAt(level.depth)}
-							practice={detail.practice}
-							feed={detail.feed}
-							feedbackCards={feedbackCards}
-							ratingProps={ratingProps}
-							skeletonRows={skeletonRows}
-							// The group level is under the practice's whenever the group is known, so a
-							// card's group name goes back to it.
-							onOpenGroup={openGroup && (() => onClose(groupIndex + 1))}
-							tab={practiceTab}
-							onTabChange={(tab) =>
-								// The default is the URL's silence.
-								onSelectionChange({ practiceTab: tab === DEFAULT_PRACTICE_TAB ? undefined : tab })
-							}
-							observations={{
-								onRespond: detail.respond,
-								pendingFeedbackId: detail.pendingFeedbackId,
-							}}
-							{...load}
-						/>
-					);
-				}
-				return renderLevel?.(entry, level, pathAt(level.depth));
 			}}
 		</DetailDrawerStack>
 	);

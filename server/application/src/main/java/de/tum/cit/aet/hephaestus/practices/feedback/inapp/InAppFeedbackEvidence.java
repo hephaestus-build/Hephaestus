@@ -6,13 +6,12 @@ import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
-import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository.CurrentResponseProjection;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.WorkResolution;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -27,16 +26,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 /**
- * What a developer's in-app feedback rests on, and what their work has said about it since: the two reads
- * every surface that shows such feedback makes, so that the developer's page and the practice profile
- * cannot disagree about which pieces of feedback are still shown or which the work has resolved.
+ * What a developer's in-app feedback rests on, and what their work has said about it since: the reads every
+ * surface that shows such feedback makes.
  */
 @Component
 @RequiredArgsConstructor
@@ -51,13 +47,10 @@ public class InAppFeedbackEvidence {
      * The observations behind these pieces of feedback that may still be shown, per piece, newest first.
      * Feedback absent from the result has no evidence left to show and is not on the developer's page either.
      *
-     * <p>The gate runs again here even though composition ran it: the composed body is frozen text and the
-     * gate is not, so a claim can lose currentness or authorization after it was written. The two are not
-     * the same loss. Evidence whose source may no longer be cited is hidden, and the card with it. Evidence
-     * measured by review rules the practice has since changed stays, and {@link #practiceChangedAt} says
-     * when the practice moved on: the card is closed by that, and closed is something the developer may
-     * see. A claim whose rules cannot be verified at all is hidden as before. One batch query and one
-     * authorization round trip, as {@link ObservationVisibilityPolicy#permitsShown} is built for.
+     * <p>The gate runs again although composition ran it, because the composed body is frozen and the gate
+     * is not. Evidence whose source may no longer be cited, or whose rules cannot be verified at all, hides
+     * the card; evidence measured by rules the practice has since changed stays, and
+     * {@link #practiceChangedAt} closes the card instead.
      */
     public Map<UUID, List<Observation>> visibleEvidence(Long workspaceId, Collection<UUID> feedbackIds) {
         if (feedbackIds.isEmpty()) {
@@ -147,41 +140,15 @@ public class InAppFeedbackEvidence {
     }
 
     /**
-     * When the developer's own answer closed this piece of feedback, or {@code null} while their answer
-     * leaves it open. One rule, since the page, the ledger and the lane that writes the next card must not
-     * disagree about whether a developer has answered: an answer resolves unless it disputes the feedback.
+     * When the developer's own answer resolved this piece of feedback, or {@code null} while their answer
+     * leaves it open: an answer resolves unless it disputes the feedback.
      */
-    public static @Nullable Instant resolvedByDeveloperAt(@Nullable CurrentResponseProjection response) {
-        return response == null
-                ? null
-                : resolvedByDeveloperAt(
-                        response.getResolution() == null ? null : FeedbackResolution.valueOf(response.getResolution()),
-                        response.getRespondedAt());
-    }
-
-    /** {@link #resolvedByDeveloperAt(CurrentResponseProjection)} over the answer as the page carries it. */
     public static @Nullable Instant resolvedByDeveloperAt(@Nullable FeedbackResponseDTO response) {
-        return response == null ? null : resolvedByDeveloperAt(response.resolution(), response.respondedAt());
-    }
-
-    private static @Nullable Instant resolvedByDeveloperAt(
-            @Nullable FeedbackResolution resolution, @Nullable Instant respondedAt) {
-        return resolution != null && resolution.resolves() ? respondedAt : null;
-    }
-
-    /**
-     * When a piece of feedback stopped being open, or {@code null} while it is: resolved by the work or by
-     * the developer, or closed because the practice changed — whichever came first, which is what the card
-     * and the summary report ({@code docs/contributor/practice-review-glossary.mdx} § How feedback resolves).
-     */
-    public static @Nullable Instant closedAt(
-            @Nullable Instant resolvedByWorkAt,
-            @Nullable Instant resolvedByDeveloperAt,
-            @Nullable Instant practiceChangedAt) {
-        return Stream.of(resolvedByWorkAt, resolvedByDeveloperAt, practiceChangedAt)
-                .filter(Objects::nonNull)
-                .min(Comparator.naturalOrder())
-                .orElse(null);
+        return response != null
+                        && response.resolution() != null
+                        && response.resolution().resolves()
+                ? response.respondedAt()
+                : null;
     }
 
     private static ReviewClaimCurrentness currentness(Observation observation) {
@@ -193,15 +160,21 @@ public class InAppFeedbackEvidence {
      * id: the {@link WorkResolution} of the practice the feedback is about, read off its newest visible
      * evidence. Feedback without visible evidence is absent, since it is not shown anywhere either.
      *
-     * <p>One query for the developer's observations since the oldest piece of feedback was prepared and one
-     * authorization round trip, whatever the number of cards; the same visibility gate as the evidence, since
-     * work that may not be shown may not resolve anything either.
+     * <p>Read the way the practice standing reads its window: the same query, the same visibility gate, then
+     * each claim narrowed to its latest run ({@link LatestRun#perClaim}), so that the card and the practice
+     * profile's summary resolve a piece of feedback off the same observations. Work that may not be shown may
+     * not resolve anything either.
+     *
+     * @param practiceChangedAt {@link #practiceChangedAt} over the same evidence
+     * @param now the moment the caller reads at: work reviewed after it does not count
      */
     public Map<UUID, WorkResolution> workResolutions(
             Long workspaceId,
             Long developerId,
             Collection<Feedback> feedback,
-            Map<UUID, List<Observation>> evidenceByFeedback) {
+            Map<UUID, List<Observation>> evidenceByFeedback,
+            Map<UUID, Instant> practiceChangedAt,
+            Instant now) {
         Optional<Instant> oldestPreparedAt = feedback.stream()
                 .filter(piece -> evidenceByFeedback.containsKey(piece.getId()))
                 .map(Feedback::getCreatedAt)
@@ -209,31 +182,33 @@ public class InAppFeedbackEvidence {
         if (oldestPreparedAt.isEmpty()) {
             return Map.of();
         }
-        List<Observation> later = observationRepository.findRecentByDeveloperAndWorkspace(
-                developerId, workspaceId, oldestPreparedAt.get(), false, Pageable.unpaged());
+        List<Observation> later = observationRepository.findByDeveloperAndWorkspaceBetween(
+                developerId, workspaceId, oldestPreparedAt.get(), now);
         Set<UUID> visible =
                 visibilityPolicy.permitsAll(workspaceId, later, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
-        Map<String, List<Observation>> laterByPractice = later.stream()
-                .filter(observation -> visible.contains(observation.getId()))
-                .collect(Collectors.groupingBy(
-                        observation -> observation.getPractice().getSlug()));
-        return workResolutions(feedback, evidenceByFeedback, laterByPractice);
+        Map<String, List<Observation>> laterByPractice =
+                LatestRun.perClaim(later.stream()
+                                .filter(observation -> visible.contains(observation.getId()))
+                                .toList())
+                        .stream()
+                        .collect(Collectors.groupingBy(
+                                observation -> observation.getPractice().getSlug()));
+        return workResolutionsFrom(feedback, evidenceByFeedback, practiceChangedAt, laterByPractice);
     }
 
     /**
-     * {@link #workResolutions(Long, Long, Collection, Map)} over observations the caller already holds, per
-     * practice slug: every visible observation about the developer since the oldest piece of feedback was
-     * prepared, each piece of work at its latest run. Each practice's work is bundled once, however many
+     * {@link #workResolutions} over observations the caller already holds,
+     * per practice slug, each claim at its latest run. Each practice's work is bundled once, however many
      * cards are about it.
      *
      * <p>Feedback closed because its practice changed is absent, as feedback without evidence is: the work
      * that came after was measured by other rules and cannot answer what these ones asked.
      */
-    public Map<UUID, WorkResolution> workResolutions(
+    public static Map<UUID, WorkResolution> workResolutionsFrom(
             Collection<Feedback> feedback,
             Map<UUID, List<Observation>> evidenceByFeedback,
+            Map<UUID, Instant> practiceChangedAt,
             Map<String, List<Observation>> observationsByPractice) {
-        Map<UUID, Instant> practiceChangedAt = practiceChangedAt(evidenceByFeedback);
         Map<String, WorkResolution.Opportunities> opportunitiesByPractice = new LinkedHashMap<>();
         Map<UUID, WorkResolution> resolutions = new LinkedHashMap<>();
         for (Feedback piece : feedback) {

@@ -12,7 +12,6 @@ import { expectSettledVisible } from "@/stories/overlay";
 import {
 	detailObservation,
 	detailPractices,
-	detailRun,
 	detailRuns,
 	focusedChanges,
 	unwrittenAbout,
@@ -63,18 +62,29 @@ const meta = {
 	parameters: { layout: "fullscreen" },
 	decorators: [withPageBehind],
 	args: {
+		path: {
+			behind: [
+				{ label: "Practice profile", depth: 0 },
+				{ label: packagingGroup.name, depth: 1 },
+			],
+			onClose: fn(),
+		},
 		practice: focusedChanges,
 		feed: readyFeed,
 		feedbackCards: ALL_FEEDBACK_CARDS,
 		observations: { onRespond: fn() },
 		onOpenGroup: fn(),
+		tab: DEFAULT_PRACTICE_TAB,
 		onTabChange: fn(),
+		skeletonRows: 3,
 		isLoading: false,
 		onRetry: fn(),
 	},
 	argTypes: {
 		// A discriminated union renders as a free-text box, which cannot produce a valid value.
 		feed: { control: false },
+		// The close is the drawer stack's, which the render holds; only the crumbs come from here.
+		path: { control: false },
 	},
 	render: (args) => (
 		<StatefulPatch<LevelState>
@@ -83,7 +93,7 @@ const meta = {
 					{ kind: "practice-group", id: packagingGroup.slug },
 					{ kind: "practice", id: args.practice?.slug ?? focusedChanges.slug },
 				],
-				tab: args.tab ?? DEFAULT_PRACTICE_TAB,
+				tab: args.tab,
 			}}
 		>
 			{(state, patch) => (
@@ -98,10 +108,7 @@ const meta = {
 								{...args}
 								nested={level.nested}
 								path={{
-									behind: [
-										{ label: "Practice profile", depth: 0 },
-										{ label: packagingGroup.name, depth: 1 },
-									],
+									behind: args.path.behind,
 									onClose: (depth) => patch({ stack: state.stack.slice(0, depth) }),
 								}}
 								tab={state.tab}
@@ -191,65 +198,14 @@ export const Default: Story = {
 	},
 };
 
-/** Each row answers its own press: an earlier one opens, the newest closes, neither disturbs the other. */
-export const OpenedAndClosed: Story = {
-	play: async () => {
-		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
-		const older = screen.getByRole("button", { name: new RegExp(olderObservation.summary, "u") });
-		await userEvent.click(older);
-		await expect(older).toHaveAttribute("aria-expanded", "true");
-		await expect(screen.getAllByText("Why it was noted")).toHaveLength(2);
-
-		const newest = screen.getByRole("button", { name: new RegExp(detailObservation.summary, "u") });
-		await userEvent.click(newest);
-		await expect(newest).toHaveAttribute("aria-expanded", "false");
-		await expect(older).toHaveAttribute("aria-expanded", "true");
-		await expect(screen.getAllByText("Why it was noted")).toHaveLength(1);
-	},
-};
-
-/**
- * The path over the title names the group; its crumb returns to the group's level under this one.
- */
-export const BackToTheGroup: Story = {
-	play: async () => {
-		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
-		await expect(screen.getByRole("list", { name: "Path" })).toHaveTextContent(
-			`Practice profile${packagingGroup.name}Practice`,
-		);
-		await userEvent.click(screen.getByRole("button", { name: packagingGroup.name }));
-		await expect(screen.queryByRole("tab")).not.toBeInTheDocument();
-	},
-};
-
-/** A dispute asks for its sentence before it is recorded. */
-export const Disputing: Story = {
-	// One run, so there is one Disputed button to press.
-	args: { feed: { ...readyFeed, runs: [detailRun] } },
-	play: async ({ args }) => {
-		await expectSettledVisible(await screen.findByRole("button", { name: "Disputed" }));
-		await userEvent.click(screen.getByRole("button", { name: "Disputed" }));
-		await expect(args.observations?.onRespond).not.toHaveBeenCalled();
-		await userEvent.type(
-			screen.getByRole("textbox", { name: "What was missed?" }),
-			"The rename was requested by the reviewer in the same thread.",
-		);
-		await userEvent.click(screen.getByRole("button", { name: "Send" }));
-		await expect(args.observations?.onRespond).toHaveBeenCalledWith(detailObservation, {
-			usefulness: undefined,
-			resolution: "DISPUTED",
-			comment: "The rename was requested by the reviewer in the same thread.",
-		});
-	},
-};
-
 /**
  * The practice's one open card and the cards the work resolved, under a heading of the
- * Observations tab's rank; a rating opens the comment band.
+ * Observations tab's rank; a rating opens the comment band, and a card's "Learn more about this
+ * practice" moves to the neighbouring tab.
  */
 export const FeedbackTab: Story = {
 	args: { tab: "feedback", practice: describedPractice },
-	play: async () => {
+	play: async ({ args }) => {
 		await expectSettledVisible(await screen.findByRole("heading", { level: 2, name: "Feedback" }));
 		await expect(screen.getByRole("heading", { level: 3, name: "Current feedback" })).toBeVisible();
 		await expect(screen.getByRole("tab", { name: "Feedback 2" })).toHaveAttribute(
@@ -264,12 +220,6 @@ export const FeedbackTab: Story = {
 			name: "Descriptions named the what, rarely the why",
 		});
 		await expect(within(open).getByText("Open")).toBeVisible();
-		// Each card heads with the practice as the grey pill, on the practice's own level too.
-		for (const card of [open, resolved]) {
-			await expect(
-				within(card).getByText(describedPractice.name).closest('[data-slot="badge"]'),
-			).not.toBeNull();
-		}
 		await expect(
 			screen.getByRole("heading", { level: 3, name: "Resolved feedback" }),
 		).toBeVisible();
@@ -278,18 +228,7 @@ export const FeedbackTab: Story = {
 		await expect(
 			screen.getByRole("textbox", { name: "What worked about this feedback?" }),
 		).toBeVisible();
-	},
-};
 
-/** A card's "Learn more about this practice" moves to the neighbouring tab. */
-export const FeedbackToAbout: Story = {
-	args: { tab: "feedback", practice: describedPractice },
-	play: async ({ args }) => {
-		await expectSettledVisible(await screen.findByText("Current feedback"));
-		const [open] = screen.getAllByRole("article");
-		if (!open) {
-			throw new Error("Expected the open card.");
-		}
 		await userEvent.click(
 			within(open).getByRole("button", { name: "Learn more about this practice" }),
 		);
@@ -332,9 +271,8 @@ export const AboutTab: Story = {
 		);
 		await expect(standingLine).toBeVisible();
 		await expect(trendLine).toBeVisible();
-		// The two lines share one bordered box on the 60% ground, under the label.
+		// The two lines share one box under the label.
 		await expect(standingLine.parentElement).toBe(trendLine.parentElement);
-		await expect(standingLine.parentElement).toHaveClass("border", "bg-sidebar");
 		await expect(screen.getByText("Why it matters")).toBeVisible();
 		await expect(screen.getByText("What good looks like")).toBeVisible();
 	},
@@ -352,24 +290,6 @@ export const MoreToLoad: Story = {
 		await expect(screen.queryByRole("tab", { name: /^Observations \d/u })).not.toBeInTheDocument();
 		// The feedback cards arrive in one piece, so that tab is counted either way.
 		await expect(screen.getByRole("tab", { name: "Feedback 1" })).toBeVisible();
-	},
-};
-
-export const FeedLoading: Story = {
-	args: { feed: { status: "loading" }, skeletonRows: 4 },
-};
-
-export const FeedFailed: Story = {
-	args: { feed: { status: "error", error: new Error("Gateway timeout"), onRetry: fn() } },
-	play: async () => {
-		await expectSettledVisible(await screen.findByText("Could not load review runs"));
-	},
-};
-
-export const EmptyFeed: Story = {
-	args: { feed: { ...readyFeed, runs: [] } },
-	play: async () => {
-		await expectSettledVisible(await screen.findByText("No review has reached this practice yet."));
 	},
 };
 

@@ -11,21 +11,21 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The observations every trend test reads: one piece of work a practice reviewed, and what it made of it.
- * A pull request unless a test says otherwise, and a run of its own unless the test names one, so a test
- * spells out only the facts it asserts on.
+ * The observations the trend and standing tests read: one piece of work a practice reviewed, and what it made
+ * of it. A pull request unless a test says otherwise, and a run of its own unless the test names one, so a
+ * test spells out only the facts it asserts on.
  */
-final class TrendObservations {
+public final class TrendObservations {
 
     private TrendObservations() {}
 
     /** The practice was demonstrated on this piece of work. */
-    static Observation clean(long artifactId, String observedAt) {
+    public static Observation clean(long artifactId, String observedAt) {
         return judged(artifactId, observedAt, Assessment.GOOD);
     }
 
     /** {@link #clean} on a kind other than a pull request. */
-    static Observation clean(long artifactId, String observedAt, ArtifactKind kind) {
+    public static Observation clean(long artifactId, String observedAt, ArtifactKind kind) {
         return observation(
                 artifactId,
                 UUID.randomUUID(),
@@ -37,7 +37,7 @@ final class TrendObservations {
     }
 
     /** {@link #clean} on a named run. */
-    static Observation clean(long artifactId, UUID jobId, String observedAt) {
+    public static Observation clean(long artifactId, UUID jobId, String observedAt) {
         return observation(
                 artifactId,
                 jobId,
@@ -49,12 +49,12 @@ final class TrendObservations {
     }
 
     /** The practice was there to judge and was judged: {@code BAD} is a problem in what was done. */
-    static Observation judged(long artifactId, String observedAt, Assessment assessment) {
+    public static Observation judged(long artifactId, String observedAt, Assessment assessment) {
         return judged(artifactId, UUID.randomUUID(), observedAt, assessment);
     }
 
     /** {@link #judged} on a named run. */
-    static Observation judged(long artifactId, UUID jobId, String observedAt, Assessment assessment) {
+    public static Observation judged(long artifactId, UUID jobId, String observedAt, Assessment assessment) {
         return observation(
                 artifactId,
                 jobId,
@@ -66,12 +66,12 @@ final class TrendObservations {
     }
 
     /** The practice was missing from this piece of work. */
-    static Observation problem(long artifactId, String observedAt) {
+    public static Observation problem(long artifactId, String observedAt) {
         return problem(artifactId, UUID.randomUUID(), observedAt);
     }
 
     /** {@link #problem} on a named run. */
-    static Observation problem(long artifactId, UUID jobId, String observedAt) {
+    public static Observation problem(long artifactId, UUID jobId, String observedAt) {
         return observation(
                 artifactId,
                 jobId,
@@ -83,12 +83,12 @@ final class TrendObservations {
     }
 
     /** The practice looked at this piece of work and found nothing to judge. */
-    static Observation noVerdict(long artifactId, String observedAt) {
+    public static Observation noVerdict(long artifactId, String observedAt) {
         return noVerdict(artifactId, UUID.randomUUID(), observedAt);
     }
 
     /** {@link #noVerdict} on a named run. */
-    static Observation noVerdict(long artifactId, UUID jobId, String observedAt) {
+    public static Observation noVerdict(long artifactId, UUID jobId, String observedAt) {
         return observation(
                 artifactId, jobId, observedAt, ArtifactKinds.PULL_REQUEST, AssessmentStatus.NOT_APPLICABLE, null, null);
     }

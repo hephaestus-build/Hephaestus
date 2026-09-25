@@ -9,32 +9,22 @@ import { isLoopbackHost, positivePort, readEnvFile } from "./lib/env.ts";
 
 /**
  * Seeds the development database with practice reviews of one developer's work, so the Practice
- * profile can be tested against the server rather than against fixtures: review runs on pull
- * requests and issues already synced into one workspace, the observations they recorded, and the
- * in-app feedback cards composed from the recurring problems, some open and some resolved. Nothing
- * here is addressed to a provider: the only feedback written is IN_APP, which is read on the
- * developer's own pages, and every run is already complete with both preparation lanes marked
- * done, so no sweeper, dispatcher or worker picks any of it up.
+ * profile can be tried against the server rather than against fixtures: review runs on pull requests
+ * and issues already synced into one workspace, the observations they recorded, and the in-app
+ * feedback composed from the recurring problems, some open and some resolved. Only IN_APP feedback
+ * is written, and every run is complete with both preparation lanes marked done, so no sweeper,
+ * dispatcher or worker picks any of it up and nothing reaches a provider.
  *
  *     node scripts/seed-practice-profile.ts          # remove the seed's rows, then insert them
- *     node scripts/seed-practice-profile.ts reset    # remove the seed's rows only
+ *     node scripts/seed-practice-profile.ts remove   # remove the seed's rows only
  *
- * Whose work is seeded comes from the flags, or from the environment, or from the defaults the
- * `HephaestusTest` fixtures are synced under:
+ * Flags, environment and defaults: docs/contributor/local-development.mdx § Seeding a Practice
+ * profile.
  *
- *     --workspace <slug>                  SEED_WORKSPACE_SLUG              hephaestustest
- *     --developer <login>                 SEED_DEVELOPER_LOGIN             ValentinGruener
- *     --pull-request-repository <owner/n> SEED_PULL_REQUEST_REPOSITORY     HephaestusTest/practice-validation
- *     --issue-repository <owner/name>     SEED_ISSUE_REPOSITORY            HephaestusTest/MaxTestRepo
- *
- * The runs name their pull requests and issues by number in those two repositories, so a
- * repository standing in for a default needs synced work under the same numbers.
- *
- * Every row the seed writes carries an id under {@link ID_PREFIX}, which is how the reset finds
+ * Every row the seed writes carries an id under {@link ID_PREFIX}, which is how a removal finds
  * them and how a re-run replaces them; nothing else in the database is touched. The reviewed work
  * is looked up by repository and number, never invented: a pull request or issue the workspace has
- * not synced fails the seed before it writes anything. The connection comes from `server/.env`
- * and only ever points at this machine.
+ * not synced fails the seed before it writes anything.
  */
 
 const { values: flags, positionals } = parseArgs({
@@ -62,10 +52,20 @@ const ISSUE_REPOSITORY = setting(
 	"HephaestusTest/MaxTestRepo",
 );
 
+/**
+ * The UTC calendar day `days` before today, at `time` ("HH:MM") UTC. Every moment in the seed is one
+ * of these, so a run stays inside the standing's 90-day look-back and a closed card inside the page's
+ * 30 days however long after this file was written the seed runs.
+ */
+function daysAgo(days: number, time: string): string {
+	const day = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+	return new Date(`${day}T${time}:00Z`).toISOString();
+}
+
 /** A UUID v4 prefix no real row carries; the fourth group says which table the row is in. */
 const ID_PREFIX = "5eed0000-cafe-4000";
 const EVIDENCE_CONTRACT_VERSION = "1.0.0";
-/** `FeedbackLedgerRecorder.IN_APP_UNIT_ORDINAL_BASE`: the band an in-app unit's position sits in. */
+/** `FeedbackLedgerRecorder.IN_APP_UNIT_ORDINAL_BASE`: the band an in-app piece of feedback's position sits in. */
 const IN_APP_POSITION_BASE = 7000;
 
 type AssessmentStatus = "ASSESSED" | "NOT_APPLICABLE" | "UNDETERMINED";
@@ -121,7 +121,7 @@ interface SeedResponse {
 
 interface SeedCard {
 	practice: string;
-	/** The run whose cycle composed the card; its job owns the unit. */
+	/** The run whose cycle composed the card; its job owns the feedback. */
 	composedBy: string;
 	createdAt: string;
 	/** Set once the developer opened the card; absent for one still unread. */
@@ -209,9 +209,9 @@ const ROLE_CONTROLLER = "src/main/java/de/tum/cit/aet/users/RoleController.java"
  */
 const RUNS: SeedRun[] = [
 	{
-		key: "pr1-aug",
+		key: "pr1",
 		artifact: pullRequest(1),
-		at: "2026-08-04T09:30:00Z",
+		at: daysAgo(41, "09:30"),
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
@@ -247,7 +247,7 @@ const RUNS: SeedRun[] = [
 	{
 		key: "pr2",
 		artifact: pullRequest(2),
-		at: "2026-08-07T14:10:00Z",
+		at: daysAgo(38, "14:10"),
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
@@ -290,7 +290,7 @@ const RUNS: SeedRun[] = [
 	{
 		key: "pr4",
 		artifact: pullRequest(4),
-		at: "2026-08-11T10:45:00Z",
+		at: daysAgo(34, "10:45"),
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
@@ -334,7 +334,7 @@ const RUNS: SeedRun[] = [
 	{
 		key: "pr16",
 		artifact: pullRequest(16),
-		at: "2026-08-13T16:20:00Z",
+		at: daysAgo(32, "16:20"),
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
@@ -387,7 +387,7 @@ const RUNS: SeedRun[] = [
 	{
 		key: "issue13",
 		artifact: issue(13),
-		at: "2026-08-18T09:05:00Z",
+		at: daysAgo(27, "09:05"),
 		observations: [
 			{
 				practice: "issue-has-checkable-outcome",
@@ -418,7 +418,7 @@ const RUNS: SeedRun[] = [
 	{
 		key: "pr17",
 		artifact: pullRequest(17),
-		at: "2026-08-19T11:50:00Z",
+		at: daysAgo(26, "11:50"),
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
@@ -454,7 +454,7 @@ const RUNS: SeedRun[] = [
 	{
 		key: "issue14",
 		artifact: issue(14),
-		at: "2026-08-25T13:25:00Z",
+		at: daysAgo(20, "13:25"),
 		observations: [
 			{
 				practice: "issue-has-checkable-outcome",
@@ -480,7 +480,7 @@ const RUNS: SeedRun[] = [
 	{
 		key: "pr19",
 		artifact: pullRequest(19),
-		at: "2026-08-27T15:40:00Z",
+		at: daysAgo(18, "15:40"),
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
@@ -549,7 +549,7 @@ const RUNS: SeedRun[] = [
 	{
 		key: "pr20",
 		artifact: pullRequest(20),
-		at: "2026-09-05T10:15:00Z",
+		at: daysAgo(9, "10:15"),
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
@@ -624,9 +624,9 @@ const RUNS: SeedRun[] = [
 		],
 	},
 	{
-		key: "pr1-sep",
+		key: "pr1-again",
 		artifact: pullRequest(1),
-		at: "2026-09-07T09:20:00Z",
+		at: daysAgo(7, "09:20"),
 		observations: [
 			{
 				practice: "leaves-useful-specific-review-comments",
@@ -646,7 +646,7 @@ const RUNS: SeedRun[] = [
 	{
 		key: "pr21",
 		artifact: pullRequest(21),
-		at: "2026-09-08T14:35:00Z",
+		at: daysAgo(6, "14:35"),
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
@@ -715,7 +715,7 @@ const RUNS: SeedRun[] = [
 	{
 		key: "pr23",
 		artifact: pullRequest(23),
-		at: "2026-09-09T11:00:00Z",
+		at: daysAgo(5, "11:00"),
 		observations: [
 			{
 				practice: "scope-one-reviewable-change",
@@ -749,7 +749,7 @@ const RUNS: SeedRun[] = [
 	{
 		key: "pr22",
 		artifact: pullRequest(22),
-		at: "2026-09-11T16:45:00Z",
+		at: daysAgo(3, "16:45"),
 		observations: [
 			{
 				practice: "scope-one-reviewable-change",
@@ -820,7 +820,7 @@ const CARDS: SeedCard[] = [
 	{
 		practice: "scope-one-reviewable-change",
 		composedBy: "pr22",
-		createdAt: "2026-09-13T08:40:00Z",
+		createdAt: daysAgo(1, "08:40"),
 		headline: "Pull requests bundle a change with a cleanup",
 		message:
 			"In #19 the deactivation change travelled with a rename of the listing it lives beside, and #20, #21, #22 and #23 each carried a role, sign-in or sweep change alongside a cleanup or rename of the code around it. All five read like the tidy-up happened while the change was open, so the reviewer had to follow two intentions in one diff.",
@@ -831,7 +831,7 @@ const CARDS: SeedCard[] = [
 	{
 		practice: "ships-tests-with-the-change",
 		composedBy: "pr22",
-		createdAt: "2026-09-12T16:05:00Z",
+		createdAt: daysAgo(2, "16:05"),
 		headline: "Behaviour changes arrive without a test for the new path",
 		message:
 			"#20, #21 and #22 each add a branch to the user service, a role change, a role listing and a last sign-in stamp, and none of them adds a test that exercises it. The descriptions name the case the change is for, so the missing test is the one the description already describes.",
@@ -842,8 +842,8 @@ const CARDS: SeedCard[] = [
 	{
 		practice: "ready-and-traceable-handoff",
 		composedBy: "pr21",
-		createdAt: "2026-09-09T07:30:00Z",
-		deliveredAt: "2026-09-09T09:12:00Z",
+		createdAt: daysAgo(5, "07:30"),
+		deliveredAt: daysAgo(5, "09:12"),
 		headline: "Changes were marked ready without the issue they close",
 		message:
 			"#19 and #21 were marked ready with no link to the issue that asked for them, and the reviewer on #19 opened with a question about what the listing was for. Both descriptions explain the change, so the missing piece is the one line that says which need it answers.",
@@ -854,21 +854,21 @@ const CARDS: SeedCard[] = [
 	{
 		practice: "commit-subjects-explain-each-change",
 		composedBy: "pr20",
-		createdAt: "2026-09-06T09:15:00Z",
-		deliveredAt: "2026-09-06T11:40:00Z",
+		createdAt: daysAgo(8, "09:15"),
+		deliveredAt: daysAgo(8, "11:40"),
 		headline: "Commit subjects repeat the diff instead of the intent",
 		message:
 			'Five of the eight commits on #19 and four of the six on #20 read "fix", "wip" or "address comments", so the history of each pull request says nothing about which commit changed what. The pull request descriptions do say it, which means the words exist and only the commits are missing them.',
 		nextStep:
 			"Give each commit a subject that says what it changes and why, and squash the fix-up commits before you mark the pull request ready.",
 		evidence: ["pr19", "pr20"],
-		response: { at: "2026-09-06T11:44:00Z", usefulness: "HELPFUL" },
+		response: { at: daysAgo(8, "11:44"), usefulness: "HELPFUL" },
 	},
 	{
 		practice: "honours-linked-issue-acceptance-criteria",
 		composedBy: "pr20",
-		createdAt: "2026-09-06T09:15:00Z",
-		deliveredAt: "2026-09-07T08:02:00Z",
+		createdAt: daysAgo(8, "09:15"),
+		deliveredAt: daysAgo(7, "08:02"),
 		headline: "Pull requests close their issue without saying which criteria are met",
 		message:
 			"#16 and #20 each close an issue that lists acceptance criteria and mention none of them, so the issue's author has to reread the diff to learn whether the change covers what was asked.",
@@ -876,7 +876,7 @@ const CARDS: SeedCard[] = [
 			"Copy the issue's acceptance criteria into the description and tick the ones the change meets, so the reviewer and the issue's author see the same list.",
 		evidence: ["pr16", "pr20"],
 		response: {
-			at: "2026-09-07T10:20:00Z",
+			at: daysAgo(7, "10:20"),
 			usefulness: "UNHELPFUL",
 			resolution: "DISPUTED",
 			comment:
@@ -886,8 +886,8 @@ const CARDS: SeedCard[] = [
 	{
 		practice: "issue-has-checkable-outcome",
 		composedBy: "issue14",
-		createdAt: "2026-08-26T07:50:00Z",
-		deliveredAt: "2026-08-27T08:31:00Z",
+		createdAt: daysAgo(19, "07:50"),
+		deliveredAt: daysAgo(18, "08:31"),
 		headline: "Issues describe the problem but not what done looks like",
 		message:
 			"#13 and #14 each explain what goes wrong and stop there. Neither says what a maintainer would check to close the issue, so the flaky test in #13 could be closed by a retry and the backoff in #14 by any delay at all.",
@@ -898,40 +898,40 @@ const CARDS: SeedCard[] = [
 	{
 		practice: "describe-what-and-why",
 		composedBy: "pr17",
-		createdAt: "2026-08-20T10:05:00Z",
-		deliveredAt: "2026-08-20T13:10:00Z",
+		createdAt: daysAgo(25, "10:05"),
+		deliveredAt: daysAgo(25, "13:10"),
 		headline: "Descriptions name the what, rarely the why",
 		message:
 			"#16 and #17 list the files touched and the endpoint added but not the problem behind them, and the reviewer on #17 asked in the first comment what deactivation was for. Both were written from the diff rather than from the need.",
 		nextStep: "Before the file list, write one paragraph on the problem and the decision you took.",
 		evidence: ["pr16", "pr17"],
-		response: { at: "2026-09-09T14:10:00Z", usefulness: "HELPFUL", resolution: "ADDRESSED" },
+		response: { at: daysAgo(5, "14:10"), usefulness: "HELPFUL", resolution: "ADDRESSED" },
 	},
 	{
 		practice: "leaves-useful-specific-review-comments",
 		composedBy: "pr4",
-		createdAt: "2026-08-12T15:30:00Z",
-		deliveredAt: "2026-08-13T08:15:00Z",
+		createdAt: daysAgo(33, "15:30"),
+		deliveredAt: daysAgo(32, "08:15"),
 		headline: "Review comments say something is off, not what",
 		message:
 			'On #2 and #4 the comments read "this looks wrong" and "can we do better here?", and the author replied to each one asking what to change. The comments land on the right lines, so the missing half is the change you would make.',
 		nextStep:
 			"Name the line, say what is wrong with it and what you would do instead, so the author can act on the comment without asking back.",
 		evidence: ["pr2", "pr4"],
-		response: { at: "2026-09-12T09:00:00Z", resolution: "ADDRESSED" },
+		response: { at: daysAgo(2, "09:00"), resolution: "ADDRESSED" },
 	},
 	{
 		practice: "validates-and-escapes-untrusted-input",
 		composedBy: "pr16",
-		createdAt: "2026-08-14T11:20:00Z",
-		deliveredAt: "2026-08-14T12:05:00Z",
+		createdAt: daysAgo(31, "11:20"),
+		deliveredAt: daysAgo(31, "12:05"),
 		headline: "Request fields reach a query or a template unescaped",
 		message:
 			"In #1 the notification body is built from the request's display name, in #2 and #4 the user lookup concatenates the login into the query, and in #16 the report runner passes the requested file name straight to the file system. Each change validates the field's presence and not its content.",
 		nextStep:
 			"Treat every request field as text until it is bound: use a parameter for the query, an encoder for the template and a whitelist for the path.",
-		evidence: ["pr1-aug", "pr2", "pr4", "pr16"],
-		response: { at: "2026-09-09T14:12:00Z", usefulness: "HELPFUL", resolution: "ADDRESSED" },
+		evidence: ["pr1", "pr2", "pr4", "pr16"],
+		response: { at: daysAgo(5, "14:12"), usefulness: "HELPFUL", resolution: "ADDRESSED" },
 	},
 ];
 
@@ -1176,7 +1176,7 @@ async function insertReviews(client: Client, resolved: Resolved, counts: Counts)
 					observation.assessmentStatus,
 					observation.presence ?? null,
 					observation.severity ?? null,
-					JSON.stringify({ detector: "practice-observer", citations: [citation] }),
+					JSON.stringify({ citations: [citation] }),
 					observation.rationale ?? null,
 					run.at,
 					practice.revisionId,
@@ -1283,8 +1283,8 @@ async function insertSeed(client: Client, resolved: Resolved): Promise<Counts> {
 
 async function main(): Promise<void> {
 	const [mode = "seed", ...rest] = positionals;
-	if ((mode !== "seed" && mode !== "reset") || rest.length > 0) {
-		throw new Error(`Unknown mode ${positionals.join(" ")}; use "seed" (the default) or "reset"`);
+	if ((mode !== "seed" && mode !== "remove") || rest.length > 0) {
+		throw new Error(`Unknown mode ${positionals.join(" ")}; use "seed" (the default) or "remove"`);
 	}
 	const server = path.join(import.meta.dirname, "..", "server");
 	const env = { ...(await readEnvFile(path.join(server, ".env"))), ...process.env };
@@ -1297,14 +1297,14 @@ async function main(): Promise<void> {
 		host,
 		port: positivePort(env.POSTGRES_PORT ?? "5432", "POSTGRES_PORT"),
 		database: env.POSTGRES_DB ?? "hephaestus",
-		user: env.DB_USERNAME ?? "root",
-		password: env.DB_PASSWORD ?? "root",
+		user: env.POSTGRES_USER ?? "root",
+		password: env.POSTGRES_PASSWORD ?? "root",
 	});
 	await client.connect();
 	try {
 		await client.query("BEGIN");
 		await removeSeed(client);
-		if (mode === "reset") {
+		if (mode === "remove") {
 			await client.query("COMMIT");
 			console.log("Removed the practice profile seed.");
 			return;

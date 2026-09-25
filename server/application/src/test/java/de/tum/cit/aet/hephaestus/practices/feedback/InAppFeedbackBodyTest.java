@@ -22,7 +22,7 @@ class InAppFeedbackBodyTest extends BaseUnitTest {
     }
 
     @Test
-    void handsOutTheMessageWithoutTheHeadlineOrTheNextStep() {
+    void shouldReadTheMessageAndTheNextStepApartWhenTheBodyIsRendered() {
         String body = InAppFeedbackBody.render("Headline", "The message.\n\nWith two paragraphs.", "Try this next.");
 
         assertThat(InAppFeedbackBody.messageOf(body)).isEqualTo("The message.\n\nWith two paragraphs.");
@@ -31,7 +31,7 @@ class InAppFeedbackBodyTest extends BaseUnitTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"Try this next.", "Split\nit", "Write the assertion **before** the branch"})
-    void roundTripsAnyNextStepItWrote(String nextStep) {
+    void shouldRoundTripTheNextStepWhenItIsRendered(String nextStep) {
         String body = InAppFeedbackBody.render("Headline", "The message.\n\nWith two paragraphs.", nextStep);
 
         assertThat(InAppFeedbackBody.nextStepOf(body)).isEqualTo(nextStep.replace('\n', ' '));

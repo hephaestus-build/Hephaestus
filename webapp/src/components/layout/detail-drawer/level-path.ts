@@ -6,7 +6,6 @@ export interface LevelPathOptions<TEntry extends DetailStackEntry> {
 	pageLabel: string;
 	/** A level behind, by what it shows; `index` is its position in the stack. */
 	labelOf: (entry: TEntry, index: number) => string;
-	/** `useDetailStack(...).close`. */
 	onClose: LevelPath["onClose"];
 }
 

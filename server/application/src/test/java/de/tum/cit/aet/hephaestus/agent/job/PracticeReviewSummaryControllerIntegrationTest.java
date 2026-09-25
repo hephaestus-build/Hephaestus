@@ -170,7 +170,7 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
     /** A run that recorded no work names its kind and nothing more, so no surface prints a number that was not there. */
     @Test
     @WithAdminUser
-    void namesNoReviewedWorkWhenTheReviewRecordedNone() {
+    void shouldNameNoReviewedWorkWhenTheReviewRecordedNone() {
         AgentJob withoutMetadata = persistJob(workspace, AgentPurpose.PRACTICE_REVIEW);
         withoutMetadata.setStatus(AgentJobStatus.COMPLETED);
         jobRepository.save(withoutMetadata);

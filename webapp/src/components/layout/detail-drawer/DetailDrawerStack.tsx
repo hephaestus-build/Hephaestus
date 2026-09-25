@@ -31,9 +31,9 @@ export interface DetailDrawerStackProps<TKind extends string = string> {
 }
 
 /**
- * Each level renders the next *inside* its own content, so the child's portal nests in the
- * parent's. Base UI keeps nested portals out of the set it hides when a popup opens, which is what
- * lets a stack reach the accessibility tree at every depth.
+ * Each level renders the next *inside* its own content, so the child's portal nests in the parent's.
+ * Base UI keeps nested portals out of the set it hides when a popup opens, which is what lets a
+ * stack reach the accessibility tree at every depth.
  *
  * A press on a visible layer brings that layer to the front: the page's backdrop dismisses every
  * level, the strip a covered level leaves showing dismisses everything over it, and the front
@@ -41,9 +41,9 @@ export interface DetailDrawerStackProps<TKind extends string = string> {
  * read off the press's position, because the front level's viewport covers the whole screen and
  * is what every outside press lands on.
  *
- * A dismissal shuts the drawer first and navigates when the exit animation ends, so the URL lags
- * it: dropping the level first would render it with an entry the caller no longer has data for.
- * Clearing `closingDepth` before the stack catches up re-opens the level that just left.
+ * A dismissal shuts the drawer first and navigates when the exit animation ends, so the URL lags it:
+ * dropping the level first would render it with an entry the caller no longer has data for. Clearing
+ * `closingDepth` before the stack catches up re-opens the level that just left.
  */
 export function DetailDrawerStack<TKind extends string>({
 	stack,
@@ -85,9 +85,7 @@ interface DetailDrawerLevelViewProps<TKind extends string> extends DetailDrawerS
 	setClosingDepth: (depth: number | null) => void;
 }
 
-/**
- * A component, not a loop, because it owns `useArrived` and each level mounts at a different time.
- */
+/** A component, not a loop, because it owns `useArrived` and each level mounts at a different time. */
 function DetailDrawerLevelView<TKind extends string>({
 	depth,
 	stack,
@@ -111,7 +109,7 @@ function DetailDrawerLevelView<TKind extends string>({
 			// The entry is the level: another id at the same depth is another level, mounted fresh, so
 			// a form seeded from the entry starts over instead of showing the last id's draft under
 			// this one's title (`webapp/AGENTS.md` § Seeding a form from props). Keying on the kind
-			// alone was tried and left that reset to each editor's mount site, where none did it.
+			// alone would leave that reset to every editor's own mount site, each one a place to miss it.
 			key={detailStackKey(entry)}
 			// Base UI shuts a parent's children anyway; this keeps the React tree in step.
 			open={arrived && (closingDepth === null || depth < closingDepth)}

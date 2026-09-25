@@ -7,7 +7,7 @@ import { InlineLink } from "@/components/common/InlineLink";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { asDate, formatShortDay, formatTime } from "@/lib/dates";
+import { formatShortDay, formatTime } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
 import type { ObservationControls } from "./review-runs";
@@ -16,7 +16,6 @@ import { TimelineItem } from "./TimelineItem";
 
 export interface ReviewRunCardProps {
 	run: PracticeGroupReviewRun;
-	initialObservationCount?: number;
 	/** The reader's response to an observation, handed to every row. */
 	observations?: ObservationControls;
 	/** Off on a practice's own level, where every row is that practice and no row repeats it. */
@@ -31,71 +30,68 @@ export interface ReviewRunCardProps {
 	tailContinues?: boolean;
 }
 
+const NO_CONTROLS: ObservationControls = {};
+
+/** How many observations a card shows before "Show more". */
+const COLLAPSED_OBSERVATION_COUNT = 3;
+
 /**
  * One review run as a row of the timeline: the day and time in the date column, a dot on the
  * rail, and the card with the reviewed work at its head and the observations as its rows. The head
- * names the work and nothing else: what the run is worth reading is what it observed, and a
- * sentence about the run as a whole only stood between the reader and those rows.
+ * names the work and nothing else: what the run is worth reading is what it observed.
  *
  * A run that carries one observation has no two things to separate — on a practice's own level a
  * run reviews that practice once, so every card there is that case. It drops the head and merges
  * into one block: the observation's summary and outcome are the block's first line, and the work
  * the head would have named is the small line under it.
  */
-const NO_CONTROLS: ObservationControls = {};
-
 export function ReviewRunCard({
 	run,
-	initialObservationCount = 3,
 	observations = NO_CONTROLS,
 	showPracticeName = true,
 	initiallyOpen = "all",
 	tailContinues = false,
 }: ReviewRunCardProps) {
 	const [showAllObservations, setShowAllObservations] = useState(false);
-	const reviewedAt = asDate(run.reviewedAt);
 	// One observation is one block: the row takes the work line and the card grows no head over it.
 	const merged = run.observations.length === 1;
-	const collapsedCount = Math.max(1, initialObservationCount);
-	const hiddenCount = Math.max(0, run.observations.length - collapsedCount);
+	const hiddenCount = Math.max(0, run.observations.length - COLLAPSED_OBSERVATION_COUNT);
 	const visibleObservations = showAllObservations
 		? run.observations
-		: run.observations.slice(0, collapsedCount);
+		: run.observations.slice(0, COLLAPSED_OBSERVATION_COUNT);
 
 	return (
 		<TimelineItem
-			at={reviewedAt}
+			at={run.reviewedAt}
 			label={
-				reviewedAt && (
-					<>
-						<span className="text-sm font-semibold text-foreground">
-							{formatShortDay(reviewedAt)}
-						</span>
-						{formatTime(reviewedAt)}
-					</>
-				)
+				<>
+					<span className="text-sm font-semibold text-foreground">
+						{formatShortDay(run.reviewedAt)}
+					</span>
+					{formatTime(run.reviewedAt)}
+				</>
 			}
 			tailContinues={tailContinues}
 		>
 			<div className="min-w-0 overflow-hidden rounded-xl border bg-background">
 				{!merged && <ReviewedWork work={run.reviewedWork} tone="head" />}
 				<ul className="divide-y">
-					{visibleObservations.map((observation, index) => (
-						<ReviewObservationRow
-							key={observation.id}
-							observation={observation}
-							defaultOpen={initiallyOpen === "all" || (initiallyOpen === "first" && index === 0)}
-							showPracticeName={showPracticeName}
-							// Either the card's head or the row's own work line links the work every
-							// observation here was seen on, so the evidence block never links it again.
-							showWorkLink={false}
-							work={merged ? <ReviewedWork work={run.reviewedWork} tone="line" /> : undefined}
-							onRespond={observations.onRespond}
-							isFeedbackResponsePending={
-								observations.pendingFeedbackId === observation.feedbackResponse?.feedbackId
-							}
-						/>
-					))}
+					{visibleObservations.map((observation, index) => {
+						const feedbackId = observation.feedbackResponse?.feedbackId;
+						return (
+							<ReviewObservationRow
+								key={observation.id}
+								observation={observation}
+								defaultOpen={initiallyOpen === "all" || (initiallyOpen === "first" && index === 0)}
+								showPracticeName={showPracticeName}
+								work={merged ? <ReviewedWork work={run.reviewedWork} tone="line" /> : undefined}
+								onRespond={observations.onRespond}
+								pendingResponse={
+									hasText(feedbackId) ? observations.pendingResponses?.get(feedbackId) : undefined
+								}
+							/>
+						);
+					})}
 				</ul>
 				{hiddenCount > 0 && (
 					<div className="border-t px-4 py-2">

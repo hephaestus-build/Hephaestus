@@ -167,7 +167,7 @@ public class PracticeStandingService {
             standings.add(new StandingSnapshot.PracticeStanding(dto, observed, trend, share));
         }
         standings.sort(Comparator.<StandingSnapshot.PracticeStanding>comparingInt(
-                        standing -> standingRank(standing.dto().standing()))
+                        standing -> standing.dto().standing().rank())
                 .thenComparingInt(standing -> worstSeverityOrdinal(standing.dto())));
         Map<String, StandingSnapshot.PracticeStanding> practices = new LinkedHashMap<>();
         standings.forEach(standing -> practices.put(standing.dto().slug(), standing));
@@ -175,10 +175,8 @@ public class PracticeStandingService {
     }
 
     /**
-     * A practice with nothing to report, carrying WHICH silence it is.
-     *
-     * <p>{@code NO_OPPORTUNITY} outranks {@code NOT_OBSERVED}: a review that ran and found nothing to say is a
-     * working instrument, not an unconfigured one.
+     * A practice with nothing to report, carrying WHICH silence it is ({@link PracticeStandingDTO.Standing#rank}
+     * says why the two sort apart).
      *
      * <p>No trend either: a direction over evidence that produced no verdict would be a claim about nothing.
      */
@@ -366,17 +364,6 @@ public class PracticeStandingService {
                 .findLatestFeedbackBodiesByObservationIds(workspaceId, observationIds, FEEDBACK_CHANNELS)
                 .stream()
                 .collect(Collectors.toMap(ObservationFeedbackBody::getObservationId, ObservationFeedbackBody::getBody));
-    }
-
-    /** Verdicts first and worst first; silences last. */
-    private static int standingRank(PracticeStandingDTO.Standing standing) {
-        return switch (standing) {
-            case DEVELOPING -> 0;
-            case MIXED -> 1;
-            case STRENGTH -> 2;
-            case NO_OPPORTUNITY -> 3;
-            case NOT_OBSERVED -> 4;
-        };
     }
 
     private static int worstSeverityOrdinal(PracticeStandingDTO practiceStanding) {

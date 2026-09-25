@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -83,7 +82,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         user.setLogin("octo");
         when(userRepository.findById(eq(2L))).thenReturn(Optional.of(user));
         when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(2L), eq(1L), any(Instant.class), anyBoolean(), any(Pageable.class)))
+                        eq(2L), eq(1L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of());
         when(queryRepository.findReviewsReceivedSince(eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of());
@@ -114,7 +113,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         Observation observation = Observation.builder().id(UUID.randomUUID()).build();
         when(userRepository.findById(2L)).thenReturn(Optional.of(user));
         when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(2L), eq(1L), any(Instant.class), anyBoolean(), any(Pageable.class)))
+                        eq(2L), eq(1L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(observation));
         when(queryRepository.findReviewsReceivedSince(eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of());
@@ -152,7 +151,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .build();
 
         when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(2L), eq(1L), any(Instant.class), anyBoolean(), any(Pageable.class)))
+                        eq(2L), eq(1L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(observation));
         when(queryRepository.findReviewsReceivedSince(eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of());
@@ -214,7 +213,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .build();
 
         when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(2L), eq(1L), any(Instant.class), anyBoolean(), any(Pageable.class)))
+                        eq(2L), eq(1L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(badObservation, naObservation));
 
         var pr = new PullRequest();

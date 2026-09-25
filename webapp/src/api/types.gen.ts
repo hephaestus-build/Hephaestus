@@ -1947,6 +1947,14 @@ export type InAppFeedback = {
    */
   cleanWork: Array<InAppCleanWork>;
   /**
+   * When it stopped being open: the earliest of the work completing its clean run, the developer answering that it is addressed or not applicable, and the practice changing its review rules after it was prepared; null while it is open
+   */
+  closedAt?: Date;
+  /**
+   * What closed it, for the moment closedAt names; on a tie the work, then the developer, then the practice; null while it is open
+   */
+  closedBy?: 'WORK' | 'DEVELOPER' | 'PRACTICE_CHANGED';
+  /**
    * The pieces of work the habit was observed on, newest first
    */
   evidence: Array<InAppEvidence>;
@@ -1967,10 +1975,6 @@ export type InAppFeedback = {
    * The habit to try next, on its own; null for feedback prepared without one
    */
   nextStep?: string;
-  /**
-   * When the practice's review rules changed after this was prepared, which closes it without a resolution: the evidence was measured by rules the practice no longer has; null while the rules are the ones it was measured by
-   */
-  practiceChangedAt?: Date;
   practiceName: string;
   /**
    * Practice this habit belongs to
@@ -1984,14 +1988,6 @@ export type InAppFeedback = {
    * When this developer first opened it; null until they have
    */
   readAt?: Date;
-  /**
-   * When the developer's own answer resolved it: they marked it addressed or not applicable; null while they have not answered or their answer disputes it
-   */
-  resolvedByDeveloperAt?: Date;
-  /**
-   * When the work resolved it: the review of the piece of work that completed the clean run; null while the work has not
-   */
-  resolvedByWorkAt?: Date;
   /**
    * The developer's current response to this feedback; null while they have none
    */
@@ -2537,7 +2533,7 @@ export type ObservationDetail = {
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
-   * What to do — the text of the newest feedback unit that said something about this observation to this developer (null if nothing was said)
+   * What to do — the text of the newest feedback that said something about this observation to this developer (null if nothing was said)
    */
   deliveredFeedback?: string;
   evidence?: ObservationEvidence;
@@ -2546,7 +2542,7 @@ export type ObservationDetail = {
    */
   evidenceRationale?: string;
   /**
-   * The developer's standing answer to the very feedback whose text deliveredFeedback shows, with that unit's id as the handle for responding (null when nothing was said, or when the unit that said it failed to deliver and so cannot be answered)
+   * The developer's standing answer to the very feedback whose text deliveredFeedback shows, with that feedback's id as the handle for responding (null when nothing was said, or when the feedback that said it failed to deliver and so cannot be answered)
    */
   feedbackResponse?: FeedbackResponse;
   /**
@@ -3356,25 +3352,9 @@ export type PracticeGroup = {
  */
 export type PracticeGroupReviewRun = {
   /**
-   * How long the run took, in seconds (null while it has not finished)
-   */
-  durationSeconds?: number;
-  /**
-   * The one sentence the review opened with about this piece of work (null when it wrote none)
-   */
-  lead?: string;
-  /**
    * Every visible observation of the run, complete enough to open in place
    */
   observations: Array<ObservationDetail>;
-  /**
-   * How many practices this run was eligible to review
-   */
-  practicesEligible?: number;
-  /**
-   * How many of the practices this run was eligible for it actually reached
-   */
-  practicesEvaluated?: number;
   reviewId: string;
   reviewedAt: Date;
   reviewedWork: ReviewedWorkRef;
@@ -3653,7 +3633,7 @@ export type PracticeStanding = {
  */
 export type PracticeStandingObservation = {
   /**
-   * What to do — the text of the newest feedback unit that said something about this observation to this developer (null if nothing was said)
+   * What to do — the text of the newest feedback that said something about this observation to this developer (null if nothing was said)
    */
   deliveredFeedback?: string;
   /**
@@ -3963,6 +3943,10 @@ export type ProfileChange = {
    * How many pieces of work in a row have to come back clean to resolve the feedback, for a FEEDBACK_RESET change: what the count fell back from
    */
   cleanNeeded?: number;
+  /**
+   * Which way a STANDING_MOVED or GROUP_MOVED went on the standing scale, for a move between two verdicts; null for a move into or out of a standing that is not a verdict
+   */
+  direction?: 'UP' | 'DOWN';
   /**
    * The reviewed work that drove the change, newest first: for feedback the work resolved, the pieces of work that came back clean; for feedback the work fell back on, the pieces that raised the problem again
    */
@@ -6874,7 +6858,7 @@ export type ObservationDetailWritable = {
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
-   * What to do — the text of the newest feedback unit that said something about this observation to this developer (null if nothing was said)
+   * What to do — the text of the newest feedback that said something about this observation to this developer (null if nothing was said)
    */
   deliveredFeedback?: string;
   evidence?: ObservationEvidence;
@@ -6883,7 +6867,7 @@ export type ObservationDetailWritable = {
    */
   evidenceRationale?: string;
   /**
-   * The developer's standing answer to the very feedback whose text deliveredFeedback shows, with that unit's id as the handle for responding (null when nothing was said, or when the unit that said it failed to deliver and so cannot be answered)
+   * The developer's standing answer to the very feedback whose text deliveredFeedback shows, with that feedback's id as the handle for responding (null when nothing was said, or when the feedback that said it failed to deliver and so cannot be answered)
    */
   feedbackResponse?: FeedbackResponse;
   /**
@@ -7012,25 +6996,9 @@ export type PagedModelReviewObservationWritable = {
  */
 export type PracticeGroupReviewRunWritable = {
   /**
-   * How long the run took, in seconds (null while it has not finished)
-   */
-  durationSeconds?: number;
-  /**
-   * The one sentence the review opened with about this piece of work (null when it wrote none)
-   */
-  lead?: string;
-  /**
    * Every visible observation of the run, complete enough to open in place
    */
   observations: Array<ObservationDetailWritable>;
-  /**
-   * How many practices this run was eligible to review
-   */
-  practicesEligible?: number;
-  /**
-   * How many of the practices this run was eligible for it actually reached
-   */
-  practicesEvaluated?: number;
   reviewId: string;
   reviewedAt: Date;
   reviewedWork: ReviewedWorkRef;
@@ -7151,7 +7119,7 @@ export type PracticeStandingWritable = {
  */
 export type PracticeStandingObservationWritable = {
   /**
-   * What to do — the text of the newest feedback unit that said something about this observation to this developer (null if nothing was said)
+   * What to do — the text of the newest feedback that said something about this observation to this developer (null if nothing was said)
    */
   deliveredFeedback?: string;
   /**

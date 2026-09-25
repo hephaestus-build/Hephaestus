@@ -5,16 +5,16 @@
  */
 import { EyeIcon, MessageCircleIcon, MessageSquareReplyIcon, PackageIcon } from "lucide-react";
 
-import { text, work } from "@/components/common/feedback-text";
+import { text, work } from "@/components/practice-vocabulary/feedback-text";
 import type { PracticeFeedbackCardEntry } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 
 import { conversation, pullRequest } from "./practice-profile-story-mock-data";
 
 /** One clean piece of work in a card's strip: the work, and the day it came back clean. */
-const clean = (number: number, date: string) => ({ ref: pullRequest(number), date });
+const clean = (number: number, date: Date) => ({ ref: pullRequest(number), date });
 
 /** The group three of the cards below belong to; the stories vary its colour from here. */
-export const PACKAGING_GROUP = {
+const PACKAGING_GROUP = {
 	slug: "review-ready-work",
 	name: "Packaging work for review",
 	color: "sky",
@@ -33,7 +33,7 @@ const SCOPE_ONE_CONCERN = {
 		"Next time a fix and a refactor meet in the same branch, open the fix first as its own pull request, let it be reviewed on its own, and put the refactor on top of it once the fix is in. The reviewer then reads one intention at a time.",
 	condition: CLEAN_CONDITION,
 	cleanNeeded: 3,
-	timestamp: "2026-09-09T14:10:00",
+	timestamp: new Date("2026-09-09T14:10:00"),
 } satisfies Partial<PracticeFeedbackCardEntry>;
 
 /** The page's first card: new, three problems in the strip, nothing clean yet. */
@@ -41,9 +41,9 @@ export const NEW_FEEDBACK_CARD: PracticeFeedbackCardEntry = {
 	feedbackId: "scope-one-concern-new",
 	...SCOPE_ONE_CONCERN,
 	reviewedWork: [
-		{ ref: pullRequest(17), date: "2026-08-28", outcome: "COMMISSION_PROBLEM" },
-		{ ref: pullRequest(19), date: "2026-09-06", outcome: "COMMISSION_PROBLEM" },
-		{ ref: pullRequest(20), date: "2026-09-03", outcome: "COMMISSION_PROBLEM" },
+		{ ref: pullRequest(17), date: new Date("2026-08-28T00:00"), outcome: "COMMISSION_PROBLEM" },
+		{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "COMMISSION_PROBLEM" },
+		{ ref: pullRequest(20), date: new Date("2026-09-03T00:00"), outcome: "COMMISSION_PROBLEM" },
 	],
 	cleanWork: [],
 	state: "new",
@@ -52,7 +52,7 @@ export const NEW_FEEDBACK_CARD: PracticeFeedbackCardEntry = {
 /**
  * Most useful first, as the page lists them; the page shows three and reveals the rest on request.
  */
-export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
+const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 	NEW_FEEDBACK_CARD,
 	{
 		// A second practice, not a second card for the first one: a practice carries one live card.
@@ -68,35 +68,35 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		cleanNeeded: SCOPE_ONE_CONCERN.cleanNeeded,
 		timestamp: SCOPE_ONE_CONCERN.timestamp,
 		reviewedWork: [
-			{ ref: pullRequest(17), date: "2026-08-28", outcome: "COMMISSION_PROBLEM" },
-			{ ref: pullRequest(19), date: "2026-09-06", outcome: "COMMISSION_PROBLEM" },
-			{ ref: pullRequest(20), date: "2026-09-03", outcome: "COMMISSION_PROBLEM" },
+			{ ref: pullRequest(17), date: new Date("2026-08-28T00:00"), outcome: "COMMISSION_PROBLEM" },
+			{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "COMMISSION_PROBLEM" },
+			{ ref: pullRequest(20), date: new Date("2026-09-03T00:00"), outcome: "COMMISSION_PROBLEM" },
 		],
-		cleanWork: [clean(21, "2026-09-07"), clean(22, "2026-09-09")],
+		cleanWork: [clean(21, new Date("2026-09-07T00:00")), clean(22, new Date("2026-09-09T00:00"))],
 		state: "open",
 	},
 	{
 		feedbackId: "describe-what-and-why",
-		...PACKAGING_GROUP,
+		group: PACKAGING_GROUP,
 		practiceSlug: "describe-what-and-why",
 		practiceName: "Describe what changed and why",
 		headline: "Descriptions name the files, not the problem",
 		body: "#16 and #18 opened with the list of files touched and no sentence on the problem behind them; on #18 the first review comment asked what the change was for.",
 		reviewedWork: [
-			{ ref: pullRequest(16), date: "2026-08-24", outcome: "OMISSION_GAP" },
-			{ ref: pullRequest(18), date: "2026-09-01", outcome: "OMISSION_GAP" },
+			{ ref: pullRequest(16), date: new Date("2026-08-24T00:00"), outcome: "OMISSION_GAP" },
+			{ ref: pullRequest(18), date: new Date("2026-09-01T00:00"), outcome: "OMISSION_GAP" },
 		],
-		cleanWork: [clean(20, "2026-09-03")],
+		cleanWork: [clean(20, new Date("2026-09-03T00:00"))],
 		nextStep:
 			"Open the description with the problem and the decision you took, then the file list.",
 		condition: CLEAN_CONDITION,
 		cleanNeeded: 3,
 		state: "open",
-		timestamp: "2026-09-09T14:10:00",
+		timestamp: new Date("2026-09-09T14:10:00"),
 	},
 	{
 		feedbackId: "reviewable-diff-size",
-		...PACKAGING_GROUP,
+		group: PACKAGING_GROUP,
 		practiceSlug: "reviewable-diff-size",
 		practiceName: "Keep the diff reviewable in one sitting",
 		headline: "Two pull requests grew past what one review can hold",
@@ -104,11 +104,11 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		reviewedWork: [
 			{
 				ref: pullRequest(19),
-				date: "2026-09-06",
+				date: new Date("2026-09-06T00:00"),
 				outcome: "DEMONSTRATED_STRENGTH",
 			},
-			{ ref: pullRequest(21), date: "2026-09-07", outcome: "COMMISSION_PROBLEM" },
-			{ ref: pullRequest(22), date: "2026-09-09", outcome: "COMMISSION_PROBLEM" },
+			{ ref: pullRequest(21), date: new Date("2026-09-07T00:00"), outcome: "COMMISSION_PROBLEM" },
+			{ ref: pullRequest(22), date: new Date("2026-09-09T00:00"), outcome: "COMMISSION_PROBLEM" },
 		],
 		// A strength before the problems: the clean work it started was emptied, so nothing is clean
 		// since.
@@ -118,7 +118,7 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		condition: CLEAN_CONDITION,
 		cleanNeeded: 3,
 		state: "open",
-		timestamp: "2026-09-09T14:10:00",
+		timestamp: new Date("2026-09-09T14:10:00"),
 	},
 	{
 		// The third of the three examples the cards are read against: the review dialogue, as the
@@ -135,28 +135,28 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		headline: "Pull requests were merged over open review threads",
 		body: "#17 merged with two threads still open, and on #20 the reviewer's question about the retry limit was never answered; the reviewer had to reopen it in the next review.",
 		reviewedWork: [
-			{ ref: pullRequest(17), date: "2026-08-28", outcome: "COMMISSION_PROBLEM" },
-			{ ref: pullRequest(20), date: "2026-09-03", outcome: "COMMISSION_PROBLEM" },
+			{ ref: pullRequest(17), date: new Date("2026-08-28T00:00"), outcome: "COMMISSION_PROBLEM" },
+			{ ref: pullRequest(20), date: new Date("2026-09-03T00:00"), outcome: "COMMISSION_PROBLEM" },
 		],
-		cleanWork: [clean(21, "2026-09-07"), clean(22, "2026-09-09")],
+		cleanWork: [clean(21, new Date("2026-09-07T00:00")), clean(22, new Date("2026-09-09T00:00"))],
 		nextStep:
 			"Before you merge, answer every open thread with a commit or a sentence and resolve it, so the reviewer sees what became of each comment.",
 		condition: CLEAN_CONDITION,
 		cleanNeeded: 3,
 		state: "open",
-		timestamp: "2026-09-04T09:32:00",
+		timestamp: new Date("2026-09-04T09:32:00"),
 	},
 	{
 		feedbackId: "acceptance-criteria",
-		...PACKAGING_GROUP,
+		group: PACKAGING_GROUP,
 		practiceSlug: "honours-linked-issue-acceptance-criteria",
 		practiceName: "Say which acceptance criteria are done",
 		headline: "Pull requests closed their issue without saying what was met",
 		body: "#16 and #19 each closed an issue with three acceptance criteria and mentioned none of them; #13 was reopened a week later for the criterion the change had skipped.",
 		reviewedWork: [
-			{ ref: pullRequest(16), date: "2026-08-24", outcome: "OMISSION_GAP" },
-			{ ref: pullRequest(19), date: "2026-09-06", outcome: "OMISSION_GAP" },
-			{ ref: pullRequest(22), date: "2026-09-09", outcome: "OMISSION_GAP" },
+			{ ref: pullRequest(16), date: new Date("2026-08-24T00:00"), outcome: "OMISSION_GAP" },
+			{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "OMISSION_GAP" },
+			{ ref: pullRequest(22), date: new Date("2026-09-09T00:00"), outcome: "OMISSION_GAP" },
 		],
 		// Two clean pieces before #22 put the run at two of three; #22 emptied it again, which is
 		// the fall back the overview's "What needs your attention" reports.
@@ -166,7 +166,7 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		condition: CLEAN_CONDITION,
 		cleanNeeded: 3,
 		state: "open",
-		timestamp: "2026-09-02T16:45:00",
+		timestamp: new Date("2026-09-02T16:45:00"),
 	},
 ];
 
@@ -174,16 +174,22 @@ export const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
  * The resolved feedback, newest first, as the "Resolved feedback" level lists it: two the work
  * resolved, whose condition names the clean pieces, and one the reader marked addressed.
  */
-export const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
+const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 	{
 		feedbackId: "describe-what-and-why-resolved",
-		...PACKAGING_GROUP,
+		group: PACKAGING_GROUP,
 		practiceSlug: "describe-what-and-why",
 		practiceName: "Describe what changed and why",
 		headline: "Descriptions named the what, rarely the why",
 		body: "#16 and #19 listed the files touched but not the problem behind them; the reviewer on #19 asked in the first comment what the change was for.",
-		reviewedWork: [{ ref: pullRequest(19), date: "2026-09-06", outcome: "OMISSION_GAP" }],
-		cleanWork: [clean(20, "2026-09-07"), clean(21, "2026-09-08"), clean(22, "2026-09-09")],
+		reviewedWork: [
+			{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "OMISSION_GAP" },
+		],
+		cleanWork: [
+			clean(20, new Date("2026-09-07T00:00")),
+			clean(21, new Date("2026-09-08T00:00")),
+			clean(22, new Date("2026-09-09T00:00")),
+		],
 		nextStep: "Before the file list, write one paragraph on the problem and the decision you took.",
 		condition: [
 			text("Resolved by the work on 9 September · "),
@@ -196,7 +202,8 @@ export const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		],
 		cleanNeeded: 3,
 		state: "resolved",
-		timestamp: "2026-09-09T14:10:00",
+		resolvedBy: "WORK",
+		timestamp: new Date("2026-09-09T14:10:00"),
 	},
 	{
 		feedbackId: "review-comments-specific-resolved",
@@ -210,8 +217,14 @@ export const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		practiceName: "Leave specific, actionable review comments",
 		headline: "Review comments said something was off, not what",
 		body: 'On #2 the comments read "this looks wrong" and "can we do better here?", and the author replied to each one asking what to change.',
-		reviewedWork: [{ ref: pullRequest(2), date: "2026-08-20", outcome: "COMMISSION_PROBLEM" }],
-		cleanWork: [clean(1, "2026-08-25"), clean(4, "2026-08-29"), clean(23, "2026-09-02")],
+		reviewedWork: [
+			{ ref: pullRequest(2), date: new Date("2026-08-20T00:00"), outcome: "COMMISSION_PROBLEM" },
+		],
+		cleanWork: [
+			clean(1, new Date("2026-08-25T00:00")),
+			clean(4, new Date("2026-08-29T00:00")),
+			clean(23, new Date("2026-09-02T00:00")),
+		],
 		nextStep:
 			"Name the line, say what is wrong with it and what you would do instead, so the author can act on the comment without asking back.",
 		condition: [
@@ -225,7 +238,8 @@ export const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		],
 		cleanNeeded: 3,
 		state: "resolved",
-		timestamp: "2026-09-02T11:40:00",
+		resolvedBy: "WORK",
+		timestamp: new Date("2026-09-02T11:40:00"),
 	},
 	{
 		feedbackId: "status-updates-resolved",
@@ -242,22 +256,23 @@ export const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		reviewedWork: [
 			{
 				ref: conversation("#backend-review"),
-				date: "2026-08-12",
+				date: new Date("2026-08-12T00:00"),
 				outcome: "OMISSION_GAP",
 			},
 		],
 		// The one the reader resolved, before the work did: the clean work stays where the work
 		// left it.
 		cleanWork: [
-			{ ref: conversation("#releases"), date: "2026-08-20" },
-			{ ref: conversation("#incidents"), date: "2026-08-25" },
+			{ ref: conversation("#releases"), date: new Date("2026-08-20T00:00") },
+			{ ref: conversation("#incidents"), date: new Date("2026-08-25T00:00") },
 		],
 		nextStep:
 			"When something blocks you for more than an hour, post it in the channel the work lives in, with what you have tried and what you need.",
 		condition: [text("Marked as addressed on 27 August")],
 		cleanNeeded: 3,
 		state: "resolved",
-		timestamp: "2026-08-27T16:05:00",
+		resolvedBy: "DEVELOPER",
+		timestamp: new Date("2026-08-27T16:05:00"),
 	},
 ];
 

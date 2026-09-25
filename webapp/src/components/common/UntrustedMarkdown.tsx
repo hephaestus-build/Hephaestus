@@ -12,6 +12,11 @@ import { MarkdownCode } from "@/components/common/MarkdownCode";
 
 const HTTP_URL = /^https?:\/\//iu;
 
+const plainText = (value: string): ReactNode => value;
+
+/** Carries {@link UntrustedMarkdownProps.renderText} to the text runs; the default is the words. */
+const RenderTextContext = createContext(plainText);
+
 /** A link the model wrote is only a link when it is one: anything else renders as its own text. */
 function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnchorElement>) {
 	if (typeof href !== "string" || !HTTP_URL.test(href)) {
@@ -19,7 +24,8 @@ function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnch
 	}
 	return (
 		<a href={href} className={className} rel="noopener noreferrer" target="_blank">
-			{children}
+			{/* A link's own words are left as written: a rewrite that links them would nest anchors. */}
+			<RenderTextContext.Provider value={plainText}>{children}</RenderTextContext.Provider>
 		</a>
 	);
 }
@@ -31,14 +37,6 @@ function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnch
 function DemotedHeading({ children, className }: HTMLAttributes<HTMLHeadingElement>) {
 	return <h4 className={className}>{children}</h4>;
 }
-
-/**
- * What a run of plain text in the Markdown renders as. The default is the words themselves; a
- * caller with something to say about them — the feedback card, which links every piece of work it
- * can vouch for — hands over its own, and every paragraph, list item, bold and italic run goes
- * through it. What a backtick or a fence holds never does: code is quoted, not prose.
- */
-const RenderTextContext = createContext<(value: string) => ReactNode>((value) => value);
 
 /**
  * The strings among an element's children as the caller writes them; everything else stands. The
@@ -117,9 +115,8 @@ export const UNTRUSTED_MARKDOWN_PROSE =
 export interface UntrustedMarkdownProps {
 	children: string;
 	/**
-	 * Rewrites every run of plain text — a feedback card hands over the one that links the work it
-	 * can vouch for, so a reference the composer wrote stays a link once the words around it are
-	 * Markdown. Code is left alone.
+	 * Rewrites every run of plain text: each paragraph, list item, bold and italic run outside a
+	 * link. What a backtick or a fence holds never goes through it — code is quoted, not prose.
 	 */
 	renderText?: (value: string) => ReactNode;
 }

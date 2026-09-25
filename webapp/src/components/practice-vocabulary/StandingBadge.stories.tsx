@@ -24,7 +24,8 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		// The sentence is the reason the badge is a button; it portals, so it is read off the document.
-		await userEvent.hover(canvas.getByRole("button", { name: "Going well" }));
+		await userEvent.tab();
+		await expect(canvas.getByRole("button", { name: "Going well" })).toHaveFocus();
 		const tooltip = await settledPopup();
 		await expect(tooltip).toHaveTextContent("Recent reviews here were almost entirely positive.");
 	},

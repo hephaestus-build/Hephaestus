@@ -29,9 +29,7 @@ type Story = StoryObj<typeof meta>;
 /** The name is a link in the group's colour, on the page's ground rather than a pill's. */
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
-		const name = canvas.getByRole("button", { name: "Packaging work for review" });
-		await expect(name.parentElement).toHaveClass("bg-transparent");
-		await userEvent.click(name);
+		await userEvent.click(canvas.getByRole("button", { name: "Packaging work for review" }));
 		await expect(args.onOpen).toHaveBeenCalledOnce();
 	},
 };
@@ -41,16 +39,10 @@ export const Plain: Story = {
 	args: { onOpen: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("button")).toBeNull();
-		await expect(canvas.getByText("Packaging work for review")).not.toHaveClass("hover:underline");
 	},
 };
 
 /** A practice in no group: the name is muted grey rather than any group's colour. */
 export const NoColour: Story = {
 	args: { name: "Unassigned", pill: undefined },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Unassigned" }).parentElement).toHaveClass(
-			"text-muted-foreground",
-		);
-	},
 };

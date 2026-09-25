@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	getInAppFeedbackQueryKey,
 	listPracticeGroupReviewRunsInfiniteQueryKey,
 	listWorkspacesQueryKey,
 } from "@/api/@tanstack/react-query.gen";
@@ -209,7 +210,7 @@ it("does not label another developer's profile with the previous developer's dat
 	await screen.findByRole("heading", { name: "Developer bob" }, ROUTE_RENDER_WAIT);
 });
 
-it("refreshes every cached filter of the group after responding to feedback", async () => {
+it("refreshes the group's every cached filter and the feedback cards after a response", async () => {
 	let resolution: "ADDRESSED" | undefined;
 	server.use(
 		// The feed carries each observation in full, so the row opens with nothing more to load.
@@ -268,11 +269,15 @@ it("refreshes every cached filter of the group after responding to feedback", as
 		query: { size: 10, practiceSlug: "small-changes" },
 	});
 	queryClient.setQueryData(filtered, { pages: [{ content: [], hasNext: false }], pageParams: [0] });
+	// The same feedback is a card on the practice profile, which must not keep the old response.
+	const cards = getInAppFeedbackQueryKey({ path: { workspaceSlug: "acme" } });
+	queryClient.setQueryData(cards, []);
 	// A resolution is recorded once its comment band is sent, with or without a comment.
 	await userEvent.click(addressed);
 	await userEvent.click(within(main).getByRole("button", { name: "Send" }));
 	await waitFor(() => expect(addressed.getAttribute("aria-pressed")).toBe("true"));
 	expect(queryClient.getQueryState(filtered)?.isInvalidated).toBe(true);
+	expect(queryClient.getQueryState(cards)?.isInvalidated).toBe(true);
 });
 
 it("restores the bookmarked custom timeframe on Back without scrolling on selection", async () => {

@@ -122,8 +122,6 @@ public class PracticeGroupReviewRunService {
         Map<UUID, UUID> jobByObservation =
                 observations.stream().collect(Collectors.toMap(Observation::getId, Observation::getAgentJobId));
         Map<UUID, ReviewRunTargetLookup.Target> targets = reviewRunTargetLookup.findByJobIds(workspaceId, jobIds);
-        // What each run wrote about itself, taken once for the page: its opening sentence and coverage
-        // belong to the run, and the next step it wrote about each observation travels with the row.
         Map<UUID, ReviewRunNarrative> narratives = reviewRunNarrativeLookup.findByJobIds(workspaceId, jobIds);
         // The visibility gate admitted every observation left, so each carries its evidence — the same
         // authorization answer the detail endpoint reads, taken once for the page.
@@ -141,16 +139,8 @@ public class PracticeGroupReviewRunService {
                 ObservationDetailDTO first = details.getFirst();
                 ReviewedWorkRefDTO reviewedWork =
                         ReviewedWorkLabels.ref(first.artifactKind(), first.artifactId(), targets.get(run.getJobId()));
-                ReviewRunNarrative narrative = narratives.get(run.getJobId());
-                reviewRuns.add(new PracticeGroupReviewRunDTO(
-                        run.getJobId(),
-                        run.getReviewedAt(),
-                        reviewedWork,
-                        narrative == null ? null : narrative.lead(),
-                        narrative == null ? null : narrative.practicesEvaluated(),
-                        narrative == null ? null : narrative.practicesEligible(),
-                        narrative == null ? null : narrative.durationSeconds(),
-                        details));
+                reviewRuns.add(
+                        new PracticeGroupReviewRunDTO(run.getJobId(), run.getReviewedAt(), reviewedWork, details));
             }
         }
         return reviewRuns;

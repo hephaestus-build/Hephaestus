@@ -39,9 +39,8 @@ export interface ReviewRunFeedProps extends Pick<
 
 /**
  * One practice surface's review-run feed: the runs as a timeline, the earlier ones a press away,
- * and the error, loading and empty states around them. The group page and a practice's own level
- * show the same feed, so the error title, the skeleton and the load-more button have one home and
- * the rail cannot end one way on one surface and another way on the other.
+ * and the error, loading and empty states around them, in one home so the rail cannot end one way
+ * on one surface and another way on the next.
  */
 export function ReviewRunFeed({
 	feed,
@@ -67,6 +66,31 @@ export function ReviewRunFeed({
 		return <ReviewRunFeedSkeleton rows={skeletonRows} />;
 	}
 	const shown = runs ?? feed.runs;
+	const loadMore = feed.hasMore && (
+		<Button
+			type="button"
+			variant="link"
+			size="inline"
+			className="w-fit text-sm"
+			onClick={feed.onLoadMore}
+			disabled={feed.isLoadingMore}
+		>
+			{feed.isLoadingMore ? "Loading…" : "View earlier reviews"}
+		</Button>
+	);
+	// A narrowing can leave the pages read so far empty while earlier ones still hold its runs, so
+	// the empty state, which says nothing reached this surface at all, waits for the last page.
+	if (shown.length === 0 && feed.hasMore) {
+		return (
+			<div className="flex flex-col items-start gap-2">
+				<p className="text-sm text-muted-foreground">Nothing here in the latest reviews.</p>
+				<div className="flex flex-wrap items-center gap-3">
+					{emptyAction}
+					{loadMore}
+				</div>
+			</div>
+		);
+	}
 	if (shown.length === 0) {
 		return (
 			<Empty>
@@ -90,29 +114,15 @@ export function ReviewRunFeed({
 				initiallyOpen={initiallyOpen}
 				continues={feed.hasMore}
 			/>
-			{feed.hasMore && (
-				<Button
-					type="button"
-					variant="link"
-					size="inline"
-					className="w-fit text-sm"
-					onClick={feed.onLoadMore}
-					disabled={feed.isLoadingMore}
-				>
-					{feed.isLoadingMore ? "Loading…" : "View earlier reviews"}
-				</Button>
-			)}
+			{loadMore}
 		</>
 	);
 }
 
-/**
- * One block per run card the feed will show, so the surface does not jump when they land. The
- * region is a live one before its text arrives, which is what lets the sr-only line be announced.
- */
+/** One block per run card the feed will show, so the surface does not jump when they land. */
 export function ReviewRunFeedSkeleton({ rows }: { rows: number }) {
 	return (
-		<div className="flex flex-col gap-2.5" role="status">
+		<div className="flex flex-col gap-2.5" aria-busy="true">
 			<span className="sr-only">Loading review runs</span>
 			{Array.from({ length: rows }, (_, index) => (
 				<Skeleton key={index} className="h-24 w-full" />

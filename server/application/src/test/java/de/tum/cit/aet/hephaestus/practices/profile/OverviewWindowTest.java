@@ -17,7 +17,7 @@ class OverviewWindowTest {
 
     @Test
     @DisplayName("the window opens at the previous run and closes now")
-    void shouldOpenAtThePreviousRun() {
+    void shouldOpenAtThePreviousRunWhenThereIsOne() {
         OverviewWindow window = OverviewWindow.sincePreviousRun(PREVIOUS_RUN, NOW);
 
         assertThat(window.since()).isEqualTo(PREVIOUS_RUN);

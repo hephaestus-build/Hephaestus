@@ -39,7 +39,7 @@ export const Unverifiable: Story = {
  */
 export const Current: Story = {
 	args: { currentness: "CURRENT" },
-	play: async ({ canvasElement }) => {
-		await expect(canvasElement.querySelector('[data-slot="alert"]')).toBeNull();
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("alert")).toBeNull();
 	},
 };

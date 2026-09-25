@@ -324,7 +324,7 @@ const PACKAGING_CHANGES: ProfileChange[] = [
 			practiceSlug: "reviewable-diff-size",
 			practiceName: "Keep the diff reviewable in one sitting",
 		},
-		{ from: "MIXED", to: "DEVELOPING", evidence: [21, 22].map(pullRequest) },
+		{ from: "MIXED", to: "DEVELOPING", direction: "DOWN", evidence: [21, 22].map(pullRequest) },
 	),
 	change(
 		"STANDING_MOVED",
@@ -333,7 +333,7 @@ const PACKAGING_CHANGES: ProfileChange[] = [
 			practiceSlug: "ready-and-traceable-handoff",
 			practiceName: "Mark the change ready and link its issue",
 		},
-		{ from: "MIXED", to: "STRENGTH", evidence: [21, 22].map(pullRequest) },
+		{ from: "MIXED", to: "STRENGTH", direction: "UP", evidence: [21, 22].map(pullRequest) },
 	),
 	change(
 		"TREND_TURNED",
@@ -374,6 +374,7 @@ const COMMUNICATION_CHANGES: ProfileChange[] = [
 	change("GROUP_MOVED", COMMUNICATION, undefined, {
 		from: "DEVELOPING",
 		to: "MIXED",
+		direction: "UP",
 		evidence: [conversation("#releases")],
 	}),
 ];
@@ -400,7 +401,7 @@ const REVIEWING_CHANGES: ProfileChange[] = [
 			practiceSlug: "reviews-respectfully-asks-rather-than-demands",
 			practiceName: "Comment on the code, not the person",
 		},
-		{ from: "MIXED", to: "STRENGTH", evidence: [4, 23].map(pullRequest) },
+		{ from: "MIXED", to: "STRENGTH", direction: "UP", evidence: [4, 23].map(pullRequest) },
 	),
 	change(
 		"STANDING_MOVED",
@@ -409,13 +410,13 @@ const REVIEWING_CHANGES: ProfileChange[] = [
 			practiceSlug: "reviews-substantively-with-understanding",
 			practiceName: "Read the change before approving it",
 		},
-		{ from: "DEVELOPING", to: "MIXED", evidence: [23].map(pullRequest) },
+		{ from: "DEVELOPING", to: "MIXED", direction: "UP", evidence: [23].map(pullRequest) },
 	),
 ];
 
 /**
  * A run in which three practices of one group made the same move and a fourth made its own: what
- * the practices table's group cell has to say in three bullets rather than six. One group moved
+ * the "All practice groups" table's group cell has to say in three bullets rather than six. One group moved
  * where a practice under it moved, so it rides on that practice's bullet; the other moved where
  * none of its practices did, so it is a bullet of its own.
  */
@@ -464,18 +465,20 @@ export const SHARED_TRANSITION_OVERVIEW: PracticeProfileOverview = {
 			"STANDING_MOVED",
 			PACKAGING,
 			{ practiceSlug: "describe-what-and-why", practiceName: "Describe what changed and why" },
-			{ from: "MIXED", to: "STRENGTH", evidence: [pullRequest(22)] },
+			{ from: "MIXED", to: "STRENGTH", direction: "UP", evidence: [pullRequest(22)] },
 		),
 		// The move the practice above made, so the group rides on that bullet rather than taking one.
 		change("GROUP_MOVED", PACKAGING, undefined, {
 			from: "MIXED",
 			to: "STRENGTH",
+			direction: "UP",
 			evidence: [pullRequest(22)],
 		}),
 		// A move no practice in the group made, so the group keeps a bullet of its own.
 		change("GROUP_MOVED", COMMUNICATION, undefined, {
 			from: "DEVELOPING",
 			to: "MIXED",
+			direction: "UP",
 			evidence: [pullRequest(21)],
 		}),
 	],

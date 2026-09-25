@@ -7,6 +7,7 @@ import {
 	formatGroupStandingBasis,
 	formatStandingBasis,
 	formatTrendProvenance,
+	shownTrendDirection,
 } from "./practice-trend-presentation";
 
 const support = (overrides: Partial<TrendSupport> = {}): TrendSupport => ({
@@ -127,5 +128,13 @@ describe("practice trend copy", () => {
 		).toBe(
 			"Based on 10 pieces of reviewed work. Two more with something to judge are needed before a direction can be shown. Evidence spans 12 days.",
 		);
+	});
+});
+
+describe("shownTrendDirection", () => {
+	it("shows a direction only with the evidence behind it", () => {
+		expect(shownTrendDirection("IMPROVING", wellSupported)).toBe("IMPROVING");
+		expect(shownTrendDirection("IMPROVING", undefined)).toBe("INSUFFICIENT_EVIDENCE");
+		expect(shownTrendDirection(undefined, wellSupported)).toBe("INSUFFICIENT_EVIDENCE");
 	});
 });

@@ -1,14 +1,13 @@
 import { cn } from "cn";
 import { ChevronDownIcon } from "lucide-react";
-import { Fragment, type ReactNode, useState } from "react";
+import { Fragment, type ReactNode, useId, useState } from "react";
 
-import type { ObservationDetail } from "@/api/types.gen";
+import type { FeedbackResponseRequest, ObservationDetail } from "@/api/types.gen";
 import { FOCUS_RING, FOCUS_RING_INSET } from "@/components/common/focus";
-import { InlineLink } from "@/components/common/InlineLink";
 import { ResponseButton, toneOf } from "@/components/common/ResponseButton";
 import { ResponseCommentBand } from "@/components/common/ResponseCommentBand";
 import { SectionLabel } from "@/components/common/SectionLabel";
-import { statusValues } from "@/components/common/status-def";
+import { statusToneClass, statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { claimCurrentnessNote } from "@/components/practice-vocabulary/ClaimCurrentness";
@@ -25,13 +24,11 @@ import {
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { StatusTooltip } from "@/components/practice-vocabulary/StatusTooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { artifactKindLabel } from "@/lib/artifact-kinds";
 import { rendersContent } from "@/lib/react-node";
 import { capitalise, hasText } from "@/lib/text";
 
 import { toEvidenceCheck, toEvidenceLocations } from "./evidence";
 import { EvidenceFileBlock } from "./EvidenceFileBlock";
-import { type FeedbackResponse, feedbackResponseOf } from "./review-runs";
 
 /**
  * The reviewer's own words about this observation, in the Markdown it writes them in: a file, a
@@ -48,17 +45,18 @@ function ReviewerText({ children }: { children: string }) {
 
 interface DetailSectionProps {
 	label: string;
+	labelId?: string;
 	className?: string;
 	children: ReactNode;
 }
 
 /** A section of the open row: its label in the muted kicker, then what it carries. */
-function DetailSection({ label, className, children }: DetailSectionProps) {
+function DetailSection({ label, labelId, className, children }: DetailSectionProps) {
 	return (
 		<div className={cn("flex min-w-0 flex-col gap-1", className)}>
 			{/* The row's anchor is its summary, so a label naming one of its details carries no
 			    weight of its own. */}
-			<SectionLabel as="span" className="font-normal">
+			<SectionLabel id={labelId} as="span" className="font-normal">
 				{label}
 			</SectionLabel>
 			{children}
@@ -72,40 +70,32 @@ export interface ReviewObservationRowProps {
 	defaultOpen?: boolean;
 	/** Off where every row is the level's own practice, so no row repeats its name. */
 	showPracticeName?: boolean;
-	/** Off where the row sits under the work's own head, as it does in a review run's card. */
-	showWorkLink?: boolean;
 	/**
 	 * The reviewed work, as a small line under the summary. A run's card gives it when the run
 	 * carries this one observation and the two are one block; otherwise the card's own head names
 	 * the work above the rows and this is left out.
 	 */
 	work?: ReactNode;
-	onRespond?: (observation: ObservationDetail, response: FeedbackResponse) => void;
-	isFeedbackResponsePending?: boolean;
+	onRespond?: (observation: ObservationDetail, response: FeedbackResponseRequest) => void;
+	/**
+	 * The response being written to this observation's feedback: shown over the one it arrived
+	 * with, and its buttons wait until the write lands.
+	 */
+	pendingResponse?: FeedbackResponseRequest;
 }
 
 /**
- * One observation as a row of its review's card, showing everything the feed carries about it:
- * its summary and outcome on one line and, when not live, where it came from; then why it was
- * noted, what the review checked to say it, the evidence, the next step and the reader's
- * response. The outcome is what the reader acts on, so the severity behind it stays in the admin
- * console rather than ranking the reader's own work here; an observation reviewed under rules
- * that have since changed says so in one line over its body rather than in a badge, since it is
- * still shown in full. The day is the card's, named once on the timeline above these rows, so no
- * row repeats it; the work is the card's too, unless the card handed this row a `work` line
- * because the two are one block. Each row opens and closes on its own, and nothing is loaded when
- * it does — the feed already brought it all — so the open state is the row's, through the
- * collapsible's own `defaultOpen`. A block whose field is absent is left out rather than headed
- * over nothing.
+ * One observation as a row of its review's card. The outcome is what the reader acts on, so the
+ * severity behind it stays in the workspace's admin console rather than ranking the reader's own
+ * work here.
  */
 export function ReviewObservationRow({
 	observation,
 	defaultOpen = true,
 	showPracticeName = true,
-	showWorkLink = true,
 	work,
 	onRespond,
-	isFeedbackResponsePending = false,
+	pendingResponse,
 }: ReviewObservationRowProps) {
 	const outcome = OBSERVATION_OUTCOME_PRESENTATION[observationOutcome(observation)];
 	const OutcomeIcon = outcome.icon;
@@ -116,7 +106,6 @@ export function ReviewObservationRow({
 	// delivery may have been withheld, replaced or rewritten, and only one next step can be acted on.
 	// Either is written as a clause, and the row shows it as a sentence.
 	const nextStep = capitalise(observation.nextStep ?? observation.deliveredFeedback ?? "");
-	const workLink = showWorkLink ? observation.artifactUrl : undefined;
 	const detector = observation.evidence?.detector;
 	// A response needs feedback to respond to and a route that records it.
 	const respondTo = hasText(observation.feedbackResponse?.feedbackId) ? onRespond : undefined;
@@ -126,7 +115,6 @@ export function ReviewObservationRow({
 		hasText(observation.evidenceRationale) ||
 		checks.length > 0 ||
 		evidenceLocations.length > 0 ||
-		hasText(workLink) ||
 		hasText(nextStep) ||
 		respondTo !== undefined;
 	// The summary is the row's anchor and the heaviest text in it; the practice under it is the pill
@@ -160,7 +148,7 @@ export function ReviewObservationRow({
 					render={hasBody ? <span /> : <button type="button" />}
 					className={cn(
 						"inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap",
-						outcome.className,
+						statusToneClass(outcome.badgeVariant),
 						!hasBody && FOCUS_RING,
 					)}
 				>
@@ -226,7 +214,7 @@ export function ReviewObservationRow({
 								</dl>
 							</DetailSection>
 						)}
-						{(evidenceLocations.length > 0 || hasText(workLink)) && (
+						{evidenceLocations.length > 0 && (
 							<DetailSection label="Evidence" className="gap-1.5">
 								<div className="flex min-w-0 flex-col gap-2">
 									{evidenceLocations.map((location) => (
@@ -238,18 +226,9 @@ export function ReviewObservationRow({
 											detector={detector}
 										/>
 									))}
-									{(hasText(detector) || hasText(workLink)) && (
-										<p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-											{hasText(detector) && (
-												<span>
-													Captured by <code className="font-mono">{detector}</code>
-												</span>
-											)}
-											{hasText(workLink) && (
-												<InlineLink href={workLink} external className="text-xs">
-													Open the {artifactKindLabel(observation.artifactKind).toLowerCase()}
-												</InlineLink>
-											)}
+									{hasText(detector) && (
+										<p className="text-xs text-muted-foreground">
+											Captured by <code className="font-mono">{detector}</code>
 										</p>
 									)}
 								</div>
@@ -265,7 +244,7 @@ export function ReviewObservationRow({
 						<ObservationResponse
 							observation={observation}
 							onRespond={respondTo}
-							isPending={isFeedbackResponsePending}
+							pendingResponse={pendingResponse}
 						/>
 					)}
 				</CollapsibleContent>
@@ -277,7 +256,7 @@ export function ReviewObservationRow({
 interface ObservationResponseProps {
 	observation: ObservationDetail;
 	onRespond: NonNullable<ReviewObservationRowProps["onRespond"]>;
-	isPending: boolean;
+	pendingResponse?: FeedbackResponseRequest;
 }
 
 /**
@@ -286,13 +265,21 @@ interface ObservationResponseProps {
  * press opens. The endpoint replaces, so the usefulness the observation arrived with travels every
  * time.
  */
-function ObservationResponse({ observation, onRespond, isPending }: ObservationResponseProps) {
+function ObservationResponse({
+	observation,
+	onRespond,
+	pendingResponse,
+}: ObservationResponseProps) {
+	const labelId = useId();
 	// The resolution whose comment band is open; recorded only once Send or Skip closes it.
 	const [pendingResolution, setPendingResolution] = useState<FeedbackResolution>();
-	const recorded = feedbackResponseOf(observation);
-	const shownResolution = pendingResolution ?? recorded.resolution;
-	const respond = (change: Pick<FeedbackResponse, "resolution" | "comment">) => {
-		onRespond(observation, { usefulness: recorded.usefulness, ...change });
+	const isPending = pendingResponse !== undefined;
+	// The response being written stands over the recorded one, so the buttons do not jump back and
+	// then forward again when it lands.
+	const current: FeedbackResponseRequest = pendingResponse ?? observation.feedbackResponse ?? {};
+	const shownResolution = pendingResolution ?? current.resolution;
+	const respond = (change: Pick<FeedbackResponseRequest, "resolution" | "comment">) => {
+		onRespond(observation, { usefulness: current.usefulness, ...change });
 	};
 	// A press opens the band for that choice; the chosen one pressed again withdraws it, comment
 	// and all, and a band still open closes without recording anything.
@@ -301,7 +288,7 @@ function ObservationResponse({ observation, onRespond, isPending }: ObservationR
 			setPendingResolution(undefined);
 			return;
 		}
-		if (recorded.resolution === resolution) {
+		if (current.resolution === resolution) {
 			setPendingResolution(undefined);
 			respond({ resolution: undefined, comment: undefined });
 			return;
@@ -317,8 +304,8 @@ function ObservationResponse({ observation, onRespond, isPending }: ObservationR
 	};
 	return (
 		<>
-			<DetailSection label="Your response" className="gap-2.5 px-4 pb-4">
-				<div className="flex flex-wrap items-center gap-2">
+			<DetailSection label="Your response" labelId={labelId} className="gap-2.5 px-4 pb-4">
+				<div role="group" aria-labelledby={labelId} className="flex flex-wrap items-center gap-2">
 					{statusValues(FEEDBACK_RESOLUTION_DEFS).map((value) => {
 						const def = FEEDBACK_RESOLUTION_DEFS[value];
 						return (
@@ -337,12 +324,12 @@ function ObservationResponse({ observation, onRespond, isPending }: ObservationR
 				</div>
 				{/* What the reader already said: the rating given on the feedback card, and the
 				    comment sent with the response that stands. */}
-				{(recorded.usefulness !== undefined || hasText(recorded.comment)) && (
+				{(current.usefulness !== undefined || hasText(current.comment)) && (
 					<p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-						{recorded.usefulness !== undefined && (
-							<StatusBadge def={FEEDBACK_USEFULNESS_DEFS[recorded.usefulness]} />
+						{current.usefulness !== undefined && (
+							<StatusBadge def={FEEDBACK_USEFULNESS_DEFS[current.usefulness]} />
 						)}
-						{hasText(recorded.comment) && <q>{recorded.comment}</q>}
+						{hasText(current.comment) && <q>{current.comment}</q>}
 					</p>
 				)}
 			</DetailSection>

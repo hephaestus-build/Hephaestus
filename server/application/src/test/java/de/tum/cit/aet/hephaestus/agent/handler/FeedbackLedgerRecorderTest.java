@@ -556,11 +556,11 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     }
 
     /**
-     * Silence stops the note on the work, not the developer's own pages: the lanes are woken now, not when the
-     * hourly sweeper next passes.
+     * Silence stops the note on the work, not the developer's own pages: the lanes are woken at once, not when
+     * the hourly sweeper next passes.
      */
     @Test
-    void recordUndelivered_recordsOneSuppressionAndWakesTheLanes_duringSilentMode() {
+    void shouldRecordOneSuppressionAndWakeTheLanesWhenSilentModeWithholdsTheRun() {
         Observation bad = problem();
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(bad));
@@ -581,7 +581,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     /** Silence stops the note on the work; a gate decision on the work applies to every channel. */
     @ParameterizedTest
     @CsvSource({"INSTANCE_SILENCED,true", "ARTIFACT_CLOSED,false"})
-    void recordSuppressedUnit_wakesTheLanesOnlyForSilentMode(FeedbackSuppressionReason reason, boolean wakes) {
+    void shouldWakeTheLanesOnlyWhenSilentModeSuppressedTheFeedback(FeedbackSuppressionReason reason, boolean wakes) {
         Observation bad = problem();
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(bad));

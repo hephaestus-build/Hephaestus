@@ -1,10 +1,10 @@
 import type { PracticeGroup } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
-import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
-import { GroupName } from "@/components/practice-vocabulary/GroupName";
-import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 
 import type { FeedbackTextSegment } from "./feedback-text";
+import { getGroupVisual } from "./group-visuals";
+import { GroupName } from "./GroupName";
+import { PracticePill } from "./PracticePill";
 
 export interface FeedbackTextProps {
 	segments: FeedbackTextSegment[];

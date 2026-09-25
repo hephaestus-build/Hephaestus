@@ -6,7 +6,6 @@ import { settledPopup } from "@/stories/overlay";
 import { wellSupported } from "@/stories/practice-profile-story-mock-data";
 
 import { PracticeTrendChip } from "./PracticeTrendChip";
-import { TrendNote } from "./StandingBadge";
 
 const none: TrendSupport = {
 	...wellSupported,
@@ -58,24 +57,5 @@ export const GroupScope: Story = {
 		const tooltip = await settledPopup();
 		await expect(tooltip).toHaveTextContent("Across eight pieces of reviewed work in this group.");
 		await expect(tooltip).not.toHaveTextContent("Compared");
-	},
-};
-
-/**
- * `TrendNote` is this chip under a standing badge, for a row that may have no trend at all: with
- * no direction, or one with no evidence behind it, it is the same chip for "not enough to compare
- * yet", so the enum is drawn one way whichever branch a row lands on.
- */
-export const AsTrendNoteWithoutTrend: StoryObj<typeof TrendNote> = {
-	render: () => <TrendNote scope="practice" />,
-	play: async ({ canvas }) => {
-		const chip = canvas.getByRole("button");
-		await expect(chip).toHaveTextContent("Not enough to compare yet");
-		// No evidence, so no provenance: the tooltip is the registry's sentence for the direction.
-		await userEvent.hover(chip);
-		const tooltip = await settledPopup();
-		await expect(tooltip).toHaveTextContent(
-			"There is not yet enough reviewed work on both sides to compare.",
-		);
 	},
 };

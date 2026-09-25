@@ -30,11 +30,8 @@ export const ThreeDeep: Story = {
 			"Practice profileAll practice groupsPackaging work for reviewPractice",
 		);
 		await expect(canvas.getByText("Practice")).toHaveAttribute("aria-current", "location");
-		// A crumb follows the house link rule — plain at rest, blue and underlined on hover — and
-		// its pointer target reaches the 24 px minimum although the text is smaller.
+		// The crumb's pointer target reaches the 24 px minimum although the text is smaller.
 		const crumb = canvas.getByRole("button", { name: "All practice groups" });
-		await expect(crumb).not.toHaveClass("underline");
-		await expect(crumb).toHaveClass("hover:underline");
 		await expectTouchTarget(crumb);
 		await userEvent.click(crumb);
 		await expect(args.onClose).toHaveBeenCalledWith(1);
@@ -52,28 +49,5 @@ export const OneOverThePage: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getAllByRole("listitem")).toHaveLength(2);
 		await expect(canvas.getByRole("button", { name: "Practice profile" })).toBeVisible();
-	},
-};
-
-/**
- * Mounted on its own, with nothing behind and no close: the level's kind, as the eyebrow always
- * was.
- */
-export const Alone: Story = {
-	args: { behind: undefined, onClose: undefined, current: "Group" },
-	play: async ({ canvas }) => {
-		await expect(canvas.getAllByRole("listitem")).toHaveLength(1);
-		await expect(canvas.queryByRole("button")).toBeNull();
-	},
-};
-
-/**
- * Without a close the crumbs behind are plain words: no hover promising a press that goes nowhere.
- */
-export const WithoutAClose: Story = {
-	args: { onClose: undefined },
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("button")).toBeNull();
-		await expect(canvas.getByText("All practice groups")).not.toHaveClass("hover:underline");
 	},
 };

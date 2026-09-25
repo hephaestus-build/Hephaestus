@@ -1,11 +1,11 @@
 import { ChevronRight, Library } from "lucide-react";
 
 import type { CatalogPracticeSummary } from "@/api/types.gen";
-import { GroupPill } from "@/components/admin/practice-editor/GroupPill";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Section } from "@/components/layout/Section";
 import { CATALOG_AVAILABILITY_DEFS } from "@/components/practice-vocabulary/catalog-availability-defs";
+import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
 import { buttonVariants } from "@/components/ui/button";
 import {

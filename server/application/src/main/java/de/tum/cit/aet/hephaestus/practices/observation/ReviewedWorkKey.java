@@ -5,8 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 
 /**
  * Identity of one piece of reviewed work: the same pull request reviewed twice is one piece of work. The key
- * every rule that counts work once — {@link LatestRun}, the trend's bundling, the group's merged trail —
- * groups by, so they all mean the same thing by "the same piece of work".
+ * every rule that counts work once groups by, so they all mean the same thing by "the same piece of work".
  */
 public record ReviewedWorkKey(ArtifactKind kind, long id) {
 

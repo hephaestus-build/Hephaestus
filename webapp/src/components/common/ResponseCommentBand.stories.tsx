@@ -75,10 +75,21 @@ export const ReasonRequired: Story = {
 
 /** The comment is on its way: Send says so and every control waits. */
 export const Pending: Story = {
-	args: { isPending: true },
+	args: {
+		isPending: true,
+		reasons: [
+			{ value: "not-accurate", label: "Not accurate" },
+			{ value: "not-useful", label: "Not useful" },
+		],
+	},
 	play: async ({ args, canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Sending…" })).toBeDisabled();
 		await expect(canvas.getByRole("button", { name: "Skip" })).toBeDisabled();
 		await expect(canvas.getByRole("textbox", { name: args.label })).toBeDisabled();
+		for (const reason of within(canvas.getByRole("group", { name: "Reason" })).getAllByRole(
+			"button",
+		)) {
+			await expect(reason).toBeDisabled();
+		}
 	},
 };

@@ -60,10 +60,7 @@ export const Openable: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: PRACTICE_NAME }));
 		await expect(args.onOpenPractice).toHaveBeenCalledWith(PRACTICE_SLUG);
 
-		const groupName = canvas.getByRole("button", { name: packagingGroup.name });
-		// The workspace's own colour for the group, from the `groups` it was handed.
-		await expect(groupName.closest("span")).toHaveClass("text-sky-700");
-		await userEvent.click(groupName);
+		await userEvent.click(canvas.getByRole("button", { name: packagingGroup.name }));
 		await expect(args.onOpenGroup).toHaveBeenCalledWith(packagingGroup.slug);
 	},
 };
@@ -92,9 +89,7 @@ export const GroupNotInTheWorkspace: Story = {
 		],
 	},
 	play: async ({ args, canvas }) => {
-		const groupName = canvas.getByRole("button", { name: "Reviewing in the open" });
-		await expect(groupName.closest("span")).toHaveClass("text-slate-700");
-		await userEvent.click(groupName);
+		await userEvent.click(canvas.getByRole("button", { name: "Reviewing in the open" }));
 		await expect(args.onOpenGroup).toHaveBeenCalledWith("retired-group");
 	},
 };

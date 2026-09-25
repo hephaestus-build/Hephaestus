@@ -16,8 +16,6 @@ export function firstNonBlank(...values: (string | null | undefined)[]): string 
 /**
  * A sentence opening with a capital: the first letter upper-cased and nothing else touched, so a
  * sentence that opens with a digit, a symbol or a code identifier stays exactly as it was written.
- * Every surface that shows a written sentence — a feedback card's next step, an observation row's,
- * the profile's composed prose — opens it through this one rule.
  */
 export function capitalise(value: string): string {
 	const index = value.search(/\S/u);
@@ -27,3 +25,6 @@ export function capitalise(value: string): string {
 	}
 	return value.slice(0, index) + char.toUpperCase() + value.slice(index + 1);
 }
+
+/** "A", "A and B", "A, B and C": a run of things read as a sentence, with no comma before the "and". */
+export const andList = new Intl.ListFormat("en-GB", { type: "conjunction" });

@@ -6,9 +6,8 @@ import type { StatusDef } from "@/components/common/status-def";
  * Where one piece of practice feedback on the Practice profile stands: not yet read, open,
  * resolved — by the work or by the reader, which the card's condition line tells apart — or
  * closed without a resolution because the practice's review rules changed after it was written.
- * The server records the facts each state reads — when the work resolved it, the reader's own
- * resolution, when the practice changed, when it was read; `practice-feedback-cards.ts#closureOf`
- * reads them into one of these four, and this registry is the words for it.
+ * The server records when it was read and when and by what it closed; `practice-feedback-cards.ts`
+ * reads that into one of these four, and this registry is the words for it.
  */
 export type FeedbackState = "new" | "open" | "resolved" | "closed";
 

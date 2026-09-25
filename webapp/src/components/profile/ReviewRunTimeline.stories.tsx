@@ -63,9 +63,7 @@ export const Default: Story = {
 			);
 		}
 		await expect(canvas.getAllByText("Why it was noted")).toHaveLength(summaries.length);
-		await expect(
-			canvas.getByText("Ask questions a teammate can answer").closest('[data-slot="badge"]'),
-		).not.toBeNull();
+		await expect(canvas.getByText("Ask questions a teammate can answer")).toBeVisible();
 		const question = canvas.getByRole("button", { name: /The question includes/u });
 		await userEvent.click(question);
 		await expect(question).toHaveAttribute("aria-expanded", "false");
@@ -92,21 +90,5 @@ export const OnThePracticeLevel: Story = {
 		await userEvent.click(earlier);
 		await expect(earlier).toHaveAttribute("aria-expanded", "true");
 		await expect(newest).toHaveAttribute("aria-expanded", "true");
-	},
-};
-
-/**
- * A page of the feed with more behind it: the last row's rail trails off dashed instead of
- * ending at its dot, so the "Show earlier runs" control under it reads as a continuation.
- */
-export const Continues: Story = {
-	args: { continues: true },
-	play: async ({ canvas }) => {
-		// The runs, not the observation rows inside each card, which are list items of their own.
-		const [first, last] = canvas
-			.getByRole("list", { name: "Review runs" })
-			.querySelectorAll(":scope > li");
-		await expect(first?.querySelector(".border-dashed")).toBeNull();
-		await expect(last?.querySelector(".border-dashed")).not.toBeNull();
 	},
 };

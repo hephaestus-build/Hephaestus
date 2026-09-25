@@ -194,7 +194,7 @@ export const OneObservation: Story = {
 		const rows = observationRow.closest("ul");
 		await expect(rows?.parentElement?.firstElementChild).toBe(rows);
 
-		// The work the head used to name is inside the observation's own row, still linked.
+		// The work a head would name is inside the observation's own row, still linked.
 		const summary = canvas.getByText("The refactor and the fix arrived together");
 		const work = canvas.getByRole("link", { name: /^#902/u });
 		await expect(observationRow).toContainElement(summary);

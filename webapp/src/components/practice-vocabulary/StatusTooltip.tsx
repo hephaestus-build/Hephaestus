@@ -3,8 +3,8 @@ import type { ReactElement, ReactNode } from "react";
 import { cn } from "cn";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-import type { StatusDef } from "@/components/common/status-def";
-import { StatusBadge } from "@/components/common/StatusBadge";
+import { FOCUS_RING, HIT_AREA_24 } from "@/components/common/focus";
+import { type StatusDef, statusToneClass } from "@/components/common/status-def";
 
 export interface StatusTooltipProps {
 	/** The registry entry the trigger stands for; the tooltip says its words and its sentence. */
@@ -19,9 +19,6 @@ export interface StatusTooltipProps {
 	/** What the trigger shows; left out when the rendered element draws itself, as a badge does. */
 	children?: ReactNode;
 }
-
-/** The trigger `StatusBadgeWithSentence` renders when the caller names none. */
-const DEFAULT_TRIGGER = <button type="button" />;
 
 /**
  * The registry's label and one-line description over a status icon, so an icon that only its
@@ -40,37 +37,32 @@ export function StatusTooltip({ def, render, className, children }: StatusToolti
 	);
 }
 
-export interface StatusBadgeWithSentenceProps {
+export interface StatusIconProps {
+	/** The registry entry the icon stands for: its glyph, in its tone, named by its label. */
 	def: StatusDef;
-	/** A `<span />` where the badge sits inside a control that is already a button. */
-	render?: ReactElement;
 	className?: string;
 }
 
 /**
- * A registry entry as its badge, with the registry's sentence on hover or focus — the shape
- * `StandingBadge` gives one enum, for any status the review console shows without its sentence
- * beside it. A button, so a keyboard reaches the sentence too; a `<span />` where the badge sits
- * inside a control that is already a button, so the two never nest. The button does nothing but
- * hold the tooltip, and says so with `data-tooltip-only`, so a surface whose whole row is a
- * control treats a press on it as the row's (`PracticeTableRow`).
+ * A registry entry's icon standing alone as the tooltip's trigger: a button with no chrome of its
+ * own, so a keyboard reaches the sentence, and named by the entry's label, since the glyph is all
+ * that tells one value from another.
  */
-export function StatusBadgeWithSentence({
-	def,
-	render = DEFAULT_TRIGGER,
-	className,
-}: StatusBadgeWithSentenceProps) {
+export function StatusIcon({ def, className }: StatusIconProps) {
+	const Icon = def.icon;
 	return (
 		<StatusTooltip
 			def={def}
-			render={
-				<StatusBadge
-					def={def}
-					render={render}
-					data-tooltip-only=""
-					className={cn("cursor-help", className)}
-				/>
-			}
-		/>
+			render={<button type="button" aria-label={def.label} />}
+			// The icon is 14 px, so the hit area is widened a step beyond the constant's.
+			className={cn(
+				HIT_AREA_24,
+				"inline-flex cursor-help items-center before:-inset-1.5",
+				FOCUS_RING,
+				className,
+			)}
+		>
+			<Icon className={cn("size-3.5 shrink-0", statusToneClass(def.badgeVariant))} aria-hidden />
+		</StatusTooltip>
 	);
 }

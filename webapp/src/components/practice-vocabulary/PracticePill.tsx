@@ -10,9 +10,8 @@ export interface PracticePillProps {
 }
 
 /**
- * A practice named as the plain grey badge, everywhere a surface names one: a feedback card's
- * head, a held row on the Heph card, a table's subject cell. A button when there is somewhere
- * to open it, so the name is the control and a keyboard reaches it.
+ * A practice named as the plain grey badge, everywhere a surface names one. A button when there is
+ * somewhere to open it, so the name is the control and a keyboard reaches it.
  */
 export function PracticePill({ name, onOpen, className }: PracticePillProps) {
 	return (

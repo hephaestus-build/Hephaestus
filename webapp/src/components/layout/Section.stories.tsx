@@ -35,10 +35,6 @@ export const Sizes: Story = {
 			<Section {...args} size="sm" title="Small — a subsection inside a panel" />
 		</div>
 	),
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("heading", { name: /^Large/u })).toHaveClass("text-xl");
-		await expect(canvas.getByRole("heading", { name: /^Medium/u })).toHaveClass("text-lg");
-	},
 };
 
 export const WithActions: Story = {

@@ -19,7 +19,7 @@ class PracticeTrendTest {
     private final TrendProperties properties = new TrendProperties();
 
     @Test
-    void shouldCountTheCleanRunBackFromTheNewestAndStopAtAProblem() {
+    void shouldCountBackFromTheNewestWhenAProblemEndsTheCleanRun() {
         Observation older = clean(3L, "2026-05-03T09:00:00Z");
         Observation newest = clean(4L, "2026-05-04T09:00:00Z");
         PracticeTrend.CleanWork cleanWork = trend(
@@ -34,7 +34,7 @@ class PracticeTrendTest {
     }
 
     @Test
-    void shouldSkipAnOpportunityWithoutAVerdict() {
+    void shouldSkipAnOpportunityWhenItHasNoVerdict() {
         PracticeTrend.CleanWork cleanWork = trend(
                         clean(1L, "2026-05-01T09:00:00Z"),
                         noVerdict(2L, "2026-05-02T09:00:00Z"),
@@ -49,7 +49,7 @@ class PracticeTrendTest {
     }
 
     @Test
-    void shouldNameTheKindMostOfTheRunWasReviewedOn() {
+    void shouldNameTheMajorityKindWhenTheCleanRunMixesKinds() {
         PracticeTrend.CleanWork cleanWork = trend(
                         clean(1L, "2026-05-01T09:00:00Z", ArtifactKinds.ISSUE),
                         clean(2L, "2026-05-02T09:00:00Z", ArtifactKinds.PULL_REQUEST),

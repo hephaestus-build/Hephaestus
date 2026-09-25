@@ -27,17 +27,9 @@ interface EvidenceFileBlockProps {
 }
 
 /**
- * One quoted citation behind an observation. What the caption may say is decided by the source's
- * locator: a `code` citation points at a real span of a real file, so it names the path and the
- * lines it was read from; an `object` citation points into the serialised context the review was
- * handed — `inputs/context/metadata.json`, line 9 — which is the runner's own file and not a place
- * the reader could open, so the caption names the source in the registry's words and no numbers at
- * all. Which side of the diff a passage came from is said on the quoted lines themselves, where
- * the reader is looking at them, rather than once in the caption above them. A quote verified
- * against a commit in the repository's history names that commit under the caption, since the
- * lines may no longer read so at the reviewed one. A block showing both sides of a change
- * names neither: each side was read at its own revision, so one range and one commit over the two
- * of them would be true of one side only.
+ * One quoted citation behind an observation. A `code` locator captions the path and lines; an
+ * `object` one points into the runner's own context, which the reader cannot open, so it captions
+ * the source's name and no numbers.
  */
 export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps) {
 	const source = evidenceSourceDef(location.sourceKind);

@@ -10,9 +10,14 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackUsefulness;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
+import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -25,11 +30,14 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 
 /**
  * The developer's own practice pages, end to end: who may read it, and what reading it records.
  */
 class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewIntegrationTest {
+
+    private static final String RESPONSE = "/workspaces/{slug}/practices/feedback/{feedbackId}/response";
 
     private Workspace workspace;
     private Practice practice;
@@ -53,15 +61,15 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("feedback prepared for this developer is returned, split into headline, body and next step")
-    void returnsTheDevelopersOwnPreparedFeedback() {
-        Feedback unit = persistInAppCard(
+    void shouldReturnTheDevelopersOwnFeedbackWhenItIsPreparedForThem() {
+        Feedback feedback = persistInAppCard(
                 job,
                 developer,
                 7000,
                 FeedbackDeliveryState.PREPARED,
                 "You keep shipping untested changes",
                 "Across your last three pull requests the tests did not move with the code.");
-        bind(unit, persistObservation(practice, job, developer, 101L));
+        bind(feedback, persistObservation(practice, job, developer, 101L));
 
         readInAppPage(workspace)
                 .jsonPath("$.length()")
@@ -73,7 +81,7 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
                 .isEqualTo("Across your last three pull requests the tests did not move with the code.")
                 .jsonPath("$[0].nextStep")
                 .isEqualTo("Write the test first next time.")
-                .jsonPath("$[0].practiceChangedAt")
+                .jsonPath("$[0].closedAt")
                 .doesNotExist()
                 .jsonPath("$[0].practiceSlug")
                 .isEqualTo("ships-tests-with-changes")
@@ -99,7 +107,7 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("feedback prepared for somebody else is not on this developer's page")
-    void doesNotReturnAnotherDevelopersFeedback() {
+    void shouldNotReturnFeedbackWhenItIsPreparedForSomebodyElse() {
         Feedback theirs = persistInAppCard(
                 job, teammate, 7000, FeedbackDeliveryState.PREPARED, "Their habit", "Not about the caller.");
         bind(theirs, persistObservation(practice, job, teammate, 202L));
@@ -119,25 +127,25 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
     @Test
     @WithUser
     @DisplayName("the first read delivers the feedback; a second read does not re-deliver it")
-    void firstReadFlipsPreparedToDeliveredAndTheSecondIsANoOp() {
-        Feedback unit = persistInAppCard(
+    void shouldKeepTheFirstDeliveryTimeWhenTheCardIsReadAgain() {
+        Feedback feedback = persistInAppCard(
                 job,
                 developer,
                 7000,
                 FeedbackDeliveryState.PREPARED,
                 "You keep shipping untested changes",
                 "Across your last three pull requests the tests did not move with the code.");
-        bind(unit, persistObservation(practice, job, developer, 101L));
+        bind(feedback, persistObservation(practice, job, developer, 101L));
 
         readInAppPage(workspace).jsonPath("$[0].readAt").doesNotExist();
 
-        Feedback afterFirstRead = feedbackRepository.findById(unit.getId()).orElseThrow();
+        Feedback afterFirstRead = feedbackRepository.findById(feedback.getId()).orElseThrow();
         assertThat(afterFirstRead.getDeliveryState()).isEqualTo(FeedbackDeliveryState.DELIVERED);
         assertThat(afterFirstRead.getDeliveredAt()).isNotNull();
 
         readInAppPage(workspace).jsonPath("$[0].readAt").exists();
 
-        assertThat(feedbackRepository.findById(unit.getId()))
+        assertThat(feedbackRepository.findById(feedback.getId()))
                 .get()
                 .extracting(Feedback::getDeliveredAt)
                 .isEqualTo(afterFirstRead.getDeliveredAt());
@@ -160,13 +168,12 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
 
     /**
      * The card carries the developer's own answer so the page is one request, and it is the answer that
-     * currently stands: a response they later deleted is no response. Both cards are read, and delivered, in
-     * the same read.
+     * stands: a response they later deleted is no response. The prepared cards are delivered by the same read.
      */
     @Test
     @WithUser
     @DisplayName("a card carries the developer's current response; a card they have not answered carries none")
-    void carriesTheDevelopersCurrentResponse() {
+    void shouldCarryTheResponseThatStandsWhenTheDeveloperAnsweredTheCard() {
         Feedback answered = persistInAppCard(
                 job,
                 developer,
@@ -183,8 +190,7 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
                 persistInAppCard(job, developer, 7002, FeedbackDeliveryState.PREPARED, "Commits say what", "Not why.");
         Practice third = persistPractice(workspace, null, "commit-messages", "Commit Messages", null);
         bind(withdrawn, persistObservation(third, job, developer, 103L));
-        // Whole seconds, so what Postgres stores is what the JSON says.
-        Instant earlier = Instant.now().truncatedTo(ChronoUnit.SECONDS).minusSeconds(120);
+        Instant earlier = NOW.minusSeconds(120);
         reactionRepository.save(Reaction.builder()
                 .feedback(answered)
                 .reactorUserId(developer.getId())
@@ -220,15 +226,17 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
                 .jsonPath(answeredPath + ".response.respondedAt")
                 .isEqualTo(earlier.plusSeconds(60).toString())
                 // The answer that resolves carries the date it resolved on; an answer nobody gave does not.
-                .jsonPath(answeredPath + ".resolvedByDeveloperAt")
+                .jsonPath(answeredPath + ".closedBy")
+                .isEqualTo("DEVELOPER")
+                .jsonPath(answeredPath + ".closedAt")
                 .isEqualTo(earlier.plusSeconds(60).toString())
                 .jsonPath(unansweredPath + ".response")
                 .doesNotExist()
-                .jsonPath(unansweredPath + ".resolvedByDeveloperAt")
+                .jsonPath(unansweredPath + ".closedAt")
                 .doesNotExist()
                 .jsonPath(withdrawnPath + ".response")
                 .doesNotExist()
-                .jsonPath(withdrawnPath + ".resolvedByDeveloperAt")
+                .jsonPath(withdrawnPath + ".closedAt")
                 .doesNotExist();
 
         assertThat(feedbackRepository.findAllById(List.of(unanswered.getId(), withdrawn.getId())))
@@ -237,75 +245,87 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
     }
 
     /**
-     * Composition freezes text; it must not freeze the rules. Feedback whose evidence was measured under
-     * review rules the practice has since changed stays on the page, closed, and says when the practice
-     * changed — the developer saw it, and a card that vanished without a word would read as a claim
-     * withdrawn.
+     * The card's own Addressed and Not applicable go through the response endpoint the rating uses, so the
+     * close is proven on that write rather than on a seeded row. The card writes the complete response, the
+     * rating and comment kept, and taking the answer back is the same write without the resolution.
      */
     @Test
     @WithUser
-    @DisplayName("feedback whose practice changed after it was prepared stays, closed, and says when")
-    void closesFeedbackWhosePracticeChanged() {
-        Feedback unit = persistInAppCard(
+    @DisplayName("answering the card through the response endpoint closes it; taking the answer back reopens it")
+    void shouldCloseTheCardWhenTheDeveloperAnswersItAndReopenItWhenTheyTakeTheAnswerBack() {
+        Feedback feedback = persistInAppCard(
                 job,
                 developer,
                 7000,
-                FeedbackDeliveryState.PREPARED,
+                FeedbackDeliveryState.DELIVERED,
                 "You keep shipping untested changes",
                 "Across your last three pull requests the tests did not move with the code.");
-        bind(unit, persistObservation(practice, job, developer, 101L));
-        readInAppPage(workspace)
-                .jsonPath("$.length()")
-                .isEqualTo(1)
-                .jsonPath("$[0].practiceChangedAt")
-                .doesNotExist();
+        bind(feedback, persistObservation(practice, job, developer, 101L));
 
-        // The measurement stays pinned to revision 1; the practice moves on, so its claim is stale.
-        Instant beforeTheChange = Instant.now();
-        practice.setCriteria("A rewritten rubric, measuring something else");
-        practice = practiceRepository.saveAndFlush(practice);
-        PracticeRevision second = practiceRevisionRepository.save(new PracticeRevision(practice, 2));
-        practice.setCurrentRevision(second);
-        practiceRepository.saveAndFlush(practice);
-
+        FeedbackResponseDTO addressed = writeResponse(
+                feedback,
+                new FeedbackResponseRequestDTO(
+                        FeedbackUsefulness.HELPFUL, FeedbackResolution.ADDRESSED, "Tests ship with the code now."));
         readInAppPage(workspace)
-                .jsonPath("$.length()")
-                .isEqualTo(1)
-                .jsonPath("$[0].id")
-                .isEqualTo(unit.getId().toString())
-                .jsonPath("$[0].practiceChangedAt")
-                .value(at -> assertThat(Instant.parse((String) at))
-                        .isBetween(beforeTheChange.truncatedTo(ChronoUnit.MILLIS), Instant.now()))
-                .jsonPath("$[0].resolvedByWorkAt")
+                .jsonPath("$[0].closedBy")
+                .isEqualTo("DEVELOPER")
+                .jsonPath("$[0].closedAt")
+                .value(at -> assertThat(Instant.parse((String) at)).isEqualTo(addressed.respondedAt()))
+                .jsonPath("$[0].response.usefulness")
+                .isEqualTo("HELPFUL")
+                .jsonPath("$[0].response.comment")
+                .isEqualTo("Tests ship with the code now.");
+
+        FeedbackResponseDTO notApplicable = writeResponse(
+                feedback,
+                new FeedbackResponseRequestDTO(FeedbackUsefulness.HELPFUL, FeedbackResolution.NOT_APPLICABLE, null));
+        readInAppPage(workspace)
+                .jsonPath("$[0].closedBy")
+                .isEqualTo("DEVELOPER")
+                .jsonPath("$[0].closedAt")
+                .value(at -> assertThat(Instant.parse((String) at)).isEqualTo(notApplicable.respondedAt()))
+                .jsonPath("$[0].response.resolution")
+                .isEqualTo("NOT_APPLICABLE");
+
+        writeResponse(feedback, new FeedbackResponseRequestDTO(FeedbackUsefulness.HELPFUL, null, null));
+        readInAppPage(workspace)
+                .jsonPath("$[0].closedAt")
+                .doesNotExist()
+                .jsonPath("$[0].closedBy")
+                .doesNotExist()
+                .jsonPath("$[0].response.usefulness")
+                .isEqualTo("HELPFUL")
+                .jsonPath("$[0].response.resolution")
                 .doesNotExist();
     }
 
     /**
-     * The date a closed card carries is the date the RULES moved. Every edit to a practice appends a
-     * revision, so reading the newest one would push the developer's "closed on" date forward every time
-     * somebody reworded a why-it-matters — a date the evidence cannot back.
+     * Composition freezes text; it must not freeze the rules. Feedback whose evidence was measured under
+     * review rules the practice has since changed stays on the page, closed, and says when the rules moved: a
+     * card that vanished without a word would read as a claim withdrawn. Every edit to a practice appends a
+     * revision, so the date is the rule change, never a later edit that touched only the prose.
      */
     @Test
     @WithUser
-    @DisplayName("a prose-only edit after a rule change does not move the moment the practice changed")
-    void keepsTheMomentTheRulesChangedWhenAlaterEditOnlyTouchesProse() {
-        Feedback unit = persistInAppCard(
+    @DisplayName("feedback whose practice rules changed stays, closed, dated by the rule change")
+    void shouldCloseFeedbackAtTheRuleChangeWhenItsPracticeChanged() {
+        Feedback feedback = persistInAppCard(
                 job,
                 developer,
                 7000,
                 FeedbackDeliveryState.PREPARED,
                 "You keep shipping untested changes",
                 "Across your last three pull requests the tests did not move with the code.");
-        bind(unit, persistObservation(practice, job, developer, 101L));
+        bind(feedback, persistObservation(practice, job, developer, 101L));
 
-        // The rules move: revision 2 is what makes the measurement stale.
+        // The measurement stays pinned to revision 1; revision 2 changes the rules, so its claim is stale.
         Instant beforeTheRuleChange = Instant.now();
         practice.setCriteria("A rewritten rubric, measuring something else");
         practice = practiceRepository.saveAndFlush(practice);
         practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 2)));
         practice = practiceRepository.saveAndFlush(practice);
 
-        // Then somebody reworks the prose only: revision 3 carries the same review rules as revision 2.
+        // Revision 3 reworks the prose only and carries the same review rules as revision 2.
         practice.setWhyItMatters("Because a change nobody tested is a change nobody can trust.");
         practice = practiceRepository.saveAndFlush(practice);
         PracticeRevision third = practiceRevisionRepository.save(new PracticeRevision(practice, 3));
@@ -314,21 +334,27 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
         Instant theProseEdit = Objects.requireNonNull(third.getCreatedAt());
 
         readInAppPage(workspace)
-                .jsonPath("$[0].practiceChangedAt")
+                .jsonPath("$.length()")
+                .isEqualTo(1)
+                .jsonPath("$[0].id")
+                .isEqualTo(feedback.getId().toString())
+                .jsonPath("$[0].closedBy")
+                .isEqualTo("PRACTICE_CHANGED")
+                .jsonPath("$[0].closedAt")
                 .value(at -> assertThat(Instant.parse((String) at))
                         .isAfterOrEqualTo(beforeTheRuleChange.truncatedTo(ChronoUnit.MILLIS))
                         .isBefore(theProseEdit));
     }
 
     /**
-     * Composition freezes text; it must not freeze permission. Feedback whose evidence source may no longer
-     * be cited to the developer stops being shown — and the ledger row stays, because hiding is not deleting.
+     * Composition freezes text; it must not freeze permission. Feedback whose evidence source may not be cited
+     * to the developer is not shown, and the ledger row stays, because hiding is not deleting.
      */
     @Test
     @WithUser
-    @DisplayName("feedback whose evidence may no longer be cited is hidden at read time, not deleted")
-    void hidesFeedbackWhoseEvidenceIsNoLongerAuthorized() {
-        Feedback unit = persistInAppCard(
+    @DisplayName("feedback whose evidence may not be cited is hidden at read time, not deleted")
+    void shouldHideFeedbackWithoutDeletingItWhenItsEvidenceMayNotBeCited() {
+        Feedback feedback = persistInAppCard(
                 job,
                 developer,
                 7000,
@@ -337,28 +363,45 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
                 "Across your last three pull requests the tests did not move with the code.");
         // A source the catalog holds no use decision for: nothing permits citing it to the developer.
         bind(
-                unit,
+                feedback,
                 observe(
                         practice,
                         job,
                         101L,
                         developer,
-                        "ABSENT",
-                        "GOOD",
-                        "MAJOR",
+                        ObservationKind.OMISSION_GAP,
+                        Severity.MAJOR,
                         Instant.now(),
                         "{\"citations\":[{\"sourceKind\":\"scm.pull-request.withdrawn\",\"quote\":\"example\"}]}"));
 
         readInAppPage(workspace).jsonPath("$.length()").isEqualTo(0);
 
-        assertThat(feedbackRepository.findById(unit.getId()))
+        assertThat(feedbackRepository.findById(feedback.getId()))
                 .get()
                 .extracting(Feedback::getDeliveryState)
                 .isEqualTo(FeedbackDeliveryState.PREPARED);
     }
 
+    /** The complete response written through the endpoint the card calls, as the signed-in developer. */
+    private FeedbackResponseDTO writeResponse(Feedback feedback, FeedbackResponseRequestDTO request) {
+        FeedbackResponseDTO written = webTestClient
+                .put()
+                .uri(RESPONSE, workspace.getWorkspaceSlug(), feedback.getId())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(FeedbackResponseDTO.class)
+                .returnResult()
+                .getResponseBody();
+        return Objects.requireNonNull(written);
+    }
+
     private UUID persistObservation(Practice about, AgentJob agentJob, User subject, long artifactId) {
-        return observe(about, agentJob, artifactId, subject, "ABSENT", "GOOD", "MAJOR", Instant.now());
+        return observe(
+                about, agentJob, artifactId, subject, ObservationKind.OMISSION_GAP, Severity.MAJOR, Instant.now());
     }
 
     private Feedback persistInAppCard(

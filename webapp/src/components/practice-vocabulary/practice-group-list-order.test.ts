@@ -2,11 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PracticeGroup, PracticeGroupStanding } from "@/api/types.gen";
 
-import {
-	DEFAULT_PRACTICE_GROUP_SORT,
-	nextPracticeGroupSort,
-	sortPracticeGroups,
-} from "./practice-group-list-order";
+import { DEFAULT_PRACTICE_GROUP_SORT, sortPracticeGroups } from "./practice-group-list-order";
 
 function group(slug: string, name: string, displayOrder = 0): PracticeGroup {
 	return {
@@ -70,12 +66,5 @@ describe("sortPracticeGroups", () => {
 		const sorted = sortPracticeGroups(groups, standings, DEFAULT_PRACTICE_GROUP_SORT);
 		expect(sorted).not.toBe(groups);
 		expect(slugsOf(groups)[0]).toBe("well");
-	});
-});
-
-describe("nextPracticeGroupSort", () => {
-	it("flips the direction and never returns to unsorted", () => {
-		expect(nextPracticeGroupSort("asc")).toBe("desc");
-		expect(nextPracticeGroupSort("desc")).toBe("asc");
 	});
 });

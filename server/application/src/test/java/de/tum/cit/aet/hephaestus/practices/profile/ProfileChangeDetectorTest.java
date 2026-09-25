@@ -49,6 +49,7 @@ class ProfileChangeDetectorTest {
             assertThat(change.groupSlug()).isEqualTo("review-ready-work");
             assertThat(change.from()).isEqualTo("STRENGTH");
             assertThat(change.to()).isEqualTo("DEVELOPING");
+            assertThat(change.direction()).isEqualTo(ProfileChangeDTO.Direction.DOWN);
             assertThat(change.at()).isEqualTo(PR_22.at());
             // Named without a run to read the name off: the kind alone, never a number that was not there.
             assertThat(change.evidence())
@@ -167,7 +168,30 @@ class ProfileChangeDetectorTest {
         assertThat(changes)
                 .filteredOn(change -> change.type() == ProfileChangeDTO.Type.STANDING_MOVED)
                 .singleElement()
-                .satisfies(change -> assertThat(change.from()).isEqualTo("NOT_OBSERVED"));
+                .satisfies(change -> {
+                    assertThat(change.from()).isEqualTo("NOT_OBSERVED");
+                    // Arriving from a silence is on no scale, so it went neither up nor down.
+                    assertThat(change.direction()).isNull();
+                });
+    }
+
+    @Test
+    @DisplayName("a standing that moved toward strength moved up")
+    void shouldSayUpWhenTheStandingMovedTowardStrength() {
+        List<ProfileChangeDTO> changes = ProfileChangeDetector.detect(
+                WINDOW,
+                List.of(practice("reviewable-diff-size", PracticeStandingDTO.Standing.DEVELOPING, null)),
+                List.of(practice("reviewable-diff-size", PracticeStandingDTO.Standing.MIXED, null)),
+                List.of(),
+                List.of(),
+                Map.of("reviewable-diff-size", List.of(PR_22)),
+                Map.of(),
+                Map.of());
+
+        assertThat(changes)
+                .singleElement()
+                .extracting(ProfileChangeDTO::direction)
+                .isEqualTo(ProfileChangeDTO.Direction.UP);
     }
 
     @Test
@@ -212,6 +236,7 @@ class ProfileChangeDetectorTest {
             assertThat(change.groupName()).isEqualTo("Packaging work for review");
             assertThat(change.from()).isEqualTo("MIXED");
             assertThat(change.to()).isEqualTo("DEVELOPING");
+            assertThat(change.direction()).isEqualTo(ProfileChangeDTO.Direction.DOWN);
             assertThat(change.at()).isEqualTo(PR_22.at());
             assertThat(change.evidence()).extracting(ReviewedWorkRefDTO::id).containsExactly("22", "21");
         });

@@ -402,7 +402,7 @@ public class FeedbackLedgerRecorder {
      * silence stops what leaves the instance and nothing else, so the developer's own pages must still get
      * their card now rather than when the hourly sweeper next passes. Every other gate decision (closed PR,
      * opted-out author) applies to every channel, so those loci must not resurface anywhere. No-ops when a
-     * DELIVERED unit already exists for the job or on retry. REQUIRES_NEW, best-effort: callers wrap in try/catch.
+     * DELIVERED feedback already exists for the job or on retry. REQUIRES_NEW, best-effort: callers wrap in try/catch.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSuppressedUnit(AgentJob job, DeliveryContent delivery, FeedbackSuppressionReason reason) {

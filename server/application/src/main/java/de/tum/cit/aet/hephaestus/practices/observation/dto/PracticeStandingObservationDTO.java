@@ -22,7 +22,7 @@ public record PracticeStandingObservationDTO(
 
         @Nullable
         @Schema(
-                description = "What to do — the text of the newest feedback unit that said something about this "
+                description = "What to do — the text of the newest feedback that said something about this "
                         + "observation to this developer (null if nothing was said)")
         String deliveredFeedback,
 

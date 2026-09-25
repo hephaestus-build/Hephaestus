@@ -69,6 +69,7 @@ final class ProfileChangeDetector {
                         now,
                         standingBefore.name(),
                         now.standing().name(),
+                        direction(standingBefore, now.standing()),
                         evidence));
             }
             TrendDirection directionBefore = was == null ? null : was.direction();
@@ -85,11 +86,13 @@ final class ProfileChangeDetector {
                         now,
                         directionBefore.name(),
                         direction.name(),
+                        null,
                         evidence));
             }
             Instant first = firstObservedAt.get(now.slug());
             if (first != null && window.contains(first)) {
-                changes.add(practiceChange(ProfileChangeDTO.Type.FIRST_OBSERVED, first, now, null, null, evidence));
+                changes.add(
+                        practiceChange(ProfileChangeDTO.Type.FIRST_OBSERVED, first, now, null, null, null, evidence));
             }
         }
 
@@ -113,12 +116,33 @@ final class ProfileChangeDetector {
                     now.groupName(),
                     standingBefore.name(),
                     now.standing().name(),
+                    direction(asPracticeStanding(standingBefore), asPracticeStanding(now.standing())),
                     null,
                     null,
                     null,
                     refs(work, targets)));
         }
         return changes;
+    }
+
+    /** A group's standing is its practices' rolled up, on the same scale under the same names. */
+    private static PracticeStandingDTO.Standing asPracticeStanding(PracticeGroupStandingDTO.Standing standing) {
+        return switch (standing) {
+            case DEVELOPING -> PracticeStandingDTO.Standing.DEVELOPING;
+            case STRENGTH -> PracticeStandingDTO.Standing.STRENGTH;
+            case MIXED -> PracticeStandingDTO.Standing.MIXED;
+            case NOT_OBSERVED -> PracticeStandingDTO.Standing.NOT_OBSERVED;
+            case NO_OPPORTUNITY -> PracticeStandingDTO.Standing.NO_OPPORTUNITY;
+        };
+    }
+
+    /** Which way a move between two verdicts went, or {@code null} for a move into or out of a silence. */
+    private static ProfileChangeDTO.@Nullable Direction direction(
+            PracticeStandingDTO.Standing from, PracticeStandingDTO.Standing to) {
+        if (!PracticeStandingDTO.isVerdict(from) || !PracticeStandingDTO.isVerdict(to)) {
+            return null;
+        }
+        return to.rank() > from.rank() ? ProfileChangeDTO.Direction.UP : ProfileChangeDTO.Direction.DOWN;
     }
 
     /** The work as the page names it, in the work's order. */
@@ -134,6 +158,7 @@ final class ProfileChangeDetector {
             PracticeStandingDTO practice,
             @Nullable String from,
             @Nullable String to,
+            ProfileChangeDTO.@Nullable Direction direction,
             List<ReviewedWorkRefDTO> evidence) {
         return new ProfileChangeDTO(
                 type,
@@ -144,6 +169,7 @@ final class ProfileChangeDetector {
                 practice.groupName(),
                 from,
                 to,
+                direction,
                 null,
                 null,
                 null,

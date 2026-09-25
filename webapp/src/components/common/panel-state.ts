@@ -16,19 +16,7 @@ export function panelState<TData, TSettled>(
 	query: UseQueryResult<TData>,
 	settled: (data: TData) => TSettled,
 ): PanelState<never> | TSettled {
-	if (query.isError) {
-		return {
-			status: "error",
-			error: query.error,
-			onRetry: () => {
-				void query.refetch();
-			},
-		};
-	}
-	if (query.isPending) {
-		return { status: "loading" };
-	}
-	return settled(query.data);
+	return query.isError || query.isPending ? unsettled(query) : settled(query.data);
 }
 
 /**
@@ -47,16 +35,20 @@ interface QueryLike {
 
 /** One query's state; a failed query retries itself. */
 export function queryLoadState(query: QueryLike): LoadState {
-	if (query.isError) {
-		return {
-			status: "error",
-			error: query.error,
-			onRetry: () => {
-				void query.refetch();
-			},
-		};
-	}
-	return query.isPending ? { status: "loading" } : { status: "ready" };
+	return query.isError || query.isPending ? unsettled(query) : { status: "ready" };
+}
+
+/** A query that has not settled: failed, with its retry, or still loading. */
+function unsettled(query: QueryLike): PanelState<never> {
+	return query.isError
+		? {
+				status: "error",
+				error: query.error,
+				onRetry: () => {
+					void query.refetch();
+				},
+			}
+		: { status: "loading" };
 }
 
 /**

@@ -1,47 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ObservationDetail } from "@/api/types.gen";
-import { detailObservation } from "@/stories/practice-detail-story-mock-data";
 
-import { feedbackResponseOf, isEmptyFeedbackResponse } from "./review-runs";
-
-const observation = (response?: ObservationDetail["feedbackResponse"]): ObservationDetail => ({
-	...detailObservation,
-	feedbackResponse: response,
-});
-
-describe("feedbackResponseOf", () => {
-	it("reads back every part of a response the server already holds", () => {
-		expect(
-			feedbackResponseOf(
-				observation({
-					feedbackId: "00000000-0000-0000-0000-000000000103",
-					usefulness: "HELPFUL",
-					resolution: "ADDRESSED",
-					comment: "Split into two commits.",
-				}),
-			),
-		).toStrictEqual({
-			usefulness: "HELPFUL",
-			resolution: "ADDRESSED",
-			comment: "Split into two commits.",
-		});
-	});
-
-	it("carries the parts that are missing as undefined rather than dropping them", () => {
-		expect(
-			feedbackResponseOf(
-				observation({
-					feedbackId: "00000000-0000-0000-0000-000000000103",
-					usefulness: "UNHELPFUL",
-				}),
-			),
-		).toStrictEqual({
-			usefulness: "UNHELPFUL",
-			resolution: undefined,
-			comment: undefined,
-		});
-	});
-});
+import { isEmptyFeedbackResponse } from "./review-runs";
 
 describe("isEmptyFeedbackResponse", () => {
 	it("treats an answer with nothing left in it as a withdrawal", () => {

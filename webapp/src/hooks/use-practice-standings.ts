@@ -19,14 +19,13 @@ export interface PracticeStandings {
 	/** The developer's standing in each group, keyed by group slug. */
 	groupStandings: Record<string, PracticeGroupStanding>;
 	practiceStandings: PracticeStanding[];
-	/** `groupPracticeStandings(practiceStandings)`. */
 	practicesByGroup: Record<string, PracticeStanding[] | undefined>;
 	/** The three queries as one: the page shows them together, so they load and fail as one. */
 	state: LoadState;
 }
 
 /** The practice standings under their group's slug; a practice in no group is in none of them. */
-export function groupPracticeStandings(
+function groupPracticeStandings(
 	practiceStandings: PracticeStanding[],
 ): Record<string, PracticeStanding[] | undefined> {
 	const byGroup: Record<string, PracticeStanding[] | undefined> = {};
@@ -40,9 +39,7 @@ export function groupPracticeStandings(
 
 /**
  * The developer's practice standings in one workspace — the groups, the standing in each and the
- * standing on every practice — as the practice profile and the drawer over it read them. Only
- * that route reads this; it is a file of its own because three queries folded into one state is
- * what keeps the route readable.
+ * standing on every practice — as the practice profile and the drawer over it read them.
  */
 export function usePracticeStandings(workspaceSlug: string): PracticeStandings {
 	const groupsQuery = useQuery(

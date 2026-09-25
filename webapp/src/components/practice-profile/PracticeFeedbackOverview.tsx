@@ -2,8 +2,8 @@ import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 
 import type { PracticeGroup } from "@/api/types.gen";
-import { count } from "@/components/common/feedback-text";
-import { FeedbackText } from "@/components/common/FeedbackText";
+import { count } from "@/components/practice-vocabulary/feedback-text";
+import { FeedbackText } from "@/components/practice-vocabulary/FeedbackText";
 import {
 	type FeedbackBlock,
 	HephFeedbackCard,
@@ -25,8 +25,6 @@ export interface PracticeFeedbackOverviewProps {
 	 * carry no link.
 	 */
 	onReadFeedback?: (feedbackId: string) => void;
-	isLoading?: boolean;
-	className?: string;
 }
 
 /**
@@ -39,8 +37,6 @@ export function PracticeFeedbackOverview({
 	groups,
 	onOpenGroup,
 	onReadFeedback,
-	isLoading = false,
-	className,
 }: PracticeFeedbackOverviewProps) {
 	const { holdingUp, holdingUpNote, needsAttention, reviewedWork, changed } = overview;
 	const changedBlock: FeedbackBlock = {
@@ -65,8 +61,6 @@ export function PracticeFeedbackOverview({
 			reviewedWork={reviewedWork}
 			onOpenPractice={onOpenPractice}
 			blocks={changed.length > 0 ? [changedBlock] : []}
-			isLoading={isLoading}
-			className={className}
 		/>
 	);
 }

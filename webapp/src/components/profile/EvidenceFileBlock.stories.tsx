@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { ComponentProps } from "react";
 import { expect, within } from "storybook/test";
 
 import { EvidenceFileBlock } from "./EvidenceFileBlock";
@@ -47,60 +48,19 @@ export const Default: Story = {
 		},
 	},
 };
-export const SingleLine: Story = {
-	args: {
-		location: {
-			path: "webapp/src/routes/_authenticated/w/$workspaceSlug/user/$username/index.tsx",
-			startLine: 118,
-			endLine: 118,
-			sourceKind: "scm.pull-request.diff",
-			redacted: false,
-			snippet:
-				"  const statusesQuery = useQuery(listPracticeGroupStandingsOptions({ path: { workspaceSlug } }));",
-		},
+/** A code citation withheld by the reviewer: its caption still names the path and the lines. */
+const withheldCode = {
+	location: {
+		path: "docs/contributor/practice-catalogue.md",
+		startLine: 31,
+		endLine: 44,
+		sourceKind: "scm.pull-request.diff",
+		redacted: true,
 	},
-};
-/** The quote is the block: there is nothing to unfold and no control that could hide it. */
-export const AlwaysQuoted: Story = {
-	args: {
-		location: {
-			path: "server/src/main/resources/db/changelog/1786939608194_changelog.xml",
-			startLine: 12,
-			endLine: 14,
-			sourceKind: "scm.pull-request.diff",
-			redacted: false,
-			snippet:
-				'<changeSet id="1786939608194-1" author="hephaestus">\n  <addColumn tableName="observation" />\n</changeSet>',
-		},
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/addColumn/u)).toBeVisible();
-		await expect(canvas.queryByRole("button")).toBeNull();
-	},
-};
-/** A code citation's caption still names the path and the lines, so the sentence may point at them. */
-export const Redacted: Story = {
-	args: {
-		location: {
-			path: "docs/contributor/practice-catalogue.md",
-			startLine: 31,
-			endLine: 44,
-			sourceKind: "scm.pull-request.diff",
-			redacted: true,
-		},
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("lines 31 to 44")).toBeVisible();
-		await expect(canvas.getByText(/only its location was kept/u)).toBeVisible();
-	},
-};
+} satisfies ComponentProps<typeof EvidenceFileBlock>;
 
-/**
- * A withheld quote of an object source: the caption shows the source's name and no numbers, so the
- * sentence cannot promise a path and a line the reader is not being shown.
- */
-export const RedactedObjectSource: Story = {
-	args: {
+const OTHER_REDACTIONS = [
+	{
 		location: {
 			path: "conversation_thread.json",
 			startLine: 62,
@@ -109,38 +69,7 @@ export const RedactedObjectSource: Story = {
 			redacted: true,
 		},
 	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("The conversation")).toBeVisible();
-		await expect(canvas.getByText("Not quoted. The passage was withheld.")).toBeVisible();
-		await expect(canvas.queryByText(/location was kept/u)).toBeNull();
-		await expect(canvas.queryByText(/lines 62 to 70/u)).toBeNull();
-	},
-};
-
-/**
- * The scanner's sentence on an object source: why nothing was stored, without pointing at a path
- * and a line the caption does not carry.
- */
-export const RedactedObjectSourceBySecretScanner: Story = {
-	args: {
-		location: {
-			path: "inputs/context/metadata.json",
-			startLine: 9,
-			endLine: 9,
-			sourceKind: "scm.pull-request.core",
-			redacted: true,
-		},
-		detector: "secret-diff-scanner",
-	},
-	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByText("Not quoted. This looked like a credential, so the text was never stored."),
-		).toBeVisible();
-		await expect(canvas.queryByText(/where it sits/u)).toBeNull();
-	},
-};
-export const RedactedBySecretScanner: Story = {
-	args: {
+	{
 		location: {
 			path: "server/application/src/main/resources/application-local.yml",
 			startLine: 12,
@@ -151,8 +80,44 @@ export const RedactedBySecretScanner: Story = {
 		},
 		detector: "secret-diff-scanner",
 	},
+	{
+		location: {
+			path: "inputs/context/metadata.json",
+			startLine: 9,
+			endLine: 9,
+			sourceKind: "scm.pull-request.core",
+			redacted: true,
+		},
+		detector: "secret-diff-scanner",
+	},
+] satisfies ComponentProps<typeof EvidenceFileBlock>[];
+
+/**
+ * Every way a quote is withheld — by the reviewer or by the secret scanner, on a code source or an
+ * object one. A code source's caption names a path and a line, so its sentence may point at them;
+ * an object source's caption names neither, so its sentence promises nothing it does not show.
+ */
+export const Redactions: Story = {
+	args: withheldCode,
+	render: (args) => (
+		<div className="flex flex-col gap-3">
+			{[args, ...OTHER_REDACTIONS].map((props) => (
+				<EvidenceFileBlock key={props.location.path} {...props} />
+			))}
+		</div>
+	),
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/The path and line above are where it sits/u)).toBeVisible();
+		await expect(
+			canvas.getAllByText(/^Not quoted\./u).map((sentence) => sentence.textContent),
+		).toStrictEqual([
+			"Not quoted. The passage was withheld, so only its location was kept.",
+			"Not quoted. The passage was withheld.",
+			"Not quoted. This looked like a credential, so the text was never stored. The path and line above are where it sits.",
+			"Not quoted. This looked like a credential, so the text was never stored.",
+		]);
+		await expect(canvas.getByText("lines 31 to 44")).toBeVisible();
+		await expect(canvas.getByText("The conversation")).toBeVisible();
+		await expect(canvas.queryByText("lines 62 to 70")).toBeNull();
 	},
 };
 export const BareFileName: Story = {
@@ -262,11 +227,9 @@ export const OneChangedLine: Story = {
 		await expect(within(caption).queryByText("Before")).toBeNull();
 		await expect(within(caption).queryByText("After")).toBeNull();
 
-		// Each side is the gutter of its own row, and the line beside it carries that side's wash.
+		// Each side is the gutter of its own row.
 		const removed = canvas.getByText("-export const PAGE_SIZE = 25;");
 		const added = canvas.getByText("+export const PAGE_SIZE = 20;");
-		await expect(removed).toHaveClass("bg-destructive/10");
-		await expect(added).toHaveClass("bg-success/10");
 		const removedRow = removed.closest<HTMLElement>("span.grid");
 		const addedRow = added.closest<HTMLElement>("span.grid");
 		if (!removedRow || !addedRow) {
@@ -277,22 +240,6 @@ export const OneChangedLine: Story = {
 	},
 };
 
-export const ObjectSource: Story = {
-	args: {
-		location: {
-			path: "conversation_thread.json",
-			startLine: 62,
-			endLine: 70,
-			sourceKind: "slack.conversation.thread",
-			redacted: false,
-			snippet: [
-				"@marta: are we rolling this out behind the flag, or straight to everyone?",
-				"@jon: behind the flag — I want a day of telemetry before we widen it.",
-				"@marta: works for me. I'll write the rollback step into the runbook.",
-			].join("\n"),
-		},
-	},
-};
 /** Only the old side was cited, so the gutter says which side it is, once. */
 export const QuotedFromBeforeTheChange: Story = {
 	args: {

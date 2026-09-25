@@ -1,44 +1,53 @@
-import { cn } from "cn";
 import type { PracticeStanding, PracticeTrend, TrendSupport } from "@/api/types.gen";
+import { StatusBadge } from "@/components/common/StatusBadge";
 
 import { standingDefs, type StandingScope } from "./practice-group-standing-defs";
-import { PracticeTrendChip, type PracticeTrendChipProps } from "./PracticeTrendChip";
-import { StatusBadgeWithSentence } from "./StatusTooltip";
+import { shownTrendDirection } from "./practice-trend-presentation";
+import { PracticeTrendChip } from "./PracticeTrendChip";
+import { StatusTooltip } from "./StatusTooltip";
 
 export interface StandingBadgeProps {
 	standing: PracticeStanding["standing"];
 	/** Whose standing this is; the sentence behind the badge is worded for it. */
 	scope: StandingScope;
-	className?: string;
 }
 
 /**
- * A standing as the registry's badge with its sentence behind it: `StatusBadgeWithSentence` for
- * one enum.
+ * A standing as the registry's badge with its sentence behind it. A button, so a keyboard reaches
+ * the sentence too; it answers nothing of its own and says so with `data-tooltip-only`, so a row
+ * that is itself a control takes a pointer's press on it (`PracticeTableRow`).
  */
-export function StandingBadge({ standing, scope, className }: StandingBadgeProps) {
-	return <StatusBadgeWithSentence def={standingDefs(scope)[standing]} className={className} />;
+export function StandingBadge({ standing, scope }: StandingBadgeProps) {
+	const def = standingDefs(scope)[standing];
+	return (
+		<StatusTooltip
+			def={def}
+			render={
+				<StatusBadge
+					def={def}
+					render={<button type="button" />}
+					data-tooltip-only=""
+					className="cursor-help"
+				/>
+			}
+		/>
+	);
 }
 
-export interface TrendNoteProps extends Pick<PracticeTrendChipProps, "scope" | "render"> {
+export interface TrendNoteProps {
 	direction?: PracticeTrend["direction"];
 	support?: TrendSupport;
-	className?: string;
+	scope: StandingScope;
 }
 
-/**
- * The trend chip under a badge. Without a comparable stretch — no direction, or one with no
- * evidence behind it — it is the chip for "not enough to compare yet", drawn the same way.
- */
-export function TrendNote({ direction, support, scope, render, className }: TrendNoteProps) {
+/** The trend chip under a badge, for a row that may have no comparable trend at all. */
+export function TrendNote({ direction, support, scope }: TrendNoteProps) {
 	return (
 		<PracticeTrendChip
-			{...(direction && support
-				? { direction, support }
-				: { direction: "INSUFFICIENT_EVIDENCE" as const })}
+			direction={shownTrendDirection(direction, support)}
+			support={support}
 			scope={scope}
-			render={render}
-			className={cn("flex-nowrap gap-x-1.5 whitespace-nowrap", className)}
+			className="flex-nowrap gap-x-1.5 whitespace-nowrap"
 		/>
 	);
 }

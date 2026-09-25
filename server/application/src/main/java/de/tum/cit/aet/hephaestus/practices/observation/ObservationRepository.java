@@ -545,17 +545,16 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      *
      * <p>Re-review deduped (same grain as {@link #findSummaryByDeveloperAndWorkspace}): a re-pushed pull
      * request's observations do not repeat across the list. "Latest run" means the latest run that said
-     * something about THIS claim — the subquery correlates on practice, subject, artifact and origin class
-     * together, the rule {@link LatestRun#perClaim} states for a window already in memory. Native because the
-     * latest-run selection needs {@code ORDER BY ... LIMIT 1} in a correlated subquery; the practice is loaded
-     * lazily per observation rather than JOIN-fetched.
+     * something about THIS claim and still stands — the subquery correlates on practice, subject, artifact and
+     * origin class together and skips superseded rows, the rule {@link LatestRun#perClaim} applies to
+     * {@link #findByDeveloperAndWorkspaceBetween}. Native because the latest-run selection needs
+     * {@code ORDER BY ... LIMIT 1} in a correlated subquery; the practice is loaded lazily per observation
+     * rather than JOIN-fetched.
      *
-     * <p>{@code verdictsOnly} decides whether an observation that was not assessed is listed. The context
-     * providers pass {@code true}: {@code NOT_APPLICABLE} would bury the actionable rows within their page
-     * budget, and coaching on {@code UNDETERMINED} would invite the mentor to invent a direction the measurement
-     * declined to take — both totals still reach it via the presence-count summary. The work resolution passes
-     * {@code false}: an opportunity that produced no verdict is skipped rather than counted, and only the row
-     * itself can say so.
+     * <p>Verdicts only ({@code PRESENT} and {@code ABSENT}): a {@code NOT_APPLICABLE} run is nothing a reader can
+     * quote and would spend the page budget burying the rows that can be, and an {@code UNDETERMINED} one would
+     * invite the mentor to invent a direction the measurement declined to take. Both totals still reach the
+     * mentor through the presence-count summary.
      *
      * <p>Backfilled observations are included: a campaign's {@code BAD} observation on a developer's own work
      * is exactly what "what should I work on" is asking for. {@code PracticeStandingObservationDTO.origin()}
@@ -569,13 +568,14 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             """ + HIDDEN_REPOSITORY_GUARD + """
               AND f.superseded_at IS NULL
               AND f.observed_at >= :since
-              AND (:verdictsOnly = FALSE OR f.presence IN ('PRESENT', 'ABSENT'))
+              AND f.presence IN ('PRESENT', 'ABSENT')
               AND f.agent_job_id = (
                   SELECT f2.agent_job_id FROM observation f2
                   WHERE f2.practice_id = f.practice_id
                     AND f2.about_user_id = f.about_user_id
                     AND f2.artifact_kind = f.artifact_kind AND f2.artifact_id = f.artifact_id
                     AND (f2.origin = 'BACKFILL') = (f.origin = 'BACKFILL')
+                    AND f2.superseded_at IS NULL
                   ORDER BY f2.observed_at DESC, f2.agent_job_id DESC LIMIT 1
               )
             ORDER BY f.observed_at DESC
@@ -584,14 +584,13 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("aboutUserId") Long aboutUserId,
             @Param("workspaceId") Long workspaceId,
             @Param("since") Instant since,
-            @Param("verdictsOnly") boolean verdictsOnly,
             Pageable pageable);
 
     /**
      * Every observation about a developer inside a span, newest first, every run's rows and every presence:
-     * the practice standing's one load, which it narrows in memory to each claim's latest run as of each
-     * moment it is read at ({@link LatestRun#perClaim}), so that two standings of one developer come from one
-     * query. Carries {@link #HIDDEN_REPOSITORY_GUARD} like every developer surface, and skips a claim the work
+     * what the practice standing and the work resolution narrow in memory to each claim's latest run as of
+     * the moment they read at ({@link LatestRun#perClaim}), so that two standings of one developer come from
+     * one query. Carries {@link #HIDDEN_REPOSITORY_GUARD} like every developer surface, and skips a claim the work
      * has moved on from since it was reviewed ({@code superseded_at}), as every developer surface does.
      */
     @Query(value = """
@@ -612,7 +611,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
 
     /**
      * The developer's review runs, newest first: one row per agent job that recorded an observation about
-     * them, dated by its newest observation and naming the one piece of work the job reviewed. Either bound
+     * them, dated by its newest observation and naming the piece of work that observation is on — both
+     * aggregates order the same way, so kind and id come from one row. Either bound
      * may be null; a run is inside the bounds when its date is after {@code since} and at or before
      * {@code until}. The lower bound is a row filter, since dropping rows at or before it leaves a later run's
      * newest observation as it was; the upper bound has to wait for the aggregate.
@@ -627,8 +627,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     @Query(value = """
                     SELECT f.agent_job_id AS "jobId",
                            MAX(f.observed_at) AS "reviewedAt",
-                           MIN(f.artifact_kind) AS "artifactKind",
-                           MIN(f.artifact_id) AS "artifactId"
+                           (ARRAY_AGG(f.artifact_kind ORDER BY f.observed_at DESC, f.id DESC))[1] AS "artifactKind",
+                           (ARRAY_AGG(f.artifact_id ORDER BY f.observed_at DESC, f.id DESC))[1] AS "artifactId"
                     FROM observation f
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId

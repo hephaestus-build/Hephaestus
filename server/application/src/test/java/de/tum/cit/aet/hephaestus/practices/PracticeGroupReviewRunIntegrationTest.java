@@ -1,5 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices;
 
+import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.DEMONSTRATED_STRENGTH;
+import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.NOT_APPLICABLE;
+import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.OMISSION_GAP;
+import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.UNDETERMINED;
+
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -7,9 +12,11 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -89,12 +96,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
 
     /** One observation of this group's practice, recorded now by this test's run. */
     private UUID observe(
-            String title,
-            String presence,
-            @Nullable String assessment,
-            @Nullable String severity,
-            String artifactKind,
-            long artifactId) {
+            String title, ObservationKind kind, @Nullable Severity severity, String artifactKind, long artifactId) {
         return observe(
                 practice,
                 agentJob,
@@ -102,8 +104,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
                 artifactId,
                 developer,
                 title,
-                presence,
-                assessment,
+                kind,
                 severity,
                 Instant.now(),
                 DIFF_EVIDENCE_JSON,
@@ -139,8 +140,8 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
     @WithUser
     @DisplayName("returns a review run whole, with every observation that explains it")
     void shouldReturnCompleteRun() {
-        observe("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
-        observe("No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
+        observe("Motivation is clear", DEMONSTRATED_STRENGTH, null, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        observe("No testing notes", OMISSION_GAP, Severity.MAJOR, ArtifactKinds.PULL_REQUEST.value(), 1L);
 
         getHistory()
                 .jsonPath("$.content.length()")
@@ -155,7 +156,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
     @WithUser
     @DisplayName("carries an undecided observation with a null assessment rather than dropping it")
     void shouldCarryInconclusiveObservationWithoutAnAssessment() {
-        observe("Could not tell from the diff", "UNDETERMINED", null, null, "scm.pull_request", 1L);
+        observe("Could not tell from the diff", UNDETERMINED, null, "scm.pull_request", 1L);
 
         getHistory()
                 .jsonPath("$.content.length()")
@@ -174,7 +175,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
     @WithUser
     @DisplayName("an unfiltered request is not silently narrowed to pull requests")
     void shouldNotDefaultToPullRequestsWhenNoKindFilterIsGiven() {
-        observe("Issue lacks acceptance criteria", "ABSENT", "GOOD", "MINOR", ArtifactKinds.ISSUE.value(), 7L);
+        observe("Issue lacks acceptance criteria", OMISSION_GAP, Severity.MINOR, ArtifactKinds.ISSUE.value(), 7L);
 
         getHistory()
                 .jsonPath("$.content.length()")
@@ -189,7 +190,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
     @WithUser
     @DisplayName("a run that produced nothing to judge is absent from the history")
     void shouldOmitRunsWithoutAnythingToJudge() {
-        observe("Nothing to judge here", "NOT_APPLICABLE", null, null, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        observe("Nothing to judge here", NOT_APPLICABLE, null, ArtifactKinds.PULL_REQUEST.value(), 1L);
 
         getHistory().jsonPath("$.content.length()").isEqualTo(0);
     }
@@ -197,7 +198,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
     @Test
     @WithUser
     void shouldSelectRunsByMatchingSeverityWithoutTreatingStrengthsAsMatches() {
-        observe("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        observe("Motivation is clear", DEMONSTRATED_STRENGTH, null, ArtifactKinds.PULL_REQUEST.value(), 1L);
 
         webTestClient
                 .get()
@@ -225,8 +226,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
                 1L,
                 developer,
                 "Visible observation",
-                "PRESENT",
-                "GOOD",
+                DEMONSTRATED_STRENGTH,
                 null,
                 Instant.parse("2025-01-01T00:00:00Z"),
                 DIFF_EVIDENCE_JSON,
@@ -241,8 +241,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
                 2L,
                 developer,
                 "Historical observation",
-                "PRESENT",
-                "GOOD",
+                DEMONSTRATED_STRENGTH,
                 null,
                 Instant.parse("2025-01-02T00:00:00Z"),
                 DIFF_EVIDENCE_JSON,
@@ -294,7 +293,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
     @WithUser
     @DisplayName("a run measured against older review rules stays in history")
     void shouldKeepARunMeasuredAgainstSupersededReviewRulesAsHistorical() {
-        observe("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        observe("Motivation is clear", DEMONSTRATED_STRENGTH, null, ArtifactKinds.PULL_REQUEST.value(), 1L);
         practice.setCriteria("Rewritten criteria, which is what makes the fingerprint differ");
         practice.setGroup(group);
         practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 2)));
@@ -310,7 +309,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
     @Test
     @WithUser
     @DisplayName("carries each observation complete enough to open in place, so a row needs no detail request")
-    void shouldCarryEachObservationCompleteEnoughToOpen() {
+    void shouldCarryEachObservationCompleteEnoughToOpenWhenListingARun() {
         UUID observationId = observe(
                 practice,
                 agentJob,
@@ -318,9 +317,8 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
                 1L,
                 developer,
                 "No testing notes",
-                "ABSENT",
-                "GOOD",
-                "MAJOR",
+                OMISSION_GAP,
+                Severity.MAJOR,
                 Instant.parse("2025-03-04T05:06:07Z"),
                 DIFF_EVIDENCE_JSON,
                 "locus-testing-notes");
@@ -355,23 +353,15 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
                 .isEqualTo("locus-testing-notes");
     }
 
-    /**
-     * What a run wrote about itself. The next step of a unit the delivery gate never let out is here too:
-     * the developer's own page is the one surface silent mode does not gate, so the sentence the review
-     * wrote about their work reaches them even when nothing was posted on the work itself.
-     */
+    /** The next step the run composed from an observation travels with it, even though no feedback was delivered. */
     @Test
     @WithUser
-    @DisplayName("a run carries its opening sentence, its coverage, its duration and the next step it wrote")
-    void shouldCarryWhatTheRunWroteAboutItself() {
+    @DisplayName("an observation carries the next step its run wrote about it")
+    void shouldCarryTheNextStepWhenTheRunComposedFeedback() {
         UUID observationId =
-                observe("No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
-        agentJob.setStartedAt(Instant.parse("2025-03-04T05:06:07Z"));
-        agentJob.setCompletedAt(Instant.parse("2025-03-04T05:08:29Z"));
+                observe("No testing notes", OMISSION_GAP, Severity.MAJOR, ArtifactKinds.PULL_REQUEST.value(), 1L);
         agentJob.setOutput(OBJECT_MAPPER.readTree("""
-                {"practiceCoverage":{"eligible":4,"evaluated":3,"outcomes":[]},
-                 "feedback":{"lead":"This change lands the retry, and says nothing about how it was tested.",
-                  "observations":[{"id":"%s","practiceSlug":"pr-description-quality","anchorable":false,
+                {"feedback":{"observations":[{"id":"%s","practiceSlug":"pr-description-quality","anchorable":false,
                    "citations":[]}],
                   "units":[{"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"pr-description-quality",
                    "basedOn":["%s"],"title":"No testing notes",
@@ -381,14 +371,6 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
         agentJobRepository.saveAndFlush(agentJob);
 
         getHistory()
-                .jsonPath("$.content[0].lead")
-                .isEqualTo("This change lands the retry, and says nothing about how it was tested.")
-                .jsonPath("$.content[0].practicesEvaluated")
-                .isEqualTo(3)
-                .jsonPath("$.content[0].practicesEligible")
-                .isEqualTo(4)
-                .jsonPath("$.content[0].durationSeconds")
-                .isEqualTo(142)
                 .jsonPath("$.content[0].observations[0].nextStep")
                 .isEqualTo("Add a Testing section that names what you ran.")
                 .jsonPath("$.content[0].observations[0].deliveredFeedback")
@@ -397,26 +379,18 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
 
     @Test
     @WithUser
-    @DisplayName("a run that wrote no opening sentence says so rather than inventing one")
-    void shouldLeaveTheRunNarrativeEmptyWhenTheRunComposedNothing() {
-        observe("No testing notes", "ABSENT", "GOOD", "MAJOR", ArtifactKinds.PULL_REQUEST.value(), 1L);
+    @DisplayName("an observation whose run composed nothing carries no next step")
+    void shouldCarryNoNextStepWhenTheRunComposedNothing() {
+        observe("No testing notes", OMISSION_GAP, Severity.MAJOR, ArtifactKinds.PULL_REQUEST.value(), 1L);
 
-        getHistory()
-                .jsonPath("$.content[0].lead")
-                .doesNotExist()
-                .jsonPath("$.content[0].practicesEvaluated")
-                .doesNotExist()
-                .jsonPath("$.content[0].durationSeconds")
-                .doesNotExist()
-                .jsonPath("$.content[0].observations[0].nextStep")
-                .doesNotExist();
+        getHistory().jsonPath("$.content[0].observations[0].nextStep").doesNotExist();
     }
 
     @Test
     @WithUser
     @DisplayName("an observation whose evidence is not authorised for delivery is withheld, never shown bare")
-    void shouldWithholdAnObservationWhoseEvidenceIsNotAuthorisedForDelivery() {
-        observe("Motivation is clear", "PRESENT", "GOOD", null, ArtifactKinds.PULL_REQUEST.value(), 1L);
+    void shouldWithholdAnObservationWhenItsEvidenceIsNotAuthorisedForDelivery() {
+        observe("Motivation is clear", DEMONSTRATED_STRENGTH, null, ArtifactKinds.PULL_REQUEST.value(), 1L);
         observe(
                 practice,
                 agentJob,
@@ -424,9 +398,8 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
                 1L,
                 developer,
                 "Cites a source nobody may show",
-                "ABSENT",
-                "GOOD",
-                "MAJOR",
+                OMISSION_GAP,
+                Severity.MAJOR,
                 Instant.now(),
                 UNKNOWN_SOURCE_EVIDENCE_JSON,
                 null);

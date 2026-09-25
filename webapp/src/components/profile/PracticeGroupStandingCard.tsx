@@ -12,13 +12,13 @@ import {
 	sortPracticeGroups,
 } from "@/components/practice-vocabulary/practice-group-list-order";
 import { PRACTICE_GROUP_STANDING_DEFS } from "@/components/practice-vocabulary/practice-group-standing-defs";
+import { PracticeGroupStandingRing } from "@/components/practice-vocabulary/PracticeGroupStandingRing";
+import { PracticeTrendChip } from "@/components/practice-vocabulary/PracticeTrendChip";
 import {
 	countPracticeStandings,
-	PracticeGroupStandingRing,
-	STANDING_LEGEND,
+	STANDING_SEGMENTS,
 	summarizeStandingCounts,
-} from "@/components/practice-vocabulary/PracticeGroupStandingRing";
-import { PracticeTrendChip } from "@/components/practice-vocabulary/PracticeTrendChip";
+} from "@/components/practice-vocabulary/standing-counts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -84,7 +84,7 @@ export function PracticeGroupStandingCard({
 						aria-label="Practice standing colours"
 						className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground"
 					>
-						{STANDING_LEGEND.map((segment) => (
+						{STANDING_SEGMENTS.map((segment) => (
 							<li key={segment.standing} className="flex items-center gap-1.5">
 								<span
 									className={cn("size-2 rounded-full bg-current", segment.colorClass)}

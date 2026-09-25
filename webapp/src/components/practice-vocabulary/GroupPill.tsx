@@ -1,11 +1,9 @@
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "cn";
-import {
-	getGroupVisual,
-	UNASSIGNED_GROUP_VISUAL,
-} from "@/components/practice-vocabulary/group-visuals";
 import { hasText } from "@/lib/text";
+
+import { getGroupVisual, UNASSIGNED_GROUP_VISUAL } from "./group-visuals";
 
 const groupPillVariants = cva("flex shrink-0 items-center justify-center", {
 	variants: {

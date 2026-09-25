@@ -22,11 +22,11 @@ export interface DetailPathCrumb {
 export interface LevelPath {
 	/** The page and the levels behind this one, outermost first. */
 	behind: DetailPathCrumb[];
-	/** `useDetailStack(...).close`: a crumb closes down to its depth. */
+	/** Closes the stack down to a depth; a crumb closes it down to its own. */
 	onClose: (depth: number) => void;
 }
 
-export interface DetailPathProps extends Partial<LevelPath> {
+export interface DetailPathProps extends LevelPath {
 	/** What this level is: "Group", "Practice", "All practice groups". */
 	current: string;
 	className?: string;
@@ -35,33 +35,26 @@ export interface DetailPathProps extends Partial<LevelPath> {
 /**
  * The eyebrow over a level's title, read off the route's detail stack: the page and the levels
  * behind, by name, then what this level is. A crumb behind is an `InlineLink` that closes down to
- * it — plain at rest and blue and underlined on hover, like every link on a practice surface —
- * and the path is the one place that says both where the reader is and how they got there;
- * without a close, the crumbs are words. The stack never goes deeper than three levels over the
- * page, so a counter would be true and useless; a named path answers "where am I" in one line.
+ * it, and the path is the one place that says both where the reader is and how they got there.
+ * The stack never goes deeper than three levels over the page, so a counter would be true and
+ * useless; a named path answers "where am I" in one line.
  *
  * The breadcrumb primitive's list, without its `nav`: covered levels stay in the accessibility
  * tree, and two landmarks with the same name would be one too many. Its link is not used either,
  * since it paints its own hover where the house link rule wants mentor blue.
  */
-const NO_CRUMBS: NonNullable<DetailPathProps["behind"]> = [];
-
-export function DetailPath({ behind = NO_CRUMBS, current, onClose, className }: DetailPathProps) {
+export function DetailPath({ behind, current, onClose, className }: DetailPathProps) {
 	return (
 		<BreadcrumbList aria-label="Path" className={className}>
 			{behind.map((crumb) => (
 				<Fragment key={crumb.depth}>
 					<BreadcrumbItem>
-						{onClose ? (
-							<InlineLink
-								className={cn(HIT_AREA_24, "text-muted-foreground")}
-								onClick={() => onClose(crumb.depth)}
-							>
-								{crumb.label}
-							</InlineLink>
-						) : (
-							crumb.label
-						)}
+						<InlineLink
+							className={cn(HIT_AREA_24, "text-muted-foreground")}
+							onClick={() => onClose(crumb.depth)}
+						>
+							{crumb.label}
+						</InlineLink>
 					</BreadcrumbItem>
 					<BreadcrumbSeparator className="[&>svg]:size-3" />
 				</Fragment>

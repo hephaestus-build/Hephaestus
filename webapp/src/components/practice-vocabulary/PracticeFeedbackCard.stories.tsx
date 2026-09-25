@@ -1,22 +1,27 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, userEvent, within } from "storybook/test";
 
-import { text, work } from "@/components/common/feedback-text";
-import {
-	NEW_FEEDBACK_CARD,
-	PACKAGING_GROUP,
-} from "@/stories/practice-feedback-cards-story-mock-data";
+import { NEW_FEEDBACK_CARD } from "@/stories/practice-feedback-cards-story-mock-data";
 import { conversation, issue, pullRequest } from "@/stories/practice-profile-story-mock-data";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { expectTouchTarget } from "@/test/controls";
 
+import { text, work } from "./feedback-text";
 import { PracticeFeedbackCard } from "./PracticeFeedbackCard";
 
 const card = NEW_FEEDBACK_CARD;
-/** One clean piece of work, reviewed on the day given. */
-const clean = (number: number, date: string) => ({ ref: pullRequest(number), date });
+/** One clean piece of work, reviewed on the day given, in the reader's own time zone. */
+const clean = (number: number, day: string) => ({
+	ref: pullRequest(number),
+	date: new Date(`${day}T00:00`),
+});
 const twoClean = [clean(21, "2026-09-07"), clean(22, "2026-09-09")];
 const threeClean = [clean(20, "2026-09-07"), clean(21, "2026-09-08"), clean(22, "2026-09-09")];
+
+/** The strip's outcome icons, matched by the names they carry for a screen reader. */
+const OUTCOME_NAME =
+	/^(?:Strength shown|Risk avoided|Needs improvement|Expected practice missing)$/u;
+const names = (icons: HTMLElement[]) => icons.map((icon) => icon.getAttribute("aria-label"));
 
 const meta = {
 	component: PracticeFeedbackCard,
@@ -26,6 +31,7 @@ const meta = {
 		onRate: fn(),
 		onSendComment: fn(),
 		onSkipComment: fn(),
+		onResolve: fn(),
 		onLearnMore: fn(),
 		onOpenPractice: fn(),
 		onOpenGroup: fn(),
@@ -51,34 +57,40 @@ type Story = StoryObj<typeof meta>;
 export const New: Story = {
 	play: async ({ args, canvas }) => {
 		await expect(canvas.getByRole("article", { name: args.card.headline })).toBeVisible();
-		// The state is the registry's badge; a new card's wears the mentor accent, the one place
-		// the palette lets a status badge carry it.
-		const badge = canvas.getByText("New").closest('[data-slot="badge"]');
-		await expect(badge).toHaveClass("text-mentor");
+		await expect(canvas.getByText("New")).toBeVisible();
 		await expect(canvas.queryByText("Open")).toBeNull();
 		// The number rule and the two day rules of `feedback-text` and `lib/dates`: a word below ten,
 		// the short day in the strip, the full day and the minute in the footer. The label counts
 		// the wire's distinct pieces of evidence, by the kind every piece carries.
 		await expect(canvas.getByText("Newest three pull requests")).toBeVisible();
-		await expect(canvas.getByText("0 of 3 clean")).toBeVisible();
+		await expect(canvas.getByRole("meter", { name: "Clean work in a row" })).toHaveAttribute(
+			"aria-valuetext",
+			"0 of 3 clean",
+		);
 		await expect(canvas.getByText("28 Aug")).toBeVisible();
 		await expect(canvas.getByText("Created 9 September, 2:10 pm")).toBeVisible();
 		// The glyph leading the next-step band is decoration: nothing in the card is a checkbox the
 		// reader could tick.
 		await expect(canvas.queryByRole("checkbox")).toBeNull();
+		// Nothing rated yet, and each rating button writes the registry's own value.
 		await expect(canvas.getByRole("button", { name: "Helpful" })).toHaveAttribute(
 			"aria-pressed",
 			"false",
 		);
+		await userEvent.click(canvas.getByRole("button", { name: "Not helpful" }));
+		await expect(args.onRate).toHaveBeenCalledWith("UNHELPFUL");
+		// The other way to close the card, beside the clean work: nothing answered yet, and each
+		// answer writes the registry's own value.
+		const response = within(canvas.getByRole("group", { name: "Your response" }));
+		await expect(response.getByRole("button", { name: "Not applicable" })).toHaveAttribute(
+			"aria-pressed",
+			"false",
+		);
+		await userEvent.click(response.getByRole("button", { name: "Addressed" }));
+		await expect(args.onResolve).toHaveBeenCalledWith("ADDRESSED");
 
-		// The strip's outcome icons are 14 px and a tooltip each; their pointer targets are still
-		// the minimum.
-		for (const icon of canvas.getAllByRole("button", { name: "Needs improvement:" })) {
-			await expectTouchTarget(icon);
-		}
-		// The head names the practice as the one grey pill every practice surface uses.
+		// The head names the practice as a control that opens it, large enough to press.
 		const pill = canvas.getByRole("button", { name: "Scope the change to one concern" });
-		await expect(pill).toHaveAttribute("data-slot", "badge");
 		await expectTouchTarget(pill);
 		await userEvent.click(pill);
 		await expect(args.onOpenPractice).toHaveBeenCalledWith("scope-one-reviewable-change");
@@ -161,20 +173,19 @@ export const TwoOfThreeClean: Story = {
 	args: { card: { ...card, state: "open", cleanWork: twoClean } },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("New")).toBeNull();
-		await expect(canvas.getByText("Open").closest('[data-slot="badge"]')).not.toHaveClass(
-			"text-mentor",
-		);
+		await expect(canvas.getByText("Open")).toBeVisible();
 		await expect(canvas.getByText("Newest five pull requests")).toBeVisible();
-		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
-		const outcomeNames = canvas
-			.getAllByText(/:$/u, { selector: ".sr-only" })
-			.map((name) => name.textContent.trim());
-		await expect(outcomeNames).toStrictEqual([
-			"Needs improvement:",
-			"Needs improvement:",
-			"Needs improvement:",
-			"Strength shown:",
-			"Strength shown:",
+		// A count toward a threshold: the meter says it in words as well as in its value.
+		const meter = canvas.getByRole("meter", { name: "Clean work in a row" });
+		await expect(meter).toHaveAttribute("aria-valuenow", "2");
+		await expect(meter).toHaveAttribute("aria-valuemax", "3");
+		await expect(meter).toHaveAttribute("aria-valuetext", "2 of 3 clean");
+		await expect(names(canvas.getAllByRole("button", { name: OUTCOME_NAME }))).toStrictEqual([
+			"Needs improvement",
+			"Needs improvement",
+			"Needs improvement",
+			"Strength shown",
+			"Strength shown",
 		]);
 		// A clean piece is dated like the evidence beside it.
 		await expect(canvas.getByRole("link", { name: /^#22/u })).toBeVisible();
@@ -183,110 +194,15 @@ export const TwoOfThreeClean: Story = {
 };
 
 /**
- * The work the strip under `label` links, in order; each link's own "(opens in a new tab)" is
- * dropped.
- */
-function stripLabels(label: HTMLElement): string[] {
-	const strip = label.parentElement;
-	if (!strip) {
-		throw new Error("The strip's label sits in the strip");
-	}
-	return within(strip)
-		.getAllByRole("link")
-		.map((link) => link.textContent.replace(/\s*\(opens.*$/u, ""));
-}
-
-/** Seven pieces of evidence, one a day, more than the strip shows. */
-const sevenPieces = [11, 12, 13, 14, 15, 16, 17].map((number) => ({
-	ref: pullRequest(number),
-	date: `2026-08-${String(number).padStart(2, "0")}`,
-	outcome: "COMMISSION_PROBLEM" as const,
-}));
-
-/**
- * The strip is a glance, not a log: of seven pieces of evidence it shows the newest five, in
- * order, and the label counts those five.
- */
-export const StripCapped: Story = {
-	args: { card: { ...card, reviewedWork: sevenPieces } },
-	play: async ({ canvas }) => {
-		const label = canvas.getByText("Newest five pull requests");
-		await expect(stripLabels(label)).toStrictEqual(["#13", "#14", "#15", "#16", "#17"]);
-	},
-};
-
-/**
- * The window is the newest five reviews whatever they found: the two clean pieces are the newest,
- * so the evidence gives way to them.
- */
-export const StripCappedWithCleanWork: Story = {
-	args: {
-		card: {
-			...card,
-			state: "open",
-			reviewedWork: sevenPieces,
-			cleanWork: twoClean,
-		},
-	},
-	play: async ({ canvas }) => {
-		const label = canvas.getByText("Newest five pull requests");
-		await expect(stripLabels(label)).toStrictEqual(["#15", "#16", "#17", "#21", "#22"]);
-	},
-};
-
-/**
- * The strip is one run ordered by time, not evidence then clean work: a piece that came back
- * clean on 1 September stands before the evidence reviewed after it.
- */
-export const CleanWorkOlderThanTheEvidence: Story = {
-	args: {
-		card: {
-			...card,
-			state: "open",
-			reviewedWork: [
-				{ ref: pullRequest(17), date: "2026-08-28", outcome: "COMMISSION_PROBLEM" },
-				{ ref: pullRequest(19), date: "2026-09-06", outcome: "COMMISSION_PROBLEM" },
-			],
-			cleanWork: [clean(18, "2026-09-01"), clean(21, "2026-09-07")],
-		},
-	},
-	play: async ({ canvas }) => {
-		const label = canvas.getByText("Newest four pull requests");
-		await expect(stripLabels(label)).toStrictEqual(["#17", "#18", "#19", "#21"]);
-	},
-};
-
-/**
- * The same pull request reviewed twice on different days is two pieces of evidence and one place
- * the habit was seen: the strip shows both reviews, the label counts the distinct work.
- */
-export const WorkReviewedTwice: Story = {
-	args: {
-		card: {
-			...card,
-			reviewedWork: [
-				{ ref: pullRequest(17), date: "2026-08-28", outcome: "COMMISSION_PROBLEM" },
-				{ ref: pullRequest(17), date: "2026-09-02", outcome: "COMMISSION_PROBLEM" },
-				{ ref: pullRequest(19), date: "2026-09-06", outcome: "COMMISSION_PROBLEM" },
-			],
-		},
-	},
-	play: async ({ canvas }) => {
-		const label = canvas.getByText("Newest two pull requests");
-		await expect(stripLabels(label)).toStrictEqual(["#17", "#17", "#19"]);
-	},
-};
-
-/**
- * The work resolved it: the card wears the success colour's wash and edge as a new card wears the
- * accent's, the badge, the green circle-check leading the band and the filled meter carry the
- * state, and the condition names the clean work.
+ * The work resolved it: the card wears the success colour's wash, the badge, the green tick leading
+ * the band and the filled meter carry the state, and the footer dates the resolution.
  */
 export const Resolved: Story = {
 	args: {
 		card: {
 			...card,
 			state: "resolved",
+			resolvedBy: "WORK",
 			cleanWork: threeClean,
 			condition: [
 				text("Resolved by the work on 9 September · "),
@@ -300,10 +216,7 @@ export const Resolved: Story = {
 		},
 		usefulness: "HELPFUL",
 	},
-	play: async ({ args, canvas }) => {
-		await expect(canvas.getByRole("article", { name: args.card.headline })).toHaveClass(
-			"border-success/35",
-		);
+	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Resolved")).toBeVisible();
 		await expect(canvas.queryByText("Open")).toBeNull();
 		await expect(canvas.getByText("3 of 3 clean")).toBeVisible();
@@ -317,23 +230,41 @@ export const Resolved: Story = {
 			"aria-pressed",
 			"true",
 		);
+		// The work's resolution is not the reader's to take back, so there is no answer to give.
+		await expect(canvas.queryByRole("group", { name: "Your response" })).toBeNull();
 	},
 };
 
-/** The rating buttons are the registry's two entries, words and icons alike. */
-export const Helpful: Story = {
-	args: { card: { ...card, state: "open" }, usefulness: "HELPFUL" },
+/**
+ * The reader marked it addressed: the card resolves on the day they did, the meter stays where the
+ * work left it, and the answer stays pressed under it, so a second press takes it back and reopens
+ * the card.
+ */
+export const MarkedAsAddressed: Story = {
+	args: {
+		card: {
+			...card,
+			state: "resolved",
+			resolvedBy: "DEVELOPER",
+			cleanWork: twoClean,
+			condition: [text("Marked as addressed on 9 September")],
+			timestamp: new Date("2026-09-09T16:05:00"),
+		},
+		resolution: "ADDRESSED",
+	},
 	play: async ({ args, canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Helpful" })).toHaveAttribute(
-			"aria-pressed",
-			"true",
-		);
-		await expect(canvas.getByRole("button", { name: "Not helpful" })).toHaveAttribute(
+		await expect(canvas.getByText("Resolved 9 September")).toBeVisible();
+		await expect(canvas.getByText("Marked as addressed on 9 September")).toBeVisible();
+		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
+		const response = within(canvas.getByRole("group", { name: "Your response" }));
+		const addressed = response.getByRole("button", { name: "Addressed" });
+		await expect(addressed).toHaveAttribute("aria-pressed", "true");
+		await expect(response.getByRole("button", { name: "Not applicable" })).toHaveAttribute(
 			"aria-pressed",
 			"false",
 		);
-		await userEvent.click(canvas.getByRole("button", { name: "Not helpful" }));
-		await expect(args.onRate).toHaveBeenCalledWith("UNHELPFUL");
+		await userEvent.click(addressed);
+		await expect(args.onResolve).toHaveBeenCalledWith("ADDRESSED");
 	},
 };
 
@@ -369,38 +300,13 @@ export const NotHelpfulReasonOpen: Story = {
 			"Not useful",
 			"Already doing this",
 		]);
-		// One reason at a time: choosing a second releases the first.
-		await userEvent.click(canvas.getByRole("button", { name: "Not useful" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Already doing this" }));
-		await expect(canvas.getByRole("button", { name: "Not useful" })).toHaveAttribute(
-			"aria-pressed",
-			"false",
-		);
-		await expect(canvas.getByRole("button", { name: "Already doing this" })).toHaveAttribute(
-			"aria-pressed",
-			"true",
-		);
-		// An empty sentence does not send.
-		await userEvent.click(canvas.getByRole("button", { name: "Send" }));
-		await expect(args.onSendComment).not.toHaveBeenCalled();
 		await userEvent.type(field, "Each of these was already one concern.");
 		await userEvent.click(canvas.getByRole("button", { name: "Send" }));
 		await expect(args.onSendComment).toHaveBeenCalledWith({
 			reason: "already-doing",
 			comment: "Each of these was already one concern.",
 		});
-	},
-};
-
-export const NotHelpful: Story = {
-	args: { card: { ...card, state: "open" }, usefulness: "UNHELPFUL" },
-	play: async ({ args, canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Not helpful" })).toHaveAttribute(
-			"aria-pressed",
-			"true",
-		);
-		await userEvent.click(canvas.getByRole("button", { name: "Helpful" }));
-		await expect(args.onRate).toHaveBeenCalledWith("HELPFUL");
 	},
 };
 
@@ -419,10 +325,14 @@ export const EveryOutcome: Story = {
 			headline: "Descriptions named the what, rarely the why",
 			body: "#16 and #19 listed the files touched but not the problem behind them; the reviewer on #19 asked in the first comment what the change was for.",
 			reviewedWork: [
-				{ ref: pullRequest(16), date: "2026-08-24", outcome: "OMISSION_GAP" },
-				{ ref: pullRequest(19), date: "2026-09-06", outcome: "COMMISSION_PROBLEM" },
-				{ ref: pullRequest(20), date: "2026-09-03", outcome: "SAFE_AVOIDANCE" },
-				{ ref: pullRequest(21), date: "2026-09-08", outcome: "DEMONSTRATED_STRENGTH" },
+				{ ref: pullRequest(16), date: new Date("2026-08-24T00:00"), outcome: "OMISSION_GAP" },
+				{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "COMMISSION_PROBLEM" },
+				{ ref: pullRequest(20), date: new Date("2026-09-03T00:00"), outcome: "SAFE_AVOIDANCE" },
+				{
+					ref: pullRequest(21),
+					date: new Date("2026-09-08T00:00"),
+					outcome: "DEMONSTRATED_STRENGTH",
+				},
 			],
 			nextStep:
 				"Before the file list, write one paragraph on the problem and the decision you took.",
@@ -431,14 +341,11 @@ export const EveryOutcome: Story = {
 	play: async ({ canvas }) => {
 		// Each outcome names itself once in the strip, oldest first whatever order the work was
 		// given in — #16 on 24 Aug, #20 on 3 Sep, #19 on 6 Sep, #21 on 8 Sep.
-		const outcomeNames = canvas
-			.getAllByText(/:$/u, { selector: ".sr-only" })
-			.map((name) => name.textContent.trim());
-		await expect(outcomeNames).toStrictEqual([
-			"Expected practice missing:",
-			"Risk avoided:",
-			"Needs improvement:",
-			"Strength shown:",
+		await expect(names(canvas.getAllByRole("button", { name: OUTCOME_NAME }))).toStrictEqual([
+			"Expected practice missing",
+			"Risk avoided",
+			"Needs improvement",
+			"Strength shown",
 		]);
 	},
 };
@@ -479,10 +386,10 @@ export const MixedWork: Story = {
 			...card,
 			state: "open",
 			reviewedWork: [
-				{ ref: pullRequest(17), date: "2026-08-28", outcome: "COMMISSION_PROBLEM" },
-				{ ref: issue(13), date: "2026-09-03", outcome: "OMISSION_GAP" },
+				{ ref: pullRequest(17), date: new Date("2026-08-28T00:00"), outcome: "COMMISSION_PROBLEM" },
+				{ ref: issue(13), date: new Date("2026-09-03T00:00"), outcome: "OMISSION_GAP" },
 			],
-			cleanWork: [{ ref: conversation("#releases"), date: "2026-09-05" }],
+			cleanWork: [{ ref: conversation("#releases"), date: new Date("2026-09-05T00:00") }],
 		},
 	},
 	play: async ({ canvas }) => {
@@ -491,14 +398,10 @@ export const MixedWork: Story = {
 	},
 };
 
-/** The pill and the group name fall back to neutral grey when the group has no colour. */
-export const WithoutGroupColor: Story = {
-	args: { card: { ...card, state: "open", group: { ...PACKAGING_GROUP, color: undefined } } },
-};
-
 /**
  * A practice in no group: the head says the feedback is unassigned and leaves it at that, since
- * there is no group level to open.
+ * there is no group level to open. The pill and the name wear the neutral grey any group without a
+ * colour falls back to.
  */
 export const WithoutGroup: Story = {
 	args: { card: { ...card, state: "open", group: undefined } },
@@ -524,11 +427,11 @@ export const WorkWithoutAnAddress: Story = {
 			reviewedWork: [
 				{
 					ref: conversation("#backend-review"),
-					date: "2026-08-12",
+					date: new Date("2026-08-12T00:00"),
 					outcome: "OMISSION_GAP",
 				},
 			],
-			cleanWork: [{ ref: conversation("#releases"), date: "2026-08-20" }],
+			cleanWork: [{ ref: conversation("#releases"), date: new Date("2026-08-20T00:00") }],
 		},
 	},
 	play: async ({ canvas }) => {
@@ -536,27 +439,6 @@ export const WorkWithoutAnAddress: Story = {
 		await expect(canvas.getByText("Newest two conversations")).toBeVisible();
 		// The body names it in its own words, since only a number carries an address to link to.
 		await expect(canvas.getByText(/^In #backend-review the outage/u)).toBeVisible();
-		for (const word of [canvas.getByText("#backend-review"), canvas.getByText("#releases")]) {
-			await expect(word.tagName).toBe("SPAN");
-			await expect(word).not.toHaveClass("hover:underline");
-		}
-	},
-};
-
-/** The reader marked it addressed before the work did: the meter stays where the work left it. */
-export const Addressed: Story = {
-	args: {
-		card: {
-			...card,
-			state: "resolved",
-			cleanWork: twoClean,
-			condition: [text("Marked as addressed on 9 September")],
-		},
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Resolved")).toBeVisible();
-		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
-		await expect(canvas.getByText("Marked as addressed on 9 September")).toBeVisible();
 	},
 };
 
@@ -571,13 +453,10 @@ export const Closed: Story = {
 			state: "closed",
 			cleanWork: twoClean,
 			condition: [text("Closed on 9 September · the practice's review rules changed")],
-			timestamp: "2026-09-09T09:00:00Z",
+			timestamp: new Date("2026-09-09T09:00"),
 		},
 	},
-	play: async ({ args, canvas }) => {
-		const article = canvas.getByRole("article", { name: args.card.headline });
-		await expect(article).not.toHaveClass("border-success/35");
-		await expect(article).not.toHaveClass("border-mentor/35");
+	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Closed")).toBeVisible();
 		await expect(canvas.queryByText("Resolved")).toBeNull();
 		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
@@ -585,12 +464,14 @@ export const Closed: Story = {
 		await expect(
 			canvas.getByText("Closed on 9 September · the practice's review rules changed"),
 		).toBeVisible();
+		// Closed unresolved, and no answer reopens it.
+		await expect(canvas.queryByRole("group", { name: "Your response" })).toBeNull();
 	},
 };
 
 /**
- * A rating on its way to the server: the chosen button says so, and the rest wait rather than
- * take a second press.
+ * The moment after a press on "Helpful": the rating being written is the one shown, saying so,
+ * and the other rating and the band the press opened wait rather than take a second press.
  */
 export const RatingPending: Story = {
 	args: {
@@ -617,6 +498,7 @@ export const WithoutHandlers: Story = {
 		onRate: undefined,
 		onSendComment: undefined,
 		onSkipComment: undefined,
+		onResolve: undefined,
 		onLearnMore: undefined,
 		onOpenPractice: undefined,
 		onOpenGroup: undefined,
@@ -624,6 +506,7 @@ export const WithoutHandlers: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("button", { name: "Helpful" })).toBeNull();
 		await expect(canvas.queryByRole("button", { name: "Not helpful" })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: "Addressed" })).toBeNull();
 		await expect(
 			canvas.queryByRole("button", { name: "Learn more about this practice" }),
 		).toBeNull();

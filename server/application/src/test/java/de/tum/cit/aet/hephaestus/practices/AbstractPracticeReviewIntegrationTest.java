@@ -16,9 +16,14 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
@@ -26,6 +31,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -36,8 +42,8 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Seeds one practice review's history the way the production writers leave it: a practice with a current
  * revision, a pull request review run with the metadata the target lookup reads, the observations the run
- * recorded, the in-app feedback composed from them and the developer's responses. Every helper returns the
- * row it wrote, so a test asserts on its own rows and never on a count.
+ * recorded, the in-app feedback composed from them and the developer's responses. A helper returns the row a
+ * test may assert on, so a test asserts on its own rows and never on a count.
  */
 public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
@@ -48,6 +54,9 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
 
     /** The developer's own in-app feedback page. */
     protected static final String IN_APP = "/workspaces/{slug}/practices/feedback/in-app";
+
+    /** Whole seconds, so what Postgres stores is what the JSON says. */
+    protected static final Instant NOW = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -121,18 +130,19 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
         return agentJobRepository.save(job);
     }
 
-    /** One live observation of {@code practice} about {@code about}, recorded by {@code job} on a pull request. */
+    /**
+     * One live observation of {@code practice} about {@code about}, recorded by {@code job} on a pull request.
+     * {@code severity} is required exactly when {@code kind} is a problem.
+     */
     protected UUID observe(
             Practice practice,
             AgentJob job,
             long artifactId,
             User about,
-            String presence,
-            @Nullable String assessment,
-            @Nullable String severity,
+            ObservationKind kind,
+            @Nullable Severity severity,
             Instant observedAt) {
-        return observe(
-                practice, job, artifactId, about, presence, assessment, severity, observedAt, DIFF_EVIDENCE_JSON);
+        return observe(practice, job, artifactId, about, kind, severity, observedAt, DIFF_EVIDENCE_JSON);
     }
 
     /** {@link #observe} citing the given evidence, for a test about what the evidence may be used for. */
@@ -141,9 +151,8 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
             AgentJob job,
             long artifactId,
             User about,
-            String presence,
-            @Nullable String assessment,
-            @Nullable String severity,
+            ObservationKind kind,
+            @Nullable Severity severity,
             Instant observedAt,
             String evidenceJson) {
         return observe(
@@ -153,8 +162,7 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
                 artifactId,
                 about,
                 null,
-                presence,
-                assessment,
+                kind,
                 severity,
                 observedAt,
                 evidenceJson,
@@ -173,12 +181,32 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
             long artifactId,
             User about,
             @Nullable String title,
-            String presence,
-            @Nullable String assessment,
-            @Nullable String severity,
+            ObservationKind kind,
+            @Nullable Severity severity,
             Instant observedAt,
             String evidenceJson,
             @Nullable String recurrenceKey) {
+        // The axes each kind stands for; ObservationKind.of reads them back the other way.
+        AssessmentStatus status =
+                switch (kind) {
+                    case NOT_APPLICABLE -> AssessmentStatus.NOT_APPLICABLE;
+                    case UNDETERMINED -> AssessmentStatus.UNDETERMINED;
+                    default -> AssessmentStatus.ASSESSED;
+                };
+        @Nullable
+        Presence presence =
+                switch (kind) {
+                    case DEMONSTRATED_STRENGTH, COMMISSION_PROBLEM -> Presence.PRESENT;
+                    case SAFE_AVOIDANCE, OMISSION_GAP -> Presence.ABSENT;
+                    case NOT_APPLICABLE, UNDETERMINED -> null;
+                };
+        @Nullable
+        Assessment assessment =
+                switch (kind) {
+                    case DEMONSTRATED_STRENGTH, OMISSION_GAP -> Assessment.GOOD;
+                    case COMMISSION_PROBLEM, SAFE_AVOIDANCE -> Assessment.BAD;
+                    case NOT_APPLICABLE, UNDETERMINED -> null;
+                };
         UUID id = UUID.randomUUID();
         String summary = title == null ? "Observation " + id : title;
         observationRepository.insertIfAbsent(
@@ -192,10 +220,10 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
                 artifactId,
                 about.getId(),
                 summary,
-                assessment == null ? presence : "ASSESSED",
-                assessment == null ? null : presence,
-                assessment,
-                severity,
+                status.name(),
+                presence == null ? null : presence.name(),
+                assessment == null ? null : assessment.name(),
+                severity == null ? null : severity.name(),
                 evidenceJson,
                 "Reasoning for " + summary,
                 recurrenceKey,
@@ -243,7 +271,7 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
     }
 
     /**
-     * The developer's response as the response endpoint records it: a snapshot of what now stands on the card.
+     * The developer's response as the response endpoint records it: a snapshot of what stands on the card.
      * A null resolution is the response they deleted, which the readers treat as no response at all.
      */
     protected Reaction respond(
@@ -264,7 +292,7 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
     /** A review of one of the developer's pull requests on which the practice raised nothing. */
     protected void cleanReview(Practice practice, User developer, int number, Instant reviewedAt) {
         AgentJob run = persistPullRequestReview(practice.getWorkspace(), number, reviewedAt);
-        observe(practice, run, number, developer, "PRESENT", "GOOD", null, reviewedAt);
+        observe(practice, run, number, developer, ObservationKind.DEMONSTRATED_STRENGTH, null, reviewedAt);
     }
 
     /** The in-app feedback page as the signed-in developer reads it. */

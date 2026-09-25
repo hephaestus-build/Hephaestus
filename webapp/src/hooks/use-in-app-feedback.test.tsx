@@ -5,10 +5,10 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { FeedbackResponse, InAppFeedback } from "@/api/types.gen";
-import { nextRating, useInAppFeedback } from "@/hooks/use-in-app-feedback";
+import { nextRating, nextResolution, useInAppFeedback } from "@/hooks/use-in-app-feedback";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
-import { sleep } from "@/test/async";
+import { deferred, sleep } from "@/test/async";
 
 describe("nextRating", () => {
 	it("keeps the resolution and the comment when a rating replaces another", () => {
@@ -39,6 +39,36 @@ describe("nextRating", () => {
 	});
 });
 
+describe("nextResolution", () => {
+	it("keeps the rating and the comment when an answer is chosen", () => {
+		expect(
+			nextResolution({ usefulness: "HELPFUL", comment: "Split it in two" }, "ADDRESSED"),
+		).toStrictEqual({ usefulness: "HELPFUL", resolution: "ADDRESSED", comment: "Split it in two" });
+	});
+
+	it("replaces a dispute, so the card closes on the answer the reader gave last", () => {
+		expect(
+			nextResolution(
+				{ usefulness: "UNHELPFUL", resolution: "DISPUTED", comment: "The rename was its own PR" },
+				"NOT_APPLICABLE",
+			),
+		).toStrictEqual({
+			usefulness: "UNHELPFUL",
+			resolution: "NOT_APPLICABLE",
+			comment: "The rename was its own PR",
+		});
+	});
+
+	it("takes the answer back when it is pressed again, keeping the rest", () => {
+		expect(
+			nextResolution(
+				{ usefulness: "HELPFUL", resolution: "ADDRESSED", comment: "Split it in two" },
+				"ADDRESSED",
+			),
+		).toStrictEqual({ usefulness: "HELPFUL", resolution: undefined, comment: "Split it in two" });
+	});
+});
+
 const workspaceSlug = "acme";
 const feedbackId = "scope-one-concern";
 
@@ -63,12 +93,20 @@ function inAppFeedback(response?: Omit<Wire<FeedbackResponse>, "feedbackId">): W
  * transitions differ only in that body. `reads` counts the GETs, because reading the cards is
  * what delivers them.
  */
-function renderFeedback(response?: Omit<Wire<FeedbackResponse>, "feedbackId">, enabled?: boolean) {
+function renderFeedback(
+	response?: Omit<Wire<FeedbackResponse>, "feedbackId">,
+	enabled?: boolean,
+	/** Holds every read after the first open until it settles. */
+	reread?: Promise<void>,
+) {
 	const written: { method: string; body: unknown }[] = [];
 	const reads: string[] = [];
 	server.use(
-		http.get("*/workspaces/:workspaceSlug/practices/feedback/in-app", ({ request }) => {
+		http.get("*/workspaces/:workspaceSlug/practices/feedback/in-app", async ({ request }) => {
 			reads.push(request.url);
+			if (reads.length > 1) {
+				await reread;
+			}
 			return HttpResponse.json([inAppFeedback(response)]);
 		}),
 		http.put(
@@ -108,6 +146,78 @@ describe("useInAppFeedback", () => {
 			method: "PUT",
 			body: { usefulness: "HELPFUL" },
 		});
+	});
+
+	it("shows the rating being written until the cards have been read again", async () => {
+		const reread = deferred();
+		const { result, written, reads } = renderFeedback(
+			{ usefulness: "UNHELPFUL" },
+			true,
+			reread.promise,
+		);
+		await waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+		act(() => {
+			result.current.ratingProps(feedbackId).onRate?.("HELPFUL");
+		});
+
+		// The write has landed and the cards are being read again, still carrying the rating it
+		// replaced: the buttons wait on the pressed rating, so "Saving…" and the comment band sit
+		// under the one the reader chose.
+		await waitFor(() => expect(reads).toHaveLength(2));
+		expect(written).toHaveLength(1);
+		expect(result.current.ratingProps(feedbackId)).toMatchObject({
+			usefulness: "HELPFUL",
+			commentOpen: true,
+			isPending: true,
+		});
+		reread.resolve();
+		await waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(false));
+	});
+
+	it("writes the answer over a dispute and shows it until the cards have been read again", async () => {
+		const reread = deferred();
+		const { result, written, reads } = renderFeedback(
+			{ usefulness: "UNHELPFUL", resolution: "DISPUTED", comment: "The rename was its own PR" },
+			true,
+			reread.promise,
+		);
+		await waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+		act(() => {
+			result.current.ratingProps(feedbackId).onResolve?.("ADDRESSED");
+		});
+
+		await waitFor(() => expect(reads).toHaveLength(2));
+		expect(written).toStrictEqual([
+			{
+				method: "PUT",
+				body: {
+					usefulness: "UNHELPFUL",
+					resolution: "ADDRESSED",
+					comment: "The rename was its own PR",
+				},
+			},
+		]);
+		expect(result.current.ratingProps(feedbackId)).toMatchObject({
+			usefulness: "UNHELPFUL",
+			resolution: "ADDRESSED",
+			isPending: true,
+		});
+		reread.resolve();
+		await waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(false));
+	});
+
+	it("withdraws the response when the answer standing alone is pressed again", async () => {
+		const { result, written } = renderFeedback({ resolution: "NOT_APPLICABLE" });
+		await waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+		act(() => {
+			result.current.ratingProps(feedbackId).onResolve?.("NOT_APPLICABLE");
+		});
+
+		await waitFor(() => expect(written).toHaveLength(1));
+		expect(written[0]?.method).toBe("DELETE");
 	});
 
 	it("settles empty and asks for nothing while it is not enabled", async () => {

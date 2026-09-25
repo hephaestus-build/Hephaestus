@@ -33,12 +33,13 @@ export type KnownArtifactKind = (typeof ARTIFACT_KIND)[keyof typeof ARTIFACT_KIN
 export type ArtifactKindId = string;
 
 /** The kinds in the one order every list of them keeps: the order `ARTIFACT_KIND` declares. */
-export const ARTIFACT_KIND_VALUES = Object.values(ARTIFACT_KIND) as KnownArtifactKind[];
+export const ARTIFACT_KIND_VALUES = Object.values(ARTIFACT_KIND);
 
 /** Where a kind sorts among the others; a kind this build does not know sorts after them all. */
 export function artifactKindRank(kind: string): number {
-	const index = (ARTIFACT_KIND_VALUES as string[]).indexOf(kind);
-	return index === -1 ? ARTIFACT_KIND_VALUES.length : index;
+	return isKnownArtifactKind(kind)
+		? ARTIFACT_KIND_VALUES.indexOf(kind)
+		: ARTIFACT_KIND_VALUES.length;
 }
 
 const ARTIFACT_KIND_LABELS: Record<KnownArtifactKind, string> = {
@@ -56,7 +57,7 @@ const ARTIFACT_KIND_PLURAL_LABELS: Record<KnownArtifactKind, string> = {
 };
 
 export function isKnownArtifactKind(kind: string | null | undefined): kind is KnownArtifactKind {
-	return kind != null && (ARTIFACT_KIND_VALUES as string[]).includes(kind);
+	return ARTIFACT_KIND_VALUES.some((known) => known === kind);
 }
 
 export function artifactKindLabel(kind: string | undefined): string {

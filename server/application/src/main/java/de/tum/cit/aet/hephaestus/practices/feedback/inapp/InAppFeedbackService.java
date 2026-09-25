@@ -34,7 +34,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,15 +50,16 @@ public class InAppFeedbackService {
 
     /**
      * How many cards one read returns. The practice surface is a short list of habits to work on, not a log;
-     * a developer who has to scroll it has been handed more than they can act on.
+     * a developer who has to scroll it has been handed more than they can act on. The limit bounds the answer,
+     * not the read: whether a card is still on the page is known only once it is read, so each read loads every
+     * readable card the developer keeps and its cost grows with them.
      */
-    private static final int MAX_CARDS = 20;
+    static final int MAX_CARDS = 20;
 
     /**
-     * How long a closed card stays on the page after it closed — resolved by the work or by the developer,
-     * or closed because the practice changed. A closed card is a record the developer already saw; the
-     * profile is a list of habits to work on, not a log, and the ledger keeps the record. Applied when the
-     * page is read, never by touching the row, so the ledger and the operator surfaces still have it.
+     * How long a card stays on the page after it closed ({@link FeedbackClosure}): a closed card is a record
+     * the developer already saw, and the ledger keeps the record. Applied when the page is read, never by
+     * touching the row, so the ledger and the operator surfaces still have it.
      */
     static final Duration CLOSED_CARD_STAYS = Duration.ofDays(30);
 
@@ -89,21 +89,68 @@ public class InAppFeedbackService {
             return List.of();
         }
         Long recipientUserId = currentUser.get().getId();
-        List<Feedback> prepared = feedbackRepository.findReadableInAppForRecipient(
-                workspaceId, recipientUserId, PageRequest.of(0, MAX_CARDS));
-        if (prepared.isEmpty()) {
+        Instant now = clock.instant();
+        // Every readable row, not a page of them: a run of closed cards must not crowd an older open one off it.
+        List<Feedback> rows = feedbackRepository.findReadableInAppForRecipient(workspaceId, recipientUserId);
+        List<InAppFeedbackDTO> onThePage = readCards(workspaceId, recipientUserId, rows, now).stream()
+                .filter(card -> stillOnThePage(card.closedAt(), now))
+                .limit(MAX_CARDS)
+                .toList();
+        Set<UUID> prepared = rows.stream()
+                .filter(feedback -> UserViewContextHolder.get() == null
+                        && feedback.getDeliveryState() == FeedbackDeliveryState.PREPARED)
+                .map(Feedback::getId)
+                .collect(Collectors.toSet());
+        List<UUID> toMarkDelivered = onThePage.stream()
+                .map(InAppFeedbackDTO::id)
+                .filter(prepared::contains)
+                .toList();
+        if (!toMarkDelivered.isEmpty()) {
+            feedbackRepository.markInAppDelivered(workspaceId, toMarkDelivered, now);
+        }
+        return onThePage;
+    }
+
+    /** The rows as cards, in the rows' order; a row with no evidence left to show is no card. */
+    private List<InAppFeedbackDTO> readCards(Long workspaceId, Long recipientUserId, List<Feedback> rows, Instant now) {
+        if (rows.isEmpty()) {
             return List.of();
         }
         Map<UUID, List<Observation>> evidenceByFeedback = feedbackEvidence.visibleEvidence(
-                workspaceId, prepared.stream().map(Feedback::getId).toList());
+                workspaceId, rows.stream().map(Feedback::getId).toList());
         // Hidden, not deleted. Feedback whose evidence source's authorization was withdrawn must stop
         // being shown, but the ledger still records that we said it, which is the whole point of a
         // ledger. Feedback whose practice changed its review rules stays, closed, and the card says so.
-        List<Feedback> shown = prepared.stream()
+        List<Feedback> shown = rows.stream()
                 .filter(feedback -> evidenceByFeedback.containsKey(feedback.getId()))
                 .toList();
-        Map<UUID, WorkResolution> resolutionByFeedback =
-                feedbackEvidence.workResolutions(workspaceId, recipientUserId, shown, evidenceByFeedback);
+        if (shown.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, Instant> practiceChangedAt = feedbackEvidence.practiceChangedAt(evidenceByFeedback);
+        // The developer's own answers, one query for the page: the same current response the response
+        // endpoint returns for one card.
+        Map<UUID, FeedbackResponseDTO> responseByFeedback = reactionRepository
+                .findCurrentResponses(
+                        recipientUserId,
+                        workspaceId,
+                        shown.stream().map(Feedback::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(
+                        CurrentResponseRow::getFeedbackId, row -> FeedbackResponseDTO.from(row.getFeedbackId(), row)));
+        // A card the developer or its practice closed long enough ago is off the page whatever the work says,
+        // since the work can only close it earlier; leaving it out keeps the work read to the cards that remain.
+        List<Feedback> candidates = shown.stream()
+                .filter(feedback -> {
+                    FeedbackClosure closedWithoutTheWork = FeedbackClosure.of(
+                            null,
+                            InAppFeedbackEvidence.resolvedByDeveloperAt(responseByFeedback.get(feedback.getId())),
+                            practiceChangedAt.get(feedback.getId()));
+                    return stillOnThePage(closedWithoutTheWork == null ? null : closedWithoutTheWork.at(), now);
+                })
+                .toList();
+        Map<UUID, WorkResolution> resolutionByFeedback = feedbackEvidence.workResolutions(
+                workspaceId, recipientUserId, candidates, evidenceByFeedback, practiceChangedAt, now);
         // One lookup names every piece of work on the page, the evidence and the clean work alike.
         Map<UUID, Target> targets = reviewRunTargetLookup.findByJobIds(
                 workspaceId,
@@ -115,21 +162,7 @@ public class InAppFeedbackService {
                                         .flatMap(resolution -> resolution.cleanWork().stream())
                                         .map(Work::jobId))
                         .collect(Collectors.toSet()));
-        // The developer's own answers, one query for the page: the same current response the response
-        // endpoint returns for one card.
-        Map<UUID, FeedbackResponseDTO> responseByFeedback = reactionRepository
-                .findCurrentResponses(
-                        recipientUserId,
-                        workspaceId,
-                        shown.stream().map(Feedback::getId).toList())
-                .stream()
-                .collect(Collectors.toMap(
-                        CurrentResponseRow::getFeedbackId, row -> FeedbackResponseDTO.from(row.getFeedbackId(), row)));
-        // When each card's practice changed its review rules, for the whole page at once: a page of cards
-        // about one practice asks its history once.
-        Map<UUID, Instant> practiceChangedAt = feedbackEvidence.practiceChangedAt(evidenceByFeedback);
-        Instant now = clock.instant();
-        List<InAppFeedbackDTO> cards = shown.stream()
+        return candidates.stream()
                 .map(feedback -> toCard(
                         feedback,
                         Objects.requireNonNull(evidenceByFeedback.get(feedback.getId())),
@@ -137,29 +170,15 @@ public class InAppFeedbackService {
                         responseByFeedback.get(feedback.getId()),
                         practiceChangedAt.get(feedback.getId()),
                         targets))
-                .filter(card -> stillOnThePage(card, now))
                 .toList();
-        Set<UUID> onThePage = cards.stream().map(InAppFeedbackDTO::id).collect(Collectors.toSet());
-        List<UUID> toMarkDelivered = shown.stream()
-                .filter(feedback -> UserViewContextHolder.get() == null
-                        && feedback.getDeliveryState() == FeedbackDeliveryState.PREPARED)
-                .map(Feedback::getId)
-                .filter(onThePage::contains)
-                .toList();
-        if (!toMarkDelivered.isEmpty()) {
-            feedbackRepository.markInAppDelivered(workspaceId, toMarkDelivered, now);
-        }
-        return List.copyOf(cards);
     }
 
     /** Open, or closed for less than {@link #CLOSED_CARD_STAYS}. */
-    private static boolean stillOnThePage(InAppFeedbackDTO card, Instant now) {
-        Instant closedAt = InAppFeedbackEvidence.closedAt(
-                card.resolvedByWorkAt(), card.resolvedByDeveloperAt(), card.practiceChangedAt());
+    private static boolean stillOnThePage(@Nullable Instant closedAt, Instant now) {
         return closedAt == null || !closedAt.plus(CLOSED_CARD_STAYS).isBefore(now);
     }
 
-    private InAppFeedbackDTO toCard(
+    private static InAppFeedbackDTO toCard(
             Feedback feedback,
             List<Observation> evidence,
             WorkResolution resolution,
@@ -169,6 +188,8 @@ public class InAppFeedbackService {
         Practice practice = evidence.getFirst().getPractice();
         PracticeGroup group = practice.getGroup();
         String headline = InAppFeedbackBody.headlineOf(feedback.getBody());
+        FeedbackClosure closure = FeedbackClosure.of(
+                resolution.resolvedAt(), InAppFeedbackEvidence.resolvedByDeveloperAt(response), practiceChangedAt);
         return new InAppFeedbackDTO(
                 feedback.getId(),
                 headline != null ? headline : practice.getName(),
@@ -191,9 +212,8 @@ public class InAppFeedbackService {
                         .map(work -> new InAppCleanWorkDTO(
                                 ReviewedWorkLabels.ref(work.kind(), work.id(), targets.get(work.jobId())), work.at()))
                         .toList(),
-                resolution.resolvedAt(),
-                InAppFeedbackEvidence.resolvedByDeveloperAt(response),
-                practiceChangedAt,
+                closure == null ? null : closure.at(),
+                closure == null ? null : closure.by(),
                 response);
     }
 }
