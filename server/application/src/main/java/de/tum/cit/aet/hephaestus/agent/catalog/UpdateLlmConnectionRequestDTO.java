@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
 import org.jspecify.annotations.Nullable;
@@ -21,4 +22,10 @@ public record UpdateLlmConnectionRequestDTO(
         Boolean clearApiKey,
 
         @Nullable @Schema(description = "Whether the connection is enabled")
-        Boolean enabled) {}
+        Boolean enabled,
+
+        @Nullable @Schema(description = "Admin-declared connection platform")
+        LlmConnectionPlatform connectionPlatform,
+
+        @Nullable @Schema(description = "Set true to clear the declared connection platform")
+        Boolean clearConnectionPlatform) {}

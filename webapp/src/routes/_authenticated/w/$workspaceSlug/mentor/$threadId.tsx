@@ -1,16 +1,22 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
 import { Chat } from "@/components/mentor/Chat";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
 import { copyToClipboard } from "@/lib/clipboard";
+import { mentorPreferenceReason } from "@/lib/mentor-preference";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor/$threadId")({
+	remountDeps: ({ params }) => params,
 	component: ThreadContainer,
 });
 
 function ThreadContainer() {
-	const { threadId } = Route.useParams();
+	const { threadId, workspaceSlug } = Route.useParams();
+	const preference = useQuery(getMemberOnboardingOptions({ path: { workspaceSlug } }));
+	const readonly = !preference.data || Boolean(mentorPreferenceReason(preference.data));
 
 	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
 	// already is, rather than as a toast away from the conversation that failed.
@@ -119,17 +125,21 @@ function ThreadContainer() {
 				messages={mentorChat.messages}
 				votes={mentorChat.votes}
 				status={mentorChat.status}
-				readonly={false}
+				readonly={readonly}
 				attachments={[]}
 				onMessageSubmit={handleMessageSubmit}
-				onMessageEdit={handleMessageEdit}
+				onMessageEdit={readonly ? undefined : handleMessageEdit}
 				onStop={() => {
 					void mentorChat.stop();
 				}}
-				onReload={() => {
-					mentorChat.clearError();
-					void mentorChat.regenerate();
-				}}
+				onReload={
+					readonly
+						? undefined
+						: () => {
+								mentorChat.clearError();
+								void mentorChat.regenerate();
+							}
+				}
 				onCopy={copyToClipboard}
 				onVote={handleVote}
 				inputPlaceholder="Continue the conversation..."

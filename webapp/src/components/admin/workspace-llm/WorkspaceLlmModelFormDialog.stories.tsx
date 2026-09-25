@@ -1,13 +1,20 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn, screen, userEvent } from "storybook/test";
+import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { WorkspaceLlmModel } from "@/api/types.gen";
+import { DATA_HANDLING_DEFS } from "@/components/practice-vocabulary/data-handling-defs";
 import { expectSettledVisible } from "@/stories/overlay";
 import { expectDialogFitsViewport } from "@/stories/reflow";
 
-import { WorkspaceLlmModelFormDialog } from "./WorkspaceLlmModelFormDialog";
+import {
+	WorkspaceLlmModelFormDialog,
+	type WorkspaceLlmModelFormDialogProps,
+} from "./WorkspaceLlmModelFormDialog";
 
 const mockModel: WorkspaceLlmModel = {
+	dataHandlingTier: "IN_HOUSE",
+	operatedBy: "OWN_ORGANISATION",
+	dataHandlingNote: "Runs in the Garching data centre",
 	id: 1,
 	slug: "gpt-5-mini",
 	displayName: "GPT-5 mini",
@@ -25,6 +32,22 @@ const mockModel: WorkspaceLlmModel = {
 	createdAt: new Date("2026-06-01T10:00:00Z"),
 };
 
+/** A model from before data handling could be declared: no operator, still saveable. */
+const legacyModel: WorkspaceLlmModel = {
+	...mockModel,
+	id: 2,
+	slug: "legacy",
+	displayName: "Legacy model",
+	dataHandlingTier: "UNDECLARED",
+	operatedBy: undefined,
+	dataHandlingNote: undefined,
+};
+
+/**
+ * The same fields as the instance catalog's dialog, with the price inline: the workspace scope has
+ * no separate price endpoint. The data-handling declaration is scope-neutral on purpose, because a
+ * workspace admin's own provider makes the same promise to the same developers.
+ */
 const meta = {
 	component: WorkspaceLlmModelFormDialog,
 	parameters: { layout: "centered" },
@@ -34,7 +57,7 @@ const meta = {
 		onOpenChange: fn(),
 		editing: null,
 		isSubmitting: false,
-		onCreate: fn(),
+		onCreate: fn<WorkspaceLlmModelFormDialogProps["onCreate"]>(),
 		onUpdate: fn(),
 	},
 } satisfies Meta<typeof WorkspaceLlmModelFormDialog>;
@@ -42,10 +65,65 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const AddModel: Story = {};
+async function fillIdentity(dialog: HTMLElement) {
+	await userEvent.type(within(dialog).getByLabelText("Display name"), "GPT-5 mini");
+	await userEvent.type(within(dialog).getByLabelText("Upstream model id"), "openai/gpt-5-mini");
+}
+
+export const Default: Story = {};
+
+export const AddModel: Story = {
+	play: async ({ args }) => {
+		const dialog = await screen.findByRole("dialog");
+		within(dialog).getByRole("radiogroup", { name: "Operated by" });
+		await expectSettledVisible(within(dialog).getByText("Not declared"));
+
+		await fillIdentity(dialog);
+		await userEvent.click(within(dialog).getByRole("radio", { name: "A provider" }));
+		await userEvent.click(within(dialog).getByRole("button", { name: /add inactive model/iu }));
+		await expect(args.onCreate).toHaveBeenCalledOnce();
+	},
+};
+
+export const DeclaredPreview: Story = {
+	play: async ({ args }) => {
+		const dialog = await screen.findByRole("dialog");
+		await fillIdentity(dialog);
+		await userEvent.click(within(dialog).getByRole("radio", { name: "A provider" }));
+
+		await expectSettledVisible(within(dialog).getByText("Cloud"));
+		// The preview's guarantee rows are the only definition list in the form.
+		const rows = within(dialog).getAllByRole("term");
+		await expect(rows.map((row) => row.textContent)).toStrictEqual(
+			DATA_HANDLING_DEFS.CLOUD.facts.map((fact) => fact.term),
+		);
+
+		await userEvent.click(within(dialog).getByRole("button", { name: /add inactive model/iu }));
+		await expect(args.onCreate).toHaveBeenCalledOnce();
+		await expect(args.onCreate.mock.calls[0]?.[0]).toMatchObject({ operatedBy: "PROVIDER" });
+	},
+};
 
 export const EditModel: Story = {
 	args: { editing: mockModel },
+	play: async () => {
+		const dialog = await screen.findByRole("dialog");
+		await expect(within(dialog).getByRole("radio", { name: "Your organisation" })).toBeChecked();
+		await expectSettledVisible(within(dialog).getByText("In-house"));
+	},
+};
+
+export const EditLegacyUndeclared: Story = {
+	args: { editing: legacyModel },
+	play: async ({ args }) => {
+		const dialog = await screen.findByRole("dialog");
+		for (const name of ["Your organisation", "A provider"]) {
+			await expect(within(dialog).getByRole("radio", { name })).not.toBeChecked();
+		}
+		await expectSettledVisible(within(dialog).getByText("Not declared"));
+		await userEvent.click(within(dialog).getByRole("button", { name: /save changes/iu }));
+		await expect(args.onUpdate).toHaveBeenCalledOnce();
+	},
 };
 
 export const FreeModel: Story = {
@@ -70,5 +148,14 @@ export const ValidationError: Story = {
 		await userEvent.click(await screen.findByRole("button", { name: /add inactive model/iu }));
 		await expectSettledVisible(await screen.findByText(/display name is required/iu));
 		await expectSettledVisible(await screen.findByText(/upstream model id is required/iu));
+	},
+};
+
+export const Dark: Story = {
+	args: { editing: mockModel },
+	globals: { theme: "dark" },
+	play: async () => {
+		const dialog = await screen.findByRole("dialog");
+		await expectSettledVisible(within(dialog).getByText("In-house"));
 	},
 };

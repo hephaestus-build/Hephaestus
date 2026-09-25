@@ -5,7 +5,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -34,23 +33,20 @@ class PracticeReviewReadinessAdapterTest extends BaseUnitTest {
 
     @Test
     void unboundPracticeIsNotRunnable() {
-        when(bindingRepository.findByWorkspaceIdAndPurposeWithModels(1L, AgentPurpose.PRACTICE_REVIEW))
-                .thenReturn(Optional.empty());
+        when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of());
         assertThat(checker.hasRunnableAgent(1L)).isFalse();
     }
 
     @Test
     void disabledBindingIsNotRunnable() {
-        when(bindingRepository.findByWorkspaceIdAndPurposeWithModels(1L, AgentPurpose.PRACTICE_REVIEW))
-                .thenReturn(Optional.of(binding(false)));
+        when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of(binding(false)));
         assertThat(checker.hasRunnableAgent(1L)).isFalse();
     }
 
     @Test
     void enabledBindingWithRevokedModelIsNotRunnable() {
         WorkspaceAgentBinding b = binding(true);
-        when(bindingRepository.findByWorkspaceIdAndPurposeWithModels(1L, AgentPurpose.PRACTICE_REVIEW))
-                .thenReturn(Optional.of(b));
+        when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of(b));
         when(resolver.isAvailable(b)).thenReturn(false);
         assertThat(checker.hasRunnableAgent(1L)).isFalse();
     }
@@ -58,8 +54,7 @@ class PracticeReviewReadinessAdapterTest extends BaseUnitTest {
     @Test
     void enabledBindingWithAvailableModelIsRunnable() {
         WorkspaceAgentBinding b = binding(true);
-        when(bindingRepository.findByWorkspaceIdAndPurposeWithModels(1L, AgentPurpose.PRACTICE_REVIEW))
-                .thenReturn(Optional.of(b));
+        when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of(b));
         when(resolver.isAvailable(b)).thenReturn(true);
         assertThat(checker.hasRunnableAgent(1L)).isTrue();
     }

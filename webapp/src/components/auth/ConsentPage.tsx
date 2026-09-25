@@ -1,25 +1,24 @@
 import {
 	ActivityIcon,
-	CheckIcon,
 	ClockIcon,
 	FileTextIcon,
 	EyeIcon,
 	FlaskConicalIcon,
-	type LucideIcon,
 	ShieldCheckIcon,
 	TrendingUpIcon,
 	TriangleAlertIcon,
 } from "lucide-react";
 import { type ReactNode, type SubmitEvent, useId, useState } from "react";
 
-import { cn } from "cn";
 import type { ConsentStatus } from "@/api/types.gen";
+import { type Fact, FactList } from "@/components/auth/FactList";
 import { LegalLink, LegalLinks } from "@/components/auth/LegalLinks";
+import { StepMarker } from "@/components/auth/StepMarker";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
-import { HephIcon } from "@/components/brand/HephIcon";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
+import { HephSays } from "@/components/mentor/HephSays";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -69,12 +68,6 @@ export interface ConsentPageProps {
 		  };
 }
 
-interface Fact {
-	icon: LucideIcon;
-	term: string;
-	detail: ReactNode;
-}
-
 /**
  * What the reader needs before accepting, and nothing else. It names no operator: who runs this
  * instance is the privacy notice and the imprint, which every operator configures and this page links
@@ -88,7 +81,8 @@ const TERMS: readonly Fact[] = [
 	{
 		icon: EyeIcon,
 		term: "What it reads",
-		detail: "The work in the tools your project connects — pull requests, issues, reviews, chat.",
+		detail:
+			"The work in the tools your project connects, such as pull requests, issues, reviews and chat.",
 	},
 	{
 		icon: TriangleAlertIcon,
@@ -148,40 +142,6 @@ const ANSWERS = [
 
 type Answer = (typeof ANSWERS)[number]["value"];
 
-function FactList({ facts }: { facts: readonly Fact[] }) {
-	return (
-		<dl className="grid gap-4 sm:grid-cols-3">
-			{facts.map(({ icon: Icon, term, detail }) => (
-				<div key={term} className="space-y-1">
-					<dt className="flex items-center gap-2 text-sm font-medium">
-						<Icon className="size-4 shrink-0 text-mentor" aria-hidden="true" />
-						{term}
-					</dt>
-					<dd className="text-sm leading-relaxed text-muted-foreground">{detail}</dd>
-				</div>
-			))}
-		</dl>
-	);
-}
-
-/**
- * The step's own icon until it is answered, then a check. Both are decoration: the heading names the
- * step and the control inside it announces its own state.
- */
-function StepMarker({ icon: Icon, done }: { icon: LucideIcon; done: boolean }) {
-	return (
-		<span
-			aria-hidden="true"
-			className={cn(
-				"inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors [&_svg]:size-4",
-				done ? "bg-mentor text-mentor-foreground" : "bg-mentor/10 text-mentor",
-			)}
-		>
-			{done ? <CheckIcon /> : <Icon />}
-		</span>
-	);
-}
-
 /**
  * Heph carries the page, so `--mentor` is its accent throughout: the bubble it speaks from, and the
  * marker on each step. `PageHeader` and its lucide icon belong to the app chrome, which is not up yet.
@@ -208,10 +168,10 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 	// and reaches the button through `aria-describedby`, so focusing Continue does not replay it.
 	function narrate() {
 		if (state.status === "loading") {
-			return "Give me a moment — I'm fetching your setup.";
+			return "Give me a moment. Hephaestus is fetching your setup.";
 		}
 		if (state.status === "error") {
-			return "I couldn't fetch your setup just now.";
+			return "Hephaestus couldn't fetch your setup just now.";
 		}
 		if (stale) {
 			return "Hephaestus was updated while this page was open.";
@@ -220,13 +180,13 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 			return "That's everything. Let's get to work.";
 		}
 		if (!asksAboutResearch) {
-			return "One thing first: the rules.";
+			return "The rules first.";
 		}
 		if (termsAccepted) {
-			return "Thanks. One question to go, and either answer is fine by me.";
+			return "Thanks. One question to go, and either answer is fine.";
 		}
 		if (answer === undefined) {
-			return "Two things first: the rules, and whether you'd like to take part in the research.";
+			return "Two things first. Accept the rules, then say if you'd like to take part in the research.";
 		}
 		return "Noted. Just the terms left.";
 	}
@@ -278,22 +238,10 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 						<h1 className="text-2xl font-semibold tracking-tight break-words">
 							Let’s get you set up
 						</h1>
-						<div className="flex items-start gap-3">
-							<HephIcon className="shrink-0" size={64} pad={2} />
-							{/* The tail is opaque so it covers the bubble's own border; a tinted fill would let
-						    that edge show straight through it. */}
-							<div className="relative min-w-0 flex-1 rounded-xl border border-mentor/30 bg-card p-3 before:absolute before:top-6 before:-left-1.5 before:size-3 before:rotate-45 before:border-b before:border-l before:border-mentor/30 before:bg-card before:content-[''] sm:p-4">
-								<p className="sr-only">Heph says:</p>
-								<p className="text-sm leading-relaxed">
-									I’m Heph, the mentor in Hephaestus. I read the work you already do, give you
-									feedback on the practices your project cares about, and talk it through whenever
-									you ask.
-								</p>
-								<p aria-live="polite" className="mt-2 text-sm font-medium">
-									{narration}
-								</p>
-							</div>
-						</div>
+						<HephSays
+							intro="I'm Heph, the mentor in Hephaestus. I read the work you already do, give you feedback on the practices your project cares about, and talk it through whenever you ask."
+							narration={narration}
+						/>
 					</header>
 
 					<Separator />
@@ -377,7 +325,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 						{submissionFailed && (
 							<Alert variant="destructive">
 								<AlertTitle>Your answers weren’t saved</AlertTitle>
-								<AlertDescription>Please try again.</AlertDescription>
+								<AlertDescription>Try again.</AlertDescription>
 							</Alert>
 						)}
 					</ConsentBody>

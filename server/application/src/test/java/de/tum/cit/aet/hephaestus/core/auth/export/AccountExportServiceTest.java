@@ -18,10 +18,12 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAiChoiceExport;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery.WorkspaceMembershipView;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.auth.spi.NotificationPreferencesExportQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
@@ -89,8 +91,8 @@ class AccountExportServiceTest extends BaseUnitTest {
                 preferencesQuery,
                 gitProviderRegistry,
                 clock,
-                accountId -> new de.tum.cit.aet.hephaestus.core.auth.spi.NotificationPreferencesExportQuery.Preferences(
-                        false, false, false, false, false),
+                accountId -> new AccountAiChoiceExport.Choice("NO_AI", clock.instant()),
+                accountId -> new NotificationPreferencesExportQuery.Preferences(false, false, false, false, false),
                 research);
 
         ExportBundle bundle = assembler.assemble(ACCOUNT_ID);
@@ -110,6 +112,10 @@ class AccountExportServiceTest extends BaseUnitTest {
         assertNotNull(bundle.preferences());
         assertThat(bundle.preferences().participateInResearch()).isEqualTo(participating);
         assertThat(bundle.preferences().practiceFeedbackDeliveryEnabled()).isFalse();
+        var aiChoice = bundle.aiChoice();
+        assertNotNull(aiChoice);
+        assertThat(aiChoice.aiChoice()).isEqualTo("NO_AI");
+        assertThat(bundle.notificationPreferences()).isNotNull();
 
         String json = new ObjectMapper().writeValueAsString(bundle);
         assertThat(json).contains("\"ada@example.com\"", "tum-ase", "mentor_access");

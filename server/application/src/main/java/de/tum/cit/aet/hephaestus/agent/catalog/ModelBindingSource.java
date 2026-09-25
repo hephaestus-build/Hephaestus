@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -9,7 +10,7 @@ import org.jspecify.annotations.Nullable;
  * binding.
  */
 public interface ModelBindingSource {
-    Long getId();
+    DataHandlingTier getDataHandlingTier();
 
     @Nullable
     LlmModel getInstanceModel();
@@ -24,6 +25,4 @@ public interface ModelBindingSource {
     boolean isAllowInternet();
 
     int getTimeoutSeconds();
-
-    int getMaxConcurrentJobs();
 }

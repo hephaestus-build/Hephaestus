@@ -44,8 +44,7 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
         binding.setId(10L);
         binding.setPurpose(AgentPurpose.MENTOR);
         binding.setEnabled(true);
-        when(agentBindingRepository.findByWorkspaceIdAndPurposeWithModels(1L, AgentPurpose.MENTOR))
-                .thenReturn(Optional.of(binding));
+        when(agentBindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of(binding));
         when(llmModelResolver.isAvailable(binding)).thenReturn(true);
 
         assertThat(query.isReady(1L)).isTrue();
@@ -58,8 +57,7 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
 
     @Test
     void shouldNotReportReadyWhenMentorIsUnconfigured() {
-        when(agentBindingRepository.findByWorkspaceIdAndPurposeWithModels(1L, AgentPurpose.MENTOR))
-                .thenReturn(Optional.empty());
+        when(agentBindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of());
         assertThat(query.isReady(1L)).isFalse();
     }
 
@@ -69,8 +67,7 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
         binding.setId(10L);
         binding.setPurpose(AgentPurpose.MENTOR);
         binding.setEnabled(true);
-        when(agentBindingRepository.findByWorkspaceIdAndPurposeWithModels(1L, AgentPurpose.MENTOR))
-                .thenReturn(Optional.of(binding));
+        when(agentBindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of(binding));
         when(llmModelResolver.isAvailable(binding)).thenReturn(false);
 
         assertThat(query.isReady(1L)).isFalse();
@@ -82,8 +79,7 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
         disabled.setId(10L);
         disabled.setPurpose(AgentPurpose.MENTOR);
         disabled.setEnabled(false);
-        when(agentBindingRepository.findByWorkspaceIdAndPurposeWithModels(1L, AgentPurpose.MENTOR))
-                .thenReturn(Optional.of(disabled));
+        when(agentBindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of(disabled));
 
         assertThat(query.isReady(1L)).isFalse();
     }

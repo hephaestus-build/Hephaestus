@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAiChoiceExport;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
@@ -37,6 +38,7 @@ public class ExportBundleAssembler {
     private final AccountPreferencesQuery preferencesQuery;
     private final GitProviderRegistry gitProviderRegistry;
     private final Clock clock;
+    private final AccountAiChoiceExport aiChoiceExport;
     private final ResearchParticipationQuery researchParticipation;
     private final NotificationPreferencesExportQuery notificationPreferences;
 
@@ -48,6 +50,7 @@ public class ExportBundleAssembler {
             AccountPreferencesQuery preferencesQuery,
             GitProviderRegistry gitProviderRegistry,
             Clock clock,
+            AccountAiChoiceExport aiChoiceExport,
             NotificationPreferencesExportQuery notificationPreferences,
             ResearchParticipationQuery researchParticipation) {
         this.accountService = accountService;
@@ -57,6 +60,7 @@ public class ExportBundleAssembler {
         this.preferencesQuery = preferencesQuery;
         this.gitProviderRegistry = gitProviderRegistry;
         this.clock = clock;
+        this.aiChoiceExport = aiChoiceExport;
         this.notificationPreferences = notificationPreferences;
         this.researchParticipation = researchParticipation;
     }
@@ -112,6 +116,7 @@ public class ExportBundleAssembler {
                 featureFlags,
                 preferences,
                 authEvents,
+                aiChoiceExport.choice(accountId),
                 notificationPreferences.preferences(accountId));
     }
 

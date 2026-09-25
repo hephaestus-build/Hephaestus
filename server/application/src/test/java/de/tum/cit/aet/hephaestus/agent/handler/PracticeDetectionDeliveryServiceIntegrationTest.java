@@ -5,7 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
@@ -40,6 +44,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeDetectionCompletedEvent;
+import de.tum.cit.aet.hephaestus.testconfig.AdmittedReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -96,6 +101,18 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
 
     @Autowired
     private AgentJobRepository agentJobRepository;
+
+    @Autowired
+    private LlmConnectionRepository llmConnectionRepository;
+
+    @Autowired
+    private LlmModelRepository llmModelRepository;
+
+    @Autowired
+    private WorkspaceAgentBindingRepository workspaceAgentBindingRepository;
+
+    @Autowired
+    private LlmModelResolver llmModelResolver;
 
     @Autowired
     private UserRepository userRepository;
@@ -165,7 +182,13 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
         agentJob.setWorkerId("test-worker");
         agentJob.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         agentJob.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
-        agentJob.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
+        agentJob.setConfigSnapshot(AdmittedReviewJobFixtures.snapshot(
+                workspace,
+                llmConnectionRepository,
+                llmModelRepository,
+                workspaceAgentBindingRepository,
+                llmModelResolver,
+                OBJECT_MAPPER));
         agentJob = agentJobRepository.save(agentJob);
 
         IdentityProvider provider = gitProviderRepository

@@ -10,7 +10,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
@@ -48,6 +52,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeDetectionCompletedEvent;
+import de.tum.cit.aet.hephaestus.testconfig.AdmittedReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -107,6 +112,18 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private AgentJobRepository agentJobRepository;
+
+    @Autowired
+    private LlmConnectionRepository llmConnectionRepository;
+
+    @Autowired
+    private LlmModelRepository llmModelRepository;
+
+    @Autowired
+    private WorkspaceAgentBindingRepository workspaceAgentBindingRepository;
+
+    @Autowired
+    private LlmModelResolver llmModelResolver;
 
     @Autowired
     private UserRepository userRepository;
@@ -253,8 +270,13 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         agentJob.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         agentJob.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         agentJob.setStatus(AgentJobStatus.COMPLETED);
-        agentJob.setConfigSnapshot(
-                OBJECT_MAPPER.valueToTree(Map.of("model", "claude-3.5", "agentType", "CLAUDE_CODE")));
+        agentJob.setConfigSnapshot(AdmittedReviewJobFixtures.snapshot(
+                workspace,
+                llmConnectionRepository,
+                llmModelRepository,
+                workspaceAgentBindingRepository,
+                llmModelResolver,
+                OBJECT_MAPPER));
 
         ObjectNode metadata = OBJECT_MAPPER.createObjectNode();
         metadata.put("pull_request_id", prId);

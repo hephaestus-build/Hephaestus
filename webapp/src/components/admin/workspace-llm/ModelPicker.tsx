@@ -1,4 +1,11 @@
+import { cn } from "cn";
 import type { AvailableLlmModel } from "@/api/types.gen";
+import { statusToneClass } from "@/components/common/status-def";
+import { AiMark } from "@/components/icons/AiMark";
+import {
+	DATA_HANDLING_DEFS,
+	type DataHandlingTier,
+} from "@/components/practice-vocabulary/data-handling-defs";
 import {
 	Select,
 	SelectContent,
@@ -21,6 +28,12 @@ export interface ModelPickerProps {
 	availableModels: AvailableLlmModel[];
 	value: ModelSelection | null;
 	onChange: (selection: ModelSelection) => void;
+	/**
+	 * Lists only models declared as this tier, for a binding row that may hold nothing else. With
+	 * nothing to list the picker disables itself; the caller says what that means, from the same
+	 * `listedModels`, because only it knows whether the reader can add a model.
+	 */
+	tier?: DataHandlingTier;
 	disabled?: boolean;
 	invalid?: boolean;
 	"aria-describedby"?: string;
@@ -41,28 +54,48 @@ function decode(value: string): ModelSelection | null {
 	return { scope, id };
 }
 
+/** The one rule for what a row may hold: every model, or only those declared as the row's tier. */
+export function listedModels<TModel extends Pick<AvailableLlmModel, "dataHandlingTier">>(
+	models: TModel[],
+	tier: DataHandlingTier | undefined,
+): TModel[] {
+	return tier === undefined ? models : models.filter((model) => model.dataHandlingTier === tier);
+}
+
 function optionLabel(model: AvailableLlmModel): string {
-	return `${model.displayName} · ${model.connectionDisplayName} · ${priceLabel(model, "workspace")}`;
+	const tier = DATA_HANDLING_DEFS[model.dataHandlingTier].label;
+	return `${model.displayName} · ${model.connectionDisplayName} · ${tier} · ${priceLabel(model, "workspace")}`;
 }
 
 function ModelOptions({ models }: { models: AvailableLlmModel[] }) {
-	return models.map((model) => (
-		<SelectItem
-			key={encode(model.scope, model.id)}
-			value={encode(model.scope, model.id)}
-			aria-label={optionLabel(model)}
-		>
-			<span className="flex min-w-0 flex-1 items-center justify-between gap-2">
-				<span className="min-w-0 truncate">
-					{model.displayName}
-					<span className="text-muted-foreground"> · {model.connectionDisplayName}</span>
+	return models.map((model) => {
+		const tier = DATA_HANDLING_DEFS[model.dataHandlingTier];
+		const TierIcon = tier.icon;
+		return (
+			<SelectItem
+				key={encode(model.scope, model.id)}
+				value={encode(model.scope, model.id)}
+				aria-label={optionLabel(model)}
+			>
+				<span className="flex min-w-0 flex-1 flex-col gap-0.5">
+					<span className="flex min-w-0 items-center justify-between gap-2">
+						<AiMark brand={model.brand} size="sm" />
+						<span className="min-w-0 flex-1 truncate">
+							{model.displayName}
+							<span className="text-muted-foreground"> · {model.connectionDisplayName}</span>
+						</span>
+						<span className="shrink-0 text-xs text-muted-foreground">
+							{priceLabel(model, "workspace")}
+						</span>
+					</span>
+					<span className="flex items-center gap-1 text-xs text-muted-foreground">
+						<TierIcon className={cn("size-3.5", statusToneClass(tier.badgeVariant))} aria-hidden />
+						{tier.label}
+					</span>
 				</span>
-				<span className="shrink-0 text-xs text-muted-foreground">
-					{priceLabel(model, "workspace")}
-				</span>
-			</span>
-		</SelectItem>
-	));
+			</SelectItem>
+		);
+	});
 }
 
 export function ModelPicker({
@@ -70,16 +103,20 @@ export function ModelPicker({
 	availableModels,
 	value,
 	onChange,
+	tier,
 	disabled = false,
 	invalid = false,
 	"aria-describedby": ariaDescribedBy,
 	"aria-labelledby": ariaLabelledBy,
 }: ModelPickerProps) {
-	const shared = availableModels.filter((model) => model.scope === "SHARED");
-	const own = availableModels.filter((model) => model.scope === "WORKSPACE");
+	const listed = listedModels(availableModels, tier);
+	const shared = listed.filter((model) => model.scope === "SHARED");
+	const own = listed.filter((model) => model.scope === "WORKSPACE");
 
 	return (
 		<Select
+			// Every model, not only the listed ones: a bound model whose declaration no longer matches
+			// the row's tier still needs its name on the trigger, even though it is no longer offered.
 			items={availableModels.map((model) => ({
 				value: encode(model.scope, model.id),
 				label: `${model.displayName} · ${model.connectionDisplayName}`,
@@ -91,7 +128,7 @@ export function ModelPicker({
 					onChange(selection);
 				}
 			}}
-			disabled={disabled}
+			disabled={disabled || listed.length === 0}
 		>
 			<SelectTrigger
 				id={id}

@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import type { LlmModel } from "@/api/types.gen";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { DataHandlingBadge } from "@/components/practice-vocabulary/DataHandlingBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +40,7 @@ export interface AdminLlmModelsSectionProps {
 	onDelete: (model: LlmModel) => void;
 }
 
+/** Readiness only; an undeclared data handling is the registry badge's warning, not a block. */
 function readinessLabel(model: LlmModel, connectionEnabled: boolean): string {
 	if (!model.currentPrice || model.currentPrice.pricingMode === "UNPRICED") {
 		return "Price missing";
@@ -120,6 +122,7 @@ export function AdminLlmModelsSection({
 					<TableHeader>
 						<TableRow>
 							<TableHead scope="col">Model</TableHead>
+							<TableHead scope="col">Data handling</TableHead>
 							<TableHead scope="col">Price</TableHead>
 							<TableHead scope="col">Workspace access</TableHead>
 							<TableHead scope="col">Status</TableHead>
@@ -135,6 +138,9 @@ export function AdminLlmModelsSection({
 							return (
 								<TableRow key={model.id}>
 									<TableCell className="font-medium">{model.displayName}</TableCell>
+									<TableCell>
+										<DataHandlingBadge tier={model.dataHandlingTier} />
+									</TableCell>
 									{/* Left-aligned: `priceLabel` is a sentence, not a figure; `tabular-nums` only
 									    aligns the digits inside it. */}
 									<TableCell numeric>{priceLabel(priceFieldsOf(model), "instance")}</TableCell>

@@ -20,10 +20,9 @@ public class PracticeReviewReadinessAdapter implements PracticeReviewReadiness {
     // The graph-fetching lookup is what lets the availability check run outside a transaction.
     @Override
     public boolean hasRunnableAgent(Long workspaceId) {
-        return bindingRepository
-                .findByWorkspaceIdAndPurposeWithModels(workspaceId, AgentPurpose.PRACTICE_REVIEW)
+        return bindingRepository.findByWorkspaceIdWithModels(workspaceId).stream()
+                .filter(binding -> binding.getPurpose() == AgentPurpose.PRACTICE_REVIEW)
                 .filter(WorkspaceAgentBinding::isEnabled)
-                .map(llmModelResolver::isAvailable)
-                .orElse(false);
+                .anyMatch(llmModelResolver::isAvailable);
     }
 }

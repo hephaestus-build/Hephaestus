@@ -48,6 +48,7 @@ function model(id: number, connectionId: number, displayName: string) {
 		slug: `model-${id}`,
 		displayName,
 		upstreamModelId: `upstream-${id}`,
+		dataHandlingTier: "UNDECLARED" as const,
 		enabled: true,
 		visibility: "PUBLIC" as const,
 		grantedWorkspaceIds: [],

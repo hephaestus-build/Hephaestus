@@ -1,5 +1,6 @@
-import { Link } from "@tanstack/react-router";
-import { ShieldCheck, UserRoundCog } from "lucide-react";
+import { Link, useLocation } from "@tanstack/react-router";
+import { ShieldCheck, SlidersHorizontal, UserRoundCog } from "lucide-react";
+import { hasText } from "@/lib/text";
 
 import {
 	SidebarMenu,
@@ -10,9 +11,12 @@ import {
 
 interface NavFooterProps {
 	isAppAdmin?: boolean;
+	workspaceSlug?: string;
 }
 
-export function NavFooter({ isAppAdmin = false }: NavFooterProps) {
+export function NavFooter({ isAppAdmin = false, workspaceSlug }: NavFooterProps) {
+	// Changing the AI choice ends on the page the reader left, never on the setup page itself.
+	const returnTo = useLocation().href;
 	return (
 		<>
 			{isAppAdmin && (
@@ -21,7 +25,7 @@ export function NavFooter({ isAppAdmin = false }: NavFooterProps) {
 						<SidebarMenuItem>
 							<SidebarMenuButton tooltip="Instance admin" render={<Link to="/admin" />}>
 								<ShieldCheck />
-								<span>Instance&nbsp;admin</span>
+								<span>Instance admin</span>
 							</SidebarMenuButton>
 						</SidebarMenuItem>
 					</SidebarMenu>
@@ -29,10 +33,27 @@ export function NavFooter({ isAppAdmin = false }: NavFooterProps) {
 				</>
 			)}
 			<SidebarMenu>
+				{hasText(workspaceSlug) && (
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							tooltip="Your AI choice"
+							render={
+								<Link
+									to="/w/$workspaceSlug/onboarding"
+									params={{ workspaceSlug }}
+									search={{ returnTo }}
+								/>
+							}
+						>
+							<SlidersHorizontal />
+							<span>Your AI choice</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton tooltip="User settings" render={<Link to="/settings" />}>
 						<UserRoundCog />
-						<span>User&nbsp;settings</span>
+						<span>User settings</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
 			</SidebarMenu>

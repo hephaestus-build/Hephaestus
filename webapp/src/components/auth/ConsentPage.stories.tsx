@@ -76,6 +76,15 @@ export const Default: Story = {
 		await expect(screen.getByRole("radio", { name: /Yes, take part/u })).not.toBeChecked();
 		await expect(screen.getByRole("radio", { name: /don't take part/u })).not.toBeChecked();
 		await expect(screen.getByText(/Two things first/u)).toBeVisible();
+		// Facts are grouped: the sentence sits under its term, indented past the chip.
+		const term = screen.getByText("What it reads");
+		const detail = screen.getByText(/The work in the tools your project connects/u);
+		await expect(detail.getBoundingClientRect().top).toBeGreaterThan(
+			term.getBoundingClientRect().bottom - 1,
+		);
+		await expect(detail.getBoundingClientRect().left).toBeGreaterThan(
+			term.getBoundingClientRect().left,
+		);
 	},
 };
 

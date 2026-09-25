@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import type { LlmModel } from "@/api/types.gen";
 import type { PricingMode } from "@/lib/llm-pricing";
 import { hasText } from "@/lib/text";
 
@@ -47,14 +48,14 @@ const baseUrlSchema = z
 		} catch {
 			ctx.addIssue({
 				code: "custom",
-				message: "Enter a full URL, including https:// — for example https://api.openai.com/v1.",
+				message: "Enter a full URL, including https://, for example https://api.openai.com/v1.",
 			});
 			return;
 		}
 		if (url.protocol !== "https:" && url.protocol !== "http:") {
 			ctx.addIssue({
 				code: "custom",
-				message: "Enter a full URL, including https:// — for example https://api.openai.com/v1.",
+				message: "Enter a full URL, including https://, for example https://api.openai.com/v1.",
 			});
 			return;
 		}
@@ -119,6 +120,7 @@ const LLM_MODEL_FORM_FIELDS = [
 	"per1mCacheReadUsd",
 	"per1mCacheWriteUsd",
 	"note",
+	"dataHandlingNote",
 ] as const;
 
 export type LlmModelFormField = (typeof LLM_MODEL_FORM_FIELDS)[number];
@@ -135,6 +137,8 @@ export interface LlmModelFormValue {
 	per1mCacheReadUsd?: number;
 	per1mCacheWriteUsd?: number;
 	note?: string;
+	operatedBy?: LlmModel["operatedBy"];
+	dataHandlingNote?: string;
 }
 
 const llmModelFormSchema = z
@@ -154,6 +158,8 @@ const llmModelFormSchema = z
 		per1mCacheReadUsd: rateSchema.optional(),
 		per1mCacheWriteUsd: rateSchema.optional(),
 		note: z.string().trim().max(500, "Use 500 characters or fewer.").optional(),
+		operatedBy: z.enum(["OWN_ORGANISATION", "PROVIDER"]).optional(),
+		dataHandlingNote: z.string().trim().max(200, "Use 200 characters or fewer.").optional(),
 	})
 	.superRefine((value, ctx) => {
 		if (value.pricingMode === "PRICED") {

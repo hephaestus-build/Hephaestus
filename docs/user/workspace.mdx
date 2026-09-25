@@ -63,3 +63,76 @@ Workspace admins can separately enable the leaderboard, progression, leagues, an
 - **Repository or Slack channel sync error?** Open **Administration → Integrations** and check the affected resource's last error. Check its access in the connected service, then run a new sync. Each error clears after its affected sync path succeeds; a skipped pass keeps its error.
 - **Team missing?** Confirm that the team exists in the connected source platform and has synced.
 - **Feature missing?** Ask a workspace admin whether it is enabled and whether your account has access.
+
+## Your AI choice
+
+A workspace can ask you to set up on your first visit, after your membership is already in place. The
+setup page is one page in two parts: which AI may handle your work, and the Slack or Outline accounts
+your workspace asks you to connect. It does not approve or create membership.
+
+You answer the AI question once, and your answer applies in all your workspaces on this Hephaestus
+deployment. Joining another workspace never asks it again; that workspace's setup page appears only if
+it requires an account you have not connected. Your answer is a boundary, not a pick from a list of
+models: anything stricter than your answer also counts, and nothing ever switches you to anything
+looser.
+
+The cards compare the three answers on the same four rows:
+
+| | **In-house** | **Cloud** | **No AI** |
+| --- | --- | --- | --- |
+| **AI help** | Feedback and Heph | Feedback and Heph | No new feedback or Heph replies |
+| **Models** | Only models your organisation runs, usually smaller ones | In-house models plus cloud models, usually the strongest on offer | None |
+| **Speed** | Limited by your organisation's capacity, so replies can be slower | More capacity, usually faster | Not applicable |
+| **Sent to** | Only systems your organisation runs | Also a cloud provider your organisation configured; its agreement sets retention and access | Nowhere; sync and stored work continue |
+
+Each workspace sets up its own models within these answers. When nothing in the workspace you are
+looking at is set up within an answer, its card says so: that answer is *not set up here yet*,
+nothing runs for you for that purpose in this workspace, and Hephaestus never switches you to
+another answer. Wait for a workspace owner to add a model, or change your answer.
+"Set up" describes the configuration, not current service health or a guarantee of speed. In-house
+models depend on your organisation's capacity and storage rules, and allowing the cloud does not
+guarantee better models or faster replies. A model mark names its maker, not who runs it. For
+example, an OpenAI model served by Azure is not automatically in-house because its endpoint is
+private. The Logos mark names the Logos service, not who runs it; an organisation can run Logos
+itself or use a provider-operated Logos deployment. Ask a workspace owner who operates the
+deployment and what terms apply to your work.
+
+In a workspace, each answer's card shows the model a new request reaches first, with its maker's
+logo and the service that receives its requests. If more models are ready, the card shows the count,
+and the list below the cards names every model for your selected answer with its declared handling.
+In user settings, the cards show no model or service: your answer applies to every workspace, and
+each workspace can use a different service.
+
+On your first visit, nothing is preselected. Choose an answer and select **Continue**; on a return
+visit the button reads **Save**. You can choose any answer, including one no workspace has set up yet.
+A workspace adding, removing or re-declaring models never asks you again: your answer stays in force
+and is checked on every request.
+
+To change your answer at any time, open **Your AI choice** in the sidebar of any workspace, which also
+shows that workspace's account links and whether anything there runs within your answer, or open
+**Your AI choice** in **User settings**. Existing feedback and earlier conversations with Heph remain
+readable. With **No AI**, there are no new practice reviews about you, new requests to Heph, or new
+feedback delivery. Requests already sent cannot be recalled. You cannot send, edit, or retry a
+conversation message. Your choice does not remove your work from shared repositories or change other
+members' choices. Research participation is a separate setting.
+
+### Connect the accounts your workspace uses
+
+A required link must match the Slack team or Outline instance configured for this workspace. A link
+to a different team or instance does not satisfy it. Connecting an account identifies you on that
+service; it does not enable AI.
+
+**Continue** finishes setup once you have chosen an answer and connected the required accounts. Your
+answer is saved when you select **Continue**, **Save AI choice**, or **Save & connect** for an account.
+When required accounts are still open, **Save AI choice** saves your answer without finishing setup.
+This includes **No AI**: you never need to connect an account to opt out. **Skip for now** leaves
+without saving a new answer; an already saved answer stays in effect, and the page waits for you under
+**Your AI choice** until a workspace owner changes the setup. On a return visit, **Save**
+records a new answer whether or not the required accounts are connected, and **Back to workspace**
+leaves without saving. If a required account is unavailable right
+now, it does not hold you up; ask a workspace owner to repair it or remove the requirement. Optional
+accounts never block completion. After finishing or skipping, you return to the workspace page you
+originally opened, including its filters and selected section.
+
+The sign-in notice and the research question are separate from workspace setup. Linking an account
+or choosing an answer does not change research participation.

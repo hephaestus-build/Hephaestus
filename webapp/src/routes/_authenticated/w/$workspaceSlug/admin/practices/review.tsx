@@ -39,9 +39,10 @@ import {
 	PracticeDefinitionSkeleton,
 	ReviewSettingsSkeleton,
 } from "@/components/admin/practices/PracticeSkeletons";
-import type {
-	ReviewModelState,
-	ReviewRunningState,
+import {
+	availableReviewBinding,
+	type ReviewModelState,
+	type ReviewRunningState,
 } from "@/components/admin/practices/review/review-readiness";
 import {
 	DEFAULT_REVIEW_SECTION,
@@ -76,7 +77,7 @@ function reviewModelOf(bindingsQuery: UseQueryResult<ListAgentsResponse>): Revie
 	}
 	return {
 		status: "ready",
-		binding: bindingsQuery.data.find((agent) => agent.purpose === "PRACTICE_REVIEW"),
+		binding: availableReviewBinding(bindingsQuery.data),
 	};
 }
 

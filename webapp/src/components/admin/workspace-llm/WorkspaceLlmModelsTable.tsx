@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import type { WorkspaceLlmModel } from "@/api/types.gen";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { DataHandlingBadge } from "@/components/practice-vocabulary/DataHandlingBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -53,6 +54,7 @@ export function WorkspaceLlmModelsTable({
 				<TableHeader>
 					<TableRow>
 						<TableHead scope="col">Model</TableHead>
+						<TableHead scope="col">Data handling</TableHead>
 						<TableHead scope="col">Price</TableHead>
 						<TableHead scope="col">Active</TableHead>
 						<TableHead scope="col" className="text-right">
@@ -67,6 +69,9 @@ export function WorkspaceLlmModelsTable({
 							<TableRow key={model.id}>
 								<TableCell>
 									<div className="font-medium">{model.displayName}</div>
+								</TableCell>
+								<TableCell>
+									<DataHandlingBadge tier={model.dataHandlingTier} />
 								</TableCell>
 								{/* Left-aligned: `priceLabel` is a sentence, not a figure; `tabular-nums` only
 								    aligns the digits inside it. */}

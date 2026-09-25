@@ -61,6 +61,7 @@ required.
 | **Base URL** | yes | The provider's OpenAI-compatible root, ≤ 2048 characters — e.g. `https://api.openai.com/v1`, or `https://<resource>.openai.azure.com/openai/v1` for Azure. Must be HTTPS, must carry no credentials, query string or fragment. **Immutable after create.** |
 | **API shape** | yes | `openai-responses` (Responses API) or `openai-completions` (Chat Completions). In the form this is the *"Use the Responses API"* checkbox, ticked for a new connection. Prefer the Responses API: a review or the mentor calls tools across many turns, and the Responses API can preserve reasoning between tool calls for models and providers that support it. OpenAI, the Vercel AI Gateway, OpenRouter and vLLM offer this API, but support depends on the model and deployment. Clear the checkbox for an endpoint that supports only Chat Completions. **Immutable after create.** |
 | **Authentication** | no | `BEARER` → `Authorization: Bearer <key>`, or `API_KEY` → `api-key: <key>`. Defaults to `BEARER`; Azure needs `API_KEY`. **Immutable after create.** |
+| **Service receiving requests** | no | Search for the service the configured endpoint sends requests to, such as Logos, Azure, or Vercel AI Gateway. Leave it as **Not listed or unknown** if the service is absent or uncertain. This is a display declaration, not proof of where inference runs or who operates the model. You can change or clear it later. |
 | **API key** | no | Write-only. Encrypted at rest, never returned — a saved connection reports only `hasApiKey` and the last four characters. Leave it blank on edit to keep the stored key; tick **Remove stored API key** to delete it. Genuinely optional: a self-hosted vLLM or Ollama gateway may need no credential at all. |
 | **Slug** | no | Internal identifier, ≤ 63 characters. Derived from the display name when you omit it. **Immutable after create.** |
 
@@ -80,8 +81,11 @@ suffix if it collides; one you supply yourself does not, so a collision comes ba
 The create form offers **OpenAI** (`https://api.openai.com/v1`, Bearer), **Azure OpenAI v1**
 (`https://RESOURCE.openai.azure.com/openai/v1`, API key) and **Other OpenAI-compatible endpoint**.
 These only prefill the two fields; nothing about the preset is stored. Reopening an Azure connection
-for editing shows it as "Other", because nothing persisted distinguishes an Azure host from any
-other host.
+for editing shows it as "Other", because the preset itself is not persisted. Use the separate
+**Service receiving requests** declaration if you want a member to see an Azure mark beside a model in a
+workspace. For a gateway, name the gateway that receives the request, not an unknown downstream
+service. Leave it blank if you cannot confirm the connection. The platform is not inferred from
+the URL and does not set the model's data-handling tier.
 
 ### What the URL guard rejects, and when
 
@@ -270,6 +274,7 @@ slug is API surface; the title is what the UI shows.
 | 409 | `llm-connection-slug-conflict` | The slug you typed is taken. |
 | 409 | `llm-model-slug-conflict` | The model slug is taken on this connection. |
 | 409 | `llm-model-upstream-id-conflict` | Two catalog entries would point at the same upstream id on one connection. Refused because pricing would then match either one nondeterministically — a `NO_CHARGE` twin could silently shadow a `PRICED` model for billing. |
+| 409 | `agent-binding-slot-mismatch` | Assigning a model to a tier row it is not declared as. The body's `declaredTier` names the model's tier and the UI words the refusal from it; an undeclared model carries no `declaredTier`, only the detail. |
 | 404 | *Resource not found* | Unknown connection or model id. |
 
 ## Next
@@ -277,3 +282,103 @@ slug is API surface; the title is what the UI shows.
 - **Budgets, caps, and what a cap pauses:** [Workspace budgets and alerting](./production-setup#workspace-budgets-and-alerting).
 - **The environment variables that *are* deploy-time facts:** [Instance-wide LLM settings](./production-setup#instance-wide-llm-settings).
 - **Nothing is being reviewed:** [When a workspace goes quiet](./practice-review#when-a-workspace-goes-quiet).
+
+## Data handling and members' AI choices
+
+Owners configure **Administration → Member onboarding** after membership is already managed by the
+workspace's existing mechanism. In that workspace, members can see the display names of models
+that are ready for their answer. You can declare an optional **Model maker** on a model and an
+optional **Service receiving requests** on its connection. Their marks appear beside the actual model only
+in this workspace, and name different facts: who made the model and which service receives its
+requests. Leave either blank when you cannot confirm it. Neither field sets the data-handling tier;
+**Operated by** does. For example, an OpenAI model served by Azure can show both marks. A private
+endpoint does not by itself mean your organisation operates the model: Microsoft-managed
+[Foundry inference](https://learn.microsoft.com/en-us/azure/foundry/concepts/deployments-overview)
+is provider-operated, while a model your organisation runs on its own Azure machines can be
+declared in-house. **Logos** is the AI service in Edutelligence, with its own webapp and mark; it
+is not an Edutelligence brand choice. Your organisation can run Logos itself, or a provider can run
+it. Select the Logos mark only when this connection actually receives requests through Logos; then
+declare **Operated by** from your deployment and agreement, not from that mark. Hephaestus does not
+infer these facts from a model ID or connection URL. Choose
+display names you are happy for developers to read. The setup page is hidden by default. Declare and assign models before
+enabling it, and wait until every runtime role has been upgraded before assigning models by tier.
+
+1. In either model console, declare each model's **Data handling** with one fact, **Operated by**:
+   **Your organisation**, or **A provider** under terms your organisation accepted. This declaration
+   does not verify a provider's retention or training terms. Check those terms with your provider
+   before you enable the model. From the operator fact Hephaestus derives one tier,
+   **In-house** or **Cloud**, and shows it as a badge wherever the model appears. Declare what the
+   agreement says, not what the hostname suggests: verify the endpoint, gateway routing,
+   subprocessors and data-handling agreement first. A note for admins carries the region, the
+   agreement, its renewal date and any retention details, and is shown to admins only. Token
+   limits and the reasoning switch sit under **Advanced**.
+2. In the workspace's **AI models**, each purpose (**Practice reviews** and **Heph**) has three
+   rows: **In-house**, **Cloud** and **Members who haven't chosen**. A row holds only a model
+   declared as that tier. Assigning a model declared as another tier is refused with *This model
+   is declared as \{tier\}. Assign it to that row.*, and an undeclared model with *This model's
+   data handling isn't declared yet. Declare it first, or assign it to Members who haven't
+   chosen.* A model whose declaration later loosens no longer matches its row, reads **Not ready**
+   and stops serving until you reassign it. Nothing is substituted. Existing grants, price
+   declarations, funding sources, feature switches and budgets still apply, and **Max concurrent
+   runs** applies independently to each row.
+3. Optionally require Slack or Outline account links under **Member onboarding**. A required link
+   needs an active integration and an enabled account-linking provider for the same server. Slack
+   also needs the configured team; Outline needs the configured instance identity.
+4. Turn on **Ask members to set up on their first visit**. From then on, personal AI activity
+   requires an explicit member choice. The page asks only members who have not answered anywhere on
+   this instance; a member who already chose in another workspace sees it only if this workspace
+   requires an account link they have not connected. Unknown or unlinked developers are not assumed
+   to have agreed.
+
+A member's choice is a ceiling: the loosest tier they accept. It belongs to the account, is answered
+once, and holds in every workspace the member belongs to on this instance. Members change it from
+**Your AI choice** in any workspace's sidebar or in **User settings**. **In-house** is served by
+the **In-house** row, and **Cloud** by the **Cloud** row or the **In-house** row. Hephaestus picks
+the loosest ready row within the ceiling and never a looser one, in each workspace from that
+workspace's rows. A member
+whose ceiling no ready row in this workspace is within gets no practice reviews and no Heph here, and
+the page they chose on says so in one sentence below the answers. Members may choose any answer,
+including one no row covers yet.
+
+Adding, removing or re-declaring models and providers never asks members again: the ceiling is
+checked on every request, and a model whose declared facts loosen stops serving until you reassign
+it. Members see the setup page again only after you change **Member onboarding** itself, and only
+those who skipped it or have a newly required link still open.
+
+The **Members who haven't chosen** row preserves existing assignments for workspaces that have never
+required member choices. It serves only members without a choice where the choice is optional and
+is never a fallback for a member who chose. Existing models upgrade with nothing declared
+(**Not declared**) and existing assignments land in that row. Hephaestus does not infer data handling
+from names or endpoints.
+
+A reviewed developer no account resolves to — never signed in, or their identity unlinked — counts
+as not having answered: that row serves them where the choice is optional, and only a workspace that
+has turned the setup page on, which makes a choice required there, keeps AI off their work.
+Reconnect the developer's identity to restore their own choice; this does not change another
+identified member's choice.
+
+Members may choose **No AI** even when model configuration or required account links are unavailable.
+This stops new practice reviews about them and new conversations with Heph in every workspace, not
+membership or access to existing feedback. A review is checked against the developer whose work is
+being reviewed, not the administrator who requested it. A changed choice is checked again at
+execution, before each model request, and before new feedback is accepted or delivered. An outbound
+request already in progress cannot be recalled, and the choice does not remove shared source content
+from other members' reviews.
+
+### Changing or pausing setup
+
+Clear a required account link to make it optional. A disconnected required integration stays visible
+as unavailable until it is repaired or its requirement is removed; it is not silently waived. Disabling
+a sign-in provider does not erase an already verified matching link.
+
+Hiding the setup page does **not** clear saved choices or restore unrestricted AI for members who
+have not chosen; the page shows a reminder while that is the case. Members can still open **Your AI
+choice** in the sidebar. Disabling a model or changing its data handling stops incompatible new
+requests; it never substitutes a looser tier. Turning an assignment off and on does not change a
+member's choice.
+
+The schema upgrade is additive apart from widening the assignment's uniqueness key to include its
+tier. A rollback is supported before onboarding settings, member choices, declarations or
+tier-specific assignments have been saved. Once used, rollback is deliberately refused: losing a
+saved refusal could restore unrestricted processing. Recover through a [verified pre-upgrade backup](./backup-restore),
+not by deleting member choices to bypass the safeguard.

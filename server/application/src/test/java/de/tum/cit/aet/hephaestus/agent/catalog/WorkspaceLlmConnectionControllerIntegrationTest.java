@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
+import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,7 +41,8 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 "openai-completions",
                 LlmAuthMode.BEARER,
                 "sk-workspace-secret-9999",
-                true);
+                true,
+                LlmConnectionPlatform.AZURE);
         return Objects.requireNonNull(webTestClient
                 .post()
                 .uri("/workspaces/{slug}/llm/connections", workspace.getWorkspaceSlug())
@@ -64,6 +66,7 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
         assertThat(created).isNotNull();
         assertThat(created.hasApiKey()).isTrue();
         assertThat(created.apiKeyLast4()).isEqualTo("9999");
+        assertThat(created.connectionPlatform()).isEqualTo(LlmConnectionPlatform.AZURE);
 
         webTestClient
                 .get()
@@ -87,7 +90,7 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 .jsonPath("$.length()")
                 .isEqualTo(1);
 
-        var updateRequest = new UpdateWorkspaceLlmConnectionRequestDTO("Renamed", null, null, null);
+        var updateRequest = new UpdateWorkspaceLlmConnectionRequestDTO("Renamed", null, null, null, null, true);
         webTestClient
                 .patch()
                 .uri("/workspaces/{slug}/llm/connections/{id}", workspace.getWorkspaceSlug(), created.id())
@@ -99,7 +102,9 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 .isOk()
                 .expectBody()
                 .jsonPath("$.displayName")
-                .isEqualTo("Renamed");
+                .isEqualTo("Renamed")
+                .jsonPath("$.connectionPlatform")
+                .doesNotExist();
 
         webTestClient
                 .delete()
@@ -137,7 +142,8 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                         "openai-completions",
                         LlmAuthMode.BEARER,
                         "sk-super-secret-workspace-value",
-                        true))
+                        true,
+                        null))
                 .exchange()
                 .expectStatus()
                 .isCreated()
@@ -244,7 +250,8 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 "openai-completions",
                 LlmAuthMode.BEARER,
                 null,
-                true);
+                true,
+                null);
 
         webTestClient
                 .post()

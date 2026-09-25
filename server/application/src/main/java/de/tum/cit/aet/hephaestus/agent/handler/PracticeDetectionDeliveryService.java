@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.EvidenceQuoteUnverifiedExcept
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -58,6 +59,7 @@ public class PracticeDetectionDeliveryService {
 
     private static final Logger log = LoggerFactory.getLogger(PracticeDetectionDeliveryService.class);
 
+    private final ReviewMemberAiPolicy memberAiPolicy;
     private final PracticeRevisionRepository practiceRevisionRepository;
     private final ObservationRepository observationRepository;
     private final ReviewTargetQuery reviewTargets;
@@ -79,7 +81,8 @@ public class PracticeDetectionDeliveryService {
             ObjectMapper objectMapper,
             JobEvidenceFiles evidenceFiles,
             ArtifactSourceCatalogRegistry sourceCatalogs,
-            HistoricalGitEvidence historicalGit) {
+            HistoricalGitEvidence historicalGit,
+            ReviewMemberAiPolicy memberAiPolicy) {
         this.practiceRevisionRepository = practiceRevisionRepository;
         this.observationRepository = observationRepository;
         this.reviewTargets = reviewTargets;
@@ -90,6 +93,7 @@ public class PracticeDetectionDeliveryService {
         this.evidenceFiles = evidenceFiles;
         this.sourceCatalogs = sourceCatalogs;
         this.historicalGit = historicalGit;
+        this.memberAiPolicy = memberAiPolicy;
     }
 
     /** Metadata key for the run's immutable observation origin. */
@@ -405,6 +409,9 @@ public class PracticeDetectionDeliveryService {
             CapturedEvidence evidence, Target target, Map<String, PracticeRevision> revisionsBySlug) {}
 
     private Admissible requireAdmissible(AgentJob job, JsonNode metadata) {
+        if (!memberAiPolicy.allowsResult(job))
+            throw new ObservationsRefusedException(
+                    "member_ai_declined", "The developer's AI choice no longer permits recording this review result.");
         CapturedEvidence evidence = CapturedEvidence.of(job, objectMapper);
         for (SourceKind kind : evidence.availableSources()) {
             if (!sourceCatalogs.isSourceUsePermitted(
