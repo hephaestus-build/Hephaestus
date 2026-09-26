@@ -10,6 +10,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,23 +31,25 @@ import org.springframework.stereotype.Component;
  * <p>Two coexisting wire formats:
  * <ul>
  *   <li><b>Legacy plaintext</b> — {@code X-Gitlab-Token} header byte-equals the
- *       shared secret. This is GitLab's original webhook auth, still the default
- *       on all GitLab installs &lt; 19.0 and on workspaces that haven't opted
- *       into Standard Webhooks.
- *   <li><b>Standard Webhooks HMAC (GitLab 19.0+)</b> — {@code X-Gitlab-Signature}
- *       carries one or more {@code v1,<base64-hmac>} pairs comma-separated. The
+ *       shared secret. GitLab's only mode before 19.0, and the one the hooks
+ *       {@code GitLabWebhookService} registers use: it sets their {@code token}.
+ *   <li><b>Standard Webhooks HMAC (GitLab 19.0+)</b> — {@code webhook-signature}
+ *       carries one or more space-separated {@code v1,<base64-hmac>} entries. The
  *       signing secret has the form {@code whsec_<base64>}; we strip the prefix,
  *       base64-decode the rest to get the MAC key, then compute
  *       {@code HMAC_SHA256(key, "<webhook-id>.<webhook-timestamp>.<body>")}.
  *       Replay protection: {@code webhook-timestamp} must be within
- *       {@link #TIMESTAMP_TOLERANCE} of now (the spec's 5-minute window).
+ *       {@link #TIMESTAMP_TOLERANCE} of now.
  * </ul>
  *
- * <p>If a request carries BOTH headers, the signature header (modern path) takes
- * priority — this is the safer choice: an attacker who only knows the legacy
- * shared secret cannot forge an HMAC over an arbitrary body.
+ * <p>GitLab sends {@code X-Gitlab-Token} alongside the signature when a hook has both
+ * tokens configured. Whenever {@code webhook-signature} is present — even blank or
+ * malformed — only the HMAC decides: an attacker who only knows the legacy shared
+ * secret cannot forge an HMAC over an arbitrary body.
  *
- * <p>Reference: <a href="https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md">Standard Webhooks spec</a>.
+ * <p>References: <a href="https://docs.gitlab.com/user/project/integrations/webhooks/#signing-tokens">GitLab
+ * signing tokens</a>, <a href="https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md">Standard
+ * Webhooks spec</a>.
  */
 @Component
 public class GitlabWebhookSignatureVerifier implements WebhookSignatureVerifier {
@@ -54,16 +57,18 @@ public class GitlabWebhookSignatureVerifier implements WebhookSignatureVerifier 
     private static final Logger log = LoggerFactory.getLogger(GitlabWebhookSignatureVerifier.class);
 
     static final String HEADER_TOKEN = "x-gitlab-token";
-    static final String HEADER_SIGNATURE = "x-gitlab-signature";
+    static final String HEADER_SIGNATURE = "webhook-signature";
     static final String HEADER_WEBHOOK_ID = "webhook-id";
     static final String HEADER_WEBHOOK_TIMESTAMP = "webhook-timestamp";
 
+    static final String SIGNATURE_V1_PREFIX = "v1,";
     static final String WHSEC_PREFIX = "whsec_";
     static final String HMAC_SHA256 = "HmacSHA256";
 
     /**
-     * Spec-mandated maximum clock skew. The spec calls for ±5 minutes; we apply it
-     * symmetrically (future-dated bodies also fail).
+     * Our replay window, applied in both directions. Standard Webhooks asks only for a
+     * "reasonable tolerance"; five minutes is Hephaestus's choice, shared with Slack's
+     * verifier ({@code WebhookProperties.Stream.REPLAY_TOLERANCE_FLOOR} depends on it).
      */
     static final Duration TIMESTAMP_TOLERANCE = Duration.ofMinutes(5);
 
@@ -99,10 +104,9 @@ public class GitlabWebhookSignatureVerifier implements WebhookSignatureVerifier 
         String signatureHeader = normalized.get(HEADER_SIGNATURE);
         String tokenHeader = normalized.get(HEADER_TOKEN);
 
-        // Modern path takes priority when both headers are present. A request bearing
-        // X-Gitlab-Signature is opting into Standard Webhooks — falling back to the
-        // weaker plaintext token on signature mismatch would be a downgrade primitive.
-        if (signatureHeader != null && !signatureHeader.isBlank()) {
+        // Presence alone selects the HMAC path: falling back to the weaker plaintext token
+        // on a blank, malformed or mismatched signature would be a downgrade primitive.
+        if (signatureHeader != null) {
             return verifyWhsec(request, normalized, signatureHeader);
         }
         if (tokenHeader != null && !tokenHeader.isBlank()) {
@@ -136,6 +140,10 @@ public class GitlabWebhookSignatureVerifier implements WebhookSignatureVerifier 
 
     private VerificationResult verifyWhsec(
             WebhookRequest request, Map<String, String> headers, String signatureHeader) {
+        List<byte[]> presentedMacs = v1Macs(signatureHeader);
+        if (presentedMacs.isEmpty()) {
+            return new VerificationResult.Invalid("malformed-signature");
+        }
         String msgId = headers.get(HEADER_WEBHOOK_ID);
         String timestampHeader = headers.get(HEADER_WEBHOOK_TIMESTAMP);
         if (msgId == null || msgId.isBlank()) {
@@ -173,36 +181,27 @@ public class GitlabWebhookSignatureVerifier implements WebhookSignatureVerifier 
         if (expectedMac == null) {
             return new VerificationResult.Invalid("hmac-init-failed");
         }
-        String expectedB64 = Base64.getEncoder().encodeToString(expectedMac);
-        byte[] expectedBytes = expectedB64.getBytes(StandardCharsets.UTF_8);
-
-        // GitLab sends a single comma-separated list, "v1,<mac-A>[,v1,<mac-B>...]".
-        // Split on comma; iterate as (scheme, value) pairs. Any v1 entry whose MAC
-        // matches the expected one counts as verified. Tolerate the variant where a
-        // single token bundles "v1 <b64>" (space-separated scheme+value).
-        String[] tokens = signatureHeader.split(",");
-        for (int i = 0; i < tokens.length; i++) {
-            String trimmed = tokens[i].trim();
-            if (trimmed.isEmpty()) continue;
-            String candidate;
-            if (trimmed.equals("v1")) {
-                // Scheme tag in pair form — next token is the b64 MAC.
-                if (i + 1 >= tokens.length) break;
-                candidate = tokens[++i].trim();
-            } else if (trimmed.startsWith("v1 ")) {
-                // Single-token form: "v1 <b64>".
-                candidate = trimmed.substring(3).trim();
-            } else {
-                // Bare MAC token (some clients omit the scheme entirely).
-                candidate = trimmed;
-            }
-            if (candidate.isEmpty()) continue;
-            byte[] candidateBytes = candidate.getBytes(StandardCharsets.UTF_8);
-            if (MessageDigest.isEqual(candidateBytes, expectedBytes)) {
+        for (byte[] presentedMac : presentedMacs) {
+            if (MessageDigest.isEqual(presentedMac, expectedMac)) {
                 return new VerificationResult.Verified();
             }
         }
         return new VerificationResult.Invalid("signature-mismatch");
+    }
+
+    /** Decoded {@code v1} MACs; like the Standard Webhooks reference verifiers, skips any other entry. */
+    private static List<byte[]> v1Macs(String signatureHeader) {
+        List<byte[]> macs = new ArrayList<>();
+        for (String entry : signatureHeader.split(" ")) {
+            if (!entry.startsWith(SIGNATURE_V1_PREFIX)) continue;
+            try {
+                byte[] mac = Base64.getDecoder().decode(entry.substring(SIGNATURE_V1_PREFIX.length()));
+                if (mac.length > 0) macs.add(mac);
+            } catch (IllegalArgumentException e) {
+                // Not base64: not a v1 signature.
+            }
+        }
+        return macs;
     }
 
     /** SHA-256 digest, or {@code null} if the algorithm is somehow unavailable (never on a JRE). */

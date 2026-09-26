@@ -18,6 +18,8 @@ import java.util.Optional;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Unit tests for the dual-mode GitLab webhook signature verifier.
@@ -30,6 +32,7 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
 
     private static final String PLAINTEXT_SECRET = "shared-gitlab-secret-32-bytes-long-XYZ";
     private static final byte[] WHSEC_KEY = "raw-hmac-key-material-32-bytes-_____XYZ".getBytes(StandardCharsets.UTF_8);
+    private static final String WHSEC_SECRET = "whsec_" + Base64.getEncoder().encodeToString(WHSEC_KEY);
 
     /** Frozen test clock — keeps timestamp drift math deterministic. */
     private static final Instant NOW = Instant.parse("2026-05-24T12:00:00Z");
@@ -90,7 +93,7 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
                 body,
                 header("webhook-id", msgId),
                 header("webhook-timestamp", timestamp),
-                header("X-Gitlab-Signature", "v1," + mac));
+                header("webhook-signature", "v1," + mac));
 
         assertThat(verifier.verify(request)).isInstanceOf(VerificationResult.Verified.class);
     }
@@ -108,10 +111,41 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
                 body,
                 header("webhook-id", msgId),
                 header("webhook-timestamp", timestamp),
-                // Key rotation case: old + new sig sent in one header.
-                header("X-Gitlab-Signature", "v1," + otherMac + ",v1," + validMac));
+                // Signing-token rotation: GitLab space-separates the entries.
+                header("webhook-signature", "v1," + otherMac + " v1," + validMac));
 
         assertThat(verifier.verify(request)).isInstanceOf(VerificationResult.Verified.class);
+    }
+
+    @Test
+    void shouldSkipOtherSchemesWhenAV1EntryMatches() {
+        byte[] body = body("{}");
+        String msgId = "msg_x";
+        String timestamp = String.valueOf(NOW.getEpochSecond());
+        String mac = computeBase64Mac(WHSEC_KEY, msgId, timestamp, body);
+        var request = req(
+                body,
+                header("webhook-id", msgId),
+                header("webhook-timestamp", timestamp),
+                header("webhook-signature", "v1a," + mac + " " + mac + " v1," + mac));
+
+        assertThat(newVerifierWhsec().verify(request)).isInstanceOf(VerificationResult.Verified.class);
+    }
+
+    @Test
+    void shouldRejectWhenWebhookIdIsNotTheSignedOne() {
+        byte[] body = body("{}");
+        String timestamp = String.valueOf(NOW.getEpochSecond());
+        String mac = computeBase64Mac(WHSEC_KEY, "msg_original", timestamp, body);
+        var request = req(
+                body,
+                header("webhook-id", "msg_replayed"),
+                header("webhook-timestamp", timestamp),
+                header("webhook-signature", "v1," + mac));
+
+        VerificationResult result = newVerifierWhsec().verify(request);
+        assertThat(result).isInstanceOf(VerificationResult.Invalid.class);
+        assertThat(((VerificationResult.Invalid) result).reason()).isEqualTo("signature-mismatch");
     }
 
     @Test
@@ -127,7 +161,7 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
                 tamperedBody,
                 header("webhook-id", msgId),
                 header("webhook-timestamp", timestamp),
-                header("X-Gitlab-Signature", "v1," + mac));
+                header("webhook-signature", "v1," + mac));
 
         VerificationResult result = verifier.verify(request);
         assertThat(result).isInstanceOf(VerificationResult.Invalid.class);
@@ -147,7 +181,7 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
                 body,
                 header("webhook-id", msgId),
                 header("webhook-timestamp", timestamp),
-                header("X-Gitlab-Signature", "v1," + mac));
+                header("webhook-signature", "v1," + mac));
 
         VerificationResult result = verifier.verify(request);
         assertThat(result).isInstanceOf(VerificationResult.StaleTimestamp.class);
@@ -168,7 +202,7 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
                 body,
                 header("webhook-id", msgId),
                 header("webhook-timestamp", timestamp),
-                header("X-Gitlab-Signature", "v1," + mac));
+                header("webhook-signature", "v1," + mac));
 
         VerificationResult result = verifier.verify(request);
         assertThat(result).isInstanceOf(VerificationResult.StaleTimestamp.class);
@@ -185,20 +219,45 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
                 body,
                 header("webhook-id", msgId),
                 header("webhook-timestamp", timestamp),
-                header("X-Gitlab-Signature", "v1," + mac));
+                header("webhook-signature", "v1," + mac));
 
         assertThat(newVerifierWhsec().verify(request)).isInstanceOf(VerificationResult.Verified.class);
     }
 
-    @Test
-    void danglingSignatureSchemeIsRejected() {
+    /**
+     * A present {@code webhook-signature} with no well-formed {@code v1,<base64>} entry is
+     * rejected even though the same request carries the correct legacy token. {@code {mac}}
+     * stands for the correct base64 MAC, so only the header's shape is wrong.
+     */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "",
+                " ",
+                "v1",
+                "v1,",
+                "{mac}",
+                "v1 {mac}",
+                "v2,{mac}",
+                "v1a,{mac}",
+                "v1,{mac}!",
+                "v1,{mac},v1,{mac}",
+            })
+    void shouldRejectWithoutLegacyFallbackWhenSignatureIsMalformed(String signature) {
+        byte[] body = body("{}");
+        String msgId = "msg_x";
+        String timestamp = String.valueOf(NOW.getEpochSecond());
+        String mac = computeBase64Mac(WHSEC_KEY, msgId, timestamp, body);
         var request = req(
-                body("{}"),
-                header("webhook-id", "msg_x"),
-                header("webhook-timestamp", String.valueOf(NOW.getEpochSecond())),
-                header("X-Gitlab-Signature", "v1"));
+                body,
+                header("X-Gitlab-Token", WHSEC_SECRET),
+                header("webhook-id", msgId),
+                header("webhook-timestamp", timestamp),
+                header("webhook-signature", signature.replace("{mac}", mac)));
 
-        assertThat(newVerifierWhsec().verify(request)).isInstanceOf(VerificationResult.Invalid.class);
+        VerificationResult result = newVerifierWhsec().verify(request);
+        assertThat(result).isInstanceOf(VerificationResult.Invalid.class);
+        assertThat(((VerificationResult.Invalid) result).reason()).isEqualTo("malformed-signature");
     }
 
     @Test
@@ -207,7 +266,7 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
         var request = req(
                 body("{}"),
                 header("webhook-timestamp", String.valueOf(NOW.getEpochSecond())),
-                header("X-Gitlab-Signature", "v1,deadbeef"));
+                header("webhook-signature", "v1,deadbeef"));
 
         VerificationResult result = verifier.verify(request);
         assertThat(result).isInstanceOf(VerificationResult.Invalid.class);
@@ -217,7 +276,7 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
     @Test
     void whsecMissingWebhookTimestampInvalid() {
         var verifier = newVerifierWhsec();
-        var request = req(body("{}"), header("webhook-id", "msg_x"), header("X-Gitlab-Signature", "v1,deadbeef"));
+        var request = req(body("{}"), header("webhook-id", "msg_x"), header("webhook-signature", "v1,deadbeef"));
 
         VerificationResult result = verifier.verify(request);
         assertThat(result).isInstanceOf(VerificationResult.Invalid.class);
@@ -231,7 +290,7 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
                 body("{}"),
                 header("webhook-id", "msg_x"),
                 header("webhook-timestamp", "not-a-number"),
-                header("X-Gitlab-Signature", "v1,deadbeef"));
+                header("webhook-signature", "v1,deadbeef"));
 
         VerificationResult result = verifier.verify(request);
         assertThat(result).isInstanceOf(VerificationResult.Invalid.class);
@@ -248,7 +307,7 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
                 body("{}"),
                 header("webhook-id", "msg_x"),
                 header("webhook-timestamp", String.valueOf(NOW.getEpochSecond())),
-                header("X-Gitlab-Signature", "v1,deadbeef"));
+                header("webhook-signature", "v1,deadbeef"));
 
         VerificationResult result = verifier.verify(request);
         assertThat(result).isInstanceOf(VerificationResult.Invalid.class);
@@ -273,7 +332,7 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
                 header("X-Gitlab-Token", "WRONG-plaintext"),
                 header("webhook-id", msgId),
                 header("webhook-timestamp", timestamp),
-                header("X-Gitlab-Signature", "v1," + mac));
+                header("webhook-signature", "v1," + mac));
 
         assertThat(verifier.verify(request)).isInstanceOf(VerificationResult.Verified.class);
     }
@@ -283,13 +342,16 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
         // Opposite case: signature header present but invalid; plaintext token is correct.
         // We MUST NOT fall back — that would be a downgrade primitive.
         byte[] body = body("{}");
+        String msgId = "msg_x";
+        String timestamp = String.valueOf(NOW.getEpochSecond());
+        String otherMac = computeBase64Mac("different-key".getBytes(StandardCharsets.UTF_8), msgId, timestamp, body);
         var verifier = newVerifierWhsec();
         var request = req(
                 body,
-                header("X-Gitlab-Token", PLAINTEXT_SECRET), // would be correct for the plaintext source
-                header("webhook-id", "msg_x"),
-                header("webhook-timestamp", String.valueOf(NOW.getEpochSecond())),
-                header("X-Gitlab-Signature", "v1,definitely-not-a-real-mac"));
+                header("X-Gitlab-Token", WHSEC_SECRET), // the configured secret: would verify on its own
+                header("webhook-id", msgId),
+                header("webhook-timestamp", timestamp),
+                header("webhook-signature", "v1," + otherMac));
 
         VerificationResult result = verifier.verify(request);
         assertThat(result).isInstanceOf(VerificationResult.Invalid.class);
@@ -309,8 +371,7 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
 
     /** Returns a verifier whose source serves a {@code whsec_<base64>} secret. */
     private static GitlabWebhookSignatureVerifier newVerifierWhsec() {
-        String whsec = "whsec_" + Base64.getEncoder().encodeToString(WHSEC_KEY);
-        return new GitlabWebhookSignatureVerifier(staticSource(whsec.getBytes(StandardCharsets.UTF_8)), CLOCK);
+        return newVerifier(WHSEC_SECRET);
     }
 
     private static GitlabWebhookSignatureVerifier newVerifierWithSource(WebhookSecretSource source) {
