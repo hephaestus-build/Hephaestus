@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider.ProviderType;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
 import de.tum.cit.aet.hephaestus.core.auth.spi.IdentityProviderCatalog;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.ArrayList;
@@ -130,21 +131,8 @@ public class IdentityProviderDiscoveryController {
         }
     }
 
-    /** The OAuth instance origin (scheme + host[:port]) derived from the authorization endpoint. */
+    /** The {@link ScmOrigin} of the authorization endpoint, so clients compare instances as plain strings. */
     static String baseUrlOf(ClientRegistration reg) {
-        String authorizationUri = reg.getProviderDetails().getAuthorizationUri();
-        if (authorizationUri == null) {
-            return "";
-        }
-        try {
-            java.net.URI uri = new java.net.URI(authorizationUri);
-            if (uri.getScheme() == null || uri.getHost() == null) {
-                return "";
-            }
-            String origin = uri.getScheme() + "://" + uri.getHost();
-            return uri.getPort() == -1 ? origin : origin + ":" + uri.getPort();
-        } catch (java.net.URISyntaxException e) {
-            return "";
-        }
+        return ScmOrigin.of(reg.getProviderDetails().getAuthorizationUri()).orElse("");
     }
 }

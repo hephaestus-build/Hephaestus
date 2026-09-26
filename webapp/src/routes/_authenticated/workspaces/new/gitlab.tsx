@@ -18,6 +18,7 @@ import { workspaceDetailsSchema } from "@/components/create-workspace/schemas";
 import { SelectGroupStep } from "@/components/create-workspace/SelectGroupStep";
 import {
 	createInitialWizardState,
+	isForCurrentToken,
 	WizardContext,
 	type WizardStep,
 	wizardReducer,
@@ -26,7 +27,7 @@ import { WizardStepIndicator } from "@/components/create-workspace/WizardStepInd
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { isRecord } from "@/lib/is-record";
+import { problemDetailOf } from "@/lib/problem-detail";
 import { firstNonBlank, hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 
@@ -37,7 +38,7 @@ export const Route = createFileRoute("/_authenticated/workspaces/new/gitlab")({
 const STEP_META: Record<WizardStep, { title: string; description: string }> = {
 	1: {
 		title: "Connect to GitLab",
-		description: "Enter your GitLab instance URL and access token.",
+		description: "Enter an access token for the GitLab instance you'll monitor.",
 	},
 	2: { title: "Select a Group", description: "Choose the GitLab group to monitor." },
 	3: { title: "Configure Workspace", description: "Set a name and URL slug for your workspace." },
@@ -46,7 +47,6 @@ const STEP_META: Record<WizardStep, { title: string; description: string }> = {
 interface GitLabProvider {
 	registrationId: string;
 	displayName: string;
-	baseUrl: string;
 }
 
 function BackToProviders() {
@@ -62,17 +62,25 @@ function BackToProviders() {
 }
 
 /**
- * Shown when no GitLab sign-in is configured for this instance, so there is nothing to link. An admin
- * must add a GitLab login provider first (Instance admin → Login providers).
+ * Shown when no GitLab sign-in is configured for the instance workspaces are created on, so there is
+ * nothing to link. An admin must add a GitLab login provider for it first (Instance admin → Login
+ * providers).
  */
-function NoGitLabProviderNotice({ isAppAdmin }: { isAppAdmin: boolean }) {
+function NoGitLabProviderNotice({
+	serverUrl,
+	isAppAdmin,
+}: {
+	serverUrl: string;
+	isAppAdmin: boolean;
+}) {
 	return (
 		<div className="mx-auto w-full max-w-2xl">
 			<BackToProviders />
 			<div className="space-y-4">
 				<h1 className="text-2xl font-semibold tracking-tight">GitLab sign-in isn’t configured</h1>
 				<p className="text-muted-foreground">
-					This instance has no GitLab login provider, so a GitLab account can’t be linked yet.
+					GitLab workspaces are created on {serverUrl}, which has no GitLab login provider, so a
+					GitLab account there can’t be linked yet.
 					{isAppAdmin
 						? " Add one to enable GitLab sign-in."
 						: " Ask an instance admin to add one (Instance admin → Login providers)."}
@@ -88,24 +96,16 @@ function NoGitLabProviderNotice({ isAppAdmin }: { isAppAdmin: boolean }) {
 }
 
 /**
- * Prompts the user to link a GitLab account via re-login linking: a top-level redirect to the GitLab
- * identity provider that attaches the identity to the current account. When more than one GitLab
- * instance is configured, the user picks which instance to link (no arbitrary default).
+ * Prompts the user to link their GitLab account on the instance workspaces are created on, via re-login
+ * linking: a top-level redirect to that instance that attaches the identity to the current account.
  */
-function linkLabel(displayName: string, linked: boolean, multiple: boolean) {
-	if (linked) {
-		return `${displayName} — already linked`;
-	}
-	return multiple ? `Link ${displayName}` : "Link GitLab account";
-}
-
 function GitLabLinkPrompt({
+	serverUrl,
 	providers,
-	linkedServerUrls,
 	linkAccount,
 }: {
+	serverUrl: string;
 	providers: GitLabProvider[];
-	linkedServerUrls: Set<string>;
 	linkAccount: (alias: string) => void;
 }) {
 	const multiple = providers.length > 1;
@@ -116,25 +116,19 @@ function GitLabLinkPrompt({
 				<div className="space-y-1.5">
 					<h1 className="text-2xl font-semibold tracking-tight">Link your GitLab account</h1>
 					<p className="text-muted-foreground">
-						{multiple
-							? "To create a GitLab workspace, link the GitLab instance you'll monitor. You'll be redirected to sign in; the identity is then attached to your current account."
-							: "To create a GitLab workspace, link your GitLab account first. You'll be redirected to GitLab to sign in; the identity is then attached to your current account."}
+						To create a GitLab workspace, link your GitLab account on {serverUrl} first. You’ll be
+						redirected to GitLab to sign in; the identity is then attached to your current account.
 					</p>
 				</div>
 				<div className="flex flex-col items-start gap-2">
-					{providers.map((provider) => {
-						const linked = linkedServerUrls.has(provider.baseUrl);
-						return (
-							<Button
-								key={provider.registrationId}
-								variant={linked ? "outline" : "default"}
-								disabled={linked}
-								onClick={() => linkAccount(provider.registrationId)}
-							>
-								{linkLabel(provider.displayName, linked, multiple)}
-							</Button>
-						);
-					})}
+					{providers.map((provider) => (
+						<Button
+							key={provider.registrationId}
+							onClick={() => linkAccount(provider.registrationId)}
+						>
+							{multiple ? `Link ${provider.displayName}` : "Link GitLab account"}
+						</Button>
+					))}
 				</div>
 			</div>
 		</div>
@@ -160,7 +154,7 @@ function StepHeading({ children }: { children: ReactNode }) {
 }
 
 function GitLabWizardPage() {
-	const { hasGitLabIdentity, linkAccount, linkedProviders, isAppAdmin } = useAuth();
+	const { linkAccount, linkedProviders, isAppAdmin } = useAuth();
 
 	const {
 		data: providers,
@@ -171,42 +165,77 @@ function GitLabWizardPage() {
 		staleTime: 5 * 60 * 1000,
 	});
 
-	// The configured GitLab sign-in options (one per instance). Used to gate + drive instance-scoped
-	// account linking — never an arbitrary "first gitlab-ish" provider.
-	const { data: identityProviders } = useQuery({
+	const {
+		data: identityProviders,
+		isLoading: identityProvidersLoading,
+		isError: identityProvidersError,
+	} = useQuery({
 		...listIdentityProvidersOptions(),
 		staleTime: 5 * 60 * 1000,
 	});
-	const gitlabProviders: GitLabProvider[] = (identityProviders ?? []).flatMap((p) => {
-		if (p.providerType !== "GITLAB" || !hasText(p.registrationId)) {
-			return [];
-		}
-		return [
-			{
-				registrationId: p.registrationId,
-				displayName: firstNonBlank(p.displayName) ?? p.registrationId,
-				baseUrl: p.baseUrl ?? "",
-			},
-		];
-	});
-	const linkedGitlabServerUrls = new Set(
-		linkedProviders.flatMap((p) =>
-			p.type === "GITLAB" && hasText(p.serverUrl) ? [p.serverUrl] : [],
-		),
-	);
 
-	const gitlabEnabled = Boolean(providers?.gitlab);
-	const defaultServerUrl = providers?.gitlab?.defaultServerUrl;
+	if (providersLoading || identityProvidersLoading) {
+		return (
+			<div className="flex justify-center py-16">
+				<Spinner />
+			</div>
+		);
+	}
+	if (providersError || identityProvidersError) {
+		return (
+			<div className="mx-auto w-full max-w-2xl">
+				<Alert variant="destructive">
+					<OctagonXIcon aria-hidden="true" />
+					<AlertTitle>Unable to load</AlertTitle>
+					<AlertDescription>
+						Could not check feature availability. Please refresh the page.
+					</AlertDescription>
+				</Alert>
+			</div>
+		);
+	}
+	const serverUrl = providers?.gitlab?.defaultServerUrl;
+	if (!hasText(serverUrl)) {
+		return <Navigate to="/workspaces/new" />;
+	}
 
-	const [state, dispatch] = useReducer(wizardReducer, defaultServerUrl, (url) =>
-		createInitialWizardState(url),
+	// Workspaces are created on the one GitLab instance the server syncs, and owned by the account's
+	// identity there. The server sends every URL here as an origin, so plain comparison matches.
+	const instanceLogins: GitLabProvider[] = (identityProviders ?? []).flatMap((p) =>
+		p.providerType === "GITLAB" && hasText(p.registrationId) && p.baseUrl === serverUrl
+			? [
+					{
+						registrationId: p.registrationId,
+						displayName: firstNonBlank(p.displayName) ?? p.registrationId,
+					},
+				]
+			: [],
 	);
+	const linked = linkedProviders.some((p) => p.type === "GITLAB" && p.serverUrl === serverUrl);
+
+	if (!linked && instanceLogins.length === 0) {
+		return <NoGitLabProviderNotice serverUrl={serverUrl} isAppAdmin={isAppAdmin} />;
+	}
+	if (!linked) {
+		return (
+			<GitLabLinkPrompt
+				serverUrl={serverUrl}
+				providers={instanceLogins}
+				linkAccount={linkAccount}
+			/>
+		);
+	}
+
+	return <GitLabWizard serverUrl={serverUrl} />;
+}
+
+/** Mounted once the server has named its GitLab instance, so no request goes anywhere else. */
+function GitLabWizard({ serverUrl }: { serverUrl: string }) {
+	const [state, dispatch] = useReducer(wizardReducer, serverUrl, createInitialWizardState);
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const stepAnnouncement = `Step ${state.step} of 3: ${STEP_META[state.step].title}`;
 
-	// No `onError`: the alert is rendered off `listGroups.isError` beside step 1's server URL and
-	// token, the two fields a reader can act on.
 	const listGroups = useMutation(listGitLabGroupsMutation());
 
 	const createWorkspace = useMutation({
@@ -223,10 +252,7 @@ function GitLabWizardPage() {
 			});
 		},
 		onError: (error) => {
-			const rawError = isRecord(error) ? error.error : undefined;
-			toast.error(
-				typeof rawError === "string" ? rawError : "Failed to create workspace. Please try again.",
-			);
+			toast.error(problemDetailOf(error, "Failed to create workspace. Please try again."));
 		},
 		onSettled: () => {
 			void queryClient.invalidateQueries({ queryKey: listWorkspacesQueryKey() });
@@ -252,12 +278,12 @@ function GitLabWizardPage() {
 				{
 					body: {
 						personalAccessToken: state.personalAccessToken,
-						serverUrl: state.serverUrl || undefined,
+						serverUrl: state.serverUrl,
 					},
 				},
 				{
-					onSuccess: (data) => {
-						dispatch({ type: "ADVANCE_TO_GROUPS", groups: data });
+					onSuccess: (groups, { body }) => {
+						dispatch({ type: "ADVANCE_TO_GROUPS", groups, request: body });
 					},
 				},
 			);
@@ -286,7 +312,7 @@ function GitLabWizardPage() {
 				accountType: "ORG",
 				kind: "GITLAB",
 				personalAccessToken: state.personalAccessToken,
-				serverUrl: state.serverUrl || undefined,
+				serverUrl: state.serverUrl,
 			},
 		});
 	};
@@ -295,44 +321,6 @@ function GitLabWizardPage() {
 	const wizardContextValue = { state, dispatch };
 	const isTransitioning = listGroups.isPending;
 	const isCreating = createWorkspace.isPending;
-	if (providersLoading) {
-		return (
-			<div className="flex justify-center py-16">
-				<Spinner />
-			</div>
-		);
-	}
-	if (providersError) {
-		return (
-			<div className="mx-auto w-full max-w-2xl">
-				<Alert variant="destructive">
-					<OctagonXIcon aria-hidden="true" />
-					<AlertTitle>Unable to load</AlertTitle>
-					<AlertDescription>
-						Could not check feature availability. Please refresh the page.
-					</AlertDescription>
-				</Alert>
-			</div>
-		);
-	}
-	if (!gitlabEnabled) {
-		return <Navigate to="/workspaces/new" />;
-	}
-
-	if (gitlabProviders.length === 0) {
-		return <NoGitLabProviderNotice isAppAdmin={isAppAdmin} />;
-	}
-
-	if (!hasGitLabIdentity) {
-		return (
-			<GitLabLinkPrompt
-				providers={gitlabProviders}
-				linkedServerUrls={linkedGitlabServerUrls}
-				linkAccount={linkAccount}
-			/>
-		);
-	}
-
 	return (
 		<div className="mx-auto w-full max-w-2xl">
 			{/* Visually hidden live region for screen reader step announcements */}
@@ -358,21 +346,26 @@ function GitLabWizardPage() {
 
 			<div className="mt-6" role="region" aria-labelledby="wizard-heading">
 				<WizardContext.Provider value={wizardContextValue}>
-					{state.step === 1 && <ConnectGitLabStep instances={gitlabProviders} />}
+					{state.step === 1 && <ConnectGitLabStep />}
 					{state.step === 2 && <SelectGroupStep />}
 					{state.step === 3 && <ConfigureWorkspaceStep />}
 				</WizardContext.Provider>
 			</div>
 
-			{listGroups.isError && state.step === 1 && (
-				<Alert variant="destructive" className="mt-4">
-					<OctagonXIcon aria-hidden="true" />
-					<AlertTitle>Failed to load groups</AlertTitle>
-					<AlertDescription>
-						Could not load groups. Check your connection, server URL, and token permissions.
-					</AlertDescription>
-				</Alert>
-			)}
+			{listGroups.isError &&
+				state.step === 1 &&
+				isForCurrentToken(state, listGroups.variables.body) && (
+					<Alert variant="destructive" className="mt-4">
+						<OctagonXIcon aria-hidden="true" />
+						<AlertTitle>Failed to load groups</AlertTitle>
+						<AlertDescription>
+							{problemDetailOf(
+								listGroups.error,
+								"GitLab did not return your groups. Try again in a moment.",
+							)}
+						</AlertDescription>
+					</Alert>
+				)}
 
 			<div className="mt-6 flex justify-end gap-2">
 				{state.step > 1 && (

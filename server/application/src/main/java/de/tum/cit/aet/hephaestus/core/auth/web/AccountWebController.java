@@ -55,7 +55,6 @@ public class AccountWebController {
             @Nullable String profileUrl,
             @Nullable String identityProvider,
             @Nullable String gitProviderId,
-            boolean hasGitLabIdentity,
             // Every SCM instance the user has an active identity on, so the workspace-creation wizard can
             // gate on the *target instance* rather than merely "has any GitLab identity".
             List<LinkedProviderDTO> linkedProviders,
@@ -89,7 +88,6 @@ public class AccountWebController {
                         gitProviderRegistry.providerServerUrl(il.getProviderId())))
                 .distinct()
                 .toList();
-        boolean hasGitLab = linkedProviders.stream().anyMatch(p -> "GITLAB".equals(p.type()));
         return ResponseEntity.ok(new CurrentUserViewDTO(
                 Objects.requireNonNull(account.getId()),
                 account.getDisplayName(),
@@ -101,7 +99,6 @@ public class AccountWebController {
                 primary != null ? primary.getProfileUrl() : null,
                 primary != null ? gitProviderRegistry.providerTypeName(primary.getProviderId()) : null,
                 primary != null ? primary.getSubject() : null,
-                hasGitLab,
                 linkedProviders,
                 CurrentAccount.roles(),
                 CurrentAccount.accessTokenExpiresAt()));

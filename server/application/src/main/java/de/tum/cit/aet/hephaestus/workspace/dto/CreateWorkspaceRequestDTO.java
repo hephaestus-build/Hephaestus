@@ -70,7 +70,7 @@ public record CreateWorkspaceRequestDTO(
 
         @Schema(
                 description =
-                        "Custom server URL for self-hosted GitLab instances. Must use HTTPS. Defaults to https://gitlab.com if not specified.",
+                        "For GitLab, the default GitLab instance this server reads from, which is also used when omitted; any other instance is refused.",
                 example = "https://gitlab.example.com")
         @Nullable
         @ScmServerUrl

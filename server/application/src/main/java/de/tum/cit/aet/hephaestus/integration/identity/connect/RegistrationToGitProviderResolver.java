@@ -1,13 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.identity.connect;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -52,9 +51,15 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public long resolveProviderId(String providerTypeName, String baseUrl) {
         IdentityProviderType type = IdentityProviderType.valueOf(providerTypeName);
-        String origin = originOf(baseUrl);
+        String origin = ScmOrigin.of(baseUrl)
+                .orElseThrow(() -> new IllegalStateException("login provider baseUrl has no origin: " + baseUrl));
+        // Rows recorded before origins were canonical may spell this one differently; reuse them.
         return Objects.requireNonNull(gitProviderRepository
                 .findByTypeAndServerUrl(type, origin)
+                .or(() -> gitProviderRepository.findAllByType(type).stream()
+                        .filter(provider ->
+                                ScmOrigin.of(provider.getServerUrl()).equals(Optional.of(origin)))
+                        .findFirst())
                 .orElseGet(() -> gitProviderRepository.save(new IdentityProvider(type, origin)))
                 .getId());
     }
@@ -79,7 +84,7 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
         }
         return gitProviderRepository
                 .findById(gitProviderId)
-                .map(IdentityProvider::getServerUrl)
+                .map(provider -> ScmOrigin.of(provider.getServerUrl()).orElse(provider.getServerUrl()))
                 .orElse(null);
     }
 
@@ -95,22 +100,5 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
         return userRepository
                 .findByNativeIdAndProviderId(nativeId, gitProviderId)
                 .map(User::getId);
-    }
-
-    /**
-     * The scheme + host (+ explicit non-default port) of the base URL — the canonical server URL used
-     * to key the {@code git_provider} row (e.g. {@code https://github.com}, {@code https://gitlab.lrz.de}).
-     */
-    private static String originOf(String baseUrl) {
-        try {
-            URI uri = new URI(baseUrl);
-            if (uri.getScheme() == null || uri.getHost() == null) {
-                throw new IllegalStateException("login provider baseUrl has no scheme/host: " + baseUrl);
-            }
-            String origin = uri.getScheme() + "://" + uri.getHost();
-            return uri.getPort() == -1 ? origin : origin + ":" + uri.getPort();
-        } catch (URISyntaxException e) {
-            throw new IllegalStateException("malformed login provider baseUrl: " + baseUrl, e);
-        }
     }
 }

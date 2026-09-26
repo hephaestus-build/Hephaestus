@@ -1252,7 +1252,7 @@ export type CreateWorkspaceRequest = {
    */
   personalAccessToken?: string;
   /**
-   * Custom server URL for self-hosted GitLab instances. Must use HTTPS. Defaults to https://gitlab.com if not specified.
+   * For GitLab, the default GitLab instance this server reads from, which is also used when omitted; any other instance is refused.
    */
   serverUrl?: string;
   /**
@@ -1370,7 +1370,6 @@ export type CurrentUserView = {
   avatarUrl?: string;
   displayName?: string;
   gitProviderId?: string;
-  hasGitLabIdentity?: boolean;
   id?: number;
   identityProvider?: string;
   linkedProviders?: Array<LinkedProvider>;
@@ -1760,7 +1759,7 @@ export type GitLabGroup = {
  */
 export type GitLabPreflightRequest = {
   /**
-   * GitLab group full path, used as fallback for group/project tokens that cannot access /api/v4/user
+   * GitLab group full path, used to validate the token against the group when /api/v4/user refuses it
    */
   groupFullPath?: string;
   /**
@@ -1768,7 +1767,7 @@ export type GitLabPreflightRequest = {
    */
   personalAccessToken: string;
   /**
-   * GitLab server URL. Defaults to https://gitlab.com if not specified.
+   * The default GitLab instance this server reads from, which is also used when omitted; any other instance is refused.
    */
   serverUrl?: string;
 };
@@ -1800,7 +1799,7 @@ export type GitLabPreflightResponse = {
  */
 export type GitLabProvider = {
   /**
-   * Default GitLab server URL
+   * Origin of the one GitLab instance workspaces are created on
    */
   defaultServerUrl?: string;
 };
@@ -2002,8 +2001,8 @@ export type InAppFeedback = {
  * Inbound payload for <code>POST /workspaces/{workspaceSlug</code>/connections}.
  *
  *  <p><code>userInput</code> is intentionally a free-form map so per-kind ConnectionStrategy
- *  implementations can dictate their own field schema (e.g. GitLab needs <code>pat</code> +
- *  <code>group_id</code>; GitHub needs nothing because the install URL is server-configured).
+ *  implementations can dictate their own field schema (e.g. Outline needs <code>server_url</code>; GitHub
+ *  needs nothing because the install URL is server-configured).
  */
 export type InitiateConnectionRequest = {
   kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';

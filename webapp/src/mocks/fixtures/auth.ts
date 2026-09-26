@@ -27,7 +27,6 @@ export const currentUser: CurrentUserView = {
 	// Uppercase to match the server, which serializes GitProviderType.name() (GITHUB/GITLAB).
 	identityProvider: "GITHUB",
 	gitProviderId: "583231",
-	hasGitLabIdentity: true,
 	linkedProviders: [
 		{ type: "GITHUB", serverUrl: "https://github.com" },
 		{ type: "GITLAB", serverUrl: "https://gitlab.lrz.de" },

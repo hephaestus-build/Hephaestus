@@ -146,23 +146,23 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
 
         Connection result = service.createInlineConnection(
                 workspaceId,
-                IntegrationKind.GITLAB,
+                IntegrationKind.OUTLINE,
                 "200",
-                new BearerToken("glpat-test", null),
-                Map.of("server_url", "https://gitlab.example.com"),
+                new BearerToken("ol-test", null),
+                Map.of("server_url", "https://wiki.example.com"),
                 "alice");
 
         assertThat(result.getId()).isEqualTo(99L);
-        assertThat(result.getKind()).isEqualTo(IntegrationKind.GITLAB);
+        assertThat(result.getKind()).isEqualTo(IntegrationKind.OUTLINE);
         assertThat(result.getInstanceKey()).isEqualTo("200");
-        assertThat(result.getConfig()).isInstanceOf(ConnectionConfig.GitLabConfig.class);
-        ConnectionConfig.GitLabConfig cfg = (ConnectionConfig.GitLabConfig) result.getConfig();
-        assertThat(cfg.serverUrl()).isEqualTo("https://gitlab.example.com");
-        assertThat(cfg.gitlabGroupId()).isEqualTo(200L);
+        assertThat(result.getConfig())
+                .isInstanceOfSatisfying(
+                        ConnectionConfig.OutlineConfig.class,
+                        cfg -> assertThat(cfg.serverUrl()).isEqualTo("https://wiki.example.com"));
         assertThat(result.getCredentialsAlg()).isEqualTo(CredentialBundleConverter.ALGORITHM_TAG);
         assertThat(result.getCredentialsEncrypted()).isNotNull();
         // Round-trip the freshly-encrypted blob to prove it's not a placeholder.
-        assertThat(result.credentials(credentialConverter)).contains(new BearerToken("glpat-test", null));
+        assertThat(result.credentials(credentialConverter)).contains(new BearerToken("ol-test", null));
 
         ArgumentCaptor<TransitionRequest> req = ArgumentCaptor.forClass(TransitionRequest.class);
         Mockito.verify(connectionService).transition(any(Connection.class), req.capture());
@@ -176,7 +176,7 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
     void createInlineConnection_missingWorkspace_throws() {
         when(workspaceRepository.findById(99L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.createInlineConnection(
-                        99L, IntegrationKind.GITLAB, "x", new BearerToken("t", null), Map.of(), "alice"))
+                        99L, IntegrationKind.OUTLINE, "x", new BearerToken("t", null), Map.of(), "alice"))
                 .isInstanceOf(EntityNotFoundException.class);
     }
 

@@ -1,22 +1,12 @@
 import { z } from "zod";
 
-/** Step 1: GitLab connection details. */
+/** Step 1: the GitLab access token. */
 export const connectionSchema = z.object({
-	serverUrl: z
-		.string()
-		.transform((v) => v.trim())
-		.pipe(
-			z.union([
-				z.literal(""),
-				z.url("Must be a valid URL").startsWith("https://", "Must use HTTPS"),
-			]),
-		),
 	personalAccessToken: z
 		.string()
 		.transform((v) => v.trim())
 		.pipe(z.string().min(1, "Personal access token is required")),
 });
-export type ConnectionFormData = z.infer<typeof connectionSchema>;
 
 /** Step 3: Workspace display name and slug. */
 export const workspaceDetailsSchema = z.object({

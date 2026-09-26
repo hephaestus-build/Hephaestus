@@ -31,7 +31,6 @@ export interface AuthContextType {
 	getUserId: () => string | undefined;
 	getGitProviderId: () => string | undefined;
 	getUserProfilePictureUrl: () => string;
-	hasGitLabIdentity: boolean;
 	linkedProviders: { type: string; serverUrl?: string }[];
 }
 
@@ -115,7 +114,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		getUserId,
 		getGitProviderId,
 		getUserProfilePictureUrl,
-		hasGitLabIdentity: viewed ? false : (user?.hasGitLabIdentity ?? false),
 		linkedProviders: viewed ? [] : (userProfile?.linkedProviders ?? []),
 	};
 

@@ -176,26 +176,14 @@ public class ConnectionAdminService {
 
     /**
      * Per-kind config construction for inline-flow Connections. Only kinds with an
-     * {@code AcceptInline} initiation are handled here — others should never reach
-     * this branch because their strategies return {@code RedirectToVendor}.
+     * {@code AcceptInline} initiation are handled here: GitHub redirects to its App install, and a
+     * GitLab connection is provisioned with its workspace, whose creation checks the instance.
      */
     private ConnectionConfig buildConfigForInlineKind(
             IntegrationKind kind, Map<String, String> userInput, @Nullable String instanceKey) {
         Set<String> enabledStreams = new HashSet<>();
         return switch (kind) {
-            case GITLAB -> {
-                String serverUrl = userInput.getOrDefault("server_url", "https://gitlab.com");
-                Long groupId = parseGroupId(instanceKey);
-                yield new ConnectionConfig.GitLabConfig(
-                        serverUrl,
-                        groupId,
-                        /* gitlabWebhookId */ null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        enabledStreams);
-            }
-            case GITHUB ->
-                new ConnectionConfig.GitHubPatConfig(
-                        /* orgLogin */ null, userInput.getOrDefault("server_url", null), enabledStreams);
+            case GITHUB, GITLAB -> throw new IllegalStateException(kind + " is never connected inline");
             case SLACK ->
                 new ConnectionConfig.SlackConfig(
                         instanceKey,
@@ -211,14 +199,5 @@ public class ConnectionAdminService {
                         /* webhookSecret */ null,
                         enabledStreams);
         };
-    }
-
-    private static @Nullable Long parseGroupId(@Nullable String instanceKey) {
-        if (instanceKey == null || instanceKey.isBlank()) return null;
-        try {
-            return Long.parseLong(instanceKey.trim());
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 }

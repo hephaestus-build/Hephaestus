@@ -226,7 +226,7 @@ GitLab login, GitLab workspaces, webhook auto-registration, and practice review 
 | `GITLAB_OAUTH_CLIENT_SECRET` | GitLab OAuth application client secret |
 | `GITLAB_OAUTH_BASE_URL` | GitLab instance the login button federates to. Defaults to `https://gitlab.com`; set to your self-hosted instance (e.g. `https://gitlab.lrz.de`) |
 | `GITLAB_OAUTH_DISPLAY_NAME` | Login-button label (defaults to `GitLab`; e.g. `gitlab.lrz.de`) |
-| `GITLAB_DEFAULT_SERVER_URL` | GitLab instance for workspace creation, sync and merge request checkouts (not login) when a workspace's GitLab connection names none. Falls back to `GITLAB_OAUTH_BASE_URL`. Give the application server and every worker the same value |
+| `GITLAB_DEFAULT_SERVER_URL` | The one GitLab instance workspaces are created on, synced from and checked out from (not login). Falls back to `GITLAB_OAUTH_BASE_URL`. Give the application server and every worker the same value |
 | `GITLAB_ENABLED` | Enables GitLab on the application server and every worker; the webhook receiver does not read it. A worker without it cannot check out a merge request: each GitLab review it claims fails preparation with `SCM Git preparation is unavailable` and ends with insufficient evidence |
 | `GITLAB_WORKSPACE_CREATION` | Enables GitLab workspace creation in the UI and API |
 | `WEBHOOK_SECRET` | Shared secret used for GitLab webhook verification and auto-registration. One instance-wide value: GitHub webhooks are verified against the same secret |
@@ -238,6 +238,8 @@ The login provider is instance-agnostic: gitlab.com works out of the box, and an
 - Confidential client: enabled
 
 This env-seeds **one** default GitLab login provider (registration id `gitlab`). Additional GitLab instances are added at runtime by an instance admin under **Instance admin → Login providers** — no redeploy.
+
+GitLab workspaces are created only on `GITLAB_DEFAULT_SERVER_URL`. Hephaestus reads every GitLab project, member and event from that one instance, so it refuses any other server before an access token is validated, used to list groups, or stored. A login provider for another GitLab instance lets people sign in and link that account, but cannot host a workspace. The workspace owner is the creator's GitLab account on the default instance, so creating one needs a GitLab login provider for that instance and a creator who has linked it.
 
 The auto-registered group webhook subscribes to merge request, issue, note, push, tag push, pipeline,
 milestone, member, subgroup and project events. A hook registered by an earlier release does not gain

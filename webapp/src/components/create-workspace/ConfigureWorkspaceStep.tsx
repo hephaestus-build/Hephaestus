@@ -133,7 +133,7 @@ export function ConfigureWorkspaceStep() {
 				</h2>
 				<dl className="space-y-1.5" aria-labelledby="workspace-summary-heading">
 					<SummaryRow label="Provider" value="GitLab" />
-					<SummaryRow label="Instance" value={state.serverUrl || "https://gitlab.com"} />
+					<SummaryRow label="Instance" value={state.serverUrl} />
 					<SummaryRow label="Group" value={state.selectedGroup?.fullPath ?? "—"} />
 					<SummaryRow label="Token owner" value={state.preflightResult?.username ?? "—"} />
 				</dl>

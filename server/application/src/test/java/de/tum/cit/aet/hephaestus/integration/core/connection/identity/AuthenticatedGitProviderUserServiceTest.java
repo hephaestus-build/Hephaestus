@@ -120,7 +120,7 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void ensureGitLab_succeeds_forGitLabLoginOnlyUser() {
+    void shouldProvisionGitLabActorWhenLinkedOnTheRequestedInstance() {
         IdentityLinkView gitlab = view(100L, GITLAB_PROVIDER_ID, "18024", "gitlabuser");
         when(accountIdentityQuery.activeLinksForAccount(ACCOUNT_ID)).thenReturn(List.of(gitlab));
         IdentityProvider gl = gitProvider(GITLAB_PROVIDER_ID, IdentityProviderType.GITLAB, "https://gitlab.lrz.de");
@@ -131,22 +131,27 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(provisioned));
         lenient().when(userRepository.findById(555L)).thenReturn(Optional.of(provisioned));
 
-        service.ensureCurrentGitLabUserExists();
-
+        assertThat(service.resolveOrProvisionCurrentGitLabUser("https://gitlab.lrz.de"))
+                .isSameAs(provisioned);
         verify(accountIdentityQuery).linkExternalActor(100L, 555L);
     }
 
     @Test
-    void ensureGitLab_throwsConflict_forGitHubOnlyUser() {
+    void shouldRefuseGitLabOwnerWhenOnlyGitHubAndAnotherGitLabInstanceAreLinked() {
+        long otherGitLabId = 11L;
         IdentityLinkView github = view(200L, GITHUB_PROVIDER_ID, "999", "ghuser");
-        when(accountIdentityQuery.activeLinksForAccount(ACCOUNT_ID)).thenReturn(List.of(github));
-        IdentityProvider gh = gitProvider(GITHUB_PROVIDER_ID, IdentityProviderType.GITHUB, "https://github.com");
-        when(gitProviderRepository.findById(GITHUB_PROVIDER_ID)).thenReturn(Optional.of(gh));
+        IdentityLinkView otherGitLab = view(300L, otherGitLabId, "18024", "gitlabuser");
+        when(accountIdentityQuery.activeLinksForAccount(ACCOUNT_ID)).thenReturn(List.of(github, otherGitLab));
+        when(gitProviderRepository.findById(GITHUB_PROVIDER_ID))
+                .thenReturn(Optional.of(
+                        gitProvider(GITHUB_PROVIDER_ID, IdentityProviderType.GITHUB, "https://github.com")));
+        when(gitProviderRepository.findById(otherGitLabId))
+                .thenReturn(Optional.of(gitProvider(otherGitLabId, IdentityProviderType.GITLAB, "https://gitlab.com")));
 
-        assertThatThrownBy(() -> service.ensureCurrentGitLabUserExists())
-                .isInstanceOf(ResponseStatusException.class)
-                .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
-                        .isEqualTo(HttpStatus.CONFLICT));
+        assertThatThrownBy(() -> service.resolveOrProvisionCurrentGitLabUser("https://gitlab.lrz.de"))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
 
         verify(userRepository, never())
                 .upsertUser(
@@ -160,6 +165,28 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
                         any(),
                         any(),
                         any());
+        verify(accountIdentityQuery, never()).linkExternalActor(anyLong(), anyLong());
+    }
+
+    @Test
+    void shouldRefuseToPickAnOwnerWhenTwoLinksNameTheSameInstance() {
+        long respelledId = 12L;
+        IdentityLinkView first = view(100L, GITLAB_PROVIDER_ID, "18024", "gitlabuser");
+        IdentityLinkView second = view(101L, respelledId, "99", "other-user");
+        when(accountIdentityQuery.activeLinksForAccount(ACCOUNT_ID)).thenReturn(List.of(first, second));
+        when(gitProviderRepository.findById(GITLAB_PROVIDER_ID))
+                .thenReturn(Optional.of(
+                        gitProvider(GITLAB_PROVIDER_ID, IdentityProviderType.GITLAB, "https://gitlab.lrz.de")));
+        when(gitProviderRepository.findById(respelledId))
+                .thenReturn(Optional.of(
+                        gitProvider(respelledId, IdentityProviderType.GITLAB, "HTTPS://GitLab.LRZ.de:443")));
+
+        assertThatThrownBy(() -> service.resolveOrProvisionCurrentGitLabUser("https://gitlab.lrz.de"))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+        verify(accountIdentityQuery, never()).linkExternalActor(anyLong(), anyLong());
+        verify(userRepository, never()).acquireLoginLock(anyString(), anyLong());
     }
 
     @Test

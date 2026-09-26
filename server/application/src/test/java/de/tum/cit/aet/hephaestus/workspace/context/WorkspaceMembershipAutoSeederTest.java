@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -22,14 +23,17 @@ class WorkspaceMembershipAutoSeederTest extends BaseUnitTest {
     @Mock
     private WorkspaceMembershipService membershipService;
 
+    @Mock
+    private ConnectionService connectionService;
+
     @Test
     void shouldNotInspectOrModifyMembershipsWhenDisabled() {
         WorkspaceMembershipAutoSeeder seeder =
-                new WorkspaceMembershipAutoSeeder(membershipRepository, membershipService, false);
+                new WorkspaceMembershipAutoSeeder(membershipRepository, membershipService, connectionService, false);
 
         assertThat(seeder.seedFirstUserWhenEmpty(TestEntities.workspace(42L), List.of(new User())))
                 .isEmpty();
-        verifyNoInteractions(membershipRepository, membershipService);
+        verifyNoInteractions(membershipRepository, membershipService, connectionService);
     }
 
     @Test
@@ -37,7 +41,7 @@ class WorkspaceMembershipAutoSeederTest extends BaseUnitTest {
         Workspace workspace = TestEntities.workspace(42L);
         when(membershipRepository.countByWorkspace_Id(42L)).thenReturn(1L);
         WorkspaceMembershipAutoSeeder seeder =
-                new WorkspaceMembershipAutoSeeder(membershipRepository, membershipService, true);
+                new WorkspaceMembershipAutoSeeder(membershipRepository, membershipService, connectionService, true);
 
         User user = new User();
         user.setId(7L);
