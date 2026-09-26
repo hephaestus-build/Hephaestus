@@ -153,29 +153,16 @@ class ApprovedFeedbackDeliveryListenerTest {
     }
 
     @Test
-    void shouldRefuseAnApprovedBodyThatDoesNotMatchItsProviderSafePreview() {
-        Fixture fixture = fixture("Exact proposal <script>changed</script>");
+    void shouldDispatchTheStoredBodyWhenItEndsInItsDisclosureFooter() {
+        Fixture fixture = fixture("Exact proposal\n\n<sub>Practice review &middot; AI-generated</sub>\n");
         allow(fixture);
+        when(fixture.dispatchService().dispatchApproved(fixture.job(), fixture.feedback()))
+                .thenReturn(PracticeFeedbackDispatchService.Result.sent("provider-id"));
 
         fixture.listener().deliver(event(fixture.feedback()));
 
         verify(fixture.feedbackRepository())
-                .markApprovedSuppressed(
-                        7L, fixture.feedback().getId(), FeedbackSuppressionReason.APPROVAL_STALE.name());
-        verifyNoInteractions(fixture.dispatchService());
-    }
-
-    @Test
-    void shouldSuppressRatherThanPostAProposalThatSanitizesToNothing() {
-        Fixture fixture = fixture("LGTM");
-        allow(fixture);
-
-        fixture.listener().deliver(event(fixture.feedback()));
-
-        verify(fixture.feedbackRepository())
-                .markApprovedSuppressed(
-                        7L, fixture.feedback().getId(), FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE.name());
-        verifyNoInteractions(fixture.dispatchService());
+                .markApprovedDelivered(7L, fixture.feedback().getId());
     }
 
     @Test

@@ -17,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -33,6 +35,10 @@ class ApprovedFeedbackDeliveryListener {
     private final FeedbackApprovalEligibility approvalEligibility;
     private final FeedbackLedgerRecorder feedbackLedgerRecorder;
 
+    // After commit, the approving transaction's resources are still bound to the thread, so a write
+    // that joins it hits a finished transaction. Suspending them lets every dispatch and ledger write
+    // open its own short transaction and keeps the provider call outside any transaction.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void deliver(ApprovedFeedbackReadyEvent event) {
         Feedback feedback = feedbackRepository
@@ -81,16 +87,6 @@ class ApprovedFeedbackDeliveryListener {
         if (policy.target() instanceof PullRequest pullRequest
                 && feedback.getReviewedRevision() != null
                 && !feedback.getReviewedRevision().equals(pullRequest.getHeadRefOid())) {
-            stop(feedback, event.workspaceId(), FeedbackSuppressionReason.APPROVAL_STALE);
-            return;
-        }
-        String approvedBody = feedback.getBody();
-        String safeBody = PullRequestCommentPoster.sanitize(approvedBody);
-        if (safeBody.isBlank()) {
-            stop(feedback, event.workspaceId(), FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE);
-            return;
-        }
-        if (!safeBody.equals(approvedBody)) {
             stop(feedback, event.workspaceId(), FeedbackSuppressionReason.APPROVAL_STALE);
             return;
         }
