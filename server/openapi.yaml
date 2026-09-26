@@ -4384,7 +4384,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChatThreadDetail"
-          description: Thread + messages returned
+          description: "Thread, messages and the owner's votes returned"
         "404":
           description: Thread not found OR not owned by current user
       summary: Get a mentor thread with its full message history
@@ -9427,7 +9427,7 @@ components:
       - isUpvoted
     ChatThreadDetail:
       type: object
-      description: Mentor chat thread with all messages.
+      description: Mentor chat thread with all messages and the owner's votes on them.
       properties:
         createdAt:
           type: string
@@ -9441,6 +9441,10 @@ components:
             $ref: "#/components/schemas/ChatMessage"
         title:
           type: string
+        votes:
+          type: object
+          additionalProperties:
+            type: boolean
     ChatThreadSummary:
       type: object
       description: Mentor chat thread summary (no messages).

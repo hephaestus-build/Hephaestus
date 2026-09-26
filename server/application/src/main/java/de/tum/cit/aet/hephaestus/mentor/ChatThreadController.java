@@ -43,7 +43,7 @@ public class ChatThreadController {
 
     @GetMapping("/{threadId}")
     @Operation(summary = "Get a mentor thread with its full message history")
-    @ApiResponse(responseCode = "200", description = "Thread + messages returned")
+    @ApiResponse(responseCode = "200", description = "Thread, messages and the owner's votes returned")
     @ApiResponse(
             responseCode = "404",
             description = "Thread not found OR not owned by current user",
@@ -51,10 +51,7 @@ public class ChatThreadController {
     @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")
     public ResponseEntity<ChatThreadDetailDTO> getThread(
             WorkspaceContext workspaceContext, @PathVariable UUID threadId) {
-        ChatThreadService.ThreadDetail detail =
-                chatThreadService.loadOwnedThreadDetail(workspaceContext.id(), threadId);
-        return ResponseEntity.ok(
-                new ChatThreadDetailDTO(detail.id(), detail.title(), detail.createdAt(), detail.messages()));
+        return ResponseEntity.ok(chatThreadService.loadOwnedThreadDetail(workspaceContext.id(), threadId));
     }
 
     @DeleteMapping("/{threadId}")

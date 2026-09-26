@@ -32,26 +32,3 @@ function isChatMessageArray(value: unknown): value is ChatMessage[] {
 export function parseThreadMessages(messages: unknown): ChatMessage[] | undefined {
 	return isChatMessageArray(messages) ? messages : undefined;
 }
-
-const voteSchema = z.object({
-	messageId: z.uuid().optional(),
-	isUpvoted: z.boolean().optional(),
-});
-
-const votesArraySchema = z.array(voteSchema);
-
-/** Votes are decoration, so anything unreadable degrades to "no votes" and the transcript still renders. */
-export function extractVotesFromThreadDetail(
-	threadDetail: unknown,
-): { messageId?: string; isUpvoted?: boolean }[] {
-	if (threadDetail === null || typeof threadDetail !== "object") {
-		return [];
-	}
-
-	if (!("votes" in threadDetail) || !Array.isArray(threadDetail.votes)) {
-		return [];
-	}
-
-	const result = votesArraySchema.safeParse(threadDetail.votes);
-	return result.success ? result.data : [];
-}

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -11,14 +12,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Vote storage keyed by {@code message_id}. There is no workspace column on the vote table —
- * tenant isolation is enforced one layer up by {@link ChatMessageVoteService} which verifies
- * the message-thread-workspace ownership chain BEFORE any repository call. The annotation
+ * tenant isolation is enforced one layer up, where the caller's ownership of the thread in its
+ * workspace is verified BEFORE any repository call: by {@link ChatMessageVoteService}'s callers
+ * for writes, and by {@link ChatThreadService} for the thread read. The annotation
  * here documents the intentional design choice and exempts the repo from the
  * {@code MultiTenancyArchitectureTest} workspace-scoping rules.
  */
 @Repository
-@WorkspaceAgnostic("Vote table has no workspace column; ChatMessageVoteService enforces ownership upstream")
+@WorkspaceAgnostic("Vote table has no workspace column; thread ownership is enforced upstream")
 public interface ChatMessageVoteRepository extends JpaRepository<ChatMessageVote, UUID> {
+    /** Only ever called for a thread the caller has already been proven to own. */
+    List<ChatMessageVote> findByMessage_Thread_Id(UUID threadId);
+
     /**
      * Atomic upsert via Postgres {@code INSERT ... ON CONFLICT DO UPDATE}. Replaces the prior
      * read-modify-write pattern which 500'd on concurrent POSTs to the same {@code message_id}
