@@ -8,13 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 
-/**
- * Chooses the actor an account speaks through in one workspace. A workspace syncs one SCM provider
- * instance ({@link ConnectionService#findActiveProviderKind} and its adapter's {@link ScmTokenSource#serverUrl}),
- * so its reviewed work, observations and feedback name the account's actor on that instance, while the
- * account's actor on another provider or instance may still hold a membership — the one that created the
- * workspace, for example. Linking order breaks ties and decides when no member actor is on that instance.
- */
+/** Chooses the actor an account speaks through in one workspace, as {@code workspace-context.mdx} describes. */
 @Component
 public class WorkspaceActorSelector {
 

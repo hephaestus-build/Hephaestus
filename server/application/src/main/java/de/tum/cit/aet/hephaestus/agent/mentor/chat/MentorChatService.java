@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -102,11 +103,12 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         ExecutorService executor = turnExecutor.executor();
         Long actorId = CurrentScmIdentityHolder.getUserId().orElse(null);
         String actorLogin = CurrentScmIdentityHolder.getLogin().orElse(null);
+        Set<Long> accountActorIds = CurrentScmIdentityHolder.getAccountActorIds();
         try {
             executor.execute(() -> {
                 // Spring propagates authentication, not our workspace-specific SCM identity.
                 if (actorId != null && actorLogin != null) {
-                    CurrentScmIdentityHolder.set(actorId, actorLogin);
+                    CurrentScmIdentityHolder.set(actorId, actorLogin, accountActorIds);
                 }
                 try {
                     dispatchTurn(request, channel, clientHolder);
@@ -130,7 +132,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         metrics.recordStarted();
         try {
             turnExecutor.executor().execute(() -> {
-                CurrentScmIdentityHolder.set(developerId, developer.getLogin());
+                CurrentScmIdentityHolder.set(developerId, developer.getLogin(), Set.of(developerId));
                 try {
                     dispatchTurn(request, channel, new AtomicReference<>());
                 } finally {
@@ -239,8 +241,12 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             throw new LlmUnpricedUsageBlockedException(mentorFunding);
         }
         User user = userRepository.getCurrentUserElseThrow();
-        ChatThread thread =
-                persistence.ensureThread(request.workspaceId(), request.threadId(), user, request.userMessage());
+        ChatThread thread = persistence.ensureThread(
+                request.workspaceId(),
+                request.threadId(),
+                user,
+                CurrentScmIdentityHolder.getAccountActorIds(),
+                request.userMessage());
         Optional<byte[]> priorSessionBytes = chatThreadRepository.findSessionJsonl(thread.getId());
 
         UUID assistantMessageId = UUID.randomUUID();

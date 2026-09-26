@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -22,15 +22,13 @@ public class ChatThreadService {
 
     private final ChatThreadRepository chatThreadRepository;
     private final ChatMessageRepository chatMessageRepository;
-    private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
 
-    /** Thread summaries (id, title, createdAt) owned by the current user, newest first. */
+    /** Thread summaries (id, title, createdAt) owned by the current account, newest first. */
     @Transactional(readOnly = true)
     public List<ChatThreadSummaryDTO> listSummariesForCurrentUser(Long workspaceId) {
-        User user = userRepository.getCurrentUserElseThrow();
         return chatThreadRepository
-                .findSummariesByWorkspaceAndUser(workspaceId, user.getId(), Pageable.unpaged())
+                .findSummariesByWorkspaceAndUserIdIn(workspaceId, requireAccountActorIds(), Pageable.unpaged())
                 .getContent();
     }
 
@@ -45,14 +43,18 @@ public class ChatThreadService {
     }
 
     private ChatThread requireOwnedThread(Long workspaceId, UUID threadId) {
-        User user = userRepository.getCurrentUserElseThrow();
-        return requireUserThread(workspaceId, user.getId(), threadId);
+        return chatThreadRepository
+                .findByIdAndWorkspaceIdAndUserIdIn(threadId, workspaceId, requireAccountActorIds())
+                .orElseThrow(() -> new EntityNotFoundException("ChatThread", threadId.toString()));
     }
 
-    private ChatThread requireUserThread(Long workspaceId, Long userId, UUID threadId) {
-        return chatThreadRepository
-                .findByIdAndWorkspaceIdAndUserId(threadId, workspaceId, userId)
-                .orElseThrow(() -> new EntityNotFoundException("ChatThread", threadId.toString()));
+    /** A thread belongs to the account whichever of its actors in the workspace started it. */
+    private static Set<Long> requireAccountActorIds() {
+        Set<Long> actorIds = CurrentScmIdentityHolder.getAccountActorIds();
+        if (actorIds.isEmpty()) {
+            throw new EntityNotFoundException("User", "current authenticated user");
+        }
+        return actorIds;
     }
 
     /** Delete a thread (cascades to messages, votes). Owner-scoped via {@link #getOwnedThread}. */

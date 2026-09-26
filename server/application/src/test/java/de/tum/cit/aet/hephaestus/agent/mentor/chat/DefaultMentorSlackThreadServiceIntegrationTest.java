@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
@@ -97,7 +98,7 @@ class DefaultMentorSlackThreadServiceIntegrationTest extends BaseIntegrationTest
                 .extracting(thread -> thread.getUser().getId())
                 .isEqualTo(actorId);
 
-        CurrentScmIdentityHolder.set(actorId, verifiedActor.getLogin());
+        CurrentScmIdentityHolder.set(actorId, verifiedActor.getLogin(), Set.of(actorId));
         try {
             assertThat(userRepository.getCurrentUser())
                     .get()
@@ -112,7 +113,7 @@ class DefaultMentorSlackThreadServiceIntegrationTest extends BaseIntegrationTest
 
     @Test
     void shouldNotFallBackToLoginWhenPinnedActorNoLongerExists() {
-        CurrentScmIdentityHolder.set(-1L, user.getLogin());
+        CurrentScmIdentityHolder.set(-1L, user.getLogin(), Set.of(-1L));
         try {
             assertThat(userRepository.getCurrentUser()).isEmpty();
         } finally {

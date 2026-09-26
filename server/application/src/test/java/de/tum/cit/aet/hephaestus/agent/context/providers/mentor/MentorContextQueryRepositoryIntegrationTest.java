@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -77,7 +78,8 @@ class MentorContextQueryRepositoryIntegrationTest extends BaseIntegrationTest {
     }
 
     private ChatThread seedThreadWithUserMessage(String firstPrompt) {
-        ChatThread thread = persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, firstPrompt);
+        ChatThread thread =
+                persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), firstPrompt);
         persistence.persistInFlight(thread, firstPrompt, UUID.randomUUID(), null, admittedMentorConfig());
         return thread;
     }
@@ -111,7 +113,8 @@ class MentorContextQueryRepositoryIntegrationTest extends BaseIntegrationTest {
         other.setAccountLogin("other-org");
         other.setAccountType(AccountType.ORG);
         other = workspaceRepository.save(other);
-        ChatThread foreign = persistence.ensureThread(other.getId(), UUID.randomUUID(), user, "foreign prompt");
+        ChatThread foreign = persistence.ensureThread(
+                other.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "foreign prompt");
         persistence.persistInFlight(foreign, "foreign prompt", UUID.randomUUID(), null, admittedMentorConfig());
 
         List<Object[]> rows = queryRepository.findFirstUserMessagePartsByThreadIds(

@@ -18,7 +18,7 @@ import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { contributingPractices } from "@/lib/practice-standing";
 import { useSearchPatch } from "@/lib/search-params";
 import { useAuth } from "@/runtime/auth/AuthContext";
-import { resolveCurrentUser } from "@/runtime/auth/guard";
+import { resolveCurrentUser, resolveWorkspaceMembership } from "@/runtime/auth/guard";
 import { getUserViewSession } from "@/runtime/user-view/session";
 
 const ACTIVITY_PAGE_SIZE = 10;
@@ -33,10 +33,13 @@ export const Route = createFileRoute(
 	validateSearch: practiceGroupDetailSearchSchema,
 	remountDeps: ({ params }) => params,
 	beforeLoad: async ({ context, params }) => {
-		const user = await resolveCurrentUser(context.queryClient);
-		const isOwnProfile =
-			(getUserViewSession()?.login ?? user?.username)?.toLowerCase() ===
-			params.username.toLowerCase();
+		// The same answer `useWorkspaceAccess().selfLogin` gives the pages that link here.
+		const [membership, user] = await Promise.all([
+			resolveWorkspaceMembership(context.queryClient, params.workspaceSlug),
+			resolveCurrentUser(context.queryClient),
+		]);
+		const selfLogin = membership?.userLogin ?? getUserViewSession()?.login ?? user?.username;
+		const isOwnProfile = selfLogin?.toLowerCase() === params.username.toLowerCase();
 		if (!isOwnProfile) {
 			throw redirect({
 				to: "/w/$workspaceSlug/user/$username",

@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -74,16 +75,22 @@ public class MentorTurnPersistence {
         this.requiresNewTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    /** Finds or creates {@code user}'s thread; a foreign-owner read is hidden as a 404. */
+    /**
+     * Finds the account's thread or creates one for {@code user}; a foreign-owner read is hidden as a 404.
+     * A thread started through another of the account's actors moves to {@code user}, whose work this turn
+     * reads, so the feedback the turn delivers is recorded for the developer it was about.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public ChatThread ensureThread(long workspaceId, UUID threadId, User user, String firstPrompt) {
+    public ChatThread ensureThread(
+            long workspaceId, UUID threadId, User user, Set<Long> accountActorIds, String firstPrompt) {
         return chatThreadRepository
                 .findByIdAndWorkspaceId(threadId, workspaceId)
                 .map(existing -> {
                     if (existing.getUser() == null
-                            || !existing.getUser().getId().equals(user.getId())) {
+                            || !accountActorIds.contains(existing.getUser().getId())) {
                         throw new EntityNotFoundException("ChatThread", threadId.toString());
                     }
+                    existing.setUser(user);
                     return existing;
                 })
                 .orElseGet(() -> createThread(workspaceId, threadId, user, firstPrompt));

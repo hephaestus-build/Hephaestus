@@ -24,6 +24,7 @@ import { LeaderboardPage } from "@/components/leaderboard/LeaderboardPage";
 import type { LeaderboardSortType } from "@/components/leaderboard/SortFilter";
 import { Spinner } from "@/components/ui/spinner";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { asDate } from "@/lib/dates";
 import { resolveLeaderboardSchedule } from "@/lib/leaderboard-schedule";
@@ -33,7 +34,6 @@ import {
 	getLeaderboardWeekEnd,
 	getLeaderboardWeekStart,
 } from "@/lib/timeframe";
-import { useAuth } from "@/runtime/auth/AuthContext";
 
 const leaderboardSearchSchema = z.object({
 	team: z.string().default("all"),
@@ -56,7 +56,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/")({
 });
 
 function LeaderboardContainer() {
-	const { username } = useAuth();
+	const { selfLogin } = useWorkspaceAccess();
 	const { workspaceSlug, providerType, isLoading: isWorkspaceLoading } = useActiveWorkspaceSlug();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
 	const leaderboardEnabled = featureState.features?.leaderboardEnabled;
@@ -117,7 +117,7 @@ function LeaderboardContainer() {
 	});
 
 	const userProfileOptions = getUserProfileOptions({
-		path: { workspaceSlug: workspaceSlug ?? "", login: username ?? "" },
+		path: { workspaceSlug: workspaceSlug ?? "", login: selfLogin ?? "" },
 		query: {
 			after: parsedAfter,
 			before: parsedBefore,
@@ -127,7 +127,7 @@ function LeaderboardContainer() {
 	const userProfileQuery = useQuery({
 		...userProfileOptions,
 		placeholderData: (previousData) => previousData,
-		enabled: hasWorkspace && Boolean(username),
+		enabled: hasWorkspace && Boolean(selfLogin),
 	});
 	const currentUserId = userProfileQuery.data?.userInfo.id;
 	const currentUserEntry =
@@ -216,13 +216,13 @@ function LeaderboardContainer() {
 
 	const leagueStatsQuery = useQuery({
 		...computeUserLeagueStatsOptions({
-			path: { workspaceSlug: slug, login: username ?? "" },
+			path: { workspaceSlug: slug, login: selfLogin ?? "" },
 			query: {
 				after: parsedAfter ?? now,
 				before: parsedBefore ?? now,
 			},
 		}),
-		enabled: hasWorkspace && Boolean(username) && Boolean(parsedAfter) && Boolean(parsedBefore),
+		enabled: hasWorkspace && Boolean(selfLogin) && Boolean(parsedAfter) && Boolean(parsedBefore),
 	});
 
 	if (
@@ -230,12 +230,12 @@ function LeaderboardContainer() {
 		!featureState.isError &&
 		leaderboardEnabled === false &&
 		hasText(workspaceSlug) &&
-		hasText(username)
+		hasText(selfLogin)
 	) {
 		return (
 			<Navigate
 				to="/w/$workspaceSlug/user/$username"
-				params={{ workspaceSlug, username }}
+				params={{ workspaceSlug, username: selfLogin }}
 				replace
 			/>
 		);

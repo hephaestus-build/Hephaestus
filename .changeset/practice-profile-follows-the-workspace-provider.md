@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-Fixes a practice profile that showed every practice as not observed when you linked more than one GitHub or GitLab account, such as GitHub and GitLab, or gitlab.com and a self-hosted GitLab: a workspace now shows your practice profile, practice pages, feedback and conversations with Heph (in the app and in Slack) for the account on the instance it is connected to, whichever you linked first.
+When your account links more than one GitHub or GitLab identity, your profile, practice pages, feedback and Heph now use the identity on the instance the workspace is connected to, instead of the one you linked first. Your earlier conversations with Heph in that workspace stay listed.

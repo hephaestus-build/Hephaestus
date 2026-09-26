@@ -28,7 +28,6 @@ export interface AuthContextType {
 	linkAccount: (providerAlias: string, returnTo?: string) => void;
 	logout: () => Promise<void>;
 	hasRole: (role: string) => boolean;
-	isCurrentUser: (candidateLogin?: string) => boolean;
 	getUserId: () => string | undefined;
 	getGitProviderId: () => string | undefined;
 	getUserProfilePictureUrl: () => string;
@@ -86,10 +85,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 	const username = viewed?.login ?? user?.username ?? undefined;
 
-	const isCurrentUser = (candidateLogin?: string) =>
-		hasText(candidateLogin) &&
-		hasText(username) &&
-		username.toLowerCase() === candidateLogin.toLowerCase();
 	const getUserId = () => (viewed !== undefined || user?.id == null ? undefined : String(user.id));
 
 	const getGitProviderId = () => (viewed ? undefined : (user?.gitProviderId ?? undefined));
@@ -117,7 +112,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		linkAccount,
 		logout,
 		hasRole,
-		isCurrentUser,
 		getUserId,
 		getGitProviderId,
 		getUserProfilePictureUrl,
