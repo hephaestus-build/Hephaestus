@@ -7,6 +7,7 @@ import path from "node:path";
 import test, { type TestContext } from "node:test";
 
 import {
+	isFetchContextKey,
 	JSONRPC_VERSION,
 	type JsonRpcErrorResponse,
 	type JsonRpcSuccessResponse,
@@ -24,6 +25,14 @@ const RUNNER = path.resolve(
 
 void test("mentor exposes only read and inline-rendering tools", () => {
 	assert.deepEqual(MENTOR_TOOL_NAMES, ["fetch_context", "link_observation"]);
+});
+
+void test("fetch_context admits canonical keys and one pull request by artifactId, nothing else", () => {
+	assert.equal(isFetchContextKey("inputs/context/merge_readiness.json"), true);
+	assert.equal(isFetchContextKey("inputs/context/merge_readiness/42.json"), true);
+	assert.equal(isFetchContextKey("merge_readiness.json"), false);
+	assert.equal(isFetchContextKey("inputs/context/merge_readiness/../user.json"), false);
+	assert.equal(isFetchContextKey("inputs/context/merge_readiness/42.json.bak"), false);
 });
 
 const SESSIONS_TMPDIR = mkdtempSync(path.join(tmpdir(), "pi-mentor-runner-spec-"));

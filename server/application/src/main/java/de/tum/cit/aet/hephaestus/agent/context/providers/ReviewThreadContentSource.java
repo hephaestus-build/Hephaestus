@@ -199,7 +199,7 @@ public class ReviewThreadContentSource implements EvidenceSource {
      * login substring match would silently drop a genuine reviewer thread from anyone whose login happens
      * to contain "hephaestus" (e.g. a fork named {@code hephaestus-fan}) — masking a real review signal.
      */
-    private static final String HEPHAESTUS_MARKER = "<!-- hephaestus";
+    public static final String HEPHAESTUS_MARKER = "<!-- hephaestus";
 
     private static boolean isHephaestusThread(PullRequestReviewThread t) {
         var comments = t.getComments();

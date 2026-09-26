@@ -22,6 +22,28 @@ export const MENTOR_PROTOCOL_VERSION = 1;
 
 export const MENTOR_TOOL_NAMES = ["fetch_context", "link_observation"] as const;
 
+// Context-key whitelist for the fetch_context tool. Java remains authoritative and
+// re-checks against MentorContextKeys.ALLOWED_OUTPUT_KEYS.
+export const FETCH_CONTEXT_ALLOWED = new Set([
+	"inputs/context/workspace.json",
+	"inputs/context/user.json",
+	"inputs/context/practice_catalog.json",
+	"inputs/context/observations_history.json",
+	"inputs/context/delivered_feedback.json",
+	"inputs/context/recent_authored_work.json",
+	"inputs/context/merge_readiness.json",
+	"inputs/context/slack_conversations.json",
+	"inputs/context/prepared_conversation_feedback.json",
+	"inputs/context/current_thread_history.json",
+	"inputs/context/outline_docs.json",
+]);
+// One authored pull request by artifactId, read on demand; mirrors MergeReadinessContentSource.ITEM_KEY.
+const MERGE_READINESS_ITEM = /^inputs\/context\/merge_readiness\/\d{1,18}\.json$/u;
+
+export function isFetchContextKey(key: string): boolean {
+	return FETCH_CONTEXT_ALLOWED.has(key) || MERGE_READINESS_ITEM.test(key);
+}
+
 /**
  * JSON-RPC 2.0 §4 restricts an id to String, Number or Null. Java always sends a Number (an
  * `AtomicLong` counter) and the runner echoes back whatever it received; the runner's own
