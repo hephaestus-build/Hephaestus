@@ -43,7 +43,6 @@ public class WorkspaceRegistryController {
 
     private final WorkspaceService workspaceService;
     private final WorkspaceQueryService workspaceQueryService;
-    private final WorkspaceProvisioningService workspaceProvisioningService;
     private final FeatureFlagService featureFlagService;
     private final WorkspaceProperties workspaceProperties;
 
@@ -76,11 +75,6 @@ public class WorkspaceRegistryController {
         if (createWorkspaceRequest.kind() == IntegrationKind.GITLAB
                 && !featureFlagService.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "GitLab workspace creation is not enabled");
-        }
-
-        // Provisions the User entity from the account's GitLab IdentityLink, or returns 409 if none is linked.
-        if (createWorkspaceRequest.kind() == IntegrationKind.GITLAB) {
-            workspaceProvisioningService.ensureAuthenticatedUserExists();
         }
 
         Workspace workspace = workspaceService.createWorkspaceWithInitialization(createWorkspaceRequest);

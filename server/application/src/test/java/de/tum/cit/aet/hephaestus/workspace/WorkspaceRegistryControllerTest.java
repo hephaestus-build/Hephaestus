@@ -2,8 +2,6 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -43,9 +41,6 @@ class WorkspaceRegistryControllerTest {
     private WorkspaceQueryService workspaceQueryService;
 
     @Mock
-    private WorkspaceProvisioningService workspaceProvisioningService;
-
-    @Mock
     private FeatureFlagService featureFlagService;
 
     private WorkspaceRegistryController controller;
@@ -69,7 +64,7 @@ class WorkspaceRegistryControllerTest {
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
-        verifyNoInteractions(workspaceService, workspaceProvisioningService);
+        verifyNoInteractions(workspaceService);
     }
 
     @Test
@@ -91,7 +86,6 @@ class WorkspaceRegistryControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isSameAs(dto);
         assertThat(response.getHeaders().getLocation()).hasPath("/workspaces/test-workspace");
-        verify(workspaceProvisioningService, never()).ensureAuthenticatedUserExists();
     }
 
     @Test
@@ -105,14 +99,13 @@ class WorkspaceRegistryControllerTest {
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
-        verifyNoInteractions(workspaceService, workspaceProvisioningService);
+        verifyNoInteractions(workspaceService);
     }
 
     private WorkspaceRegistryController controller(WorkspaceProperties.CreationPolicy policy) {
         return new WorkspaceRegistryController(
                 workspaceService,
                 workspaceQueryService,
-                workspaceProvisioningService,
                 featureFlagService,
                 new WorkspaceProperties(false, null, false, null, policy));
     }

@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.connection.identity.AuthenticatedGitProviderUserService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProviderAvailability;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -49,7 +48,6 @@ public class WorkspaceProvisioningService {
     private final IdentityProviderRepository gitProviderRepository;
     private final WorkspaceMembershipRepository workspaceMembershipRepository;
     private final WorkspaceMembershipService workspaceMembershipService;
-    private final AuthenticatedGitProviderUserService authenticatedGitProviderUserService;
     private final ConnectionService connectionService;
     private final WebClient webClient;
     private final ScmServerEndpointPolicy endpoints;
@@ -70,7 +68,6 @@ public class WorkspaceProvisioningService {
             IdentityProviderRepository gitProviderRepository,
             WorkspaceMembershipRepository workspaceMembershipRepository,
             WorkspaceMembershipService workspaceMembershipService,
-            AuthenticatedGitProviderUserService authenticatedGitProviderUserService,
             ConnectionService connectionService,
             List<WorkspaceProviderAvailability> providerAvailabilityList,
             ScmServerEndpointPolicy endpoints) {
@@ -83,7 +80,6 @@ public class WorkspaceProvisioningService {
         this.gitProviderRepository = gitProviderRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceMembershipService = workspaceMembershipService;
-        this.authenticatedGitProviderUserService = authenticatedGitProviderUserService;
         this.connectionService = connectionService;
         Map<IntegrationKind, WorkspaceProviderAvailability> map = new EnumMap<>(IntegrationKind.class);
         for (WorkspaceProviderAvailability a : providerAvailabilityList) {
@@ -277,23 +273,6 @@ public class WorkspaceProvisioningService {
     }
 
     /**
-     * Ensures the currently authenticated account has a corresponding git provider
-     * {@link User} entity so they can be assigned as workspace owner.
-     *
-     * <p>Identity is resolved from the account's federated identities, not from JWT claims: the
-     * cookie-JWT carries only {@code sub = Account.id}, so the chain is
-     * {@code sub → Account → active GitLab IdentityLink → User}. A first-time, login-only user
-     * gets a {@code User} created here (it is normally created during sync).
-     *
-     * @throws org.springframework.web.server.ResponseStatusException 409 if the account has no
-     *         active GitLab identity linked, so the frontend can prompt to link GitLab first
-     */
-    @Transactional
-    public void ensureAuthenticatedUserExists() {
-        authenticatedGitProviderUserService.ensureCurrentGitLabUserExists();
-    }
-
-    /**
      * Resolves the GitLab server URL from the workspace config, falling back to the default
      * exposed via {@link WorkspaceProviderAvailability}
      * ({@code hephaestus.integration.gitlab.default-server-url}). Throws when availability is
@@ -321,8 +300,7 @@ public class WorkspaceProvisioningService {
      * Validates the GitLab token and upserts the token owner or a synthetic bot user.
      * <p>
      * First tries {@code GET /api/v4/user} which works for personal access tokens.
-     * If that returns 401 (as it does for group/project access tokens which have no
-     * user identity), falls back to {@code GET /api/v4/groups/:groupPath} to validate
+     * If that is refused, falls back to {@code GET /api/v4/groups/:groupPath} to validate
      * the token against the target group and creates a synthetic bot user from group info.
      */
     private Long syncGitLabUserForPAT(String patToken, String serverUrl, String groupPath) {
@@ -352,7 +330,7 @@ public class WorkspaceProvisioningService {
                     .block(Duration.ofSeconds(10));
         } catch (Exception e) {
             log.debug(
-                    "GET /api/v4/user failed (expected for group/project tokens): serverUrl={}, status={}",
+                    "GET /api/v4/user failed; trying the group endpoint: serverUrl={}, status={}",
                     serverUrl,
                     e.getMessage());
         }

@@ -4,12 +4,12 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.LoginProviderQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
-import java.net.URI;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -92,18 +92,6 @@ class WorkspaceOnboardingLinks {
     }
 
     private static @Nullable String origin(@Nullable String value) {
-        if (value == null) return null;
-        try {
-            URI uri = URI.create(value);
-            if (uri.getScheme() == null || uri.getHost() == null) return null;
-            int port = uri.getPort();
-            boolean defaultPort = port < 0
-                    || (port == 443 && uri.getScheme().equalsIgnoreCase("https"))
-                    || (port == 80 && uri.getScheme().equalsIgnoreCase("http"));
-            return uri.getScheme().toLowerCase(java.util.Locale.ROOT) + "://"
-                    + uri.getHost().toLowerCase(java.util.Locale.ROOT) + (defaultPort ? "" : ":" + port);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
+        return ScmOrigin.of(value).orElse(null);
     }
 }

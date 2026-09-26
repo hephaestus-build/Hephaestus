@@ -30,7 +30,6 @@ const meta = {
 			step: 3,
 			selectedGroup: defaultGroup,
 			preflightResult: { valid: true, username: "admin-user" },
-			serverUrl: "",
 		}),
 		(Story) => (
 			<div className="w-96">

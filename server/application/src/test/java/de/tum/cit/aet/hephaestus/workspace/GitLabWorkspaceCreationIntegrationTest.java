@@ -6,17 +6,25 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.api.InitiateConnectionRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
+import de.tum.cit.aet.hephaestus.workspace.dto.GitLabPreflightRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import org.assertj.core.api.InstanceOfAssertFactories;
@@ -47,24 +55,40 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
     @Autowired
     private IdentityLinkRepository identityLinkRepository;
 
+    @Autowired
+    private LoginProviderRepository loginProviderRepository;
+
+    @Autowired
+    private ConnectionRepository connectionRepository;
+
+    /** {@code hephaestus.integration.gitlab.default-server-url} in the test profile. */
+    private static final String DEFAULT_INSTANCE = "https://gitlab.lrz.de";
+
     /**
-     * Creating a GitLab workspace now requires the CALLER to have an active GitLab identity (the
-     * native-auth migration's {@code AuthenticatedGitProviderUserService.ensureCurrentGitLabUserExists}).
-     * Seed that precondition — a real {@link Account} + an active GitLab {@link IdentityLink} — and
-     * return headers authenticating as that account (sub = the account id, via the {@code mock-jwt-sub-}
-     * dynamic test token).
+     * A caller whose {@link Account} has an active GitLab {@link IdentityLink} on the default instance,
+     * authenticated through the {@code mock-jwt-sub-} test token (sub = the account id).
      */
     private Consumer<HttpHeaders> gitLabCaller(String login) {
+        return gitLabCaller(login, gitLabInstance(DEFAULT_INSTANCE));
+    }
+
+    /** A caller linked once on each of {@code instances}, with a distinct subject per link. */
+    private Consumer<HttpHeaders> gitLabCaller(String login, IdentityProvider... instances) {
         Account account = accountRepository.save(new Account(login));
-        IdentityProvider gitlab = ensureGitLabProvider();
-        IdentityLink link = new IdentityLink();
-        link.setAccount(account);
-        link.setProviderId(persistedId(gitlab.getId()));
-        link.setSubject(String.valueOf(70_000 + persistedId(account.getId())));
-        link.setUsernameAtSignup(login);
-        identityLinkRepository.save(link);
+        for (IdentityProvider gitlab : instances) {
+            IdentityLink link = new IdentityLink();
+            link.setAccount(account);
+            link.setProviderId(persistedId(gitlab.getId()));
+            link.setSubject(String.valueOf(subject(account, gitlab)));
+            link.setUsernameAtSignup(login);
+            identityLinkRepository.save(link);
+        }
         String token = "mock-jwt-sub-" + persistedId(account.getId());
         return headers -> headers.setBearerAuth(token);
+    }
+
+    private static long subject(Account account, IdentityProvider gitlab) {
+        return 70_000 + persistedId(account.getId()) * 100 + persistedId(gitlab.getId());
     }
 
     /** A seeded GitLab caller plus its resolved SCM {@link User} mirror (for owner/membership setup). */
@@ -73,26 +97,161 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
     /** Adds the SCM mirror belonging to the caller's verified provider subject. */
     private GitLabCaller gitLabCallerWithMirror(String login) {
         Account account = accountRepository.save(new Account(login));
-        IdentityProvider gitlab = ensureGitLabProvider();
+        IdentityProvider gitlab = gitLabInstance(DEFAULT_INSTANCE);
         long nativeId = 70_000 + persistedId(account.getId());
-        // Deliberately differs from the mock token's display login; the provider subject owns the actor.
-        String scmLogin = login;
-        User scmUser = TestUserFactory.ensureUser(userRepository, scmLogin, nativeId, gitlab);
+        User scmUser = TestUserFactory.ensureUser(userRepository, login, nativeId, gitlab);
         IdentityLink link = new IdentityLink();
         link.setAccount(account);
         link.setProviderId(persistedId(gitlab.getId()));
         link.setSubject(String.valueOf(nativeId));
-        link.setUsernameAtSignup(scmLogin);
+        link.setUsernameAtSignup(login);
         link.setExternalActorId(persistedId(scmUser.getId()));
         identityLinkRepository.save(link);
         return new GitLabCaller(
                 headers -> headers.setBearerAuth("mock-jwt-sub-" + persistedId(account.getId())), scmUser);
     }
 
+    private IdentityProvider gitLabInstance(String serverUrl) {
+        return gitProviderRepository
+                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, serverUrl)
+                .orElseGet(
+                        () -> gitProviderRepository.save(new IdentityProvider(IdentityProviderType.GITLAB, serverUrl)));
+    }
+
+    /** An enabled GitLab login provider: what makes a self-hosted instance eligible for workspaces. */
+    private void configureGitLabLogin(String registrationId, String baseUrl) {
+        LoginProvider provider = new LoginProvider();
+        provider.setRegistrationId(registrationId);
+        provider.setType(LoginProvider.ProviderType.GITLAB);
+        provider.setDisplayName("GitLab Example");
+        provider.setBaseUrl(baseUrl);
+        provider.setClientId("test-client-id");
+        provider.setClientSecret("test-client-secret");
+        provider.setScopes("read_user");
+        loginProviderRepository.save(provider);
+    }
+
+    private WebTestClient.ResponseSpec postGitLabWorkspace(
+            Consumer<HttpHeaders> auth, String slug, @Nullable String serverUrl) {
+        return webTestClient
+                .post()
+                .uri("/workspaces")
+                .headers(auth)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new CreateWorkspaceRequestDTO(
+                        slug, slug, "my-group", AccountType.ORG, null, IntegrationKind.GITLAB, "glpat-test", serverUrl))
+                .exchange();
+    }
+
+    @Test
+    void shouldRefuseUnconfiguredInstanceBeforeCreatingTheWorkspace() {
+        postGitLabWorkspace(gitLabCaller("mentor"), "gitlab-unconfigured", "https://gitlab.attacker.example")
+                .expectStatus()
+                .isEqualTo(422)
+                .expectBody(Void.class);
+
+        assertThat(workspaceRepository.findByWorkspaceSlug("gitlab-unconfigured"))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldRejectPreflightServerUrlWithPathOrQueryBeforeResolvingTheInstance() {
+        ProblemDetail problem = webTestClient
+                .post()
+                .uri("/workspaces/gitlab/preflight")
+                .headers(gitLabCaller("mentor"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new GitLabPreflightRequestDTO("glpat-test", DEFAULT_INSTANCE + "/api?redirect=1", null))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(ProblemDetail.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertNotNull(problem);
+        assertNotNull(problem.getProperties());
+        assertThat(problem.getProperties().get("errors"))
+                .asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class))
+                .containsKey("serverUrl");
+    }
+
+    @Test
+    void shouldRefuseWhenCallerIsLinkedOnlyOnAnotherGitLabInstance() {
+        Consumer<HttpHeaders> linkedElsewhere = gitLabCaller("elsewhere", gitLabInstance("https://gitlab.com"));
+
+        postGitLabWorkspace(linkedElsewhere, "gitlab-other-instance", DEFAULT_INSTANCE)
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody(Void.class);
+
+        assertThat(workspaceRepository.findByWorkspaceSlug("gitlab-other-instance"))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldRefuseAnotherInstanceEvenWhenTheCallerCanSignInThere() {
+        configureGitLabLogin("gitlab-example", "https://gitlab.example.com");
+        Consumer<HttpHeaders> linkedThere =
+                gitLabCaller("example", gitLabInstance("https://gitlab.example.com"), gitLabInstance(DEFAULT_INSTANCE));
+
+        postGitLabWorkspace(linkedThere, "gitlab-example", "https://gitlab.example.com")
+                .expectStatus()
+                .isEqualTo(422)
+                .expectBody(Void.class);
+
+        assertThat(workspaceRepository.findByWorkspaceSlug("gitlab-example")).isEmpty();
+    }
+
+    @Test
+    void shouldRefuseWhenTheCallerHasTwoIdentitiesOnTheDefaultInstance() {
+        Consumer<HttpHeaders> linkedTwice =
+                gitLabCaller("twice", gitLabInstance(DEFAULT_INSTANCE), gitLabInstance("HTTPS://GitLab.LRZ.de:443"));
+
+        postGitLabWorkspace(linkedTwice, "gitlab-ambiguous", DEFAULT_INSTANCE)
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody(Void.class);
+
+        assertThat(workspaceRepository.findByWorkspaceSlug("gitlab-ambiguous")).isEmpty();
+    }
+
+    @Test
+    void shouldRefuseToConnectGitLabOutsideWorkspaceCreation() {
+        Consumer<HttpHeaders> owner = gitLabCaller("connector");
+        WorkspaceDTO workspace = Objects.requireNonNull(postGitLabWorkspace(owner, "gitlab-connect", null)
+                .expectStatus()
+                .isCreated()
+                .expectBody(WorkspaceDTO.class)
+                .returnResult()
+                .getResponseBody());
+
+        webTestClient
+                .post()
+                .uri("/workspaces/{slug}/connections", workspace.workspaceSlug())
+                .headers(owner)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new InitiateConnectionRequestDTO(
+                        IntegrationKind.GITLAB,
+                        Map.of("pat", "glpat-test", "group_id", "7", "server_url", "https://gitlab.attacker.example")))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+
+        assertThat(connectionRepository.findByWorkspaceId(workspace.id()))
+                .singleElement()
+                .extracting(Connection::getConfig)
+                .isInstanceOfSatisfying(
+                        ConnectionConfig.GitLabConfig.class,
+                        config -> assertThat(config.serverUrl()).isEqualTo(DEFAULT_INSTANCE));
+    }
+
     @Test
     void createGitLabWorkspacePersistsCorrectProviderModeAndServerUrl() {
         User owner = persistUser("mentor");
-        Consumer<HttpHeaders> auth = gitLabCaller("mentor");
+        IdentityProvider instance = gitLabInstance(DEFAULT_INSTANCE);
+        Consumer<HttpHeaders> auth = gitLabCaller("mentor", gitLabInstance("https://gitlab.com"), instance);
 
         var request = new CreateWorkspaceRequestDTO(
                 "gitlab-space",
@@ -102,7 +261,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 persistedId(owner.getId()),
                 IntegrationKind.GITLAB,
                 "glpat-test-token-12345",
-                "https://gitlab.example.com");
+                "HTTPS://GitLab.LRZ.de:443");
 
         WorkspaceDTO created = webTestClient
                 .post()
@@ -119,24 +278,24 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
         WorkspaceDTO workspace = Objects.requireNonNull(created);
         assertThat(workspace.workspaceSlug()).isEqualTo("gitlab-space");
-        // provider classification is derived from the active Connection
-        // and surfaced via `kind` (the renamed field). The legacy gitProviderMode field
-        // is gone.
         assertThat(workspace.kind()).isEqualTo("GITLAB");
         assertThat(workspace.providerType()).isEqualTo(IdentityProviderType.GITLAB);
-        assertThat(workspace.serverUrl()).isEqualTo("https://gitlab.example.com");
+        assertThat(workspace.serverUrl()).isEqualTo(DEFAULT_INSTANCE);
         assertThat(workspace.status()).isEqualTo("ACTIVE");
         assertThat(workspace.hasPersonalAccessToken()).isTrue();
 
-        // Verify persisted entity exists; provider mode / PAT / server URL now live on
-        // the workspace's GitLab Connection row rather than legacy Workspace columns,
-        // which the WorkspaceDTO assertions above already cover end-to-end.
         Workspace persisted = workspaceRepository.findById(workspace.id()).orElseThrow();
         assertThat(persisted.getAccountLogin()).isEqualTo("my-group/my-project");
+        User instanceActor = userRepository
+                .findByLoginAndProviderId("mentor", persistedId(instance.getId()))
+                .orElseThrow();
+        assertThat(workspaceMembershipRepository.findByWorkspace_IdAndUser_Id(workspace.id(), instanceActor.getId()))
+                .hasValueSatisfying(membership ->
+                        assertThat(membership.getRole()).isEqualTo(WorkspaceMembership.WorkspaceRole.OWNER));
     }
 
     @Test
-    void createGitLabWorkspaceWithDefaultServerUrlOmitsServerUrl() {
+    void createGitLabWorkspaceWithoutServerUrlUsesTheDefaultInstance() {
         User owner = persistUser("mentor");
         Consumer<HttpHeaders> auth = gitLabCaller("mentor");
 
@@ -165,7 +324,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
         WorkspaceDTO workspace = Objects.requireNonNull(created);
         assertThat(workspace.providerType()).isEqualTo(IdentityProviderType.GITLAB);
-        assertThat(workspace.serverUrl()).isNull();
+        assertThat(workspace.serverUrl()).isEqualTo(DEFAULT_INSTANCE);
     }
 
     @Test

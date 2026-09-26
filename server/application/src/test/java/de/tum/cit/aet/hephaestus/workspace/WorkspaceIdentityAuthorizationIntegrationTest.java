@@ -64,6 +64,45 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
     }
 
     @Test
+    void shouldOwnAGitHubWorkspaceThroughTheGitHubActorWhenTheAccountLinkedGitLabFirst() {
+        var account = accounts.saveAndFlush(new Account("Linked twice"));
+        var gitLabActor =
+                userRepository.saveAndFlush(TestUserFactory.createUser(990L, "linked-twice", ensureGitLabProvider()));
+        var gitHubActor = persistUser("linked-twice");
+        for (var actor : List.of(gitLabActor, gitHubActor)) {
+            var link = new IdentityLink();
+            link.setAccount(account);
+            link.setProviderId(Objects.requireNonNull(actor.getProvider().getId()));
+            link.setSubject(actor.getNativeId().toString());
+            identities.saveAndFlush(link);
+        }
+        var request = new CreateWorkspaceRequestDTO(
+                "github-owner",
+                "GitHub owner",
+                "github-owner",
+                AccountType.ORG,
+                null,
+                IntegrationKind.GITHUB,
+                "t",
+                null);
+
+        client.post()
+                .uri("/workspaces")
+                .headers(headers -> headers.setBearerAuth("mock-jwt-sub-" + account.getId()))
+                .bodyValue(request)
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody(Void.class);
+
+        var workspace = workspaces.findByWorkspaceSlug("github-owner").orElseThrow();
+        assertThat(workspaceMembershipRepository.findByWorkspace_Id(workspace.getId()))
+                .singleElement()
+                .satisfies(
+                        membership -> assertThat(membership.getId().getUserId()).isEqualTo(gitHubActor.getId()));
+    }
+
+    @Test
     void shouldKeepTheVerifiedOwnerWhenLoginsCollideAndDenyAccessWhenItsLinkIsDisabled() {
         var namesake = persistUser("shared-login");
         var provider = ensureGitLabProvider();

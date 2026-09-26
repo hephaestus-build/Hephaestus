@@ -3,14 +3,14 @@ import { fn } from "storybook/test";
 import type { GitLabGroup } from "@/api/types.gen";
 
 import {
-	initialWizardState,
+	createInitialWizardState,
 	type WizardAction,
 	WizardContext,
 	type WizardState,
 } from "./wizard-context";
 
 export function withWizardState(overrides: Partial<WizardState>) {
-	const state: WizardState = { ...initialWizardState, ...overrides };
+	const state: WizardState = { ...createInitialWizardState("https://gitlab.com"), ...overrides };
 	return function WizardDecorator(Story: React.ComponentType) {
 		return (
 			<WizardContext.Provider value={{ state, dispatch: fn<React.Dispatch<WizardAction>>() }}>

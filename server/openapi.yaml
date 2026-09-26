@@ -10543,8 +10543,8 @@ components:
           minLength: 0
         serverUrl:
           type: string
-          description: Custom server URL for self-hosted GitLab instances. Must use
-            HTTPS. Defaults to https://gitlab.com if not specified.
+          description: "For GitLab, the default GitLab instance this server reads\
+            \ from, which is also used when omitted; any other instance is refused."
           example: https://gitlab.example.com
         workspaceSlug:
           type: string
@@ -10812,8 +10812,6 @@ components:
           type: string
         gitProviderId:
           type: string
-        hasGitLabIdentity:
-          type: boolean
         id:
           type: integer
           format: int64
@@ -11502,8 +11500,8 @@ components:
       properties:
         groupFullPath:
           type: string
-          description: "GitLab group full path, used as fallback for group/project\
-            \ tokens that cannot access /api/v4/user"
+          description: "GitLab group full path, used to validate the token against\
+            \ the group when /api/v4/user refuses it"
           example: my-org/my-team
         personalAccessToken:
           type: string
@@ -11512,7 +11510,8 @@ components:
           minLength: 1
         serverUrl:
           type: string
-          description: GitLab server URL. Defaults to https://gitlab.com if not specified.
+          description: "The default GitLab instance this server reads from, which\
+            \ is also used when omitted; any other instance is refused."
           example: https://gitlab.example.com
       required:
       - personalAccessToken
@@ -11542,7 +11541,7 @@ components:
       properties:
         defaultServerUrl:
           type: string
-          description: Default GitLab server URL
+          description: Origin of the one GitLab instance workspaces are created on
           example: https://gitlab.lrz.de
     GroupAutonomyRollup:
       type: object
@@ -11792,8 +11791,8 @@ components:
         Inbound payload for <code>POST /workspaces/{workspaceSlug</code>/connections}.
 
          <p><code>userInput</code> is intentionally a free-form map so per-kind ConnectionStrategy
-         implementations can dictate their own field schema (e.g. GitLab needs <code>pat</code> +
-         <code>group_id</code>; GitHub needs nothing because the install URL is server-configured).
+         implementations can dictate their own field schema (e.g. Outline needs <code>server_url</code>; GitHub
+         needs nothing because the install URL is server-configured).
       properties:
         kind:
           type: string

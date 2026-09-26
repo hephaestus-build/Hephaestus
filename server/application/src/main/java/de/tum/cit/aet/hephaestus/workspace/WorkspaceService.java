@@ -7,6 +7,9 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.identity.AuthenticatedGitProviderUserService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.identity.GitLabWorkspaceInstance;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -71,6 +74,8 @@ public class WorkspaceService {
     private final WorkspaceRepository workspaceRepository;
     private final UserRepository userRepository;
     private final CurrentAccountUsers currentAccountUsers;
+    private final AuthenticatedGitProviderUserService authenticatedGitProviderUserService;
+    private final GitLabWorkspaceInstance gitLabWorkspaceInstance;
 
     // Services
     private final WorkspaceSlugService workspaceSlugService;
@@ -86,6 +91,8 @@ public class WorkspaceService {
             WorkspaceRepository workspaceRepository,
             UserRepository userRepository,
             CurrentAccountUsers currentAccountUsers,
+            AuthenticatedGitProviderUserService authenticatedGitProviderUserService,
+            GitLabWorkspaceInstance gitLabWorkspaceInstance,
             WorkspaceSlugService workspaceSlugService,
             WorkspaceSettingsService workspaceSettingsService,
             LeaguePointsRecalculator leaguePointsRecalculator,
@@ -96,6 +103,8 @@ public class WorkspaceService {
         this.workspaceRepository = workspaceRepository;
         this.userRepository = userRepository;
         this.currentAccountUsers = currentAccountUsers;
+        this.authenticatedGitProviderUserService = authenticatedGitProviderUserService;
+        this.gitLabWorkspaceInstance = gitLabWorkspaceInstance;
         this.workspaceSlugService = workspaceSlugService;
         this.workspaceSettingsService = workspaceSettingsService;
         this.leaguePointsRecalculator = leaguePointsRecalculator;
@@ -175,29 +184,39 @@ public class WorkspaceService {
         String personalAccessToken =
                 Objects.requireNonNull(request.personalAccessToken(), "personalAccessToken is required");
 
-        // Creation has no workspace identity yet. Resolve the account's verified actors directly.
-        Long ownerUserId = SecurityUtils.getCurrentAccountId().isPresent()
-                ? currentAccountUsers.resolve().stream()
-                        .map(user -> Objects.requireNonNull(user.getId()))
-                        .findFirst()
-                        .orElseThrow(() ->
-                                new AccessForbiddenException("Connect an SCM account before creating a workspace"))
-                : request.ownerUserId();
+        boolean isGitLab = kind == IntegrationKind.GITLAB;
+        String serverUrl = isGitLab
+                ? gitLabWorkspaceInstance.require(request.serverUrl())
+                : (request.serverUrl() != null && !request.serverUrl().isBlank())
+                        ? request.serverUrl().trim()
+                        : null;
+
+        // Creation has no workspace identity yet. The owner is the account's verified actor on the workspace's
+        // provider, never one of its other links.
+        Long ownerUserId;
+        if (SecurityUtils.getCurrentAccountId().isEmpty()) {
+            ownerUserId = request.ownerUserId();
+        } else if (isGitLab) {
+            ownerUserId = authenticatedGitProviderUserService
+                    .resolveOrProvisionCurrentGitLabUser(Objects.requireNonNull(serverUrl))
+                    .getId();
+        } else {
+            ownerUserId = currentAccountUsers.resolve().stream()
+                    .filter(user -> user.getProvider().getType() == IdentityProviderType.GITHUB)
+                    .map(user -> Objects.requireNonNull(user.getId()))
+                    .findFirst()
+                    .orElseThrow(() -> new AccessForbiddenException(
+                            "Link your GitHub account before creating a GitHub workspace"));
+        }
 
         Workspace workspace =
                 createWorkspaceInTransaction(workspaceSlug, displayName, accountLogin, accountType, ownerUserId);
-
-        boolean isGitLab = kind == IntegrationKind.GITLAB;
 
         if (isGitLab) {
             // GitLab PAT workspaces monitor all repositories in the group by default.
             workspace.setRepositorySelection(RepositorySelection.ALL);
             workspaceRepository.save(workspace);
 
-            String serverUrl =
-                    (request.serverUrl() != null && !request.serverUrl().isBlank())
-                            ? request.serverUrl().trim()
-                            : null;
             connectionService.provisionPatConnection(
                     workspace,
                     IntegrationKind.GITLAB,
@@ -215,10 +234,6 @@ public class WorkspaceService {
             // (they arrive via GithubLifecycleListener.createOrUpdateFromInstallation).
             // The DTO validator rejects any other kind.
             workspaceRepository.save(workspace);
-            String serverUrl =
-                    (request.serverUrl() != null && !request.serverUrl().isBlank())
-                            ? request.serverUrl().trim()
-                            : null;
             connectionService.provisionPatConnection(
                     workspace,
                     IntegrationKind.GITHUB,

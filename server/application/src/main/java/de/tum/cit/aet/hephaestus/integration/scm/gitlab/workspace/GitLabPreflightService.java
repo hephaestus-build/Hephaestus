@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.core.connection.identity.GitLabWorkspaceInstance;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabGroupDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabPreflightResponseDTO;
 import java.time.Duration;
@@ -12,8 +12,10 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Pre-creation validation service for GitLab workspace setup.
@@ -24,9 +26,8 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
  *
  * <h2>Token Validation Flow</h2>
  * <ol>
- *   <li>Try {@code GET /api/v4/user} — works for personal access tokens</li>
- *   <li>If 401 and {@code groupFullPath} provided, try {@code GET /api/v4/groups/{path}}
- *       — works for group/project access tokens</li>
+ *   <li>Try {@code GET /api/v4/user}</li>
+ *   <li>If that is refused and {@code groupFullPath} is provided, try {@code GET /api/v4/groups/{path}}</li>
  *   <li>Return structured success/failure result</li>
  * </ol>
  *
@@ -38,25 +39,25 @@ public class GitLabPreflightService {
     private static final Logger log = LoggerFactory.getLogger(GitLabPreflightService.class);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
-    private final GitLabProperties gitLabProperties;
     private final ScmServerEndpointPolicy endpoints;
+    private final GitLabWorkspaceInstance instance;
 
-    public GitLabPreflightService(GitLabProperties gitLabProperties, ScmServerEndpointPolicy endpoints) {
-        this.gitLabProperties = gitLabProperties;
+    public GitLabPreflightService(ScmServerEndpointPolicy endpoints, GitLabWorkspaceInstance instance) {
         this.endpoints = endpoints;
+        this.instance = instance;
     }
 
     /**
      * Validates a GitLab PAT by attempting to authenticate against the GitLab API.
      *
      * @param token         the personal access token
-     * @param serverUrl     custom server URL (nullable, defaults to gitlab.com)
+     * @param serverUrl     the default GitLab instance, or null for it
      * @param groupFullPath optional group path for group/project token fallback
      * @return validation result with user/group info on success, or error message on failure
      */
     public GitLabPreflightResponseDTO validateToken(
             String token, @Nullable String serverUrl, @Nullable String groupFullPath) {
-        String resolvedUrl = resolveAndValidateServerUrl(serverUrl);
+        String resolvedUrl = instance.require(serverUrl);
 
         // Try personal token endpoint first
         try {
@@ -86,13 +87,13 @@ public class GitLabPreflightService {
             return GitLabPreflightResponseDTO.failure("Failed to connect to GitLab server");
         }
 
-        // Fallback: try group endpoint for group/project access tokens
+        // Fallback: validate the token against the group it is meant for
         if (groupFullPath != null && !groupFullPath.isBlank()) {
             return validateGroupToken(token, resolvedUrl, groupFullPath.trim());
         }
 
         return GitLabPreflightResponseDTO.failure(
-                "Token is invalid or is a group/project token. Provide groupFullPath for group token validation.");
+                "GitLab did not accept this token. Provide groupFullPath to validate it against the group.");
     }
 
     private GitLabPreflightResponseDTO validateGroupToken(String token, String serverUrl, String groupFullPath) {
@@ -135,11 +136,12 @@ public class GitLabPreflightService {
      * Lists GitLab groups accessible to the provided PAT.
      *
      * @param token     the personal access token
-     * @param serverUrl custom server URL (nullable, defaults to gitlab.com)
+     * @param serverUrl the default GitLab instance, or null for it
      * @return list of accessible groups
+     * @throws ResponseStatusException 422 when GitLab refuses the token, 502 when it cannot answer
      */
     public List<GitLabGroupDTO> listAccessibleGroups(String token, @Nullable String serverUrl) {
-        String resolvedUrl = resolveAndValidateServerUrl(serverUrl);
+        String resolvedUrl = instance.require(serverUrl);
 
         try {
             List<GitLabGroupListItem> groups = endpoints
@@ -160,26 +162,15 @@ public class GitLabPreflightService {
                     .map(g -> new GitLabGroupDTO(
                             g.id(), g.name(), g.fullPath(), g.avatarUrl(), g.webUrl(), g.visibility()))
                     .toList();
+        } catch (WebClientResponseException.Unauthorized | WebClientResponseException.Forbidden e) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_CONTENT, "GitLab refused this token. Check it and validate it again.", e);
         } catch (Exception e) {
             log.warn("Failed to list accessible GitLab groups: serverUrl={}, error={}", resolvedUrl, e.getMessage());
-            return List.of();
+            // An empty list would read as "this token sees no groups"; the caller must learn it failed.
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY, "GitLab did not return the groups for this token", e);
         }
-    }
-
-    /**
-     * Resolves and validates the server URL, applying SSRF protections.
-     */
-    private String resolveAndValidateServerUrl(@Nullable String serverUrl) {
-        if (serverUrl == null || serverUrl.isBlank()) {
-            return gitLabProperties.defaultServerUrl();
-        }
-
-        String trimmed = serverUrl.trim();
-        String normalized = trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
-
-        endpoints.validate(normalized);
-
-        return normalized;
     }
 
     // GitLab REST API Response Records

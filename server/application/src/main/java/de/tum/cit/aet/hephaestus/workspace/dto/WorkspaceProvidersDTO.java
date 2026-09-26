@@ -23,6 +23,8 @@ public record WorkspaceProvidersDTO(
 
     @Schema(description = "GitLab provider configuration")
     public record GitLabProviderDTO(
-            @Schema(description = "Default GitLab server URL", example = "https://gitlab.lrz.de")
+            @Schema(
+                    description = "Origin of the one GitLab instance workspaces are created on",
+                    example = "https://gitlab.lrz.de")
             String defaultServerUrl) {}
 }

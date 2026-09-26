@@ -1,8 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
@@ -17,16 +15,9 @@ import org.springframework.stereotype.Component;
 /**
  * GitLab connection lifecycle strategy.
  *
- * <p>GitLab uses a Personal Access Token paste flow (no OAuth round-trip). The user enters:
- * <ul>
- *   <li>{@code pat} — their GitLab PAT scoped to {@code api}, {@code read_repository}, {@code write_repository}
- *   <li>{@code group_id} — the GitLab group id the PAT has access to; becomes the
- *       Connection's {@code instanceKey}
- * </ul>
- *
- * <p>{@link #initiate} returns {@link ConnectInitiation.AcceptInline} immediately —
- * there is no vendor redirect. {@link #finalizeConnect} is therefore a no-op (the
- * UI never invokes it for GitLab).
+ * <p>A GitLab connection is provisioned when its workspace is created, which checks the instance and the
+ * token first, so {@link #initiate} refuses to connect one on its own and {@link #finalizeConnect} is never
+ * reached.
  *
  * <p>{@link #revoke} cannot revoke the PAT itself (GitLab PATs are revocable only from the
  * user's profile page — there is no third-party revoke API), but it DOES tear down the group
@@ -45,9 +36,6 @@ public class GitlabConnectionStrategy implements ConnectionStrategy {
 
     private static final Logger log = LoggerFactory.getLogger(GitlabConnectionStrategy.class);
 
-    static final String INPUT_PAT = "pat";
-    static final String INPUT_GROUP_ID = "group_id";
-
     private final GitLabWebhookService webhookService;
     private final ScmWorkspaceContentEraser contentEraser;
 
@@ -63,31 +51,13 @@ public class GitlabConnectionStrategy implements ConnectionStrategy {
 
     @Override
     public ConnectInitiation initiate(InitiateRequest request) {
-        Map<String, String> userInput = request.userInput();
-        if (userInput == null) {
-            throw new IllegalArgumentException("GitLab initiate requires userInput with 'pat' and 'group_id'");
-        }
-        String pat = userInput.get(INPUT_PAT);
-        if (pat == null || pat.isBlank()) {
-            throw new IllegalArgumentException("Missing required field: '" + INPUT_PAT + "'");
-        }
-        String groupId = userInput.get(INPUT_GROUP_ID);
-        if (groupId == null || groupId.isBlank()) {
-            throw new IllegalArgumentException("Missing required field: '" + INPUT_GROUP_ID + "'");
-        }
-        // The PAT is held in memory only for the duration of this call; the caller
-        // (ConnectionService) is responsible for encrypting and persisting via the
-        // credential converter.
-        CredentialBundle bundle = new BearerToken(pat, null);
-        return new ConnectInitiation.AcceptInline(bundle, groupId);
+        throw new IllegalArgumentException("A GitLab connection is made by creating a GitLab workspace");
     }
 
     @Override
     public ConnectFinalization finalizeConnect(IntegrationRef ref, Map<String, String> callbackParams) {
-        // PAT-paste flow has no callback. Returning Failed surfaces a clear error if
-        // the orchestrator mistakenly invokes this for GitLab.
         return new ConnectFinalization.Failed(
-                "GitLab uses PAT-paste — finalizeConnect is not applicable; use initiate() output directly");
+                "GitLab has no vendor callback; its connection is made by creating a GitLab workspace");
     }
 
     @Override

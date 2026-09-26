@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection.identity;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery.IdentityLinkView;
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -57,46 +58,41 @@ public class AuthenticatedGitProviderUserService {
     }
 
     /**
-     * Ensures the account has a GitLab actor for workspace-owner bootstrap.
-     * Missing GitLab identity or conflicting saved profile data yields 409.
+     * The account's GitLab actor on the instance at {@code serverUrl}, provisioned when absent. A link to
+     * another GitLab instance, or to GitHub, never stands in for it. Without exactly one matching link this
+     * is 409: identity providers recorded before instances were compared by origin can name one instance
+     * twice, and neither link may be picked.
      */
     @Transactional
-    public void ensureCurrentGitLabUserExists() {
-        List<IdentityLinkView> links = activeLinksForCurrentAccount();
-
-        IdentityLinkView gitLabLink = firstOfType(links, IdentityProviderType.GITLAB);
-        if (gitLabLink != null) {
-            resolveOrProvisionUser(gitLabLink);
-            return;
-        }
-
-        if (firstOfType(links, IdentityProviderType.GITHUB) != null) {
+    public User resolveOrProvisionCurrentGitLabUser(String serverUrl) {
+        Optional<String> instance = ScmOrigin.of(serverUrl);
+        List<IdentityLinkView> matching = activeLinksForCurrentAccount().stream()
+                .filter(link -> instance.isPresent()
+                        && gitProviderRepository
+                                .findById(link.gitProviderId())
+                                .filter(provider -> provider.getType() == IdentityProviderType.GITLAB)
+                                .map(provider -> instance.equals(ScmOrigin.of(provider.getServerUrl())))
+                                .orElse(false))
+                .toList();
+        if (matching.size() > 1) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "You need to link your GitLab account before creating a GitLab workspace. Go to Settings → Linked Accounts to connect your GitLab identity.");
+                    "Your account has more than one GitLab identity on " + serverUrl
+                            + ". Unlink the one you don't use in Settings → Linked Accounts.");
         }
-
-        throw new ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "No GitLab identity found. Please link your GitLab account in Settings → Linked Accounts.");
+        if (matching.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Link your GitLab account on " + serverUrl
+                            + " before creating a workspace there. Go to Settings → Linked Accounts.");
+        }
+        return resolveOrProvisionUser(matching.getFirst());
     }
 
     private List<IdentityLinkView> activeLinksForCurrentAccount() {
         return SecurityUtils.getCurrentAccountId()
                 .map(accountIdentityQuery::activeLinksForAccount)
                 .orElseGet(List::of);
-    }
-
-    @Nullable
-    private IdentityLinkView firstOfType(List<IdentityLinkView> links, IdentityProviderType type) {
-        for (IdentityLinkView link : links) {
-            IdentityProvider provider =
-                    gitProviderRepository.findById(link.gitProviderId()).orElse(null);
-            if (provider != null && provider.getType() == type) {
-                return link;
-            }
-        }
-        return null;
     }
 
     /** Returns the actor matching the verified provider subject, provisioning it only when absent. */
