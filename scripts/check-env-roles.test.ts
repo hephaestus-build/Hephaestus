@@ -457,6 +457,21 @@ await test("the shipped topology delivers every role-scoped variable to a contai
 	]);
 });
 
+await test("the shipped worker is given the server's GitLab settings and the receiver none", async () => {
+	const [app, core] = await Promise.all(
+		["docker/compose.app.yaml", "docker/compose.core.yaml"].map(async (file) =>
+			readComposeServices(await readFile(path.join(REPO_ROOT, file), "utf8")),
+		),
+	);
+	// Compared as written: one expression over one .env is one value, whatever the operator sets.
+	for (const variable of ["GITLAB_ENABLED", "GITLAB_DEFAULT_SERVER_URL"]) {
+		const server = app?.get("application-server")?.raw.get(variable);
+		assert.ok(server !== undefined, `application-server is not given ${variable}`);
+		assert.equal(app?.get("application-worker")?.raw.get(variable), server, variable);
+		assert.equal(core?.get("webhook-server")?.env.has(variable), false, variable);
+	}
+});
+
 await test("Docker settings are rejected on a container that disables the worker role", () => {
 	const application = APPLICATION.replace(
 		"host: unix:///var/run/docker.sock",

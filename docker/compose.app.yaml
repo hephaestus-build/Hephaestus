@@ -35,6 +35,10 @@ x-scm-access-env: &scm-access-env
   GIT_CHECKOUT_ENABLED: ${GIT_CHECKOUT_ENABLED:-false}
   GIT_MAX_CONCURRENT_INGESTIONS: ${GIT_MAX_CONCURRENT_INGESTIONS:-2}
   GIT_MAX_SNAPSHOT_BYTES: ${GIT_MAX_SNAPSHOT_BYTES:-8589934592}
+  # The worker needs the GitLab beans to check out a merge request; it runs no GitLab sync.
+  GITLAB_ENABLED: ${GITLAB_ENABLED:-false}
+  # Unset, it follows the login instance; a hard-coded instance here would win over that everywhere.
+  GITLAB_DEFAULT_SERVER_URL: ${GITLAB_DEFAULT_SERVER_URL:-${GITLAB_OAUTH_BASE_URL:-https://gitlab.com}}
 
 x-observability-env: &observability-env
   TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.0}
@@ -271,14 +275,6 @@ services:
       OUTLINE_OAUTH_DISPLAY_NAME: ${OUTLINE_OAUTH_DISPLAY_NAME:-Outline}
       OUTLINE_OAUTH_CLIENT_ID: ${OUTLINE_OAUTH_CLIENT_ID:-}
       OUTLINE_OAUTH_CLIENT_SECRET: ${OUTLINE_OAUTH_CLIENT_SECRET:-}
-      # GitLab integration
-      GITLAB_ENABLED: ${GITLAB_ENABLED:-false}
-      # Which GitLab instance workspace creation and SCM sync talk to (not auth). Unset, it follows
-      # GITLAB_OAUTH_BASE_URL, so an operator who configures GitLab login gets the SAME instance for
-      # sync without naming it twice — that chain mirrors application.yml's, and it is the reason
-      # this line must not carry a hard-coded instance default: a concrete value here always wins,
-      # so pinning one silently pointed every self-hoster at that instance.
-      GITLAB_DEFAULT_SERVER_URL: ${GITLAB_DEFAULT_SERVER_URL:-${GITLAB_OAUTH_BASE_URL:-https://gitlab.com}}
       # Agent sandbox (practice review + Pi mentor chat). Activated by the worker role
       # (hephaestus.runtime.worker.enabled), then gated per-workspace via WorkspaceFeatures.
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
