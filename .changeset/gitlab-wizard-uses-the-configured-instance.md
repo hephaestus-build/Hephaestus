@@ -11,5 +11,5 @@ refuses your token or does not return your groups, the wizard says so instead of
 list. A GitHub workspace you create now belongs to your GitHub account, even if you linked GitLab
 first.
 
-**Operators:** a GitLab connection can no longer be added to an existing workspace through
-`POST /workspaces/{slug}/connections`; GitLab is connected by creating a GitLab workspace.
+The workspace connections API (`POST /workspaces/{slug}/connections`) no longer adds GitLab
+connections; GitLab is connected by creating a GitLab workspace.
