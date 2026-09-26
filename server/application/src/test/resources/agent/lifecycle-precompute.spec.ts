@@ -99,6 +99,7 @@ const metadata = {
 	created_at: "2026-04-13T10:16:13Z",
 	merged_at: "2026-04-13T15:06:54Z",
 };
+const { merged_at: _mergedAt, merged_by: _mergedBy, ...unmerged } = metadata;
 
 function diffFile(path: string, added: number[]): [string, DiffFile] {
 	return [
@@ -288,7 +289,7 @@ void test("every linked issue with a checkable outcome is an occasion, not only 
 		const [story, tasks, subIssues] = result.hints;
 		assert.ok(story && tasks && subIssues);
 		assert.equal(story.pattern, "no checkable outcome");
-		assert.equal(story.flags.how, "closed by the body");
+		assert.equal(story.flags.how, "named with a closing keyword in the body");
 		assert.equal(tasks.pattern, "checkable outcome");
 		assert.equal(tasks.flags.ticked, 1);
 		assert.equal(tasks.flags.unticked, 1);
@@ -299,11 +300,99 @@ void test("every linked issue with a checkable outcome is an occasion, not only 
 		const open = await script(
 			nodePath.join(root, "repo"),
 			new Map(),
-			{ ...metadata, state: "OPEN" },
+			{ ...unmerged, state: "OPEN" },
 			contextDir,
 			changeDir,
 		);
 		assert.match(open.directions[0] ?? "", /not merged/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+/** An open merge request whose description says `Closes #1`; the provider records #1 as a closing candidate. */
+const closingLink = {
+	"linked_work_items.json": {
+		workItems: [
+			{
+				number: 1,
+				how: "closesOnMerge",
+				title: "Add a short demo learner introduction",
+				state: "OPEN",
+				body: "## Acceptance criteria\n- [ ] The introduction names the learner\n",
+			},
+		],
+	},
+};
+const openMergeRequest = {
+	...unmerged,
+	title: "#1: Add a short demo learner introduction",
+	body: "Closes #1",
+	source_branch: "1-demo-learner-introduction",
+	state: "OPEN",
+	is_merged: false,
+};
+
+void test("an open issue that an open merge request may close stays open, its closing link a candidate", async () => {
+	for (const slug of ["links-the-change-to-its-issue", "merge-confirms-the-linked-issue-outcome"]) {
+		const { root, script, contextDir, changeDir } = await stage(slug, closingLink);
+		try {
+			const result = await script(
+				nodePath.join(root, "repo"),
+				new Map(),
+				openMergeRequest,
+				contextDir,
+				changeDir,
+			);
+			const provider = result.hints[0];
+			assert.ok(provider);
+			assert.equal(provider.flags.number, 1);
+			assert.equal(provider.flags.state, "OPEN");
+			const evidence = [
+				...result.hints.map((h) => `${h.file} ${h.context} ${String(h.flags.how)}`),
+				...result.directions,
+			].join("\n");
+			assert.doesNotMatch(evidence, /\bclosed\b/u);
+			if (slug === "links-the-change-to-its-issue") {
+				assert.equal(
+					provider.file,
+					"areas/changed-work/linked_work_items.json (how: closesOnMerge)",
+				);
+				assert.equal(provider.pattern, "closing reference");
+				assert.equal(result.metrics.providerClosingLinks, 1);
+				assert.match(
+					result.directions[0] ?? "",
+					/1 captured, 1 of them provider closing candidates #1 \(state OPEN\)/u,
+				);
+			} else {
+				assert.equal(provider.flags.how, "a provider closing candidate");
+				assert.match(result.directions[0] ?? "", /not merged/u);
+			}
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	}
+});
+
+void test("a merge request stored closed by its merge is merged, while its linked issue stays as last synced", async () => {
+	const { root, script, contextDir, changeDir } = await stage(
+		"merge-confirms-the-linked-issue-outcome",
+		closingLink,
+	);
+	try {
+		const result = await script(
+			nodePath.join(root, "repo"),
+			new Map(),
+			{ ...openMergeRequest, state: "CLOSED", is_merged: true },
+			contextDir,
+			changeDir,
+		);
+		const [issue] = result.hints;
+		assert.ok(issue);
+		assert.equal(issue.pattern, "checkable outcome");
+		assert.equal(issue.flags.how, "a provider closing candidate");
+		assert.equal(issue.flags.state, "OPEN");
+		assert.match(result.directions[0] ?? "", /every one is an occasion/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

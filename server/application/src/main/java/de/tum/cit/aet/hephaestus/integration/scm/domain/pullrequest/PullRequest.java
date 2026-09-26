@@ -149,9 +149,10 @@ public class PullRequest extends Issue {
     private Set<User> requestedReviewers = new HashSet<>();
 
     /**
-     * The issues the provider records this pull request as closing — GitHub's closing references,
-     * GitLab's "closes" issues — as far as they are issues of this repository. The set is the
-     * provider's current statement and is replaced whole on every sync that reads it.
+     * The provider's closing candidates for this pull request — GitHub's closing references, GitLab's
+     * closes-issues — as far as they are issues of this repository. A candidate closes only on an
+     * eligible merge in a project that closes issues automatically; the issue's own state says whether it
+     * did. The set is the provider's current statement and is replaced whole on every sync that reads it.
      */
     @ManyToMany
     @JoinTable(

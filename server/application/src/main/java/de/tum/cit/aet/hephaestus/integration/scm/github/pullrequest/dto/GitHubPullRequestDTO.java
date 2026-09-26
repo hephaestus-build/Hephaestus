@@ -91,7 +91,7 @@ public record GitHubPullRequestDTO(
          */
         @Nullable HeadChecks headChecks,
         /**
-         * The numbers of the issues of this repository GitHub records the pull request as closing,
+         * The numbers of this repository's issues GitHub lists as closing candidates for the pull request,
          * from GraphQL; null when the source did not read them, which leaves the stored set alone.
          */
         @Nullable List<Integer> closingIssueNumbers) {
