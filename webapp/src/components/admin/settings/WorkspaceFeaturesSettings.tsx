@@ -19,7 +19,8 @@ const FEATURES = [
 	{
 		key: "mentorEnabled",
 		label: "Chat with Heph",
-		description: "Let eligible workspace members chat with Heph in the web app.",
+		description:
+			"Let members chat with Heph in the web app and, when Slack is connected, in a direct message. Each member's AI choice still applies.",
 	},
 	{
 		key: "leaderboardEnabled",

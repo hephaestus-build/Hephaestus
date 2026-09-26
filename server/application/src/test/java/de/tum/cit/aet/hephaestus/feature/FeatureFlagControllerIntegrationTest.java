@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.feature;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -45,29 +44,8 @@ class FeatureFlagControllerIntegrationTest extends BaseIntegrationTest {
                     .expectBody()
                     .jsonPath("$.ADMIN")
                     .isEqualTo(true)
-                    .jsonPath("$.MENTOR_ACCESS")
-                    .isEqualTo(false) // admin annotation only sets "admin" authority
                     .jsonPath("$.GITLAB_WORKSPACE_CREATION")
                     .isEqualTo(true);
-        }
-
-        @Test
-        @WithMentorUser
-        void mentorUserHasMentorFlags() {
-            webTestClient
-                    .get()
-                    .uri("/user/features")
-                    .headers(TestAuthUtils.withCurrentUser())
-                    .exchange()
-                    .expectStatus()
-                    .isOk()
-                    .expectBody()
-                    .jsonPath("$.MENTOR_ACCESS")
-                    .isEqualTo(true)
-                    .jsonPath("$.ADMIN")
-                    .isEqualTo(false)
-                    .jsonPath("$.NOTIFICATION_ACCESS")
-                    .isEqualTo(false);
         }
 
         @Test
@@ -81,8 +59,6 @@ class FeatureFlagControllerIntegrationTest extends BaseIntegrationTest {
                     .expectStatus()
                     .isOk()
                     .expectBody()
-                    .jsonPath("$.MENTOR_ACCESS")
-                    .isEqualTo(false)
                     .jsonPath("$.ADMIN")
                     .isEqualTo(false)
                     .jsonPath("$.NOTIFICATION_ACCESS")
@@ -102,8 +78,6 @@ class FeatureFlagControllerIntegrationTest extends BaseIntegrationTest {
                     .expectBody()
                     .jsonPath("$.length()")
                     .isEqualTo(FeatureFlag.values().length)
-                    .jsonPath("$.MENTOR_ACCESS")
-                    .exists()
                     .jsonPath("$.NOTIFICATION_ACCESS")
                     .exists()
                     .jsonPath("$.ADMIN")

@@ -19,7 +19,6 @@ const FEATURE_FLAGS_QUERY_KEY = ["user", "features"] as const;
 const featureFlagsSchema = z.object({
 	ADMIN: z.boolean().catch(false),
 	GITLAB_WORKSPACE_CREATION: z.boolean().catch(false),
-	MENTOR_ACCESS: z.boolean().catch(false),
 	NOTIFICATION_ACCESS: z.boolean().catch(false),
 });
 
@@ -32,11 +31,10 @@ async function fetchFeatureFlags(): Promise<FeatureFlagsResponse> {
 	return parsed.data;
 }
 
-// The administrator's flags never apply in a view, and the server does not gate a view's mentor reads.
+// The administrator's flags never apply in a view.
 const USER_VIEW_FLAGS: FeatureFlagsResponse = {
 	ADMIN: false,
 	GITLAB_WORKSPACE_CREATION: false,
-	MENTOR_ACCESS: true,
 	NOTIFICATION_ACCESS: false,
 };
 

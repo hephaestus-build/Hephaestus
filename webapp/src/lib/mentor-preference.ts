@@ -12,8 +12,7 @@ export type MentorNotice =
 	| { reason: "unavailable"; choice: MemberAiChoice };
 
 /**
- * Why Heph will not answer this member, if it will not. The server twin is
- * `MemberAiPreferences.Decision.permitsAi` plus `MemberAiRoutingAdapter.ready(MENTOR)`.
+ * Why Heph will not answer this member, if it will not. The server twin is `MentorRefusal`.
  * `aiChoice == null && !aiChoiceRequired` is `undefined` on purpose: members who haven't chosen
  * are served by the undeclared slot.
  */

@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRunner;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
@@ -24,6 +25,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
@@ -66,6 +69,21 @@ class SlackMentorServiceTest extends BaseUnitTest {
                 new KeywordSlackMentorInputGuard(),
                 onboardingService,
                 mentorReadinessQuery);
+    }
+
+    @ParameterizedTest
+    @EnumSource(MentorRefusal.class)
+    void shouldReplyWithTheReasonAndStartNothingWhenAdmissionRefusesTheMember(MentorRefusal refusal) {
+        when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
+        when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.of(314L));
+        when(mentorTurnRunner.refusal(WORKSPACE, 314L)).thenReturn(Optional.of(refusal));
+
+        service().handleDm(TEAM, CHANNEL, USER, "Can you review my work?", "100.1", "100.1");
+
+        verify(slackMessageService).sendForWorkspace(WORKSPACE, CHANNEL, "100.1", List.of(), refusal.userMessage());
+        verify(slackMessageService, never()).setStatus(anyLong(), anyString(), anyString(), anyString());
+        verify(mentorTurnRunner, never()).run(any(), any(), anyLong());
+        verifyNoInteractions(threadLinker);
     }
 
     @Test

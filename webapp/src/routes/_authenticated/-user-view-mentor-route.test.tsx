@@ -29,7 +29,7 @@ beforeEach(() => {
 				},
 			]),
 		),
-		http.get("*/user/features", () => HttpResponse.json({ MENTOR_ACCESS: false })),
+		http.get("*/user/features", () => HttpResponse.json({})),
 		// The saved AI choice belongs to the signed-in account; the server refuses it in a view.
 		http.get("*/workspaces/:workspaceSlug/onboarding/me", () =>
 			HttpResponse.json({ status: 403 }, { status: 403 }),
@@ -39,7 +39,7 @@ beforeEach(() => {
 afterEach(clearUserView);
 afterAll(() => client.interceptors.request.eject(applyUserViewHeaders));
 
-it("opens saved conversations without using the administrator's mentor setting", async () => {
+it("opens the viewed member's saved conversations", async () => {
 	let viewedUser: string | null = null;
 	server.use(
 		http.get("*/workspaces/:workspaceSlug/mentor/threads", ({ request }) => {

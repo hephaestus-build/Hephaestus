@@ -210,21 +210,6 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldListTheViewedUsersConversationsWhenTheAdministratorHasNoMentorAccess() {
-        ChatThread own = thread(workspace, viewed, "Viewed user's conversation");
-
-        sessionRequest("/workspaces/acme/mentor/threads", "mock-jwt-admin-" + administrator.getId())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.length()")
-                .isEqualTo(1)
-                .jsonPath("$[0].id")
-                .isEqualTo(own.getId().toString());
-    }
-
-    @Test
     void shouldNotDiscloseAConversationWhenItBelongsToAnotherMember() {
         User other = persistUser("another-view-user");
         ensureWorkspaceMembership(workspace, other, WorkspaceMembership.WorkspaceRole.MEMBER);

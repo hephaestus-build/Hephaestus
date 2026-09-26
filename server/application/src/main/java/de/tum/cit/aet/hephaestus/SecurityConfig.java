@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
-import de.tum.cit.aet.hephaestus.feature.FeatureFlag;
 import de.tum.cit.aet.hephaestus.observability.ReplicaIdentityFilter;
 import de.tum.cit.aet.hephaestus.observability.RequestCorrelationFilter;
 import java.time.Instant;
@@ -95,7 +94,7 @@ public class SecurityConfig {
     AuthoritiesConverter rolesAuthoritiesConverter() {
         return claims -> {
             // Flat `roles` claim on the Hephaestus-issued JWT (ADR 0017). The role strings
-            // ("admin", "mentor_access", …) map 1:1 to granted authorities consumed by @PreAuthorize.
+            // ("app_admin", "notification_access", …) map 1:1 to granted authorities consumed by @PreAuthorize.
             final var roles = Optional.ofNullable((List<String>) claims.get("roles"));
             Stream<GrantedAuthority> granted = roles.map(List::stream)
                     .orElse(Stream.empty())
@@ -265,8 +264,7 @@ public class SecurityConfig {
 
         http.authorizeHttpRequests(requests -> {
             // A user view is an instance administrator's GET and nothing else, decided before any permit below.
-            // A CORS preflight only names these headers, never sends them, so it is not a view; the mentor
-            // flag is the caller's own authority and does not apply to one.
+            // A CORS preflight only names these headers, never sends them, so it is not a view.
             requests.requestMatchers(UserViewContextHolder.USER_VIEW_READ)
                     .hasAuthority(SecurityUtils.APP_ADMIN_AUTHORITY);
             requests.requestMatchers(UserViewContextHolder.USER_VIEW_REQUEST).denyAll();
@@ -308,10 +306,9 @@ public class SecurityConfig {
             requests.requestMatchers(HttpMethod.GET, "/.well-known/**").permitAll();
             // Public workspace provider discovery (workspace creation UI)
             requests.requestMatchers(HttpMethod.GET, "/workspaces/providers").permitAll();
-            // Mentor endpoints gated by the MENTOR_ACCESS feature flag. MUST be matched BEFORE the
-            // generic `/workspaces/*/**` permitAll below; otherwise the public-GET rule wins and
-            // mentor reads become unauthenticated (feature-flag bypass — see #1071).
-            requests.requestMatchers("/workspaces/*/mentor/**").hasAuthority(FeatureFlag.MENTOR_ACCESS.key());
+            // Heph is never public, even in a publicly viewable workspace, so this MUST precede the generic
+            // `/workspaces/*/**` permitAll below; the controllers decide who may use it.
+            requests.requestMatchers("/workspaces/*/mentor/**").authenticated();
             // Public read for slugged workspace paths (filter enforces membership/public visibility).
             requests.requestMatchers(HttpMethod.GET, "/workspaces/*/**").permitAll();
             // Registry/listing stays authenticated to avoid leaking tenant directory.

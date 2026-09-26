@@ -45,7 +45,7 @@ public class MentorChatController {
 
     @PostMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "Send one mentor-chat turn; stream the response as AI SDK UIMessage chunks")
-    @PreAuthorize("@workspaceSecure.isMember()")
+    @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")
     public SseEmitter chat(
             WorkspaceContext workspaceContext,
             @Valid @RequestBody MentorChatRequestBody body,

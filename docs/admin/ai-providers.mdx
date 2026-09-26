@@ -37,6 +37,11 @@ until it can be paid for:
 6. A workspace admin binds it to a purpose — **practice reviews**, **mentor** — on their own
    **AI models** page. Nothing runs until this step.
 
+For Heph, the workspace admin also turns on **Chat with Heph** in the workspace's settings. That is
+the whole access path: there is no per-account grant to make before inviting a cohort, and each
+member's [AI choice](#data-handling-and-members-ai-choices) decides whether Heph answers them.
+An instance admin who is not a member can administer a workspace but does not get Heph there.
+
 Attempting to skip a stage returns HTTP 400 with a specific message rather than a generic
 validation error:
 

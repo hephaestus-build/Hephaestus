@@ -358,7 +358,7 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
 
     /** Persists one row in each child table that the sweeper purges, using real owned entities. */
     private void seedChildRows(Long accountId) {
-        accountFeatureRepository.save(new AccountFeature(accountId, "mentor_access"));
+        accountFeatureRepository.save(new AccountFeature(accountId, "notification_access"));
 
         IdentityLink link = new IdentityLink();
         link.setAccount(accountRepository.findById(accountId).orElseThrow());

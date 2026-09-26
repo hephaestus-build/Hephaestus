@@ -76,7 +76,7 @@ class AccountExportServiceTest extends BaseUnitTest {
 
         when(accountService.requireById(ACCOUNT_ID)).thenReturn(account);
         when(accountService.activeIdentities(ACCOUNT_ID)).thenReturn(List.of(link));
-        when(featureRepo.findFlagsByAccountId(ACCOUNT_ID)).thenReturn(List.of("mentor_access"));
+        when(featureRepo.findFlagsByAccountId(ACCOUNT_ID)).thenReturn(List.of("notification_access"));
         when(authEventRepo.findByAccountSince(eq(ACCOUNT_ID), any())).thenReturn(List.of());
         when(membershipQuery.membershipsForAccount(ACCOUNT_ID))
                 .thenReturn(List.of(new WorkspaceMembershipView(7L, "tum-ase", "TUM ASE", "MEMBER", 314L)));
@@ -108,7 +108,7 @@ class AccountExportServiceTest extends BaseUnitTest {
             assertThat(m.slug()).isEqualTo("tum-ase");
             assertThat(m.role()).isEqualTo("MEMBER");
         });
-        assertThat(bundle.featureFlags()).containsExactly("mentor_access");
+        assertThat(bundle.featureFlags()).containsExactly("notification_access");
         assertNotNull(bundle.preferences());
         assertThat(bundle.preferences().participateInResearch()).isEqualTo(participating);
         assertThat(bundle.preferences().practiceFeedbackDeliveryEnabled()).isFalse();
@@ -118,7 +118,7 @@ class AccountExportServiceTest extends BaseUnitTest {
         assertThat(bundle.notificationPreferences()).isNotNull();
 
         String json = new ObjectMapper().writeValueAsString(bundle);
-        assertThat(json).contains("\"ada@example.com\"", "tum-ase", "mentor_access");
+        assertThat(json).contains("\"ada@example.com\"", "tum-ase", "notification_access");
         assertThat(json.toLowerCase())
                 .as("export bundle must never disclose tokens / credentials / signing keys")
                 .doesNotContain("access_token")

@@ -11197,9 +11197,6 @@ components:
         GITLAB_WORKSPACE_CREATION:
           type: boolean
           description: GitLab workspace creation feature is enabled
-        MENTOR_ACCESS:
-          type: boolean
-          description: User has access to the AI Mentor feature
         NOTIFICATION_ACCESS:
           type: boolean
           description: User can receive notifications
