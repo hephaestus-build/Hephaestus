@@ -458,11 +458,13 @@ public class IntegrationNatsConsumer {
      *
      * <h3>Partial failure</h3>
      * A scope binds several streams, so this loop can fail halfway — typically because one stream does not
-     * exist yet (the {@code outline} stream is created by the webhook pod, which may boot after us). Every
-     * consumer this pass already {@code start()}ed is therefore <b>committed to {@link #scopeConsumers}
-     * before the failure propagates</b>. Dropping them on the floor would leave a live, untracked consumer:
-     * never stopped on shutdown, invisible to {@link #updateScopeConsumer(Long)} (which would no-op as "not
-     * running"), and duplicated on its own durable by the next {@link #startConsumingScope(Long)}.
+     * exist yet (the {@code outline} stream is created by the webhook pod, which may boot after us), or
+     * because one stream's update fails. The pass therefore starts from every tracked consumer, drops one
+     * only once it has stopped, and <b>commits to {@link #scopeConsumers} before the failure propagates</b>
+     * — including the consumers it never reached and those it just {@code start()}ed. Dropping any of them
+     * would leave a live, untracked consumer: never stopped on shutdown, invisible to
+     * {@link #updateScopeConsumer(Long)} (which would no-op as "not running"), and duplicated on its own
+     * durable by the next reconcile.
      *
      * <p>The failure also re-arms a backed-off retry, so a transient one heals itself instead of requiring
      * an app restart.
@@ -481,27 +483,24 @@ public class IntegrationNatsConsumer {
         }
 
         List<ScopeConsumer> current = scopeConsumers.getOrDefault(scopeId, List.of());
-        List<ScopeConsumer> next = new ArrayList<>();
+        List<ScopeConsumer> next = new ArrayList<>(current);
         Set<String> kept = new HashSet<>();
         try {
             for (ScopeConsumer existing : current) {
                 StreamSubscription want = desired.get(existing.streamName());
                 if (want == null) {
-                    stopAndCleanup(existing);
+                    // A consumer that fails to stop may still be dispatching, so it stays tracked for the retry.
+                    existing.stop();
+                    next.remove(existing);
+                    cleanupConsumer(existing.streamName(), existing.consumerName());
                     continue;
                 }
+                kept.add(existing.streamName());
                 try {
                     existing.updateSubjects(want.subjects().toArray(String[]::new));
                 } catch (JetStreamApiException | IOException e) {
-                    // The consumer is still running with its previous subjects — keep it TRACKED (an
-                    // untracked live consumer is exactly the leak this method exists to prevent) and let
-                    // the retry re-apply the new subjects.
-                    next.add(existing);
-                    kept.add(existing.streamName());
                     throw new IOException("Failed to update scope consumer for scopeId=" + scopeId, e);
                 }
-                next.add(existing);
-                kept.add(existing.streamName());
             }
             for (StreamSubscription want : desired.values()) {
                 if (!kept.contains(want.streamName())) {
@@ -509,10 +508,10 @@ public class IntegrationNatsConsumer {
                 }
             }
         } catch (IOException | RuntimeException e) {
-            // Commit whatever is already running (see javadoc), then re-arm and rethrow.
+            // Commit every consumer still tracked (see javadoc), then re-arm and rethrow.
             commitScopeConsumers(scopeId, next);
             log.error(
-                    "Partial scope consumer reconcile: scopeId={}, running={}, desired={} — retrying",
+                    "Partial scope consumer reconcile: scopeId={}, tracked={}, desired={} — retrying",
                     scopeId,
                     next.size(),
                     desired.size(),
@@ -527,13 +526,11 @@ public class IntegrationNatsConsumer {
 
     /**
      * Publish this pass's consumer list for the scope. Every {@code start()}ed consumer MUST land here —
-     * {@link #scopeConsumers} is the only handle by which a consumer can later be stopped or updated.
+     * {@link #scopeConsumers} is the only handle by which a consumer can later be stopped or updated. That holds
+     * while the scope is stopping too: {@link #stopConsumingScope(Long)} waits for this pass to release the scope
+     * and then stops what it published, failing without dropping a consumer that would not stop.
      */
     private void commitScopeConsumers(Long scopeId, List<ScopeConsumer> consumers) {
-        if (stoppingScopes.contains(scopeId)) {
-            consumers.forEach(this::stopAndCleanup);
-            return;
-        }
         if (consumers.isEmpty()) {
             scopeConsumers.remove(scopeId);
             log.info("Skipped scope consumer setup (no subjects): scopeId={}", scopeId);
@@ -697,15 +694,6 @@ public class IntegrationNatsConsumer {
         } catch (JetStreamApiException e) {
             throw new IOException(
                     "Failed to set up scope consumer for scopeId=" + scopeId + " stream=" + streamName, e);
-        }
-    }
-
-    private void stopAndCleanup(ScopeConsumer consumer) {
-        try {
-            consumer.stop();
-            cleanupConsumer(consumer.streamName(), consumer.consumerName());
-        } catch (Exception e) {
-            log.error("Failed to stop scope consumer: consumerName={}", consumer.consumerName(), e);
         }
     }
 

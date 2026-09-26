@@ -3,7 +3,9 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -26,8 +28,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -342,6 +347,61 @@ class IntegrationNatsConsumerTest {
                     .containsExactlyInAnyOrder(SCM_STREAM, OUTLINE_STREAM);
         }
 
+        @Test
+        void shouldKeepConsumerTrackedWhenItFailsToStopForDroppedStream() throws IOException {
+            FakeFleet consumer = fleetFailingOn();
+            consumer.stopFailingStreams.add(OUTLINE_STREAM);
+            consumer.reconcileScope(SCOPE_ID);
+            ScopeConsumer outline = consumer.startedOn(OUTLINE_STREAM);
+            consumer.subscribedStreams.remove(OUTLINE_STREAM);
+
+            assertThatThrownBy(() -> consumer.reconcileScope(SCOPE_ID)).hasMessage("injected stop failure");
+            assertThat(consumer.trackedConsumers(SCOPE_ID)).contains(outline);
+            assertThat(outline.isRunning()).isTrue();
+
+            await().atMost(Duration.ofSeconds(10))
+                    .untilAsserted(() -> assertThat(consumer.trackedConsumers(SCOPE_ID))
+                            .extracting(ScopeConsumer::streamName)
+                            .containsExactly(SCM_STREAM));
+            assertThat(outline.isRunning()).isFalse();
+        }
+
+        @Test
+        void shouldKeepConsumerTrackedWhenItFailsToStopDuringDeactivationThatRacedItsSetup() throws Exception {
+            FakeFleet consumer = fleetFailingOn();
+            consumer.stopFailingStreams.add(OUTLINE_STREAM);
+            CountDownLatch creating = new CountDownLatch(1);
+            CountDownLatch releaseCreation = new CountDownLatch(1);
+            consumer.beforeNextCreation.set(() -> {
+                creating.countDown();
+                try {
+                    releaseCreation.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            consumer.startConsumingScope(SCOPE_ID);
+            assertThat(creating.await(10, TimeUnit.SECONDS)).isTrue();
+
+            FutureTask<@Nullable Void> deactivation =
+                    new FutureTask<>(() -> consumer.stopConsumingScope(SCOPE_ID), null);
+            Thread stopper = new Thread(deactivation);
+            stopper.start();
+            // The only timed wait on the way is the one for the setup in flight, entered with the scope fenced.
+            await().atMost(Duration.ofSeconds(10)).until(() -> stopper.getState() == Thread.State.TIMED_WAITING);
+            releaseCreation.countDown();
+
+            assertThatThrownBy(() -> deactivation.get(10, TimeUnit.SECONDS))
+                    .hasRootCauseMessage("injected stop failure");
+            ScopeConsumer outline = consumer.startedOn(OUTLINE_STREAM);
+            assertThat(consumer.trackedConsumers(SCOPE_ID)).contains(outline);
+            assertThat(outline.isRunning()).isTrue();
+
+            consumer.stopConsumingScope(SCOPE_ID);
+            assertThat(consumer.started).hasSize(2).noneMatch(ScopeConsumer::isRunning);
+            assertThat(consumer.trackedConsumers(SCOPE_ID)).isEmpty();
+        }
+
         /**
          * The fleet with its two broker-touching seams stubbed out: consumer creation (which streams exist)
          * and connection establishment. Everything under test — the reconcile bookkeeping, the commit of
@@ -350,9 +410,19 @@ class IntegrationNatsConsumerTest {
         private static class FakeFleet extends IntegrationNatsConsumer {
 
             private final Set<String> failingStreams;
+            private final Set<String> subscribedStreams;
+
+            /** Streams whose consumer fails its first stop, as one whose dispatch thread outlives the stop. */
+            private final Set<String> stopFailingStreams = new ConcurrentSkipListSet<>();
+
+            private final AtomicReference<@Nullable Runnable> beforeNextCreation = new AtomicReference<>();
             private final List<ScopeConsumer> started = new CopyOnWriteArrayList<>();
 
             FakeFleet(Set<String> failingStreams) {
+                this(failingStreams, new CopyOnWriteArraySet<>(List.of(SCM_STREAM, OUTLINE_STREAM)));
+            }
+
+            private FakeFleet(Set<String> failingStreams, Set<String> subscribedStreams) {
                 super(
                         new NatsConnectionProperties(
                                 true,
@@ -362,14 +432,22 @@ class IntegrationNatsConsumerTest {
                         NatsConsumerPropertiesFixture.withFastPoisonBackoff(),
                         scopeId -> Optional.of(new NatsSubscriptionInfo(
                                 scopeId,
-                                List.of(
-                                        new StreamSubscription(SCM_STREAM, Set.of("github.acme.>")),
-                                        new StreamSubscription(OUTLINE_STREAM, Set.of("outline.acme.>"))))),
+                                subscribedStreams.stream()
+                                        .map(stream -> new StreamSubscription(stream, Set.of(stream + ".acme.>")))
+                                        .toList())),
                         mock(IntegrationMessageDispatcher.class),
                         mock(IntegrationPoisonHandler.class),
                         new IntegrationConsumerStats(),
                         mock(ConnectionActivityRecorder.class));
                 this.failingStreams = new ConcurrentSkipListSet<>(failingStreams);
+                this.subscribedStreams = subscribedStreams;
+            }
+
+            ScopeConsumer startedOn(String streamName) {
+                return started.stream()
+                        .filter(consumer -> consumer.streamName().equals(streamName))
+                        .findFirst()
+                        .orElseThrow();
             }
 
             @Override
@@ -379,6 +457,10 @@ class IntegrationNatsConsumerTest {
 
             @Override
             ScopeConsumer createScopeConsumer(Long scopeId, StreamSubscription subscription) throws IOException {
+                Runnable hook = beforeNextCreation.getAndSet(null);
+                if (hook != null) {
+                    hook.run();
+                }
                 if (failingStreams.contains(subscription.streamName())) {
                     throw new IOException("stream not found: " + subscription.streamName());
                 }
@@ -390,6 +472,13 @@ class IntegrationNatsConsumerTest {
                         mock(StreamContext.class),
                         subscription.subjects().toArray(String[]::new),
                         msg -> {});
+                if (stopFailingStreams.contains(subscription.streamName())) {
+                    scopeConsumer = spy(scopeConsumer);
+                    doThrow(new IllegalStateException("injected stop failure"))
+                            .doCallRealMethod()
+                            .when(scopeConsumer)
+                            .stop();
+                }
                 try {
                     scopeConsumer.start();
                 } catch (Exception e) {
