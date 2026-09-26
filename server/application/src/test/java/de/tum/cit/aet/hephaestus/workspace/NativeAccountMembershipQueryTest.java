@@ -17,8 +17,8 @@ class NativeAccountMembershipQueryTest extends BaseUnitTest {
     private final WorkspaceMembershipRepository memberships = mock(WorkspaceMembershipRepository.class);
     private final CurrentAccountUsers accountUsers = mock(CurrentAccountUsers.class);
     private final AccountIdentityQuery identities = mock(AccountIdentityQuery.class);
-    private final AccountWorkspaceMembershipQueryAdapter query =
-            new AccountWorkspaceMembershipQueryAdapter(memberships, accountUsers, identities);
+    private final AccountWorkspaceMembershipQueryAdapter query = new AccountWorkspaceMembershipQueryAdapter(
+            memberships, accountUsers, identities, mock(WorkspaceActorSelector.class));
 
     @Test
     void shouldResolveAdministratorByProviderIdentityRatherThanCachedActorLink() {

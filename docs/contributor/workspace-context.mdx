@@ -83,9 +83,17 @@ on public reads or instance-admin elevation.
 
 `AccountWorkspaceMembershipQuery` uses that resolver for cross-module membership reads. The effective
 role is the strongest role across the account's linked workspace members. The representative actor is
-instead the first-linked actor that currently holds membership, using identity-link id order. HTTP
-requests and provider attribution use that same selection. Role changes and newly added links do not
-replace an existing eligible representative; losing or disabling its link or membership can change it.
+chosen by `WorkspaceActorSelector` among the actors that currently hold membership: the one on the
+provider instance the workspace's active SCM connection syncs (provider type and the server URL its
+adapter's `ScmTokenSource` resolves, as sync stamps it on actors), because a workspace syncs one
+instance and its observations and feedback name that instance's actor. The account's actor on another
+provider, or on another instance of the same provider, may still hold a membership, such as the one
+that created the workspace. Identity-link id order breaks ties and decides when no member actor is on
+that instance; an account has at most one active link per instance. This is a selection, not an
+aggregation: reads show the selected actor's observations only. HTTP requests and provider attribution
+use that same selection. Role changes and newly added links do not replace an eligible representative
+on the connected instance; losing or disabling its link or membership, or reconnecting the workspace to
+another instance, can change it.
 A failure in this cross-module query propagates rather than returning an empty membership list.
 
 Slack and Outline attribution first resolve the provider subject and provider workspace identity

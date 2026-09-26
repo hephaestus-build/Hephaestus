@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.workspace.CurrentAccountUsers;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
@@ -29,6 +30,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -71,6 +73,7 @@ public class WorkspaceContextFilter implements Filter {
     private final ConnectionService connectionService;
     private final ObjectMapper objectMapper;
     private final WorkspaceElevationAudit elevationAudit;
+    private final WorkspaceActorSelector actorSelector;
 
     public WorkspaceContextFilter(
             WorkspaceRepository workspaceRepository,
@@ -81,7 +84,8 @@ public class WorkspaceContextFilter implements Filter {
             WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository,
             ConnectionService connectionService,
             ObjectMapper objectMapper,
-            WorkspaceElevationAudit elevationAudit) {
+            WorkspaceElevationAudit elevationAudit,
+            WorkspaceActorSelector actorSelector) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.currentAccountUsers = currentAccountUsers;
@@ -91,6 +95,7 @@ public class WorkspaceContextFilter implements Filter {
         this.connectionService = connectionService;
         this.objectMapper = objectMapper;
         this.elevationAudit = elevationAudit;
+        this.actorSelector = actorSelector;
     }
 
     @Override
@@ -204,7 +209,7 @@ public class WorkspaceContextFilter implements Filter {
             WorkspaceContextHolder.setContext(context);
 
             // Pin the verified actor id; a session's display login may belong to a different provider.
-            resolveWorkspaceIdentity(currentUsers, membership.memberUserIds())
+            resolveWorkspaceIdentity(workspace, currentUsers, membership.memberUserIds())
                     .ifPresent(user -> CurrentScmIdentityHolder.set(
                             java.util.Objects.requireNonNull(user.getId()), user.getLogin()));
 
@@ -227,14 +232,15 @@ public class WorkspaceContextFilter implements Filter {
         static final MembershipResolution EMPTY = new MembershipResolution(Set.of(), Set.of());
     }
 
-    /** Chooses the first-linked actor that belongs to this workspace, independently of role strength. */
-    private Optional<User> resolveWorkspaceIdentity(Collection<User> users, Set<Long> memberUserIds) {
-        if (memberUserIds.isEmpty()) {
-            return Optional.empty();
-        }
-        return users.stream()
+    /** Chooses the member actor that speaks for the account here, independently of role strength. */
+    private Optional<User> resolveWorkspaceIdentity(Workspace workspace, List<User> users, Set<Long> memberUserIds) {
+        List<User> members = users.stream()
                 .filter(u -> u != null && memberUserIds.contains(u.getId()))
-                .findFirst();
+                .toList();
+        return actorSelector
+                .select(workspace.getId(), members.stream().map(User::getId).toList())
+                .flatMap(
+                        id -> members.stream().filter(u -> id.equals(u.getId())).findFirst());
     }
 
     private MembershipResolution fetchUserRoles(Workspace workspace, Collection<User> users, boolean maySeed) {

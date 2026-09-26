@@ -19,7 +19,11 @@ class AccountWorkspaceMembershipQueryAdapterTest extends BaseUnitTest {
         var memberships = mock(WorkspaceMembershipRepository.class);
         when(accounts.resolve(42L)).thenReturn(List.of());
 
-        assertThat(new AccountWorkspaceMembershipQueryAdapter(memberships, accounts, mock(AccountIdentityQuery.class))
+        assertThat(new AccountWorkspaceMembershipQueryAdapter(
+                                memberships,
+                                accounts,
+                                mock(AccountIdentityQuery.class),
+                                mock(WorkspaceActorSelector.class))
                         .membershipsForAccount(42L))
                 .isEmpty();
         verifyNoInteractions(memberships);
@@ -36,7 +40,10 @@ class AccountWorkspaceMembershipQueryAdapterTest extends BaseUnitTest {
                 .thenThrow(new IllegalStateException("Database unavailable"));
 
         assertThatThrownBy(() -> new AccountWorkspaceMembershipQueryAdapter(
-                                memberships, accounts, mock(AccountIdentityQuery.class))
+                                memberships,
+                                accounts,
+                                mock(AccountIdentityQuery.class),
+                                mock(WorkspaceActorSelector.class))
                         .membershipsForAccount(42L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Database unavailable");

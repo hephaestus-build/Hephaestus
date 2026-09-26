@@ -18,14 +18,17 @@ public class AccountWorkspaceMembershipQueryAdapter implements AccountWorkspaceM
     private final WorkspaceMembershipRepository workspaceMembershipRepository;
     private final CurrentAccountUsers accountUsers;
     private final AccountIdentityQuery identities;
+    private final WorkspaceActorSelector actorSelector;
 
     public AccountWorkspaceMembershipQueryAdapter(
             WorkspaceMembershipRepository workspaceMembershipRepository,
             CurrentAccountUsers accountUsers,
-            AccountIdentityQuery identities) {
+            AccountIdentityQuery identities,
+            WorkspaceActorSelector actorSelector) {
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.accountUsers = accountUsers;
         this.identities = identities;
+        this.actorSelector = actorSelector;
     }
 
     @Override
@@ -42,21 +45,24 @@ public class AccountWorkspaceMembershipQueryAdapter implements AccountWorkspaceM
                         membership -> membership.getWorkspace().getId(), LinkedHashMap::new, Collectors.toList()));
         return byWorkspace.values().stream()
                 .map(memberships -> {
-                    var representative = memberships.stream()
-                            .min(Comparator.comparingInt(membership ->
-                                    userIds.indexOf(membership.getUser().getId())))
-                            .orElseThrow();
+                    var workspace = memberships.getFirst().getWorkspace();
+                    var memberIds = memberships.stream()
+                            .map(membership ->
+                                    Objects.requireNonNull(membership.getUser().getId()))
+                            .sorted(Comparator.comparingInt(userIds::indexOf))
+                            .toList();
+                    var memberId =
+                            actorSelector.select(workspace.getId(), memberIds).orElseThrow();
                     var role = memberships.stream()
                             .map(WorkspaceMembership::getRole)
                             .reduce((first, next) -> first.isAtLeast(next) ? first : next)
                             .orElseThrow();
-                    var workspace = representative.getWorkspace();
                     return new WorkspaceMembershipView(
                             workspace.getId(),
                             workspace.getWorkspaceSlug(),
                             workspace.getDisplayName(),
                             role.name(),
-                            Objects.requireNonNull(representative.getUser().getId()));
+                            memberId);
                 })
                 .toList();
     }
