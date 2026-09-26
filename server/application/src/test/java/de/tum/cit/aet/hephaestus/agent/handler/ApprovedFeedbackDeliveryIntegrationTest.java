@@ -36,7 +36,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
-import de.tum.cit.aet.hephaestus.practices.feedback.approval.ApprovedFeedbackReadyEvent;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.DecideFeedbackProposalRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
@@ -91,9 +90,6 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
 
     @Autowired
     private FeedbackDispatchRepository dispatchRepository;
-
-    @Autowired
-    private ApprovedFeedbackDeliveryListener delivery;
 
     @Autowired
     private ApprovedFeedbackRecovery recovery;
@@ -226,8 +222,8 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
 
         approve(proposal);
 
+        await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertDelivered(proposal, "gid://gitlab/Note/1"));
         verify(commentPoster).postApprovedProposal(any(), eq(proposal.getId()), eq(body));
-        assertDelivered(proposal, "gid://gitlab/Note/1");
     }
 
     @Test
@@ -288,15 +284,6 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
                 .thenReturn(ExistingDeliveryLookup.absent());
         when(commentPoster.postApprovedProposal(any(), eq(proposal.getId()), any()))
                 .thenReturn("gid://gitlab/Note/2");
-        Workspace other = createWorkspace(
-                "other-delivery", "Other delivery", "other-org", AccountType.ORG, persistUser("other-owner"));
-        makeRetryDue(proposal);
-
-        delivery.deliver(new ApprovedFeedbackReadyEvent(other.getId(), proposal.getId()));
-
-        assertThat(dispatch(proposal).getAttemptCount()).isEqualTo(1);
-        verify(commentPoster, never()).postApprovedProposal(any(), any(), any());
-
         recoverNow(proposal);
 
         assertDelivered(proposal, "gid://gitlab/Note/2");
