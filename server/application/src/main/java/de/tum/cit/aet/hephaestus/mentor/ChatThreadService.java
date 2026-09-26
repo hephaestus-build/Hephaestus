@@ -3,8 +3,10 @@ package de.tum.cit.aet.hephaestus.mentor;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -21,7 +23,7 @@ import tools.jackson.databind.ObjectMapper;
 public class ChatThreadService {
 
     private final ChatThreadRepository chatThreadRepository;
-    private final ChatMessageRepository chatMessageRepository;
+    private final ChatMessageVoteRepository chatMessageVoteRepository;
     private final ObjectMapper objectMapper;
 
     /** Thread summaries (id, title, createdAt) owned by the current account, newest first. */
@@ -64,23 +66,17 @@ public class ChatThreadService {
     }
 
     /**
-     * Single read-only transaction that resolves the thread, its messages, and converts each
-     * to a DTO. {@code chat_message.parts} is the canonical JSONB representation; backfill
-     * guarantees every row has a non-empty array.
+     * The thread, its messages and its votes in one read-only transaction. Votes are read only after
+     * the owner check, so they cannot reach anyone but the thread's owner.
      */
     @Transactional(readOnly = true)
-    public ThreadDetail loadOwnedThreadDetail(Long workspaceId, UUID threadId) {
+    public ChatThreadDetailDTO loadOwnedThreadDetail(Long workspaceId, UUID threadId) {
         ChatThread thread = requireOwnedThread(workspaceId, threadId);
-        return detail(thread);
-    }
-
-    private ThreadDetail detail(ChatThread thread) {
         List<ChatMessageDTO> messages = thread.getAllMessages().stream()
                 .map(msg -> ChatMessageDTO.from(msg, msg.getParts(), objectMapper))
                 .toList();
-        return new ThreadDetail(thread.getId(), thread.getTitle(), thread.getCreatedAt(), messages);
+        Map<UUID, Boolean> votes = chatMessageVoteRepository.findByMessage_Thread_Id(thread.getId()).stream()
+                .collect(Collectors.toMap(ChatMessageVote::getMessageId, ChatMessageVote::getIsUpvoted));
+        return new ChatThreadDetailDTO(thread.getId(), thread.getTitle(), thread.getCreatedAt(), messages, votes);
     }
-
-    /** Snapshot of a thread + messages in DTO form. */
-    public record ThreadDetail(UUID id, String title, java.time.Instant createdAt, List<ChatMessageDTO> messages) {}
 }

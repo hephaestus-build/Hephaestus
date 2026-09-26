@@ -2,7 +2,7 @@ import { assert, describe, expect, it } from "vitest";
 
 import type { ChatMessage as ThreadMessage } from "@/api/types.gen";
 
-import { extractVotesFromThreadDetail, parseThreadMessages } from "./chat-validation";
+import { parseThreadMessages } from "./chat-validation";
 
 const UUID = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 const UUID2 = "c9bf9e57-1685-4c89-bafb-ff5af830be8a";
@@ -53,24 +53,5 @@ describe("parseThreadMessages", () => {
 	it("rejects a non-array payload", () => {
 		expect(parseThreadMessages({ id: UUID })).toBeUndefined();
 		expect(parseThreadMessages(null)).toBeUndefined();
-	});
-});
-
-describe("extractVotesFromThreadDetail", () => {
-	it("returns the validated votes for a well-formed payload", () => {
-		const votes = extractVotesFromThreadDetail({ votes: [{ messageId: UUID, isUpvoted: true }] });
-		expect(votes).toStrictEqual([{ messageId: UUID, isUpvoted: true }]);
-	});
-
-	it("returns [] when votes are absent, not an array, or the container is not an object", () => {
-		expect(extractVotesFromThreadDetail({})).toStrictEqual([]);
-		expect(extractVotesFromThreadDetail({ votes: "nope" })).toStrictEqual([]);
-		expect(extractVotesFromThreadDetail(null)).toStrictEqual([]);
-	});
-
-	it("returns [] (fail closed) when any vote is malformed", () => {
-		expect(extractVotesFromThreadDetail({ votes: [{ messageId: "not-a-uuid" }] })).toStrictEqual(
-			[],
-		);
 	});
 });

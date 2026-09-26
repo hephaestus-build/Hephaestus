@@ -15,7 +15,7 @@ import {
 import type { ChatMessageVote, ChatThreadDetail, ChatThreadSummary } from "@/api/types.gen";
 import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { extractVotesFromThreadDetail, parseThreadMessages } from "@/lib/chat-validation";
+import { parseThreadMessages } from "@/lib/chat-validation";
 import { hasText } from "@/lib/text";
 import type { ChatMessage } from "@/lib/types";
 import { csrfHeaders } from "@/runtime/auth/auth-client";
@@ -103,20 +103,16 @@ export function useMentorChat({
 		setCastVotes(new Map());
 	}
 
-	const voteState: Record<string, boolean | undefined> = {};
-	for (const vote of extractVotesFromThreadDetail(threadDetail)) {
-		if (hasText(vote.messageId)) {
-			voteState[vote.messageId] = vote.isUpvoted;
-		}
-	}
+	const voteState: Record<string, boolean> = { ...threadDetail?.votes };
 	for (const [messageId, isUpvoted] of castVotes) {
 		voteState[messageId] = isUpvoted;
 	}
 
 	// `updatedAt` stays unset: it is the server's stamp on a stored vote, and no surface renders it.
-	const votes: ChatMessageVote[] = Object.entries(voteState)
-		.filter((entry): entry is [string, boolean] => entry[1] !== undefined)
-		.map(([messageId, isUpvoted]) => ({ messageId, isUpvoted }));
+	const votes: ChatMessageVote[] = Object.entries(voteState).map(([messageId, isUpvoted]) => ({
+		messageId,
+		isUpvoted,
+	}));
 
 	// Unmemoised on purpose: `useChat` builds its `Chat` from these options into a ref and rebuilds it
 	// only when `id` changes, so the transport is read once and a later instance is never looked at.

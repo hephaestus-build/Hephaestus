@@ -586,13 +586,16 @@ export type ChatMessageVoteRequest = {
 };
 
 /**
- * Mentor chat thread with all messages.
+ * Mentor chat thread with all messages and the owner's votes on them.
  */
 export type ChatThreadDetail = {
   createdAt?: Date;
   id?: string;
   messages?: Array<ChatMessage>;
   title?: string;
+  votes?: {
+    [key: string]: boolean;
+  };
 };
 
 /**
@@ -10878,7 +10881,7 @@ export type GetThreadErrors = {
 
 export type GetThreadResponses = {
   /**
-   * Thread + messages returned
+   * Thread, messages and the owner's votes returned
    */
   200: ChatThreadDetail;
 };
