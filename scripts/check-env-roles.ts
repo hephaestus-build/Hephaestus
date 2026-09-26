@@ -19,11 +19,12 @@
  *                  reads it, so the value one is handed is a claim about the whole deployment, and
  *                  two claims describe a stack that does not exist.
  *   omitted      — the same defect with the key left out rather than left blank. A container that
- *                  never mentions a setting makes no claim to disagree with, so `DEPLOYMENT_WIDE`
- *                  names the settings whose absence is itself the failure.
+ *                  never mentions a setting makes no claim to disagree with, so `REQUIRED_SETTINGS`
+ *                  names the settings whose absence is itself the failure, and the roles reading them.
  *
- * `ROLE_SCOPES` and `DEPLOYMENT_WIDE` are the two things to extend, and they are opposite claims
- * about the same question — which containers read a setting. Both are keyed on `application.yml`
+ * `ROLE_SCOPES` and `REQUIRED_SETTINGS` are the two things to extend, and they answer the same
+ * question — which containers read a setting — from opposite ends: a scope says where a setting
+ * must not go, a required setting where it must. Both are keyed on `application.yml`
  * paths rather than on whole property records because ownership is finer than a record:
  * `hephaestus.webhook.secret` is read on the server role (outbound registration) while
  * `hephaestus.webhook.stream.*` is read on the webhook role, out of the same `WebhookProperties`.
@@ -51,7 +52,8 @@ const APPLICATION_YML = "server/application/src/main/resources/application.yml";
 const COMPOSE_FILES = ["docker/compose.app.yaml", "docker/compose.core.yaml"];
 
 /** The runtime roles a container can be given. A scope claiming any other name does not compile. */
-type Role = "server" | "worker" | "webhook";
+const ROLES = ["server", "worker", "webhook"] as const;
+type Role = (typeof ROLES)[number];
 
 interface RoleScope {
 	readonly path: string;
@@ -162,15 +164,17 @@ const PER_CONTAINER = new Map<string, string>([
  * would be a private key shipped to a container with no use for it. Only the role gate on the bean
  * that reads it decides, so each entry names that bean and a reader can check it against the Java.
  */
-interface DeploymentWideSetting {
+interface RequiredSetting {
 	readonly variable: string;
 	/** The `application.yml` path it binds. A path the file no longer has fails, as in `ROLE_SCOPES`. */
 	readonly path: string;
+	/** Every application container running one of these roles must be given it. Default: every role. */
+	readonly readBy?: readonly Role[];
 	/** Named beans, so a reader can check the claim rather than take it. Quoted back in every failure. */
 	readonly why: string;
 }
 
-const DEPLOYMENT_WIDE: readonly DeploymentWideSetting[] = [
+const REQUIRED_SETTINGS: readonly RequiredSetting[] = [
 	{
 		variable: "HEPHAESTUS_AGENT_IMAGE_REFERENCE",
 		path: "hephaestus.agent.image.reference",
@@ -178,6 +182,23 @@ const DEPLOYMENT_WIDE: readonly DeploymentWideSetting[] = [
 			"AgentImageReferenceGuard and AgentImagePinGuard are plain @Components that ADR 0031 keeps " +
 			"ungated on purpose, so no pod can boot on an agent image the workers cannot run; a container " +
 			"left without the reference derives one from its own version, which is a tag, and refuses to start",
+	},
+	{
+		variable: "GITLAB_ENABLED",
+		path: "hephaestus.integration.gitlab.enabled",
+		readBy: ["server", "worker"],
+		why:
+			"GitLabTokenService, and GitLabScmTokenSource with it, exist only when it is true; the server " +
+			"syncs GitLab through them and the worker checks out merge requests through them, so a worker " +
+			"without it cannot prepare a GitLab practice review",
+	},
+	{
+		variable: "GITLAB_DEFAULT_SERVER_URL",
+		path: "hephaestus.integration.gitlab.default-server-url",
+		readBy: ["server", "worker"],
+		why:
+			"GitLabTokenService.resolveServerUrl falls back to it for a workspace whose GitLab connection " +
+			"stores no server URL, on the server to sync and on the worker to check out the merge request",
 	},
 ];
 
@@ -598,38 +619,42 @@ function disagreementFailures(applicationContainers: readonly Delivery[]): strin
 }
 
 /**
- * Deployment-wide settings an application container omits. The disagreement check sees only
+ * Required settings an application container reading them omits. The disagreement check sees only
  * containers that mention the key, so an absence has to be checked separately: the container that
  * omits it reads the application default instead.
  */
 function omissionFailures(
 	applicationContainers: readonly Delivery[],
 	paths: ReadonlySet<string>,
+	profileRoles: ProfileRoles,
 ): string[] {
 	const failures: string[] = [];
-	for (const { variable, path: keyPath, why } of DEPLOYMENT_WIDE) {
+	for (const { variable, path: keyPath, readBy = ROLES, why } of REQUIRED_SETTINGS) {
 		if (!paths.has(keyPath)) {
 			failures.push(
-				`DEPLOYMENT_WIDE declares "${keyPath}" (${variable}), which ${APPLICATION_YML} does not have.\n` +
+				`REQUIRED_SETTINGS declares "${keyPath}" (${variable}), which ${APPLICATION_YML} does not have.\n` +
 					"  Point it at wherever the setting moved, or drop the entry — as written it checks nothing.",
 			);
 			continue;
 		}
-		const missing = applicationContainers.filter(({ service }) => !service.env.has(variable));
+		const readers = applicationContainers.filter(({ service }) =>
+			readBy.some((role) => runsRole(service, role, profileRoles)),
+		);
+		const missing = readers.filter(({ service }) => !service.env.has(variable));
 		if (missing.length === 0) {
 			continue;
 		}
+		const roles = `the ${new Intl.ListFormat("en", { type: "disjunction" }).format(readBy)} role`;
 		const listed = missing.map(({ id }) => `    ${id}`).join("\n");
 		failures.push(
-			missing.length === applicationContainers.length
-				? `${variable} binds ${keyPath}, and no container running the application image is given it.\n` +
+			missing.length === readers.length
+				? `${variable} binds ${keyPath}, and no application container running ${roles} is given it.\n` +
 						`  ${why}.\n` +
 						"  Every one of them reads it, so the deployment has nowhere to get the value from."
-				: `${variable} binds ${keyPath}, and these containers run the application image without it:\n${listed}\n` +
+				: `${variable} binds ${keyPath}, and these application containers run ${roles} without it:\n${listed}\n` +
 						`  ${why}.\n` +
-						"  The setting is not gated on a runtime role, so leaving it off one container does not\n" +
-						"  scope it — that container falls back to the application default and reads a different\n" +
-						"  deployment than its siblings.",
+						"  Each of them reads it, so leaving it off one does not scope it — that container falls\n" +
+						"  back to the application default and reads a different deployment than its siblings.",
 		);
 	}
 	return failures;
@@ -661,7 +686,7 @@ export function analyse(
 		...undeliveredFailures(delivered, profileRoles),
 		...unforwardedFailures(ownership, delivered),
 		...disagreementFailures(applicationContainers),
-		...omissionFailures(applicationContainers, paths),
+		...omissionFailures(applicationContainers, paths, profileRoles),
 	);
 
 	return { failures, delivered, applicationContainers: applicationContainers.map((c) => c.id) };

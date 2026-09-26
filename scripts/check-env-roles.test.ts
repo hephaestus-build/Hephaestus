@@ -26,7 +26,7 @@ function failureAt(failures: readonly string[], index: number): string {
 }
 
 /**
- * Carries every path ROLE_SCOPES and DEPLOYMENT_WIDE name, so a scope that goes stale fails loudly
+ * Carries every path ROLE_SCOPES and REQUIRED_SETTINGS name, so a scope that goes stale fails loudly
  * rather than here.
  */
 const APPLICATION = `
@@ -58,6 +58,9 @@ hephaestus:
             inactive-threshold: 30d
         github:
             token: \${GH_AUTH_TOKEN:}
+        gitlab:
+            enabled: false
+            default-server-url: https://gitlab.com
     email:
         from: noreply@example.org
 spring:
@@ -318,10 +321,20 @@ await test("readProfileRoles rejects malformed YAML", async () => {
 /** The lock digest, spelled as the shipped topology spells it. */
 const AGENT_DIGEST = `HEPHAESTUS_AGENT_IMAGE_REFERENCE: \${HEPHAESTUS_IMAGE_AGENT_PI:?verified release lock required}`;
 
+/** What the shipped server and worker are both given, so a pair differs only where a test says. */
+const SERVER = [
+	AGENT_DIGEST,
+	`GITLAB_ENABLED: \${GITLAB_ENABLED:-false}`,
+	`GITLAB_DEFAULT_SERVER_URL: \${GITLAB_DEFAULT_SERVER_URL:-https://gitlab.com}`,
+];
+
 /** Environment lines indented under a service's `environment:` key. */
 const lines = (env: readonly string[]): string => env.map((line) => `      ${line}`).join("\n");
 
-/** Two containers of the one image every role boots from, each given its own environment lines. */
+/**
+ * An application server and a webhook-only receiver of the one image every role boots from, each
+ * given its own environment lines.
+ */
 const applicationPair = (server: readonly string[], receiver: readonly string[]): ComposeFile[] =>
 	compose(`  application-server:
     image: "\${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
@@ -331,7 +344,8 @@ ${lines(server)}
   webhook-server:
     image: "\${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
     environment:
-      HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED: "true"
+      HEPHAESTUS_RUNTIME_SERVER_ENABLED: "false"
+      HEPHAESTUS_RUNTIME_WORKER_ENABLED: "false"
       HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES: \${HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES:-1073741824}
 ${lines(receiver)}
 `);
@@ -340,7 +354,7 @@ await test("application containers that spell an ungated setting differently fai
 	const { failures, applicationContainers: found } = analyse(
 		APPLICATION,
 		// Raw spellings must differ even when both default to an empty value.
-		applicationPair([AGENT_DIGEST], ["HEPHAESTUS_AGENT_IMAGE_REFERENCE:"]),
+		applicationPair(SERVER, ["HEPHAESTUS_AGENT_IMAGE_REFERENCE:"]),
 	);
 
 	assert.deepEqual(found, ["compose.yaml:application-server", "compose.yaml:webhook-server"]);
@@ -349,8 +363,8 @@ await test("application containers that spell an ungated setting differently fai
 	assert.match(failureAt(failures, 0), /<nothing>/u);
 });
 
-await test("an application container that omits a deployment-wide setting fails", () => {
-	const { failures } = analyse(APPLICATION, applicationPair([AGENT_DIGEST], []));
+await test("an application container that omits a setting every role reads fails", () => {
+	const { failures } = analyse(APPLICATION, applicationPair(SERVER, []));
 
 	assert.equal(failures.length, 1, failures.join("\n"));
 	assert.match(
@@ -359,19 +373,49 @@ await test("an application container that omits a deployment-wide setting fails"
 	);
 	assert.match(
 		failureAt(failures, 0),
-		/run the application image without it:\n {4}compose\.yaml:webhook-server/u,
+		/run the server, worker, or webhook role without it:\n {4}compose\.yaml:webhook-server/u,
 	);
 });
 
-await test("a deployment-wide setting no application container is given fails", () => {
-	const { failures } = analyse(APPLICATION, applicationPair([], []));
+await test("a required setting no application container is given fails", () => {
+	const { failures } = analyse(APPLICATION, applicationPair(SERVER.slice(1), []));
 
 	assert.equal(failures.length, 1, failures.join("\n"));
-	assert.match(failureAt(failures, 0), /no container running the application image is given it/u);
+	assert.match(
+		failureAt(failures, 0),
+		/no application container running the server, worker, or webhook role is given it/u,
+	);
 });
 
-await test("application containers agreeing on an ungated setting pass", () => {
-	const { failures } = analyse(APPLICATION, applicationPair([AGENT_DIGEST], [AGENT_DIGEST]));
+await test("a container running the worker role that omits a setting the worker reads fails", () => {
+	const { failures } = analyse(
+		APPLICATION,
+		compose(`  application-server:
+    image: "\${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
+    environment:
+${lines(SERVER)}
+  application-worker:
+    image: "\${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
+    environment:
+      HEPHAESTUS_RUNTIME_SERVER_ENABLED: "false"
+${lines([AGENT_DIGEST])}
+${RECEIVER}`),
+	);
+
+	assert.equal(failures.length, 2, failures.join("\n"));
+	assert.match(
+		failureAt(failures, 0),
+		/GITLAB_ENABLED binds hephaestus\.integration\.gitlab\.enabled/u,
+	);
+	assert.match(
+		failureAt(failures, 0),
+		/run the server or worker role without it:\n {4}compose\.yaml:application-worker/u,
+	);
+	assert.match(failureAt(failures, 1), /GITLAB_DEFAULT_SERVER_URL binds/u);
+});
+
+await test("agreeing containers pass, a webhook-only one omitting what only the server and worker read", () => {
+	const { failures } = analyse(APPLICATION, applicationPair(SERVER, [AGENT_DIGEST]));
 
 	assert.deepEqual(failures, []);
 });
@@ -381,7 +425,7 @@ await test("a setting named in PER_CONTAINER may differ", () => {
 	const { failures } = analyse(
 		APPLICATION,
 		applicationPair(
-			[AGENT_DIGEST, "THC_PATH: /actuator/health/liveness"],
+			[...SERVER, "THC_PATH: /actuator/health/liveness"],
 			[AGENT_DIGEST, "THC_PATH: /actuator/health/readiness"],
 		),
 	);
@@ -389,16 +433,18 @@ await test("a setting named in PER_CONTAINER may differ", () => {
 	assert.deepEqual(failures, []);
 });
 
-await test("a DEPLOYMENT_WIDE entry naming a path application.yml does not have is a failure", () => {
+await test("a REQUIRED_SETTINGS entry naming a path application.yml does not have is a failure", () => {
 	const withoutTheSetting = APPLICATION.replace(
 		"    agent:\n        image:\n            reference: ghcr.io/hephaestus-build/agent-pi:1.2.3\n",
 		"",
 	);
 
-	const { failures } = analyse(withoutTheSetting, applicationPair([AGENT_DIGEST], [AGENT_DIGEST]));
+	const { failures } = analyse(withoutTheSetting, applicationPair(SERVER, [AGENT_DIGEST]));
 
 	assert.ok(
-		failures.some((f) => f.includes('DEPLOYMENT_WIDE declares "hephaestus.agent.image.reference"')),
+		failures.some((f) =>
+			f.includes('REQUIRED_SETTINGS declares "hephaestus.agent.image.reference"'),
+		),
 		failures.join("\n"),
 	);
 });
@@ -409,7 +455,7 @@ await test("a service running some other image is not compared against the appli
 		compose(`  application-server:
     image: "\${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
     environment:
-      HEPHAESTUS_AGENT_IMAGE_REFERENCE: \${HEPHAESTUS_IMAGE_AGENT_PI:?verified release lock required}
+${lines(SERVER)}
   webapp:
     image: "\${HEPHAESTUS_IMAGE_WEBAPP:?verified release lock required}"
     environment:
@@ -455,21 +501,6 @@ await test("the shipped topology delivers every role-scoped variable to a contai
 		"docker/compose.app.yaml:application-worker",
 		"docker/compose.core.yaml:webhook-server",
 	]);
-});
-
-await test("the shipped worker is given the server's GitLab settings and the receiver none", async () => {
-	const [app, core] = await Promise.all(
-		["docker/compose.app.yaml", "docker/compose.core.yaml"].map(async (file) =>
-			readComposeServices(await readFile(path.join(REPO_ROOT, file), "utf8")),
-		),
-	);
-	// Compared as written: one expression over one .env is one value, whatever the operator sets.
-	for (const variable of ["GITLAB_ENABLED", "GITLAB_DEFAULT_SERVER_URL"]) {
-		const server = app?.get("application-server")?.raw.get(variable);
-		assert.ok(server !== undefined, `application-server is not given ${variable}`);
-		assert.equal(app?.get("application-worker")?.raw.get(variable), server, variable);
-		assert.equal(core?.get("webhook-server")?.env.has(variable), false, variable);
-	}
 });
 
 await test("Docker settings are rejected on a container that disables the worker role", () => {
