@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRunner;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
@@ -86,6 +87,12 @@ public class SlackMentorService {
             return;
         }
         long developerId = devOpt.get();
+        Optional<MentorRefusal> refusal = mentorTurnRunner.refusal(workspaceId, developerId);
+        if (refusal.isPresent()) {
+            slackMessageService.sendForWorkspace(
+                    workspaceId, channelId, threadTs, List.of(), refusal.get().userMessage());
+            return;
+        }
         // Link the thread transactionally before starting remote Slack I/O.
         UUID threadId =
                 threadLinker.findOrCreateThread(workspaceId, teamId, channelId, threadTs, slackUserId, developerId);

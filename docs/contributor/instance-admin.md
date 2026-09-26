@@ -141,8 +141,7 @@ characters without control or format characters), resolves the viewed member thr
 generated client requires it.
 
 `SecurityConfig` admits a request carrying a view header only as an instance administrator's `GET`,
-and does so ahead of the `mentor_access` rule, so saved conversations are readable whatever the
-administrator's own mentor access. `UserViewSessionFilter` then answers 403 for a route outside its
+and does so ahead of every other rule. `UserViewSessionFilter` then answers 403 for a route outside its
 `READ_PATHS`, and 404 for a workspace in the path other than the viewed one, both before any audit
 row. A teammate's profile is readable as it is for the member, and its row records that read. It requires a [recent sign-in](#recent-sign-in-gate) on every
 request, resolves the human member, and commits the `USER_VIEW` row before the handler runs,

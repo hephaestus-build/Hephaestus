@@ -47,6 +47,8 @@ import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
 import de.tum.cit.aet.hephaestus.mentor.ThreadSurface;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
+import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -59,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -78,6 +81,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -143,6 +147,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     private MentorChatService service;
     private RecordingEmitter emitter;
     private io.micrometer.core.instrument.simple.SimpleMeterRegistry meterRegistry;
+    private MemberAiPreferences.Decision aiDecision = new MemberAiPreferences.Decision(false, null);
 
     @BeforeEach
     void setUp() throws Exception {
@@ -199,7 +204,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         thread.setId(THREAD_ID);
         thread.setWorkspace(ws);
         thread.setUser(user);
-        when(persistence.ensureThread(eq(WORKSPACE_ID), eq(THREAD_ID), any(), any()))
+        when(persistence.ensureThread(eq(WORKSPACE_ID), eq(THREAD_ID), any(), any(), any()))
                 .thenReturn(thread);
         when(persistence.persistInFlight(any(), any(), any(), any(), any())).thenAnswer(inv -> {
             UUID assistantId = inv.getArgument(2, UUID.class);
@@ -240,7 +245,8 @@ class MentorChatServiceTest extends BaseUnitTest {
                 llmBudgetService,
                 llmAdmissionService,
                 proxyCredentialRegistry,
-                memberAiRouting);
+                memberAiRouting,
+                (workspaceId, developerId) -> aiDecision);
     }
 
     @Test
@@ -255,7 +261,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         });
         scheduleHappyPathResponses(sandbox).run();
 
-        CurrentScmIdentityHolder.set(USER_ID, expected.getLogin());
+        CurrentScmIdentityHolder.set(USER_ID, expected.getLogin(), Set.of(USER_ID));
         try {
             runTurnSync();
         } finally {
@@ -427,26 +433,29 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(admitted.getValue().getId()).isEqualTo(4242L);
     }
 
-    @Test
-    void runTurn_noEnabledConfig_recordsErrorAndNeverAttaches() throws Exception {
+    @ParameterizedTest
+    @CsvSource({"false, NO_AI, NO_AI", "true, , CHOICE_REQUIRED", "false, CLOUD, UNAVAILABLE"})
+    void shouldRefuseWithTheMembersReasonWhenNoModelServesThem(
+            boolean choiceRequired, @Nullable MemberAiChoice choice, MentorRefusal expected) throws Exception {
+        aiDecision = new MemberAiPreferences.Decision(choiceRequired, choice);
         when(memberAiRouting.binding(eq(WORKSPACE_ID), eq(AgentPurpose.MENTOR), any()))
                 .thenReturn(Optional.empty());
 
+        assertThat(service.refusal(WORKSPACE_ID, USER_ID)).contains(expected);
         runTurnSync();
 
         assertThat(emitter.recordedTypes()).contains("error");
         assertThat(String.join("\n", emitter.rawData))
-                .contains(
-                        "Heph isn't set up for your AI choice in this workspace yet. Ask a workspace owner, or change your choice under Your AI choice in the sidebar.")
+                .contains(expected.userMessage())
                 .doesNotContain("workspace " + WORKSPACE_ID);
-        try {
-            verify(interactiveSandboxService, never()).attach(any());
-        } catch (InteractiveSandboxException e) {
-            throw new AssertionError(e);
-        }
-        verify(persistence, never()).finalise(any(), any(), any(), any());
+        verify(interactiveSandboxService, never()).attach(any());
         assertThat(turnLock.activeKeys()).isZero();
         assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
+    }
+
+    @Test
+    void shouldAdmitWhenAModelWithinTheMembersChoiceIsReady() {
+        assertThat(service.refusal(WORKSPACE_ID, USER_ID)).isEmpty();
     }
 
     private static LlmBudgetDecision instanceBlocked(LlmBudgetBlockReason reason) {

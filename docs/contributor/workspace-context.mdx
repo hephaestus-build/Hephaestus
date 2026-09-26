@@ -46,6 +46,9 @@ scope their operations to the supplied workspace.
 
 Instance admins can access active workspaces as ADMIN without a membership or an SCM identity.
 Elevation does not grant OWNER; an explicit OWNER membership still permits owner-only operations.
+It does not make them a member either: what a workspace offers its own members, such as Heph, is
+declared with `@PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")`, which a user view
+still satisfies as the viewed member.
 The privilege and audit policy lives in [Instance administration](./instance-admin.md#who-is-an-instance-admin).
 
 Check roles via the context:
@@ -83,9 +86,21 @@ on public reads or instance-admin elevation.
 
 `AccountWorkspaceMembershipQuery` uses that resolver for cross-module membership reads. The effective
 role is the strongest role across the account's linked workspace members. The representative actor is
-instead the first-linked actor that currently holds membership, using identity-link id order. HTTP
-requests and provider attribution use that same selection. Role changes and newly added links do not
-replace an existing eligible representative; losing or disabling its link or membership can change it.
+chosen by `WorkspaceActorSelector` among the actors that currently hold membership: the one on the
+provider type and server URL the workspace's active SCM connection is configured for, because reviewed
+work, observations and feedback name the account's actor on that instance. The account's actor on
+another provider, or on another instance of the same provider, may still hold a membership, such as the
+one that created the workspace. With no active SCM connection, or no member actor on its instance, the
+first-linked member actor in identity-link id order is chosen. Until sync records actors against the
+configured instance ([#2181](https://github.com/hephaestus-build/Hephaestus/issues/2181)); GitHub
+Enterprise sync still records github.com), a workspace connected to a non-default instance falls back
+to link order. This is a selection, not an aggregation: reads show the selected actor's observations
+only. HTTP requests and provider attribution use that same selection. Role changes and newly added links
+do not replace an eligible representative on the connected instance; losing or disabling its link or
+membership, or reconnecting the workspace to another instance, can change it. Conversations with Heph
+survive such a change: the request carries all of the account's member actor ids, a thread started
+through any of them is listed and opened for the account, a new thread belongs to the selected actor,
+and a continued one moves to it.
 A failure in this cross-module query propagates rather than returning an empty membership list.
 
 Slack and Outline attribution first resolve the provider subject and provider workspace identity

@@ -74,17 +74,17 @@ public class TestSecurityConfig {
             }
             // Dynamic numeric-subject token: "mock-jwt-sub-<accountId>" decodes to that exact `sub`,
             // so a test can authenticate AS a specific (DB-assigned) Account id — required since the
-            // native-auth migration keys currentAccountId() on a numeric JWT sub (ADR 0017). Carries the
-            // common roles so it works for both authenticated and mentor-gated endpoints.
+            // native-auth migration keys currentAccountId() on a numeric JWT sub (ADR 0017). Carries
+            // app_admin so it also reaches instance-admin endpoints.
             if (token.startsWith("mock-jwt-sub-")) {
-                return numericSubject(token, token.substring("mock-jwt-sub-".length()), "mentor_access", "app_admin");
+                return numericSubject(token, token.substring("mock-jwt-sub-".length()), "app_admin");
             }
             // "mock-jwt-member-<accountId>": the same numeric subject without app_admin, for a test that
             // proves what a plain member can and cannot reach.
             if (token.startsWith("mock-jwt-member-")) {
-                return numericSubject(token, token.substring("mock-jwt-member-".length()), "mentor_access");
+                return numericSubject(token, token.substring("mock-jwt-member-".length()));
             }
-            // "mock-jwt-admin-<accountId>": an instance administrator without mentor_access.
+            // "mock-jwt-admin-<accountId>": an instance administrator.
             if (token.startsWith("mock-jwt-admin-")) {
                 return numericSubject(token, token.substring("mock-jwt-admin-".length()), "app_admin");
             }
@@ -96,7 +96,7 @@ public class TestSecurityConfig {
             if ("mock-jwt-token-for-mentor-user".equals(token)) {
                 username = "mentor";
                 userId = "mentor-user-id";
-                roles = new String[] {"mentor_access"};
+                roles = new String[] {};
             } else if ("mock-jwt-token-for-admin-user".equals(token)) {
                 username = "admin";
                 userId = "admin-user-id";

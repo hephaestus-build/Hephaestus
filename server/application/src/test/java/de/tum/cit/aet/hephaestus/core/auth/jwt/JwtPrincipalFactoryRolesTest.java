@@ -61,14 +61,17 @@ class JwtPrincipalFactoryRolesTest extends BaseUnitTest {
 
     @Test
     void grantedReservedFeatureFlagDoesNotEscalateToInstanceAdmin() {
-        // account_feature.flag is free-text; a /admin/users-granted row must NOT be able to inject the
+        // account_feature.flag is free-text; a row written by a database edit must NOT be able to inject the
         // instance-admin authority. Privilege separation: app_admin comes only from appRole==APP_ADMIN.
-        when(featureRepository.findFlagsByAccountId(any())).thenReturn(List.of("app_admin", "admin", "mentor_access"));
+        when(featureRepository.findFlagsByAccountId(any()))
+                .thenReturn(List.of("app_admin", "admin", "notification_access"));
         when(identityLinkRepository.findActiveByAccountId(any())).thenReturn(List.of());
         Account user = new Account("Sneaky");
         user.setId(3L);
         user.setAppRole(Account.AppRole.USER);
 
-        assertThat(factory.forAccount(user).roles()).contains("mentor_access").doesNotContain("app_admin", "admin");
+        assertThat(factory.forAccount(user).roles())
+                .contains("notification_access")
+                .doesNotContain("app_admin", "admin");
     }
 }

@@ -15,6 +15,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { useNow } from "@/components/common/use-now";
 import { PracticeGroupStandingCard } from "@/components/profile/PracticeGroupStandingCard";
 import { ProfilePage } from "@/components/profile/ProfilePage";
+import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import {
 	type ActivityMonitorFilters,
@@ -27,7 +28,6 @@ import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 import { formatDateRangeForApi, getDateRangeForPreset } from "@/lib/timeframe";
-import { useAuth } from "@/runtime/auth/AuthContext";
 
 const profileSearchSchema = z.object({
 	after: z.string().optional(),
@@ -72,7 +72,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/user/$use
 
 function UserProfile() {
 	const { username, workspaceSlug } = Route.useParams();
-	const { isCurrentUser } = useAuth();
+	const { selfLogin } = useWorkspaceAccess();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
 	const progressionEnabled = featureState.features?.progressionEnabled;
 	const leaguesEnabled = featureState.features?.leaguesEnabled;
@@ -104,7 +104,7 @@ function UserProfile() {
 	const parsedBefore = asDate(effectiveDates.before);
 	const selectedRepositoryIds = parseRepositoryIds(monitorRepositories);
 
-	const currUserIsDashboardUser = isCurrentUser(username);
+	const currUserIsDashboardUser = selfLogin?.toLowerCase() === username.toLowerCase();
 
 	// Standings only mean anything where practices review the work, so with them off this asks for
 	// nothing rather than asking and rendering an empty answer as "none configured".

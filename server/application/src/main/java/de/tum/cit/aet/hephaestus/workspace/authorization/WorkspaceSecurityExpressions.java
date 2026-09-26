@@ -52,6 +52,16 @@ public class WorkspaceSecurityExpressions {
     }
 
     /**
+     * Like {@link #isMember()}, but instance-admin elevation does not count: for what a workspace offers
+     * its own members, such as Heph. Use in SpEL: {@code @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")}.
+     *
+     * @return true if the caller (or, in a user view, the viewed member) holds a workspace membership
+     */
+    public boolean isMemberWithoutElevation() {
+        return accessService.isMemberWithoutElevation();
+    }
+
+    /**
      * Check if user has permission to manage the specified role.
      * OWNER can manage all roles, ADMIN can manage ADMIN and MEMBER.
      * Can be used in SpEL: @PreAuthorize("@workspaceSecure.canManageRole(#role)")

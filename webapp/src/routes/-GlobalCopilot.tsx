@@ -3,7 +3,6 @@ import { useRouter } from "@tanstack/react-router";
 import { copyToClipboard } from "@/lib/clipboard";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
-import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 
 import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
 import { Chat } from "@/components/mentor/Chat";
@@ -20,7 +19,6 @@ import { mentorPreferenceReason } from "@/lib/mentor-preference";
 export default function GlobalCopilot() {
 	const { workspaceSlug } = useActiveWorkspaceSlug();
 	const { isAuthenticated, isLoading } = useAuth();
-	const { enabled: hasMentorAccess, isLoading: accessLoading } = useFeatureFlag("MENTOR_ACCESS");
 	const { features, isLoading: featuresLoading } = useWorkspaceFeatures(workspaceSlug);
 	const preference = useQuery({
 		...getMemberOnboardingOptions({ path: { workspaceSlug: workspaceSlug ?? "" } }),
@@ -30,8 +28,6 @@ export default function GlobalCopilot() {
 		!hasText(workspaceSlug) ||
 		isLoading ||
 		!isAuthenticated ||
-		accessLoading ||
-		!hasMentorAccess ||
 		featuresLoading ||
 		features?.mentorEnabled !== true ||
 		!preference.isSuccess ||

@@ -56,7 +56,6 @@ export const Collapsed: Story = {
 export const MixedFlags: Story = {
 	args: {
 		flags: mockFeatureFlags({
-			MENTOR_ACCESS: true,
 			ADMIN: true,
 			GITLAB_WORKSPACE_CREATION: true,
 		}),
@@ -70,7 +69,6 @@ export const MixedFlags: Story = {
 export const AllEnabled: Story = {
 	args: {
 		flags: mockFeatureFlags({
-			MENTOR_ACCESS: true,
 			NOTIFICATION_ACCESS: true,
 			ADMIN: true,
 			GITLAB_WORKSPACE_CREATION: true,

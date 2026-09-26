@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
 import de.tum.cit.aet.hephaestus.agent.mentor.SessionRestore;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.ClientDisconnectedException;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRefusedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.TurnAlreadyInFlightException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.PiEventToUiChunkTranslator;
@@ -34,12 +35,15 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.mentor.ChatThread;
 import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
+import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -88,6 +92,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     private final LlmAdmissionService llmAdmissionService;
     private final MentorProxyCredentialRegistry proxyCredentialRegistry;
     private final MemberAiRoutingAdapter memberAiRouting;
+    private final MemberAiPreferences memberAiPreferences;
 
     /** The holder lets a disconnect abort a runner attached after lifecycle callbacks were registered. */
     @Override
@@ -102,11 +107,12 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         ExecutorService executor = turnExecutor.executor();
         Long actorId = CurrentScmIdentityHolder.getUserId().orElse(null);
         String actorLogin = CurrentScmIdentityHolder.getLogin().orElse(null);
+        Set<Long> accountActorIds = CurrentScmIdentityHolder.getAccountActorIds();
         try {
             executor.execute(() -> {
                 // Spring propagates authentication, not our workspace-specific SCM identity.
                 if (actorId != null && actorLogin != null) {
-                    CurrentScmIdentityHolder.set(actorId, actorLogin);
+                    CurrentScmIdentityHolder.set(actorId, actorLogin, accountActorIds);
                 }
                 try {
                     dispatchTurn(request, channel, clientHolder);
@@ -121,6 +127,16 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         }
     }
 
+    @Override
+    public Optional<MentorRefusal> refusal(long workspaceId, long developerId) {
+        try {
+            admittedBinding(workspaceId, developerId);
+            return Optional.empty();
+        } catch (MentorRefusedException refused) {
+            return Optional.of(refused.reason());
+        }
+    }
+
     /** Non-HTTP turns pin their verified actor on the worker thread because no request identity is available. */
     @Override
     public void run(MentorTurnRequest request, MentorChannel channel, long developerId) {
@@ -130,7 +146,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         metrics.recordStarted();
         try {
             turnExecutor.executor().execute(() -> {
-                CurrentScmIdentityHolder.set(developerId, developer.getLogin());
+                CurrentScmIdentityHolder.set(developerId, developer.getLogin(), Set.of(developerId));
                 try {
                     dispatchTurn(request, channel, new AtomicReference<>());
                 } finally {
@@ -239,8 +255,12 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             throw new LlmUnpricedUsageBlockedException(mentorFunding);
         }
         User user = userRepository.getCurrentUserElseThrow();
-        ChatThread thread =
-                persistence.ensureThread(request.workspaceId(), request.threadId(), user, request.userMessage());
+        ChatThread thread = persistence.ensureThread(
+                request.workspaceId(),
+                request.threadId(),
+                user,
+                CurrentScmIdentityHolder.getAccountActorIds(),
+                request.userMessage());
         Optional<byte[]> priorSessionBytes = chatThreadRepository.findSessionJsonl(thread.getId());
 
         UUID assistantMessageId = UUID.randomUUID();
@@ -629,19 +649,13 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             // Should never surface to a still-connected client, but guard anyway.
             return "Connection lost.";
         }
-        if (e instanceof IllegalStateException && isMissingMentorConfig(e.getMessage())) {
-            return "Heph isn't set up for your AI choice in this workspace yet. Ask a workspace owner, or change your choice under Your AI choice in the sidebar.";
+        if (e instanceof MentorRefusedException refused) {
+            return refused.reason().userMessage();
         }
         if (e instanceof InteractiveSandboxException) {
             return "I couldn't start the mentor runtime. Please try again in a moment.";
         }
         return "Mentor turn failed unexpectedly.";
-    }
-
-    private static boolean isMissingMentorConfig(@Nullable String message) {
-        return (message != null
-                && (message.startsWith("No mentor model is configured for workspace ")
-                        || message.equals("The configured mentor model is not available")));
     }
 
     private Map<String, byte[]> buildMentorContext(MentorTurnRequest request, User user, UUID currentUserMessageId) {
@@ -650,14 +664,22 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     }
 
     private MentorLlmConfig resolveWorkspaceLlmConfig(long workspaceId) {
-        WorkspaceAgentBinding binding = memberAiRouting
-                .binding(
-                        workspaceId,
-                        AgentPurpose.MENTOR,
-                        CurrentScmIdentityHolder.getUserId().orElse(null))
-                .orElseThrow(
-                        () -> new IllegalStateException("No mentor model is configured for workspace " + workspaceId));
+        WorkspaceAgentBinding binding = admittedBinding(
+                workspaceId, CurrentScmIdentityHolder.getUserId().orElse(null));
         return MentorLlmConfig.fromAdmission(binding, llmAdmissionService.admit(binding));
+    }
+
+    /** Mentor admission for web and Slack alike: the member's AI choice, then a model within it. */
+    private WorkspaceAgentBinding admittedBinding(long workspaceId, @Nullable Long developerId) {
+        return memberAiRouting
+                .binding(workspaceId, AgentPurpose.MENTOR, developerId)
+                .orElseThrow(() -> new MentorRefusedException(refusalWithoutModel(workspaceId, developerId)));
+    }
+
+    private MentorRefusal refusalWithoutModel(long workspaceId, @Nullable Long developerId) {
+        MemberAiPreferences.Decision decision = memberAiPreferences.forDeveloper(workspaceId, developerId);
+        if (decision.choice() == MemberAiChoice.NO_AI) return MentorRefusal.NO_AI;
+        return decision.permitsAi() ? MentorRefusal.UNAVAILABLE : MentorRefusal.CHOICE_REQUIRED;
     }
 
     private JsonNode handleFetchContext(MentorRunnerClient.FetchContextRequest req, Map<String, byte[]> contextInputs) {

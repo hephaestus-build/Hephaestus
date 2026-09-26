@@ -38,7 +38,7 @@ function renderMobileSidebar() {
 					username="ada"
 					isAdmin={false}
 					isAppAdmin={false}
-					hasMentorAccess={false}
+					isMember
 					integrationKinds={[]}
 					context="main"
 					workspaces={[workspace]}

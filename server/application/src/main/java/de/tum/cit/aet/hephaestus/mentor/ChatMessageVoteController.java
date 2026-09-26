@@ -38,7 +38,7 @@ public class ChatMessageVoteController {
             responseCode = "404",
             description = "Thread or message not found (or not owned by current user)",
             content = @Content(schema = @Schema(hidden = true)))
-    @PreAuthorize("@workspaceSecure.isMember()")
+    @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")
     public ResponseEntity<ChatMessageVoteDTO> vote(
             WorkspaceContext workspaceContext,
             @PathVariable UUID threadId,
@@ -58,7 +58,7 @@ public class ChatMessageVoteController {
             responseCode = "404",
             description = "Thread or message not found (or not owned by current user)",
             content = @Content(schema = @Schema(hidden = true)))
-    @PreAuthorize("@workspaceSecure.isMember()")
+    @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")
     public ResponseEntity<Void> removeVote(
             WorkspaceContext workspaceContext, @PathVariable UUID threadId, @PathVariable UUID messageId) {
         chatThreadService.getOwnedThread(workspaceContext.id(), threadId);

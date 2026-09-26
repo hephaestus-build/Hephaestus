@@ -1,21 +1,17 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
-import {
-	createFileRoute,
-	Navigate,
-	Outlet,
-	useLocation,
-	useMatchRoute,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useLocation, useMatchRoute } from "@tanstack/react-router";
 
 import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
+import { HephIcon } from "@/components/brand/HephIcon";
+import { EmptyState } from "@/components/common/EmptyState";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import { WorkspaceMentorPreferenceNotice } from "@/components/onboarding/WorkspaceMentorPreferenceNotice";
+import { buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { mentorPreferenceReason } from "@/lib/mentor-preference";
 import { useAuth } from "@/runtime/auth/AuthContext";
-import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 import { getUserViewSession } from "@/runtime/user-view/session";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor")({
@@ -38,15 +34,22 @@ function MentorLayout() {
 	const { userView } = useAuth();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
 	const mentorEnabled = featureState.features?.mentorEnabled;
-	const { enabled: hasMentorAccess, isLoading: accessLoading } = useFeatureFlag("MENTOR_ACCESS");
 
-	if (
-		!featureState.isLoading &&
-		!featureState.isError &&
-		!accessLoading &&
-		(mentorEnabled === false || !hasMentorAccess)
-	) {
-		return <Navigate to="/w/$workspaceSlug" params={{ workspaceSlug }} replace />;
+	if (!featureState.isLoading && !featureState.isError && mentorEnabled === false) {
+		return (
+			<div className="flex h-full items-center justify-center p-6">
+				<EmptyState
+					icon={<HephIcon />}
+					title="Heph is off in this workspace"
+					description="A workspace admin can turn on Chat with Heph under Administration → Settings."
+					action={
+						<Link to="/w/$workspaceSlug" params={{ workspaceSlug }} className={buttonVariants()}>
+							Go to workspace home
+						</Link>
+					}
+				/>
+			</div>
+		);
 	}
 
 	if (featureState.isError) {
@@ -61,7 +64,7 @@ function MentorLayout() {
 		);
 	}
 
-	if (featureState.isLoading || accessLoading || mentorEnabled !== true || !hasMentorAccess) {
+	if (featureState.isLoading || mentorEnabled !== true) {
 		return (
 			<div className="flex min-h-0 flex-1 items-center justify-center">
 				<Spinner className="h-8 w-8" />

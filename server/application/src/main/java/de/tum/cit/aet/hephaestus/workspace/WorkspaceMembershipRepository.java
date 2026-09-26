@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import java.util.Collection;
@@ -85,6 +86,19 @@ public interface WorkspaceMembershipRepository extends JpaRepository<WorkspaceMe
             ORDER BY wm.workspace.id, u.id
         """)
     List<WorkspaceMembership> findAllWithWorkspaceByUserIdIn(@Param("userIds") Collection<Long> userIds);
+
+    @Query("""
+            SELECT wm.user.id FROM WorkspaceMembership wm
+            WHERE wm.workspace.id = :workspaceId
+              AND wm.user.id IN :userIds
+              AND wm.user.provider.type = :providerType
+              AND wm.user.provider.serverUrl = :serverUrl
+        """)
+    Set<Long> findMemberUserIdsByWorkspaceIdAndProvider(
+            @Param("workspaceId") Long workspaceId,
+            @Param("userIds") Collection<Long> userIds,
+            @Param("providerType") IdentityProviderType providerType,
+            @Param("serverUrl") String serverUrl);
 
     long countByWorkspace_IdAndRole(Long workspaceId, WorkspaceRole role);
 

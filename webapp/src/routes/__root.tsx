@@ -76,7 +76,6 @@ import { useSearchState } from "@/lib/search-params";
 import { type AuthContextType, useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/guard";
 import { FeatureFlagDevTools } from "@/runtime/feature-flags/FeatureFlagDevTools";
-import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 import { exitUserView } from "@/runtime/user-view/session";
 import { isCopilotExcludedRoute } from "./-copilot-route";
 
@@ -108,13 +107,8 @@ function RootLayout() {
 		},
 	});
 	const { isAuthenticated, isLoading, userView } = useAuth();
-	const { enabled: hasMentorAccess } = useFeatureFlag("MENTOR_ACCESS");
 	const showCopilot =
-		!userView &&
-		!isLoading &&
-		isAuthenticated &&
-		hasMentorAccess &&
-		!isCopilotExcludedRoute(pathname);
+		!userView && !isLoading && isAuthenticated && !isCopilotExcludedRoute(pathname);
 
 	if (surface === "auth") {
 		return (
@@ -356,21 +350,16 @@ function HeaderContainer() {
 	const {
 		isAuthenticated,
 		isLoading,
-		username,
 		userProfile,
 		userView,
 		logout,
 		getUserProfilePictureUrl,
 		getUserId,
 	} = useAuth();
-	const {
-		chromeWorkspaceSlug,
-		userLogin: workspaceUserLogin,
-		userName: workspaceUserName,
-	} = useWorkspaceAccess();
+	const { chromeWorkspaceSlug, selfLogin, userName: workspaceUserName } = useWorkspaceAccess();
 
 	// The account menu signs the administrator out, so during a user view it names them.
-	const effectiveUsername = userView ? userProfile?.username : (workspaceUserLogin ?? username);
+	const effectiveUsername = userView ? userProfile?.username : selfLogin;
 	const effectiveName = userView
 		? userProfile?.name
 		: (workspaceUserName ?? (userProfile && `${userProfile.firstName} ${userProfile.lastName}`));
@@ -475,7 +464,6 @@ function sidebarContextOf(pathname: string): SidebarContext {
 function AppSidebarContainer() {
 	const { pathname } = useLocation();
 	const { isAuthenticated, username, isAppAdmin, userView } = useAuth();
-	const { enabled: hasMentorAccess } = useFeatureFlag("MENTOR_ACCESS");
 	const navigate = useNavigate();
 	const switchWorkspace = useWorkspaceSwitcher();
 	const workspaceAccess = useWorkspaceAccess();
@@ -526,11 +514,12 @@ function AppSidebarContainer() {
 
 	return (
 		<AppSidebar
-			username={username}
+			// Only the loading skeleton renders while `selfLogin` is still undefined.
+			username={workspaceAccess.selfLogin ?? username}
 			isAdmin={workspaceAccess.isAdmin}
 			isOwner={workspaceAccess.role === "OWNER"}
 			isAppAdmin={isAppAdmin}
-			hasMentorAccess={hasMentorAccess}
+			isMember={workspaceAccess.role !== undefined}
 			readOnly={Boolean(userView)}
 			integrationKinds={integrationKinds}
 			context={sidebarContext}

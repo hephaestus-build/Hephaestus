@@ -20,7 +20,8 @@ function mockCopilot(preference: WorkspaceOnboarding) {
 				workspaceListItem("other", { mentorEnabled: true }),
 			]),
 		),
-		http.get("*/user/features", () => HttpResponse.json({ MENTOR_ACCESS: true })),
+		// The account carries no flags: the copilot follows the workspace and the member's AI choice.
+		http.get("*/user/features", () => HttpResponse.json({})),
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),
 		),

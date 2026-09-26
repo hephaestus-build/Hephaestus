@@ -1570,10 +1570,6 @@ export type FeatureFlags = {
    */
   GITLAB_WORKSPACE_CREATION?: boolean;
   /**
-   * User has access to the AI Mentor feature
-   */
-  MENTOR_ACCESS?: boolean;
-  /**
    * User can receive notifications
    */
   NOTIFICATION_ACCESS?: boolean;

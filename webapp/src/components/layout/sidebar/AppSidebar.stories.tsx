@@ -32,7 +32,7 @@ const meta = {
 		username: "johnDoe",
 		isAdmin: false,
 		isAppAdmin: false,
-		hasMentorAccess: false,
+		isMember: true,
 		integrationKinds: ["GITHUB", "SLACK", "OUTLINE"],
 		context: "main",
 		workspaces: [mockWorkspace],
@@ -54,12 +54,12 @@ export const RegularUser: Story = {
 	args: {
 		username: "johndoe",
 		isAdmin: false,
-		hasMentorAccess: false,
 		context: "main",
 		activeWorkspace: mockWorkspace,
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("Administration")).not.toBeInTheDocument();
+		await expect(canvas.getByRole("link", { name: /AI mentor/u })).toBeVisible();
 	},
 };
 
@@ -68,7 +68,6 @@ export const WorkspaceAdminUser: Story = {
 		username: "admin",
 		isAdmin: true,
 		isAppAdmin: false,
-		hasMentorAccess: true,
 		context: "main",
 		activeWorkspace: mockWorkspace,
 	},
@@ -83,7 +82,6 @@ export const AdminUser: Story = {
 		username: "admin",
 		isAdmin: true,
 		isAppAdmin: true,
-		hasMentorAccess: true,
 		context: "main",
 		activeWorkspace: mockWorkspace,
 	},
@@ -97,7 +95,6 @@ export const ReadOnlyUserView: Story = {
 		username: "alex",
 		isAdmin: false,
 		isAppAdmin: false,
-		hasMentorAccess: true,
 		readOnly: true,
 		context: "mentor",
 		mentorThreads: [
@@ -148,7 +145,6 @@ export const MentorContext: Story = {
 	args: {
 		username: "mentor",
 		isAdmin: false,
-		hasMentorAccess: true,
 		context: "mentor",
 		mentorThreads: [
 			{
@@ -175,7 +171,6 @@ export const MentorLoading: Story = {
 	args: {
 		username: "mentor",
 		isAdmin: false,
-		hasMentorAccess: true,
 		context: "mentor",
 		mentorThreadsLoading: true,
 	},
@@ -211,10 +206,21 @@ export const LoadingWorkspaces: Story = {
 	},
 };
 
-export const MentorRoleButFeatureDisabled: Story = {
+export const HephHiddenFromNonMember: Story = {
 	args: {
-		hasMentorAccess: true,
+		isMember: false,
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("link", { name: /AI mentor/u })).not.toBeInTheDocument();
+	},
+};
+
+export const HephOffInWorkspace: Story = {
+	args: {
 		activeWorkspace: { ...mockWorkspace, mentorEnabled: false },
 		workspaces: [{ ...mockWorkspace, mentorEnabled: false }],
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("link", { name: /AI mentor/u })).not.toBeInTheDocument();
 	},
 };

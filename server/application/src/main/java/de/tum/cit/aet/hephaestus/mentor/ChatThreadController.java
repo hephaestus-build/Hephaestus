@@ -36,7 +36,7 @@ public class ChatThreadController {
     @GetMapping
     @Operation(summary = "List the current user's mentor threads in this workspace")
     @ApiResponse(responseCode = "200", description = "Threads returned, newest first")
-    @PreAuthorize("@workspaceSecure.isMember()")
+    @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")
     public ResponseEntity<List<ChatThreadSummaryDTO>> listThreads(WorkspaceContext workspaceContext) {
         return ResponseEntity.ok(chatThreadService.listSummariesForCurrentUser(workspaceContext.id()));
     }
@@ -48,7 +48,7 @@ public class ChatThreadController {
             responseCode = "404",
             description = "Thread not found OR not owned by current user",
             content = @Content(schema = @Schema(hidden = true)))
-    @PreAuthorize("@workspaceSecure.isMember()")
+    @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")
     public ResponseEntity<ChatThreadDetailDTO> getThread(
             WorkspaceContext workspaceContext, @PathVariable UUID threadId) {
         ChatThreadService.ThreadDetail detail =
@@ -64,7 +64,7 @@ public class ChatThreadController {
             responseCode = "404",
             description = "Thread not found OR not owned by current user",
             content = @Content(schema = @Schema(hidden = true)))
-    @PreAuthorize("@workspaceSecure.isMember()")
+    @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")
     public ResponseEntity<Void> deleteThread(WorkspaceContext workspaceContext, @PathVariable UUID threadId) {
         chatThreadService.deleteOwnedThread(workspaceContext.id(), threadId);
         return ResponseEntity.noContent().build();
