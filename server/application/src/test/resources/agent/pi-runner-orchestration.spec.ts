@@ -54,6 +54,8 @@ const changeCitation = {
 	quote: "+ insecure();",
 };
 
+const OVERLONG_SUMMARY = "A summary that runs on ".repeat(8).trim();
+
 function observation(slug: string, summary: string, citation: unknown = changeCitation) {
 	return {
 		practiceSlug: slug,
@@ -654,7 +656,7 @@ if (scenario !== undefined && scenario !== "") {
 										...changeCitation,
 										quote: "+ somethingElse();",
 									}),
-									observation("test-practice", "A summary that runs on ".repeat(8).trim()),
+									observation("test-practice", OVERLONG_SUMMARY),
 									// The artifact is the pinned change; the source kind named is not the one that
 									// staged it. The manifest decides, and the correction is echoed.
 									observation("test-practice", "Cited under the wrong source kind", {
@@ -673,6 +675,14 @@ if (scenario !== undefined && scenario !== "") {
 								],
 							});
 							record(`batch:${JSON.stringify(reply)}`);
+							if (scenario === "batch") {
+								const corrected = await report.execute("o-2", {
+									observations: [
+										observation("test-practice", "The login change calls an insecure helper"),
+									],
+								});
+								record(`corrected:${JSON.stringify(corrected)}`);
+							}
 						},
 					},
 				};
@@ -1000,7 +1010,7 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(
 								reply,
-								/#3 test-practice: refused — summary must be at most 160 characters/u,
+								/#3 test-practice: refused — summary must be at most 160 characters; this one is 183\. Resend the observation with a shorter summary/u,
 							);
 							assert.match(
 								reply,
@@ -1034,6 +1044,12 @@ if (scenario !== undefined && scenario !== "") {
 							const reviewState = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
 							assert.match(reviewState, /"quote": " insecure\(\);"/u);
 							assert.match(reviewState, /"side": "NEW"/u);
+							assert.match(
+								events.find((event) => event.startsWith("corrected:")) ?? "",
+								/#1 test-practice: stored \(negative\)/u,
+							);
+							assert.match(reviewState, /"summary": "The login change calls an insecure helper"/u);
+							assert.ok(!reviewState.includes(OVERLONG_SUMMARY));
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}

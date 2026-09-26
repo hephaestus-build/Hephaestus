@@ -26,7 +26,7 @@ public class PracticeDetectionResultParser {
 
     private static final Logger log = LoggerFactory.getLogger(PracticeDetectionResultParser.class);
 
-    private static final int MAX_SUMMARY_LENGTH = 255;
+    public static final int MAX_SUMMARY_LENGTH = 160;
     private static final int MAX_EVIDENCE_RATIONALE_LENGTH = 10_000;
     private static final int MAX_EVIDENCE_BYTES = 64 * 1024;
 
@@ -139,7 +139,8 @@ public class PracticeDetectionResultParser {
             throw new EntryValidationException("summary is blank");
         }
         if (summary.length() > MAX_SUMMARY_LENGTH) {
-            throw new EntryValidationException("summary exceeds " + MAX_SUMMARY_LENGTH + " characters");
+            throw new EntryValidationException(
+                    "summary is " + summary.length() + " characters, over the " + MAX_SUMMARY_LENGTH + " allowed");
         }
 
         AssessmentStatus assessmentStatus = parseEnum(entry, "assessmentStatus", AssessmentStatus.class);
