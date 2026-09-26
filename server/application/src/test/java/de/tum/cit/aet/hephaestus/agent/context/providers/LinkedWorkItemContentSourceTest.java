@@ -251,8 +251,8 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldListWhatTheProviderRecordsAsClosedEvenWhenNoTextNamesIt() throws Exception {
-            // A link made in the provider's UI: no `#N` anywhere, and still the pull request closes it.
+        void shouldListTheProvidersClosingCandidateEvenWhenNoTextNamesIt() throws Exception {
+            // A link made in the provider's UI: no `#N` anywhere, and still a closing candidate.
             var pr = new PullRequest();
             pr.setId(PR_ID);
             pr.setBody("Implements the token refresh.");
@@ -263,12 +263,40 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             JsonNode root = payload(sampleMetadata());
 
             assertThat(itemNumbers(root)).containsExactly(42);
-            assertThat(root.get("workItems").get(0).get("how").asString()).isEqualTo("closes");
+            assertThat(root.get("workItems").get(0).get("how").asString()).isEqualTo("closesOnMerge");
             verify(issueRepository, never()).findByRepositoryIdAndNumber(REPO_ID, 42);
         }
 
         @Test
-        void shouldSayClosesForAMentionTheProviderAlsoRecordsAsClosing() throws Exception {
+        void shouldKeepAnOpenIssueOpenWhenAnOpenMergeRequestIsItsClosingCandidate() {
+            var mr = new PullRequest();
+            mr.setId(PR_ID);
+            mr.setState(Issue.State.OPEN);
+            mr.setMerged(false);
+            mr.setTitle("#1: Add a short demo learner introduction");
+            mr.setBody("Closes #1");
+            when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(mr));
+            when(pullRequestRepository.findClosingIssuesById(PR_ID))
+                    .thenReturn(List.of(issue(1, "Add a short demo learner introduction", "")));
+
+            var captured = provider.capture(request(sampleMetadata()), Set.of(KIND));
+
+            JsonNode item = objectMapper
+                    .readTree(captured.files().get(LinkedWorkItemContentSource.OUTPUT_FILE))
+                    .get("workItems")
+                    .get(0);
+            assertThat(item.get("how").asString()).isEqualTo("closesOnMerge");
+            assertThat(item.get("state").asString()).isEqualTo("OPEN");
+            assertThat(item.has("closedAt")).isFalse();
+            assertThat(new String(
+                            captured.files().get(LinkedWorkItemContentSource.ITEMS_PREFIX + "1.md"),
+                            java.nio.charset.StandardCharsets.UTF_8))
+                    .contains("state OPEN")
+                    .doesNotContain("closed");
+        }
+
+        @Test
+        void shouldSayClosesOnMergeForAMentionTheProviderAlsoLinksAsClosing() throws Exception {
             var pr = new PullRequest();
             pr.setId(PR_ID);
             pr.setBody("Closes #42, see also #7");
@@ -282,7 +310,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             assertThat(root.get("workItems")
                             .valueStream()
                             .map(item -> item.get("how").asString()))
-                    .containsExactly("closes", "mentions");
+                    .containsExactly("closesOnMerge", "mentions");
         }
 
         @Test

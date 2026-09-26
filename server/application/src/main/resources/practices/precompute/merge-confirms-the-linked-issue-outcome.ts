@@ -3,13 +3,13 @@ import { text } from "../lib/practice-contract.ts";
 // Precompute FACTS for merge-confirms-the-linked-issue-outcome: every linked issue with a checkable
 // outcome, one row each — its task-list items as captured, ticked and unticked, its state, and how
 // the change names it. The practice's occasion is any linked item that states a checkable outcome,
-// not only the one the body closes; the review decides whether the merge left each confirmed.
+// not only a closing candidate; the review decides whether the merge left each confirmed.
 import {
 	branchIssueReferences,
 	closingReferences,
 	issueNumberReferences,
 } from "../lib/references.ts";
-import { checkableItems, readLinkedWorkItems } from "../lib/review.ts";
+import { checkableItems, mergeFacts, readLinkedWorkItems } from "../lib/review.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 /** Headings under which an issue states what "done" means without a task list. */
@@ -23,7 +23,7 @@ function howLinked(
 	named: ReadonlySet<number>,
 ): string {
 	if (closing.has(number)) {
-		return "closed by the body";
+		return "named with a closing keyword in the body";
 	}
 	return named.has(number)
 		? "named by the title, body or branch"
@@ -55,8 +55,8 @@ export default async function mergeConfirmsTheLinkedIssueOutcome(
 		const checkable = items.length > 0 || heading || subIssues > 0;
 		// The provider's own link outranks what the text says: a link made in the UI matches no `#N`.
 		const how =
-			item.how === "closes"
-				? "closed by the provider's link"
+			item.how === "closesOnMerge"
+				? "a provider closing candidate"
 				: howLinked(item.number, closing, named);
 		hints.push({
 			file: contextFile(contextReference, `linked_work_items/${String(item.number)}.md`),
@@ -78,7 +78,7 @@ export default async function mergeConfirmsTheLinkedIssueOutcome(
 	}
 	const occasions = hints.filter((h) => h.pattern === "checkable outcome");
 	const directions: string[] = [];
-	if (metadata.state !== "MERGED") {
+	if (!mergeFacts(metadata).merged) {
 		directions.push("The change is not merged; the practice's occasion is the merge.");
 	} else if (occasions.length === 0) {
 		directions.push(
@@ -88,7 +88,7 @@ export default async function mergeConfirmsTheLinkedIssueOutcome(
 		);
 	} else {
 		directions.push(
-			`${String(occasions.length)} linked issue(s) state a checkable outcome — every one is an occasion, the one the body closes and the ones it only names alike. For each, the confirmation is in the record: its items ticked as captured, or the description or a closing comment naming which items are done and where the rest moves. Work delivered in the diff but neither ticked nor named is unconfirmed.`,
+			`${String(occasions.length)} linked issue(s) state a checkable outcome — every one is an occasion, closing candidates and issues only named alike. For each, the confirmation is in the record: its items ticked as captured, or the description or a closing comment naming which items are done and where the rest moves. Work delivered in the diff but neither ticked nor named is unconfirmed.`,
 		);
 	}
 	return {

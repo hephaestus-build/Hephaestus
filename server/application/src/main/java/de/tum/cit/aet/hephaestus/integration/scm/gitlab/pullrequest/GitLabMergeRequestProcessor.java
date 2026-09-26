@@ -198,7 +198,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             @Nullable String headPipelineStatus,
             @Nullable String headPipelineSha,
             /**
-             * The iids of the issues GitLab records the MR as closing, from the REST closes-issues route;
+             * The iids of GitLab's closing candidates for the MR, from the REST closes-issues route;
              * null when this sync did not read them, which leaves the stored set alone.
              */
             @Nullable List<Integer> closingIssueNumbers) {}

@@ -22,7 +22,7 @@ export default async function linksTheChangeToItsIssue(
 	contextReference: string,
 ) {
 	const linked = await readLinkedWorkItems(contextDir);
-	const linkedNumbers = new Set((linked ?? []).map((item) => item.number));
+	const linkedItems = new Map((linked ?? []).map((item) => [item.number, item]));
 	const inventory = await readProjectInventory(contextDir);
 	const issues = inventoryIssues(inventory);
 	const hints: Hint[] = [];
@@ -40,20 +40,18 @@ export default async function linksTheChangeToItsIssue(
 					where,
 					inInventory: issue !== undefined,
 					title: issue?.title ?? "",
-					state: issue?.state ?? "",
-					inLinkedItems: linkedNumbers.has(n),
+					state: issue?.state ?? linkedItems.get(n)?.state ?? "",
+					inLinkedItems: linkedItems.has(n),
 				},
 			});
 		}
 	};
-	// The provider's own record of what the pull request closes comes first: a link made in the UI
-	// or through a cross-project reference matches nothing in the text.
-	const providerLinks = (linked ?? [])
-		.filter((item) => item.how === "closes")
-		.map((item) => item.number);
+	// The provider's closing candidates come first: a link made in the UI or through a cross-project
+	// reference matches nothing in the text.
+	const providerLinks = (linked ?? []).filter((item) => item.how === "closesOnMerge");
 	add(
-		`${contextFile(contextReference, "linked_work_items.json")} (how: closes)`,
-		providerLinks,
+		`${contextFile(contextReference, "linked_work_items.json")} (how: closesOnMerge)`,
+		providerLinks.map((item) => item.number),
 		true,
 	);
 	const title = text(metadata.title);
@@ -87,10 +85,17 @@ export default async function linksTheChangeToItsIssue(
 		inventoryIssues: inventory?.issues?.length ?? -1,
 		inventoryOpenIssues: inventory?.issues?.filter((i) => isOpenState(i.state)).length ?? -1,
 	};
+	const candidates = providerLinks
+		.map((item) => ` #${String(item.number)} (state ${item.state ?? "not recorded"})`)
+		.join(",");
+	const linkedSummary =
+		linked === null
+			? "linked_work_items.json not captured"
+			: `${String(linked.length)} captured, ${String(providerLinks.length)} of them provider closing candidates${candidates}`;
 	const directions: string[] = [];
 	if (numbers.size > 0) {
 		directions.push(
-			`Issue-shaped references found: ${[...numbers].map((n) => `#${String(n)}`).join(", ")}, one row each with what the inventory holds under that number (${inventory === null ? "no inventory captured" : `${String(metrics.inventoryIssues)} issues`}) and whether it is among the linked items (${linked === null ? "linked_work_items.json not captured" : `${String(linked.length)} captured, ${String(providerLinks.length)} of them the provider records as closed by this change`}).`,
+			`Issue-shaped references found: ${[...numbers].map((n) => `#${String(n)}`).join(", ")}, one row each with what the inventory holds under that number (${inventory === null ? "no inventory captured" : `${String(metrics.inventoryIssues)} issues`}) and whether it is among the linked items (${linkedSummary}).`,
 		);
 	} else {
 		directions.push(

@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
- * The issues GitLab records a merge request as closing, from
+ * The issues GitLab lists as closing candidates for a merge request, from
  * {@code GET /projects/:id/merge_requests/:iid/closes_issues} — a REST route, since the GraphQL merge
  * request exposes no closing references. The route returns issues of any project; only the iids of
  * this project's own issues are kept, and a reference into another project is dropped, for the same

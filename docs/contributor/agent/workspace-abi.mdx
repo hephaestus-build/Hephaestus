@@ -192,11 +192,13 @@ The window is the same 10,000 bound as every other list, so an approval on a bus
 never pushed out by discussion rows.
 
 **`linked_work_items.json`** and **`linked_work_items/<n>.md`** — the issues this repository stores
-that the provider records the pull request as closing (GitHub's closing references, GitLab's
-closes-issues), and the ones named by every `#N` the title, the description (HTML comments removed),
-the branch name and the full commit messages of the change mention. Each item says `how`: `closes`
-when the provider records the link — made by a keyword, in the provider's UI or through a
-cross-project reference — and `mentions` when only the text names it. A `#N` that continues another
+that the provider records as closing candidates for the pull request (GitHub's closing references,
+GitLab's closes-issues), and the ones named by every `#N` the title, the description (HTML comments
+removed), the branch name and the full commit messages of the change mention. Each item says `how`:
+`closesOnMerge` for a provider-recorded candidate — linked by a keyword, in the provider's UI or
+through a cross-project reference — and `mentions` when only the text names it. A candidate closes
+only on an eligible merge, and a project can turn automatic closing off; whether the issue closed is
+its `state` and `closedAt`, as last synced. A `#N` that continues another
 name — `owner/repo#12`, `v1.2#3`, `GH-12` — is not this repository's issue and is not looked up.
 `unresolvedReferences[]` lists the mentioned numbers this repository does not hold. An item's `subIssuesTotal` and `subIssuesCompleted` come with
 `subIssuesSource`: `provider` when the provider synced the rollup (GitHub), `children` when the record

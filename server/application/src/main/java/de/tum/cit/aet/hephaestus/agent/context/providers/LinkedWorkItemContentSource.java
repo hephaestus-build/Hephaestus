@@ -36,8 +36,8 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Captures provider closing links and same-repository issue references from the title,
- * description, branch and commit messages. The review interprets textual references.
+ * Captures the provider's closing candidates for the pull request and same-repository issue references
+ * from the title, description, branch and commit messages. The review interprets textual references.
  */
 @Component
 @Order(200)
@@ -142,8 +142,8 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
                             .findByIdWithAllForGate(pullRequestId)
                             .orElse(null);
 
-            // What the provider records the pull request as closing, before what the text mentions: a
-            // link made in the provider's UI or through a cross-project reference matches no `#N`.
+            // The provider's closing candidates before what the text mentions: a link made in the
+            // provider's UI or through a cross-project reference matches no `#N`.
             Map<Integer, Issue> closing = new LinkedHashMap<>();
             if (pullRequest != null) {
                 for (Issue issue : pullRequestRepository.findClosingIssuesById(pullRequest.getId())) {
@@ -182,7 +182,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
                     unresolved.add(number);
                     continue;
                 }
-                items.add(toItem(resolved.get(), closing.containsKey(number) ? "closes" : "mentions"));
+                items.add(toItem(resolved.get(), closing.containsKey(number) ? "closesOnMerge" : "mentions"));
                 files.put(ITEMS_PREFIX + number + ".md", asText(resolved.get()));
             }
 
@@ -219,8 +219,9 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
     }
 
     /**
-     * @param how {@code closes} when the provider records the pull request as closing the issue,
-     *     {@code mentions} when only the title, description, branch or a commit message names it
+     * @param how {@code closesOnMerge} for a provider-recorded closing candidate, which may close on an
+     *     eligible merge; {@code mentions} when only the title, description, branch or a commit message
+     *     names it. Only the issue's {@code state} and {@code closedAt} say whether it closed
      */
     private ObjectNode toItem(Issue issue, String how) {
         ObjectNode node = objectMapper.createObjectNode();

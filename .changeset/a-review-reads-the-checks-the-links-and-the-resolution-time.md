@@ -4,7 +4,7 @@
 
 A practice review now reads three more facts from the record, on GitHub and GitLab alike: what the
 checks said about the pull request's head (GitHub's status check rollup, GitLab's head pipeline),
-which issues the provider records the pull request as closing — including links made in the
+which issues the provider records as closing candidates for the pull request — including links made in the
 provider's UI that no `#N` in the text names — and review-thread resolution times when available. The
 schema migration that stores them applies automatically.
 

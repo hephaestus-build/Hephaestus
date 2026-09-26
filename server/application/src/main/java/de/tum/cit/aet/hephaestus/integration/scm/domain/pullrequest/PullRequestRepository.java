@@ -126,7 +126,7 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     List<PullRequest> findAllByRepository_Id(Long repositoryId);
 
     /**
-     * The issues the provider records the pull request as closing, with their labels, in number order:
+     * The provider's closing candidates for the pull request, with their labels, in number order:
      * the rows of {@code pull_request_closing_issue} for one pull request.
      */
     @Query("SELECT DISTINCT i FROM PullRequest p JOIN p.closingIssues i LEFT JOIN FETCH i.labels "

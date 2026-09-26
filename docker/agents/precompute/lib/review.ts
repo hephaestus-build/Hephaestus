@@ -9,8 +9,11 @@ export interface LinkedWorkItem {
 	number: number;
 	title: string;
 	state?: string;
-	/** `closes` when the provider records the pull request as closing the issue; `mentions` otherwise. */
-	how?: string;
+	/**
+	 * `closesOnMerge` for a provider-recorded closing candidate, which may close on an eligible merge;
+	 * `mentions` when only the text names it. Only `state` and `closedAt` say whether it closed.
+	 */
+	how?: "closesOnMerge" | "mentions";
 	body: string;
 	createdAt?: string;
 	closedAt?: string;
@@ -74,6 +77,10 @@ function optionalNumber(value: unknown): number | undefined {
 	return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function linkHow(value: unknown): LinkedWorkItem["how"] {
+	return value === "closesOnMerge" || value === "mentions" ? value : undefined;
+}
+
 function objects(value: unknown): Record<string, unknown>[] {
 	return Array.isArray(value) ? value.filter(isJsonObject) : [];
 }
@@ -97,7 +104,7 @@ export async function readLinkedWorkItems(
 				number,
 				title: text(item.title),
 				state: optionalString(item.state),
-				how: optionalString(item.how),
+				how: linkHow(item.how),
 				body: text(item.body ?? item.description),
 				createdAt: optionalString(item.createdAt),
 				closedAt: optionalString(item.closedAt),
