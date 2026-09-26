@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 
-import type { GitLabGroup, GitLabPreflightResponse } from "@/api/types.gen";
+import type { GitLabGroup, GitLabPreflightRequest, GitLabPreflightResponse } from "@/api/types.gen";
 
 import { generateSlug } from "./slug-utils";
 
@@ -24,19 +24,22 @@ export interface WizardState {
 export type WizardAction =
 	| { type: "SET_SERVER_URL"; value: string }
 	| { type: "SET_PAT"; value: string }
-	| { type: "SET_PREFLIGHT_RESULT"; result: GitLabPreflightResponse }
-	| { type: "ADVANCE_TO_GROUPS"; groups: GitLabGroup[] }
+	| {
+			type: "SET_PREFLIGHT_RESULT";
+			result: GitLabPreflightResponse;
+			request: GitLabPreflightRequest;
+	  }
+	| { type: "ADVANCE_TO_GROUPS"; groups: GitLabGroup[]; request: GitLabPreflightRequest }
 	| { type: "SELECT_GROUP"; group: GitLabGroup }
 	| { type: "ADVANCE_TO_CONFIGURE" }
 	| { type: "SET_DISPLAY_NAME"; value: string }
 	| { type: "SET_SLUG"; value: string; manual: boolean }
-	| { type: "GO_BACK" }
-	| { type: "RESET" };
+	| { type: "GO_BACK" };
 
-export function createInitialWizardState(defaultServerUrl?: string): WizardState {
+export function createInitialWizardState(serverUrl: string): WizardState {
 	return {
 		step: 1,
-		serverUrl: defaultServerUrl ?? "",
+		serverUrl,
 		personalAccessToken: "",
 		preflightResult: null,
 		groups: [],
@@ -47,7 +50,16 @@ export function createInitialWizardState(defaultServerUrl?: string): WizardState
 	};
 }
 
-export const initialWizardState: WizardState = createInitialWizardState();
+/** A response settles the credentials it was requested with; one that arrives after an edit is dropped. */
+export function isForCurrentCredentials(
+	state: WizardState,
+	request: GitLabPreflightRequest,
+): boolean {
+	return (
+		request.serverUrl === state.serverUrl &&
+		request.personalAccessToken === state.personalAccessToken
+	);
+}
 
 export function wizardReducer(state: WizardState, action: WizardAction): WizardState {
 	switch (action.type) {
@@ -60,10 +72,13 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
 			return { ...state, personalAccessToken: action.value, preflightResult: null };
 		}
 		case "SET_PREFLIGHT_RESULT": {
+			if (!isForCurrentCredentials(state, action.request)) {
+				return state;
+			}
 			return { ...state, preflightResult: action.result };
 		}
 		case "ADVANCE_TO_GROUPS": {
-			if (state.step !== 1) {
+			if (state.step !== 1 || !isForCurrentCredentials(state, action.request)) {
 				return state;
 			}
 			return { ...state, step: 2, groups: action.groups };
@@ -120,9 +135,6 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
 				workspaceSlug: "",
 				slugManuallyEdited: false,
 			};
-		}
-		case "RESET": {
-			return initialWizardState;
 		}
 		default: {
 			const _exhaustive: never = action;

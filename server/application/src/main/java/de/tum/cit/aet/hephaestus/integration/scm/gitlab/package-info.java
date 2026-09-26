@@ -27,6 +27,8 @@
             // GitLabWebhookService uses WebhookProperties; GitLabPreflightService validates URLs.
             "core::webhook",
             "core::security",
+            // ConfiguredScmInstances reads the enabled login providers.
+            "core::auth-spi",
             "workspace",
             // GitLab workspace flows depend on the workspace named sub-surfaces.
             "workspace::context",

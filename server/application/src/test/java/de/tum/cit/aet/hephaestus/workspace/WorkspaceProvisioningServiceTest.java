@@ -17,7 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.connection.identity.AuthenticatedGitProviderUserService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.identity.ConfiguredScmInstances;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -58,7 +58,7 @@ class WorkspaceProvisioningServiceTest {
     private WorkspaceMembershipService workspaceMembershipService;
 
     @Mock
-    private AuthenticatedGitProviderUserService authenticatedGitProviderUserService;
+    private ConfiguredScmInstances configuredScmInstances;
 
     @Mock
     private ConnectionService connectionService;
@@ -85,7 +85,7 @@ class WorkspaceProvisioningServiceTest {
                 gitProviderRepository,
                 workspaceMembershipRepository,
                 workspaceMembershipService,
-                authenticatedGitProviderUserService,
+                configuredScmInstances,
                 connectionService,
                 List.of(),
                 new ScmServerEndpointPolicy(new MockEnvironment()));
@@ -232,7 +232,7 @@ class WorkspaceProvisioningServiceTest {
                 gitProviderRepository,
                 workspaceMembershipRepository,
                 workspaceMembershipService,
-                authenticatedGitProviderUserService,
+                configuredScmInstances,
                 connectionService,
                 List.of(),
                 new ScmServerEndpointPolicy(new MockEnvironment()));

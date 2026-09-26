@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.workspace.dto;
 
+import de.tum.cit.aet.hephaestus.workspace.validation.ScmServerUrl;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Request DTO for GitLab pre-creation checks (token validation and group listing).
@@ -16,12 +18,15 @@ public record GitLabPreflightRequestDTO(
         String personalAccessToken,
 
         @Schema(
-                description = "GitLab server URL. Defaults to https://gitlab.com if not specified.",
+                description = "GitLab instance configured for sign-in; the default GitLab instance when omitted.",
                 example = "https://gitlab.example.com")
+        @ScmServerUrl
+        @Nullable
         String serverUrl,
 
         @Schema(
                 description =
-                        "GitLab group full path, used as fallback for group/project tokens that cannot access /api/v4/user",
+                        "GitLab group full path, used to validate the token against the group when /api/v4/user refuses it",
                 example = "my-org/my-team")
+        @Nullable
         String groupFullPath) {}

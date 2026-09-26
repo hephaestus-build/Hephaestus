@@ -239,6 +239,8 @@ The login provider is instance-agnostic: gitlab.com works out of the box, and an
 
 This env-seeds **one** default GitLab login provider (registration id `gitlab`). Additional GitLab instances are added at runtime by an instance admin under **Instance admin → Login providers** — no redeploy.
 
+GitLab workspaces can only be created on an instance with an enabled GitLab login provider, or on `GITLAB_DEFAULT_SERVER_URL`. Hephaestus refuses any other server before an access token is validated, used to list groups, or stored. The workspace owner is the creator's GitLab account on that same instance, so creators link that instance first. Keep one enabled GitLab login provider per instance: a second one for the same instance, even spelled differently (`https://gitlab.example.com` and `HTTPS://GitLab.example.com:443`), is refused, and an existing pair blocks GitLab workspace creation there until one is disabled.
+
 The auto-registered group webhook subscribes to merge request, issue, note, push, tag push, pipeline,
 milestone, member, subgroup and project events. A hook registered by an earlier release does not gain
 a subscription on upgrade: for a workspace connected before pipeline events were read, enable

@@ -10543,8 +10543,8 @@ components:
           minLength: 0
         serverUrl:
           type: string
-          description: Custom server URL for self-hosted GitLab instances. Must use
-            HTTPS. Defaults to https://gitlab.com if not specified.
+          description: GitLab instance configured for sign-in; the default GitLab
+            instance when omitted.
           example: https://gitlab.example.com
         workspaceSlug:
           type: string
@@ -11505,8 +11505,8 @@ components:
       properties:
         groupFullPath:
           type: string
-          description: "GitLab group full path, used as fallback for group/project\
-            \ tokens that cannot access /api/v4/user"
+          description: "GitLab group full path, used to validate the token against\
+            \ the group when /api/v4/user refuses it"
           example: my-org/my-team
         personalAccessToken:
           type: string
@@ -11515,7 +11515,8 @@ components:
           minLength: 1
         serverUrl:
           type: string
-          description: GitLab server URL. Defaults to https://gitlab.com if not specified.
+          description: GitLab instance configured for sign-in; the default GitLab
+            instance when omitted.
           example: https://gitlab.example.com
       required:
       - personalAccessToken

@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { CircleCheckIcon, EyeIcon, EyeOffIcon, OctagonXIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { gitLabPreflightMutation } from "@/api/@tanstack/react-query.gen";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -24,7 +24,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { firstNonBlank, hasText } from "@/lib/text";
 
 import { type ConnectionFormData, connectionSchema } from "./schemas";
-import { useWizard } from "./wizard-context";
+import { isForCurrentCredentials, useWizard } from "./wizard-context";
 
 export interface GitLabInstanceOption {
 	registrationId: string;
@@ -37,31 +37,9 @@ const CONNECTION_FIELDS = [
 	"personalAccessToken",
 ] as const satisfies readonly (keyof ConnectionFormData)[];
 
-const NO_INSTANCES: readonly GitLabInstanceOption[] = [];
-
-export function ConnectGitLabStep({
-	instances = NO_INSTANCES,
-}: {
-	instances?: readonly GitLabInstanceOption[];
-}) {
+export function ConnectGitLabStep({ instances }: { instances: readonly GitLabInstanceOption[] }) {
 	const { state, dispatch } = useWizard();
-	// Only instances with a known base URL can be offered as a pick; a blank one falls back to the
-	// read-only configured field.
-	const selectableInstances = instances.filter((i) => Boolean(i.baseUrl));
-	const multipleInstances = selectableInstances.length > 1;
-
-	// Keep state.serverUrl pinned to a real instance when a picker is shown, so preflight + creation use
-	// the selected instance even before the user touches the dropdown.
-	useEffect(() => {
-		if (!multipleInstances) {
-			return;
-		}
-		const matches = selectableInstances.some((i) => i.baseUrl === state.serverUrl);
-		const [firstInstance] = selectableInstances;
-		if (!matches && firstInstance) {
-			dispatch({ type: "SET_SERVER_URL", value: firstInstance.baseUrl });
-		}
-	}, [multipleInstances, selectableInstances, state.serverUrl, dispatch]);
+	const multipleInstances = instances.length > 1;
 	const [showToken, setShowToken] = useState(false);
 	const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ConnectionFormData, string>>>(
 		{},
@@ -69,8 +47,8 @@ export function ConnectGitLabStep({
 
 	const preflight = useMutation({
 		...gitLabPreflightMutation(),
-		onSuccess: (data) => {
-			dispatch({ type: "SET_PREFLIGHT_RESULT", result: data });
+		onSuccess: (data, { body }) => {
+			dispatch({ type: "SET_PREFLIGHT_RESULT", result: data, request: body });
 		},
 	});
 
@@ -102,12 +80,10 @@ export function ConnectGitLabStep({
 		preflight.mutate({
 			body: {
 				personalAccessToken: result.data.personalAccessToken,
-				serverUrl: result.data.serverUrl || undefined,
+				serverUrl: result.data.serverUrl,
 			},
 		});
 	};
-
-	const settingsBaseUrl = state.serverUrl || "https://gitlab.com";
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -117,18 +93,22 @@ export function ConnectGitLabStep({
 				</FieldLabel>
 				{multipleInstances ? (
 					<Select
-						items={selectableInstances.map((instance) => ({
+						items={instances.map((instance) => ({
 							value: instance.baseUrl,
 							label: `${instance.displayName} (${instance.baseUrl})`,
 						}))}
-						value={firstNonBlank(state.serverUrl, selectableInstances[0]?.baseUrl) ?? ""}
-						onValueChange={(value) => dispatch({ type: "SET_SERVER_URL", value: value ?? "" })}
+						value={state.serverUrl}
+						onValueChange={(value) => {
+							if (value !== null) {
+								dispatch({ type: "SET_SERVER_URL", value });
+							}
+						}}
 					>
 						<SelectTrigger id="gitlab-server-url">
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent aria-labelledby="gitlab-server-url-label">
-							{selectableInstances.map((instance) => (
+							{instances.map((instance) => (
 								<SelectItem key={instance.registrationId} value={instance.baseUrl}>
 									{instance.displayName} ({instance.baseUrl})
 								</SelectItem>
@@ -138,7 +118,7 @@ export function ConnectGitLabStep({
 				) : (
 					<Input
 						id="gitlab-server-url"
-						value={state.serverUrl || "https://gitlab.com"}
+						value={state.serverUrl}
 						disabled
 						aria-describedby="gitlab-server-url-description"
 					/>
@@ -189,7 +169,7 @@ export function ConnectGitLabStep({
 				<FieldDescription id="gitlab-pat-description">
 					Use a{" "}
 					<a
-						href={`${settingsBaseUrl}/help/user/group/settings/group_access_tokens`}
+						href={`${state.serverUrl}/help/user/group/settings/group_access_tokens`}
 						target="_blank"
 						rel="noopener noreferrer"
 					>
@@ -233,7 +213,7 @@ export function ConnectGitLabStep({
 				</Alert>
 			)}
 
-			{preflight.isError && !state.preflightResult && (
+			{preflight.isError && isForCurrentCredentials(state, preflight.variables.body) && (
 				<Alert variant="destructive">
 					<OctagonXIcon aria-hidden="true" />
 					<AlertTitle>Connection error</AlertTitle>

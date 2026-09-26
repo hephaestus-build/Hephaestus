@@ -3,6 +3,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { ConnectGitLabStep } from "./ConnectGitLabStep";
 import { withWizardState } from "./stories-utils";
 
+const serverUrl = "https://gitlab.example.com";
+
 /**
  * Connection step in the GitLab workspace creation wizard.
  * Collects GitLab instance URL and personal access token,
@@ -10,6 +12,9 @@ import { withWizardState } from "./stories-utils";
  */
 const meta = {
 	component: ConnectGitLabStep,
+	args: {
+		instances: [{ registrationId: "gitlab", displayName: "GitLab", baseUrl: serverUrl }],
+	},
 	parameters: {
 		layout: "centered",
 		docs: {
@@ -20,7 +25,7 @@ const meta = {
 		},
 	},
 	decorators: [
-		withWizardState({ step: 1 }),
+		withWizardState({ step: 1, serverUrl }),
 		(Story) => (
 			<div className="w-96">
 				<Story />
@@ -33,15 +38,15 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Empty initial state — no URL or token entered yet. */
+/** Empty initial state — no token entered yet. */
 export const Default: Story = {};
 
-/** User has entered a self-hosted URL and token but hasn't validated yet. */
+/** User has entered a token but hasn't validated yet. */
 export const FilledNotValidated: Story = {
 	decorators: [
 		withWizardState({
 			step: 1,
-			serverUrl: "https://gitlab.example.com",
+			serverUrl,
 			personalAccessToken: "glpat-abc123def456",
 		}),
 	],
@@ -52,7 +57,7 @@ export const TokenValid: Story = {
 	decorators: [
 		withWizardState({
 			step: 1,
-			serverUrl: "https://gitlab.example.com",
+			serverUrl,
 			personalAccessToken: "glpat-abc123def456",
 			preflightResult: { valid: true, username: "admin" },
 		}),
@@ -64,7 +69,7 @@ export const TokenInvalid: Story = {
 	decorators: [
 		withWizardState({
 			step: 1,
-			serverUrl: "https://gitlab.example.com",
+			serverUrl,
 			personalAccessToken: "glpat-bad-token",
 			preflightResult: {
 				valid: false,
@@ -79,6 +84,7 @@ export const TokenInvalidGenericError: Story = {
 	decorators: [
 		withWizardState({
 			step: 1,
+			serverUrl,
 			personalAccessToken: "glpat-expired",
 			preflightResult: { valid: false },
 		}),

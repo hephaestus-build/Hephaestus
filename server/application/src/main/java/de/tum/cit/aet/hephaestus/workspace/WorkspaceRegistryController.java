@@ -78,12 +78,13 @@ public class WorkspaceRegistryController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "GitLab workspace creation is not enabled");
         }
 
-        // Provisions the User entity from the account's GitLab IdentityLink, or returns 409 if none is linked.
-        if (createWorkspaceRequest.kind() == IntegrationKind.GITLAB) {
-            workspaceProvisioningService.ensureAuthenticatedUserExists();
-        }
+        // The token may only reach, and the workspace only bind to, a configured GitLab instance.
+        CreateWorkspaceRequestDTO request = createWorkspaceRequest.kind() == IntegrationKind.GITLAB
+                ? createWorkspaceRequest.withServerUrl(
+                        workspaceProvisioningService.requireGitLabInstance(createWorkspaceRequest.serverUrl()))
+                : createWorkspaceRequest;
 
-        Workspace workspace = workspaceService.createWorkspaceWithInitialization(createWorkspaceRequest);
+        Workspace workspace = workspaceService.createWorkspaceWithInitialization(request);
 
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{workspaceSlug}")

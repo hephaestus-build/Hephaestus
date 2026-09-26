@@ -2,12 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import type { GitLabGroup, GitLabPreflightResponse } from "@/api/types.gen";
 import {
-	initialWizardState,
+	createInitialWizardState,
 	type WizardState,
 	wizardReducer,
 } from "@/components/create-workspace/wizard-context";
 
+const initialWizardState = createInitialWizardState("https://gitlab.lrz.de");
 const validPreflight: GitLabPreflightResponse = { valid: true, username: "admin" };
+const request = {
+	serverUrl: initialWizardState.serverUrl,
+	personalAccessToken: initialWizardState.personalAccessToken,
+};
 const sampleGroup: GitLabGroup = {
 	id: 1,
 	name: "Hephaestus",
@@ -60,8 +65,19 @@ describe("wizardReducer", () => {
 			const result = wizardReducer(initialWizardState, {
 				type: "SET_PREFLIGHT_RESULT",
 				result: validPreflight,
+				request,
 			});
 			expect(result.preflightResult).toStrictEqual(validPreflight);
+		});
+
+		it("drops a result for credentials edited since the request", () => {
+			const state = stateAt(1, { personalAccessToken: "glpat-edited" });
+			const result = wizardReducer(state, {
+				type: "SET_PREFLIGHT_RESULT",
+				result: validPreflight,
+				request: { ...request, personalAccessToken: "glpat-sent" },
+			});
+			expect(result).toBe(state);
 		});
 	});
 
@@ -70,21 +86,28 @@ describe("wizardReducer", () => {
 			const result = wizardReducer(initialWizardState, {
 				type: "ADVANCE_TO_GROUPS",
 				groups: sampleGroups,
+				request,
 			});
 			expect(result.step).toBe(2);
 			expect(result.groups).toStrictEqual(sampleGroups);
 		});
 
+		it("drops groups listed for credentials edited since the request", () => {
+			const state = stateAt(1, { serverUrl: "https://gitlab.example.com" });
+			const result = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: [], request });
+			expect(result).toBe(state);
+		});
+
 		it("rejects advancement from step 2 (guard)", () => {
 			const state = stateAt(2);
-			const result = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: [] });
+			const result = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: [], request });
 			// unchanged reference
 			expect(result).toBe(state);
 		});
 
 		it("rejects advancement from step 3 (guard)", () => {
 			const state = stateAt(3);
-			const result = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: [] });
+			const result = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: [], request });
 			expect(result).toBe(state);
 		});
 	});
@@ -216,32 +239,22 @@ describe("wizardReducer", () => {
 		});
 	});
 
-	describe("RESET", () => {
-		it("returns to initial state from step 3", () => {
-			const state = stateAt(3, {
-				serverUrl: "https://gitlab.example.com",
-				personalAccessToken: "token",
-				displayName: "Test",
-				workspaceSlug: "test",
-			});
-			const result = wizardReducer(state, { type: "RESET" });
-			expect(result).toStrictEqual(initialWizardState);
-		});
-
-		it("returns to initial state from step 2", () => {
-			const state = stateAt(2, { selectedGroup: sampleGroup });
-			const result = wizardReducer(state, { type: "RESET" });
-			expect(result).toStrictEqual(initialWizardState);
-		});
-	});
-
 	describe("integration flows", () => {
 		it("full forward flow: step 1 → 2 → 3", () => {
 			let state = initialWizardState;
 			state = wizardReducer(state, { type: "SET_SERVER_URL", value: "https://gitlab.example.com" });
 			state = wizardReducer(state, { type: "SET_PAT", value: "glpat-test" });
-			state = wizardReducer(state, { type: "SET_PREFLIGHT_RESULT", result: validPreflight });
-			state = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: sampleGroups });
+			const sent = { serverUrl: "https://gitlab.example.com", personalAccessToken: "glpat-test" };
+			state = wizardReducer(state, {
+				type: "SET_PREFLIGHT_RESULT",
+				result: validPreflight,
+				request: sent,
+			});
+			state = wizardReducer(state, {
+				type: "ADVANCE_TO_GROUPS",
+				groups: sampleGroups,
+				request: sent,
+			});
 			expect(state.step).toBe(2);
 
 			state = wizardReducer(state, { type: "SELECT_GROUP", group: sampleGroup });
@@ -253,7 +266,7 @@ describe("wizardReducer", () => {
 
 		it("round-trip: 1 → 2 → 3 → back → back → 1", () => {
 			let state = initialWizardState;
-			state = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: sampleGroups });
+			state = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: sampleGroups, request });
 			state = wizardReducer(state, { type: "SELECT_GROUP", group: sampleGroup });
 			state = wizardReducer(state, { type: "ADVANCE_TO_CONFIGURE" });
 			expect(state.step).toBe(3);
@@ -275,7 +288,11 @@ describe("wizardReducer", () => {
 				fullPath: "org/new-group",
 			};
 			let state = initialWizardState;
-			state = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: [sampleGroup, groupB] });
+			state = wizardReducer(state, {
+				type: "ADVANCE_TO_GROUPS",
+				groups: [sampleGroup, groupB],
+				request,
+			});
 			state = wizardReducer(state, { type: "SELECT_GROUP", group: sampleGroup });
 			state = wizardReducer(state, { type: "ADVANCE_TO_CONFIGURE" });
 			expect(state.displayName).toBe("Hephaestus");
@@ -291,7 +308,7 @@ describe("wizardReducer", () => {
 
 		it("still advances on ADVANCE_TO_GROUPS with an empty array", () => {
 			const state = initialWizardState;
-			const result = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: [] });
+			const result = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: [], request });
 			expect(result.step).toBe(2);
 			expect(result.groups).toStrictEqual([]);
 		});

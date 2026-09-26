@@ -1252,7 +1252,7 @@ export type CreateWorkspaceRequest = {
    */
   personalAccessToken?: string;
   /**
-   * Custom server URL for self-hosted GitLab instances. Must use HTTPS. Defaults to https://gitlab.com if not specified.
+   * GitLab instance configured for sign-in; the default GitLab instance when omitted.
    */
   serverUrl?: string;
   /**
@@ -1764,7 +1764,7 @@ export type GitLabGroup = {
  */
 export type GitLabPreflightRequest = {
   /**
-   * GitLab group full path, used as fallback for group/project tokens that cannot access /api/v4/user
+   * GitLab group full path, used to validate the token against the group when /api/v4/user refuses it
    */
   groupFullPath?: string;
   /**
@@ -1772,7 +1772,7 @@ export type GitLabPreflightRequest = {
    */
   personalAccessToken: string;
   /**
-   * GitLab server URL. Defaults to https://gitlab.com if not specified.
+   * GitLab instance configured for sign-in; the default GitLab instance when omitted.
    */
   serverUrl?: string;
 };

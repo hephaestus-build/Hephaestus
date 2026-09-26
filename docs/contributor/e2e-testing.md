@@ -32,7 +32,9 @@ For an isolated simulator, set `hephaestus.e2e.scm-origin` (environment variable
 `HEPHAESTUS_E2E_SCM_ORIGIN`) to its exact `http://127.0.0.1:<port>` origin, without a trailing
 slash. Startup rejects this setting unless `e2e` is active and `prod` is absent. Workspace
 validation and GitLab preflight allow only that origin; other destinations retain the normal
-HTTPS and private-address restrictions. Preflight clients do not follow redirects and cannot
+HTTPS and private-address restrictions. GitLab workspace creation also requires a configured
+instance, so set `GITLAB_DEFAULT_SERVER_URL` to the same origin. Preflight clients do not follow
+redirects and cannot
 send requests to a different origin. A Git fetch to that origin runs in the application's own process
 through JGit, so it reaches the simulator exactly as the provider API calls do and the simulator has to
 serve Git smart HTTP on the same loopback origin. This does not enable a GitHub simulator or supply

@@ -26,6 +26,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -289,6 +290,37 @@ class LoginProviderServiceTest extends BaseUnitTest {
         assertThatThrownBy(() -> adminService().create(gitlabDraft("gitlab-acme", "https://gitlab.acme.test", null)))
                 .isInstanceOf(ResponseStatusException.class);
         verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shouldRefuseASecondEnabledGitlabProviderForTheSameInstanceWhenSpelledDifferently() {
+        when(repository.findByEnabledTrueOrderByDisplayNameAsc()).thenReturn(List.of(gitlabProvider("gitlab", "s")));
+
+        assertThatThrownBy(() ->
+                        adminService().create(gitlabDraft("gitlab-again", "HTTPS://GitLab.example.com:443", null)))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shouldLetAnAdminDisableButNotReenableAnExistingDuplicate() {
+        LoginProvider kept = gitlabProvider("gitlab", "s");
+        LoginProvider duplicate = gitlabProvider("gitlab-again", "s");
+        duplicate.setBaseUrl("HTTPS://GitLab.example.com:443");
+        when(repository.findByRegistrationId("gitlab-again")).thenReturn(Optional.of(duplicate));
+        when(repository.findByEnabledTrueOrderByDisplayNameAsc()).thenReturn(List.of(kept, duplicate));
+        when(repository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        var disable = new LoginProviderService.Patch(null, null, null, null, null, false);
+        var enable = new LoginProviderService.Patch(null, null, null, null, null, true);
+
+        assertThat(adminService().update("gitlab-again", disable).isEnabled()).isFalse();
+        when(repository.findByEnabledTrueOrderByDisplayNameAsc()).thenReturn(List.of(kept));
+        assertThatThrownBy(() -> adminService().update("gitlab-again", enable))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
     }
 
     @Test

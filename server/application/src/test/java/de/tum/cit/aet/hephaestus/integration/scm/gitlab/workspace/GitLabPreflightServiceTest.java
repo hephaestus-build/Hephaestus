@@ -7,10 +7,14 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.LoginProviderQuery;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
+import de.tum.cit.aet.hephaestus.integration.core.connection.identity.ConfiguredScmInstances;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabGroupDTO;
@@ -30,12 +34,14 @@ import org.springframework.web.reactive.function.client.WebClient.RequestHeaders
 import org.springframework.web.reactive.function.client.WebClient.RequestHeadersUriSpec;
 import org.springframework.web.reactive.function.client.WebClient.ResponseSpec;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 class GitLabPreflightServiceTest extends BaseUnitTest {
 
     private WebClient mockWebClient;
+    private ScmServerEndpointPolicy endpoints;
     private GitLabPreflightService preflightService;
 
     @BeforeEach
@@ -48,9 +54,13 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
                 Duration.ofSeconds(60),
                 Duration.ofMillis(200),
                 Duration.ofMinutes(5));
-        var endpoints = spy(new ScmServerEndpointPolicy(new MockEnvironment()));
+        endpoints = spy(new ScmServerEndpointPolicy(new MockEnvironment()));
         lenient().doReturn(mockWebClient).when(endpoints).clientFor(anyString());
-        preflightService = new GitLabPreflightService(properties, endpoints);
+        LoginProviderQuery loginProviders = () -> List.of(
+                new LoginProviderQuery.Provider("lrz", "LRZ GitLab", "GITLAB", "https://gitlab.lrz.de"),
+                new LoginProviderQuery.Provider("gh", "GitHub", "GITHUB", "https://github.example.com"));
+        preflightService =
+                new GitLabPreflightService(properties, endpoints, new ConfiguredScmInstances(List.of(loginProviders)));
     }
 
     @SuppressWarnings("unchecked")
@@ -79,7 +89,7 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
         lenient().when(uriSpec.uri(anyString(), any(Object.class))).thenReturn((RequestHeadersSpec) headersSpec);
         when(headersSpec.header(anyString(), anyString())).thenReturn((RequestHeadersSpec) headersSpec);
         when(headersSpec.retrieve()).thenReturn(responseSpec);
-        when(responseSpec.bodyToMono(any(Class.class))).thenReturn(Mono.error(exception));
+        lenient().when(responseSpec.bodyToMono(any(Class.class))).thenReturn(Mono.error(exception));
         lenient().when(responseSpec.bodyToFlux(any(Class.class))).thenReturn(Flux.error(exception));
     }
 
@@ -111,7 +121,7 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
             GitLabPreflightResponseDTO result = preflightService.validateToken("glpat-bad", null, null);
 
             assertThat(result.valid()).isFalse();
-            assertThat(result.error()).contains("group/project token");
+            assertThat(result.error()).contains("groupFullPath");
         }
 
         @Test
@@ -125,23 +135,25 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void validatesWithCustomServerUrl() {
-            // Uses custom server URL — the mock intercepts regardless
-            mockGetRequest(new GitLabPreflightService.GitLabUserResponse(99L, "custom-user", "Custom", null, null));
+        void shouldValidateAgainstConfiguredInstanceWhenItIsASignInProvider() {
+            mockGetRequest(new GitLabPreflightService.GitLabUserResponse(99L, "lrz-user", "LRZ", null, null));
 
-            // Note: actual server URL validation (SSRF) is tested in ServerUrlValidatorTest
             GitLabPreflightResponseDTO result =
-                    preflightService.validateToken("glpat-test", "https://gitlab.example.com", null);
+                    preflightService.validateToken("glpat-test", "https://gitlab.lrz.de/", null);
 
-            assertThat(result.valid()).isTrue();
-            assertThat(result.username()).isEqualTo("custom-user");
+            assertThat(result.username()).isEqualTo("lrz-user");
+            verify(endpoints).clientFor("https://gitlab.lrz.de");
         }
 
         @Test
-        void rejectsUnsafeServerUrl() {
-            assertThatThrownBy(() -> preflightService.validateToken("glpat-test", "http://evil.com", null))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("HTTPS");
+        void shouldRefuseBeforeAnyRequestWhenInstanceIsNotConfigured() {
+            for (String serverUrl : List.of("https://gitlab.example.com", "https://github.example.com")) {
+                assertThatThrownBy(() -> preflightService.validateToken("glpat-test", serverUrl, null))
+                        .isInstanceOfSatisfying(
+                                ResponseStatusException.class,
+                                e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT));
+            }
+            verify(endpoints, never()).clientFor(anyString());
         }
     }
 
@@ -197,10 +209,27 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void rejectsUnsafeServerUrl() {
-            assertThatThrownBy(() -> preflightService.listAccessibleGroups("glpat-test", "http://evil.com"))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("HTTPS");
+        void shouldFailInsteadOfReturningNoGroupsWhenGitLabRefusesTheToken() {
+            mockGetRequestThrows(WebClientResponseException.create(
+                    HttpStatus.UNAUTHORIZED.value(),
+                    "Unauthorized",
+                    HttpHeaders.EMPTY,
+                    new byte[0],
+                    StandardCharsets.UTF_8));
+
+            assertThatThrownBy(() -> preflightService.listAccessibleGroups("glpat-revoked", null))
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY));
+        }
+
+        @Test
+        void shouldRefuseBeforeAnyRequestWhenInstanceIsNotConfigured() {
+            assertThatThrownBy(() -> preflightService.listAccessibleGroups("glpat-test", "https://gitlab.example.com"))
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT));
+            verify(endpoints, never()).clientFor(anyString());
         }
     }
 }
