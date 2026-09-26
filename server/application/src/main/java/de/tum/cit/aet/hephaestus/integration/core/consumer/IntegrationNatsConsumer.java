@@ -78,6 +78,9 @@ public class IntegrationNatsConsumer {
     /** NATS client connection timeout — keep short; reconnect handles long outages. */
     private static final Duration CONNECTION_TIMEOUT = Duration.ofSeconds(10);
 
+    /** How long a caller that needs the scope to itself waits for a setup task in flight to finish. */
+    private static final Duration SCOPE_SETUP_WAIT = Duration.ofSeconds(10);
+
     /** Maximum reconnect attempts before we throw {@link NatsConnectionException}. */
     private static final int MAX_RECONNECT_ATTEMPTS = 6;
 
@@ -109,6 +112,13 @@ public class IntegrationNatsConsumer {
      * here means a setup task is in-flight on a virtual thread.
      */
     private final Set<Long> pendingScopeSetup = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Scopes that were asked to reconcile while a setup task held them in {@link #pendingScopeSetup}. That task
+     * reconciles once more before it releases the scope, because its own read of the subscription info may
+     * predate the change behind the request.
+     */
+    private final Set<Long> reconcileRequestedScopes = ConcurrentHashMap.newKeySet();
 
     private final Set<Long> stoppingScopes = ConcurrentHashMap.newKeySet();
 
@@ -280,52 +290,94 @@ public class IntegrationNatsConsumer {
             log.debug("Scope consumer setup already in progress: scopeId={}", scopeId);
             return;
         }
-        virtualThreadExecutor.submit(() -> {
-            try {
-                ensureNatsConnectionEstablished();
-                reconcileScope(scopeId);
-            } catch (Exception e) {
-                log.error("Failed to start scope consumer: scopeId={}", scopeId, e);
-            } finally {
-                endScopeSetup(scopeId);
-            }
-        });
+        submitScopeSetup(scopeId);
     }
 
     /**
-     * Reconcile the filter subjects of an already-running scope. No-op if the scope has no consumers
-     * yet — scope startup picks up the latest subscription info when {@link #startConsumingScope(Long)}
-     * fires. When a scope gains a stream (e.g. Outline is connected after boot) the reconcile creates
-     * the additional consumer; when it loses one the reconcile tears that consumer down.
+     * Reconcile the filter subjects of a running or starting scope. No-op if the scope has neither
+     * consumers nor a setup in flight. When a scope gains a stream (e.g. Outline is connected after boot)
+     * the reconcile creates the additional consumer; when it loses one the reconcile tears that consumer
+     * down.
      *
      * <p>Shares {@link #pendingScopeSetup} with {@link #startConsumingScope(Long)}: two concurrent
      * reconciles of one scope would race the read-modify-write on {@link #scopeConsumers} and the loser's
      * freshly-created consumer would be overwritten without {@code stop()} — leaking its virtual thread
-     * and an orphaned server-side durable. A membership change that arrives while a reconcile is in
-     * flight is not lost: the in-flight reconcile re-reads the subscription info, and the callers
-     * (lifecycle listeners, repo monitors) re-fire on the next change.
+     * and an orphaned server-side durable. A request that arrives while a setup is in flight is handed to
+     * that setup, which reconciles once more before it releases the scope.
      */
     public void updateScopeConsumer(Long scopeId) {
         if (!connectionProperties.enabled() || shuttingDown.get() || scopeId == null) {
             return;
         }
-        if (!scopeConsumers.containsKey(scopeId)) {
-            log.debug("Skipped consumer update: reason=notRunning, scopeId={}", scopeId);
-            return;
-        }
-        if (!beginScopeSetup(scopeId)) {
-            log.debug("Scope reconcile already in progress: scopeId={}", scopeId);
-            return;
-        }
-        virtualThreadExecutor.submit(() -> {
-            try {
-                reconcileScope(scopeId);
-            } catch (Exception e) {
-                log.error("Failed to update scope consumer: scopeId={}", scopeId, e);
-            } finally {
-                endScopeSetup(scopeId);
+        synchronized (scopeLifecycleMonitor) {
+            if (!scopeConsumers.containsKey(scopeId) && !pendingScopeSetup.contains(scopeId)) {
+                log.debug("Skipped consumer update: reason=notRunning, scopeId={}", scopeId);
+                return;
             }
-        });
+            if (!beginScopeSetup(scopeId)) {
+                log.debug("Scope reconcile already in progress: scopeId={}", scopeId);
+                return;
+            }
+        }
+        submitScopeSetup(scopeId);
+    }
+
+    /**
+     * Creates or updates the scope's consumers on the calling thread and returns once JetStream holds the
+     * scope's current subscription on {@code streamName}, so the caller can open a delivery path whose
+     * events must not be skipped. Waits for a setup task already in flight instead of racing it, and
+     * reconciles again for every change requested while it runs, so no requested subject is left to a
+     * later pass.
+     *
+     * @throws IOException when a stream's consumer cannot be created, updated or read back; the usual retry
+     *     is armed for creation and update failures
+     * @throws IllegalStateException when the fleet is not running, the scope is stopping or stays busy, or
+     *     JetStream does not hold the scope's subscription on {@code streamName}
+     */
+    public void establishScopeConsumer(Long scopeId, String streamName) throws IOException {
+        if (!connectionProperties.enabled() || shuttingDown.get()) {
+            throw new IllegalStateException("Integration NATS consumer is not running");
+        }
+        claimScopeSetup(scopeId);
+        boolean released = false;
+        try {
+            do {
+                ensureNatsConnectionEstablished();
+                reconcileScope(scopeId);
+                requireInstalledSubscription(scopeId, streamName);
+                released = endScopeSetup(scopeId);
+            } while (!released);
+        } finally {
+            if (!released && !endScopeSetup(scopeId)) {
+                submitScopeSetup(scopeId);
+            }
+        }
+    }
+
+    /**
+     * Requires a live local subscription and reads the stream's durable back from JetStream, requiring the
+     * filter this pass installed.
+     */
+    private void requireInstalledSubscription(Long scopeId, String streamName) throws IOException {
+        ScopeConsumer consumer = scopeConsumers.getOrDefault(scopeId, List.of()).stream()
+                .filter(candidate -> candidate.streamName().equals(streamName))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Scope has no consumer on stream " + streamName + ": scopeId=" + scopeId));
+        if (!consumer.isAttached()) {
+            throw new IllegalStateException(
+                    "Scope consumer is not subscribed: scopeId=" + scopeId + ", stream=" + streamName);
+        }
+        Set<String> installed;
+        try {
+            installed = consumer.installedSubjects();
+        } catch (JetStreamApiException e) {
+            throw new IOException("Failed to read scope consumer for scopeId=" + scopeId + " stream=" + streamName, e);
+        }
+        if (!installed.equals(Set.of(consumer.currentSubjects()))) {
+            throw new IllegalStateException("Scope consumer filter differs from its subscription: scopeId=" + scopeId
+                    + ", stream=" + streamName);
+        }
     }
 
     /** Stops every consumer for the scope and waits until no handler or setup task is running. */
@@ -347,7 +399,7 @@ public class IntegrationNatsConsumer {
         }
         synchronized (scopeLifecycleMonitor) {
             stoppingScopes.add(scopeId);
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            long deadline = System.nanoTime() + SCOPE_SETUP_WAIT.toNanos();
             while (pendingScopeSetup.contains(scopeId)) {
                 long remaining = deadline - System.nanoTime();
                 if (remaining <= 0) {
@@ -517,46 +569,91 @@ public class IntegrationNatsConsumer {
 
     /**
      * Retry pass. Shares {@link #pendingScopeSetup} with the other reconcile entry points: if one is already
-     * in flight for this scope we drop out — that pass re-reads the subscription info and re-arms its own
-     * retry on failure, so nothing is lost. Unlike {@link #updateScopeConsumer(Long)} this does NOT require
-     * the scope to already be in {@link #scopeConsumers}: a reconcile that failed on its very first stream
-     * has no entry there and would otherwise never come back.
+     * in flight for this scope it takes over the request. Unlike {@link #updateScopeConsumer(Long)} this does
+     * NOT require the scope to already be in {@link #scopeConsumers}: a reconcile that failed on its very
+     * first stream has no entry there and would otherwise never come back.
      */
     private void retryReconcileScope(Long scopeId) {
         if (shuttingDown.get() || !connectionProperties.enabled()) {
             return;
         }
         if (!beginScopeSetup(scopeId)) {
-            log.debug("Scope reconcile retry skipped: another reconcile in progress, scopeId={}", scopeId);
+            log.debug("Scope reconcile retry handed to the reconcile in progress: scopeId={}", scopeId);
             return;
         }
+        submitScopeSetup(scopeId);
+    }
+
+    /** Runs the scope's reconcile on a virtual thread, repeating it while requests arrive during a pass. */
+    private void submitScopeSetup(Long scopeId) {
         try {
             virtualThreadExecutor.submit(() -> {
-                try {
-                    ensureNatsConnectionEstablished();
-                    reconcileScope(scopeId);
-                } catch (Exception e) {
-                    // reconcileScope already logged + re-armed; this is the executor's last-resort net.
-                    log.debug("Scope consumer reconcile retry failed: scopeId={}", scopeId, e);
-                } finally {
-                    endScopeSetup(scopeId);
-                }
+                do {
+                    try {
+                        ensureNatsConnectionEstablished();
+                        reconcileScope(scopeId);
+                    } catch (Exception e) {
+                        log.error("Failed to reconcile scope consumer: scopeId={}", scopeId, e);
+                    }
+                } while (!endScopeSetup(scopeId));
             });
         } catch (RejectedExecutionException e) {
             endScopeSetup(scopeId);
         }
     }
 
+    /**
+     * Claims the scope for one setup task. While another task holds it the request is recorded instead,
+     * and that task reconciles again before releasing the scope.
+     */
     private boolean beginScopeSetup(Long scopeId) {
         synchronized (scopeLifecycleMonitor) {
-            return !stoppingScopes.contains(scopeId) && pendingScopeSetup.add(scopeId);
+            if (stoppingScopes.contains(scopeId)) {
+                return false;
+            }
+            if (pendingScopeSetup.add(scopeId)) {
+                return true;
+            }
+            reconcileRequestedScopes.add(scopeId);
+            return false;
         }
     }
 
-    private void endScopeSetup(Long scopeId) {
+    /** Claims the scope for the calling thread, waiting for a setup task in flight to release it. */
+    private void claimScopeSetup(Long scopeId) {
         synchronized (scopeLifecycleMonitor) {
+            long deadline = System.nanoTime() + SCOPE_SETUP_WAIT.toNanos();
+            while (true) {
+                if (stoppingScopes.contains(scopeId)) {
+                    throw new IllegalStateException("Scope consumer is stopping: scopeId=" + scopeId);
+                }
+                if (pendingScopeSetup.add(scopeId)) {
+                    return;
+                }
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0) {
+                    throw new IllegalStateException("Timed out waiting for scope consumer setup: scopeId=" + scopeId);
+                }
+                try {
+                    TimeUnit.NANOSECONDS.timedWait(scopeLifecycleMonitor, remaining);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(
+                            "Interrupted while waiting for scope consumer setup: scopeId=" + scopeId, e);
+                }
+            }
+        }
+    }
+
+    /** Releases the scope, or returns {@code false} when a request arrived during the pass and must be run. */
+    private boolean endScopeSetup(Long scopeId) {
+        synchronized (scopeLifecycleMonitor) {
+            if (reconcileRequestedScopes.remove(scopeId) && !stoppingScopes.contains(scopeId) && !shuttingDown.get()) {
+                return false;
+            }
             pendingScopeSetup.remove(scopeId);
             scopeLifecycleMonitor.notifyAll();
+            return true;
         }
     }
 

@@ -328,7 +328,13 @@ public class GitLabGroupSyncService {
                         .field("group.projects.pageInfo")
                         .toEntity(GitLabPageInfo.class);
 
-                if (pageInfo == null || !pageInfo.hasNextPage()) {
+                // Only an explicit last page proves the listing complete.
+                if (pageInfo == null) {
+                    log.warn("Pagination info missing: groupPath={}, page={}", safeGroupPath, pageCount);
+                    hadApiFailure = true;
+                    break;
+                }
+                if (!pageInfo.hasNextPage()) {
                     break;
                 }
 
@@ -338,6 +344,7 @@ public class GitLabGroupSyncService {
                             "Pagination cursor is null despite hasNextPage=true: groupPath={}, page={}",
                             safeGroupPath,
                             pageCount);
+                    hadApiFailure = true;
                     break;
                 }
                 if (responseHandler.isPaginationLoop(
@@ -369,19 +376,6 @@ public class GitLabGroupSyncService {
                         reportedTotalCount);
             }
 
-            // Post-sync overflow detection using reported totalCount
-            int totalProcessed = syncedRepositories.size() + projectsSkipped + projectsRedacted;
-            if (reportedTotalCount >= 0 && totalProcessed < reportedTotalCount) {
-                log.warn(
-                        "Project connection overflow detected: groupPath={}, synced={}, skipped={}, redacted={}, "
-                                + "reportedCount={}. Some projects may not have been fetched.",
-                        safeGroupPath,
-                        syncedRepositories.size(),
-                        projectsSkipped,
-                        projectsRedacted,
-                        reportedTotalCount);
-            }
-
             // Warn if pagination was truncated (more pages exist but we hit the safety limit)
             if (pageCount >= MAX_PAGINATION_PAGES) {
                 log.warn(
@@ -398,16 +392,32 @@ public class GitLabGroupSyncService {
             // any direct projects silently dropped by the GitLab includeSubgroups bug.
             // See: https://gitlab.com/gitlab-org/gitlab/-/issues/33419
             int projectsReconciled = 0;
+            boolean directProjectsListed = true;
             if (!hadApiFailure && topLevelOrganization != null) {
                 Set<Long> seenNativeIds = new HashSet<>();
                 for (Repository repo : syncedRepositories) {
                     seenNativeIds.add(repo.getNativeId());
                 }
 
-                List<Repository> reconciled = reconcileDirectProjects(
-                        scopeId, groupFullPath, topLevelOrganization, provider, providerId, seenNativeIds);
+                List<Repository> reconciled = new ArrayList<>();
+                directProjectsListed = reconcileDirectProjects(
+                        scopeId, groupFullPath, topLevelOrganization, provider, providerId, seenNativeIds, reconciled);
                 projectsReconciled = reconciled.size();
                 syncedRepositories.addAll(reconciled);
+            }
+
+            // Fewer projects than GitLab counted means some were never listed: the result is incomplete.
+            int totalProcessed = syncedRepositories.size() + projectsSkipped + projectsRedacted;
+            boolean projectsMissing = reportedTotalCount >= 0 && totalProcessed < reportedTotalCount;
+            if (projectsMissing) {
+                log.warn(
+                        "Project connection overflow detected: groupPath={}, synced={}, skipped={}, redacted={}, "
+                                + "reportedCount={}. Some projects were not fetched.",
+                        safeGroupPath,
+                        syncedRepositories.size(),
+                        projectsSkipped,
+                        projectsRedacted,
+                        reportedTotalCount);
             }
 
             log.info(
@@ -426,8 +436,8 @@ public class GitLabGroupSyncService {
                 return GitLabSyncResult.aborted(
                         GitLabSyncResult.Status.ABORTED_ERROR, syncedRepositories, totalPages, projectsSkipped);
             }
-            // Both processing failures and redacted (null) projects indicate incomplete sync
-            if (projectsSkipped > 0 || projectsRedacted > 0) {
+            // Processing failures, redacted (null) projects and unlisted projects all mean an incomplete sync
+            if (projectsSkipped > 0 || projectsRedacted > 0 || projectsMissing || !directProjectsListed) {
                 return GitLabSyncResult.withErrors(
                         syncedRepositories, totalPages, projectsSkipped, projectsRedacted, projectsReconciled);
             }
@@ -451,21 +461,25 @@ public class GitLabGroupSyncService {
     }
 
     /**
-     * Reconciliation pass: fetches direct projects (excludeSubgroups) and processes any that
-     * were missing from the primary sync. This works around a GitLab bug where
+     * Reconciliation pass: fetches direct projects (excludeSubgroups) and adds any that were
+     * missing from the primary sync to {@code reconciled}. This works around a GitLab bug where
      * {@code includeSubgroups: true} can silently drop direct projects on certain versions.
      *
+     * @return whether every direct project was listed and processed; the projects recovered before
+     *     an incomplete pass stay in {@code reconciled}
      * @see <a href="https://gitlab.com/gitlab-org/gitlab/-/issues/33419">GitLab #33419</a>
      */
-    private List<Repository> reconcileDirectProjects(
+    private boolean reconcileDirectProjects(
             Long scopeId,
             String groupFullPath,
             Organization topLevelOrganization,
             IdentityProvider provider,
             Long providerId,
-            Set<Long> seenNativeIds) {
+            Set<Long> seenNativeIds,
+            List<Repository> reconciled) {
         String safeGroupPath = sanitizeForLog(groupFullPath);
-        List<Repository> reconciled = new ArrayList<>();
+        boolean listedToEnd = false;
+        boolean projectMissed = false;
 
         try {
             String reconCursor = null;
@@ -514,6 +528,7 @@ public class GitLabGroupSyncService {
 
                 for (GitLabProjectResponse project : projects) {
                     if (project == null || project.id() == null) {
+                        projectMissed = true;
                         continue;
                     }
                     try {
@@ -527,8 +542,11 @@ public class GitLabGroupSyncService {
                         if (repo != null) {
                             reconciled.add(repo);
                             seenNativeIds.add(nativeId);
+                        } else {
+                            projectMissed = true;
                         }
                     } catch (Exception e) {
+                        projectMissed = true;
                         log.warn(
                                 "Failed to reconcile project: fullPath={}, error={}",
                                 sanitizeForLog(project.fullPath()),
@@ -540,7 +558,16 @@ public class GitLabGroupSyncService {
                         .field("group.projects.pageInfo")
                         .toEntity(GitLabPageInfo.class);
 
-                if (pageInfo == null || !pageInfo.hasNextPage()) {
+                // Only an explicit last page proves every direct project was listed.
+                if (pageInfo == null) {
+                    log.warn(
+                            "Reconciliation pagination info missing: groupPath={}, page={}",
+                            safeGroupPath,
+                            reconPageCount);
+                    break;
+                }
+                if (!pageInfo.hasNextPage()) {
+                    listedToEnd = true;
                     break;
                 }
 
@@ -577,7 +604,7 @@ public class GitLabGroupSyncService {
             log.warn("Reconciliation failed (primary sync results preserved): groupPath={}", safeGroupPath, e);
         }
 
-        return reconciled;
+        return listedToEnd && !projectMissed;
     }
 
     /**

@@ -181,7 +181,11 @@ public class WorkspaceActivationService {
                 .orElse(false);
     }
 
-    /** Activate a single workspace: run startup sync, then start its NATS consumer scope. */
+    /**
+     * Activate a single workspace: start its NATS consumer scope from the persisted routing, then run the
+     * startup sync. Webhook events are processed while the sync runs, and a sync that discovers
+     * repositories reconciles the scope's filter.
+     */
     public void activateWorkspace(Workspace workspace) {
         if (workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE) {
             log.debug(
@@ -194,6 +198,10 @@ public class WorkspaceActivationService {
         if (!workspaceScopeFilter.isWorkspaceAllowed(workspace)) {
             log.info("Skipped workspace activation: reason=filteredByScope, workspaceId={}", workspace.getId());
             return;
+        }
+
+        if (shouldUseNats(workspace)) {
+            natsConsumerService.ifAvailable(svc -> svc.startConsumingScope(workspace.getId()));
         }
 
         if (syncSchedulerProperties.runOnStartup()) {
@@ -222,8 +230,6 @@ public class WorkspaceActivationService {
 
                 log.info("Completed monitoring on startup: workspaceId={}", workspace.getId());
             } catch (Exception e) {
-                // Continue to start the NATS consumer so webhook events can still be processed;
-                // entities missing from the failed sync are handled via NAK/retry.
                 log.error(
                         "Failed monitoring on startup: workspaceId={}, accountLogin={}, error={}",
                         workspace.getId(),
@@ -233,12 +239,6 @@ public class WorkspaceActivationService {
             } finally {
                 WorkspaceContextHolder.clearContext();
             }
-        }
-
-        // Start the NATS consumer AFTER startup sync so webhook events never reference
-        // entities the sync has not created yet.
-        if (shouldUseNats(workspace)) {
-            natsConsumerService.ifAvailable(svc -> svc.startConsumingScope(workspace.getId()));
         }
     }
 

@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeR
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.collaborator.GitLabCollaboratorSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.subissue.GitLabSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.Instant;
@@ -107,6 +108,7 @@ public class GitlabDataSyncScheduler {
     private final ConnectionRepository connectionRepository;
     private final SyncJobService syncJobService;
     private final GitLabDeletionSweepService deletionSweepService;
+    private final GitLabWorkspaceInitializationService initializationService;
 
     public GitlabDataSyncScheduler(
             SyncTargetProvider syncTargetProvider,
@@ -119,7 +121,8 @@ public class GitlabDataSyncScheduler {
             @Qualifier("monitoringExecutor") Executor monitoringExecutor,
             ConnectionRepository connectionRepository,
             SyncJobService syncJobService,
-            GitLabDeletionSweepService deletionSweepService) {
+            GitLabDeletionSweepService deletionSweepService,
+            GitLabWorkspaceInitializationService initializationService) {
         this.syncTargetProvider = syncTargetProvider;
         this.syncContextProvider = syncContextProvider;
         this.organizationRepository = organizationRepository;
@@ -131,6 +134,7 @@ public class GitlabDataSyncScheduler {
         this.connectionRepository = connectionRepository;
         this.syncJobService = syncJobService;
         this.deletionSweepService = deletionSweepService;
+        this.initializationService = initializationService;
     }
 
     @PostConstruct
@@ -279,6 +283,9 @@ public class GitlabDataSyncScheduler {
                 return;
             }
 
+            // Phase 0: Open a group webhook an earlier initialization had to leave closed
+            openMissingWebhook(session, handle);
+
             // Phase 1: Sync group projects (discovers new repos, removes deleted ones)
             syncGroupProjects(services, session, handle);
 
@@ -351,6 +358,17 @@ public class GitlabDataSyncScheduler {
             }
         } finally {
             syncContextProvider.clearContext();
+        }
+    }
+
+    private void openMissingWebhook(SyncSession session, @Nullable SyncExecutionHandle handle) {
+        try {
+            if (initializationService.initializeIfWebhookMissing(session.scopeId())) {
+                reportWarning(handle);
+            }
+        } catch (Exception e) {
+            log.error("Failed GitLab webhook recovery: scopeId={}", session.scopeId(), e);
+            reportWarning(handle);
         }
     }
 

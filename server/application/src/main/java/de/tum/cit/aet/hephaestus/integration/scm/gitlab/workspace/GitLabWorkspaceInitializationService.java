@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
@@ -23,17 +24,18 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -49,11 +51,16 @@ import org.springframework.stereotype.Service;
  * The sequence:
  * <ol>
  *   <li>Token rotation (if expiring soon)</li>
- *   <li>Webhook registration (idempotent)</li>
  *   <li>Group project sync via GraphQL (discovers all projects in group + subgroups)</li>
  *   <li>Organization linking (workspace → synced Organization entity)</li>
  *   <li>Repository monitor creation (RepositoryToMonitor entries for each project)</li>
+ *   <li>NATS scope consumer confirmed with every monitored repository</li>
+ *   <li>Webhook registration (idempotent)</li>
  * </ol>
+ *
+ * <p>The webhook comes last because JetStream skips an event published before a consumer's filter
+ * covers its repository, and a handler skips an event whose repository has no row yet. Neither is
+ * redelivered, so GitLab may only start delivering once both exist.
  *
  * <p>This service is intentionally in the {@code workspace} package because it bridges
  * workspace lifecycle (creation/activation) with integration.scm sync services. The dependency
@@ -129,8 +136,8 @@ public class GitLabWorkspaceInitializationService {
 
     /**
      * Triggers GitLab workspace initialization asynchronously. Returns immediately so the
-     * caller's HTTP response is not blocked; discovery + NATS consumer start run on the
-     * monitoring executor.
+     * caller's HTTP response is not blocked; discovery, NATS consumer, webhook and full sync run on
+     * the monitoring executor, in that order.
      */
     public void initializeAsync(Long workspaceId) {
         monitoringExecutor.submit(() -> {
@@ -151,7 +158,6 @@ public class GitLabWorkspaceInitializationService {
                 WorkspaceContextHolder.setContext(context);
                 try {
                     dataSyncTriggerProvider.getObject().syncAllRepositories(workspaceId);
-                    startNatsConsumer(workspace);
                 } finally {
                     WorkspaceContextHolder.clearContext();
                 }
@@ -162,19 +168,15 @@ public class GitLabWorkspaceInitializationService {
     }
 
     /**
-     * Runs the core GitLab initialization sequence for a workspace:
-     * webhook setup, project discovery, organization linking, and monitor creation.
+     * Runs the core GitLab initialization sequence for a workspace: project discovery,
+     * organization linking, monitor creation, NATS consumer confirmation and webhook setup.
      *
      * <p>Called both from {@link #initializeAsync(Long)} (creation time) and from
-     * {@link WorkspaceActivationService#activateWorkspace} (startup time).
+     * {@link WorkspaceActivationService#activateWorkspace} (startup time), before the full data sync.
      *
-     * <p>Each phase is isolated: a failure in webhook registration does not prevent
-     * project discovery.
-     *
-     * <p><b>Note:</b> This method does NOT start the NATS consumer. Callers are responsible
-     * for starting NATS at the appropriate point in their lifecycle. At creation time,
-     * {@link #initializeAsync} starts it after initialization. At startup time,
-     * {@link WorkspaceActivationService} starts it after full sync completes.
+     * <p>Each phase is isolated: a failed or partial discovery still monitors and routes the
+     * repositories it found. The webhook opens only after a complete discovery and a confirmed
+     * consumer; otherwise it stays as it was, and {@link #initializeIfWebhookMissing} retries.
      *
      * @param workspace the GITLAB_PAT workspace to initialize
      */
@@ -212,19 +214,32 @@ public class GitLabWorkspaceInitializationService {
                     workspace.getId(),
                     LoggingUtils.sanitizeForLog(workspace.getAccountLogin()));
 
-            // Phase 0: Token rotation + webhook registration
-            setupWebhook(workspace);
+            // Phase 0: Token rotation
+            rotateToken(workspace);
 
             // Phase 1: Discover group projects via GraphQL
-            List<Repository> syncedRepos = discoverGroupProjects(workspace);
+            GitLabSyncResult discovery = discoverGroupProjects(workspace);
+            List<Repository> syncedRepos = discovery == null ? List.of() : discovery.synced();
 
             // Phase 2: Link organization + create monitors
             if (!syncedRepos.isEmpty()) {
                 linkWorkspaceToOrganization(workspace);
-                int created = ensureRepositoryMonitors(workspace, syncedRepos);
-                // Update NATS consumer subscriptions to include newly discovered repos
-                if (created > 0 && natsProperties.enabled()) {
-                    natsConsumerService.ifAvailable(svc -> svc.updateScopeConsumer(workspace.getId()));
+                ensureRepositoryMonitors(workspace, syncedRepos);
+            }
+
+            // Phase 3: Consume every monitored repository, then let GitLab deliver. Without NATS no
+            // consumer exists for the webhook's events, so no hook is registered.
+            if (!natsProperties.enabled()) {
+                log.info("Skipped GitLab webhook registration: reason=natsDisabled, workspaceId={}", workspace.getId());
+            } else {
+                boolean routed = establishScopeConsumer(workspace);
+                if (discovery == null || discovery.status() != GitLabSyncResult.Status.COMPLETED) {
+                    log.warn(
+                            "Skipped GitLab webhook registration: reason=discoveryIncomplete, workspaceId={}, status={}",
+                            workspace.getId(),
+                            discovery == null ? null : discovery.status());
+                } else if (routed) {
+                    registerWebhook(workspace);
                 }
             }
 
@@ -240,21 +255,75 @@ public class GitLabWorkspaceInitializationService {
     }
 
     /**
-     * Runs token rotation and webhook registration.
-     * Errors are logged but do not abort initialization.
+     * Runs {@link #initialize} again when the workspace's group webhook should exist but was never
+     * registered, because an earlier initialization found discovery incomplete or the consumer not ready.
+     *
+     * @return whether the webhook is still missing afterwards
      */
-    private void setupWebhook(Workspace workspace) {
+    public boolean initializeIfWebhookMissing(long workspaceId) {
+        if (!isWebhookMissing(workspaceId)) {
+            return false;
+        }
+        log.info("Retrying GitLab initialization: reason=webhookMissing, workspaceId={}", workspaceId);
+        workspaceRepository.findById(workspaceId).ifPresent(this::initialize);
+        return isWebhookMissing(workspaceId);
+    }
+
+    private boolean isWebhookMissing(long workspaceId) {
+        var webhookService = gitLabWebhookServiceProvider.getIfAvailable();
+        return natsProperties.enabled()
+                && webhookService != null
+                && webhookService.isRegistrationEnabled()
+                && connectionService
+                        .findActiveGitLabConfig(workspaceId)
+                        .map(config -> config.gitlabWebhookId() == null)
+                        .orElse(false);
+    }
+
+    /** Rotates the token when it expires soon. Errors are logged but do not abort initialization. */
+    private void rotateToken(Workspace workspace) {
         var webhookService = gitLabWebhookServiceProvider.getIfAvailable();
         if (webhookService == null) {
             return;
         }
-
         try {
             webhookService.rotateTokenIfNeeded(workspace);
         } catch (Exception e) {
             log.warn("Token rotation failed (non-fatal): workspaceId={}", workspace.getId(), e);
         }
+    }
 
+    /**
+     * Confirms the NATS scope consumer holds every monitored repository.
+     *
+     * @return {@code false} when the consumer could not be confirmed and the webhook must stay closed
+     */
+    private boolean establishScopeConsumer(Workspace workspace) {
+        IntegrationNatsConsumer consumer = natsConsumerService.getIfAvailable();
+        if (consumer == null) {
+            log.error("Skipped GitLab webhook registration: reason=noScopeConsumer, workspaceId={}", workspace.getId());
+            return false;
+        }
+        try {
+            consumer.establishScopeConsumer(
+                    workspace.getId(),
+                    ConsumerSubjectMath.streamNameFor(IntegrationKind.GITLAB).orElseThrow());
+            return true;
+        } catch (IOException | RuntimeException e) {
+            log.error(
+                    "Skipped GitLab webhook registration: reason=scopeConsumerNotReady, workspaceId={}",
+                    workspace.getId(),
+                    e);
+            return false;
+        }
+    }
+
+    /** Registers the group webhook. Errors are logged but do not abort initialization. */
+    private void registerWebhook(Workspace workspace) {
+        var webhookService = gitLabWebhookServiceProvider.getIfAvailable();
+        if (webhookService == null) {
+            return;
+        }
         try {
             var webhookResult = webhookService.registerWebhook(workspace);
             if (webhookResult.registered()) {
@@ -276,9 +345,9 @@ public class GitLabWorkspaceInitializationService {
     /**
      * Discovers all projects in the workspace's GitLab group via GraphQL.
      *
-     * @return list of synced repositories (empty on failure, never null)
+     * @return the discovery result, or {@code null} when discovery could not run or failed
      */
-    private List<Repository> discoverGroupProjects(Workspace workspace) {
+    private @Nullable GitLabSyncResult discoverGroupProjects(Workspace workspace) {
         var gitLabServices = gitLabSyncServiceHolderProvider.getIfAvailable();
         var syncService = gitLabServices != null ? gitLabServices.getGroupSyncService() : null;
 
@@ -286,7 +355,7 @@ public class GitLabWorkspaceInitializationService {
             log.warn(
                     "Skipped GitLab project discovery: reason=syncServiceUnavailable, workspaceId={}",
                     workspace.getId());
-            return Collections.emptyList();
+            return null;
         }
 
         try {
@@ -306,10 +375,10 @@ public class GitLabWorkspaceInitializationService {
                     result.synced().size(),
                     result.projectsSkipped(),
                     result.pagesCompleted());
-            return result.synced();
+            return result;
         } catch (Exception e) {
             log.error("Failed GitLab project discovery: workspaceId={}", workspace.getId(), e);
-            return Collections.emptyList();
+            return null;
         }
     }
 
@@ -741,15 +810,6 @@ public class GitLabWorkspaceInitializationService {
                     workspace.getId(),
                     totalSubIssues,
                     totalDeps);
-        }
-    }
-
-    /**
-     * Starts the NATS consumer for webhook event processing if NATS is enabled.
-     */
-    private void startNatsConsumer(Workspace workspace) {
-        if (natsProperties.enabled()) {
-            natsConsumerService.ifAvailable(svc -> svc.startConsumingScope(workspace.getId()));
         }
     }
 }
