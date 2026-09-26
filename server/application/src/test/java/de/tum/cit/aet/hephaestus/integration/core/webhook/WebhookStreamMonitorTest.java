@@ -41,204 +41,137 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
     private static final String STREAM = "github";
     private static final String DURABLE_BASE = "hephaestus";
     /** Built the way IntegrationNatsConsumer builds it, so the two cannot drift apart unnoticed. */
-    private static final String CONSUMER = ConsumerSubjectMath.scopeConsumerName(DURABLE_BASE, 1) + "-github";
+    private static final String CONSUMER = scope(1);
 
     private final WebhookProperties properties = WebhookPropertiesFixture.properties();
     private final MeterRegistry registry = new SimpleMeterRegistry();
     private final JetStreamManagement jsm = mock(JetStreamManagement.class);
 
     @Test
-    void countsMessagesTheStreamDeletedBeforeTheConsumerReadThem(CapturedOutput output) throws Exception {
+    void claimsNoLossWhenOtherSubjectsPushTheStreamPastCaughtUpFilteredConsumers(CapturedOutput output)
+            throws Exception {
+        // Both durables are caught up on their own subjects; a busier organisation's messages, shed at the
+        // byte bound, moved the stream's first sequence past ack floors that only move on a match.
         WebhookStreamMonitor monitor = monitor();
-        // First poll establishes where the stream starts; nothing is charged for history.
-        give(1_000, 900);
+        give(1_000_000, caughtUp(scope(5), 4_200), caughtUp(scope(8), 17_000));
+        monitor.poll();
+        give(1_100_000, caughtUp(scope(5), 4_200), caughtUp(scope(8), 17_000));
         monitor.poll();
 
-        // The stream discarded 1000..1099 while the consumer's ack floor stayed at 900.
-        give(1_100, 900);
-        monitor.poll();
-
-        assertThat(counter()).isEqualTo(100d);
-        assertThat(output.getAll()).contains("deleted 100 unacknowledged webhook(s)");
+        assertThat(output.getAll())
+                .as("a sequence below firstSequence says nothing about a filtered consumer's own subjects")
+                .doesNotContain("ERROR");
+        assertThat(pending()).isZero();
+        assertThat(ackPending()).isZero();
     }
 
     @Test
-    void countsNothingWhenTheConsumerKeptUpWithWhatWasDeleted() throws Exception {
+    void publishesTheBacklogThisDeploymentHasNotProcessedYet() throws Exception {
         WebhookStreamMonitor monitor = monitor();
-        give(1_000, 999);
+        give(
+                1_000,
+                consumer(scope(1), 900, 40, 3, 1),
+                consumer(scope(2), 950, 2, 0, 0),
+                // Another deployment's durable on the same broker.
+                consumer("pr-1234-appserver-consumer-scope-1-github", 10, 500, 0, 0));
+
         monitor.poll();
 
-        give(1_100, 1_099);
-        monitor.poll();
-
-        assertThat(counter()).isZero();
-        assertThat(gauge()).isZero();
+        assertThat(pending()).isEqualTo(42d);
+        assertThat(ackPending()).isEqualTo(3d);
+        assertThat(withoutPullRequests()).isEqualTo(1d);
     }
 
     @Test
-    void countsOnlyTheLossThatIsNewSinceTheLastPoll() throws Exception {
+    void followsTheDurablesThatExistNowOnOneSeriesPerStream() throws Exception {
         WebhookStreamMonitor monitor = monitor();
-        give(1_000, 900);
-        monitor.poll();
-        give(1_100, 900);
+        give(1_000, consumer(scope(2), 800, 30, 0, 0), consumer(scope(1), 900, 5, 0, 1));
         monitor.poll();
 
-        // The stream has not moved, so the same 100 messages must not be charged twice.
-        give(1_100, 900);
+        // Scope 2 is gone and scope 3 is new. A tag per consumer would leave scope 2's backlog standing
+        // on a series of its own forever; one series per stream has to follow the set that exists now.
+        give(1_100, consumer(scope(3), 1_050, 7, 0, 1));
         monitor.poll();
 
-        assertThat(counter()).isEqualTo(100d);
-    }
-
-    @Test
-    void reportsALossThatHappenedBeforeThisProcessStartedWithoutCountingIt(CapturedOutput output) throws Exception {
-        WebhookStreamMonitor monitor = monitor();
-        give(1_000, 500);
-
-        monitor.poll();
-
-        assertThat(counter())
-                .as("re-charging historic loss on every restart would make it meaningless")
-                .isZero();
-        assertThat(gauge()).isEqualTo(499d);
-        assertThat(output.getAll()).contains("499 webhook(s) were deleted before it read them");
-    }
-
-    @Test
-    void reportsTheStandingGapAsItGrows() throws Exception {
-        WebhookStreamMonitor monitor = monitor();
-        give(1_000, 900);
-        monitor.poll();
-        give(1_500, 900);
-        monitor.poll();
-
-        assertThat(gauge()).isEqualTo(599d);
+        assertThat(pending()).isEqualTo(7d);
+        assertThat(registry.find("webhook.stream.consumer.pending").gauges())
+                .hasSize(WebhookJetStreamBootstrap.STREAMS.length)
+                .allSatisfy(
+                        gauge -> assertThat(gauge.getId().getTag("consumer")).isNull());
     }
 
     @Test
     void publishesStreamUsageAlongsideIt() throws Exception {
         WebhookStreamMonitor monitor = monitor();
-        give(1_000, 999);
+        give(1_000, caughtUp(CONSUMER, 999));
 
         monitor.poll();
 
-        assertThat(registry.get("webhook.stream.bytes")
-                        .tag("stream", STREAM)
-                        .gauge()
-                        .value())
-                .isEqualTo((double) GIBIBYTE / 2);
-        assertThat(registry.get("webhook.stream.bytes.utilization")
-                        .tag("stream", STREAM)
-                        .gauge()
-                        .value())
-                .isEqualTo(0.5);
-    }
-
-    @Test
-    void chargesLossOnlyToDurablesThisDeploymentOwns(CapturedOutput output) throws Exception {
-        // Another deployment's durable on the same broker, permanently behind firstSequence.
-        WebhookStreamMonitor monitor = monitor();
-        give(1_000, consumer(CONSUMER, 999), consumer("pr-1234-appserver-consumer-scope-1-github", 500));
-        monitor.poll();
-
-        give(1_100, consumer(CONSUMER, 1_099), consumer("pr-1234-appserver-consumer-scope-1-github", 500));
-        monitor.poll();
-
-        assertThat(counter()).isZero();
-        assertThat(gauge()).isZero();
-        assertThat(output.getAll()).doesNotContain("pr-1234-appserver-consumer");
-    }
-
-    @Test
-    void reportsTheWorstOfWhateverConsumersExistNowOnOneSeriesPerStream() throws Exception {
-        WebhookStreamMonitor monitor = monitor();
-        // Worst first, so a gauge that simply keeps the last consumer it saw reads 99 and fails here.
-        give(1_000, consumer(DURABLE_BASE + "-scope-2-github", 800), consumer(CONSUMER, 900));
-
-        monitor.poll();
-
-        assertThat(gauge())
-                .as("the worst of the durables present, not one series each")
-                .isEqualTo(199d);
-
-        // Scope 2 is gone and scope 3 is new. A tag per consumer would leave scope 2's 199 standing
-        // on a series of its own forever; one series per stream has to follow the set that exists now.
-        give(1_100, consumer(DURABLE_BASE + "-scope-3-github", 1_050));
-
-        monitor.poll();
-
-        assertThat(gauge()).isEqualTo(49d);
-        assertThat(registry.find("webhook.stream.unacknowledged.gap").gauges())
-                .hasSize(WebhookJetStreamBootstrap.STREAMS.length);
-        assertThat(registry.find("webhook.stream.unacknowledged.deletions").counters())
-                .hasSize(WebhookJetStreamBootstrap.STREAMS.length)
-                .allSatisfy(counter ->
-                        assertThat(counter.getId().getTag("consumer")).isNull());
+        assertThat(gauge("webhook.stream.bytes")).isEqualTo((double) GIBIBYTE / 2);
+        assertThat(gauge("webhook.stream.bytes.utilization")).isEqualTo(0.5);
     }
 
     @Test
     void publishesTheAgeOfTheOldestStoredMessageAsEffectiveRetention() throws Exception {
         WebhookStreamMonitor monitor = monitor();
-        oldestMessageAt(ZonedDateTime.now().minusDays(9));
+        give(1_000, ZonedDateTime.now().minusDays(9), caughtUp(CONSUMER, 999));
 
         monitor.poll();
 
-        assertThat(registry.get("webhook.stream.oldest.message.age")
-                        .tag("stream", STREAM)
-                        .gauge()
-                        .value())
+        assertThat(gauge("webhook.stream.oldest.message.age"))
                 .as("max-age is a ceiling and max-bytes a floor; this is the retention the deployment gets")
                 .isCloseTo(Duration.ofDays(9).toSeconds(), within(60d));
     }
 
     @Test
-    void saysSoWhenLossAccountingItselfStopsWorking(CapturedOutput output) throws Exception {
+    void saysSoWhenMonitoringItselfStopsWorking(CapturedOutput output) throws Exception {
         WebhookStreamMonitor monitor = monitor();
-        give(1_000, consumer(CONSUMER, 999));
-        doThrow(new java.io.IOException("broker unreachable")).when(jsm).getStreamInfo(STREAM);
+        give(1_000, consumer(CONSUMER, 900, 40, 0, 1));
+        monitor.poll();
+        doThrow(new java.io.IOException("broker unreachable")).when(jsm).getConsumers(STREAM);
 
         monitor.poll();
 
-        assertThat(counter())
-                .as("a broker blip must not kill the scheduled task")
-                .isZero();
+        assertThat(pending())
+                .as("a broker blip must not read as a backlog that drained")
+                .isEqualTo(40d);
         assertThat(output.getAll())
-                .as("a frozen counter reads exactly like no loss, so the failure has to say so itself")
-                .contains("the dropped-webhook counter is frozen, not zero");
+                .as("a held gauge reads exactly like a current one, so the failure has to say so itself")
+                .contains("its gauges hold their last values");
     }
 
     @Test
     void reportsRecoveryAndOnlyTheFirstOfARunOfFailures(CapturedOutput output) throws Exception {
         WebhookStreamMonitor monitor = monitor();
-        give(1_000, consumer(CONSUMER, 999));
+        give(1_000, caughtUp(CONSUMER, 999));
         doThrow(new java.io.IOException("broker unreachable")).when(jsm).getStreamInfo(STREAM);
         monitor.poll();
         monitor.poll();
-        give(1_000, consumer(CONSUMER, 999));
+        give(1_000, caughtUp(CONSUMER, 999));
 
         monitor.poll();
 
-        assertThat(output.getAll().split("counter is frozen", -1))
+        assertThat(output.getAll().split("hold their last values", -1))
                 .as("one line per outage, not one per poll")
                 .hasSize(2);
-        assertThat(output.getAll()).contains("Webhook loss accounting resumed for stream github");
+        assertThat(output.getAll()).contains("Webhook stream monitoring resumed for stream github");
     }
 
     @Test
-    void reportsHowStaleTheLossCounterIs() throws Exception {
+    void reportsHowStaleTheGaugesAre() throws Exception {
         WebhookStreamMonitor monitor = monitor();
         assertThat(pollAge())
                 .as("never polled is not the same as polled and found nothing")
                 .isNaN();
 
-        give(1_000, 999);
+        give(1_000, caughtUp(CONSUMER, 999));
         doThrow(new java.io.IOException("broker unreachable")).when(jsm).getStreamInfo(STREAM);
         monitor.poll();
         assertThat(pollAge())
-                .as("a poll that failed did not maintain the counter, so it must not say it did")
+                .as("a poll that failed did not refresh the gauges, so it must not say it did")
                 .isNaN();
 
-        give(1_000, 999);
+        give(1_000, caughtUp(CONSUMER, 999));
         monitor.poll();
 
         assertThat(pollAge()).isLessThan(5d);
@@ -247,7 +180,7 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
     @Test
     void stopWaitsForTheActivePollToFinish() throws Exception {
         WebhookStreamMonitor monitor = monitor();
-        give(1_000, 999);
+        give(1_000, caughtUp(CONSUMER, 999));
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch blockUntilShutdown = new CountDownLatch(1);
         CountDownLatch interrupted = new CountDownLatch(1);
@@ -290,16 +223,6 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
         return new WebhookStreamMonitor(jsm, properties, DURABLE_BASE, registry);
     }
 
-    /** Puts the stream at {@code firstSequence} with one consumer whose ack floor is {@code ackFloor}. */
-    private void give(long firstSequence, long ackFloor) throws Exception {
-        give(firstSequence, consumer(CONSUMER, ackFloor));
-    }
-
-    /** Puts the stream at a steady state whose oldest stored message dates from {@code first}. */
-    private void oldestMessageAt(ZonedDateTime first) throws Exception {
-        give(1_000, first, consumer(CONSUMER, 999));
-    }
-
     /** Puts the stream at {@code firstSequence} with exactly the consumers given. */
     private void give(long firstSequence, ConsumerInfo... consumers) throws Exception {
         give(firstSequence, ZonedDateTime.now(), consumers);
@@ -339,33 +262,45 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
         return info;
     }
 
-    private static ConsumerInfo consumer(String name, long ackFloor) {
+    private static String scope(long scopeId) {
+        return ConsumerSubjectMath.scopeConsumerName(DURABLE_BASE, scopeId) + "-github";
+    }
+
+    /** A durable with a pull request waiting and nothing matching its filter left to read. */
+    private static ConsumerInfo caughtUp(String name, long ackFloor) {
+        return consumer(name, ackFloor, 0, 0, 1);
+    }
+
+    private static ConsumerInfo consumer(
+            String name, long ackFloor, long pending, long ackPending, long waitingPullRequests) {
         SequenceInfo floor = mock(SequenceInfo.class);
         lenient().when(floor.getStreamSequence()).thenReturn(ackFloor);
         ConsumerInfo consumer = mock(ConsumerInfo.class);
         lenient().when(consumer.getName()).thenReturn(name);
         lenient().when(consumer.getAckFloor()).thenReturn(floor);
+        lenient().when(consumer.getNumPending()).thenReturn(pending);
+        lenient().when(consumer.getNumAckPending()).thenReturn(ackPending);
+        lenient().when(consumer.getNumWaiting()).thenReturn(waitingPullRequests);
         return consumer;
     }
 
-    private double counter() {
-        return registry.get("webhook.stream.unacknowledged.deletions")
-                .tag("stream", STREAM)
-                .counter()
-                .count();
+    private double pending() {
+        return gauge("webhook.stream.consumer.pending");
+    }
+
+    private double ackPending() {
+        return gauge("webhook.stream.consumer.ack.pending");
+    }
+
+    private double withoutPullRequests() {
+        return gauge("webhook.stream.consumers.without.pull.requests");
     }
 
     private double pollAge() {
-        return registry.get("webhook.stream.poll.age")
-                .tag("stream", STREAM)
-                .gauge()
-                .value();
+        return gauge("webhook.stream.poll.age");
     }
 
-    private double gauge() {
-        return registry.get("webhook.stream.unacknowledged.gap")
-                .tag("stream", STREAM)
-                .gauge()
-                .value();
+    private double gauge(String name) {
+        return registry.get(name).tag("stream", STREAM).gauge().value();
     }
 }

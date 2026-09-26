@@ -41,9 +41,10 @@ Metrics are Micrometer, exposed on the receiver's actuator endpoint, all tagged 
 
 | Metric | Type | What it means |
 | --- | --- | --- |
-| `webhook.stream.unacknowledged.deletions` | counter | **Deliveries lost.** A message the stream discarded before the consumer that needed it had read it. Zero unless something is wrong, and irrecoverable when it is not. |
-| `webhook.stream.poll.age` | gauge (s) | Seconds since the loss counter was last maintained. `NaN` means never. |
-| `webhook.stream.unacknowledged.gap` | gauge | How far the worst consumer is behind the oldest message still stored. Rising means a consumer is falling behind while the stream is discarding. |
+| `webhook.stream.consumer.pending` | gauge | Messages not yet delivered, summed over your deployment's consumers. A message two consumers match counts twice. |
+| `webhook.stream.consumer.ack.pending` | gauge | Messages delivered and not yet acknowledged, including ones waiting for redelivery, summed the same way. |
+| `webhook.stream.consumers.without.pull.requests` | gauge | Your deployment's consumers with no pull request waiting when polled. A healthy consumer can read zero between fetches. |
+| `webhook.stream.poll.age` | gauge (s) | Seconds since the gauges on this page were last refreshed. `NaN` means never. |
 | `webhook.stream.oldest.message.age` | gauge (s) | **Your effective retention.** The age of the oldest message the stream still holds. |
 | `webhook.stream.bytes` | gauge | Bytes stored. |
 | `webhook.stream.bytes.limit` | gauge | The bound in force on the live stream. |
@@ -51,12 +52,27 @@ Metrics are Micrometer, exposed on the receiver's actuator endpoint, all tagged 
 | `webhook.stream.messages` | gauge | Messages stored. |
 | `webhook.stream.consumers` | gauge | Durable consumers on the stream. |
 
-**Page on any increase in `webhook.stream.unacknowledged.deletions`.** That is webhook data nobody
-can get back. Every increment is also logged at ERROR, naming the stream, the count and the consumer.
+**No metric counts lost deliveries.** A delivery is lost when the stream sheds it before the consumer
+that needed it has acknowledged it. The gauges above describe what the stream holds now, so zero
+pending means nothing is waiting, not that nothing was lost. Stream positions cannot tell either: each
+consumer reads only its own subjects on a shared stream, so a caught-up consumer's position trails the
+stream's oldest message whenever other subjects are busier. The broker can announce a delivered but
+unacknowledged message it deleted as a consumer advisory; Hephaestus does not subscribe to it.
 
-**Alert on `webhook.stream.poll.age` beside it**, at something a few times your
-`hephaestus.webhook.stream.monitor-interval` (default 60s). A receiver that cannot reach the broker
-leaves the loss counter flat at zero, which reads exactly like no loss.
+- **Alert on `webhook.stream.consumer.pending` or `webhook.stream.consumer.ack.pending` staying above
+  zero or growing** for several monitor intervals. Beside `webhook.stream.bytes.utilization` near 1 it
+  is a risk to investigate: at its bound the stream sheds its oldest message on the next publish,
+  whoever still needs it. `webhook.stream.oldest.message.age` is how much history the stream holds, not
+  how long a pending message has left.
+- `webhook.stream.consumers.without.pull.requests` above zero beside a growing backlog points at a
+  consumer nothing is fetching from. On its own it is not an alert.
+- **Alert on `webhook.stream.poll.age`** at a few times your
+  `hephaestus.webhook.stream.monitor-interval` (default 60s). A receiver that cannot reach the broker
+  holds every gauge at its last value, which reads exactly like a current one.
+
+Provider reconciliation restores current source state within each integration's own limits, not every
+event; see
+[choosing the broker recovery strategy](./production-operations-runbook.mdx#choose-the-broker-recovery-strategy-before-starting-consumers).
 
 Do not page on `webhook.stream.bytes.utilization`. A healthy stream at its bound sits near 1.0
 forever — that is the bound doing its job, not an incident. It is a dashboard number.
@@ -242,8 +258,7 @@ silent. Only a deployment that no longer exists ages out.
 
 `0s` preserves the consumer's *position*, not the *messages*. Those still expire on the stream's own
 retention, so a deployment offline past the stream's byte or age bound comes back to a cursor pointing
-at messages the stream no longer holds — `webhook.stream.unacknowledged.deletions` will say so on the
-first poll.
+at messages the stream no longer holds, and those are not delivered.
 
 ## Making a change actually reach the broker
 

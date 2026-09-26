@@ -3,24 +3,19 @@ package de.tum.cit.aet.hephaestus.integration.core.webhook;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
-import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
-import io.nats.client.JetStreamApiException;
 import io.nats.client.JetStreamManagement;
 import io.nats.client.api.ConsumerInfo;
-import io.nats.client.api.SequenceInfo;
 import io.nats.client.api.StreamInfo;
 import io.nats.client.api.StreamState;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,17 +28,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Measures webhook loss, and reports stream usage alongside it.
+ * Reports each webhook stream's usage, and the backlog this deployment's durables have on it.
  *
- * <p>The signal that matters is {@code webhook.stream.unacknowledged.deletions}: JetStream's first
- * stored sequence against each consumer's ack floor. A message below the first sequence that the
- * consumer never acknowledged has been deleted before anyone read it, and a push event lost that way
- * is not redeliverable by either provider (ADR 0008). It is a counter, it is zero unless something is
- * genuinely wrong, and it does not go quiet at steady state the way proximity to a bound does.
+ * <p>Webhook loss is not measured. A durable filtered to a few subjects advances its ack floor only over
+ * messages it matches, so on a shared stream shedding at its bound, comparing that floor with the
+ * stream's first sequence counts other subjects' messages as its loss. Stream and consumer snapshots
+ * cannot say which shed messages matched which filter, so current backlog is published instead.
  *
- * <p>Two things keep it worth alerting on, and both are about a broker that may be shared. Loss is
- * charged only to durables under {@code hephaestus.sync.nats.durable-consumer-name}, and every meter
- * is tagged by stream alone and registered once at construction, so the series count is fixed at four
+ * <p>Two things keep that worth alerting on, and both are about a broker that may be shared. Only
+ * durables under {@code hephaestus.sync.nats.durable-consumer-name} are counted, and every meter is
+ * tagged by stream alone and registered once at construction, so the series count is fixed at four
  * however many consumers, workspaces or stacks come and go.
  *
  * <p>Runs its own single-threaded scheduler rather than {@code @Scheduled}: {@code @EnableScheduling}
@@ -53,21 +47,16 @@ import org.slf4j.LoggerFactory;
 class WebhookStreamMonitor {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookStreamMonitor.class);
-    private static final Usage UNKNOWN = new Usage(0, 0, 0, 0, 0);
+    private static final Usage UNKNOWN = new Usage(0, 0, 0, 0, 0, 0, 0, 0);
 
     private final JetStreamManagement jsm;
     private final WebhookProperties properties;
     private final String durablePrefix;
     private final Map<String, Usage> usage = new ConcurrentHashMap<>();
-    /** Lowest stream sequence the stream still held, per stream, as of the previous poll. */
-    private final Map<String, Long> lastFirstSequence = new ConcurrentHashMap<>();
-
-    private final Map<String, AtomicLong> unacknowledgedGap = new HashMap<>();
-    private final Map<String, Counter> dropped = new HashMap<>();
     /**
-     * When each stream's accounting last completed. A monitor that cannot read the broker leaves the
-     * loss counter flat at zero, which is indistinguishable from no loss — so the age of this is what
-     * says whether the counter is currently being maintained at all.
+     * When each stream's gauges were last refreshed. A monitor that cannot read the broker holds them at
+     * their last values, which read exactly like current ones — so the age of this is what says whether
+     * they are being maintained at all.
      */
     private final Map<String, AtomicLong> lastSuccessfulPollMillis = new HashMap<>();
 
@@ -109,17 +98,19 @@ class WebhookStreamMonitor {
                     .register(meterRegistry);
             // A durable nobody deletes shows up here as a count that only ever climbs.
             gauge(meterRegistry, IntegrationCoreMetrics.WEBHOOK_STREAM_CONSUMERS, tags, name, Usage::consumers);
-
-            AtomicLong gap = new AtomicLong();
-            unacknowledgedGap.put(name, gap);
-            Gauge.builder(IntegrationCoreMetrics.WEBHOOK_STREAM_UNACKNOWLEDGED_GAP, gap, AtomicLong::doubleValue)
-                    .tags(tags)
-                    .register(meterRegistry);
-            dropped.put(
+            gauge(meterRegistry, IntegrationCoreMetrics.WEBHOOK_STREAM_CONSUMER_PENDING, tags, name, Usage::pending);
+            gauge(
+                    meterRegistry,
+                    IntegrationCoreMetrics.WEBHOOK_STREAM_CONSUMER_ACK_PENDING,
+                    tags,
                     name,
-                    Counter.builder(IntegrationCoreMetrics.WEBHOOK_STREAM_UNACKNOWLEDGED_DELETIONS)
-                            .tags(tags)
-                            .register(meterRegistry));
+                    Usage::ackPending);
+            gauge(
+                    meterRegistry,
+                    IntegrationCoreMetrics.WEBHOOK_STREAM_CONSUMERS_WITHOUT_PULL_REQUESTS,
+                    tags,
+                    name,
+                    Usage::withoutPullRequests);
 
             AtomicLong polled = new AtomicLong();
             lastSuccessfulPollMillis.put(name, polled);
@@ -151,7 +142,7 @@ class WebhookStreamMonitor {
         scheduler.close();
     }
 
-    /** Package-private so loss accounting is testable without waiting on the scheduler. */
+    /** Package-private so the gauges are testable without waiting on the scheduler. */
     void poll() {
         for (String name : WebhookJetStreamBootstrap.STREAMS) {
             try {
@@ -161,6 +152,22 @@ class WebhookStreamMonitor {
                     failed(name, new IllegalStateException("stream state unavailable"));
                     continue;
                 }
+                long pending = 0;
+                long ackPending = 0;
+                long withoutPullRequests = 0;
+                for (ConsumerInfo consumer : jsm.getConsumers(name)) {
+                    if (!consumer.getName().startsWith(durablePrefix)) {
+                        // Another deployment's durable. An abandoned one keeps its backlog for good, so
+                        // counting it pegs these gauges at a number nobody here can act on.
+                        continue;
+                    }
+                    // Per durable, so a message matching two durables counts twice.
+                    pending += consumer.getNumPending();
+                    ackPending += consumer.getNumAckPending();
+                    if (consumer.getNumWaiting() == 0) {
+                        withoutPullRequests++;
+                    }
+                }
                 usage.put(
                         name,
                         new Usage(
@@ -168,8 +175,10 @@ class WebhookStreamMonitor {
                                 state.getMsgCount(),
                                 info.getConfiguration().getMaxBytes(),
                                 state.getConsumerCount(),
-                                ageSeconds(state)));
-                accountForLoss(name, state.getFirstSequence());
+                                ageSeconds(state),
+                                pending,
+                                ackPending,
+                                withoutPullRequests));
                 Objects.requireNonNull(lastSuccessfulPollMillis.get(name)).set(System.currentTimeMillis());
                 recovered(name);
             } catch (Exception e) {
@@ -179,74 +188,14 @@ class WebhookStreamMonitor {
     }
 
     /**
-     * Everything the stream has discarded sits below {@code firstSequence}. Anything in there that a
-     * consumer's ack floor has not reached was deleted before that consumer read it.
-     */
-    private void accountForLoss(String stream, long firstSequence) throws IOException, JetStreamApiException {
-        long lastRetained = firstSequence - 1;
-        Long previous = lastFirstSequence.get(stream);
-        List<ConsumerInfo> consumers = jsm.getConsumers(stream);
-        long worstGap = 0;
-        long newLoss = 0;
-        for (ConsumerInfo consumer : consumers) {
-            if (!consumer.getName().startsWith(durablePrefix)) {
-                // Another deployment's durable. An abandoned one sits behind firstSequence for good,
-                // so counting it pegs the loss counter at a number nobody here can act on.
-                continue;
-            }
-            SequenceInfo ackFloor = consumer.getAckFloor();
-            if (ackFloor == null) {
-                continue;
-            }
-            long acked = ackFloor.getStreamSequence();
-            long gap = Math.max(0, lastRetained - acked);
-            worstGap = Math.max(worstGap, gap);
-            if (previous == null) {
-                // Nothing to compare against on the first poll of a process, so the standing gap is
-                // reported rather than counted: it happened while nothing was watching, and counting
-                // it would re-charge the same loss on every restart.
-                if (gap > 0) {
-                    log.error(
-                            "Consumer {} on stream {} is behind the oldest message the stream still holds: {} "
-                                    + "webhook(s) were deleted before it read them",
-                            consumer.getName(),
-                            stream,
-                            gap);
-                }
-                continue;
-            }
-            // Only sequences that crossed below the retained window since the last poll, and that
-            // the consumer had not acknowledged by then, are new loss.
-            long alreadyCounted = Math.max(previous - 1, acked);
-            long lost = Math.max(0, lastRetained - alreadyCounted);
-            if (lost > 0) {
-                newLoss += lost;
-                log.error(
-                        "Stream {} deleted {} unacknowledged webhook(s) that consumer {} had not read. "
-                                + "They are not recoverable: raise hephaestus.webhook.stream.max-bytes, lengthen "
-                                + "max-age, or find out why the consumer stopped keeping up.",
-                        stream,
-                        lost,
-                        consumer.getName());
-            }
-        }
-        Objects.requireNonNull(unacknowledgedGap.get(stream)).set(worstGap);
-        if (newLoss > 0) {
-            Objects.requireNonNull(dropped.get(stream)).increment(newLoss);
-        }
-        lastFirstSequence.put(stream, firstSequence);
-    }
-
-    /**
-     * The instrument that measures silent loss must not fail silently itself. The first failure and
-     * the recovery are both above DEBUG; the repetitions in between are not, so a long broker outage
-     * does not bury everything else.
+     * The monitor must not fail silently itself. The first failure and the recovery are both above DEBUG;
+     * the repetitions in between are not, so a long broker outage does not bury everything else.
      */
     private void failed(String stream, Exception e) {
         if (failing.put(stream, Boolean.TRUE) == null) {
             log.warn(
-                    "Webhook loss accounting stopped for stream {}: the dropped-webhook counter is frozen, "
-                            + "not zero, until this recovers ({}: {})",
+                    "Webhook stream monitoring stopped for stream {}: its gauges hold their last values "
+                            + "until this recovers ({}: {})",
                     stream,
                     e.getClass().getSimpleName(),
                     e.getMessage());
@@ -257,7 +206,7 @@ class WebhookStreamMonitor {
 
     private void recovered(String stream) {
         if (failing.remove(stream) != null) {
-            log.info("Webhook loss accounting resumed for stream {}", stream);
+            log.info("Webhook stream monitoring resumed for stream {}", stream);
         }
     }
 
@@ -275,7 +224,15 @@ class WebhookStreamMonitor {
     }
 
     /** {@code maxBytes <= 0} is JetStream's encoding of "unbounded". */
-    record Usage(long bytes, long messages, long maxBytes, long consumers, long oldestMessageAgeSeconds) {
+    record Usage(
+            long bytes,
+            long messages,
+            long maxBytes,
+            long consumers,
+            long oldestMessageAgeSeconds,
+            long pending,
+            long ackPending,
+            long withoutPullRequests) {
         double utilization() {
             return maxBytes > 0 ? (double) bytes / maxBytes : 0d;
         }
