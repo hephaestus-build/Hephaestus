@@ -2,15 +2,11 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { CheckCircleIcon, InfoIcon, XCircleIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { hasText } from "@/lib/text";
-
-interface Search {
-	status?: "success" | "error";
-	reason?: string;
-}
 
 /** What the page shows for each outcome the provider sent back — or for a visit with none. */
 const OUTCOMES = {
@@ -29,9 +25,11 @@ const OUTCOMES = {
 
 export const Route = createFileRoute("/_authenticated/integrations")({
 	component: IntegrationsCallback,
-	validateSearch: (search): Search => ({
-		status: search.status === "success" || search.status === "error" ? search.status : undefined,
-		reason: typeof search.reason === "string" ? search.reason : undefined,
+	// The server's failure redirect: `reason` is a code, `description` the sentence written for the user.
+	validateSearch: z.object({
+		status: z.enum(["success", "error"]).optional().catch(undefined),
+		reason: z.string().optional().catch(undefined),
+		description: z.string().optional().catch(undefined),
 	}),
 	beforeLoad: ({ search }) => {
 		if (typeof window === "undefined") {
@@ -44,8 +42,9 @@ export const Route = createFileRoute("/_authenticated/integrations")({
 		window.sessionStorage.removeItem("slack-connect-return-slug");
 		if (search.status) {
 			window.sessionStorage.setItem("slack-connect-result", search.status);
-			if (hasText(search.reason)) {
-				window.sessionStorage.setItem("slack-connect-reason", search.reason);
+			const detail = failureDetail(search);
+			if (hasText(detail)) {
+				window.sessionStorage.setItem("slack-connect-reason", detail);
 			}
 		}
 		throw redirect({
@@ -55,8 +54,14 @@ export const Route = createFileRoute("/_authenticated/integrations")({
 	},
 });
 
+function failureDetail({ reason, description }: { reason?: string; description?: string }) {
+	return hasText(description) ? description : reason;
+}
+
 function IntegrationsCallback() {
-	const { status, reason } = Route.useSearch();
+	const search = Route.useSearch();
+	const { status } = search;
+	const detail = failureDetail(search);
 	const toasted = useRef(false);
 
 	useEffect(() => {
@@ -67,9 +72,9 @@ function IntegrationsCallback() {
 		if (status === "success") {
 			toast.success("Integration connected");
 		} else if (status === "error") {
-			toast.error("Integration connection failed", { description: reason });
+			toast.error("Integration connection failed", { description: detail });
 		}
-	}, [status, reason]);
+	}, [status, detail]);
 
 	const { Icon, iconClass, title } = OUTCOMES[status ?? "none"];
 	return (
@@ -79,11 +84,13 @@ function IntegrationsCallback() {
 					<Icon className={iconClass} />
 					<div className="text-center">
 						<h1 className="text-xl font-semibold">{title}</h1>
-						{status === "error" && hasText(reason) && (
-							<p className="mt-2 text-sm wrap-anywhere text-muted-foreground">{reason}</p>
+						{status === "error" && hasText(detail) && (
+							<p className="mt-2 text-sm wrap-anywhere text-muted-foreground">{detail}</p>
 						)}
 					</div>
-					<Button render={<Link to="/" />}>Return to dashboard</Button>
+					<Button nativeButton={false} render={<Link to="/" />}>
+						Return to dashboard
+					</Button>
 				</CardContent>
 			</Card>
 		</div>

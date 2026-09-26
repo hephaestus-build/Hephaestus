@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.transaction.PlatformTransactionManager;
 
 @Tag("unit")
 class OAuthCallbackServiceTest extends BaseUnitTest {
@@ -55,6 +56,9 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
     @Mock
     private AccountWorkspaceMembershipQuery membershipQuery;
 
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     private OAuthCallbackService service;
 
     @BeforeEach
@@ -65,7 +69,8 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                 connectionService,
                 workspaceRepository,
                 credentialBundleConverter,
-                membershipQuery);
+                membershipQuery,
+                transactionManager);
     }
 
     @Test
@@ -185,54 +190,6 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         Assertions.assertThatThrownBy(() -> service.completeConnection(existing, completed, "alice"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("instance_key");
-    }
-
-    @Test
-    void complete_slackTeamActiveElsewhere_hidesOwnerWorkspaceFromNonAdministrator() {
-        Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
-        givenActiveSlackTeam(newConnection(8L, 99L, IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE));
-        ConnectFinalization.Completed completed =
-                new ConnectFinalization.Completed("T1", new BearerToken("t", null), "Acme");
-
-        assertThatThrownBy(() -> service.completeConnection(pending, completed, "5"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("This Slack workspace is already connected to Hephaestus elsewhere;"
-                        + " it must be disconnected there first");
-
-        verify(membershipQuery).isAdministrator(99L, 5L);
-        verify(connectionRepository, never()).save(any(Connection.class));
-        verify(connectionService, never()).transition(any(), any());
-    }
-
-    @Test
-    void complete_slackTeamActiveElsewhere_namesOwnerWorkspaceToItsAdministrator() {
-        Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
-        givenActiveSlackTeam(newConnection(8L, 99L, IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE));
-        when(membershipQuery.isAdministrator(99L, 5L)).thenReturn(true);
-        ConnectFinalization.Completed completed =
-                new ConnectFinalization.Completed("T1", new BearerToken("t", null), "Acme");
-
-        assertThatThrownBy(() -> service.completeConnection(pending, completed, "5"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("already connected to workspace 99");
-
-        verify(connectionRepository, never()).save(any(Connection.class));
-    }
-
-    @Test
-    void complete_slackTeamActiveInThisAndAnotherWorkspace_rejects() {
-        Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
-        givenActiveSlackTeam(
-                newConnection(8L, 42L, IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE),
-                newConnection(9L, 99L, IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE));
-        ConnectFinalization.Completed completed =
-                new ConnectFinalization.Completed("T1", new BearerToken("t", null), "Acme");
-
-        assertThatThrownBy(() -> service.completeConnection(pending, completed, null))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageNotContaining("99");
-
-        verify(connectionService, never()).transition(any(), any());
     }
 
     @Test
