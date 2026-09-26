@@ -267,14 +267,16 @@ public final class MentorRunnerClient implements AutoCloseable {
         // chat tab in the same workspace subscribes to the same frame stream. Drop any frame
         // whose threadId doesn't match the one this client is bound to — without the filter,
         // tab-A's translator sees tab-B's text deltas and ships them down tab-A's wire.
-        // Notification-type frames (`runner_ready`) ship with `threadId: null` and pass
-        // through here for ALL clients; the translator drops them by event-type.
+        // Only `runner_ready` is runner-scoped: it ships with `threadId: null` and reaches every
+        // client. Any other event without a thread cannot be attributed to a turn, so it ends the stream.
         JsonNode threadId = params.path("threadId");
         if (threadId.isString() && !boundThreadId.toString().equals(threadId.asString())) {
             return;
         }
         JsonNode event = params.path("event");
-        if (!(threadId.isString() || threadId.isNull()) || !event.path("type").isString()) {
+        boolean runnerScoped =
+                threadId.isNull() && "runner_ready".equals(event.path("type").asString(""));
+        if (!(threadId.isString() || runnerScoped) || !event.path("type").isString()) {
             loseStream("an event frame did not match the protocol");
             return;
         }

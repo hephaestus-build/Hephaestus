@@ -25,6 +25,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import reactor.core.Disposable;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -175,6 +177,38 @@ class MentorRunnerClientTest extends BaseUnitTest {
 
         assertThat(streamLost).hasValue(0);
         assertThat(events).hasSize(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"message_update", "agent_end"})
+    void shouldDeliverOnlyRunnerReadyWithoutAThreadToEveryClient(String unaddressedType) {
+        CopyOnWriteArrayList<JsonNode> otherEvents = new CopyOnWriteArrayList<>();
+        AtomicInteger otherLost = new AtomicInteger();
+        MentorRunnerClient other = new MentorRunnerClient(
+                sandbox,
+                mapper,
+                otherEvents::add,
+                otherLost::incrementAndGet,
+                req -> mapper.nullNode(),
+                scheduler,
+                UUID.randomUUID());
+        other.start();
+
+        sandbox.pushFrame(unaddressed("runner_ready"));
+        sandbox.pushFrame(unaddressed(unaddressedType));
+
+        assertThat(events).extracting(e -> e.get("type").asString()).containsExactly("runner_ready");
+        assertThat(otherEvents).extracting(e -> e.get("type").asString()).containsExactly("runner_ready");
+        assertThat(streamLost).hasValue(1);
+        assertThat(otherLost).hasValue(1);
+        other.close();
+    }
+
+    private ObjectNode unaddressed(String type) {
+        ObjectNode frame = eventFrame(threadId.toString());
+        ((ObjectNode) frame.get("params")).putNull("threadId");
+        ((ObjectNode) frame.path("params").path("event")).put("type", type);
+        return frame;
     }
 
     private ObjectNode eventFrame(String frameThreadId) {

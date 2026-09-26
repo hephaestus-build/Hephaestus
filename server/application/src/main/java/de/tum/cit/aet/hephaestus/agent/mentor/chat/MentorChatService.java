@@ -632,6 +632,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     disconnect.toString());
         } catch (RuntimeException e) {
             log.warn("Event translation/send failed: {}", e.getMessage(), e);
+            // Claimed while delivery is still held, so no later event can finish a reply missing this one.
+            turn.terminal.compareAndSet(null, Terminal.FAILED);
             turn.done.completeExceptionally(e);
         } finally {
             turn.delivery.unlock();

@@ -514,7 +514,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
         CountDownLatch sending = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        PausingChannel channel = new PausingChannel(new MentorSseChannel(emitter, mapper, scheduler), chunk -> {
+        HookedChannel channel = new HookedChannel(new MentorSseChannel(emitter, mapper, scheduler), chunk -> {
             if (chunk instanceof UIMessageChunk.TextDelta) {
                 sending.countDown();
                 awaitQuietly(release);
@@ -548,9 +548,9 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     /** Delegates to the SSE channel, running a hook before each chunk is written. */
-    private record PausingChannel(MentorSseChannel delegate, Consumer<UIMessageChunk> beforeSend)
+    private record HookedChannel(MentorSseChannel delegate, Consumer<UIMessageChunk> beforeSend)
             implements MentorChannel {
-        PausingChannel {
+        HookedChannel {
             delegate.bindLifecycle();
         }
 
@@ -651,23 +651,25 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNotFinaliseWhenHandlingAnEventFails() {
-        translator = org.mockito.Mockito.spy(new PiEventToUiChunkTranslator());
-        org.mockito.Mockito.doThrow(new IllegalStateException("boom"))
-                .when(translator)
-                .translate(
-                        org.mockito.ArgumentMatchers.argThat(
-                                e -> "message_end".equals(e.path("type").asString(""))),
-                        any());
-        service = serviceWithExecutor(turnExec);
+    void shouldNotFinishAfterAChunkThatFailedToSend() {
+        User developer = userRepository.getCurrentUserElseThrow();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
+        AtomicBoolean failed = new AtomicBoolean();
+        HookedChannel channel = new HookedChannel(new MentorSseChannel(emitter, mapper, scheduler), chunk -> {
+            if (chunk instanceof UIMessageChunk.TextDelta && failed.compareAndSet(false, true)) {
+                throw new IllegalStateException("Failed to serialise UIMessageChunk");
+            }
+        });
         scheduleHappyPathResponses(sandbox).run();
 
-        runTurnSync();
+        service.run(
+                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB),
+                channel,
+                USER_ID);
 
         assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
         verify(persistence, never()).complete(any(), any(), any());
         verify(persistence).interrupt(any(), any(), any());
-        assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
     }
 
     @Test
