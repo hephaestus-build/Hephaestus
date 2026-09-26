@@ -454,18 +454,22 @@ class PracticeDetectionResultParserTest extends BaseUnitTest {
         }
 
         @Test
-        void oversizedSummaryIsRejected() {
-            ObjectNode observation = validFindingNode();
-            observation.put("summary", "x".repeat(300));
+        void shouldDiscardOnlyTheObservationWhenItsSummaryExceedsTheRunnerBound() {
+            ObjectNode atBound = validFindingNode();
+            atBound.put("summary", "x".repeat(160));
+            ObjectNode overBound = validFindingNode();
+            overBound.put("summary", "x".repeat(161));
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(
+                    objectMapper.createArrayNode().add(atBound).add(overBound));
 
-            assertThat(result.validObservations()).isEmpty();
+            assertThat(result.validObservations())
+                    .singleElement()
+                    .extracting(ValidatedObservation::summary)
+                    .isEqualTo("x".repeat(160));
             assertThat(result.discarded())
                     .singleElement()
-                    .extracting(DiscardedEntry::reason)
-                    .asString()
-                    .contains("summary");
+                    .isEqualTo(new DiscardedEntry(1, "summary is 161 characters, over the 160 allowed"));
         }
 
         @Test

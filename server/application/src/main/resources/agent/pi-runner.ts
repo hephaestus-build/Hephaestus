@@ -615,7 +615,8 @@ const observationSchema = {
 			// documentedShape removes schema bounds, so include this limit in the model-facing description.
 			description:
 				`A short phrase of at most ${MAX_SUMMARY_CHARS} characters identifying the specific behavior whose presence and contextual desirability you assess, such as 'Debug print left in the request handler'. ` +
-				"Never a single word and never the practice's own name; the reasons go in evidenceRationale.",
+				"Never a single word and never the practice's own name; the reasons, titles and quotes go in evidenceRationale. " +
+				"A longer summary is refused, not shortened.",
 		},
 		assessmentStatus: {
 			type: "string",

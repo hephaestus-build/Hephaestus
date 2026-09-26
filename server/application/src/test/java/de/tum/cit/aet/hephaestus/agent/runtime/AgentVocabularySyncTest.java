@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
@@ -56,6 +57,18 @@ class AgentVocabularySyncTest extends BaseUnitTest {
         assertThat(runner)
                 .contains("assessmentStatus:", "presence:", "assessment:", "severity:")
                 .doesNotContain("BEHAVIOR_PRESENT_GOOD", "NO_REVIEW_OCCASION", "INSUFFICIENT_EVIDENCE");
+    }
+
+    @Test
+    void shouldBoundSummariesAlikeInRunnerAndAdmission() throws IOException {
+        Matcher matcher = Pattern.compile("export const MAX_SUMMARY_CHARS = (\\d+);")
+                .matcher(Files.readString(NORMALIZER, StandardCharsets.UTF_8));
+        assertThat(matcher.find())
+                .as("MAX_SUMMARY_CHARS is declared in pi-observation-normalize.ts")
+                .isTrue();
+        assertThat(Integer.parseInt(matcher.group(1)))
+                .as("MAX_SUMMARY_CHARS vs PracticeDetectionResultParser.MAX_SUMMARY_LENGTH")
+                .isEqualTo(PracticeDetectionResultParser.MAX_SUMMARY_LENGTH);
     }
 
     @Test

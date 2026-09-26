@@ -467,7 +467,7 @@ function evidenceBranchOf(
 	return assessmentStatus === "UNDETERMINED" ? "undecidability" : null;
 }
 
-/** The summary heads the developer's practice page; a phrase, not the rationale. */
+/** The summary heads the developer's practice page; a phrase, not the rationale. Mirrored by admission. */
 export const MAX_SUMMARY_CHARS = 160;
 
 /** Shorten at a sentence boundary, or a clause boundary past half the limit; otherwise refuse. */
@@ -536,8 +536,8 @@ function rehomed(observation: Record<string, unknown>, notes: string[]): Record<
 /**
  * @param ruledOut the cells the practice's Judge section rules out, from {@link cellsRuledOut}; an
  *   assessed observation in one of them is refused before anything else about it is asked for.
- * @param notes receives one line per correction made on the way in — a field moved to its home, a
- *   summary cut at a sentence end — so the caller can echo what was recorded.
+ * @param notes receives one line per correction made on the way in — a field moved to its home — so
+ *   the caller can echo what was recorded.
  */
 export function normalizeObservation(
 	raw: unknown,
@@ -585,15 +585,12 @@ export function normalizeObservation(
 				"'Debug print left in the request handler'",
 		);
 	}
-	const title = boundedAtSentenceEnd(sent, MAX_SUMMARY_CHARS);
-	if (title === undefined) {
+	// Refused, never shortened: a cut the runner chooses changes what the observation says.
+	if (sent.length > MAX_SUMMARY_CHARS) {
 		throw new Error(
-			`summary must be at most ${MAX_SUMMARY_CHARS} characters; this one is ${sent.length} with no sentence or clause end inside the bound. Name the behavior, and keep the reasons for the rationale`,
-		);
-	}
-	if (title !== sent) {
-		notes.push(
-			`summary was ${sent.length} characters; recorded up to its last sentence or clause end within ${MAX_SUMMARY_CHARS}: "${title}"`,
+			`summary must be at most ${MAX_SUMMARY_CHARS} characters; this one is ${sent.length}. Resend the ` +
+				"observation with a shorter summary that reads as a complete phrase on its own — name the " +
+				"behavior, and move titles, quotes and reasons into evidenceRationale",
 		);
 	}
 	if (!reasoning) {
@@ -621,7 +618,7 @@ export function normalizeObservation(
 	);
 	const out: NormalizedObservation = {
 		practiceSlug,
-		summary: title,
+		summary: sent,
 		...result,
 		evidence,
 		evidenceRationale: reasoning,
