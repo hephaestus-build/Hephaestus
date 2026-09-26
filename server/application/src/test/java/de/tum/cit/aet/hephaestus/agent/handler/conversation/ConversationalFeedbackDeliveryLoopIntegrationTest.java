@@ -206,11 +206,10 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
                 "test-model",
                 org.mockito.Mockito.mock(LlmPriceSnapshot.class));
 
-        mentorTurnPersistence.finalise(
-                cookie,
-                state,
-                new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null),
-                MentorChannel.DeliveryOutcome.INSTANCE_SILENCED);
+        mentorTurnPersistence.complete(
+                cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
+
+        mentorTurnPersistence.recordDelivery(cookie, state, MentorChannel.DeliveryOutcome.INSTANCE_SILENCED);
 
         assertThat(reconciler.suppressForSilentMode(workspace.getId(), recipient.getId(), List.of(observation.getId())))
                 .isZero();

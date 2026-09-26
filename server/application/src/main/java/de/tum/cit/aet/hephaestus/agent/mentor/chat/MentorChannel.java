@@ -74,7 +74,7 @@ public interface MentorChannel extends AutoCloseable {
     /** 409 terminal: a turn is already in flight for this thread. Idempotent. */
     void completeWithConflict();
 
-    /** Release transport resources. Idempotent. Never throws. */
+    /** End the transport if no terminal did, and release its resources. Idempotent. Never throws. */
     @Override
     void close();
 }

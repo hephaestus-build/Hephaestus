@@ -451,6 +451,28 @@ describe("useMentorChat", () => {
 			]);
 		});
 
+		it("keeps an interrupted reply marked as interrupted when it rehydrates", async () => {
+			const interrupted = {
+				...createMockMessage(
+					"assistant",
+					"Link the issue so",
+					"0b6f1c8e-3d2a-4f5b-9c7d-1e2f3a4b5c6d",
+				),
+				metadata: { status: "interrupted" },
+			};
+			queryClient.setQueryData(
+				getThreadQueryKey({ path: { workspaceSlug: "test-workspace", threadId: "thread-123" } }),
+				{ id: "thread-123", title: "Test Thread", messages: [threadMessages[0], interrupted] },
+			);
+
+			const { result } = renderHook(() => useMentorChat({ threadId: "thread-123" }), {
+				wrapper: createWrapper(queryClient),
+			});
+
+			await waitFor(() => expect(result.current.messages).toHaveLength(2));
+			expect(result.current.messages[1]?.metadata?.status).toBe("interrupted");
+		});
+
 		it("does not overwrite an answer that is still streaming", async () => {
 			chat = installFakeChat("streaming");
 			seedThread();

@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalDeliveryReconciler;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState;
-import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -47,23 +46,22 @@ class MentorTurnPersistenceDeliveryOutcomeTest extends BaseUnitTest {
     }
 
     @Test
-    void silentOutcomeSuppressesPreparedFeedbackInFinaliseTransaction() {
+    void silentOutcomeSuppressesPreparedFeedback() {
         enableTransaction();
         Fixture fixture = fixture();
 
-        persistence.finalise(
-                fixture.cookie(), fixture.state(), finish(), MentorChannel.DeliveryOutcome.INSTANCE_SILENCED);
+        persistence.recordDelivery(fixture.cookie(), fixture.state(), MentorChannel.DeliveryOutcome.INSTANCE_SILENCED);
 
         verify(reconciler).suppressForSilentMode(1L, 2L, List.of(fixture.observationId()));
         verify(reconciler, never()).reconcile(anyLong(), anyLong(), any(), any());
     }
 
     @Test
-    void deliveredOutcomeReconcilesPreparedFeedbackInFinaliseTransaction() {
+    void deliveredOutcomeReconcilesPreparedFeedback() {
         enableTransaction();
         Fixture fixture = fixture();
 
-        persistence.finalise(fixture.cookie(), fixture.state(), finish(), MentorChannel.DeliveryOutcome.DELIVERED);
+        persistence.recordDelivery(fixture.cookie(), fixture.state(), MentorChannel.DeliveryOutcome.DELIVERED);
 
         verify(reconciler, never()).suppressForSilentMode(anyLong(), anyLong(), any());
         verify(reconciler).reconcile(1L, 2L, fixture.cookie().assistantMessageId(), List.of(fixture.observationId()));
@@ -74,7 +72,7 @@ class MentorTurnPersistenceDeliveryOutcomeTest extends BaseUnitTest {
         enableTransaction();
         Fixture fixture = fixture();
 
-        persistence.finalise(fixture.cookie(), fixture.state(), finish(), MentorChannel.DeliveryOutcome.NOT_DELIVERED);
+        persistence.recordDelivery(fixture.cookie(), fixture.state(), MentorChannel.DeliveryOutcome.NOT_DELIVERED);
 
         verify(reconciler, never()).suppressForSilentMode(anyLong(), anyLong(), any());
         verify(reconciler, never()).reconcile(anyLong(), anyLong(), any(), any());
@@ -101,10 +99,6 @@ class MentorTurnPersistenceDeliveryOutcomeTest extends BaseUnitTest {
 
     private void enableTransaction() {
         when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
-    }
-
-    private static UIMessageChunk.Finish finish() {
-        return new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null);
     }
 
     private static MentorTurnPersistence.TurnPersistenceCookie cookie(UUID assistantId) {

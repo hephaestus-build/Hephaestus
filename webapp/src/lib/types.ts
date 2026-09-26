@@ -38,6 +38,11 @@ export interface MessageMetadata {
 	usage?: UsageMetadata;
 	/** Computed dollar cost (Pi-reported if available, else priced from {@code model_pricing}). */
 	costUsd?: number;
+	/**
+	 * Stored turn status, present only on messages read back from the server. `interrupted` means the
+	 * reply stopped before it finished, so its text is incomplete.
+	 */
+	status?: "in_flight" | "completed" | "interrupted";
 }
 
 /**

@@ -73,6 +73,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
@@ -104,11 +105,13 @@ class MentorChatServiceTest extends BaseUnitTest {
     private static final long WORKSPACE_ID = 1L;
     private static final long USER_ID = 99L;
     private static final UUID THREAD_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static final UUID OBSERVATION_ID = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
     /** The disconnect index follows the orchestrator preamble and translator start frames. */
     private static final int PREAMBLE_SEND_COUNT = 4;
 
     private final ObjectMapper mapper = new ObjectMapper();
+    private final List<Boolean> closedUnderSandboxLock = new CopyOnWriteArrayList<>();
 
     @Mock
     UserRepository userRepository;
@@ -157,6 +160,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         // Direct executor so the test runs on the caller thread — no race between dispatch and assertion.
         turnExec = directExecutor();
         sandbox = new FakeSandbox();
+        sandbox.onClose = () -> closedUnderSandboxLock.add(turnLock.activeSandboxKeys() > 0);
         proxyCredentialRegistry = new MentorProxyCredentialRegistry();
         sessionToken = proxyCredentialRegistry.mint(
                 sandbox.identity().sessionId(),
@@ -222,6 +226,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         when(workspaceContextBuilder.build(any())).thenReturn(new LinkedHashMap<>());
         when(interactiveSandboxService.attach(any())).thenReturn(sandbox);
         when(mentorPiAdapter.buildSandboxSpec(any(), any(), any(), any())).thenReturn(stubSpec());
+        when(persistence.complete(any(), any(), any())).thenReturn(true);
         when(persistence.augmentFinishWithCost(any(UIMessageChunk.Finish.class), any()))
                 .thenAnswer(inv -> inv.getArgument(0, UIMessageChunk.Finish.class));
     }
@@ -301,12 +306,422 @@ class MentorChatServiceTest extends BaseUnitTest {
                         "finish");
         assertThat(types).doesNotContain("error");
         var deliveryOutcome = ArgumentCaptor.forClass(MentorChannel.DeliveryOutcome.class);
-        verify(persistence).finalise(any(), any(), any(UIMessageChunk.Finish.class), deliveryOutcome.capture());
+        verify(persistence).complete(any(), any(), any(UIMessageChunk.Finish.class));
+        verify(persistence).recordDelivery(any(), any(), deliveryOutcome.capture());
         assertThat(deliveryOutcome.getValue()).isEqualTo(MentorChannel.DeliveryOutcome.DELIVERED);
         verify(persistence, never()).interrupt(any(), any(), any());
         assertThat(turnLock.activeKeys()).isZero();
         assertOutcomeRecorded(MentorChatMetrics.Outcome.SUCCESS);
         assertThat(meterRegistry.timer("mentor.turn.duration").count()).isEqualTo(1L);
+    }
+
+    @Test
+    void shouldInterruptInsteadOfFinalisingWhenAStreamedDeltaWasLost() {
+        scheduleResponses(sandbox, prompt -> {
+            sandbox.push(assistantStart());
+            // ". The C" never arrived; Pi's final message still carries it.
+            sandbox.push(textDelta("it"));
+            sandbox.push(event("link_observation", n -> n.put("observationId", OBSERVATION_ID.toString())));
+            sandbox.push(textDelta("loses #1"));
+            sandbox.push(assistantEnd("it. The Closes #1"));
+            sandbox.push(event("turn_end", n -> {}));
+            sandbox.push(event("agent_end", n -> n.putArray("messages")));
+        });
+
+        runTurnSync();
+
+        assertThat(emitter.recordedTypes())
+                .containsSubsequence("text-end", "error")
+                .doesNotContain("finish");
+        verify(persistence, never()).complete(any(), any(), any());
+        var interrupted =
+                ArgumentCaptor.forClass(de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState.class);
+        verify(persistence).interrupt(any(), interrupted.capture(), any());
+        assertThat(interrupted.getValue().partsSnapshot().toString())
+                .contains("it. The Closes #1", OBSERVATION_ID.toString())
+                .doesNotContain("itloses #1");
+        assertThat(interrupted.getValue().linkedObservationIds()).containsExactly(OBSERVATION_ID);
+        assertThat(closedUnderSandboxLock)
+                .as("the runner is discarded before another turn can take it")
+                .containsExactly(true);
+        assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"hello", "open_thread"})
+    void shouldRunTheNextTurnOnAFreshSandboxWhenTheStreamIsLostBeforeThePrompt(String lostDuring) throws Exception {
+        FakeSandbox fresh = new FakeSandbox();
+        when(interactiveSandboxService.attach(any())).thenReturn(sandbox, fresh);
+        scheduleResponses(sandbox, prompt -> {});
+        Consumer<JsonNode> answer = sandbox.onSend;
+        sandbox.onSend = frame -> {
+            if (lostDuring.equals(frame.path("method").asString(""))) {
+                sandbox.onLost.run();
+            } else {
+                answer.accept(frame);
+            }
+        };
+
+        runTurnSync();
+
+        assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
+        assertThat(sandbox.promptTexts()).isEmpty();
+        assertThat(closedUnderSandboxLock).containsExactly(true);
+
+        emitter = new RecordingEmitter();
+        scheduleHappyPathResponses(fresh).run();
+        runTurnSync();
+
+        assertThat(fresh.promptTexts()).hasSize(1);
+        assertThat(emitter.recordedTypes()).contains("finish").doesNotContain("error");
+    }
+
+    @Test
+    void shouldCommitTheReplyBeforeTheClientSeesItFinish() {
+        List<String> seenAtCommit = new CopyOnWriteArrayList<>();
+        when(persistence.complete(any(), any(), any())).thenAnswer(inv -> {
+            seenAtCommit.addAll(emitter.recordedTypes());
+            return true;
+        });
+        scheduleHappyPathResponses(sandbox).run();
+
+        runTurnSync();
+
+        assertThat(seenAtCommit).contains("text-delta").doesNotContain("finish");
+        assertThat(emitter.recordedTypes()).contains("finish");
+        assertThat(sandbox.closed)
+                .as("a durably completed turn keeps its runner")
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldReportAnErrorInsteadOfFinishWhenTheReplyIsNotSaved(boolean saveThrows) {
+        if (saveThrows) {
+            when(persistence.complete(any(), any(), any()))
+                    .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("database down"));
+        } else {
+            // Another writer, such as the in-flight reaper, already settled the row.
+            when(persistence.complete(any(), any(), any())).thenReturn(false);
+        }
+        scheduleHappyPathResponses(sandbox).run();
+
+        runTurnSync();
+
+        assertThat(emitter.recordedTypes())
+                .containsSubsequence("text-delta", "error")
+                .doesNotContain("finish");
+        assertThat(String.join("\n", emitter.rawData)).contains("couldn't be saved");
+        verify(persistence, never()).recordDelivery(any(), any(), any());
+        verify(persistence, saveThrows ? times(1) : never()).interrupt(any(), any(), any());
+        assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
+    }
+
+    @Test
+    void shouldEndTheStreamAfterAnInStreamErrorEvenWhenItsRowCannotBeWritten() {
+        doThrow(new org.springframework.dao.DataAccessResourceFailureException("database down"))
+                .when(persistence)
+                .interrupt(any(), any(), any());
+        scheduleResponses(sandbox, prompt -> {
+            sandbox.push(assistantStart());
+            sandbox.push(textDelta("Hel"));
+            sandbox.push(event("pi_error", n -> n.put("message", "provider failed")));
+        });
+
+        runTurnSync();
+
+        assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
+        assertThat(emitter.rawData).contains("[DONE]");
+        assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
+    }
+
+    @Test
+    void shouldInterruptTheTurnWhenItsInStreamErrorCannotBeWritten() {
+        User developer = userRepository.getCurrentUserElseThrow();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
+        HookedChannel channel = new HookedChannel(new MentorSseChannel(emitter, mapper, scheduler), chunk -> {
+            if (chunk instanceof UIMessageChunk.Error) {
+                throw new IllegalStateException("Failed to serialise UIMessageChunk");
+            }
+        });
+        scheduleResponses(sandbox, prompt -> {
+            sandbox.push(assistantStart());
+            sandbox.push(textDelta("Hel"));
+            sandbox.push(event("pi_error", n -> n.put("message", "provider failed")));
+        });
+
+        service.run(
+                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB),
+                channel,
+                USER_ID);
+
+        verify(persistence).interrupt(any(), any(), any());
+        verify(persistence, never()).complete(any(), any(), any());
+        assertThat(emitter.rawData).contains("[DONE]");
+    }
+
+    @Test
+    void shouldReportAFailureOutsideTheStreamEvenWhenItsRowCannotBeWritten() throws Exception {
+        when(interactiveSandboxService.attach(any())).thenThrow(new InteractiveSandboxException("no capacity"));
+        doThrow(new org.springframework.dao.DataAccessResourceFailureException("database down"))
+                .when(persistence)
+                .interrupt(any(), any(), any());
+
+        runTurnSync();
+
+        String wire = String.join("", emitter.rawData);
+        assertThat(wire).contains("couldn't start the mentor runtime", "[DONE]");
+        assertThat(wire.indexOf("couldn't start the mentor runtime")).isLessThan(wire.indexOf("[DONE]"));
+        assertThat(emitter.recordedTypes()).doesNotContain("finish");
+    }
+
+    @Test
+    void shouldRunTheNextTurnOnAFreshSandboxWhenTheStreamIsLostWhileASaveFails() throws Exception {
+        FakeSandbox fresh = new FakeSandbox();
+        when(interactiveSandboxService.attach(any())).thenReturn(sandbox, fresh);
+        when(persistence.complete(any(), any(), any()))
+                .thenAnswer(inv -> {
+                    sandbox.onLost.run();
+                    throw new org.springframework.dao.DataAccessResourceFailureException("database down");
+                })
+                .thenReturn(true);
+        scheduleHappyPathResponses(sandbox).run();
+
+        runTurnSync();
+
+        assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
+        assertThat(closedUnderSandboxLock).containsExactly(true);
+
+        emitter = new RecordingEmitter();
+        scheduleHappyPathResponses(fresh).run();
+        runTurnSync();
+
+        assertThat(fresh.promptTexts()).hasSize(1);
+        assertThat(emitter.recordedTypes()).contains("finish").doesNotContain("error");
+    }
+
+    @Test
+    void shouldFinishButDiscardTheRunnerWhenTheStreamIsLostBeforeTheReplyIsCommitted() {
+        when(persistence.complete(any(), any(), any())).thenAnswer(inv -> {
+            sandbox.onLost.run();
+            return true;
+        });
+        scheduleHappyPathResponses(sandbox).run();
+
+        runTurnSync();
+
+        assertThat(emitter.recordedTypes()).contains("finish").doesNotContain("error");
+        verify(persistence, never()).interrupt(any(), any(), any());
+        assertThat(closedUnderSandboxLock).containsExactly(true);
+    }
+
+    @Test
+    void shouldSendNoChunkAfterTheFailureItFollows() throws Exception {
+        User developer = userRepository.getCurrentUserElseThrow();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
+        CountDownLatch sending = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        HookedChannel channel = new HookedChannel(new MentorSseChannel(emitter, mapper, scheduler), chunk -> {
+            if (chunk instanceof UIMessageChunk.TextDelta) {
+                sending.countDown();
+                awaitQuietly(release);
+            }
+        });
+        AtomicReference<Thread> dispatcher = streamOnItsOwnThread("Hi");
+        Thread.ofVirtual().start(() -> {
+            awaitQuietly(sending);
+            sandbox.onLost.run();
+            // Give the turn thread its chance to record the failure while the delta is still in flight.
+            LockSupport.parkNanos(Duration.ofMillis(300).toNanos());
+            release.countDown();
+        });
+
+        service.run(
+                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB),
+                channel,
+                USER_ID);
+        dispatcher.get().join(5_000);
+
+        assertThat(emitter.recordedTypes()).containsSubsequence("text-delta", "error");
+        assertThat(emitter.recordedTypes()
+                        .subList(
+                                emitter.recordedTypes().indexOf("error"),
+                                emitter.recordedTypes().size()))
+                .doesNotContain("text-delta", "finish");
+        var interrupted =
+                ArgumentCaptor.forClass(de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState.class);
+        verify(persistence).interrupt(any(), interrupted.capture(), any());
+        assertThat(interrupted.getValue().partsSnapshot().toString()).contains("Hi");
+    }
+
+    /** Delegates to the SSE channel, running a hook before each chunk is written. */
+    private record HookedChannel(MentorSseChannel delegate, Consumer<UIMessageChunk> beforeSend)
+            implements MentorChannel {
+        HookedChannel {
+            delegate.bindLifecycle();
+        }
+
+        @Override
+        public void onDisconnect(Runnable hook) {
+            delegate.onDisconnect(hook);
+        }
+
+        @Override
+        public boolean isClientGone() {
+            return delegate.isClientGone();
+        }
+
+        @Override
+        public void startKeepAlive() {
+            delegate.startKeepAlive();
+        }
+
+        @Override
+        public void send(UIMessageChunk chunk) {
+            beforeSend.accept(chunk);
+            delegate.send(chunk);
+        }
+
+        @Override
+        public DeliveryOutcome completeWithDone() {
+            return delegate.completeWithDone();
+        }
+
+        @Override
+        public void completeWithError(String errorText) {
+            delegate.completeWithError(errorText);
+        }
+
+        @Override
+        public void completeWithConflict() {
+            delegate.completeWithConflict();
+        }
+
+        @Override
+        public void close() {
+            delegate.close();
+        }
+    }
+
+    @Test
+    void shouldNotFinishATurnWhoseStreamIsLostWhileItsFinishIsTranslated() {
+        translator = org.mockito.Mockito.spy(new PiEventToUiChunkTranslator());
+        org.mockito.Mockito.doAnswer(inv -> {
+                    sandbox.onLost.run();
+                    return inv.callRealMethod();
+                })
+                .when(translator)
+                .translate(
+                        org.mockito.ArgumentMatchers.argThat(
+                                e -> "agent_end".equals(e.path("type").asString(""))),
+                        any());
+        service = serviceWithExecutor(turnExec);
+        scheduleHappyPathResponses(sandbox).run();
+
+        runTurnSync();
+
+        assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
+        verify(persistence, never()).complete(any(), any(), any());
+        verify(persistence).interrupt(any(), any(), any());
+    }
+
+    /** Streams one complete reply from a thread of its own, as the sandbox's dispatcher does. */
+    private AtomicReference<Thread> streamOnItsOwnThread(String text) {
+        AtomicReference<Thread> dispatcher = new AtomicReference<>();
+        scheduleResponses(
+                sandbox,
+                prompt -> dispatcher.set(Thread.ofVirtual().start(() -> {
+                    sandbox.push(assistantStart());
+                    sandbox.push(textDelta(text));
+                    sandbox.push(assistantEnd(text));
+                    sandbox.push(event("turn_end", n -> {}));
+                    sandbox.push(event("agent_end", n -> n.putArray("messages")));
+                })));
+        return dispatcher;
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    @Test
+    void shouldNotFinishAfterAChunkThatFailedToSend() {
+        User developer = userRepository.getCurrentUserElseThrow();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
+        AtomicBoolean failed = new AtomicBoolean();
+        HookedChannel channel = new HookedChannel(new MentorSseChannel(emitter, mapper, scheduler), chunk -> {
+            if (chunk instanceof UIMessageChunk.TextDelta && failed.compareAndSet(false, true)) {
+                throw new IllegalStateException("Failed to serialise UIMessageChunk");
+            }
+        });
+        scheduleHappyPathResponses(sandbox).run();
+
+        service.run(
+                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB),
+                channel,
+                USER_ID);
+
+        assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
+        verify(persistence, never()).complete(any(), any(), any());
+        verify(persistence).interrupt(any(), any(), any());
+    }
+
+    @Test
+    void shouldFailTheTurnAndRunTheNextOnAFreshSandboxWhenTheStreamIsCutOff() throws Exception {
+        FakeSandbox fresh = new FakeSandbox();
+        when(interactiveSandboxService.attach(any())).thenReturn(sandbox, fresh);
+        scheduleResponses(sandbox, prompt -> {
+            sandbox.push(assistantStart());
+            sandbox.push(textDelta("Hel"));
+            sandbox.onLost.run();
+        });
+
+        runTurnSync();
+
+        assertThat(emitter.recordedTypes())
+                .containsSubsequence("text-end", "error")
+                .doesNotContain("finish");
+        assertThat(String.join("\n", emitter.rawData)).contains(PiEventToUiChunkTranslator.REPLY_LOST_IN_TRANSIT);
+        verify(persistence, never()).complete(any(), any(), any());
+        verify(persistence).interrupt(any(), any(), any());
+        assertThat(closedUnderSandboxLock).containsExactly(true);
+
+        emitter = new RecordingEmitter();
+        scheduleHappyPathResponses(fresh).run();
+        runTurnSync();
+
+        assertThat(fresh.promptTexts()).hasSize(1);
+        assertThat(sandbox.promptTexts()).hasSize(1);
+        assertThat(emitter.recordedTypes()).contains("finish").doesNotContain("error");
+        verify(persistence).complete(any(), any(), any(UIMessageChunk.Finish.class));
+    }
+
+    @Test
+    void shouldNotFinaliseWhenAThreadFrameBreaksTheProtocol() {
+        scheduleResponses(sandbox, prompt -> {
+            sandbox.push(assistantStart());
+            sandbox.push(textDelta("Hel"));
+            // Valid JSON, but an event with no type: whatever it carried for this turn is gone.
+            ObjectNode broken = event("link_observation", n -> {});
+            ((ObjectNode) broken.path("params").path("event")).remove("type");
+            sandbox.push(broken);
+            sandbox.push(textDelta("lo"));
+            sandbox.push(assistantEnd("Hello"));
+            sandbox.push(event("turn_end", n -> {}));
+            sandbox.push(event("agent_end", n -> n.putArray("messages")));
+        });
+
+        runTurnSync();
+
+        assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
+        verify(persistence, never()).complete(any(), any(), any());
+        verify(persistence).interrupt(any(), any(), any());
+        assertThat(sandbox.closed).isTrue();
+        assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
     }
 
     @Test
@@ -582,8 +997,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         runTurnSync();
 
         verify(interactiveSandboxService, times(2)).attach(any());
-        verify(persistence)
-                .finalise(any(), any(), any(UIMessageChunk.Finish.class), any(MentorChannel.DeliveryOutcome.class));
+        verify(persistence).complete(any(), any(), any(UIMessageChunk.Finish.class));
         verify(persistence, never()).interrupt(any(), any(), any());
         assertOutcomeRecorded(MentorChatMetrics.Outcome.SUCCESS);
     }
@@ -634,8 +1048,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         verify(chatThreadRepository).clearSessionJsonl(THREAD_ID);
         verify(interactiveSandboxService, times(2)).attach(any());
         assertThat(staleSessionSandbox.closed).isTrue();
-        verify(persistence)
-                .finalise(any(), any(), any(UIMessageChunk.Finish.class), any(MentorChannel.DeliveryOutcome.class));
+        verify(persistence).complete(any(), any(), any(UIMessageChunk.Finish.class));
         assertOutcomeRecorded(MentorChatMetrics.Outcome.SUCCESS);
     }
 
@@ -648,8 +1061,7 @@ class MentorChatServiceTest extends BaseUnitTest {
 
         assertThat(sandbox.methodsSent()).contains("abort");
         assertThat(emitter.recordedTypes()).doesNotContain("error");
-        verify(persistence, atLeastOnce())
-                .finalise(any(), any(), any(UIMessageChunk.Finish.class), any(MentorChannel.DeliveryOutcome.class));
+        verify(persistence, atLeastOnce()).complete(any(), any(), any(UIMessageChunk.Finish.class));
         verify(persistence, never()).interrupt(any(), any(), any());
         assertThat(turnLock.activeKeys()).isZero();
         // A disconnect on the event-handler thread is swallowed inside handleEvent; the runner keeps
@@ -667,8 +1079,10 @@ class MentorChatServiceTest extends BaseUnitTest {
         runTurnSync();
 
         assertThat(sandbox.methodsSent()).contains("abort");
-        verify(persistence, atLeastOnce())
-                .finalise(any(), any(), any(UIMessageChunk.Finish.class), any(MentorChannel.DeliveryOutcome.class));
+        assertThat(sandbox.closed)
+                .as("a client leaving does not make the runner unusable")
+                .isFalse();
+        verify(persistence, atLeastOnce()).complete(any(), any(), any(UIMessageChunk.Finish.class));
         verify(persistence, never()).interrupt(any(), any(), any());
         assertThat(turnLock.activeKeys()).isZero();
         assertOutcomeRecorded(MentorChatMetrics.Outcome.SUCCESS);
@@ -688,8 +1102,7 @@ class MentorChatServiceTest extends BaseUnitTest {
             throw new AssertionError(e);
         }
         verify(persistence).interrupt(any(), any(), any());
-        verify(persistence, never())
-                .finalise(any(), any(), any(UIMessageChunk.Finish.class), any(MentorChannel.DeliveryOutcome.class));
+        verify(persistence, never()).complete(any(), any(), any(UIMessageChunk.Finish.class));
         assertThat(turnLock.activeKeys()).isZero();
         assertOutcomeRecorded(MentorChatMetrics.Outcome.CLIENT_DISCONNECT);
     }
@@ -714,8 +1127,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(sandbox.closed).isFalse();
         assertThat(sandbox.methodsSent()).doesNotContain("hello", "open_thread", "prompt");
         verify(persistence).interrupt(any(), any(), any());
-        verify(persistence, never())
-                .finalise(any(), any(), any(UIMessageChunk.Finish.class), any(MentorChannel.DeliveryOutcome.class));
+        verify(persistence, never()).complete(any(), any(), any(UIMessageChunk.Finish.class));
         assertThat(turnLock.activeKeys()).isZero();
         assertOutcomeRecorded(MentorChatMetrics.Outcome.CLIENT_DISCONNECT);
     }
@@ -752,7 +1164,7 @@ class MentorChatServiceTest extends BaseUnitTest {
 
         assertThat(sandbox.closed.get()).isTrue();
         verify(persistence).interrupt(any(), any(), any(Throwable.class));
-        verify(persistence, never()).finalise(any(), any(), any(), any());
+        verify(persistence, never()).complete(any(), any(), any());
         assertThat(turnLock.activeKeys()).isZero();
 
         assertOutcomeRecorded(MentorChatMetrics.Outcome.POISONED);
@@ -994,6 +1406,7 @@ class MentorChatServiceTest extends BaseUnitTest {
                             ame.put("delta", chunk);
                         }));
                     }
+                    sb.push(assistantEnd("Hello, world!"));
                     sb.push(event("turn_end", n -> {}));
                     sb.push(event("agent_end", n -> n.putArray("messages")));
                     sb.push(jsonRpcResult(id, mapper.createObjectNode()));
@@ -1004,6 +1417,45 @@ class MentorChatServiceTest extends BaseUnitTest {
                 }
             }
         };
+    }
+
+    /** Answers the control calls; {@code onPrompt} scripts the events and the prompt stays unacknowledged. */
+    private void scheduleResponses(FakeSandbox sb, Consumer<JsonNode> onPrompt) {
+        sb.onSend = frame -> {
+            String method = frame.path("method").asString("");
+            long id = frame.path("id").asLong(0);
+            switch (method) {
+                case "hello" ->
+                    sb.push(jsonRpcResult(id, mapper.createObjectNode().put("protocolVersion", 1)));
+                case "prompt" -> onPrompt.accept(frame);
+                case "open_thread", "abort", "close_thread" -> sb.push(jsonRpcResult(id, mapper.createObjectNode()));
+                default -> {
+                    /* ignore */
+                }
+            }
+        };
+    }
+
+    private ObjectNode assistantEnd(String text) {
+        return event("message_end", node -> {
+            ObjectNode message = node.putObject("message");
+            message.put("role", "assistant");
+            message.put("stopReason", "stop");
+            message.putArray("content").addObject().put("type", "text").put("text", text);
+        });
+    }
+
+    private ObjectNode assistantStart() {
+        return event("message_start", node -> node.putObject("message").put("role", "assistant"));
+    }
+
+    private ObjectNode textDelta(String delta) {
+        return event("message_update", node -> {
+            ObjectNode ame = node.putObject("assistantMessageEvent");
+            ame.put("type", "text_delta");
+            ame.put("contentIndex", 0);
+            ame.put("delta", delta);
+        });
     }
 
     private Runnable scheduleRunnerPoisoned(FakeSandbox sb) {
@@ -1054,6 +1506,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         frame.put("jsonrpc", "2.0");
         frame.put("method", "event");
         ObjectNode params = frame.putObject("params");
+        params.put("threadId", THREAD_ID.toString());
         ObjectNode evt = params.putObject("event");
         evt.put("type", type);
         filler.accept(evt);
@@ -1145,6 +1598,8 @@ class MentorChatServiceTest extends BaseUnitTest {
 
         Runnable onSubscribe = () -> {};
 
+        volatile Runnable onLost = () -> {};
+
         @Override
         public SandboxIdentity identity() {
             return new SandboxIdentity(sessionId, Long.toString(USER_ID), Long.toString(WORKSPACE_ID));
@@ -1165,6 +1620,12 @@ class MentorChatServiceTest extends BaseUnitTest {
         }
 
         @Override
+        public Disposable subscribeFromNow(Consumer<JsonNode> listener, Runnable onLost) {
+            this.onLost = onLost;
+            return subscribe(listener);
+        }
+
+        @Override
         public Instant lastActivityAt() {
             return Instant.now();
         }
@@ -1174,8 +1635,11 @@ class MentorChatServiceTest extends BaseUnitTest {
             return Duration.ZERO;
         }
 
+        volatile Runnable onClose = () -> {};
+
         @Override
         public void close(Duration graceTimeout) {
+            onClose.run();
             closed.set(true);
             listeners.clear();
         }

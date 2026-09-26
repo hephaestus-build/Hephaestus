@@ -37,6 +37,20 @@ public final class TranslatorState {
     /** AI SDK UIMessage parts as accumulated. Order matches the stream; written to JSONB at end-of-turn. */
     private final ArrayNode partsAccumulator = nodes.arrayNode();
 
+    /** Every text delta since the last verified assistant message, checked against that message's final text. */
+    private final StringBuilder unverifiedText = new StringBuilder();
+
+    private boolean assistantMessageOpen = false;
+
+    /** Final texts of the assistant messages verified this turn, in order; empty texts are not kept. */
+    private final List<String> verifiedTexts = new ArrayList<>();
+
+    /** Index in {@link #partsAccumulator} where the unverified assistant message's parts begin. */
+    private int messagePartsStart;
+
+    /** The stream stopped being intact, so neither its reply nor its runner can be trusted. */
+    private boolean streamBroken = false;
+
     /**
      * Observation ids the mentor linked this turn via {@code link_observation}, in emission order. Read at
      * end-of-turn by the conversational-delivery reconciler to flip the matching PREPARED unit to DELIVERED.
@@ -171,20 +185,100 @@ public final class TranslatorState {
 
     public synchronized void appendText(String delta) {
         this.textBuffer.append(delta);
+        this.unverifiedText.append(delta);
+    }
+
+    public synchronized void openAssistantMessage() {
+        assistantMessageOpen = true;
+        messagePartsStart = partsAccumulator.size();
+        unverifiedText.setLength(0);
+    }
+
+    /** An assistant message started or streamed text, and its final text has not been checked yet. */
+    public synchronized boolean hasUnverifiedAssistantMessage() {
+        return assistantMessageOpen || unverifiedText.length() > 0;
+    }
+
+    public synchronized int unverifiedTextLength() {
+        return unverifiedText.length();
+    }
+
+    /**
+     * Closes the open text block and checks the text streamed since the last verified assistant message
+     * against that message's final text blocks. On a mismatch, or with no final text ({@code null}), the
+     * stream is marked broken and the message's stored text parts are replaced by the final text, or
+     * dropped when there is none; its other parts keep their place.
+     *
+     * @return whether the streamed text matched
+     */
+    public synchronized boolean verifyAssistantMessage(@Nullable List<String> finalTextBlocks) {
+        closeTextBlock();
+        boolean matched =
+                finalTextBlocks != null && String.join("", finalTextBlocks).contentEquals(unverifiedText);
+        if (!matched) {
+            int insertAt = -1;
+            for (int i = partsAccumulator.size() - 1; i >= messagePartsStart; i--) {
+                if ("text".equals(partsAccumulator.get(i).path("type").asString(""))) {
+                    partsAccumulator.remove(i);
+                    insertAt = i;
+                }
+            }
+            if (insertAt < 0) {
+                insertAt = partsAccumulator.size();
+            }
+            if (finalTextBlocks != null) {
+                for (String text : finalTextBlocks) {
+                    if (!text.isEmpty()) {
+                        partsAccumulator.insert(insertAt++, textPart(text));
+                    }
+                }
+            }
+            streamBroken = true;
+        } else if (!unverifiedText.isEmpty()) {
+            verifiedTexts.add(unverifiedText.toString());
+        }
+        assistantMessageOpen = false;
+        unverifiedText.setLength(0);
+        messagePartsStart = partsAccumulator.size();
+        return matched;
+    }
+
+    /**
+     * Whether the non-empty texts of a run's assistant messages, in order, are the last texts this turn
+     * verified. A retried attempt's texts come before them, so only the tail has to match.
+     */
+    public synchronized boolean endsWithVerified(List<String> finalTexts) {
+        List<String> expected =
+                finalTexts.stream().filter(text -> !text.isEmpty()).toList();
+        int offset = verifiedTexts.size() - expected.size();
+        return offset >= 0
+                && verifiedTexts.subList(offset, verifiedTexts.size()).equals(expected);
+    }
+
+    public synchronized void markStreamBroken() {
+        streamBroken = true;
+    }
+
+    public synchronized boolean isStreamBroken() {
+        return streamBroken;
     }
 
     public synchronized void closeTextBlock() {
         if (activeTextId != null && textBuffer.length() > 0) {
-            ObjectNode part = nodes.objectNode();
-            part.put("type", "text");
-            part.put("text", textBuffer.toString());
-            // "done" — terminal value of AI SDK's TextUIPart.state, so a rehydrated message
-            // doesn't render an in-progress streaming cursor.
-            part.put("state", "done");
-            partsAccumulator.add(part);
+            partsAccumulator.add(textPart(textBuffer.toString()));
         }
         this.activeTextId = null;
         this.textBuffer.setLength(0);
+    }
+
+    private ObjectNode textPart(String text) {
+        ObjectNode part = nodes.objectNode();
+        part.put("type", "text");
+        part.put("text", text);
+        // "done" — terminal value of AI SDK's TextUIPart.state, so a rehydrated message
+        // doesn't render an in-progress streaming cursor.
+        part.put("state", "done");
+        return part;
     }
 
     public synchronized void recordDataObservation(UUID observationId) {

@@ -215,16 +215,17 @@ class MentorSseChannelTest extends BaseUnitTest {
         sender.join();
         // Allow a couple of heartbeat ticks to fire alongside.
         Thread.sleep(50);
+        List<String> frames = List.copyOf(emitter.dataFrames());
         channel.close();
 
         // Every JSON frame must be complete; every comment frame must equal "ping".
-        for (String frame : emitter.dataFrames()) {
+        for (String frame : frames) {
             assertThat(frame).startsWith("{").endsWith("}").contains("\"type\":\"start-step\"");
         }
         // Heartbeat comments are SSE `:` lines emitted via `SseEmitter.event().comment("ping")`;
         // our RecordingEmitter parses `data:` lines only, so we can also assert that the comment
         // stream didn't poison the data-frame collection. The negative shape is what matters.
-        assertThat(emitter.dataFrames()).allMatch(f -> f.contains("\"type\":\"start-step\""));
+        assertThat(frames).allMatch(f -> f.contains("\"type\":\"start-step\""));
     }
 
     /** Test-only emitter that records data frames + can simulate disconnect failures. */

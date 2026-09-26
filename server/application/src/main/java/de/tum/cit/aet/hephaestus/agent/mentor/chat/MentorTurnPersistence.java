@@ -231,32 +231,27 @@ public class MentorTurnPersistence {
         return cost != null ? cost.doubleValue() : null;
     }
 
-    /** Uses {@link TransactionTemplate} so the message and ledger write share an explicit new transaction. */
-    public void finalise(
-            TurnPersistenceCookie cookie,
-            TranslatorState state,
-            UIMessageChunk.Finish finish,
-            MentorChannel.DeliveryOutcome deliveryOutcome) {
+    /**
+     * Durably completes the turn: the message and its ledger write share one new transaction. Returns
+     * {@code false}, having written nothing, when the row is no longer in flight because another writer
+     * (the in-flight reaper, or an interrupt) recorded its outcome first. Any other failure throws.
+     */
+    public boolean complete(TurnPersistenceCookie cookie, TranslatorState state, UIMessageChunk.Finish finish) {
         try {
-            requiresNewTx.executeWithoutResult(tx -> doFinalise(cookie, state, finish, deliveryOutcome));
-        } catch (OptimisticLockingFailureException stale) {
-            // A concurrent writer (typically the in-flight reaper) already recorded a terminal state
-            // for this row; theirs wins.
-            log.info(
-                    "finalise lost optimistic-lock race for assistantMessageId={} — leaving prior observation in place",
-                    cookie.assistantMessageId());
+            return Boolean.TRUE.equals(requiresNewTx.execute(tx -> doComplete(cookie, state, finish)));
+        } catch (OptimisticLockingFailureException concurrentlyTerminated) {
+            return false;
         }
     }
 
-    private void doFinalise(
-            TurnPersistenceCookie cookie,
-            TranslatorState state,
-            UIMessageChunk.Finish finish,
-            MentorChannel.DeliveryOutcome deliveryOutcome) {
+    private boolean doComplete(TurnPersistenceCookie cookie, TranslatorState state, UIMessageChunk.Finish finish) {
         ChatMessage assistant = chatMessageRepository
                 .findById(cookie.assistantMessageId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "ChatMessage", cookie.assistantMessageId().toString()));
+        if (assistant.getStatus() != ChatMessage.Status.in_flight) {
+            return false;
+        }
         assistant.setParts(state.partsSnapshot());
         assistant.setStatus(ChatMessage.Status.completed);
         ObjectNode meta = newOrCopyMeta(assistant);
@@ -293,21 +288,32 @@ public class MentorTurnPersistence {
                 "durationMs",
                 Duration.between(cookie.startedAt(), Instant.now()).toMillis());
         assistant.setMetadata(meta);
-        // saveAndFlush, not save: forces the optimistic-lock check inside finalise's try/catch instead of
+        // saveAndFlush, not save: forces the optimistic-lock check inside complete's try/catch instead of
         // at the REQUIRES_NEW commit boundary, where it would escape uncaught.
         chatMessageRepository.saveAndFlush(assistant);
         billTurn(assistant, state, cookie);
-        reconcileConversationalDelivery(assistant, state, deliveryOutcome);
 
         byte[] sessionBytes = state.observedSessionJsonl();
         if (sessionBytes != null) {
             chatThreadRepository.updateSessionJsonl(cookie.threadId(), sessionBytes);
         }
+        return true;
+    }
+
+    /**
+     * Settles the feedback a completed reply linked, by what its channel reports reached the developer.
+     * Runs after the channel closes, because only then is that known.
+     */
+    public void recordDelivery(
+            TurnPersistenceCookie cookie, TranslatorState state, MentorChannel.DeliveryOutcome deliveryOutcome) {
+        requiresNewTx.executeWithoutResult(tx -> chatMessageRepository
+                .findById(cookie.assistantMessageId())
+                .ifPresent(assistant -> reconcileConversationalDelivery(assistant, state, deliveryOutcome)));
     }
 
     /**
      * Append this turn's spend to the {@code llm_usage_event} ledger, in the same transaction as the
-     * assistant message. Runs for finalise AND interrupt: an interrupted turn still burned tokens.
+     * assistant message. Runs for complete AND interrupt: an interrupted turn still burned tokens.
      *
      * <p>The runner's own report and the proxy's per-call meter are two views of the SAME calls, so
      * exactly one is billed, never their sum. The proxy's totals are the fallback for a turn that died
@@ -368,7 +374,6 @@ public class MentorTurnPersistence {
                 && usage.cacheWriteTokens() <= 0);
     }
 
-    /** Reconcile linked observations in the same transaction as the completed assistant message. */
     private void reconcileConversationalDelivery(
             ChatMessage assistant, TranslatorState state, MentorChannel.DeliveryOutcome deliveryOutcome) {
         List<UUID> linkedObservationIds = state.linkedObservationIds();
@@ -393,7 +398,7 @@ public class MentorTurnPersistence {
         }
     }
 
-    /** Transaction shape mirrors {@link #finalise} — see that method's note on the ledger write. */
+    /** Records the turn as interrupted unless its row already holds an outcome. */
     public void interrupt(TurnPersistenceCookie cookie, TranslatorState state, Throwable cause) {
         try {
             requiresNewTx.executeWithoutResult(tx -> doInterrupt(cookie, state, cause));
@@ -407,6 +412,9 @@ public class MentorTurnPersistence {
 
     private void doInterrupt(TurnPersistenceCookie cookie, TranslatorState state, Throwable cause) {
         chatMessageRepository.findById(cookie.assistantMessageId()).ifPresent(assistant -> {
+            if (assistant.getStatus() != ChatMessage.Status.in_flight) {
+                return;
+            }
             assistant.setParts(state.partsSnapshot());
             assistant.setStatus(ChatMessage.Status.interrupted);
             ObjectNode meta = newOrCopyMeta(assistant);
@@ -419,7 +427,7 @@ public class MentorTurnPersistence {
                     "durationMs",
                     Duration.between(cookie.startedAt(), Instant.now()).toMillis());
             assistant.setMetadata(meta);
-            // saveAndFlush, not save — see doFinalise.
+            // saveAndFlush, not save — see doComplete.
             chatMessageRepository.saveAndFlush(assistant);
             billTurn(assistant, state, cookie);
         });

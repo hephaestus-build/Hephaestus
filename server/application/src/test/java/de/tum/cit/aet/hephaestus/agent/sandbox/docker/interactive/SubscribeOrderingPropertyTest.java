@@ -37,8 +37,10 @@ class SubscribeOrderingPropertyTest extends BaseUnitTest {
                     listenerCalledOnce.countDown();
                 },
                 4096,
-                reg.counter("test.sub.dropped"),
+                Duration.ofSeconds(5),
+                reg.counter("test.sub.cutoff"),
                 reg.counter("test.sub.error"),
+                () -> {},
                 () -> {});
         holder[0] = sub;
 

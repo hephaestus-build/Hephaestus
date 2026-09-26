@@ -33,7 +33,7 @@ public final class InteractiveSandboxMetrics {
 
     final Counter ringBufferDropped;
 
-    final Counter subscriberDropped;
+    final Counter subscriberCutOff;
     final Counter subscriberError;
 
     final Counter frameParseError;
@@ -72,9 +72,9 @@ public final class InteractiveSandboxMetrics {
                 .description("Frames evicted from the per-session ring buffer (drop-oldest on overflow)")
                 .register(registry);
 
-        this.subscriberDropped = Counter.builder(AgentMetrics.MENTOR_SUBSCRIBER_DROPPED)
+        this.subscriberCutOff = Counter.builder(AgentMetrics.MENTOR_SUBSCRIBER_DROPPED)
                 .tag("reason", "queue_full")
-                .description("Frames dropped from a subscriber's bounded queue due to slow listener")
+                .description("Subscribers cut off because their listener stalled with a full queue")
                 .register(registry);
         this.subscriberError = Counter.builder(AgentMetrics.MENTOR_SUBSCRIBER_ERROR)
                 .description("Subscriber listener invocations that threw")
