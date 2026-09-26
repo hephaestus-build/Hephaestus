@@ -3,7 +3,8 @@ import { http, HttpResponse } from "msw";
 import { expect, it, vi } from "vitest";
 
 import { getMemberOnboardingQueryKey } from "@/api/@tanstack/react-query.gen";
-import type { WorkspaceOnboarding } from "@/api/types.gen";
+import type { ChatThreadDetail, WorkspaceOnboarding } from "@/api/types.gen";
+import type { Wire } from "@/lib/dates";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
@@ -29,14 +30,17 @@ it("keeps an existing conversation readable under No AI and restores its compose
 		http.get("*/workspaces/acme/mentor/threads/:threadId", () =>
 			HttpResponse.json({
 				id: threadId,
+				createdAt: "2026-09-24T09:15:00Z",
 				messages: [
 					{
 						id: "ea28a7c9-b17f-49be-ae98-a083fa99b2b2",
 						role: "assistant",
 						parts: [{ type: "text", text: "Earlier guidance remains readable." }],
+						metadata: { status: "completed" },
+						createdAt: "2026-09-24T09:15:04.512Z",
 					},
 				],
-			}),
+			} satisfies Wire<ChatThreadDetail>),
 		),
 	);
 	const { queryClient } = renderRouteAtWithRouter(`/w/acme/mentor/${threadId}`);
