@@ -104,7 +104,7 @@ export const RatingQuestion: Story = {
 	play: async () => {
 		await userEvent.click(await screen.findByRole("combobox", { name: "Answer type" }));
 		await userEvent.click(await screen.findByRole("option", { name: "Rating (1–5)" }));
-		await expect(await screen.findByRole("textbox", { name: "Label for 1" })).toBeVisible();
+		await expectSettledVisible(await screen.findByRole("textbox", { name: "Label for 1" }));
 		await expect(screen.getByRole("textbox", { name: "Label for 5" })).toBeVisible();
 	},
 };
