@@ -11,8 +11,10 @@ package de.tum.cit.aet.hephaestus.feature;
  * <ol>
  *   <li>Add the enum constant here with the correct kind and key</li>
  *   <li>Add a corresponding field to {@link FeatureFlagsDTO} and wire it in {@code from()}</li>
- *   <li>For {@code ROLE} flags: grant the {@code account_feature} flag to accounts
- *       (e.g. via /admin/users); the {@code admin} app role implies all of them</li>
+ *   <li>For {@code ROLE} flags: nothing in the product grants one. An {@code account_feature} row
+ *       is written only by a database edit and follows the account into every workspace, so a
+ *       feature a workspace offers its members belongs in {@code WorkspaceFeatures} instead, which
+ *       workspace admins change through an audited request</li>
  *   <li>For {@code CONFIG} flags: add the property under
  *       {@code hephaestus.features.flags.<key>} in {@code application.yml}</li>
  *   <li>Run {@code vp run generate:api:client} to update the TypeScript client</li>
@@ -23,7 +25,6 @@ package de.tum.cit.aet.hephaestus.feature;
  */
 public enum FeatureFlag {
     // ── Authorization flags (account_feature role flags) ──────────────────────
-    MENTOR_ACCESS(Kind.ROLE, "mentor_access"),
     NOTIFICATION_ACCESS(Kind.ROLE, "notification_access"),
     // Reports instance-admin status: the authority key is the namespaced `app_admin` the issuer mints
     // for Account.AppRole APP_ADMIN. NOT a grantable escalation — JwtPrincipalFactory strips

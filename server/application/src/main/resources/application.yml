@@ -513,7 +513,7 @@ hephaestus:
     # FEATURE FLAGS (operational / development toggles)
     # ═══════════════════════════════════════════════════════════════════════════
     # CONFIG-backed feature flags evaluated by FeatureFlagService.
-    # ROLE-backed flags (mentor_access, admin, etc.) are stored per account in the account_feature table.
+    # ROLE-backed flags (notification_access, etc.) are stored per account in the account_feature table.
     # Each flag names its own env var so the SHORT name works everywhere: docker/.env, the compose files
     # and the admin docs all say GITLAB_WORKSPACE_CREATION. The long
     # relaxed-binding form (HEPHAESTUS_FEATURES_FLAGS_GITLAB_WORKSPACE_CREATION) also reaches these keys

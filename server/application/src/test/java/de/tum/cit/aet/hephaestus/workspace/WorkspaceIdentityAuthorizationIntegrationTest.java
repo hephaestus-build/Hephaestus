@@ -58,27 +58,28 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
         threads.saveAndFlush(thread);
         String token = "mock-jwt-sub-" + accountId;
         String path = "/workspaces/namesake-threads/mentor/threads";
+        // Elevation lends no place in the workspace, so Heph is refused before any namesake lookup.
 
         client.get()
                 .uri(path)
                 .headers(headers -> headers.setBearerAuth(token))
                 .exchange()
                 .expectStatus()
-                .isNotFound()
+                .isForbidden()
                 .expectBody(Void.class);
         client.get()
                 .uri(path + "/" + threadId)
                 .headers(headers -> headers.setBearerAuth(token))
                 .exchange()
                 .expectStatus()
-                .isNotFound()
+                .isForbidden()
                 .expectBody(Void.class);
         client.delete()
                 .uri(path + "/" + threadId)
                 .headers(headers -> headers.setBearerAuth(token))
                 .exchange()
                 .expectStatus()
-                .isNotFound()
+                .isForbidden()
                 .expectBody(Void.class);
 
         assertThat(threads.findById(threadId)).isPresent();

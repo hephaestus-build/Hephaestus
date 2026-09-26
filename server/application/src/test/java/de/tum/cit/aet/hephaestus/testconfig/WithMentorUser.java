@@ -5,7 +5,7 @@ import java.lang.annotation.RetentionPolicy;
 import org.springframework.security.test.context.support.WithSecurityContext;
 
 /**
- * Custom annotation to create a mock mentor user for tests.
+ * A signed-in user with no instance authority, for tests that decide access by workspace membership.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @WithSecurityContext(factory = WithMentorUserSecurityContextFactory.class)
@@ -18,7 +18,7 @@ public @interface WithMentorUser {
     /**
      * The authorities/roles for the mock mentor user.
      */
-    String[] authorities() default {"mentor_access"};
+    String[] authorities() default {};
 
     /**
      * The user ID for the mock mentor user.

@@ -32,21 +32,23 @@ class FeatureFlagServiceTest extends BaseUnitTest {
 
         @Test
         void returnsTrueWhenUserHasRole() {
-            setSecurityContext("testuser", FeatureFlag.MENTOR_ACCESS.key());
+            setSecurityContext("testuser", FeatureFlag.NOTIFICATION_ACCESS.key());
 
-            assertThat(featureFlagService.isEnabled(FeatureFlag.MENTOR_ACCESS)).isTrue();
+            assertThat(featureFlagService.isEnabled(FeatureFlag.NOTIFICATION_ACCESS))
+                    .isTrue();
         }
 
         @Test
         void returnsFalseWhenUserLacksRole() {
-            setSecurityContext("testuser", FeatureFlag.MENTOR_ACCESS.key());
+            setSecurityContext("testuser", FeatureFlag.NOTIFICATION_ACCESS.key());
 
             assertThat(featureFlagService.isEnabled(FeatureFlag.ADMIN)).isFalse();
         }
 
         @Test
         void returnsFalseWithNoSecurityContext() {
-            assertThat(featureFlagService.isEnabled(FeatureFlag.MENTOR_ACCESS)).isFalse();
+            assertThat(featureFlagService.isEnabled(FeatureFlag.NOTIFICATION_ACCESS))
+                    .isFalse();
         }
 
         @Test
@@ -58,12 +60,11 @@ class FeatureFlagServiceTest extends BaseUnitTest {
 
         @Test
         void returnsCorrectFlagsWithMultipleAuthorities() {
-            setSecurityContext("poweruser", FeatureFlag.ADMIN.key(), FeatureFlag.MENTOR_ACCESS.key());
+            setSecurityContext("poweruser", FeatureFlag.ADMIN.key(), FeatureFlag.NOTIFICATION_ACCESS.key());
 
             assertThat(featureFlagService.isEnabled(FeatureFlag.ADMIN)).isTrue();
-            assertThat(featureFlagService.isEnabled(FeatureFlag.MENTOR_ACCESS)).isTrue();
             assertThat(featureFlagService.isEnabled(FeatureFlag.NOTIFICATION_ACCESS))
-                    .isFalse();
+                    .isTrue();
         }
     }
 
@@ -149,14 +150,14 @@ class FeatureFlagServiceTest extends BaseUnitTest {
 
         @Test
         void returnsAllFlags() {
-            setSecurityContext("testuser", FeatureFlag.MENTOR_ACCESS.key());
+            setSecurityContext("testuser", FeatureFlag.NOTIFICATION_ACCESS.key());
             when(featureProperties.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION.key()))
                     .thenReturn(true);
 
             Map<FeatureFlag, Boolean> result = featureFlagService.evaluateAll();
 
             assertThat(result).hasSize(FeatureFlag.values().length);
-            assertThat(result.get(FeatureFlag.MENTOR_ACCESS)).isTrue();
+            assertThat(result.get(FeatureFlag.NOTIFICATION_ACCESS)).isTrue();
             assertThat(result.get(FeatureFlag.ADMIN)).isFalse();
             assertThat(result.get(FeatureFlag.GITLAB_WORKSPACE_CREATION)).isTrue();
         }

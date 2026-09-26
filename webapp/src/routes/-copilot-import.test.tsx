@@ -19,7 +19,7 @@ vi.mock("./-GlobalCopilot", () => {
 it("keeps the main route available when the optional copilot import rejects", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([])),
-		http.get("*/user/features", () => HttpResponse.json({ MENTOR_ACCESS: true })),
+		http.get("*/user/features", () => HttpResponse.json({})),
 	);
 	const queryClient = testQueryClient();
 	const router = createRouter({

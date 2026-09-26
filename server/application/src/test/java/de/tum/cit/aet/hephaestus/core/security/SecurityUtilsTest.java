@@ -91,14 +91,14 @@ class SecurityUtilsTest extends BaseUnitTest {
     @Test
     @DisplayName("isSuperAdmin is true only when the roles claim contains app_admin")
     void superAdmin_trueWhenRolesContainAppAdmin() {
-        authenticateWithJwt("1", Map.of("roles", List.of("mentor_access", SecurityUtils.APP_ADMIN_AUTHORITY)));
+        authenticateWithJwt("1", Map.of("roles", List.of("notification_access", SecurityUtils.APP_ADMIN_AUTHORITY)));
         assertThat(SecurityUtils.isSuperAdmin()).isTrue();
     }
 
     @Test
     @DisplayName("isSuperAdmin is false when the roles list lacks app_admin")
     void superAdmin_falseWhenRolesLackAppAdmin() {
-        authenticateWithJwt("1", Map.of("roles", List.of("mentor_access", "run_practice_review")));
+        authenticateWithJwt("1", Map.of("roles", List.of("notification_access", "run_practice_review")));
         assertThat(SecurityUtils.isSuperAdmin()).isFalse();
     }
 

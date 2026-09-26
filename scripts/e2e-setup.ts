@@ -331,10 +331,6 @@ async function seedIdentity(
 		"INSERT INTO identity_link (account_id, provider_id, subject, linked_at, linked_via, external_actor_id, username_at_signup) VALUES ($1,$2,$3,now(),'OAUTH_LOGIN',$4,$5) ON CONFLICT (account_id, provider_id, COALESCE(team_id, '')) WHERE disabled_at IS NULL DO NOTHING",
 		[accountId, providerId, String(scmId), userId, scmLogin],
 	);
-	await database.query(
-		"INSERT INTO account_feature (account_id, flag, enabled_at) VALUES ($1,'mentor_access',now()) ON CONFLICT DO NOTHING",
-		[accountId],
-	);
 	await database.query("COMMIT");
 	return userId;
 }

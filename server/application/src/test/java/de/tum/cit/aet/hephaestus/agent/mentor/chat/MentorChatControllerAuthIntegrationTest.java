@@ -23,7 +23,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
  * Fires the real filter chain so the SSE endpoint's two guards — WorkspaceContextFilter
- * membership pre-check and the {@code @PreAuthorize("@workspaceSecure.isMember()")} expression
+ * membership pre-check and the {@code @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")} expression
  * — survive future regressions.
  */
 class MentorChatControllerAuthIntegrationTest extends AbstractWorkspaceIntegrationTest {

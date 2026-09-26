@@ -39,7 +39,8 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	isAdmin: boolean;
 	isOwner?: boolean;
 	isAppAdmin: boolean;
-	hasMentorAccess: boolean;
+	/** A member of the active workspace, or viewing one; a public reader or an elevated instance admin is not. */
+	isMember: boolean;
 	readOnly?: boolean;
 	integrationKinds: readonly IntegrationCatalogEntry["kind"][];
 	context: SidebarContext;
@@ -58,7 +59,7 @@ export function AppSidebar({
 	isAdmin,
 	isOwner = false,
 	isAppAdmin,
-	hasMentorAccess,
+	isMember,
 	readOnly = false,
 	integrationKinds,
 	context,
@@ -143,7 +144,7 @@ export function AppSidebar({
 					leaderboardEnabled={activeWorkspace.leaderboardEnabled}
 					practicesEnabled={activeWorkspace.practicesEnabled}
 				/>
-				{hasMentorAccess && activeWorkspace.mentorEnabled && (
+				{isMember && activeWorkspace.mentorEnabled && (
 					<NavMentor workspaceSlug={activeWorkspace.workspaceSlug} />
 				)}
 				{isAdmin && (

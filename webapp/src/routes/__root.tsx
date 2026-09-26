@@ -76,7 +76,6 @@ import { useSearchState } from "@/lib/search-params";
 import { type AuthContextType, useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/guard";
 import { FeatureFlagDevTools } from "@/runtime/feature-flags/FeatureFlagDevTools";
-import { useFeatureFlag } from "@/runtime/feature-flags/hooks";
 import { exitUserView } from "@/runtime/user-view/session";
 import { isCopilotExcludedRoute } from "./-copilot-route";
 
@@ -108,13 +107,8 @@ function RootLayout() {
 		},
 	});
 	const { isAuthenticated, isLoading, userView } = useAuth();
-	const { enabled: hasMentorAccess } = useFeatureFlag("MENTOR_ACCESS");
 	const showCopilot =
-		!userView &&
-		!isLoading &&
-		isAuthenticated &&
-		hasMentorAccess &&
-		!isCopilotExcludedRoute(pathname);
+		!userView && !isLoading && isAuthenticated && !isCopilotExcludedRoute(pathname);
 
 	if (surface === "auth") {
 		return (
@@ -475,7 +469,6 @@ function sidebarContextOf(pathname: string): SidebarContext {
 function AppSidebarContainer() {
 	const { pathname } = useLocation();
 	const { isAuthenticated, username, isAppAdmin, userView } = useAuth();
-	const { enabled: hasMentorAccess } = useFeatureFlag("MENTOR_ACCESS");
 	const navigate = useNavigate();
 	const switchWorkspace = useWorkspaceSwitcher();
 	const workspaceAccess = useWorkspaceAccess();
@@ -530,7 +523,8 @@ function AppSidebarContainer() {
 			isAdmin={workspaceAccess.isAdmin}
 			isOwner={workspaceAccess.role === "OWNER"}
 			isAppAdmin={isAppAdmin}
-			hasMentorAccess={hasMentorAccess}
+			// `members/me` answers only for a member; a view cannot read it, but views only a member.
+			isMember={Boolean(userView) || workspaceAccess.role !== undefined}
 			readOnly={Boolean(userView)}
 			integrationKinds={integrationKinds}
 			context={sidebarContext}

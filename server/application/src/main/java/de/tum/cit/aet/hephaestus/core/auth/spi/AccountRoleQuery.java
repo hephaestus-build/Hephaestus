@@ -5,7 +5,7 @@ package de.tum.cit.aet.hephaestus.core.auth.spi;
  * flag? Exposed so callers (e.g. the practices {@code UserRoleChecker} in the notification module) can
  * check roles without reaching into {@code core.auth}'s domain types.
  *
- * <p>Roles map 1:1 to {@code FeatureFlag} keys ({@code mentor_access}, {@code run_practice_review},
+ * <p>Roles map 1:1 to {@code FeatureFlag} keys ({@code run_practice_review},
  * {@code notification_access}, {@code admin}). Resolution is {@code (gitProviderId, subject) →
  * IdentityLink → Account → account_feature} (appRole-based admin is resolved at JWT-mint time in
  * {@code JwtPrincipalFactory}, not by this query).

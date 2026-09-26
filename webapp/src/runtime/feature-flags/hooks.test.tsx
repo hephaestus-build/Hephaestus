@@ -24,7 +24,11 @@ describe("useFeatureFlags", () => {
 	it("reads a flag the server did not send as a boolean as off, and keeps the rest of the map", async () => {
 		server.use(
 			http.get("*/user/features", () =>
-				HttpResponse.json({ ADMIN: "true", MENTOR_ACCESS: true, NOTIFICATION_ACCESS: false }),
+				HttpResponse.json({
+					ADMIN: "true",
+					NOTIFICATION_ACCESS: true,
+					GITLAB_WORKSPACE_CREATION: false,
+				}),
 			),
 		);
 
@@ -35,7 +39,7 @@ describe("useFeatureFlags", () => {
 		await waitFor(() => expect(result.current.flags?.ADMIN).toBe(false));
 		// Both well-formed flags: a `true` that has to survive, and the `false` the malformed one
 		// collapses to, which a blanket coercion would flatten together.
-		expect(result.current.flags?.MENTOR_ACCESS).toBe(true);
-		expect(result.current.flags?.NOTIFICATION_ACCESS).toBe(false);
+		expect(result.current.flags?.NOTIFICATION_ACCESS).toBe(true);
+		expect(result.current.flags?.GITLAB_WORKSPACE_CREATION).toBe(false);
 	});
 });

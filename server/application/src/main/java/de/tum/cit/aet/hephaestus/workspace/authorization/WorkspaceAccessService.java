@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace.authorization;
 
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
+import de.tum.cit.aet.hephaestus.core.security.WorkspaceElevationContext;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
@@ -64,6 +65,15 @@ public class WorkspaceAccessService {
 
     public boolean isMember() {
         return hasRole(WorkspaceRole.MEMBER);
+    }
+
+    /**
+     * A membership the caller holds in this workspace, or, in a user view, the viewed member holds.
+     * Instance-admin elevation lends a role to administer a workspace, never a place in it.
+     */
+    public boolean isMemberWithoutElevation() {
+        WorkspaceContext context = WorkspaceContextHolder.getContext();
+        return context != null && context.hasMembership() && !WorkspaceElevationContext.isElevated(context.id());
     }
 
     public boolean hasPermission(WorkspaceRole requiredRole) {

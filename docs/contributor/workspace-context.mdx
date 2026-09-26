@@ -46,6 +46,9 @@ scope their operations to the supplied workspace.
 
 Instance admins can access active workspaces as ADMIN without a membership or an SCM identity.
 Elevation does not grant OWNER; an explicit OWNER membership still permits owner-only operations.
+It does not make them a member either: what a workspace offers its own members, such as Heph, is
+declared with `@PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")`, which a user view
+still satisfies as the viewed member.
 The privilege and audit policy lives in [Instance administration](./instance-admin.md#who-is-an-instance-admin).
 
 Check roles via the context:

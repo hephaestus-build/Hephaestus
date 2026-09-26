@@ -182,7 +182,7 @@ class ProductionSchemaContractIntegrationTest {
                         providerB, IDENTITY_SUBJECT, ACCOUNT_FEATURE))
                 .isFalse();
         assertThat(accountFeatureRepository.existsActiveFeatureForProviderSubject(
-                        providerA, IDENTITY_SUBJECT, "mentor_access"))
+                        providerA, IDENTITY_SUBJECT, "notification_access"))
                 .isFalse();
         assertThat(accountFeatureRepository.existsActiveFeatureForProviderSubject(
                         999L, IDENTITY_SUBJECT, ACCOUNT_FEATURE))
