@@ -50,7 +50,7 @@ public class SpringAsyncConfig implements AsyncConfigurer {
     }
 
     /**
-     * The two feedback-preparation lanes, off the shared pool.
+     * The two feedback-preparation lanes and approved-feedback delivery, off the shared pool.
      *
      * <p>They shared {@link #applicationTaskExecutor} with every other {@code @Async} listener in the
      * tree, including the twenty-odd activity listeners a provider sync fans out. A concurrent sync
@@ -58,10 +58,11 @@ public class SpringAsyncConfig implements AsyncConfigurer {
      * {@code AbortPolicy} throws once the 500-deep queue is full, and a rejected {@code AFTER_COMMIT}
      * event is not redelivered.
      *
-     * <p>Small and deep: the work is short, database-bound and bursty — one submission per finished
-     * review — so depth absorbs a burst better than width, and width here only competes for the same
-     * Hikari connections the web tier needs. It can still reject; {@code FeedbackLanePreparationSweeper}
-     * is what makes that survivable, and this pool only makes it rare and unrelated to sync load.
+     * <p>Small and deep: the work is short and bursty — one submission per finished review, one per
+     * approval — so depth absorbs a burst better than width, and width here only competes for the same
+     * Hikari connections the web tier needs. It can still reject; {@code
+     * FeedbackLanePreparationSweeper} and {@code ApprovedFeedbackRecovery} are what make that survivable,
+     * and this pool only makes it rare and unrelated to sync load.
      */
     @Bean(name = FeedbackLaneExecutor.BEAN_NAME)
     public AsyncTaskExecutor feedbackLaneExecutor() {

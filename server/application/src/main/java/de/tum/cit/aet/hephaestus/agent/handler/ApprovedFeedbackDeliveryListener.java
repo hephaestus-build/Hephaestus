@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.config.FeedbackLaneExecutor;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -16,7 +17,10 @@ import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -33,8 +37,17 @@ class ApprovedFeedbackDeliveryListener {
     private final FeedbackApprovalEligibility approvalEligibility;
     private final FeedbackLedgerRecorder feedbackLedgerRecorder;
 
+    // Off the approving request, so it does not wait on provider HTTP. NOT_SUPPORTED matters when the
+    // executor runs the task on the committing thread, as the synchronous test executor does: the
+    // finished approval is still bound there, and a write that joined it would never commit.
+    @Async(FeedbackLaneExecutor.BEAN_NAME)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void deliver(ApprovedFeedbackReadyEvent event) {
+    public void onApproved(ApprovedFeedbackReadyEvent event) {
+        deliver(event);
+    }
+
+    void deliver(ApprovedFeedbackReadyEvent event) {
         Feedback feedback = feedbackRepository
                 .findByIdAndWorkspaceId(event.feedbackId(), event.workspaceId())
                 .orElse(null);
@@ -81,16 +94,6 @@ class ApprovedFeedbackDeliveryListener {
         if (policy.target() instanceof PullRequest pullRequest
                 && feedback.getReviewedRevision() != null
                 && !feedback.getReviewedRevision().equals(pullRequest.getHeadRefOid())) {
-            stop(feedback, event.workspaceId(), FeedbackSuppressionReason.APPROVAL_STALE);
-            return;
-        }
-        String approvedBody = feedback.getBody();
-        String safeBody = PullRequestCommentPoster.sanitize(approvedBody);
-        if (safeBody.isBlank()) {
-            stop(feedback, event.workspaceId(), FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE);
-            return;
-        }
-        if (!safeBody.equals(approvedBody)) {
             stop(feedback, event.workspaceId(), FeedbackSuppressionReason.APPROVAL_STALE);
             return;
         }
