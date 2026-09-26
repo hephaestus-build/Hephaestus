@@ -31,12 +31,12 @@ import org.springframework.stereotype.Component;
  * <p>Two coexisting wire formats:
  * <ul>
  *   <li><b>Legacy plaintext</b> — {@code X-Gitlab-Token} header byte-equals the
- *       shared secret. GitLab's only mode before 19.0, and the one the hooks
- *       {@code GitLabWebhookService} registers use: it sets their {@code token}.
+ *       shared secret. GitLab's only mode before 19.0; {@code GitLabWebhookService}
+ *       registers it as a hook's {@code token} for a {@code PLAINTEXT} connection.
  *   <li><b>Standard Webhooks HMAC (GitLab 19.0+)</b> — {@code webhook-signature}
  *       carries one or more space-separated {@code v1,<base64-hmac>} entries. The
- *       signing secret has the form {@code whsec_<base64>}; we strip the prefix,
- *       base64-decode the rest to get the MAC key, then compute
+ *       signing secret has the form {@code whsec_<base64>} ({@link #signingKey}); we strip
+ *       the prefix, base64-decode the rest to get the 32-byte MAC key, then compute
  *       {@code HMAC_SHA256(key, "<webhook-id>.<webhook-timestamp>.<body>")}.
  *       Replay protection: {@code webhook-timestamp} must be within
  *       {@link #TIMESTAMP_TOLERANCE} of now.
@@ -64,6 +64,7 @@ public class GitlabWebhookSignatureVerifier implements WebhookSignatureVerifier 
     static final String SIGNATURE_V1_PREFIX = "v1,";
     static final String WHSEC_PREFIX = "whsec_";
     static final String HMAC_SHA256 = "HmacSHA256";
+    static final int SIGNING_KEY_BYTES = 32;
 
     /**
      * Our replay window, applied in both directions. Standard Webhooks asks only for a
@@ -172,7 +173,7 @@ public class GitlabWebhookSignatureVerifier implements WebhookSignatureVerifier 
             return new VerificationResult.Invalid("missing-secret");
         }
 
-        byte[] hmacKey = extractHmacKey(secret.get());
+        byte[] hmacKey = signingKey(new String(secret.get(), StandardCharsets.UTF_8));
         if (hmacKey == null) {
             return new VerificationResult.Invalid("malformed-whsec-secret");
         }
@@ -213,15 +214,18 @@ public class GitlabWebhookSignatureVerifier implements WebhookSignatureVerifier 
         }
     }
 
-    private static byte @Nullable [] extractHmacKey(byte[] secret) {
-        String secretStr = new String(secret, StandardCharsets.UTF_8);
-        if (!secretStr.startsWith(WHSEC_PREFIX)) {
-            // Non-whsec secret in whsec path; configuration mismatch.
+    /**
+     * The HMAC key of a GitLab signing token, or {@code null} unless {@code secret} is
+     * {@code whsec_} followed by the base64 of exactly {@value #SIGNING_KEY_BYTES} bytes — the
+     * only form GitLab accepts as a hook's {@code signing_token}.
+     */
+    public static byte @Nullable [] signingKey(String secret) {
+        if (!secret.startsWith(WHSEC_PREFIX)) {
             return null;
         }
-        String b64 = secretStr.substring(WHSEC_PREFIX.length());
         try {
-            return Base64.getDecoder().decode(b64);
+            byte[] key = Base64.getDecoder().decode(secret.substring(WHSEC_PREFIX.length()));
+            return key.length == SIGNING_KEY_BYTES ? key : null;
         } catch (IllegalArgumentException e) {
             return null;
         }

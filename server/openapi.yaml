@@ -3230,6 +3230,45 @@ paths:
       summary: Post a test message to verify the Slack connection
       tags:
       - Connections
+  /workspaces/{workspaceSlug}/connections/{connectionId}/gitlab-signing-mode:
+    put:
+      description: |-
+        Puts the connection's group webhook into the requested mode, then stores it with an audit row.
+         Answers 409 with GitLab's or the configuration's reason when the webhook could not be confirmed in
+         that mode, in which case the stored mode is unchanged. Repeating a request reconciles the webhook
+         again.
+      operationId: updateGitLabSigningMode
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: connectionId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitLabSigningModeRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitLabSigningMode"
+          description: OK
+      summary: "Puts the connection's group webhook into the requested mode, then\
+        \ stores it with an audit row."
+      tags:
+      - Connections
   /workspaces/{workspaceSlug}/connections/{connectionId}/sync:
     get:
       operationId: getConnectionSyncStatus
@@ -11543,6 +11582,38 @@ components:
           type: string
           description: Origin of the one GitLab instance workspaces are created on
           example: https://gitlab.lrz.de
+    GitLabSigningMode:
+      type: object
+      description: "A GitLab connection's webhook signing mode, as GitLab reported\
+        \ its group webhook"
+      properties:
+        signingMode:
+          type: string
+          enum:
+          - PLAINTEXT
+          - WHSEC
+        webhookId:
+          type: integer
+          format: int64
+          description: The group webhook GitLab reported in this mode
+      required:
+      - signingMode
+      - webhookId
+    GitLabSigningModeRequest:
+      type: object
+      description: Request to change how a GitLab connection's group webhook authenticates
+        its deliveries
+      properties:
+        signingMode:
+          type: string
+          description: "WHSEC: a GitLab 19.1+ signing token (webhook-signature), which\
+            \ needs WEBHOOK_SECRET to be a whsec_ signing token. PLAINTEXT: the legacy\
+            \ secret token (X-Gitlab-Token)."
+          enum:
+          - PLAINTEXT
+          - WHSEC
+      required:
+      - signingMode
     GroupAutonomyRollup:
       type: object
       description: One group's practice counts per effective autonomy state

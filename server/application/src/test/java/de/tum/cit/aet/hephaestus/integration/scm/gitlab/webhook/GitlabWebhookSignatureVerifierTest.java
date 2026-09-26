@@ -31,8 +31,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
 
     private static final String PLAINTEXT_SECRET = "shared-gitlab-secret-32-bytes-long-XYZ";
-    private static final byte[] WHSEC_KEY = "raw-hmac-key-material-32-bytes-_____XYZ".getBytes(StandardCharsets.UTF_8);
-    private static final String WHSEC_SECRET = "whsec_" + Base64.getEncoder().encodeToString(WHSEC_KEY);
+    /** GitLab only accepts a signing token encoding exactly 32 key bytes. */
+    private static final byte[] WHSEC_KEY = "gitlab-signing-key-of-32-bytes!!".getBytes(StandardCharsets.UTF_8);
+
+    private static final String WHSEC_SECRET = "whsec_Z2l0bGFiLXNpZ25pbmcta2V5LW9mLTMyLWJ5dGVzISE=";
 
     /** Frozen test clock — keeps timestamp drift math deterministic. */
     private static final Instant NOW = Instant.parse("2026-05-24T12:00:00Z");
@@ -81,21 +83,19 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
 
     // whsec_* HMAC path
 
+    /**
+     * A constructed vector in GitLab's documented header format, with a hard-coded MAC rather than one
+     * from {@link #computeBase64Mac}, so the MAC input's shape cannot drift with the helper.
+     */
     @Test
-    void whsecMatchingMacVerified() {
-        byte[] body = body("{\"object_kind\":\"push\"}");
-        String msgId = "msg_2v9D0aH9zN6";
-        String timestamp = String.valueOf(NOW.getEpochSecond());
-        String mac = computeBase64Mac(WHSEC_KEY, msgId, timestamp, body);
-
-        var verifier = newVerifierWhsec();
+    void shouldVerifyAFixedVectorInGitLabsSigningTokenHeaderFormat() {
         var request = req(
-                body,
-                header("webhook-id", msgId),
-                header("webhook-timestamp", timestamp),
-                header("webhook-signature", "v1," + mac));
+                body("{\"object_kind\":\"push\"}"),
+                header("webhook-id", "msg_2v9D0aH9zN6"),
+                header("webhook-timestamp", "1779624000"),
+                header("webhook-signature", "v1,sfYaMwlkOleG1WxJrq/nh4d+83InXU7BLJyolkFT8Hc="));
 
-        assertThat(verifier.verify(request)).isInstanceOf(VerificationResult.Verified.class);
+        assertThat(newVerifierWhsec().verify(request)).isInstanceOf(VerificationResult.Verified.class);
     }
 
     @Test
@@ -308,6 +308,23 @@ class GitlabWebhookSignatureVerifierTest extends BaseUnitTest {
                 header("webhook-id", "msg_x"),
                 header("webhook-timestamp", String.valueOf(NOW.getEpochSecond())),
                 header("webhook-signature", "v1,deadbeef"));
+
+        VerificationResult result = verifier.verify(request);
+        assertThat(result).isInstanceOf(VerificationResult.Invalid.class);
+        assertThat(((VerificationResult.Invalid) result).reason()).isEqualTo("malformed-whsec-secret");
+    }
+
+    @Test
+    void shouldRejectASigningTokenThatDoesNotEncode32Bytes() {
+        byte[] shortKey = "a-31-byte-key-gitlab-would-deny".getBytes(StandardCharsets.UTF_8);
+        byte[] body = body("{}");
+        String timestamp = String.valueOf(NOW.getEpochSecond());
+        var verifier = newVerifier("whsec_" + Base64.getEncoder().encodeToString(shortKey));
+        var request = req(
+                body,
+                header("webhook-id", "msg_x"),
+                header("webhook-timestamp", timestamp),
+                header("webhook-signature", "v1," + computeBase64Mac(shortKey, "msg_x", timestamp, body)));
 
         VerificationResult result = verifier.verify(request);
         assertThat(result).isInstanceOf(VerificationResult.Invalid.class);

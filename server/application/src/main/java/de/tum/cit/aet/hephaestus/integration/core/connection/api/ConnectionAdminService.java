@@ -200,4 +200,36 @@ public class ConnectionAdminService {
                         enabledStreams);
         };
     }
+
+    /**
+     * Stores the signing mode of an ACTIVE GitLab Connection with its {@code SIGNING_MODE} audit row, in
+     * one transaction; a no-op when the mode is already stored. The caller has already put the provider
+     * hook into {@code mode}.
+     */
+    @Transactional
+    public Connection changeGitLabSigningMode(
+            long workspaceId, long connectionId, ConnectionConfig.GitLabConfig.SigningMode mode, String actorRef) {
+        Connection connection = connectionRepository
+                .findByIdAndWorkspaceId(connectionId, workspaceId)
+                .filter(c -> c.getState() == IntegrationState.ACTIVE)
+                .orElseThrow(
+                        () -> new IllegalStateException("GitLab connection " + connectionId + " is no longer active"));
+        if (!(connection.getConfig() instanceof ConnectionConfig.GitLabConfig config)) {
+            throw new IllegalStateException("Connection " + connectionId + " is not a GitLab connection");
+        }
+        if (config.signingMode() == mode) {
+            return connection;
+        }
+        auditRepository.save(new ConnectionAudit(
+                connection,
+                "SIGNING_MODE",
+                IntegrationState.ACTIVE,
+                IntegrationState.ACTIVE,
+                "ADMIN",
+                actorRef,
+                "signing-mode-" + connectionId + "-" + UUID.randomUUID(),
+                "Webhook signing mode " + config.signingMode() + " -> " + mode));
+        connection.setConfig(config.withSigningMode(mode));
+        return connectionRepository.save(connection);
+    }
 }

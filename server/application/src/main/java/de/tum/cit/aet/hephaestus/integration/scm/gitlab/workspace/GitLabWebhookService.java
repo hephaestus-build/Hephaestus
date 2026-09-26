@@ -1,19 +1,24 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig.SigningMode;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabWebhookSignatureVerifier;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
@@ -178,7 +183,35 @@ public class GitLabWebhookService {
         if (configOpt.isEmpty()) {
             return WebhookSetupResult.skipped("Not a GitLab workspace");
         }
+        return registerWebhook(workspace, configOpt.get(), configOpt.get().signingMode(), false);
+    }
 
+    /**
+     * Puts an ACTIVE GitLab connection's group hook into {@code mode}, without storing the mode: the
+     * result is a success only once GitLab reported the hook in {@code mode}. Unlike ordinary
+     * registration, a switch to {@code PLAINTEXT} removes the hook's signing token.
+     *
+     * @throws NoSuchElementException             when the workspace has no GitLab connection {@code connectionId}
+     * @throws GitLabSigningModeConflictException when that connection is not ACTIVE
+     */
+    public WebhookSetupResult applySigningMode(long workspaceId, long connectionId, SigningMode mode) {
+        Connection connection = connectionService
+                .findInWorkspace(workspaceId, connectionId)
+                .filter(c -> c.getKind() == IntegrationKind.GITLAB)
+                .orElseThrow(() -> new NoSuchElementException("GitLab connection " + connectionId + " not found"));
+        if (connection.getState() != IntegrationState.ACTIVE
+                || !(connection.getConfig() instanceof GitLabConfig config)) {
+            throw new GitLabSigningModeConflictException(
+                    "Only an active GitLab connection's webhook signing mode can change");
+        }
+        Workspace workspace = workspaceRepository
+                .findById(workspaceId)
+                .orElseThrow(() -> new IllegalStateException("Workspace " + workspaceId + " is gone"));
+        return registerWebhook(workspace, config, mode, mode == SigningMode.PLAINTEXT);
+    }
+
+    private WebhookSetupResult registerWebhook(
+            Workspace workspace, GitLabConfig config, SigningMode mode, boolean removeSigningToken) {
         if (!webhookProperties.isConfigured()) {
             return WebhookSetupResult.skipped("Webhook properties not configured (missing external URL or secret)");
         }
@@ -197,17 +230,36 @@ public class GitLabWebhookService {
         String baseUrl = Objects.requireNonNull(webhookProperties.externalUrl()).replaceAll("/+$", "");
         String webhookUrl = baseUrl + "/webhooks/gitlab";
 
-        GitLabConfig config = configOpt.get();
         Long currentWebhookId = config.gitlabWebhookId();
         Long currentGroupId = config.gitlabGroupId();
 
+        String secret = Objects.requireNonNull(webhookProperties.secret());
+        boolean signed = mode == SigningMode.WHSEC;
+        if (signed && GitlabWebhookSignatureVerifier.signingKey(secret) == null) {
+            return WebhookSetupResult.failed("Signing-token mode needs WEBHOOK_SECRET to be a GitLab signing token:"
+                    + " whsec_ followed by the base64 of 32 bytes");
+        }
         try {
+            // Before 19.1 GitLab may ignore signing_token, so a hook could sign with no key or a foreign one.
+            if (signed && !client.supportsSigningTokens(scopeId)) {
+                return WebhookSetupResult.failed("Signing-token mode needs GitLab 19.1 or later;"
+                        + " this GitLab instance only verifies webhooks with the legacy secret token");
+            }
+
             // Step 1: If we already have a webhook ID, verify it still exists
             if (currentWebhookId != null && currentGroupId != null) {
                 Optional<WebhookInfo> existing = client.getGroupWebhook(scopeId, currentGroupId, currentWebhookId);
                 if (existing.isPresent()) {
                     log.debug("Webhook already registered: workspaceId={}, webhookId={}", scopeId, currentWebhookId);
-                    return WebhookSetupResult.success(currentWebhookId, currentGroupId);
+                    return settle(
+                            client,
+                            scopeId,
+                            currentGroupId,
+                            existing.get(),
+                            webhookUrl,
+                            secret,
+                            mode,
+                            removeSigningToken);
                 }
                 // Webhook was deleted externally — clear local id and re-register
                 log.info(
@@ -215,7 +267,6 @@ public class GitLabWebhookService {
                         scopeId,
                         currentWebhookId);
                 updateGitLabConfig(scopeId, cfg -> cfg.withGitlabWebhookId(null));
-                currentWebhookId = null;
             }
 
             // Step 2: Look up group by path to get numeric ID
@@ -243,29 +294,18 @@ public class GitLabWebhookService {
                         scopeId,
                         groupId,
                         adoptedId);
-                return WebhookSetupResult.success(adoptedId, groupId);
+                return settle(
+                        client, scopeId, groupId, matchingHook.get(), webhookUrl, secret, mode, removeSigningToken);
             }
 
-            // Step 4: Register new webhook
-            WebhookConfig webhookConfig = new WebhookConfig(
-                    webhookUrl,
-                    Objects.requireNonNull(webhookProperties.secret()),
-                    true, // merge_requests_events
-                    true, // issues_events
-                    true, // confidential_issues_events
-                    true, // note_events
-                    true, // confidential_note_events
-                    true, // push_events
-                    true, // tag_push_events
-                    true, // pipeline_events
-                    true, // milestone_events
-                    true, // member_events
-                    true, // subgroup_events
-                    true, // project_events
-                    true // enable_ssl_verification
-                    );
-
-            WebhookInfo registered = client.registerGroupWebhook(scopeId, groupId, webhookConfig);
+            // Step 4: Register new webhook — a signed one with both tokens, so it stays verifiable by its
+            // secret token if this GitLab ignores signing_token
+            WebhookInfo registered = client.registerGroupWebhook(
+                    scopeId,
+                    groupId,
+                    signed
+                            ? WebhookConfig.bothTokens(webhookUrl, secret)
+                            : WebhookConfig.secretToken(webhookUrl, secret));
             updateGitLabConfig(scopeId, cfg -> cfg.withGitlabWebhookId(registered.id()));
 
             log.info(
@@ -273,7 +313,7 @@ public class GitLabWebhookService {
                     scopeId,
                     groupId,
                     registered.id());
-            return WebhookSetupResult.success(registered.id(), groupId);
+            return settle(client, scopeId, groupId, registered, webhookUrl, secret, mode, removeSigningToken);
         } catch (WebClientResponseException e) {
             if (GitLabWebhookClient.isPermissionOrNotFoundError(e.getStatusCode())) {
                 String reason = String.format(
@@ -293,6 +333,84 @@ public class GitLabWebhookService {
                     .log("GitLab webhook registration failed");
             return WebhookSetupResult.failed(apiReason);
         }
+    }
+
+    /**
+     * Brings a hook into {@code mode} one token at a time, so that after every request it still carries a
+     * token the receiver verifies: the signing token is set beside the secret token before the secret
+     * token goes, and the secret token returns before the signing token goes. Each step counts only once
+     * GitLab reports it, and the final state only once a fresh read shows it at this deployment's URL.
+     *
+     * <p>GitLab reports only that some signing token is set, never which, so a signed hook is always sent
+     * our key again, beside the secret token unless the hook already has none; from GitLab 19.1 a
+     * successful update stores what it was sent. Ordinary registration never removes a signing token an operator may have set, but it does not
+     * call such a hook registered either: the receiver verifies only the signature once one is sent, with
+     * a key nothing here can confirm.
+     */
+    private static WebhookSetupResult settle(
+            GitLabWebhookClient client,
+            long scopeId,
+            long groupId,
+            WebhookInfo hook,
+            String url,
+            String secret,
+            SigningMode mode,
+            boolean removeSigningToken) {
+        long id = hook.id();
+        if (mode == SigningMode.WHSEC) {
+            boolean signingTokenOnly = hook.signingTokenPresent() && !hook.tokenPresent() && url.equals(hook.url());
+            if (!signingTokenOnly
+                    && !client.updateGroupWebhook(scopeId, groupId, id, WebhookConfig.bothTokens(url, secret))
+                            .signingTokenPresent()) {
+                return WebhookSetupResult.failed(
+                        "GitLab did not store the webhook's signing token. The webhook keeps its secret token");
+            }
+            client.updateGroupWebhook(scopeId, groupId, id, WebhookConfig.signingTokenOnly(url, secret));
+            return confirm(client, scopeId, groupId, id, url, true, false);
+        }
+        if (hook.signingTokenPresent()) {
+            if (!removeSigningToken) {
+                return WebhookSetupResult.failed("The webhook carries a signing token this connection does not"
+                        + " use, so its deliveries verify only if that token is this deployment's; switch the"
+                        + " connection's signing mode explicitly to settle it");
+            }
+            if (!client.updateGroupWebhook(scopeId, groupId, id, WebhookConfig.secretToken(url, secret))
+                    .tokenPresent()) {
+                return WebhookSetupResult.failed(
+                        "GitLab did not store the webhook's secret token. The webhook keeps its signing token");
+            }
+            client.updateGroupWebhook(scopeId, groupId, id, WebhookConfig.secretTokenOnly(url, secret));
+            return confirm(client, scopeId, groupId, id, url, false, true);
+        }
+        if (!url.equals(hook.url())
+                // Sending the token keeps it: GitLab drops a hook's secret token when only its URL changes.
+                && !url.equals(client.updateGroupWebhook(scopeId, groupId, id, WebhookConfig.secretToken(url, secret))
+                        .url())) {
+            return WebhookSetupResult.failed("GitLab kept the webhook's previous URL");
+        }
+        return WebhookSetupResult.success(id, groupId);
+    }
+
+    private static WebhookSetupResult confirm(
+            GitLabWebhookClient client,
+            long scopeId,
+            long groupId,
+            long id,
+            String url,
+            boolean signed,
+            boolean secretToken) {
+        Optional<WebhookInfo> hook = client.getGroupWebhook(scopeId, groupId, id);
+        if (hook.isEmpty() || !url.equals(hook.get().url())) {
+            return WebhookSetupResult.failed("GitLab no longer shows the webhook at " + url);
+        }
+        if (hook.get().signingTokenPresent() != signed || hook.get().tokenPresent() != secretToken) {
+            return WebhookSetupResult.failed(
+                    signed
+                            ? "GitLab kept the webhook's secret token beside its signing token"
+                            : "GitLab kept the webhook's signing token; remove it under the group's"
+                                    + " Settings → Webhooks, then retry");
+        }
+        return WebhookSetupResult.success(id, groupId);
     }
 
     /**
@@ -471,7 +589,7 @@ public class GitLabWebhookService {
             return;
         }
 
-        record GitLabHealthCandidate(Workspace workspace, Long groupId, Long webhookId) {}
+        record GitLabHealthCandidate(Workspace workspace, Long groupId, Long webhookId, boolean signed) {}
 
         List<GitLabHealthCandidate> gitLabWorkspaces =
                 workspaceRepository.findByStatus(Workspace.WorkspaceStatus.ACTIVE).stream()
@@ -483,7 +601,10 @@ public class GitLabWebhookService {
                                 return null;
                             }
                             return new GitLabHealthCandidate(
-                                    ws, cfg.get().gitlabGroupId(), cfg.get().gitlabWebhookId());
+                                    ws,
+                                    cfg.get().gitlabGroupId(),
+                                    cfg.get().gitlabWebhookId(),
+                                    cfg.get().signingMode() == SigningMode.WHSEC);
                         })
                         .filter(Objects::nonNull)
                         .toList();
@@ -500,7 +621,24 @@ public class GitLabWebhookService {
 
                 boolean missing = existing.isEmpty();
                 boolean disabled = existing.isPresent() && existing.get().isDisabled();
-                if (!missing && !disabled) {
+                if (!candidate.signed()
+                        && existing.isPresent()
+                        && existing.get().signingTokenPresent()) {
+                    // Signed with a key nothing here can confirm: recreating it, even once GitLab disabled
+                    // it, would silently drop that signature, so only an explicit switch may.
+                    log.warn(
+                            "Webhook carries a signing token its connection does not use; switch the signing mode"
+                                    + " explicitly: workspaceId={}, webhookId={}",
+                            workspace.getId(),
+                            candidate.webhookId());
+                    continue;
+                }
+                // Signing-token mode wants the signing token alone, which an interrupted switch leaves not.
+                boolean mismatched = existing.isPresent()
+                        && candidate.signed()
+                        && (!existing.get().signingTokenPresent()
+                                || existing.get().tokenPresent());
+                if (!missing && !disabled && !mismatched) {
                     continue; // hook exists and is still delivering — nothing to do
                 }
 
@@ -521,15 +659,23 @@ public class GitLabWebhookService {
                                 workspace.getId(),
                                 e);
                     }
-                } else {
+                } else if (missing) {
                     log.warn(
                             "Webhook missing (deleted externally), re-registering: workspaceId={}, webhookId={}",
                             workspace.getId(),
                             candidate.webhookId());
+                } else {
+                    // An interrupted switch; registerWebhook finishes it.
+                    log.warn(
+                            "Webhook does not match its signing mode, reconciling it: workspaceId={}, webhookId={}",
+                            workspace.getId(),
+                            candidate.webhookId());
                 }
 
-                // Clear stored ID so registerWebhook creates a new one
-                updateGitLabConfig(workspace.getId(), cfg -> cfg.withGitlabWebhookId(null));
+                if (missing || disabled) {
+                    // Clear stored ID so registerWebhook creates a new one
+                    updateGitLabConfig(workspace.getId(), cfg -> cfg.withGitlabWebhookId(null));
+                }
 
                 WebhookSetupResult result = registerWebhook(workspace);
                 if (result.registered()) {

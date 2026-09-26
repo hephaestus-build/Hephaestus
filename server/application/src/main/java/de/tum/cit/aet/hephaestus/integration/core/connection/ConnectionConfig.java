@@ -67,6 +67,10 @@ public sealed interface ConnectionConfig
         public GitLabConfig withGitlabGroupId(@Nullable Long groupId) {
             return new GitLabConfig(serverUrl, groupId, gitlabWebhookId, signingMode, enabledStreams);
         }
+
+        public GitLabConfig withSigningMode(SigningMode mode) {
+            return new GitLabConfig(serverUrl, gitlabGroupId, gitlabWebhookId, mode, enabledStreams);
+        }
     }
 
     /** Slack bot identity, notification channel, enabled streams, and message-retention configuration. */

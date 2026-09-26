@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.EgressExempt;
 import de.tum.cit.aet.hephaestus.integration.core.egress.EgressExemption;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupResponse;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -18,6 +19,8 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Scope-based client for GitLab webhook CRUD operations.
@@ -39,6 +42,8 @@ public class GitLabWebhookClient {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabWebhookClient.class);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+    private static final int SIGNING_TOKEN_MAJOR = 19;
+    private static final int SIGNING_TOKEN_MINOR = 1;
 
     private final GitLabGraphQlClientProvider graphQlClientProvider;
     private final GitLabTokenService tokenService;
@@ -124,16 +129,74 @@ public class GitLabWebhookClient {
                     "Null response from GitLab when registering webhook: scopeId=" + scopeId + ", groupId=" + groupId);
         }
 
-        Map<String, Object> responseBody = Objects.requireNonNull(response);
-        Number idValue = (Number) responseBody.get("id");
-        if (idValue == null) {
+        if (response.get("id") == null) {
             throw new IllegalStateException(
                     "GitLab webhook response missing 'id' field: scopeId=" + scopeId + ", groupId=" + groupId);
         }
-        long webhookId = idValue.longValue();
-        String url = (String) responseBody.get("url");
-        log.info("Registered GitLab group webhook: scopeId={}, groupId={}, webhookId={}", scopeId, groupId, webhookId);
-        return new WebhookInfo(webhookId, Objects.requireNonNull(url), (String) responseBody.get("alert_status"));
+        WebhookInfo registered = webhookInfo(response);
+        log.info(
+                "Registered GitLab group webhook: scopeId={}, groupId={}, webhookId={}",
+                scopeId,
+                groupId,
+                registered.id());
+        return registered;
+    }
+
+    /**
+     * Rewrites an existing group hook with {@code config}, keeping its id and URL — GitLab drops a
+     * hook's secret token when its URL changes.
+     *
+     * @throws WebClientResponseException on API errors
+     */
+    public WebhookInfo updateGroupWebhook(Long scopeId, long groupId, long webhookId, WebhookConfig config) {
+        ScopeCredentials credentials = resolveCredentials(scopeId);
+
+        Map<String, Object> response = webClient
+                .put()
+                .uri(credentials.serverUrl() + "/api/v4/groups/{groupId}/hooks/{hookId}", groupId, webhookId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token())
+                .bodyValue(config.toPayload())
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .block(REQUEST_TIMEOUT);
+
+        if (response == null || response.get("id") == null) {
+            throw new IllegalStateException("GitLab webhook update returned no hook: scopeId=" + scopeId + ", groupId="
+                    + groupId + ", webhookId=" + webhookId);
+        }
+        return webhookInfo(response);
+    }
+
+    /**
+     * Whether the scope's GitLab instance always stores a hook {@code signing_token} it is sent: 19.1 and
+     * later. GitLab 19.0 introduced the field behind the {@code webhook_signing_token} feature flag and
+     * ignores it while the flag is off; an older instance ignores the unknown field. Since GitLab never
+     * returns the key, a successful update that carried it is the only evidence the hook holds ours, and
+     * that evidence holds only where the field cannot be ignored. An unreadable version counts as
+     * unsupported.
+     */
+    public boolean supportsSigningTokens(Long scopeId) {
+        ScopeCredentials credentials = resolveCredentials(scopeId);
+
+        Map<String, Object> response = webClient
+                .get()
+                .uri(credentials.serverUrl() + "/api/v4/version")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token())
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .block(REQUEST_TIMEOUT);
+
+        if (response == null || !(response.get("version") instanceof String version)) {
+            return false;
+        }
+        String[] parts = version.split("[.-]", 3);
+        try {
+            int major = Integer.parseInt(parts[0]);
+            int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            return major > SIGNING_TOKEN_MAJOR || (major == SIGNING_TOKEN_MAJOR && minor >= SIGNING_TOKEN_MINOR);
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     /**
@@ -200,19 +263,10 @@ public class GitLabWebhookClient {
                     .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
                     .block(REQUEST_TIMEOUT);
 
-            if (response == null) {
+            if (response == null || response.get("id") == null) {
                 return Optional.empty();
             }
-
-            Map<String, Object> responseBody = Objects.requireNonNull(response);
-            Number idValue = (Number) responseBody.get("id");
-            if (idValue == null) {
-                return Optional.empty();
-            }
-            long id = idValue.longValue();
-            String url = (String) responseBody.get("url");
-            return Optional.of(
-                    new WebhookInfo(id, Objects.requireNonNull(url), (String) responseBody.get("alert_status")));
+            return Optional.of(webhookInfo(response));
         } catch (WebClientResponseException e) {
             if (e.getStatusCode().value() == 404) {
                 return Optional.empty();
@@ -245,11 +299,17 @@ public class GitLabWebhookClient {
 
         return Objects.requireNonNull(response).stream()
                 .filter(hook -> hook.get("id") != null)
-                .map(hook -> new WebhookInfo(
-                        ((Number) hook.get("id")).longValue(),
-                        Objects.requireNonNull((String) hook.get("url")),
-                        (String) hook.get("alert_status")))
+                .map(GitLabWebhookClient::webhookInfo)
                 .toList();
+    }
+
+    private static WebhookInfo webhookInfo(Map<String, Object> hook) {
+        return new WebhookInfo(
+                ((Number) Objects.requireNonNull(hook.get("id"))).longValue(),
+                Objects.requireNonNull((String) hook.get("url")),
+                (String) hook.get("alert_status"),
+                Boolean.TRUE.equals(hook.get("signing_token_present")),
+                Boolean.TRUE.equals(hook.get("token_present")));
     }
 
     /**
@@ -276,12 +336,17 @@ public class GitLabWebhookClient {
      *                    repeated failures — GitLab keeps the row but stops delivering), or
      *                    {@code "temporarily_disabled"} (transient backoff GitLab auto-recovers).
      *                    {@code null} when the field is absent (older GitLab, or the register response).
-     * @see <a href="https://docs.gitlab.com/ee/api/group_level_webhooks.html">GitLab Group Webhooks API</a>
+     * @param signingTokenPresent GitLab's {@code signing_token_present}: the hook signs its deliveries.
+     *                    GitLab never returns the token itself, and before 19.0 not this field either.
+     * @param tokenPresent GitLab's {@code token_present}: the hook has a secret token. Reported since
+     *                    GitLab 19.0 like {@code signing_token_present}; {@code false} when absent.
+     * @see <a href="https://docs.gitlab.com/api/group_webhooks/">GitLab Group Webhooks API</a>
      */
-    public record WebhookInfo(long id, String url, @Nullable String alertStatus) {
+    public record WebhookInfo(
+            long id, String url, @Nullable String alertStatus, boolean signingTokenPresent, boolean tokenPresent) {
         /** Two-arg convenience for callers/tests that don't care about delivery health. */
         public WebhookInfo(long id, String url) {
-            this(id, url, null);
+            this(id, url, null, false, false);
         }
 
         /**
@@ -297,44 +362,76 @@ public class GitLabWebhookClient {
     }
 
     /**
-     * Webhook configuration payload matching the GitLab API contract.
+     * A group hook request body: every event Hephaestus consumes, and the token fields this request sets
+     * or clears. A field it leaves out keeps the hook's current token, which is also the only form a
+     * GitLab before 19.0 is sent. Clearing is an explicit JSON {@code null}: GitLab assigns only the
+     * fields a request carries, and {@code signing_token} validates with {@code allow_nil}. The body is
+     * a JSON tree because the application's {@code non_null} default would drop that {@code null} from
+     * a map or record.
      *
-     * @see <a href="https://docs.gitlab.com/ee/api/group_level_webhooks.html#add-a-group-hook">Add Group Hook</a>
+     * @param tokens {@code token} (the legacy secret token, sent as {@code X-Gitlab-Token}) and
+     *               {@code signing_token} (the GitLab 19.0+ key behind {@code webhook-signature}); a
+     *               {@code null} value clears that token
+     * @see <a href="https://docs.gitlab.com/api/group_webhooks/#add-a-group-hook">Add Group Hook</a>
      */
-    public record WebhookConfig(
-            String url,
-            String token,
-            boolean mergeRequestsEvents,
-            boolean issuesEvents,
-            boolean confidentialIssuesEvents,
-            boolean noteEvents,
-            boolean confidentialNoteEvents,
-            boolean pushEvents,
-            boolean tagPushEvents,
-            boolean pipelineEvents,
-            boolean milestoneEvents,
-            boolean memberEvents,
-            boolean subgroupEvents,
-            boolean projectEvents,
-            boolean enableSslVerification) {
-        public Map<String, Object> toPayload() {
-            // Map.ofEntries used because Map.of supports at most 10 entries
-            return Map.ofEntries(
-                    Map.entry("url", url),
-                    Map.entry("token", token),
-                    Map.entry("merge_requests_events", mergeRequestsEvents),
-                    Map.entry("issues_events", issuesEvents),
-                    Map.entry("confidential_issues_events", confidentialIssuesEvents),
-                    Map.entry("note_events", noteEvents),
-                    Map.entry("confidential_note_events", confidentialNoteEvents),
-                    Map.entry("push_events", pushEvents),
-                    Map.entry("tag_push_events", tagPushEvents),
-                    Map.entry("pipeline_events", pipelineEvents),
-                    Map.entry("milestone_events", milestoneEvents),
-                    Map.entry("member_events", memberEvents),
-                    Map.entry("subgroup_events", subgroupEvents),
-                    Map.entry("project_events", projectEvents),
-                    Map.entry("enable_ssl_verification", enableSslVerification));
+    public record WebhookConfig(String url, Map<String, @Nullable String> tokens) {
+
+        private static final List<String> EVENTS = List.of(
+                "merge_requests_events",
+                "issues_events",
+                "confidential_issues_events",
+                "note_events",
+                "confidential_note_events",
+                "push_events",
+                "tag_push_events",
+                "pipeline_events",
+                "milestone_events",
+                "member_events",
+                "subgroup_events",
+                "project_events",
+                "enable_ssl_verification");
+
+        /** Sets the secret token and leaves any signing token alone. */
+        public static WebhookConfig secretToken(String url, String secret) {
+            return new WebhookConfig(url, tokens(secret, null, false));
+        }
+
+        /** Sets both tokens, so a hook keeps the secret token until the signing token is confirmed. */
+        public static WebhookConfig bothTokens(String url, String secret) {
+            return new WebhookConfig(url, tokens(secret, secret, true));
+        }
+
+        /** Sets the signing token and clears the secret token. */
+        public static WebhookConfig signingTokenOnly(String url, String secret) {
+            return new WebhookConfig(url, tokens(null, secret, true));
+        }
+
+        /** Sets the secret token and clears the signing token. */
+        public static WebhookConfig secretTokenOnly(String url, String secret) {
+            return new WebhookConfig(url, tokens(secret, null, true));
+        }
+
+        private static Map<String, @Nullable String> tokens(
+                @Nullable String token, @Nullable String signingToken, boolean includeSigningToken) {
+            Map<String, @Nullable String> tokens = new LinkedHashMap<>();
+            tokens.put("token", token);
+            if (includeSigningToken) {
+                tokens.put("signing_token", signingToken);
+            }
+            return tokens;
+        }
+
+        public ObjectNode toPayload() {
+            ObjectNode body = JsonNodeFactory.instance.objectNode().put("url", url);
+            EVENTS.forEach(event -> body.put(event, true));
+            tokens.forEach((field, value) -> {
+                if (value == null) {
+                    body.putNull(field);
+                } else {
+                    body.put(field, value);
+                }
+            });
+            return body;
         }
     }
 }

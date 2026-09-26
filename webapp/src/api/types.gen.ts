@@ -1805,6 +1805,27 @@ export type GitLabProvider = {
 };
 
 /**
+ * A GitLab connection's webhook signing mode, as GitLab reported its group webhook
+ */
+export type GitLabSigningMode = {
+  signingMode: 'PLAINTEXT' | 'WHSEC';
+  /**
+   * The group webhook GitLab reported in this mode
+   */
+  webhookId: number;
+};
+
+/**
+ * Request to change how a GitLab connection's group webhook authenticates its deliveries
+ */
+export type GitLabSigningModeRequest = {
+  /**
+   * WHSEC: a GitLab 19.1+ signing token (webhook-signature), which needs WEBHOOK_SECRET to be a whsec_ signing token. PLAINTEXT: the legacy secret token (X-Gitlab-Token).
+   */
+  signingMode: 'PLAINTEXT' | 'WHSEC';
+};
+
+/**
  * One group's practice counts per effective autonomy state
  */
 export type GroupAutonomyRollup = {
@@ -9906,6 +9927,28 @@ export type SendSlackTestMessageResponses = {
 };
 
 export type SendSlackTestMessageResponse = SendSlackTestMessageResponses[keyof SendSlackTestMessageResponses];
+
+export type UpdateGitLabSigningModeData = {
+  body: GitLabSigningModeRequest;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    connectionId: number;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/connections/{connectionId}/gitlab-signing-mode';
+};
+
+export type UpdateGitLabSigningModeResponses = {
+  /**
+   * OK
+   */
+  200: GitLabSigningMode;
+};
+
+export type UpdateGitLabSigningModeResponse = UpdateGitLabSigningModeResponses[keyof UpdateGitLabSigningModeResponses];
 
 export type GetConnectionSyncStatusData = {
   body?: never;

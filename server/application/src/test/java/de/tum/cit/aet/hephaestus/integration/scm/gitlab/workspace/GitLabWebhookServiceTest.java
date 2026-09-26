@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient.RotatedToken;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient.TokenInfo;
@@ -38,6 +39,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -46,8 +48,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
+import mockwebserver3.RecordedRequest;
+import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
@@ -59,6 +67,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 /**
@@ -103,22 +112,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        WebhookProperties properties = new WebhookProperties(
-                EXTERNAL_URL,
-                SECRET,
-                new TokenRotation(7, 90),
-                new Publish(java.time.Duration.ofSeconds(9), 5, java.time.Duration.ofMillis(200)),
-                WebhookPropertiesFixture.stream(),
-                new Shutdown(java.time.Duration.ofSeconds(15)),
-                new Http(26_214_400L));
-
-        webhookService = new GitLabWebhookService(
-                webhookClientProvider,
-                rotationClientProvider,
-                tokenServiceProvider,
-                properties,
-                workspaceRepository,
-                connectionService);
+        webhookService = serviceWithSecret(SECRET);
 
         workspace = new Workspace();
         workspace.setAccountLogin("my-org");
@@ -177,6 +171,24 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                             Objects.requireNonNull(gitLabConfigs.get(id)));
                     return Optional.of(new BearerTokenReplacement(stored, true));
                 });
+    }
+
+    private GitLabWebhookService serviceWithSecret(String secret) {
+        WebhookProperties properties = new WebhookProperties(
+                EXTERNAL_URL,
+                secret,
+                new TokenRotation(7, 90),
+                new Publish(java.time.Duration.ofSeconds(9), 5, java.time.Duration.ofMillis(200)),
+                WebhookPropertiesFixture.stream(),
+                new Shutdown(java.time.Duration.ofSeconds(15)),
+                new Http(26_214_400L));
+        return new GitLabWebhookService(
+                webhookClientProvider,
+                rotationClientProvider,
+                tokenServiceProvider,
+                properties,
+                workspaceRepository,
+                connectionService);
     }
 
     private void bindGitLabConfig(long workspaceId, ConnectionConfig.GitLabConfig cfg) {
@@ -701,7 +713,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         @Test
         void leavesExecutableWebhookUntouched() {
             when(webhookClient.getGroupWebhook(1L, 42L, 99L))
-                    .thenReturn(Optional.of(new WebhookInfo(99L, EXTERNAL_URL + "/webhooks/gitlab", "executable")));
+                    .thenReturn(Optional.of(
+                            new WebhookInfo(99L, EXTERNAL_URL + "/webhooks/gitlab", "executable", false, false)));
 
             webhookService.checkWebhookHealth();
 
@@ -715,10 +728,11 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             // GitLab kept the hook row but flipped it to alert_status=disabled — an existence check
             // alone would pass forever, so this is the invisible-failure the health check must heal.
             when(webhookClient.getGroupWebhook(1L, 42L, 99L))
-                    .thenReturn(Optional.of(new WebhookInfo(99L, EXTERNAL_URL + "/webhooks/gitlab", "disabled")));
+                    .thenReturn(Optional.of(
+                            new WebhookInfo(99L, EXTERNAL_URL + "/webhooks/gitlab", "disabled", false, false)));
             when(webhookClient.listGroupWebhooks(1L, 42L)).thenReturn(List.of());
             when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
-                    .thenReturn(new WebhookInfo(100L, EXTERNAL_URL + "/webhooks/gitlab", "executable"));
+                    .thenReturn(new WebhookInfo(100L, EXTERNAL_URL + "/webhooks/gitlab", "executable", false, false));
 
             webhookService.checkWebhookHealth();
 
@@ -729,12 +743,26 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
         }
 
+        /** Recreating it would drop a signature only an explicit switch may remove. */
+        @Test
+        void leavesADisabledHookSignedUnderALegacyConnection() {
+            when(webhookClient.getGroupWebhook(1L, 42L, 99L))
+                    .thenReturn(Optional.of(
+                            new WebhookInfo(99L, EXTERNAL_URL + "/webhooks/gitlab", "disabled", true, false)));
+
+            webhookService.checkWebhookHealth();
+
+            verify(webhookClient, never()).deregisterGroupWebhook(anyLong(), anyLong(), anyLong());
+            verify(webhookClient, never()).registerGroupWebhook(anyLong(), anyLong(), any());
+            assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(99L);
+        }
+
         @Test
         void reRegistersExternallyDeletedWebhook() {
             when(webhookClient.getGroupWebhook(1L, 42L, 99L)).thenReturn(Optional.empty());
             when(webhookClient.listGroupWebhooks(1L, 42L)).thenReturn(List.of());
             when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
-                    .thenReturn(new WebhookInfo(100L, EXTERNAL_URL + "/webhooks/gitlab", "executable"));
+                    .thenReturn(new WebhookInfo(100L, EXTERNAL_URL + "/webhooks/gitlab", "executable", false, false));
 
             webhookService.checkWebhookHealth();
 
@@ -742,6 +770,246 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             verify(webhookClient, never()).deregisterGroupWebhook(anyLong(), anyLong(), anyLong());
             verify(webhookClient).registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class));
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
+        }
+    }
+
+    /**
+     * The group hooks API as GitLab documents it (https://docs.gitlab.com/api/group_webhooks/): the
+     * secret travels as {@code token} for a legacy hook and as {@code signing_token} (GitLab 19.0+)
+     * for a signed one, and GitLab answers with {@code signing_token_present} but never the token.
+     */
+    @Nested
+    class SigningModeWireContract {
+
+        private static final String SIGNING_TOKEN = "whsec_Z2l0bGFiLXNpZ25pbmcta2V5LW9mLTMyLWJ5dGVzISE=";
+        private static final String HOOK_URL = EXTERNAL_URL + "/webhooks/gitlab";
+
+        private MockWebServer gitlab;
+
+        @BeforeEach
+        void startGitLab() throws IOException {
+            gitlab = new MockWebServer();
+            gitlab.start();
+            Mockito.lenient()
+                    .when(tokenService.resolveServerUrl(1L))
+                    .thenReturn("http://" + gitlab.getHostName() + ":" + gitlab.getPort());
+            Mockito.lenient().when(tokenService.getAccessToken(1L)).thenReturn("glpat-test-token");
+            when(webhookClientProvider.getIfAvailable())
+                    .thenReturn(new GitLabWebhookClient(
+                            Mockito.mock(GitLabGraphQlClientProvider.class), tokenService, WebClient.builder()));
+        }
+
+        @AfterEach
+        void stopGitLab() throws IOException {
+            gitlab.close();
+        }
+
+        private void bindMode(ConnectionConfig.GitLabConfig.SigningMode mode) {
+            bindStoredHook(mode, null);
+        }
+
+        private void bindStoredHook(ConnectionConfig.GitLabConfig.SigningMode mode, @Nullable Long webhookId) {
+            bindGitLabConfig(
+                    1L, new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, webhookId, mode, Set.of()));
+        }
+
+        private void respond(String json) {
+            gitlab.enqueue(new MockResponse.Builder()
+                    .addHeader("Content-Type", "application/json")
+                    .body(json)
+                    .build());
+        }
+
+        private String nextRequest(String method, String target) throws InterruptedException {
+            RecordedRequest request = Objects.requireNonNull(gitlab.takeRequest(5, TimeUnit.SECONDS));
+            assertThat(request.getMethod() + " " + request.getTarget()).isEqualTo(method + " " + target);
+            var body = request.getBody();
+            return body == null ? "" : body.utf8();
+        }
+
+        private String hook(long id, boolean token, boolean signingToken) {
+            return "{\"id\":" + id + ",\"url\":\"" + HOOK_URL + "\",\"alert_status\":\"executable\","
+                    + "\"token_present\":" + token + ",\"signing_token_present\":" + signingToken + "}";
+        }
+
+        /** The body a GitLab before 19.0 accepted: the secret token and no signing_token field at all. */
+        @Test
+        void shouldRegisterALegacyHookWithTheSecretTokenOnly() throws InterruptedException {
+            bindMode(ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT);
+            respond("[]");
+            respond("{\"id\":100,\"url\":\"" + HOOK_URL + "\"}");
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.registered()).isTrue();
+            nextRequest("GET", "/api/v4/groups/42/hooks?per_page=100");
+            assertThat(nextRequest("POST", "/api/v4/groups/42/hooks"))
+                    .contains("\"token\":\"" + SECRET + "\"")
+                    .doesNotContain("signing_token");
+        }
+
+        @Test
+        void shouldRegisterWithBothTokensThenDropTheSecretTokenOnGitLab191() throws InterruptedException {
+            bindMode(ConnectionConfig.GitLabConfig.SigningMode.WHSEC);
+            respond("{\"version\":\"19.1.0-ee\",\"revision\":\"abc123\"}");
+            respond("[]");
+            respond(hook(100, true, true));
+            respond(hook(100, true, true));
+            respond(hook(100, false, true));
+            respond(hook(100, false, true));
+
+            WebhookSetupResult result = serviceWithSecret(SIGNING_TOKEN).registerWebhook(workspace);
+
+            assertThat(result.registered()).isTrue();
+            nextRequest("GET", "/api/v4/version");
+            nextRequest("GET", "/api/v4/groups/42/hooks?per_page=100");
+            assertThat(nextRequest("POST", "/api/v4/groups/42/hooks"))
+                    .contains("\"token\":\"" + SIGNING_TOKEN + "\"")
+                    .contains("\"signing_token\":\"" + SIGNING_TOKEN + "\"");
+            // The key is sent again beside the secret token: presence alone never shows whose key it is.
+            assertThat(nextRequest("PUT", "/api/v4/groups/42/hooks/100"))
+                    .contains("\"token\":\"" + SIGNING_TOKEN + "\"")
+                    .contains("\"signing_token\":\"" + SIGNING_TOKEN + "\"");
+            assertThat(nextRequest("PUT", "/api/v4/groups/42/hooks/100"))
+                    .contains("\"token\":null")
+                    .contains("\"signing_token\":\"" + SIGNING_TOKEN + "\"");
+            nextRequest("GET", "/api/v4/groups/42/hooks/100");
+        }
+
+        /** 19.0 ignores signing_token while its feature flag is off, so it cannot prove the stored key. */
+        @Test
+        void shouldRefuseSigningTokenModeBeforeGitLab191() throws InterruptedException {
+            bindMode(ConnectionConfig.GitLabConfig.SigningMode.WHSEC);
+            respond("{\"version\":\"19.0.3-ee\",\"revision\":\"abc123\"}");
+
+            WebhookSetupResult result = serviceWithSecret(SIGNING_TOKEN).registerWebhook(workspace);
+
+            assertThat(result.registered()).isFalse();
+            assertThat(result.failureReason()).contains("GitLab 19.1 or later");
+            nextRequest("GET", "/api/v4/version");
+            assertThat(gitlab.getRequestCount()).isEqualTo(1);
+        }
+
+        /**
+         * An operator may have signed the hook by hand, with a key nothing here can confirm: it is left
+         * alone but not called registered. Only an explicit switch removes it.
+         */
+        @Test
+        void shouldReportButKeepASignedHookUnderALegacyConnection() throws InterruptedException {
+            bindStoredHook(ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, 99L);
+            respond(hook(99, false, true));
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.registered()).isFalse();
+            assertThat(result.failureReason()).contains("signing token this connection does not use");
+            nextRequest("GET", "/api/v4/groups/42/hooks/99");
+            assertThat(gitlab.getRequestCount()).isEqualTo(1);
+        }
+
+        @Test
+        void shouldRewriteAStoredLegacyHookThatPointsElsewhere() throws InterruptedException {
+            bindStoredHook(ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, 99L);
+            respond("{\"id\":99,\"url\":\"https://old.example.com/webhooks/gitlab\"}");
+            respond("{\"id\":99,\"url\":\"" + HOOK_URL + "\"}");
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.registered()).isTrue();
+            nextRequest("GET", "/api/v4/groups/42/hooks/99");
+            assertThat(nextRequest("PUT", "/api/v4/groups/42/hooks/99"))
+                    .contains("\"url\":\"" + HOOK_URL + "\"")
+                    .contains("\"token\":\"" + SECRET + "\"")
+                    .doesNotContain("signing_token");
+        }
+
+        @Test
+        void shouldFailWhenGitLabKeepsTheOldUrl() {
+            bindStoredHook(ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, 99L);
+            respond("{\"id\":99,\"url\":\"https://old.example.com/webhooks/gitlab\"}");
+            respond("{\"id\":99,\"url\":\"https://old.example.com/webhooks/gitlab\"}");
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.registered()).isFalse();
+            assertThat(result.failureReason()).contains("previous URL");
+        }
+
+        @Test
+        void shouldKeepTheSecretTokenWhenGitLabIgnoresTheSigningToken() throws InterruptedException {
+            bindMode(ConnectionConfig.GitLabConfig.SigningMode.WHSEC);
+            respond("{\"version\":\"19.1.0\"}");
+            respond("[]");
+            respond(hook(100, true, false));
+            respond(hook(100, true, false));
+
+            WebhookSetupResult result = serviceWithSecret(SIGNING_TOKEN).registerWebhook(workspace);
+
+            assertThat(result.registered()).isFalse();
+            assertThat(result.failureReason()).contains("keeps its secret token");
+            assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
+            nextRequest("GET", "/api/v4/version");
+            nextRequest("GET", "/api/v4/groups/42/hooks?per_page=100");
+            nextRequest("POST", "/api/v4/groups/42/hooks");
+            assertThat(nextRequest("PUT", "/api/v4/groups/42/hooks/100"))
+                    .contains("\"token\":\"" + SIGNING_TOKEN + "\"");
+            assertThat(gitlab.getRequestCount()).isEqualTo(4);
+        }
+
+        /** Reasserting the key of a signing-token-only hook never hands GitLab the secret token again. */
+        @Test
+        void shouldResendOnlyTheSigningTokenToASigningTokenOnlyHook() throws InterruptedException {
+            bindStoredHook(ConnectionConfig.GitLabConfig.SigningMode.WHSEC, 99L);
+            respond("{\"version\":\"19.1.0\"}");
+            respond(hook(99, false, true));
+            respond(hook(99, false, true));
+            respond(hook(99, false, true));
+
+            WebhookSetupResult result = serviceWithSecret(SIGNING_TOKEN).registerWebhook(workspace);
+
+            assertThat(result.registered()).isTrue();
+            nextRequest("GET", "/api/v4/version");
+            nextRequest("GET", "/api/v4/groups/42/hooks/99");
+            assertThat(nextRequest("PUT", "/api/v4/groups/42/hooks/99"))
+                    .contains("\"token\":null")
+                    .contains("\"signing_token\":\"" + SIGNING_TOKEN + "\"");
+            nextRequest("GET", "/api/v4/groups/42/hooks/99");
+            assertThat(gitlab.getRequestCount()).isEqualTo(4);
+        }
+
+        /** An interrupted switch leaves both tokens; the health check finishes it. */
+        @Test
+        void shouldFinishAnInterruptedSwitchFromTheHealthCheck() throws InterruptedException {
+            bindStoredHook(ConnectionConfig.GitLabConfig.SigningMode.WHSEC, 99L);
+            when(workspaceRepository.findByStatus(Workspace.WorkspaceStatus.ACTIVE))
+                    .thenReturn(List.of(workspace));
+            respond(hook(99, true, true));
+            respond("{\"version\":\"19.1.0\"}");
+            respond(hook(99, true, true));
+            respond(hook(99, true, true));
+            respond(hook(99, false, true));
+            respond(hook(99, false, true));
+
+            serviceWithSecret(SIGNING_TOKEN).checkWebhookHealth();
+
+            nextRequest("GET", "/api/v4/groups/42/hooks/99");
+            nextRequest("GET", "/api/v4/version");
+            nextRequest("GET", "/api/v4/groups/42/hooks/99");
+            nextRequest("PUT", "/api/v4/groups/42/hooks/99");
+            assertThat(nextRequest("PUT", "/api/v4/groups/42/hooks/99")).contains("\"token\":null");
+            nextRequest("GET", "/api/v4/groups/42/hooks/99");
+            assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(99L);
+        }
+
+        @Test
+        void shouldRefuseSigningTokenModeWithoutAGitLabSigningToken() {
+            bindMode(ConnectionConfig.GitLabConfig.SigningMode.WHSEC);
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.registered()).isFalse();
+            assertThat(result.failureReason()).contains("whsec_");
+            assertThat(gitlab.getRequestCount()).isZero();
         }
     }
 }

@@ -229,7 +229,7 @@ GitLab login, GitLab workspaces, webhook auto-registration, and practice review 
 | `GITLAB_DEFAULT_SERVER_URL` | The one GitLab instance workspaces are created on, synced from and checked out from (not login). Falls back to `GITLAB_OAUTH_BASE_URL`. Give the application server and every worker the same value |
 | `GITLAB_ENABLED` | Enables GitLab on the application server and every worker; the webhook receiver does not read it. A worker without it cannot check out a merge request: each GitLab review it claims fails preparation with `SCM Git preparation is unavailable` and ends with insufficient evidence |
 | `GITLAB_WORKSPACE_CREATION` | Enables GitLab workspace creation in the UI and API |
-| `WEBHOOK_SECRET` | Shared secret used for GitLab webhook verification and auto-registration. One instance-wide value: GitHub webhooks are verified against the same secret. Hooks Hephaestus creates on GitLab carry it as their secret token (`X-Gitlab-Token`); it does not add a signing token to them. A hook you give a signing token yourself (GitLab 19.0 and later) is verified by its signature alone, so this value must then be that `whsec_…` signing token |
+| `WEBHOOK_SECRET` | Shared secret used for GitLab webhook verification and auto-registration. One instance-wide value: GitHub webhooks are verified against the same secret. Hooks Hephaestus creates on GitLab carry it as their secret token (`X-Gitlab-Token`) unless an instance admin switches the workspace to a [signed GitLab webhook](#signed-gitlab-webhooks). A hook you give a signing token yourself (GitLab 19.0 and later) is verified by its signature alone, so this value must then be that `whsec_…` signing token, which GitLab requires to encode exactly 32 bytes. Hephaestus reports such a hook in the server log rather than as registered, since it cannot read the key back; switching the workspace explicitly settles it |
 | `WEBHOOK_EXTERNAL_URL` | Public webhook base URL registered on GitLab. The reference Compose files deliberately leave it unset so auto-registration derives it from the application host URL; add it to the `application-server` service's `environment:` block if you need to override that. |
 
 The login provider is instance-agnostic: gitlab.com works out of the box, and any self-hosted GitLab works by pointing `GITLAB_OAUTH_BASE_URL` at it. Create the GitLab OAuth application on that instance with these settings:
@@ -247,6 +247,56 @@ a subscription on upgrade: for a workspace connected before pipeline events were
 **Pipeline events** on the hook under the group's **Settings → Webhooks**, or delete the hook and let
 Hephaestus register it again on the next sync. Until then the head pipeline's state reaches
 Hephaestus only through the scheduled sync.
+
+#### Signed GitLab webhooks
+
+On GitLab 19.1 and later, an instance admin can switch a workspace's group webhook from the secret
+token, which GitLab sends in plain text with every delivery, to a signing token, which GitLab uses to
+sign each delivery without sending it.
+
+The signing token is `WEBHOOK_SECRET` itself, so this only works when `WEBHOOK_SECRET` already is a
+`whsec_` token encoding exactly 32 bytes. The switch does not change or rotate that value. The value is
+instance-wide: GitHub webhooks and every GitLab hook that still uses the secret token are verified
+against it, so replacing it means updating the GitHub webhook secret and every GitLab hook at the same
+time. A new deployment can choose that form from the start, for example the output of
+`echo "whsec_$(openssl rand -base64 32)"`.
+
+To switch one workspace, look up its GitLab connection's `id` with
+`GET /api/workspaces/{workspaceSlug}/connections`, then, as an instance admin, send:
+
+```http
+PUT /api/workspaces/{workspaceSlug}/connections/{connectionId}/gitlab-signing-mode
+Content-Type: application/json
+
+{"signingMode": "WHSEC"}
+```
+
+Hephaestus checks the value and the GitLab version (19.0 can ignore the signing token behind a feature
+flag, so it is refused), sends the group webhook the signing token beside its secret token, and removes
+the secret token only once GitLab reports the signing token. It answers `200` only after reading the
+webhook back at this deployment's URL in the new state, then stores the mode and records the change on
+the connection's audit trail. The same request with `"signingMode": "PLAINTEXT"` switches back in
+the same order: the secret token returns before the signing token is removed.
+
+Every step leaves the webhook with a token this deployment verifies, so deliveries keep arriving
+while a switch runs or after one fails. The exception is a webhook someone signed with a different key:
+its deliveries fail until the switch replaces or removes that key. A `409` carries the reason (GitLab older than 19.1, a
+`WEBHOOK_SECRET` that is not a signing token, GitLab not keeping a token, or a GitLab error), and the
+workspace keeps its stored mode; the webhook may then carry both tokens until the request is repeated.
+If switching back reports that GitLab kept the signing token, remove it under the group's
+**Settings → Webhooks** and send the request again. A `5xx` can leave the webhook switched while the
+stored mode is not; repeating the request completes it. Requests can be repeated safely.
+
+One `WEBHOOK_SECRET` and one verifier serve every workspace, so a valid signature shows that a
+delivery came from a GitLab hook holding that key, not which workspace or GitLab instance sent it. Signed
+webhooks are supported for the single GitLab instance workspaces are created on
+(`GITLAB_DEFAULT_SERVER_URL`); they do not separate groups that share a path on different GitLab
+servers.
+
+A switch stops GitLab from sending the secret in plain text for that workspace. It does not make the
+webhook receiver refuse the plain-text token: Hephaestus still accepts a GitLab delivery that carries
+`WEBHOOK_SECRET` as its secret token, for every workspace, and a value that was sent in plain text
+before the switch stays as exposed as it was.
 
 ### Practice review
 

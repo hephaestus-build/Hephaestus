@@ -145,23 +145,7 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                     .thenReturn(Mono.just(Map.of("id", 99, "url", "https://example.com/webhooks/gitlab")));
 
-            WebhookConfig config = new WebhookConfig(
-                    "https://example.com/webhooks/gitlab",
-                    "secret123",
-                    true, // mergeRequestsEvents
-                    true, // issuesEvents
-                    true, // confidentialIssuesEvents
-                    true, // noteEvents
-                    false, // confidentialNoteEvents
-                    true, // pushEvents
-                    true, // tagPushEvents
-                    false, // pipelineEvents
-                    true, // milestoneEvents
-                    true, // memberEvents
-                    true, // subgroupEvents
-                    true, // projectEvents
-                    true // enableSslVerification
-                    );
+            WebhookConfig config = WebhookConfig.secretToken("https://example.com/webhooks/gitlab", "secret123");
 
             WebhookInfo result = webhookClient.registerGroupWebhook(SCOPE_ID, GROUP_ID, config);
 
