@@ -89,6 +89,26 @@ class MentorRunnerClientTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldSettleOnlyItsOwnCallWhenClientsShareASandbox() throws Exception {
+        MentorRunnerClient other = new MentorRunnerClient(
+                sandbox, mapper, e -> {}, () -> {}, req -> mapper.nullNode(), scheduler, UUID.randomUUID());
+        other.start();
+        CompletableFuture<JsonNode> mine = client.hello();
+        long myId = sandbox.takeFrame().get("id").asLong();
+        CompletableFuture<JsonNode> theirs = other.hello();
+        long theirId = sandbox.takeFrame().get("id").asLong();
+
+        // Every client on the sandbox receives every reply.
+        sandbox.pushFrame(responseOf(myId, mapper.createObjectNode().put("for", "mine")));
+
+        assertThat(mine.get(1, TimeUnit.SECONDS).get("for").asString()).isEqualTo("mine");
+        assertThat(theirs).isNotDone();
+        sandbox.pushFrame(responseOf(theirId, mapper.createObjectNode().put("for", "theirs")));
+        assertThat(theirs.get(1, TimeUnit.SECONDS).get("for").asString()).isEqualTo("theirs");
+        other.close();
+    }
+
+    @Test
     void shouldFailPendingAndLaterCallsWhenTheEventStreamIsLost() throws Exception {
         CompletableFuture<JsonNode> inFlight = client.openThread(threadId);
         sandbox.takeFrame();

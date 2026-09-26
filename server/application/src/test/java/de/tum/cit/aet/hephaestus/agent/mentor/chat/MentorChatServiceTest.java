@@ -454,24 +454,15 @@ class MentorChatServiceTest extends BaseUnitTest {
     void shouldRunTheNextTurnOnAFreshSandboxWhenTheStreamIsLostWhileASaveFails() throws Exception {
         FakeSandbox fresh = new FakeSandbox();
         when(interactiveSandboxService.attach(any())).thenReturn(sandbox, fresh);
-        CountDownLatch saving = new CountDownLatch(1);
-        CountDownLatch release = new CountDownLatch(1);
         when(persistence.complete(any(), any(), any()))
                 .thenAnswer(inv -> {
-                    saving.countDown();
-                    release.await(5, TimeUnit.SECONDS);
+                    sandbox.onLost.run();
                     throw new org.springframework.dao.DataAccessResourceFailureException("database down");
                 })
                 .thenReturn(true);
-        AtomicReference<Thread> dispatcher = streamOnItsOwnThread("Hi");
-        Thread.ofVirtual().start(() -> {
-            awaitQuietly(saving);
-            sandbox.onLost.run();
-            release.countDown();
-        });
+        scheduleHappyPathResponses(sandbox).run();
 
         runTurnSync();
-        dispatcher.get().join(5_000);
 
         assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
         assertThat(closedUnderSandboxLock).containsExactly(true);
@@ -485,23 +476,14 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldFinishButDiscardTheRunnerWhenTheStreamIsLostBeforeTheReplyIsCommitted() throws Exception {
-        CountDownLatch saving = new CountDownLatch(1);
-        CountDownLatch release = new CountDownLatch(1);
+    void shouldFinishButDiscardTheRunnerWhenTheStreamIsLostBeforeTheReplyIsCommitted() {
         when(persistence.complete(any(), any(), any())).thenAnswer(inv -> {
-            saving.countDown();
-            release.await(5, TimeUnit.SECONDS);
+            sandbox.onLost.run();
             return true;
         });
-        AtomicReference<Thread> dispatcher = streamOnItsOwnThread("Hi");
-        Thread.ofVirtual().start(() -> {
-            awaitQuietly(saving);
-            sandbox.onLost.run();
-            release.countDown();
-        });
+        scheduleHappyPathResponses(sandbox).run();
 
         runTurnSync();
-        dispatcher.get().join(5_000);
 
         assertThat(emitter.recordedTypes()).contains("finish").doesNotContain("error");
         verify(persistence, never()).interrupt(any(), any(), any());
@@ -597,13 +579,10 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNotFinishATurnWhoseStreamIsLostWhileItsFinishIsTranslated() throws Exception {
-        CountDownLatch translating = new CountDownLatch(1);
-        CountDownLatch release = new CountDownLatch(1);
+    void shouldNotFinishATurnWhoseStreamIsLostWhileItsFinishIsTranslated() {
         translator = org.mockito.Mockito.spy(new PiEventToUiChunkTranslator());
         org.mockito.Mockito.doAnswer(inv -> {
-                    translating.countDown();
-                    release.await(5, TimeUnit.SECONDS);
+                    sandbox.onLost.run();
                     return inv.callRealMethod();
                 })
                 .when(translator)
@@ -612,15 +591,9 @@ class MentorChatServiceTest extends BaseUnitTest {
                                 e -> "agent_end".equals(e.path("type").asString(""))),
                         any());
         service = serviceWithExecutor(turnExec);
-        AtomicReference<Thread> dispatcher = streamOnItsOwnThread("Hi");
-        Thread.ofVirtual().start(() -> {
-            awaitQuietly(translating);
-            sandbox.onLost.run();
-            release.countDown();
-        });
+        scheduleHappyPathResponses(sandbox).run();
 
         runTurnSync();
-        dispatcher.get().join(5_000);
 
         assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
         verify(persistence, never()).complete(any(), any(), any());

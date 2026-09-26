@@ -64,7 +64,13 @@ public final class MentorRunnerClient implements AutoCloseable {
      */
     private final UUID boundThreadId;
 
-    private final AtomicLong idGen = new AtomicLong();
+    /**
+     * Shared by every client in this JVM. Clients on one sandbox each receive every reply, which carries only
+     * the request id, so an id must be unique across them; a sandbox's stdout reaches only the JVM that
+     * attached it.
+     */
+    private static final AtomicLong REQUEST_IDS = new AtomicLong();
+
     private final ConcurrentHashMap<Long, PendingCall> pending = new ConcurrentHashMap<>();
 
     /**
@@ -173,7 +179,7 @@ public final class MentorRunnerClient implements AutoCloseable {
     }
 
     private CompletableFuture<JsonNode> call(String method, ObjectNode params, Duration timeout) {
-        long id = idGen.incrementAndGet();
+        long id = REQUEST_IDS.incrementAndGet();
         CompletableFuture<JsonNode> future = new CompletableFuture<>();
         ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(
                 () -> {
@@ -289,7 +295,7 @@ public final class MentorRunnerClient implements AutoCloseable {
 
     private void handleFetchContext(JsonNode frame) {
         // Runner-originated callbacks carry a string id (`fc-<uuid>`); Java-originated calls use
-        // numeric ids from our own AtomicLong. We MUST echo the runner's id back unchanged — the
+        // numeric ids from REQUEST_IDS. We MUST echo the runner's id back unchanged — the
         // runner indexes `pendingFetchContexts` by string key, so any coercion (asLong → 0) silently
         // breaks correlation and stalls the LLM tool call until the 10s timeout fires.
         JsonNode idNode = frame.get("id");
