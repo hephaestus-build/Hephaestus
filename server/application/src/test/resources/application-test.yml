@@ -109,7 +109,8 @@ hephaestus:
             enabled: true
             default-server-url: https://gitlab.lrz.de
     webhook:
-        secret: test-webhook-shared-secret-not-real
+        # A GitLab signing token's whsec_ form, so signed GitLab webhooks verify end to end.
+        secret: whsec_dGVzdC1naXRsYWItc2lnbmluZy1rZXktbm90LXJlYWw=
         external-url: http://localhost:8080
     cors:
         allowed-origins:

@@ -413,7 +413,8 @@ echo "WEBHOOK_SECRET=$WEBHOOK_SECRET" >> docker/.env
 ```
 
 The value must match the secret configured on your GitHub and GitLab webhooks (validated via
-`X-Hub-Signature-256` for GitHub, `X-Gitlab-Token` for GitLab).
+`X-Hub-Signature-256` for GitHub; `X-Gitlab-Token`, or `webhook-signature` for a hook with a signing
+token, for GitLab — see [`WEBHOOK_SECRET`](../admin/production-setup#gitlab-rollout-bundle)).
 
 For Slack app setup, use the scope/event checklist in
 [`docs/admin/production-setup.mdx`](../admin/production-setup#slack-app-configuration) and the manifest template in

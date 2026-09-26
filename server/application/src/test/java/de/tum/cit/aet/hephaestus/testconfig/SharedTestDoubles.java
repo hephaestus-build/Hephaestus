@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.testconfig;
 
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.integration.core.webhook.JetStreamPublisher;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineContentClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineTokenClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookClient;
@@ -47,6 +48,12 @@ public class SharedTestDoubles {
     @Primary
     SlackOAuthClient slackOAuthClient() {
         return mock(SlackOAuthClient.class);
+    }
+
+    /** NATS is off in tests; this stands in for it so a verified webhook reaches the publish step. */
+    @Bean
+    JetStreamPublisher jetStreamPublisher() {
+        return mock(JetStreamPublisher.class);
     }
 
     @Bean
