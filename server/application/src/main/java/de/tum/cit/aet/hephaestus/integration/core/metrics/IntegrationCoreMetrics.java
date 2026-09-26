@@ -17,12 +17,14 @@ public final class IntegrationCoreMetrics {
     public static final String WEBHOOK_STREAM_BYTES = "webhook.stream.bytes";
     public static final String WEBHOOK_STREAM_BYTES_LIMIT = "webhook.stream.bytes.limit";
     public static final String WEBHOOK_STREAM_BYTES_UTILIZATION = "webhook.stream.bytes.utilization";
+    public static final String WEBHOOK_STREAM_CONSUMER_ACK_PENDING = "webhook.stream.consumer.ack.pending";
+    public static final String WEBHOOK_STREAM_CONSUMER_PENDING = "webhook.stream.consumer.pending";
     public static final String WEBHOOK_STREAM_CONSUMERS = "webhook.stream.consumers";
+    public static final String WEBHOOK_STREAM_CONSUMERS_WITHOUT_PULL_REQUESTS =
+            "webhook.stream.consumers.without.pull.requests";
     public static final String WEBHOOK_STREAM_MESSAGES = "webhook.stream.messages";
     public static final String WEBHOOK_STREAM_OLDEST_MESSAGE_AGE = "webhook.stream.oldest.message.age";
     public static final String WEBHOOK_STREAM_POLL_AGE = "webhook.stream.poll.age";
-    public static final String WEBHOOK_STREAM_UNACKNOWLEDGED_DELETIONS = "webhook.stream.unacknowledged.deletions";
-    public static final String WEBHOOK_STREAM_UNACKNOWLEDGED_GAP = "webhook.stream.unacknowledged.gap";
 
     public static final String REVIEW_OCCASIONS = "practice.review.occasions";
 

@@ -150,7 +150,8 @@ the receiver still has known failure windows that we are NOT solving here:
 > Superseded on two points by the 2026-08-22 update, §"`webhook` joins the readiness group" and
 > §"What is measured is loss, not proximity to it": the `webhook-server-down` alert below reads a
 > probe that did not contain the `webhook` indicator, and the instrument worth paging on is now
-> `webhook.stream.unacknowledged.deletions`. The `webhook.*` publish counters are unchanged.
+> `webhook.stream.unacknowledged.deletions` — itself withdrawn by the 2026-09-26 update. The
+> `webhook.*` publish counters are unchanged.
 
 The receiver exposes Micrometer instruments under the `webhook.*` namespace:
 
@@ -344,6 +345,9 @@ that conclusion is wrong and a supervisor is the next step.
 
 ### What is measured is loss, not proximity to it
 
+> Superseded by the 2026-09-26 update, §"The loss counter is withdrawn": on a shared stream it reported
+> caught-up filtered consumers as losing messages other subjects pushed out.
+
 `webhook.stream.bytes.utilization` is published and kept, but it is not the signal to alert on: at
 steady state it goes flat and stops carrying information, and a threshold warning fires once into a
 log. `webhook.stream.unacknowledged.deletions{stream}` compares the stream's first stored sequence
@@ -409,6 +413,25 @@ Any of these says one of the six decisions above was wrong:
 - **A second consumer family lands on these streams.** The loss accounting compares one ack floor per
   durable against one first sequence per stream; fan-out to consumers with different retention needs
   is a different model.
+
+## Update — 2026-09-26 (the loss counter is withdrawn)
+
+The loss counter above compared each durable's ack floor with the stream's first sequence. Both are
+positions in one sequence shared by every subject, and a durable filtered to one organisation's
+subjects advances only over messages it matches. On a GitHub stream held at its byte bound by a busier
+organisation, a quieter durable sits below the first sequence while caught up, so the counter reported
+the busier organisation's shed messages as its loss, at ERROR.
+
+Stream and consumer snapshots cannot replace it: they cannot say which shed messages matched which
+filter. The broker's consumer advisory for a deleted, delivered but unacknowledged message covers part
+of the gap and is not subscribed to. Counting subjects in the application was rejected as duplicating
+the broker's bookkeeping for a partial answer.
+
+What is published instead is current backlog: pending and unacknowledged counts summed over this
+deployment's durables, and the durables with no pull request waiting, beside the stream's utilization
+and oldest retained message. A sustained backlog on a stream at its bound is a risk to investigate,
+not a measured loss. The first and last revisit triggers above read the withdrawn counter and go with
+it; the roster and alerts are on the operations page below.
 
 ## Operator documentation
 
