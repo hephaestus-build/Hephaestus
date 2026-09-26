@@ -28,7 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
  *
  * <h2>Role resolution</h2>
  * {@code app_admin} when the account is {@link Account.AppRole#APP_ADMIN}, plus every enabled
- * {@code account_feature} flag (e.g. {@code run_practice_review}, {@code notification_access}). The
+ * {@code account_feature} flag (e.g. {@code notification_access}). The
  * instance-admin authority is namespaced {@code app_admin} (matching the {@code /.well-known}
  * discovery doc and {@code SecurityUtils.isSuperAdmin}) — deliberately distinct from the
  * per-workspace "admin" role, which is membership-derived and never appears in this token.

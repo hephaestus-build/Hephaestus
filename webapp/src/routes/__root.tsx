@@ -523,8 +523,7 @@ function AppSidebarContainer() {
 			isAdmin={workspaceAccess.isAdmin}
 			isOwner={workspaceAccess.role === "OWNER"}
 			isAppAdmin={isAppAdmin}
-			// `members/me` answers only for a member; a view cannot read it, but views only a member.
-			isMember={Boolean(userView) || workspaceAccess.role !== undefined}
+			isMember={workspaceAccess.role !== undefined}
 			readOnly={Boolean(userView)}
 			integrationKinds={integrationKinds}
 			context={sidebarContext}

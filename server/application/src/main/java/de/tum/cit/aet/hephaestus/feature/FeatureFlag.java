@@ -11,10 +11,7 @@ package de.tum.cit.aet.hephaestus.feature;
  * <ol>
  *   <li>Add the enum constant here with the correct kind and key</li>
  *   <li>Add a corresponding field to {@link FeatureFlagsDTO} and wire it in {@code from()}</li>
- *   <li>For {@code ROLE} flags: nothing in the product grants one. An {@code account_feature} row
- *       is written only by a database edit and follows the account into every workspace, so a
- *       feature a workspace offers its members belongs in {@code WorkspaceFeatures} instead, which
- *       workspace admins change through an audited request</li>
+ *   <li>Workspace-offered features belong in {@code WorkspaceFeatures}, not here</li>
  *   <li>For {@code CONFIG} flags: add the property under
  *       {@code hephaestus.features.flags.<key>} in {@code application.yml}</li>
  *   <li>Run {@code vp run generate:api:client} to update the TypeScript client</li>

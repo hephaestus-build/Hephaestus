@@ -13,19 +13,20 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRunner;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackOnboardingService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
-import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
@@ -57,8 +58,6 @@ class SlackMentorServiceTest extends BaseUnitTest {
     @Mock
     private MentorReadinessQuery mentorReadinessQuery;
 
-    private MemberAiPreferences.Decision aiDecision = new MemberAiPreferences.Decision(false, null);
-
     private SlackMentorService service() {
         when(mentorReadinessQuery.isEnabled(WORKSPACE)).thenReturn(true);
         return new SlackMentorService(
@@ -69,45 +68,22 @@ class SlackMentorServiceTest extends BaseUnitTest {
                 identityResolver,
                 new KeywordSlackMentorInputGuard(),
                 onboardingService,
-                mentorReadinessQuery,
-                (workspaceId, developerId) -> aiDecision);
+                mentorReadinessQuery);
     }
 
-    @Test
-    void shouldRefuseWithoutAThreadOrTurnWhenTheMemberChoseNoAi() {
+    @ParameterizedTest
+    @EnumSource(MentorRefusal.class)
+    void shouldReplyWithTheReasonAndStartNothingWhenAdmissionRefusesTheMember(MentorRefusal refusal) {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
         when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.of(314L));
-        aiDecision = new MemberAiPreferences.Decision(true, MemberAiChoice.NO_AI);
+        when(mentorTurnRunner.refusal(WORKSPACE, 314L)).thenReturn(Optional.of(refusal));
 
         service().handleDm(TEAM, CHANNEL, USER, "Can you review my work?", "100.1", "100.1");
 
-        verify(slackMessageService)
-                .sendForWorkspace(
-                        WORKSPACE,
-                        CHANNEL,
-                        "100.1",
-                        List.of(),
-                        "You chose No AI, so Heph doesn't answer you. To use Heph, change Your AI choice in Hephaestus.");
+        verify(slackMessageService).sendForWorkspace(WORKSPACE, CHANNEL, "100.1", List.of(), refusal.userMessage());
         verify(slackMessageService, never()).setStatus(anyLong(), anyString(), anyString(), anyString());
-        verifyNoInteractions(threadLinker, mentorTurnRunner);
-    }
-
-    @Test
-    void shouldAskForAChoiceWithoutAThreadOrTurnWhenTheWorkspaceRequiresOne() {
-        when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
-        when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.of(314L));
-        aiDecision = new MemberAiPreferences.Decision(true, null);
-
-        service().handleDm(TEAM, CHANNEL, USER, "Can you review my work?", "100.1", "100.1");
-
-        verify(slackMessageService)
-                .sendForWorkspace(
-                        WORKSPACE,
-                        CHANNEL,
-                        "100.1",
-                        List.of(),
-                        "Choose which AI may handle your work under Your AI choice in Hephaestus before using Heph.");
-        verifyNoInteractions(threadLinker, mentorTurnRunner);
+        verify(mentorTurnRunner, never()).run(any(), any(), anyLong());
+        verifyNoInteractions(threadLinker);
     }
 
     @Test

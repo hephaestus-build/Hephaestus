@@ -61,7 +61,7 @@ class JwtPrincipalFactoryRolesTest extends BaseUnitTest {
 
     @Test
     void grantedReservedFeatureFlagDoesNotEscalateToInstanceAdmin() {
-        // account_feature.flag is free-text; a /admin/users-granted row must NOT be able to inject the
+        // account_feature.flag is free-text; a row written by a database edit must NOT be able to inject the
         // instance-admin authority. Privilege separation: app_admin comes only from appRole==APP_ADMIN.
         when(featureRepository.findFlagsByAccountId(any()))
                 .thenReturn(List.of("app_admin", "admin", "notification_access"));

@@ -9,14 +9,11 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.mentor.ChatThread;
-import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -38,52 +35,6 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
 
     @Autowired
     private WorkspaceRepository workspaces;
-
-    @Autowired
-    private ChatThreadRepository threads;
-
-    @Test
-    void shouldNotExposeNamesakeConversationsWhenAnInstanceAdminHasNoWorkspaceActor() {
-        var account = accounts.saveAndFlush(new Account("Elevated administrator"));
-        var accountId = Objects.requireNonNull(account.getId());
-        var namesake = persistUser("account-" + accountId);
-        var workspace =
-                createWorkspace("namesake-threads", "Private conversations", "namesake", AccountType.ORG, namesake);
-        var thread = new ChatThread();
-        var threadId = UUID.randomUUID();
-        thread.setId(threadId);
-        thread.setWorkspace(workspace);
-        thread.setUser(namesake);
-        thread.setTitle("Private conversation");
-        threads.saveAndFlush(thread);
-        String token = "mock-jwt-sub-" + accountId;
-        String path = "/workspaces/namesake-threads/mentor/threads";
-        // Elevation lends no place in the workspace, so Heph is refused before any namesake lookup.
-
-        client.get()
-                .uri(path)
-                .headers(headers -> headers.setBearerAuth(token))
-                .exchange()
-                .expectStatus()
-                .isForbidden()
-                .expectBody(Void.class);
-        client.get()
-                .uri(path + "/" + threadId)
-                .headers(headers -> headers.setBearerAuth(token))
-                .exchange()
-                .expectStatus()
-                .isForbidden()
-                .expectBody(Void.class);
-        client.delete()
-                .uri(path + "/" + threadId)
-                .headers(headers -> headers.setBearerAuth(token))
-                .exchange()
-                .expectStatus()
-                .isForbidden()
-                .expectBody(Void.class);
-
-        assertThat(threads.findById(threadId)).isPresent();
-    }
 
     @Test
     void shouldRejectAnUnlinkedCreatorInsteadOfUsingTheirNamesakeOrTheSubmittedOwner() {

@@ -187,8 +187,6 @@ class MentorAccessIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .jsonPath("$.aiChoice")
                 .isEqualTo("NO_AI");
 
-        // No AI is enforced where a model would be chosen (MemberAiRoutingAdapter), not by locking
-        // the member out of what they already have.
         threads(MEMBER, workspace).expectStatus().isOk().expectBody(Void.class);
     }
 }

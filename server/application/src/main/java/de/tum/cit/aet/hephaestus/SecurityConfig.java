@@ -94,7 +94,7 @@ public class SecurityConfig {
     AuthoritiesConverter rolesAuthoritiesConverter() {
         return claims -> {
             // Flat `roles` claim on the Hephaestus-issued JWT (ADR 0017). The role strings
-            // ("app_admin", "run_practice_review", …) map 1:1 to granted authorities consumed by @PreAuthorize.
+            // ("app_admin", "notification_access", …) map 1:1 to granted authorities consumed by @PreAuthorize.
             final var roles = Optional.ofNullable((List<String>) claims.get("roles"));
             Stream<GrantedAuthority> granted = roles.map(List::stream)
                     .orElse(Stream.empty())
@@ -306,10 +306,8 @@ public class SecurityConfig {
             requests.requestMatchers(HttpMethod.GET, "/.well-known/**").permitAll();
             // Public workspace provider discovery (workspace creation UI)
             requests.requestMatchers(HttpMethod.GET, "/workspaces/providers").permitAll();
-            // Heph is never public, even in a publicly viewable workspace, so this MUST be matched BEFORE
-            // the generic `/workspaces/*/**` permitAll below. Who may use it is workspace-scoped and decided
-            // past this chain — membership on every mentor controller, the workspace's mentor switch for a
-            // new turn, the member's AI choice at admission — the same rule as a Slack direct message.
+            // Heph is never public, even in a publicly viewable workspace, so this MUST precede the generic
+            // `/workspaces/*/**` permitAll below; the controllers decide who may use it.
             requests.requestMatchers("/workspaces/*/mentor/**").authenticated();
             // Public read for slugged workspace paths (filter enforces membership/public visibility).
             requests.requestMatchers(HttpMethod.GET, "/workspaces/*/**").permitAll();

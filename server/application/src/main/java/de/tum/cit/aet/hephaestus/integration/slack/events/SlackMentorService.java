@@ -1,14 +1,13 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRunner;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackStreamingMentorChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackOnboardingService;
-import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
-import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
@@ -33,7 +32,6 @@ public class SlackMentorService {
     private final SlackMentorInputGuard inputGuard;
     private final SlackOnboardingService onboardingService;
     private final MentorReadinessQuery mentorReadinessQuery;
-    private final MemberAiPreferences memberAiPreferences;
 
     public SlackMentorService(
             SlackWorkspaceResolver workspaceResolver,
@@ -43,8 +41,7 @@ public class SlackMentorService {
             SlackMentorIdentityResolver identityResolver,
             SlackMentorInputGuard inputGuard,
             SlackOnboardingService onboardingService,
-            MentorReadinessQuery mentorReadinessQuery,
-            MemberAiPreferences memberAiPreferences) {
+            MentorReadinessQuery mentorReadinessQuery) {
         this.workspaceResolver = workspaceResolver;
         this.threadLinker = threadLinker;
         this.mentorTurnRunner = mentorTurnRunner;
@@ -53,7 +50,6 @@ public class SlackMentorService {
         this.inputGuard = inputGuard;
         this.onboardingService = onboardingService;
         this.mentorReadinessQuery = mentorReadinessQuery;
-        this.memberAiPreferences = memberAiPreferences;
     }
 
     public void handleDm(
@@ -91,16 +87,10 @@ public class SlackMentorService {
             return;
         }
         long developerId = devOpt.get();
-        MemberAiPreferences.Decision decision = memberAiPreferences.forDeveloper(workspaceId, developerId);
-        if (!decision.permitsAi()) {
+        Optional<MentorRefusal> refusal = mentorTurnRunner.refusal(workspaceId, developerId);
+        if (refusal.isPresent()) {
             slackMessageService.sendForWorkspace(
-                    workspaceId,
-                    channelId,
-                    threadTs,
-                    List.of(),
-                    decision.choice() == MemberAiChoice.NO_AI
-                            ? "You chose No AI, so Heph doesn't answer you. To use Heph, change Your AI choice in Hephaestus."
-                            : "Choose which AI may handle your work under Your AI choice in Hephaestus before using Heph.");
+                    workspaceId, channelId, threadTs, List.of(), refusal.get().userMessage());
             return;
         }
         // Link the thread transactionally before starting remote Slack I/O.
