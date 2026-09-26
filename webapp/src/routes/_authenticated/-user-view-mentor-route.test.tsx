@@ -5,6 +5,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 
 import { getThreadOptions } from "@/api/@tanstack/react-query.gen";
 import { client } from "@/api/client.gen";
+import type { ChatThreadDetail } from "@/api/types.gen";
+import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { applyUserViewHeaders, clearUserView } from "@/runtime/user-view/session";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
@@ -62,14 +64,17 @@ it("opens a saved conversation read-only", async () => {
 		http.get("*/workspaces/:workspaceSlug/mentor/threads/:threadId", () =>
 			HttpResponse.json({
 				id: threadId,
+				createdAt: "2026-09-24T09:15:00Z",
 				messages: [
 					{
 						id: "ea28a7c9-b17f-49be-ae98-a083fa99b2b2",
 						role: "assistant",
 						parts: [{ type: "text", text: "Earlier guidance remains readable." }],
+						metadata: { status: "completed" },
+						createdAt: "2026-09-24T09:15:04.512Z",
 					},
 				],
-			}),
+			} satisfies Wire<ChatThreadDetail>),
 		),
 	);
 

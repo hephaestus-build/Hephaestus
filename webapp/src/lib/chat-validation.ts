@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import type { ChatMessage as ThreadMessage } from "@/api/types.gen";
 import type { ChatMessage } from "@/lib/types";
 
 /**
@@ -19,7 +20,7 @@ const chatMessageSchema = z.looseObject({
 	id: z.uuid(),
 	role: z.enum(["system", "user", "assistant"]),
 	parts: z.array(messagePartSchema),
-	createdAt: z.iso.datetime().optional(),
+	createdAt: z.date().optional() satisfies z.ZodType<ThreadMessage["createdAt"]>,
 });
 
 const chatMessagesArraySchema = z.array(chatMessageSchema);
