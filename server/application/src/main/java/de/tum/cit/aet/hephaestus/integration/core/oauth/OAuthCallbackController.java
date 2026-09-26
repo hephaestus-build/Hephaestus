@@ -199,6 +199,9 @@ public class OAuthCallbackController {
             boolean wantsJson) {
         try {
             callbackService.completeConnection(connection, completed, binding.actorRef());
+        } catch (OAuthCallbackService.SlackTeamConnectedElsewhereException e) {
+            return failure(
+                    kind.name(), "slack_team_connected_elsewhere", e.getMessage(), HttpStatus.CONFLICT, wantsJson);
         } catch (IllegalStateException e) {
             log.warn(
                     "OAuth complete rejected by transition guard for connection={}: {}",

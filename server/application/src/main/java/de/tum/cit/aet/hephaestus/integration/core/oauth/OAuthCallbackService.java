@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.integration.core.oauth;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
+import de.tum.cit.aet.hephaestus.core.exception.DataIntegrityViolationConstraints;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -15,14 +17,18 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Application-layer facade for the OAuth callback flow. Owns all repository access so
@@ -45,20 +51,28 @@ public class OAuthCallbackService {
     /** Marker used in audit rows when the state token didn't carry an actorRef. */
     static final String ACTOR_FALLBACK = "oauth-callback";
 
+    private static final String ONE_ACTIVE_SLACK_CONNECTION_PER_TEAM = "uq_connection_one_active_slack_per_team";
+
     private final ConnectionRepository connectionRepository;
     private final ConnectionService connectionService;
     private final WorkspaceRepository workspaceRepository;
     private final CredentialBundleConverter credentialBundleConverter;
+    private final AccountWorkspaceMembershipQuery membershipQuery;
+    private final TransactionTemplate transactionTemplate;
 
     public OAuthCallbackService(
             ConnectionRepository connectionRepository,
             ConnectionService connectionService,
             WorkspaceRepository workspaceRepository,
-            CredentialBundleConverter credentialBundleConverter) {
+            CredentialBundleConverter credentialBundleConverter,
+            AccountWorkspaceMembershipQuery membershipQuery,
+            PlatformTransactionManager transactionManager) {
         this.connectionRepository = connectionRepository;
         this.connectionService = connectionService;
         this.workspaceRepository = workspaceRepository;
         this.credentialBundleConverter = credentialBundleConverter;
+        this.membershipQuery = membershipQuery;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     /**
@@ -91,14 +105,31 @@ public class OAuthCallbackService {
      * credential placeholder, and transition PENDING (or ACTIVE on reconnect) → ACTIVE
      * with an audit row attributed to {@code actorRef}.
      *
-     * <p>Throws {@link IllegalStateException} if the transition guard rejects the move
-     * (e.g. the Connection was UNINSTALLED between create and finalize). The controller
-     * translates that into HTTP 409.
+     * <p>Throws {@link SlackTeamConnectedElsewhereException} if another workspace holds the Slack
+     * team, and {@link IllegalStateException} if the transition guard rejects the move (e.g. the
+     * Connection was UNINSTALLED between create and finalize). The controller translates both into
+     * HTTP 409.
      */
-    @Transactional
     public Connection completeConnection(
             Connection pending, ConnectFinalization.Completed completed, @Nullable String actorRef) {
-        Connection connection = resolveSlackCompletionTarget(pending, completed);
+        try {
+            return Objects.requireNonNull(
+                    transactionTemplate.execute(status -> complete(pending, completed, actorRef)));
+        } catch (DataIntegrityViolationException e) {
+            String teamId = completed.instanceKey();
+            if (teamId == null || !DataIntegrityViolationConstraints.hasName(e, ONE_ACTIVE_SLACK_CONNECTION_PER_TEAM)) {
+                throw e;
+            }
+            // A concurrent install of the same team committed after this one's ownership check passed.
+            String conflict = connectedElsewhere(pending.getWorkspace().getId(), teamId, actorRef)
+                    .orElseThrow(() -> e);
+            throw new SlackTeamConnectedElsewhereException(conflict, e);
+        }
+    }
+
+    private Connection complete(
+            Connection pending, ConnectFinalization.Completed completed, @Nullable String actorRef) {
+        Connection connection = resolveSlackCompletionTarget(pending, completed, actorRef);
         deleteSupersededPending(pending, connection);
         applyVendorMetadata(connection, completed);
         connection.setCredentials(completed.credentials(), credentialBundleConverter);
@@ -125,7 +156,8 @@ public class OAuthCallbackService {
         return connection;
     }
 
-    private Connection resolveSlackCompletionTarget(Connection connection, ConnectFinalization.Completed completed) {
+    private Connection resolveSlackCompletionTarget(
+            Connection connection, ConnectFinalization.Completed completed, @Nullable String actorRef) {
         if (connection.getKind() != IntegrationKind.SLACK) {
             return connection;
         }
@@ -133,24 +165,53 @@ public class OAuthCallbackService {
         if (instanceKey == null || instanceKey.isBlank()) {
             return connection;
         }
-        Optional<Connection> active = connectionRepository.findFirstByKindAndInstanceKeyAndState(
-                IntegrationKind.SLACK, instanceKey, IntegrationState.ACTIVE);
-        if (active.isEmpty() || Objects.equals(active.get().getId(), connection.getId())) {
-            return connectionRepository
-                    .findByWorkspaceIdAndKindAndInstanceKey(
-                            connection.getWorkspace().getId(), IntegrationKind.SLACK, instanceKey)
-                    .filter(existing -> !Objects.equals(existing.getId(), connection.getId()))
-                    .orElse(connection);
+        long workspaceId = connection.getWorkspace().getId();
+        Optional<String> conflict = connectedElsewhere(workspaceId, instanceKey, actorRef);
+        if (conflict.isPresent()) {
+            throw new SlackTeamConnectedElsewhereException(conflict.get(), null);
         }
-        Connection existing = active.get();
-        if (Objects.equals(
-                existing.getWorkspace().getId(), connection.getWorkspace().getId())) {
-            return existing;
+        return connectionRepository
+                .findByWorkspaceIdAndKindAndInstanceKey(workspaceId, IntegrationKind.SLACK, instanceKey)
+                .filter(existing -> !Objects.equals(existing.getId(), connection.getId()))
+                .orElse(connection);
+    }
+
+    /**
+     * Why Slack team {@code teamId} cannot be connected to {@code workspaceId}, if another workspace
+     * holds it ACTIVE. The holder is named only to an administrator of it; the log names it for the operator.
+     */
+    private Optional<String> connectedElsewhere(long workspaceId, String teamId, @Nullable String actorRef) {
+        return connectionRepository
+                .findAllByKindAndInstanceKeyInAndState(IntegrationKind.SLACK, List.of(teamId), IntegrationState.ACTIVE)
+                .stream()
+                .map(Connection::getWorkspace)
+                .filter(owner -> owner.getId() != workspaceId)
+                .findFirst()
+                .map(owner -> {
+                    log.warn(
+                            "Rejected Slack install: team={} is ACTIVE in workspace={}, target workspace={}",
+                            sanitizeForLog(teamId),
+                            owner.getId(),
+                            workspaceId);
+                    return administers(owner.getId(), actorRef)
+                            ? "This Slack workspace is already connected to the Hephaestus workspace \""
+                                    + owner.getDisplayName() + "\" (" + owner.getWorkspaceSlug()
+                                    + "). Disconnect Slack there before connecting it here."
+                            : "This Slack workspace is already connected to another Hephaestus workspace."
+                                    + " An administrator of that workspace must disconnect Slack there first.";
+                });
+    }
+
+    /** The OAuth state's {@code actorRef} is the initiating account id; anything else is not an administrator. */
+    private boolean administers(long workspaceId, @Nullable String actorRef) {
+        if (actorRef == null) {
+            return false;
         }
-        throw new IllegalStateException("Slack team is already connected to workspace "
-                + existing.getWorkspace().getId()
-                + "; disconnect it before connecting it to workspace "
-                + connection.getWorkspace().getId());
+        try {
+            return membershipQuery.isAdministrator(workspaceId, Long.parseLong(actorRef));
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     private void deleteSupersededPending(Connection original, Connection target) {
@@ -195,6 +256,16 @@ public class OAuthCallbackService {
         // findOrCreatePendingConnection in place.
         if (completed.config() != null) {
             connection.setConfig(completed.config());
+        }
+    }
+
+    /** A Slack team can be ACTIVE in only one workspace; the message is safe to show the caller. */
+    static final class SlackTeamConnectedElsewhereException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        SlackTeamConnectedElsewhereException(String message, @Nullable Throwable cause) {
+            super(message, cause);
         }
     }
 }
