@@ -226,8 +226,8 @@ GitLab login, GitLab workspaces, webhook auto-registration, and practice review 
 | `GITLAB_OAUTH_CLIENT_SECRET` | GitLab OAuth application client secret |
 | `GITLAB_OAUTH_BASE_URL` | GitLab instance the login button federates to. Defaults to `https://gitlab.com`; set to your self-hosted instance (e.g. `https://gitlab.lrz.de`) |
 | `GITLAB_OAUTH_DISPLAY_NAME` | Login-button label (defaults to `GitLab`; e.g. `gitlab.lrz.de`) |
-| `GITLAB_DEFAULT_SERVER_URL` | Default GitLab instance for workspace creation / SCM sync (not auth). Falls back to `GITLAB_OAUTH_BASE_URL` |
-| `GITLAB_ENABLED` | Enables server-side GitLab beans in the application server |
+| `GITLAB_DEFAULT_SERVER_URL` | GitLab instance for workspace creation, sync and merge request checkouts (not login) when a workspace's GitLab connection names none. Falls back to `GITLAB_OAUTH_BASE_URL`. Give the application server and every worker the same value |
+| `GITLAB_ENABLED` | Enables GitLab on the application server and every worker; the webhook receiver does not read it. A worker without it cannot check out a merge request: each GitLab review it claims fails preparation with `SCM Git preparation is unavailable` and ends with insufficient evidence |
 | `GITLAB_WORKSPACE_CREATION` | Enables GitLab workspace creation in the UI and API |
 | `WEBHOOK_SECRET` | Shared secret used for GitLab webhook verification and auto-registration. One instance-wide value: GitHub webhooks are verified against the same secret |
 | `WEBHOOK_EXTERNAL_URL` | Public webhook base URL registered on GitLab. The reference Compose files deliberately leave it unset so auto-registration derives it from the application host URL; add it to the `application-server` service's `environment:` block if you need to override that. |
