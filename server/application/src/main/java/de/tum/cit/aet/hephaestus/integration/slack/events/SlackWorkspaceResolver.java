@@ -1,6 +1,11 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
+import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
+
+import java.util.List;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -18,17 +23,29 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
 public class SlackWorkspaceResolver {
 
+    private static final Logger log = LoggerFactory.getLogger(SlackWorkspaceResolver.class);
+
     private final JdbcTemplate jdbc;
 
     public SlackWorkspaceResolver(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
-    /** The workspace id of the ACTIVE Slack connection for {@code teamId}, if any. */
+    /**
+     * The workspace id of the ACTIVE Slack connection for {@code teamId}, if exactly one exists. More than one
+     * means the one-active-per-team index was bypassed; picking either would route events to an arbitrary tenant.
+     */
     public Optional<Long> resolveWorkspaceId(String teamId) {
-        return jdbc.query(
-                "SELECT workspace_id FROM connection WHERE kind = 'SLACK' AND instance_key = ? AND state = 'ACTIVE' LIMIT 1",
-                rs -> rs.next() ? Optional.of(rs.getLong(1)) : Optional.<Long>empty(),
+        List<Long> workspaceIds = jdbc.query(
+                "SELECT workspace_id FROM connection WHERE kind = 'SLACK' AND instance_key = ? AND state = 'ACTIVE' LIMIT 2",
+                (rs, row) -> rs.getLong(1),
                 teamId);
+        if (workspaceIds.size() > 1) {
+            log.error(
+                    "Slack team={} has more than one ACTIVE connection; refusing to resolve a workspace",
+                    sanitizeForLog(teamId));
+            return Optional.empty();
+        }
+        return workspaceIds.stream().findFirst();
     }
 }

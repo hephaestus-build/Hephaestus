@@ -7,6 +7,7 @@ buildscript {
         resolutionStrategy {
             force("com.graphql-java:graphql-java:20.9")
             force("com.github.jknack:handlebars:4.5.2")
+            force("org.freemarker:freemarker:2.3.35")
         }
         // 4.5.2 offers a Nashorn-backed helper and the ASM tree it needs. The generation configured
         // here renders Mustache and FreeMarker templates, registers no JavaScript helper and

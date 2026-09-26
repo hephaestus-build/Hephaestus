@@ -336,8 +336,8 @@ across sources rather than treating every reported version as selected. Exit 1 m
 were reported; an extraction or network error is not a clean assessment. The advisories investigated
 in [#2078](https://github.com/hephaestus-build/Hephaestus/issues/2078) all came from verification
 metadata, not either resolved lockfile. The script classpath is separate: those lockfiles do not
-cover the GraphQL and OpenAPI build plugins. `server/build.gradle.kts` forces their GraphQL Java and
-Handlebars dependencies to patched versions; check `./server/gradlew -p server buildEnvironment`
+cover the GraphQL and OpenAPI build plugins. `server/build.gradle.kts` forces their vulnerable
+transitive dependencies to patched versions; check `./server/gradlew -p server buildEnvironment`
 when diagnosing those packages rather than inferring their absence from an application lockfile.
 Re-run the checks when the action or dependencies change; the recorded observation is not an
 exemption for a new advisory against a resolved package.
