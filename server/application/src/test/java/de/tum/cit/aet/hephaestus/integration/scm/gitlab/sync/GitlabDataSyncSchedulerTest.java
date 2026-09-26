@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncService
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.label.GitLabLabelSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.subissue.GitLabSubIssueSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.List;
@@ -89,6 +90,9 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
     private GitLabDeletionSweepService deletionSweepService;
 
     @Mock
+    private GitLabWorkspaceInitializationService initializationService;
+
+    @Mock
     private SyncJobHandle syncJobHandle;
 
     private GitlabDataSyncScheduler scheduler;
@@ -121,7 +125,8 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
                 synchronousExecutor,
                 connectionRepository,
                 syncJobService,
-                deletionSweepService);
+                deletionSweepService,
+                initializationService);
 
         // syncScope's first real step: no GitLabSyncServiceHolder available -> it logs and returns
         // immediately. This isolates the job-recording wrapper from the sync pipeline itself.

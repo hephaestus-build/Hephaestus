@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -34,17 +35,19 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.beans.factory.ObjectProvider;
@@ -125,14 +128,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                 new SyncSchedulerProperties.DiscussionsProperties(false),
                 new SyncSchedulerProperties.ProjectsProperties(false));
 
-        lenient()
-                .doAnswer(invocation -> {
-                    Consumer<IntegrationNatsConsumer> consumer = invocation.getArgument(0);
-                    consumer.accept(natsConsumerService);
-                    return null;
-                })
-                .when(natsConsumerServiceProvider)
-                .ifAvailable(any());
+        lenient().when(natsConsumerServiceProvider.getIfAvailable()).thenReturn(natsConsumerService);
         lenient().when(dataSyncTriggerProvider.getObject()).thenReturn(dataSyncTrigger);
 
         initService = new GitLabWorkspaceInitializationService(
@@ -287,18 +283,29 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         }
     }
 
+    /** Stubs the group project discovery to return {@code result}. */
+    private void stubDiscovery(GitLabSyncResult result) {
+        when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
+        when(gitLabSyncServiceHolder.getGroupSyncService()).thenReturn(gitLabGroupSyncService);
+        when(gitLabGroupSyncService.syncGroupProjects(eq(1L), eq("my-group/subgroup"), any()))
+                .thenReturn(result);
+    }
+
     @Nested
     class InitializeWebhook {
 
+        @BeforeEach
+        void provideWebhookService() {
+            when(gitLabWebhookServiceProvider.getIfAvailable()).thenReturn(gitLabWebhookService);
+        }
+
         @Test
         void shouldContinueWhenTokenRotationFails() {
-            when(gitLabWebhookServiceProvider.getIfAvailable()).thenReturn(gitLabWebhookService);
             doThrow(new RuntimeException("rotation failed"))
                     .when(gitLabWebhookService)
                     .rotateTokenIfNeeded(workspace);
-            // Webhook registration should still be attempted after rotation failure
             when(gitLabWebhookService.registerWebhook(workspace)).thenReturn(WebhookSetupResult.success(99L, 42L));
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(null);
+            stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
 
             initService.initialize(workspace);
 
@@ -307,17 +314,147 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
         @Test
         void shouldContinueWhenWebhookRegistrationFails() {
-            when(gitLabWebhookServiceProvider.getIfAvailable()).thenReturn(gitLabWebhookService);
             when(gitLabWebhookService.registerWebhook(workspace)).thenThrow(new RuntimeException("webhook failed"));
-            // Discovery should still be attempted
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getGroupSyncService()).thenReturn(gitLabGroupSyncService);
-            when(gitLabGroupSyncService.syncGroupProjects(eq(1L), eq("my-group/subgroup"), any()))
-                    .thenReturn(GitLabSyncResult.completed(Collections.emptyList(), 1, 0, 0));
+            stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
+
+            assertThatCode(() -> initService.initialize(workspace)).doesNotThrowAnyException();
+        }
+
+        @Test
+        void shouldRegisterWebhookWhenDiscoveryVerifiesAnEmptyGroup() throws Exception {
+            when(gitLabWebhookService.registerWebhook(workspace)).thenReturn(WebhookSetupResult.success(99L, 42L));
+            stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
 
             initService.initialize(workspace);
 
-            verify(gitLabGroupSyncService).syncGroupProjects(eq(1L), eq("my-group/subgroup"), any());
+            verify(natsConsumerService).establishScopeConsumer(1L, "gitlab");
+            verify(gitLabWebhookService).registerWebhook(workspace);
+        }
+
+        @ParameterizedTest
+        @EnumSource(
+                value = GitLabSyncResult.Status.class,
+                names = {"COMPLETED_WITH_ERRORS", "ABORTED_RATE_LIMIT", "ABORTED_ERROR"})
+        void shouldRouteFoundRepositoriesButKeepWebhookClosedWhenDiscoveryIsIncomplete(GitLabSyncResult.Status status)
+                throws Exception {
+            stubDiscovery(new GitLabSyncResult(status, List.of(createRepo("my-group/project-a")), 1, 1, 0, 0));
+
+            initService.initialize(workspace);
+
+            ArgumentCaptor<RepositoryToMonitor> monitor = ArgumentCaptor.forClass(RepositoryToMonitor.class);
+            verify(repositoryToMonitorRepository).save(monitor.capture());
+            assertThat(monitor.getValue().getNameWithOwner()).isEqualTo("my-group/project-a");
+            verify(natsConsumerService).establishScopeConsumer(1L, "gitlab");
+            verify(gitLabWebhookService, never()).registerWebhook(any());
+        }
+
+        @Test
+        void shouldKeepWebhookClosedWhenDiscoveryFails() {
+            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
+            when(gitLabSyncServiceHolder.getGroupSyncService()).thenReturn(gitLabGroupSyncService);
+            when(gitLabGroupSyncService.syncGroupProjects(anyLong(), any(), any()))
+                    .thenThrow(new RuntimeException("GraphQL timeout"));
+
+            initService.initialize(workspace);
+
+            verify(gitLabWebhookService, never()).registerWebhook(any());
+        }
+
+        @Test
+        void shouldKeepWebhookClosedWhenScopeConsumerCannotBeConfirmed() throws Exception {
+            stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
+            doThrow(new IOException("stream gitlab not found"))
+                    .when(natsConsumerService)
+                    .establishScopeConsumer(1L, "gitlab");
+
+            initService.initialize(workspace);
+
+            verify(gitLabWebhookService, never()).registerWebhook(any());
+        }
+
+        @Test
+        void shouldKeepWebhookClosedWhenThisRuntimeHasNoScopeConsumer() {
+            stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
+            when(natsConsumerServiceProvider.getIfAvailable()).thenReturn(null);
+
+            initService.initialize(workspace);
+
+            verify(gitLabWebhookService, never()).registerWebhook(any());
+        }
+
+        @Test
+        void shouldKeepWebhookClosedWhenNatsIsDisabled() {
+            stubDiscovery(GitLabSyncResult.completed(List.of(createRepo("my-group/project-a")), 1, 0, 0));
+
+            createServiceWithNatsDisabled().initialize(workspace);
+
+            verify(repositoryToMonitorRepository).save(any());
+            verify(gitLabWebhookService, never()).registerWebhook(any());
+            verifyNoInteractions(natsConsumerService);
+        }
+    }
+
+    @Nested
+    class InitializeIfWebhookMissing {
+
+        @BeforeEach
+        void provideWebhookService() {
+            when(gitLabWebhookServiceProvider.getIfAvailable()).thenReturn(gitLabWebhookService);
+        }
+
+        @Test
+        void shouldRegisterWebhookThatInitializationLeftClosed() {
+            when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(true);
+            when(gitLabWebhookService.registerWebhook(workspace)).thenReturn(WebhookSetupResult.success(99L, 42L));
+            when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
+            stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
+
+            initService.initializeIfWebhookMissing(1L);
+
+            verify(gitLabWebhookService).registerWebhook(workspace);
+        }
+
+        @Test
+        void shouldLeaveRegisteredWebhookAlone() {
+            when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(true);
+            when(connectionService.findActiveGitLabConfig(1L))
+                    .thenReturn(Optional.of(new ConnectionConfig.GitLabConfig(
+                            "https://gitlab.com",
+                            42L,
+                            99L,
+                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
+                            Set.of())));
+
+            assertThat(initService.initializeIfWebhookMissing(1L)).isFalse();
+            verifyNoInteractions(gitLabSyncServiceHolderProvider);
+        }
+
+        @Test
+        void shouldReportWebhookStillMissingWhenDiscoveryIsIncomplete() {
+            when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(true);
+            when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
+            stubDiscovery(GitLabSyncResult.aborted(GitLabSyncResult.Status.ABORTED_RATE_LIMIT, List.of(), 1, 0));
+
+            assertThat(initService.initializeIfWebhookMissing(1L)).isTrue();
+            verify(gitLabWebhookService, never()).registerWebhook(any());
+        }
+
+        @Test
+        void shouldNotReportWebhookMissingWhenNatsIsDisabled() {
+            // Registration is otherwise enabled; without NATS it must not even be consulted.
+            lenient().when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(true);
+
+            assertThat(createServiceWithNatsDisabled().initializeIfWebhookMissing(1L))
+                    .isFalse();
+            verifyNoInteractions(gitLabSyncServiceHolderProvider);
+        }
+
+        @Test
+        void shouldSkipWhenWebhookRegistrationIsDisabled() {
+            when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(false);
+
+            assertThat(initService.initializeIfWebhookMissing(1L)).isFalse();
+            verifyNoInteractions(gitLabSyncServiceHolderProvider);
         }
     }
 
@@ -325,7 +462,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
     class InitializeDiscovery {
 
         @Test
-        void shouldDiscoverAndCreateMonitors() {
+        void shouldDiscoverAndCreateMonitors() throws Exception {
             List<Repository> repos = List.of(createRepo("my-group/project-a"), createRepo("my-group/project-b"));
             GitLabSyncResult syncResult = GitLabSyncResult.completed(repos, 1, 0, 0);
 
@@ -360,7 +497,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             captor.getAllValues()
                     .forEach(monitor -> assertThat(monitor.getWorkspace()).isSameAs(workspace));
 
-            verify(natsConsumerService).updateScopeConsumer(1L);
+            verify(natsConsumerService).establishScopeConsumer(1L, "gitlab");
         }
 
         @Test
@@ -377,7 +514,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
             verify(repositoryToMonitorRepository, never()).save(any());
             verify(organizationRepository, never()).findByLoginIgnoreCaseAndProvider_Type(any(), any());
-            verifyNoInteractions(natsConsumerService);
         }
 
         @Test
@@ -438,20 +574,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
             verify(organizationRepository, never()).findByLoginIgnoreCaseAndProvider_Type(any(), any());
         }
-
-        @Test
-        void shouldNotUpdateNatsWhenNoNewMonitors() {
-            stubMinimalDiscovery(List.of(createRepo("my-group/project-a")));
-
-            // All monitors already exist
-            RepositoryToMonitor existing = new RepositoryToMonitor();
-            existing.setNameWithOwner("my-group/project-a");
-            when(repositoryToMonitorRepository.findByWorkspaceId(1L)).thenReturn(List.of(existing));
-
-            initService.initialize(workspace);
-
-            verify(natsConsumerService, never()).updateScopeConsumer(anyLong());
-        }
     }
 
     @Nested
@@ -465,30 +587,13 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldStartNatsConsumerAfterInit() {
+        void shouldRunSync() {
             executeSubmittedTasksSynchronously();
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
 
             initService.initializeAsync(1L);
 
             verify(dataSyncTrigger).syncAllRepositories(1L);
-            verify(natsConsumerService).startConsumingScope(1L);
-        }
-
-        @Test
-        void shouldNotStartNatsWhenDisabled() {
-            var disabledService = createServiceWithNatsDisabled();
-
-            when(monitoringExecutor.submit(any(Runnable.class))).thenAnswer(invocation -> {
-                Runnable task = invocation.getArgument(0);
-                task.run();
-                return null;
-            });
-            when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
-
-            disabledService.initializeAsync(1L);
-
-            verifyNoInteractions(natsConsumerService);
         }
 
         @Test
@@ -498,7 +603,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
             initService.initializeAsync(99L);
 
-            verifyNoInteractions(natsConsumerService);
+            verifyNoInteractions(dataSyncTrigger);
         }
     }
 

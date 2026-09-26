@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
@@ -17,14 +18,22 @@ import io.nats.client.MessageHandler;
 import io.nats.client.StreamContext;
 import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.ConsumerInfo;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for {@link ScopeConsumer}: lifecycle (start / stop / updateSubjects),
@@ -106,6 +115,40 @@ class ScopeConsumerTest {
             assertThat(consumer.isRunning()).isTrue();
             consumer.stop();
             assertThat(consumer.isRunning()).isFalse();
+        }
+
+        @Test
+        void failedFirstAttachStopsDispatchSoStartCanBeRetried() throws Exception {
+            ConsumerContext ctx = mock(ConsumerContext.class);
+            MessageConsumer subscription = mock(MessageConsumer.class);
+            List<Message> handled = new CopyOnWriteArrayList<>();
+            ScopeConsumer consumer = new ScopeConsumer(
+                    SCOPE_ID, CONSUMER_NAME, STREAM, ctx, mock(StreamContext.class), SUBJECTS, handled::add);
+            AtomicReference<@Nullable Thread> dispatch = new AtomicReference<>();
+            when(ctx.consume(any(MessageHandler.class)))
+                    .thenAnswer(invocation -> {
+                        dispatch.set((Thread) ReflectionTestUtils.getField(consumer, "processorThread"));
+                        throw new IOException("first attach failed");
+                    })
+                    .thenReturn(subscription);
+
+            assertThatThrownBy(consumer::start).hasMessage("first attach failed");
+
+            assertThat(Objects.requireNonNull(dispatch.get()).isAlive()).isFalse();
+            assertThat(consumer.isRunning()).isFalse();
+
+            try {
+                consumer.start();
+                assertThat(consumer.isAttached()).isTrue();
+                ArgumentCaptor<MessageHandler> attached = ArgumentCaptor.forClass(MessageHandler.class);
+                verify(ctx, times(2)).consume(attached.capture());
+                Message message = mock(Message.class);
+                attached.getValue().onMessage(message);
+                await().atMost(Duration.ofSeconds(5))
+                        .untilAsserted(() -> assertThat(handled).containsExactly(message));
+            } finally {
+                consumer.stop();
+            }
         }
 
         @Test

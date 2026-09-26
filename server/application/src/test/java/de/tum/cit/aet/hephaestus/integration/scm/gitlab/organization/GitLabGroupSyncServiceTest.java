@@ -228,7 +228,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
         @Test
         void emptyGroup_returnsCompleted() {
-            ClientGraphQlResponse projectsResp = mockProjectsPageWithGroup(List.of(), null);
+            ClientGraphQlResponse projectsResp = mockProjectsPageWithGroup(List.of(), LAST_PAGE);
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, projectsResp);
@@ -246,7 +246,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             var proj1 = createMinimalProject("gid://gitlab/Project/10", "my-org/proj-a", "proj-a");
             var proj2 = createMinimalProject("gid://gitlab/Project/20", "my-org/proj-b", "proj-b");
 
-            ClientGraphQlResponse projectsResp = mockProjectsPageWithGroup(List.of(proj1, proj2), null);
+            ClientGraphQlResponse projectsResp = mockProjectsPageWithGroup(List.of(proj1, proj2), LAST_PAGE);
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, projectsResp);
@@ -303,7 +303,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             var proj1 = createMinimalProject("gid://gitlab/Project/10", "my-org/proj-a", "proj-a");
             var proj2 = createMinimalProject("gid://gitlab/Project/20", "my-org/proj-b", "proj-b");
 
-            ClientGraphQlResponse projectsResp = mockProjectsPageWithGroup(List.of(proj1, proj2), null);
+            ClientGraphQlResponse projectsResp = mockProjectsPageWithGroup(List.of(proj1, proj2), LAST_PAGE);
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, projectsResp);
@@ -328,7 +328,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             var proj1 = createMinimalProject("gid://gitlab/Project/10", "my-org/proj-a", "proj-a");
             var proj2 = createMinimalProject("gid://gitlab/Project/20", "my-org/proj-b", "proj-b");
 
-            ClientGraphQlResponse projectsResp = mockProjectsPageWithGroup(List.of(proj1, proj2), null);
+            ClientGraphQlResponse projectsResp = mockProjectsPageWithGroup(List.of(proj1, proj2), LAST_PAGE);
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, projectsResp);
@@ -359,7 +359,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             nodesWithNulls.add(null);
             nodesWithNulls.add(null);
 
-            ClientGraphQlResponse projectsResp = mockProjectsPageWithGroup(nodesWithNulls, null);
+            ClientGraphQlResponse projectsResp = mockProjectsPageWithGroup(nodesWithNulls, LAST_PAGE);
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, projectsResp);
@@ -405,7 +405,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
                     subGroupResponse, // subgroup
                     null);
 
-            ClientGraphQlResponse projectsResp = mockProjectsPageWithGroup(List.of(proj1), null);
+            ClientGraphQlResponse projectsResp = mockProjectsPageWithGroup(List.of(proj1), LAST_PAGE);
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, projectsResp);
@@ -464,9 +464,9 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             var projB = createMinimalProject("gid://gitlab/Project/20", "my-org/proj-b", "proj-b");
 
             // Phase 1: includeSubgroups=true — returns only projA (bug drops projB)
-            ClientGraphQlResponse mainPage = mockProjectsPageWithGroup(List.of(projA), null);
+            ClientGraphQlResponse mainPage = mockProjectsPageWithGroup(List.of(projA), LAST_PAGE);
             // Phase 2: includeSubgroups=false — returns both projA and projB
-            ClientGraphQlResponse reconPage = mockProjectsPage(List.of(projA, projB), null);
+            ClientGraphQlResponse reconPage = mockProjectsPage(List.of(projA, projB), LAST_PAGE);
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, mainPage, reconPage);
@@ -494,9 +494,9 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             var projB = createMinimalProject("gid://gitlab/Project/20", "my-org/proj-b", "proj-b");
 
             // Phase 1: returns both projects
-            ClientGraphQlResponse mainPage = mockProjectsPageWithGroup(List.of(projA, projB), null);
+            ClientGraphQlResponse mainPage = mockProjectsPageWithGroup(List.of(projA, projB), LAST_PAGE);
             // Phase 2: returns same projects (all duplicates, nothing to reconcile)
-            ClientGraphQlResponse reconPage = mockProjectsPage(List.of(projA, projB), null);
+            ClientGraphQlResponse reconPage = mockProjectsPage(List.of(projA, projB), LAST_PAGE);
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, mainPage, reconPage);
@@ -522,7 +522,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             var projA = createMinimalProject("gid://gitlab/Project/10", "my-org/proj-a", "proj-a");
 
             // Phase 1: succeeds
-            ClientGraphQlResponse mainPage = mockProjectsPageWithGroup(List.of(projA), null);
+            ClientGraphQlResponse mainPage = mockProjectsPageWithGroup(List.of(projA), LAST_PAGE);
             // Phase 2: invalid response
             ClientGraphQlResponse reconPage = mock(ClientGraphQlResponse.class);
             lenient().when(reconPage.isValid()).thenReturn(false);
@@ -543,8 +543,8 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
             GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
 
-            // Primary results preserved despite reconciliation failure
-            assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.COMPLETED);
+            // Primary results preserved, but direct projects were never proven listed
+            assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.COMPLETED_WITH_ERRORS);
             assertThat(result.synced()).hasSize(1);
             assertThat(result.projectsReconciled()).isZero();
         }
@@ -555,9 +555,9 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             var projB = createMinimalProject("gid://gitlab/Project/20", "my-org/proj-b", "proj-b");
 
             // Phase 1: returns only projA (bug drops projB)
-            ClientGraphQlResponse mainPage = mockProjectsPageWithGroup(List.of(projA), null);
+            ClientGraphQlResponse mainPage = mockProjectsPageWithGroup(List.of(projA), LAST_PAGE);
             // Phase 2: reconciliation finds projB after rate limit wait
-            ClientGraphQlResponse reconPage = mockProjectsPage(List.of(projA, projB), null);
+            ClientGraphQlResponse reconPage = mockProjectsPage(List.of(projA, projB), LAST_PAGE);
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, mainPage, reconPage);
@@ -590,9 +590,9 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             var projB = createMinimalProject("gid://gitlab/Project/20", "my-org/proj-b", "proj-b");
 
             // Phase 1: includeSubgroups=true returns empty (extreme bug)
-            ClientGraphQlResponse mainPage = mockProjectsPageWithGroup(List.of(), null);
+            ClientGraphQlResponse mainPage = mockProjectsPageWithGroup(List.of(), LAST_PAGE);
             // Phase 2: includeSubgroups=false returns all direct projects
-            ClientGraphQlResponse reconPage = mockProjectsPage(List.of(projA, projB), null);
+            ClientGraphQlResponse reconPage = mockProjectsPage(List.of(projA, projB), LAST_PAGE);
 
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, mainPage, reconPage);
@@ -611,6 +611,114 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.COMPLETED);
             assertThat(result.synced()).hasSize(2);
             assertThat(result.projectsReconciled()).isEqualTo(2);
+        }
+
+        @Test
+        void fewerProjectsThanReportedCount_isIncomplete() {
+            var projA = createMinimalProject("gid://gitlab/Project/10", "my-org/proj-a", "proj-a");
+            ClientGraphQlResponse page = mockProjectsPageWithGroup(List.of(projA), LAST_PAGE);
+            reportCount(page, 2);
+
+            HttpGraphQlClient client = mockClient();
+            mockSequentialExecute(client, page);
+            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
+                    .thenReturn(createTestRepository(10L));
+
+            GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
+
+            assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.COMPLETED_WITH_ERRORS);
+            assertThat(result.synced()).extracting(Repository::getNativeId).containsExactly(10L);
+        }
+
+        @Test
+        void missingPageInfo_isIncomplete() {
+            var projA = createMinimalProject("gid://gitlab/Project/10", "my-org/proj-a", "proj-a");
+            ClientGraphQlResponse page = mockProjectsPageWithGroup(List.of(projA), null);
+
+            HttpGraphQlClient client = mockClient();
+            mockSequentialExecute(client, page);
+            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
+                    .thenReturn(createTestRepository(10L));
+
+            GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
+
+            assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.ABORTED_ERROR);
+            assertThat(result.synced()).extracting(Repository::getNativeId).containsExactly(10L);
+        }
+
+        @Test
+        void nextPageWithoutCursor_isIncomplete() {
+            var projA = createMinimalProject("gid://gitlab/Project/10", "my-org/proj-a", "proj-a");
+            ClientGraphQlResponse page = mockProjectsPageWithGroup(List.of(projA), new GitLabPageInfo(true, null));
+
+            HttpGraphQlClient client = mockClient();
+            mockSequentialExecute(client, page);
+            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
+                    .thenReturn(createTestRepository(10L));
+
+            GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
+
+            assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.ABORTED_ERROR);
+            assertThat(result.synced()).extracting(Repository::getNativeId).containsExactly(10L);
+        }
+
+        @Test
+        void reportedCountMetAfterReconciliation_isComplete() {
+            var projA = createMinimalProject("gid://gitlab/Project/10", "my-org/proj-a", "proj-a");
+            var projB = createMinimalProject("gid://gitlab/Project/20", "my-org/proj-b", "proj-b");
+            ClientGraphQlResponse mainPage = mockProjectsPageWithGroup(List.of(projA), LAST_PAGE);
+            reportCount(mainPage, 2);
+            ClientGraphQlResponse reconPage = mockProjectsPage(List.of(projA, projB), LAST_PAGE);
+
+            HttpGraphQlClient client = mockClient();
+            mockSequentialExecute(client, mainPage, reconPage);
+            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
+                    .thenReturn(createTestRepository(10L));
+            when(projectProcessor.processGraphQlResponse(eq(projB), any(), any()))
+                    .thenReturn(createTestRepository(20L));
+
+            GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
+
+            assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.COMPLETED);
+            assertThat(result.synced()).extracting(Repository::getNativeId).containsExactly(10L, 20L);
+        }
+
+        @Test
+        void directProjectsWithoutPageInfo_isIncompleteEvenWhenReportedCountIsMet() {
+            assertIncompleteWhenDirectProjectsEndWith(null);
+        }
+
+        @Test
+        void directProjectsNextPageWithoutCursor_isIncompleteEvenWhenReportedCountIsMet() {
+            assertIncompleteWhenDirectProjectsEndWith(new GitLabPageInfo(true, null));
+        }
+
+        /** The primary listing is explicit and its count is met; only the direct-project pass ends ambiguously. */
+        private void assertIncompleteWhenDirectProjectsEndWith(@Nullable GitLabPageInfo directPageInfo) {
+            var projA = createMinimalProject("gid://gitlab/Project/10", "my-org/proj-a", "proj-a");
+            ClientGraphQlResponse mainPage = mockProjectsPageWithGroup(List.of(projA), LAST_PAGE);
+            reportCount(mainPage, 1);
+            ClientGraphQlResponse reconPage = mockProjectsPage(List.of(projA), directPageInfo);
+
+            HttpGraphQlClient client = mockClient();
+            mockSequentialExecute(client, mainPage, reconPage);
+            when(groupProcessor.process(any(), anyLong())).thenReturn(org);
+            when(graphQlClientProvider.getRateLimitRemaining(1L)).thenReturn(100);
+            when(projectProcessor.processGraphQlResponse(eq(projA), any(), any()))
+                    .thenReturn(createTestRepository(10L));
+
+            GitLabSyncResult result = service.syncGroupProjects(1L, "my-org", null);
+
+            assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.COMPLETED_WITH_ERRORS);
+            assertThat(result.synced()).extracting(Repository::getNativeId).containsExactly(10L);
         }
 
         @Test
@@ -647,6 +755,8 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             repo.setNativeId(nativeId);
             return repo;
         }
+
+        private static final GitLabPageInfo LAST_PAGE = new GitLabPageInfo(false, null);
 
         private static final GitLabGroupResponse DEFAULT_GROUP = new GitLabGroupResponse(
                 "gid://gitlab/Group/1", "my-org", "My Org", null, "https://gitlab.com/my-org", null, "public", null);
@@ -687,7 +797,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
         private ClientGraphQlResponse mockProjectsPage(
                 List<GitLabProjectResponse> projects, @Nullable GitLabPageInfo pageInfo) {
             ClientGraphQlResponse resp = mock(ClientGraphQlResponse.class);
-            when(resp.isValid()).thenReturn(true);
+            lenient().when(resp.isValid()).thenReturn(true);
 
             ClientResponseField nodesField = mock(ClientResponseField.class);
             when(nodesField.<GitLabProjectResponse>toEntityList(any(Class.class)))
@@ -699,6 +809,13 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             when(resp.field("group.projects.pageInfo")).thenReturn(pageInfoField);
 
             return resp;
+        }
+
+        /** GitLab's {@code group.projects.count} for the listing on this page. */
+        private void reportCount(ClientGraphQlResponse response, int count) {
+            ClientResponseField countField = mock(ClientResponseField.class);
+            when(countField.<Integer>getValue()).thenReturn(count);
+            when(response.field("group.projects.count")).thenReturn(countField);
         }
 
         private void mockSequentialExecute(

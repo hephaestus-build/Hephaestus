@@ -47,6 +47,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "integration.outline.connect.OutlineConnectionAdminControllerIntegrationTest", "outline-enabled"),
             assignment("integration.outline.sync.OutlineDocumentSyncIntegrationTest", "outline-enabled"),
             assignment("integration.core.sync.api.SyncControllerIntegrationTest", "sync-controller-focused"),
+            assignment(
+                    "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
+                    "gitlab-event-routing"),
             assignment("integration.slack.detection.ConversationThreadDetectionIntegrationTest", "slack-ingest"),
             assignment("integration.slack.SlackConsentLifecycleE2EIntegrationTest", "slack-lifecycle"),
             assignment("integration.slack.channel.SlackChannelAdminControllerIntegrationTest", "slack-signed"),
@@ -74,7 +77,10 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry("slack-ingest", "enabled Slack ingest wiring with its review-submission spy"),
             Map.entry("slack-lifecycle", "agent submission boundary override"),
             Map.entry("slack-signed", "enabled signed Slack HTTP wiring"),
-            Map.entry("sync-controller-focused", "controlled sync provider and runner behavior"));
+            Map.entry("sync-controller-focused", "controlled sync provider and runner behavior"),
+            Map.entry(
+                    "gitlab-event-routing",
+                    "real JetStream scope consumer with GitLab discovery, webhook and sync held at the API boundary"));
 
     private static final Set<String> SPRING_BOOT_TESTS = names(
             "StartupBudgetIntegrationTest", "testconfig.BaseIntegrationTest", "testconfig.RealAuthIntegrationTest");
@@ -90,6 +96,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     private static final Set<String> DYNAMIC_PROPERTY_TESTS = names(
             "StartupBudgetIntegrationTest",
             "integration.schema.ProductionSchemaContractIntegrationTest",
+            "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
             "testconfig.BaseIntegrationTest",
             "testconfig.RealAuthIntegrationTest");
 
@@ -113,8 +120,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> DIRTY_CONTEXT_TESTS = Set.of();
 
-    private static final Set<String> MOCKITO_BEAN_TESTS =
-            names("integration.slack.SlackConsentLifecycleE2EIntegrationTest");
+    private static final Set<String> MOCKITO_BEAN_TESTS = names(
+            "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
+            "integration.slack.SlackConsentLifecycleE2EIntegrationTest");
 
     @Test
     void shouldMatchReviewedContextDeclarationsWhenArchitectureTestsRun() {

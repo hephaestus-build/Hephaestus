@@ -143,6 +143,11 @@ public class GitLabWebhookService {
         }
     }
 
+    /** Whether this deployment registers group webhooks: GitLab is enabled and a webhook URL and secret are set. */
+    public boolean isRegistrationEnabled() {
+        return webhookProperties.isConfigured() && webhookClientProvider.getIfAvailable() != null;
+    }
+
     private boolean isGitLabWorkspace(Workspace workspace) {
         return connectionService
                 .findActiveProviderKind(workspace.getId())

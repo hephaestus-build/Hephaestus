@@ -8,6 +8,9 @@ import io.nats.client.StreamContext;
 import io.nats.client.api.ConsumerConfiguration;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -125,7 +128,8 @@ public final class ScopeConsumer {
 
     /**
      * Starts the consumer: spawns the dispatch virtual thread, then attaches the
-     * JetStream subscription. Idempotent.
+     * JetStream subscription. Idempotent. A failed attach stops the dispatch thread again,
+     * because a consumer that never started is never tracked and so never stopped.
      */
     public synchronized void start() throws IOException, JetStreamApiException {
         if (!running.compareAndSet(false, true)) {
@@ -133,7 +137,16 @@ public final class ScopeConsumer {
         }
         String threadName = "integration-consumer-" + (scopeId != null ? "scope-" + scopeId : "installation");
         processorThread = Thread.ofVirtual().name(threadName).start(this::processMessagesSequentially);
-        subscription = context.consume(this::enqueueMessage);
+        try {
+            subscription = context.consume(this::enqueueMessage);
+        } catch (IOException | JetStreamApiException | RuntimeException e) {
+            try {
+                stop();
+            } catch (RuntimeException stopFailure) {
+                e.addSuppressed(stopFailure);
+            }
+            throw e;
+        }
         log.debug(
                 "Started ScopeConsumer: consumerName={}, scopeId={}, subjectCount={}",
                 consumerName,
@@ -173,20 +186,24 @@ public final class ScopeConsumer {
     /**
      * Rebuilds the consumer's filter subjects in-place. The server-side durable
      * configuration is updated first; once that succeeds, the local subscription is
-     * recycled. Idempotent: identical subject sets are a no-op.
+     * recycled. Identical subject sets are a no-op only while the subscription is attached,
+     * so a subscription lost to a failed recycle is reattached by the next call.
      */
     public synchronized void updateSubjects(String @Nullable [] newSubjects) throws IOException, JetStreamApiException {
         if (newSubjects == null) {
             throw new IllegalArgumentException("newSubjects must not be null");
         }
-        if (Arrays.equals(currentSubjects, newSubjects)) {
+        boolean subjectsChanged = !Arrays.equals(currentSubjects, newSubjects);
+        if (!subjectsChanged && isAttached()) {
             return;
         }
-        ConsumerConfiguration existing = context.getConsumerInfo().getConsumerConfiguration();
-        streamContext.createOrUpdateConsumer(ConsumerConfiguration.builder(existing)
-                .filterSubjects(newSubjects)
-                .build());
-        currentSubjects = newSubjects.clone();
+        if (subjectsChanged) {
+            ConsumerConfiguration existing = context.getConsumerInfo().getConsumerConfiguration();
+            streamContext.createOrUpdateConsumer(ConsumerConfiguration.builder(existing)
+                    .filterSubjects(newSubjects)
+                    .build());
+            currentSubjects = newSubjects.clone();
+        }
         closeSubscriptionQuietly();
         subscription = context.consume(this::enqueueMessage);
         log.debug(
@@ -194,6 +211,18 @@ public final class ScopeConsumer {
                 consumerName,
                 scopeId,
                 newSubjects.length);
+    }
+
+    /** Whether a live JetStream subscription feeds this running consumer. */
+    public boolean isAttached() {
+        MessageConsumer sub = subscription;
+        return running.get() && sub != null && !sub.isStopped() && !sub.isFinished();
+    }
+
+    /** The filter subjects JetStream holds for this consumer, read from the server. */
+    public Set<String> installedSubjects() throws IOException, JetStreamApiException {
+        return Set.copyOf(Objects.requireNonNullElse(
+                context.getConsumerInfo().getConsumerConfiguration().getFilterSubjects(), List.of()));
     }
 
     /**

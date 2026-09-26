@@ -22,8 +22,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * Connection is resolvable and ACTIVE by the time the sync body runs, so the sync is always recorded as an
  * {@code INITIAL}/{@code LIFECYCLE} {@code SyncJob} (via {@code GitLabWorkspaceDataSyncTrigger} inside
  * {@link GitLabWorkspaceInitializationService#initializeAsync}) instead of racing the activation and
- * falling to an unrecorded body. {@code initializeAsync} additionally starts the NATS scope consumer, so
- * webhook, discovery, sync and consumer bring-up stay sequenced exactly as before.
+ * falling to an unrecorded body. {@code initializeAsync} confirms the NATS scope consumer for the discovered
+ * repositories before it registers the webhook, and runs the full sync after both.
  *
  * <p><b>Deactivation</b> tears the group webhook down (best-effort). The real vendor-side delete happens
  * earlier, in {@code GitlabConnectionStrategy.revoke}, while the PAT is still live (the GitLab token
