@@ -1,13 +1,17 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.ChatThread;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -238,6 +242,78 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
         """)
     List<PullRequest> findRecentAuthoredPullRequests(
             @Param("workspaceId") Long workspaceId, @Param("userId") Long userId, Pageable page);
+
+    /**
+     * The developer's open authored pull requests on the workspace's connected instance, most recently
+     * updated first. The provider predicate keeps a same-path project on another instance out: the
+     * monitor matches by path alone.
+     */
+    @Query("""
+        SELECT p
+        FROM PullRequest p
+        JOIN p.repository r
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = r.nameWithOwner
+        WHERE p.author.id = :userId
+          AND p.deletedAt IS NULL
+          AND p.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
+          AND rtm.workspace.id = :workspaceId
+          AND r.provider.id = :providerId
+        ORDER BY p.updatedAt DESC NULLS LAST, p.id DESC
+        """)
+    List<PullRequest> findOpenAuthoredPullRequestsOnInstance(
+            @Param("workspaceId") Long workspaceId,
+            @Param("userId") Long userId,
+            @Param("providerId") Long providerId,
+            Pageable page);
+
+    /** One pull request under the same scope as {@link #findOpenAuthoredPullRequestsOnInstance}. */
+    @Query("""
+        SELECT p
+        FROM PullRequest p
+        JOIN p.repository r
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = r.nameWithOwner
+        WHERE p.id = :pullRequestId
+          AND p.author.id = :userId
+          AND p.deletedAt IS NULL
+          AND p.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
+          AND rtm.workspace.id = :workspaceId
+          AND r.provider.id = :providerId
+        """)
+    List<PullRequest> findOpenAuthoredPullRequestOnInstance(
+            @Param("workspaceId") Long workspaceId,
+            @Param("userId") Long userId,
+            @Param("providerId") Long providerId,
+            @Param("pullRequestId") Long pullRequestId);
+
+    /** Which of {@code refs} the delivery ledger records Hephaestus posting as feedback on this pull request. */
+    @Query("""
+        SELECT fp.postedCommentRef
+        FROM FeedbackPlacement fp
+        WHERE fp.feedback.workspaceId = :workspaceId
+          AND fp.feedback.artifactKind = :artifactKind
+          AND fp.feedback.artifactId = :pullRequestId
+          AND fp.postedCommentRef IN :refs
+        """)
+    Set<String> findPostedCommentRefs(
+            @Param("workspaceId") Long workspaceId,
+            @Param("artifactKind") ArtifactKind artifactKind,
+            @Param("pullRequestId") Long pullRequestId,
+            @Param("refs") Collection<String> refs);
+
+    /** A pull request's inline comments, a thread at a time: unresolved threads first, each thread oldest first. */
+    @Query("""
+        SELECT c
+        FROM PullRequestReviewComment c
+        JOIN FETCH c.thread t
+        LEFT JOIN FETCH t.resolvedBy
+        LEFT JOIN FETCH c.author
+        WHERE c.pullRequest.id = :pullRequestId
+          AND c.pullRequest.deletedAt IS NULL
+        ORDER BY CASE WHEN t.state = de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread.State.UNRESOLVED THEN 0 ELSE 1 END,
+                 t.id DESC, c.createdAt ASC, c.id ASC
+        """)
+    List<PullRequestReviewComment> findThreadCommentsUnresolvedFirst(
+            @Param("pullRequestId") Long pullRequestId, Pageable page);
 
     /**
      * The developer's own authored ISSUES (excluding PRs via {@code TYPE(i) = Issue}) in the workspace,

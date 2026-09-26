@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScmTokenSource;
@@ -22,8 +23,8 @@ class WorkspaceActorSelectorTest extends BaseUnitTest {
     private final ConnectionService connections = mock(ConnectionService.class);
     private final ScmTokenSource gitlab = mock(ScmTokenSource.class);
     private final WorkspaceMembershipRepository memberships = mock(WorkspaceMembershipRepository.class);
-    private final WorkspaceActorSelector selector =
-            new WorkspaceActorSelector(connections, List.of(gitlab), memberships);
+    private final WorkspaceActorSelector selector = new WorkspaceActorSelector(
+            connections, List.of(gitlab), memberships, mock(IdentityProviderRepository.class));
 
     @Test
     void shouldSelectTheFirstLinkedActorWhenTheWorkspaceHasNoActiveScmConnection() {

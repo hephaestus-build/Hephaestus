@@ -22,6 +22,8 @@ import { errorText } from "./pi-error-text.ts";
 import {
 	MENTOR_ERROR_CODES as ERR,
 	JSONRPC_VERSION,
+	FETCH_CONTEXT_ALLOWED,
+	isFetchContextKey,
 	type JsonRpcId,
 	MENTOR_PROTOCOL_VERSION,
 	MENTOR_TOOL_NAMES,
@@ -105,21 +107,6 @@ const TURN_GRACE_MS = (() => {
 	const raw = Number(process.env.MENTOR_TURN_GRACE_MS);
 	return Number.isFinite(raw) && raw > 0 ? raw : 30_000;
 })();
-
-// Context-key whitelist for the fetch_context tool. Java remains authoritative and
-// re-checks against MentorContextKeys.ALLOWED_OUTPUT_KEYS.
-const FETCH_CONTEXT_ALLOWED = new Set([
-	"inputs/context/workspace.json",
-	"inputs/context/user.json",
-	"inputs/context/practice_catalog.json",
-	"inputs/context/observations_history.json",
-	"inputs/context/delivered_feedback.json",
-	"inputs/context/recent_authored_work.json",
-	"inputs/context/slack_conversations.json",
-	"inputs/context/prepared_conversation_feedback.json",
-	"inputs/context/current_thread_history.json",
-	"inputs/context/outline_docs.json",
-]);
 
 function logText(value: unknown): string {
 	if (value instanceof Error) {
@@ -485,7 +472,8 @@ function defineFetchContextTool(sdk: PiSdk) {
 		label: "Fetch Context",
 		description:
 			"Fetch a Hephaestus mentor context JSON resource from the server. Use the exact canonical path, " +
-			`for example inputs/context/recent_authored_work.json. Allowed paths: ${[...FETCH_CONTEXT_ALLOWED].join(", ")}.`,
+			`for example inputs/context/recent_authored_work.json. Allowed paths: ${[...FETCH_CONTEXT_ALLOWED].join(", ")}, ` +
+			"and inputs/context/merge_readiness/<artifactId>.json for one pull request listed in merge_readiness.json.",
 		parameters: {
 			type: "object",
 			additionalProperties: false,
@@ -498,7 +486,7 @@ function defineFetchContextTool(sdk: PiSdk) {
 			const contextKey = jsonText(params.path).trim();
 			// Pi treats THROWN errors as the tool's failure signal — a returned `isError:true`
 			// is ignored by the runtime, so throw to flag the call as failed.
-			if (!FETCH_CONTEXT_ALLOWED.has(contextKey)) {
+			if (!isFetchContextKey(contextKey)) {
 				throw new Error(`fetch_context: path "${contextKey}" is not in the allow-list`);
 			}
 			if (activeThreadId === null) {

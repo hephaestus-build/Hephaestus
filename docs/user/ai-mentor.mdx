@@ -39,6 +39,11 @@ Previous chats appear in the Heph sidebar. Select a thread to continue it.
 Depending on your workspace configuration, Heph can use:
 
 - the pull requests, merge requests, and issues you recently authored, plus how much you have reviewed
+- for your open pull requests and merge requests, as Hephaestus last recorded them: whether GitHub or GitLab
+  reported them as mergeable, their latest pipeline or check result, each reviewer's latest review, and the general
+  comments and inline review threads on them. Neither an approval nor a resolved thread shows that a condition
+  written in a comment or thread was met. This record can lag GitHub or GitLab, so Heph says what it could not
+  confirm and asks you to check there before you merge
 - practice feedback that was delivered to you
 - the engineering practices configured for your workspace
 - messages from Slack channels that the workspace monitors and you have allowed Hephaestus to use

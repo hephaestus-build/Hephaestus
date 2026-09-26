@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MentorContextKeys;
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MergeReadinessContentSource;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
@@ -52,6 +53,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -95,6 +97,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     private final MentorProxyCredentialRegistry proxyCredentialRegistry;
     private final MemberAiRoutingAdapter memberAiRouting;
     private final MemberAiPreferences memberAiPreferences;
+    private final MergeReadinessContentSource mergeReadiness;
 
     /** The holder lets a disconnect abort a runner attached after lifecycle callbacks were registered. */
     @Override
@@ -290,6 +293,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             channel.send(UIMessageChunk.DataMentorStatus.of("warming-up", "container-cold"));
 
             Map<String, byte[]> contextInputs = buildMentorContext(request, user, cookie.userMessageId());
+            Function<MentorRunnerClient.FetchContextRequest, JsonNode> fetchContext =
+                    callback -> handleFetchContext(callback, contextInputs, request.workspaceId(), user.getId());
             MentorAgentRequest agentRequest = new MentorAgentRequest(request.workspaceId(), user.getId());
             SessionRestore sessionRestore = priorSessionBytes
                     .filter(bytes -> bytes.length > 0)
@@ -304,7 +309,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 boolean poisoning = false;
                 try {
                     sandbox = attachSandbox(spec);
-                    client = startRunner(sandbox, request, channel, clientHolder, state, cookie, turn, contextInputs);
+                    client = startRunner(sandbox, request, channel, clientHolder, state, cookie, turn, fetchContext);
                     try {
                         client.openThread(request.threadId()).get(10, TimeUnit.SECONDS);
                     } catch (Exception openFailure) {
@@ -322,8 +327,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                         InteractiveSandboxSpec cleanSpec =
                                 mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig, contextInputs, null);
                         sandbox = attachSandbox(cleanSpec);
-                        client = startRunner(
-                                sandbox, request, channel, clientHolder, state, cookie, turn, contextInputs);
+                        client =
+                                startRunner(sandbox, request, channel, clientHolder, state, cookie, turn, fetchContext);
                         client.openThread(request.threadId()).get(10, TimeUnit.SECONDS);
                     }
                     // Bind and unbind INSIDE the sandbox lock: that exclusivity is what stops a call being
@@ -471,7 +476,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             TranslatorState state,
             MentorTurnPersistence.TurnPersistenceCookie cookie,
             Turn turn,
-            Map<String, byte[]> contextInputs)
+            Function<MentorRunnerClient.FetchContextRequest, JsonNode> fetchContext)
             throws InterruptedException, java.util.concurrent.ExecutionException, TimeoutException {
         if (channel.isClientGone()) {
             throw new ClientDisconnectedException("Client disconnected during sandbox attach");
@@ -492,7 +497,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                         state.markStreamBroken();
                     }
                 },
-                callback -> handleFetchContext(callback, contextInputs),
+                fetchContext,
                 runnerTimeoutScheduler.scheduler(),
                 // Per-thread event filter: the sandbox is shared by (userId, workspaceId), so
                 // a second tab in the same workspace would otherwise see this tab's events.
@@ -795,8 +800,16 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         return decision.permitsAi() ? MentorRefusal.UNAVAILABLE : MentorRefusal.CHOICE_REQUIRED;
     }
 
-    private JsonNode handleFetchContext(MentorRunnerClient.FetchContextRequest req, Map<String, byte[]> contextInputs) {
+    private JsonNode handleFetchContext(
+            MentorRunnerClient.FetchContextRequest req,
+            Map<String, byte[]> contextInputs,
+            long workspaceId,
+            long developerId) {
         String path = req.path();
+        Optional<Long> mergeRequest = MergeReadinessContentSource.artifactIdOf(path);
+        if (mergeRequest.isPresent()) {
+            return mergeReadiness.inspect(workspaceId, developerId, mergeRequest.get());
+        }
         if (!MentorContextKeys.ALLOWED_OUTPUT_KEYS.contains(path)) {
             throw new IllegalArgumentException("fetch_context path not allowed: " + path);
         }

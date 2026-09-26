@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Drift guard for the prose contract in {@link MentorContextKeys}: the JS runner's hand-maintained
- * {@code FETCH_CONTEXT_ALLOWED} whitelist (pi-mentor-runner.ts) must mirror
+ * {@code FETCH_CONTEXT_ALLOWED} whitelist (pi-mentor-protocol.ts) must mirror
  * {@link MentorContextKeys#ALLOWED_OUTPUT_KEYS}. Java is authoritative (MentorChatService re-checks),
  * so a divergence only weakens the runner's defense-in-depth — this test makes the mirror enforced.
  */
@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 class MentorContextKeysRunnerMirrorTest {
 
     private static final Path RUNNER = Path.of("src", "main", "resources", "agent", "pi-mentor-runner.ts");
+    private static final Path PROTOCOL = Path.of("src", "main", "resources", "agent", "pi-mentor-protocol.ts");
     private static final Path SYSTEM_PROMPT = Path.of("src", "main", "resources", "agent", "mentor", "system.md");
     private static final Pattern ALLOWED_BLOCK =
             Pattern.compile("const FETCH_CONTEXT_ALLOWED = new Set\\(\\[(.*?)\\]\\);", Pattern.DOTALL);
@@ -32,10 +33,10 @@ class MentorContextKeysRunnerMirrorTest {
     @Test
     @DisplayName("runner FETCH_CONTEXT_ALLOWED mirrors MentorContextKeys.ALLOWED_OUTPUT_KEYS")
     void runnerWhitelistMirrorsJavaSource() throws IOException {
-        String source = Files.readString(RUNNER, StandardCharsets.UTF_8);
+        String source = Files.readString(PROTOCOL, StandardCharsets.UTF_8);
         Matcher block = ALLOWED_BLOCK.matcher(source);
         assertThat(block.find())
-                .as("FETCH_CONTEXT_ALLOWED block present in pi-mentor-runner.ts")
+                .as("FETCH_CONTEXT_ALLOWED block present in pi-mentor-protocol.ts")
                 .isTrue();
 
         Set<String> jsKeys = STRING_LITERAL
@@ -47,6 +48,18 @@ class MentorContextKeysRunnerMirrorTest {
         assertThat(jsKeys)
                 .as("runner JS whitelist must equal the Java context output keys")
                 .isEqualTo(MentorContextKeys.ALLOWED_OUTPUT_KEYS);
+    }
+
+    @Test
+    @DisplayName("a fitted merge readiness payload is never sliced by the runner")
+    void mergeReadinessBudgetIsTheRunnerFetchCap() throws IOException {
+        assertThat(Files.readString(RUNNER, StandardCharsets.UTF_8))
+                .contains("const FETCH_CONTEXT_MAX_CHARS = 200_000;");
+        assertThat(MergeReadinessContentSource.MAX_JSON_CHARS).isEqualTo(200_000);
+        assertThat(MergeReadinessContentSource.artifactIdOf("inputs/context/merge_readiness/42.json"))
+                .contains(42L);
+        assertThat(MergeReadinessContentSource.artifactIdOf("inputs/context/merge_readiness/../user.json"))
+                .isEmpty();
     }
 
     @Test
@@ -69,7 +82,7 @@ class MentorContextKeysRunnerMirrorTest {
 
         assertThat(source)
                 .contains("tools: [...MENTOR_TOOL_NAMES]")
-                .contains("\"inputs/context/recent_authored_work.json\"")
+                .contains("if (!isFetchContextKey(contextKey))")
                 .doesNotContain("tools: [\"fetch_context\", \"link_observation\", \"read\", \"bash\", \"grep\"]");
     }
 }

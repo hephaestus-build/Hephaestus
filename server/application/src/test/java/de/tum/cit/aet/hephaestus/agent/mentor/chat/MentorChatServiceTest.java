@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MergeReadinessContentSource;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerException;
@@ -140,6 +141,9 @@ class MentorChatServiceTest extends BaseUnitTest {
     @Mock
     LlmAdmissionService llmAdmissionService;
 
+    @Mock
+    MergeReadinessContentSource mergeReadiness;
+
     private MentorTurnLock turnLock;
     private PiEventToUiChunkTranslator translator;
     private ScheduledExecutorService scheduler;
@@ -251,7 +255,8 @@ class MentorChatServiceTest extends BaseUnitTest {
                 llmAdmissionService,
                 proxyCredentialRegistry,
                 memberAiRouting,
-                (workspaceId, developerId) -> aiDecision);
+                (workspaceId, developerId) -> aiDecision,
+                mergeReadiness);
     }
 
     @Test
@@ -787,12 +792,15 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void runTurn_fetchContextRequiresCanonicalOutputKey() {
+    void runTurn_fetchContextServesCanonicalKeysAndOnePullRequestByArtifactId() {
         Map<String, byte[]> context = new LinkedHashMap<>();
         context.put(
                 "inputs/context/recent_authored_work.json",
                 "{\"pullRequests\":[{\"number\":12}]}".getBytes(StandardCharsets.UTF_8));
         when(workspaceContextBuilder.build(any())).thenReturn(context);
+        ObjectNode inspected = mapper.createObjectNode();
+        inspected.putArray("pullRequests").addObject().put("number", 6);
+        when(mergeReadiness.inspect(WORKSPACE_ID, USER_ID, 42L)).thenReturn(inspected);
 
         sandbox.onSend = frame -> {
             String method = frame.path("method").asString("");
@@ -804,6 +812,8 @@ class MentorChatServiceTest extends BaseUnitTest {
                 case "prompt" -> {
                     sandbox.push(fetchContextCallback("fc-bad", "recent_authored_work.json"));
                     sandbox.push(fetchContextCallback("fc-good", "inputs/context/recent_authored_work.json"));
+                    sandbox.push(fetchContextCallback("fc-mr", "inputs/context/merge_readiness/42.json"));
+                    sandbox.push(fetchContextCallback("fc-escape", "inputs/context/merge_readiness/../user.json"));
                     sandbox.push(event("agent_end", n -> n.putArray("messages")));
                     sandbox.push(jsonRpcResult(id, mapper.createObjectNode()));
                 }
@@ -827,6 +837,19 @@ class MentorChatServiceTest extends BaseUnitTest {
                         .path("number")
                         .asInt())
                 .isEqualTo(12);
+        assertThat(sandbox.sentFrameWithId("fc-mr")
+                        .path("result")
+                        .path("content")
+                        .path("pullRequests")
+                        .get(0)
+                        .path("number")
+                        .asInt())
+                .isEqualTo(6);
+        assertThat(sandbox.sentFrameWithId("fc-escape")
+                        .path("error")
+                        .path("message")
+                        .asString())
+                .contains("fetch_context path not allowed");
     }
 
     @Test
