@@ -49,7 +49,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("integration.core.sync.api.SyncControllerIntegrationTest", "sync-controller-focused"),
             assignment("integration.slack.detection.ConversationThreadDetectionIntegrationTest", "slack-ingest"),
             assignment("integration.slack.SlackConsentLifecycleE2EIntegrationTest", "slack-lifecycle"),
-            assignment("integration.slack.channel.SlackChannelAdminControllerIntegrationTest", "slack-signed"));
+            assignment("integration.slack.channel.SlackChannelAdminControllerIntegrationTest", "slack-signed"),
+            assignment("integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest", "slack-signed"));
 
     private static final Map<String, String> FULL_CONTEXT_JUSTIFICATIONS = Map.ofEntries(
             Map.entry("base", "shared PostgreSQL, HTTP, security, and application acceptance context"),
@@ -106,6 +107,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "integration.outline.sync.OutlineDocumentSyncIntegrationTest",
             "integration.slack.SlackConsentLifecycleE2EIntegrationTest",
             "integration.slack.channel.SlackChannelAdminControllerIntegrationTest",
+            "integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest",
             "integration.slack.detection.ConversationThreadDetectionIntegrationTest",
             "testconfig.BaseIntegrationTest");
 

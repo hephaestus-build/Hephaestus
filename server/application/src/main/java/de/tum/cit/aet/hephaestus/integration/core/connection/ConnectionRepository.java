@@ -42,9 +42,6 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     Optional<Connection> findByWorkspaceIdAndKindAndInstanceKey(
             long workspaceId, IntegrationKind kind, @Nullable String instanceKey);
 
-    Optional<Connection> findFirstByKindAndInstanceKeyAndState(
-            IntegrationKind kind, String instanceKey, IntegrationState state);
-
     List<Connection> findAllByKindAndInstanceKeyInAndState(
             IntegrationKind kind, Collection<String> instanceKeys, IntegrationState state);
 

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.oauth;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -15,6 +16,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -49,16 +51,19 @@ public class OAuthCallbackService {
     private final ConnectionService connectionService;
     private final WorkspaceRepository workspaceRepository;
     private final CredentialBundleConverter credentialBundleConverter;
+    private final AccountWorkspaceMembershipQuery membershipQuery;
 
     public OAuthCallbackService(
             ConnectionRepository connectionRepository,
             ConnectionService connectionService,
             WorkspaceRepository workspaceRepository,
-            CredentialBundleConverter credentialBundleConverter) {
+            CredentialBundleConverter credentialBundleConverter,
+            AccountWorkspaceMembershipQuery membershipQuery) {
         this.connectionRepository = connectionRepository;
         this.connectionService = connectionService;
         this.workspaceRepository = workspaceRepository;
         this.credentialBundleConverter = credentialBundleConverter;
+        this.membershipQuery = membershipQuery;
     }
 
     /**
@@ -98,7 +103,7 @@ public class OAuthCallbackService {
     @Transactional
     public Connection completeConnection(
             Connection pending, ConnectFinalization.Completed completed, @Nullable String actorRef) {
-        Connection connection = resolveSlackCompletionTarget(pending, completed);
+        Connection connection = resolveSlackCompletionTarget(pending, completed, actorRef);
         deleteSupersededPending(pending, connection);
         applyVendorMetadata(connection, completed);
         connection.setCredentials(completed.credentials(), credentialBundleConverter);
@@ -125,7 +130,8 @@ public class OAuthCallbackService {
         return connection;
     }
 
-    private Connection resolveSlackCompletionTarget(Connection connection, ConnectFinalization.Completed completed) {
+    private Connection resolveSlackCompletionTarget(
+            Connection connection, ConnectFinalization.Completed completed, @Nullable String actorRef) {
         if (connection.getKind() != IntegrationKind.SLACK) {
             return connection;
         }
@@ -133,24 +139,46 @@ public class OAuthCallbackService {
         if (instanceKey == null || instanceKey.isBlank()) {
             return connection;
         }
-        Optional<Connection> active = connectionRepository.findFirstByKindAndInstanceKeyAndState(
-                IntegrationKind.SLACK, instanceKey, IntegrationState.ACTIVE);
-        if (active.isEmpty() || Objects.equals(active.get().getId(), connection.getId())) {
-            return connectionRepository
-                    .findByWorkspaceIdAndKindAndInstanceKey(
-                            connection.getWorkspace().getId(), IntegrationKind.SLACK, instanceKey)
-                    .filter(existing -> !Objects.equals(existing.getId(), connection.getId()))
-                    .orElse(connection);
+        long workspaceId = connection.getWorkspace().getId();
+        // Every ACTIVE row, not the first: a duplicate must not let this workspace win by row order.
+        List<Long> ownerWorkspaceIds = connectionRepository
+                .findAllByKindAndInstanceKeyInAndState(
+                        IntegrationKind.SLACK, List.of(instanceKey), IntegrationState.ACTIVE)
+                .stream()
+                .map(active -> active.getWorkspace().getId())
+                .filter(id -> id != workspaceId)
+                .toList();
+        if (!ownerWorkspaceIds.isEmpty()) {
+            long ownerWorkspaceId = ownerWorkspaceIds.getFirst();
+            // The caller may not see the owner; the operator reading this log must.
+            log.warn(
+                    "Rejected Slack install: team={} is ACTIVE in workspaces={}, target workspace={}",
+                    sanitizeForLog(instanceKey),
+                    ownerWorkspaceIds,
+                    workspaceId);
+            throw new IllegalStateException(
+                    administers(ownerWorkspaceId, actorRef)
+                            ? "Slack team is already connected to workspace " + ownerWorkspaceId
+                                    + "; disconnect it there before connecting it to workspace " + workspaceId
+                            : "This Slack workspace is already connected to Hephaestus elsewhere;"
+                                    + " it must be disconnected there first");
         }
-        Connection existing = active.get();
-        if (Objects.equals(
-                existing.getWorkspace().getId(), connection.getWorkspace().getId())) {
-            return existing;
+        return connectionRepository
+                .findByWorkspaceIdAndKindAndInstanceKey(workspaceId, IntegrationKind.SLACK, instanceKey)
+                .filter(existing -> !Objects.equals(existing.getId(), connection.getId()))
+                .orElse(connection);
+    }
+
+    /** The OAuth state's {@code actorRef} is the initiating account id; anything else is not an administrator. */
+    private boolean administers(long workspaceId, @Nullable String actorRef) {
+        if (actorRef == null) {
+            return false;
         }
-        throw new IllegalStateException("Slack team is already connected to workspace "
-                + existing.getWorkspace().getId()
-                + "; disconnect it before connecting it to workspace "
-                + connection.getWorkspace().getId());
+        try {
+            return membershipQuery.isAdministrator(workspaceId, Long.parseLong(actorRef));
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     private void deleteSupersededPending(Connection original, Connection target) {

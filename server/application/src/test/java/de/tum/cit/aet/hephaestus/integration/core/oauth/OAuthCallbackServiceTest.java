@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -23,6 +24,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.lang.reflect.Field;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.assertj.core.api.Assertions;
@@ -50,13 +52,20 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
     @Mock
     private CredentialBundleConverter credentialBundleConverter;
 
+    @Mock
+    private AccountWorkspaceMembershipQuery membershipQuery;
+
     private OAuthCallbackService service;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
         service = new OAuthCallbackService(
-                connectionRepository, connectionService, workspaceRepository, credentialBundleConverter);
+                connectionRepository,
+                connectionService,
+                workspaceRepository,
+                credentialBundleConverter,
+                membershipQuery);
     }
 
     @Test
@@ -179,21 +188,50 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void complete_slackTeamAlreadyActiveInAnotherWorkspace_throwsBeforeSaving() {
+    void complete_slackTeamActiveElsewhere_hidesOwnerWorkspaceFromNonAdministrator() {
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
-        Connection otherWorkspace = newConnection(8L, 99L, IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE);
+        givenActiveSlackTeam(newConnection(8L, 99L, IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE));
         ConnectFinalization.Completed completed =
                 new ConnectFinalization.Completed("T1", new BearerToken("t", null), "Acme");
-        when(connectionRepository.findFirstByKindAndInstanceKeyAndState(
-                        IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE))
-                .thenReturn(Optional.of(otherWorkspace));
 
-        assertThatThrownBy(() -> service.completeConnection(pending, completed, "alice"))
+        assertThatThrownBy(() -> service.completeConnection(pending, completed, "5"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("already connected")
-                .hasMessageContaining("workspace 99");
+                .hasMessage("This Slack workspace is already connected to Hephaestus elsewhere;"
+                        + " it must be disconnected there first");
+
+        verify(membershipQuery).isAdministrator(99L, 5L);
+        verify(connectionRepository, never()).save(any(Connection.class));
+        verify(connectionService, never()).transition(any(), any());
+    }
+
+    @Test
+    void complete_slackTeamActiveElsewhere_namesOwnerWorkspaceToItsAdministrator() {
+        Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
+        givenActiveSlackTeam(newConnection(8L, 99L, IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE));
+        when(membershipQuery.isAdministrator(99L, 5L)).thenReturn(true);
+        ConnectFinalization.Completed completed =
+                new ConnectFinalization.Completed("T1", new BearerToken("t", null), "Acme");
+
+        assertThatThrownBy(() -> service.completeConnection(pending, completed, "5"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already connected to workspace 99");
 
         verify(connectionRepository, never()).save(any(Connection.class));
+    }
+
+    @Test
+    void complete_slackTeamActiveInThisAndAnotherWorkspace_rejects() {
+        Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
+        givenActiveSlackTeam(
+                newConnection(8L, 42L, IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE),
+                newConnection(9L, 99L, IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE));
+        ConnectFinalization.Completed completed =
+                new ConnectFinalization.Completed("T1", new BearerToken("t", null), "Acme");
+
+        assertThatThrownBy(() -> service.completeConnection(pending, completed, null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageNotContaining("99");
+
         verify(connectionService, never()).transition(any(), any());
     }
 
@@ -203,8 +241,8 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         Connection active = newConnection(8L, 42L, IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE);
         ConnectFinalization.Completed completed =
                 new ConnectFinalization.Completed("T1", new BearerToken("new-token", null), "Acme");
-        when(connectionRepository.findFirstByKindAndInstanceKeyAndState(
-                        IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE))
+        givenActiveSlackTeam(active);
+        when(connectionRepository.findByWorkspaceIdAndKindAndInstanceKey(42L, IntegrationKind.SLACK, "T1"))
                 .thenReturn(Optional.of(active));
         when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
         when(connectionService.transition(any(Connection.class), any(TransitionRequest.class)))
@@ -228,9 +266,6 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         Connection uninstalled = newConnection(8L, 42L, IntegrationKind.SLACK, "T1", IntegrationState.UNINSTALLED);
         ConnectFinalization.Completed completed =
                 new ConnectFinalization.Completed("T1", new BearerToken("new-token", null), "Acme");
-        when(connectionRepository.findFirstByKindAndInstanceKeyAndState(
-                        IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE))
-                .thenReturn(Optional.empty());
         when(connectionRepository.findByWorkspaceIdAndKindAndInstanceKey(42L, IntegrationKind.SLACK, "T1"))
                 .thenReturn(Optional.of(uninstalled));
         when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -283,6 +318,12 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
     }
 
     // helpers
+
+    private void givenActiveSlackTeam(Connection... active) {
+        when(connectionRepository.findAllByKindAndInstanceKeyInAndState(
+                        IntegrationKind.SLACK, List.of("T1"), IntegrationState.ACTIVE))
+                .thenReturn(List.of(active));
+    }
 
     private static Connection newConnection(
             long id, long workspaceId, IntegrationKind kind, @Nullable String instanceKey, IntegrationState state) {

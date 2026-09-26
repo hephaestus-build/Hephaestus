@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineContentClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineTokenClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookClient;
+import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -40,6 +41,12 @@ public class SharedTestDoubles {
     @Primary
     SlackMessageService slackMessageService() {
         return mock(SlackMessageService.class);
+    }
+
+    @Bean
+    @Primary
+    SlackOAuthClient slackOAuthClient() {
+        return mock(SlackOAuthClient.class);
     }
 
     @Bean
