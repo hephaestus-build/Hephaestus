@@ -706,12 +706,17 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         }
     }
 
-    /** A client that has gone away must not stop the terminal chunk's row from being recorded. */
+    /**
+     * The turn's outcome is already claimed, so a terminal chunk that cannot be written — the client is gone, or
+     * the chunk failed to serialise — must not stop that outcome from being recorded.
+     */
     private static void sendTerminal(MentorChannel channel, UIMessageChunk chunk) {
         try {
             channel.send(chunk);
         } catch (ClientDisconnectedException disconnect) {
             log.debug("Terminal chunk not delivered, client gone: {}", disconnect.toString());
+        } catch (RuntimeException e) {
+            log.warn("Terminal chunk could not be written", e);
         }
     }
 

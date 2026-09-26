@@ -436,6 +436,31 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldInterruptTheTurnWhenItsInStreamErrorCannotBeWritten() {
+        User developer = userRepository.getCurrentUserElseThrow();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
+        HookedChannel channel = new HookedChannel(new MentorSseChannel(emitter, mapper, scheduler), chunk -> {
+            if (chunk instanceof UIMessageChunk.Error) {
+                throw new IllegalStateException("Failed to serialise UIMessageChunk");
+            }
+        });
+        scheduleResponses(sandbox, prompt -> {
+            sandbox.push(assistantStart());
+            sandbox.push(textDelta("Hel"));
+            sandbox.push(event("pi_error", n -> n.put("message", "provider failed")));
+        });
+
+        service.run(
+                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB),
+                channel,
+                USER_ID);
+
+        verify(persistence).interrupt(any(), any(), any());
+        verify(persistence, never()).complete(any(), any(), any());
+        assertThat(emitter.rawData).contains("[DONE]");
+    }
+
+    @Test
     void shouldReportAFailureOutsideTheStreamEvenWhenItsRowCannotBeWritten() throws Exception {
         when(interactiveSandboxService.attach(any())).thenThrow(new InteractiveSandboxException("no capacity"));
         doThrow(new org.springframework.dao.DataAccessResourceFailureException("database down"))
