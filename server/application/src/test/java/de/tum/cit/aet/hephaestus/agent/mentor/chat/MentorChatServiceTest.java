@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -203,7 +204,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         thread.setId(THREAD_ID);
         thread.setWorkspace(ws);
         thread.setUser(user);
-        when(persistence.ensureThread(eq(WORKSPACE_ID), eq(THREAD_ID), any(), any()))
+        when(persistence.ensureThread(eq(WORKSPACE_ID), eq(THREAD_ID), any(), any(), any()))
                 .thenReturn(thread);
         when(persistence.persistInFlight(any(), any(), any(), any(), any())).thenAnswer(inv -> {
             UUID assistantId = inv.getArgument(2, UUID.class);
@@ -260,7 +261,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         });
         scheduleHappyPathResponses(sandbox).run();
 
-        CurrentScmIdentityHolder.set(USER_ID, expected.getLogin());
+        CurrentScmIdentityHolder.set(USER_ID, expected.getLogin(), Set.of(USER_ID));
         try {
             runTurnSync();
         } finally {

@@ -14,7 +14,7 @@ export function useWorkspaceAccess() {
 		workspaces,
 		isLoading: workspacesLoading,
 	} = useActiveWorkspaceSlug();
-	const { isAuthenticated, isLoading: authLoading, userView } = useAuth();
+	const { isAuthenticated, isLoading: authLoading, userView, username } = useAuth();
 
 	const membershipQuery = useQuery({
 		...workspaceMembershipQueryOptions(chromeWorkspaceSlug ?? ""),
@@ -29,9 +29,13 @@ export function useWorkspaceAccess() {
 		workspaces,
 		role,
 		isAdmin: !userView && hasMinimumWorkspaceRole(role, "ADMIN"),
-		// The account's SCM identity for THIS workspace's provider, so prefer these over the global
-		// `username` on the current user.
-		userLogin: membershipQuery.data?.userLogin,
+		// The account's own login here, which the server chooses per workspace; the sign-in `username`
+		// names whichever linked identity signed in, so it answers only where no membership can.
+		// Undefined while the membership loads, so no page asks for another identity's data first.
+		selfLogin:
+			chromeWorkspaceSlug === undefined || membershipQuery.isError
+				? username
+				: membershipQuery.data?.userLogin,
 		userName: membershipQuery.data?.userName,
 		isLoading: workspacesLoading || membershipQuery.isLoading,
 		error: membershipQuery.error,

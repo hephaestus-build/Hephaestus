@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -15,15 +16,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public interface ChatThreadRepository extends JpaRepository<ChatThread, UUID> {
     /**
-     * List thread summaries (no messages, no session_jsonl BYTEA) owned by the given user
+     * List thread summaries (no messages, no session_jsonl BYTEA) owned by any of the given users
      * inside the given workspace, newest first. Constructor projection so Postgres never
      * detoasts the multi-MB session JSONL just to render the sidebar.
      */
     @Query("SELECT new de.tum.cit.aet.hephaestus.mentor.ChatThreadSummaryDTO(t.id, t.title, t.createdAt) "
-            + "FROM ChatThread t WHERE t.workspace.id = :workspaceId AND t.user.id = :userId "
+            + "FROM ChatThread t WHERE t.workspace.id = :workspaceId AND t.user.id IN :userIds "
             + "ORDER BY t.createdAt DESC, t.id DESC")
-    Page<ChatThreadSummaryDTO> findSummariesByWorkspaceAndUser(
-            @Param("workspaceId") Long workspaceId, @Param("userId") Long userId, Pageable pageable);
+    Page<ChatThreadSummaryDTO> findSummariesByWorkspaceAndUserIdIn(
+            @Param("workspaceId") Long workspaceId, @Param("userIds") Collection<Long> userIds, Pageable pageable);
 
     /**
      * Resolve a thread within a workspace; returns empty when the thread either does not
@@ -31,7 +32,7 @@ public interface ChatThreadRepository extends JpaRepository<ChatThread, UUID> {
      */
     Optional<ChatThread> findByIdAndWorkspaceId(UUID id, Long workspaceId);
 
-    Optional<ChatThread> findByIdAndWorkspaceIdAndUserId(UUID id, Long workspaceId, Long userId);
+    Optional<ChatThread> findByIdAndWorkspaceIdAndUserIdIn(UUID id, Long workspaceId, Collection<Long> userIds);
 
     /** Projection: avoids materialising the full entity to fetch the JSONL blob. Empty when missing or NULL. */
     @WorkspaceAgnostic("Caller has already resolved thread ownership via findByIdAndWorkspaceId")

@@ -350,21 +350,16 @@ function HeaderContainer() {
 	const {
 		isAuthenticated,
 		isLoading,
-		username,
 		userProfile,
 		userView,
 		logout,
 		getUserProfilePictureUrl,
 		getUserId,
 	} = useAuth();
-	const {
-		chromeWorkspaceSlug,
-		userLogin: workspaceUserLogin,
-		userName: workspaceUserName,
-	} = useWorkspaceAccess();
+	const { chromeWorkspaceSlug, selfLogin, userName: workspaceUserName } = useWorkspaceAccess();
 
 	// The account menu signs the administrator out, so during a user view it names them.
-	const effectiveUsername = userView ? userProfile?.username : (workspaceUserLogin ?? username);
+	const effectiveUsername = userView ? userProfile?.username : selfLogin;
 	const effectiveName = userView
 		? userProfile?.name
 		: (workspaceUserName ?? (userProfile && `${userProfile.firstName} ${userProfile.lastName}`));
@@ -519,7 +514,8 @@ function AppSidebarContainer() {
 
 	return (
 		<AppSidebar
-			username={username}
+			// Only the loading skeleton renders while `selfLogin` is still undefined.
+			username={workspaceAccess.selfLogin ?? username}
 			isAdmin={workspaceAccess.isAdmin}
 			isOwner={workspaceAccess.role === "OWNER"}
 			isAppAdmin={isAppAdmin}

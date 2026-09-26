@@ -8,7 +8,6 @@ import {
 	getMemberOnboardingSettingsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type { WorkspaceOnboarding, WorkspaceOnboardingLink } from "@/api/types.gen";
-import { currentUser } from "@/mocks/fixtures/auth";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
@@ -238,9 +237,9 @@ describe("workspace member onboarding route", () => {
 		);
 		await screen.findByRole("radio", { name: /^In-house /u }, ROUTE_RENDER_WAIT);
 		fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-		// With leaderboards disabled, workspace home opens the signed-in developer’s page.
+		// With leaderboards disabled, workspace home opens the member’s own page.
 		await waitFor(
-			() => expect(router.state.location.pathname).toBe(`/w/acme/user/${currentUser.username}`),
+			() => expect(router.state.location.pathname).toBe("/w/acme/user/ada"),
 			ROUTE_RENDER_WAIT,
 		);
 	});
@@ -328,7 +327,7 @@ describe("workspace member onboarding route", () => {
 		fireEvent.click(screen.getByRole("radio", { name: /^No AI /u }));
 		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await waitFor(
-			() => expect(router.state.location.pathname).toBe(`/w/acme/user/${currentUser.username}`),
+			() => expect(router.state.location.pathname).toBe("/w/acme/user/ada"),
 			ROUTE_RENDER_WAIT,
 		);
 		expect(savedWorkspace).toBe("acme");
