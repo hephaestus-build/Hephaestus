@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -52,6 +53,9 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Autowired
     private LoginProviderRepository loginProviderRepository;
+
+    @Autowired
+    private GitProviderRegistry gitProviderRegistry;
 
     /** {@code hephaestus.integration.gitlab.default-server-url} in the test profile. */
     private static final String DEFAULT_INSTANCE = "https://gitlab.lrz.de";
@@ -179,6 +183,29 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
         assertThat(workspaceRepository.findByWorkspaceSlug("gitlab-other-instance"))
                 .isEmpty();
+    }
+
+    @Test
+    void shouldBindTheWorkspaceToTheProviderRowItsOwnerSignedInThroughWhenSpelledDifferently() {
+        String configured = "HTTPS://GitLab.example.com:443";
+        configureGitLabLogin("gitlab-example", configured);
+        long signedInThrough = gitProviderRegistry.resolveProviderId("GITLAB", configured);
+        IdentityProvider provider =
+                gitProviderRepository.findById(signedInThrough).orElseThrow();
+
+        WorkspaceDTO workspace = Objects.requireNonNull(
+                postGitLabWorkspace(gitLabCaller("mentor", provider), "gitlab-respelled", "https://gitlab.example.com")
+                        .expectStatus()
+                        .isCreated()
+                        .expectBody(WorkspaceDTO.class)
+                        .returnResult()
+                        .getResponseBody());
+
+        // Initial project discovery resolves the stored instance to its provider row by exact URL.
+        String storedInstance = Objects.requireNonNull(workspace.serverUrl());
+        assertThat(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, storedInstance))
+                .map(IdentityProvider::getId)
+                .contains(signedInThrough);
     }
 
     @Test

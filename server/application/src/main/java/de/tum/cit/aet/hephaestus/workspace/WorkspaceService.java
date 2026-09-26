@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.identity.AuthenticatedGitProviderUserService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
@@ -190,10 +191,12 @@ public class WorkspaceService {
         if (SecurityUtils.getCurrentAccountId().isEmpty()) {
             ownerUserId = request.ownerUserId();
         } else if (isGitLab) {
-            ownerUserId = authenticatedGitProviderUserService
-                    .resolveOrProvisionCurrentGitLabUser(
-                            Objects.requireNonNull(serverUrl, "A GitLab workspace needs its resolved instance"))
-                    .getId();
+            User owner = authenticatedGitProviderUserService.resolveOrProvisionCurrentGitLabUser(
+                    Objects.requireNonNull(serverUrl, "A GitLab workspace needs its resolved instance"));
+            ownerUserId = owner.getId();
+            // Sync finds the instance's provider row by exact URL; keep the spelling the owner's identity row
+            // has, which is the same instance as the requested URL but may be written differently.
+            serverUrl = owner.getProvider().getServerUrl();
         } else {
             ownerUserId = currentAccountUsers.resolve().stream()
                     .map(user -> Objects.requireNonNull(user.getId()))
