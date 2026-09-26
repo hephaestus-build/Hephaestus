@@ -98,6 +98,12 @@ final class StdioAttachedSandbox implements AttachedSandbox {
         return () -> listeners.remove(listener);
     }
 
+    /** Fan-out here never cuts a subscriber off, so {@code onLost} never runs. */
+    @Override
+    public Disposable subscribeFromNow(Consumer<JsonNode> listener, Runnable onLost) {
+        return subscribe(listener);
+    }
+
     @Override
     public Instant lastActivityAt() {
         Instant activity = lastActivity.get();

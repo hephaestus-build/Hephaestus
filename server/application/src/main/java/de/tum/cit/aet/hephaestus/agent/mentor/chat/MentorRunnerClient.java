@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -50,6 +51,7 @@ public final class MentorRunnerClient implements AutoCloseable {
     private final AttachedSandbox sandbox;
     private final ObjectMapper objectMapper;
     private final Consumer<JsonNode> onEvent;
+    private final Runnable onStreamLost;
     private final Function<FetchContextRequest, JsonNode> fetchContextHandler;
     private final ScheduledExecutorService timeoutScheduler;
 
@@ -65,6 +67,12 @@ public final class MentorRunnerClient implements AutoCloseable {
     private final AtomicLong idGen = new AtomicLong();
     private final ConcurrentHashMap<Long, PendingCall> pending = new ConcurrentHashMap<>();
 
+    /**
+     * Set once this client's stream stopped being intact — the sandbox cut the subscription off, or a
+     * frame for this thread arrived malformed. No reply or event is processed after it.
+     */
+    private final AtomicBoolean streamLost = new AtomicBoolean();
+
     @Nullable
     private Disposable subscription;
 
@@ -72,12 +80,14 @@ public final class MentorRunnerClient implements AutoCloseable {
             AttachedSandbox sandbox,
             ObjectMapper objectMapper,
             Consumer<JsonNode> onEvent,
+            Runnable onStreamLost,
             Function<FetchContextRequest, JsonNode> fetchContextHandler,
             ScheduledExecutorService timeoutScheduler,
             UUID boundThreadId) {
         this.sandbox = Objects.requireNonNull(sandbox, "sandbox");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
         this.onEvent = Objects.requireNonNull(onEvent, "onEvent");
+        this.onStreamLost = Objects.requireNonNull(onStreamLost, "onStreamLost");
         this.fetchContextHandler = Objects.requireNonNull(fetchContextHandler, "fetchContextHandler");
         this.timeoutScheduler = Objects.requireNonNull(timeoutScheduler, "timeoutScheduler");
         this.boundThreadId = Objects.requireNonNull(boundThreadId, "boundThreadId");
@@ -91,7 +101,7 @@ public final class MentorRunnerClient implements AutoCloseable {
         // subscribeFromNow: skip ring-buffer replay of frames from prior turns on the same
         // reused sandbox. Without this, a second turn replays turn-1's agent_end event and
         // completes instantly with stale data.
-        this.subscription = sandbox.subscribeFromNow(this::onFrame);
+        this.subscription = sandbox.subscribeFromNow(this::onFrame, () -> loseStream("the subscription was cut off"));
     }
 
     public CompletableFuture<JsonNode> hello() {
@@ -140,11 +150,26 @@ public final class MentorRunnerClient implements AutoCloseable {
             }
             subscription = null;
         }
+        failPending("Runner client closed");
+    }
+
+    private void loseStream(String reason) {
+        if (!streamLost.compareAndSet(false, true)) {
+            return;
+        }
+        log.warn("Runner stream for thread {} is no longer intact: {}", boundThreadId, reason);
+        // Report the loss before failing pending calls, so it is the turn's recorded cause.
+        onStreamLost.run();
+        failPending("Runner event stream lost");
+    }
+
+    private void failPending(String reason) {
         pending.forEach((id, p) -> {
-            p.timeoutTask.cancel(false);
-            p.future.completeExceptionally(new InteractiveSandboxException("Runner client closed"));
+            if (pending.remove(id, p)) {
+                p.timeoutTask.cancel(false);
+                p.future.completeExceptionally(new InteractiveSandboxException(reason));
+            }
         });
-        pending.clear();
     }
 
     private CompletableFuture<JsonNode> call(String method, ObjectNode params, Duration timeout) {
@@ -174,16 +199,34 @@ public final class MentorRunnerClient implements AutoCloseable {
             timeoutTask.cancel(false);
             future.completeExceptionally(e);
         }
+        // The request still reaches the runner (abort, close_thread), but its reply never can.
+        if (streamLost.get() && pending.remove(id) != null) {
+            timeoutTask.cancel(false);
+            future.completeExceptionally(new InteractiveSandboxException("Runner event stream lost"));
+        }
         return future;
     }
 
+    /**
+     * Frames arrive from a sandbox, so their shape is checked here. A frame that breaks the protocol
+     * and is not addressed to another thread may have carried part of this thread's turn, so it ends
+     * the stream rather than being skipped; an unknown method is a benign notification.
+     */
     private void onFrame(JsonNode frame) {
+        if (streamLost.get()) {
+            return;
+        }
         if (!frame.isObject()) {
-            log.debug("Discarding non-object runner frame: {}", frame);
+            loseStream("a runner frame was not a JSON object");
             return;
         }
         if (frame.has("method")) {
-            String method = frame.get("method").asString();
+            JsonNode methodNode = frame.get("method");
+            if (!methodNode.isString()) {
+                loseStream("a runner frame's method was not a string");
+                return;
+            }
+            String method = methodNode.asString();
             if ("event".equals(method)) {
                 handleEvent(frame);
             } else if ("fetch_context".equals(method)) {
@@ -193,10 +236,10 @@ public final class MentorRunnerClient implements AutoCloseable {
             }
             return;
         }
-        if (frame.has("id")) {
+        if (frame.path("id").isIntegralNumber()) {
             handleResponse(frame);
         } else {
-            log.debug("Runner frame has neither method nor id; ignoring: {}", frame);
+            loseStream("a runner frame had neither a method nor a numeric reply id");
         }
     }
 
@@ -219,25 +262,24 @@ public final class MentorRunnerClient implements AutoCloseable {
     }
 
     private void handleEvent(JsonNode frame) {
-        JsonNode params = frame.get("params");
-        if (params == null || !params.has("event")) {
-            log.debug("Runner event frame missing params.event — ignoring");
-            return;
-        }
+        JsonNode params = frame.path("params");
         // Per-thread fan-out: the sandbox is shared by (userId, workspaceId), so a second
         // chat tab in the same workspace subscribes to the same frame stream. Drop any frame
         // whose threadId doesn't match the one this client is bound to — without the filter,
         // tab-A's translator sees tab-B's text deltas and ships them down tab-A's wire.
         // Notification-type frames (`runner_ready`) ship with `threadId: null` and pass
         // through here for ALL clients; the translator drops them by event-type.
-        if (params.has("threadId") && !params.get("threadId").isNull()) {
-            String frameThreadId = params.get("threadId").asString();
-            if (!boundThreadId.toString().equals(frameThreadId)) {
-                return;
-            }
+        JsonNode threadId = params.path("threadId");
+        if (threadId.isString() && !boundThreadId.toString().equals(threadId.asString())) {
+            return;
+        }
+        JsonNode event = params.path("event");
+        if (!(threadId.isString() || threadId.isNull()) || !event.path("type").isString()) {
+            loseStream("an event frame did not match the protocol");
+            return;
         }
         try {
-            onEvent.accept(params.get("event"));
+            onEvent.accept(event);
         } catch (RuntimeException e) {
             log.warn("Runner event handler threw: {}", e.getMessage(), e);
         }

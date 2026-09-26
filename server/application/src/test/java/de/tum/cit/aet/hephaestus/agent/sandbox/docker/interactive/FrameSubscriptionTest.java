@@ -11,11 +11,14 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.DisplayName;
+import java.util.concurrent.locks.LockSupport;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.node.IntNode;
 
 class FrameSubscriptionTest extends BaseUnitTest {
+
+    private static final Duration STALL = Duration.ofSeconds(5);
 
     @Test
     void deliversInOrder() {
@@ -24,8 +27,8 @@ class FrameSubscriptionTest extends BaseUnitTest {
         Counter errors = reg.counter("test.err");
         CopyOnWriteArrayList<Integer> received = new CopyOnWriteArrayList<>();
 
-        FrameSubscription sub =
-                new FrameSubscription(frame -> received.add(frame.intValue()), 16, dropped, errors, () -> {});
+        FrameSubscription sub = new FrameSubscription(
+                frame -> received.add(frame.intValue()), 16, STALL, dropped, errors, () -> {}, () -> {});
         sub.start();
 
         sub.offer(IntNode.valueOf(1));
@@ -39,10 +42,47 @@ class FrameSubscriptionTest extends BaseUnitTest {
     }
 
     @Test
-    void slowListenerDropsOldest() throws Exception {
+    void shouldDeliverEveryFrameInOrderWhenASlowListenerFallsFarBehindQueueCapacity() throws Exception {
         SimpleMeterRegistry reg = new SimpleMeterRegistry();
-        Counter dropped = reg.counter("test.drop");
-        Counter errors = reg.counter("test.err");
+        Counter cutOff = reg.counter("test.cutoff");
+        AtomicInteger lost = new AtomicInteger();
+        CopyOnWriteArrayList<Integer> received = new CopyOnWriteArrayList<>();
+        int frames = 200;
+
+        FrameSubscription sub = new FrameSubscription(
+                frame -> {
+                    LockSupport.parkNanos(Duration.ofMillis(1).toNanos());
+                    received.add(frame.intValue());
+                },
+                4,
+                Duration.ofSeconds(5),
+                cutOff,
+                reg.counter("test.err"),
+                lost::incrementAndGet,
+                () -> {});
+        sub.start();
+
+        Thread producer = Thread.ofVirtual().start(() -> {
+            for (int i = 0; i < frames; i++) {
+                sub.offer(IntNode.valueOf(i));
+            }
+        });
+        producer.join(Duration.ofSeconds(10));
+
+        await().atMost(Duration.ofSeconds(5)).until(() -> received.size() == frames);
+        assertThat(received)
+                .containsExactlyElementsOf(IntStream.range(0, frames).boxed().toList());
+        assertThat(cutOff.count()).isZero();
+        assertThat(lost).hasValue(0);
+        assertThat(sub.isDisposed()).isFalse();
+        sub.dispose();
+    }
+
+    @Test
+    void shouldCutOffAndSignalLossWhenListenerStallsPastTheTimeout() throws Exception {
+        SimpleMeterRegistry reg = new SimpleMeterRegistry();
+        Counter cutOff = reg.counter("test.cutoff");
+        AtomicInteger lost = new AtomicInteger();
         CountDownLatch gate = new CountDownLatch(1);
         CopyOnWriteArrayList<Integer> received = new CopyOnWriteArrayList<>();
 
@@ -56,40 +96,88 @@ class FrameSubscriptionTest extends BaseUnitTest {
                     received.add(frame.intValue());
                 },
                 4,
-                dropped,
-                errors,
+                Duration.ofMillis(100),
+                cutOff,
+                reg.counter("test.err"),
+                lost::incrementAndGet,
                 () -> {});
         sub.start();
 
-        for (int i = 0; i < 10; i++) {
-            sub.offer(IntNode.valueOf(i));
-        }
-        // capacity=4 → 5 enter (1 in-flight + 4 queued); 5 evict.
-        await().atMost(Duration.ofSeconds(2))
-                .untilAsserted(() -> assertThat(dropped.count()).isGreaterThan(0));
+        Thread producer = Thread.ofVirtual().start(() -> {
+            for (int i = 0; i < 20; i++) {
+                sub.offer(IntNode.valueOf(i));
+            }
+        });
+        producer.join(Duration.ofSeconds(5));
+
+        assertThat(producer.isAlive())
+                .as("the producer is released once the subscriber is cut off")
+                .isFalse();
+        assertThat(lost).hasValue(1);
+        assertThat(cutOff.count()).isEqualTo(1.0);
+        assertThat(sub.isDisposed()).isTrue();
 
         gate.countDown();
-        await().atMost(Duration.ofSeconds(2))
-                .untilAsserted(() -> assertThat(received).isNotEmpty());
-        sub.dispose();
+        // Only the frame already handed to the listener lands; nothing after the gap is delivered.
+        await().during(Duration.ofMillis(200))
+                .atMost(Duration.ofSeconds(2))
+                .untilAsserted(() -> assertThat(received).containsExactly(0));
     }
 
     @Test
-    @DisplayName("listener throwing does not kill the dispatcher; error counter increments")
-    void listenerThrowsHandled() {
+    void shouldReleaseABlockedProducerWhenDisposed() throws Exception {
         SimpleMeterRegistry reg = new SimpleMeterRegistry();
-        Counter dropped = reg.counter("test.drop");
+        AtomicInteger lost = new AtomicInteger();
+        CountDownLatch gate = new CountDownLatch(1);
+        FrameSubscription sub = new FrameSubscription(
+                frame -> {
+                    try {
+                        gate.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                },
+                1,
+                Duration.ofMinutes(1),
+                reg.counter("test.cutoff"),
+                reg.counter("test.err"),
+                lost::incrementAndGet,
+                () -> {});
+        sub.start();
+        Thread producer = Thread.ofVirtual().start(() -> {
+            for (int i = 0; i < 5; i++) {
+                sub.offer(IntNode.valueOf(i));
+            }
+        });
+        await().atMost(Duration.ofSeconds(2)).until(() -> producer.getState() == Thread.State.TIMED_WAITING);
+
+        sub.dispose();
+
+        producer.join(Duration.ofSeconds(2));
+        assertThat(producer.isAlive()).isFalse();
+        assertThat(lost).as("a disposed subscriber was not cut off").hasValue(0);
+        gate.countDown();
+    }
+
+    @Test
+    void shouldCutOffInsteadOfSkippingAFrameWhenTheListenerThrows() {
+        SimpleMeterRegistry reg = new SimpleMeterRegistry();
         Counter errors = reg.counter("test.err");
-        AtomicInteger called = new AtomicInteger();
+        AtomicInteger lost = new AtomicInteger();
+        CopyOnWriteArrayList<Integer> received = new CopyOnWriteArrayList<>();
 
         FrameSubscription sub = new FrameSubscription(
                 frame -> {
-                    called.incrementAndGet();
-                    throw new RuntimeException("boom");
+                    if (frame.intValue() == 2) {
+                        throw new RuntimeException("boom");
+                    }
+                    received.add(frame.intValue());
                 },
                 8,
-                dropped,
+                STALL,
+                reg.counter("test.cutoff"),
                 errors,
+                lost::incrementAndGet,
                 () -> {});
         sub.start();
 
@@ -97,11 +185,106 @@ class FrameSubscriptionTest extends BaseUnitTest {
         sub.offer(IntNode.valueOf(2));
         sub.offer(IntNode.valueOf(3));
 
-        await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
-            assertThat(called.get()).isEqualTo(3);
-            assertThat(errors.count()).isEqualTo(3.0);
+        await().atMost(Duration.ofSeconds(2))
+                .untilAsserted(() -> assertThat(lost).hasValue(1));
+        assertThat(received).containsExactly(1);
+        assertThat(errors.count()).isEqualTo(1.0);
+        assertThat(sub.isDisposed()).isTrue();
+    }
+
+    @Test
+    void shouldReportLossButNoStallWhenABlockedProducerIsInterrupted() throws Exception {
+        SimpleMeterRegistry reg = new SimpleMeterRegistry();
+        Counter cutOff = reg.counter("test.cutoff");
+        AtomicInteger lost = new AtomicInteger();
+        CountDownLatch gate = new CountDownLatch(1);
+        FrameSubscription sub = new FrameSubscription(
+                frame -> {
+                    try {
+                        gate.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                },
+                1,
+                Duration.ofMinutes(1),
+                cutOff,
+                reg.counter("test.err"),
+                lost::incrementAndGet,
+                () -> {});
+        sub.start();
+        Thread producer = Thread.ofVirtual().start(() -> {
+            for (int i = 0; i < 5; i++) {
+                sub.offer(IntNode.valueOf(i));
+            }
         });
+        await().atMost(Duration.ofSeconds(2)).until(() -> producer.getState() == Thread.State.TIMED_WAITING);
+
+        producer.interrupt();
+
+        producer.join(Duration.ofSeconds(2));
+        assertThat(producer.isAlive()).isFalse();
+        assertThat(lost).as("the frame it was holding never arrives").hasValue(1);
+        assertThat(cutOff.count()).as("not a stall").isZero();
+        gate.countDown();
+    }
+
+    @Test
+    void shouldDeliverQueuedFramesThenSignalLossWhenTheStreamEnds() {
+        SimpleMeterRegistry reg = new SimpleMeterRegistry();
+        AtomicInteger lost = new AtomicInteger();
+        CopyOnWriteArrayList<Integer> received = new CopyOnWriteArrayList<>();
+        CountDownLatch gate = new CountDownLatch(1);
+        FrameSubscription sub = new FrameSubscription(
+                frame -> {
+                    try {
+                        gate.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    received.add(frame.intValue());
+                },
+                8,
+                STALL,
+                reg.counter("test.cutoff"),
+                reg.counter("test.err"),
+                lost::incrementAndGet,
+                () -> {});
+        sub.start();
+        sub.offer(IntNode.valueOf(1));
+        sub.offer(IntNode.valueOf(2));
+
+        sub.endOfStream();
+        sub.offer(IntNode.valueOf(3));
+        gate.countDown();
+
+        await().atMost(Duration.ofSeconds(2))
+                .untilAsserted(() -> assertThat(lost).hasValue(1));
+        assertThat(received)
+                .as("frames queued before the end still arrive; none after it")
+                .containsExactly(1, 2);
+    }
+
+    @Test
+    void shouldNotSignalLossWhenTheOwnerDisposesBeforeTheStreamEnds() throws Exception {
+        SimpleMeterRegistry reg = new SimpleMeterRegistry();
+        AtomicInteger lost = new AtomicInteger();
+        FrameSubscription sub = new FrameSubscription(
+                frame -> {},
+                8,
+                STALL,
+                reg.counter("test.cutoff"),
+                reg.counter("test.err"),
+                lost::incrementAndGet,
+                () -> {});
+        sub.start();
+
         sub.dispose();
+        sub.endOfStream();
+
+        await().during(Duration.ofMillis(200))
+                .atMost(Duration.ofSeconds(1))
+                .untilAsserted(() -> assertThat(lost).hasValue(0));
     }
 
     @Test
@@ -109,7 +292,13 @@ class FrameSubscriptionTest extends BaseUnitTest {
         SimpleMeterRegistry reg = new SimpleMeterRegistry();
         AtomicInteger onDisposeFires = new AtomicInteger();
         FrameSubscription sub = new FrameSubscription(
-                frame -> {}, 4, reg.counter("test.drop"), reg.counter("test.err"), onDisposeFires::incrementAndGet);
+                frame -> {},
+                4,
+                STALL,
+                reg.counter("test.drop"),
+                reg.counter("test.err"),
+                () -> {},
+                onDisposeFires::incrementAndGet);
         sub.start();
         assertThat(sub.isDisposed()).isFalse();
         sub.dispose();
@@ -128,8 +317,10 @@ class FrameSubscriptionTest extends BaseUnitTest {
         FrameSubscription sub = new FrameSubscription(
                 frame -> received.add(frame.intValue()),
                 4,
+                STALL,
                 reg.counter("test.drop"),
                 reg.counter("test.err"),
+                () -> {},
                 () -> {});
         sub.start();
         sub.dispose();

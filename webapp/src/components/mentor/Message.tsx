@@ -1,3 +1,4 @@
+import { AlertCircle } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { type InputHTMLAttributes, useState } from "react";
 import { Streamdown } from "streamdown";
@@ -54,6 +55,7 @@ export function PreviewMessage({
 	const attachmentsFromMessage = message.parts.filter((part) => part.type === "file");
 
 	const isArtifact = variant === "artifact";
+	const isInterrupted = message.role === "assistant" && message.metadata?.status === "interrupted";
 
 	return (
 		<AnimatePresence>
@@ -136,6 +138,14 @@ export function PreviewMessage({
 
 							return null;
 						})}
+
+						{isInterrupted && (
+							<p className="flex items-center gap-2 text-sm text-muted-foreground">
+								<AlertCircle aria-hidden className="size-4 shrink-0" />
+								This reply was interrupted before it finished, so it is incomplete. Ask again for a
+								full answer.
+							</p>
+						)}
 
 						{!readonly && (
 							<MessageActions

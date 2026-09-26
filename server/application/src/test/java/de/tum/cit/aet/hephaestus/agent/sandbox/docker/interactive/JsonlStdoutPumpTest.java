@@ -28,7 +28,7 @@ class JsonlStdoutPumpTest extends BaseUnitTest {
     private static final String PARA_SEP = Character.toString(0x2029);
     private static final int LINE_CAP = 1024;
 
-    private record Captured(List<JsonNode> frames, List<Integer> bytes, AtomicInteger eofCalls) {}
+    private record Captured(List<JsonNode> frames, List<Integer> bytes, AtomicInteger eofCalls, AtomicInteger lost) {}
 
     private Captured runPump(String input) {
         SimpleMeterRegistry reg = new SimpleMeterRegistry();
@@ -40,6 +40,7 @@ class JsonlStdoutPumpTest extends BaseUnitTest {
         List<JsonNode> frames = new ArrayList<>();
         List<Integer> bytes = new ArrayList<>();
         AtomicInteger eofCalls = new AtomicInteger();
+        AtomicInteger lost = new AtomicInteger();
         JsonlStdoutPump pump = new JsonlStdoutPump(
                 UUID.randomUUID(),
                 new StringReader(input),
@@ -48,6 +49,7 @@ class JsonlStdoutPumpTest extends BaseUnitTest {
                     frames.add(frame);
                     bytes.add(wireBytes);
                 },
+                lost::incrementAndGet,
                 ec -> eofCalls.incrementAndGet(),
                 () -> 0,
                 parseErrors,
@@ -56,7 +58,7 @@ class JsonlStdoutPumpTest extends BaseUnitTest {
         pump.start();
         await().atMost(Duration.ofSeconds(5))
                 .untilAsserted(() -> assertThat(eofCalls.get()).isEqualTo(1));
-        return new Captured(frames, bytes, eofCalls);
+        return new Captured(frames, bytes, eofCalls, lost);
     }
 
     @Test
@@ -100,6 +102,9 @@ class JsonlStdoutPumpTest extends BaseUnitTest {
         assertThat(c.frames().get(0).get("t").asString()).isEqualTo("a");
         assertThat(c.frames().get(1).get("t").asString()).isEqualTo("c");
         assertThat(parseErrors.count()).isEqualTo(1.0);
+        assertThat(c.lost())
+                .as("the unreadable line is reported as a lost frame")
+                .hasValue(1);
     }
 
     @Test
@@ -109,6 +114,7 @@ class JsonlStdoutPumpTest extends BaseUnitTest {
         Captured c = runPump("\n\n{\"t\":\"a\"}\n\n\n{\"t\":\"b\"}\n\n", parseErrors, LINE_CAP);
         assertThat(c.frames()).hasSize(2);
         assertThat(parseErrors.count()).isZero();
+        assertThat(c.lost()).hasValue(0);
     }
 
     @Test
@@ -119,6 +125,7 @@ class JsonlStdoutPumpTest extends BaseUnitTest {
         Captured c = runPump(big, parseErrors, 64);
         assertThat(parseErrors.count()).isGreaterThanOrEqualTo(1.0);
         assertThat(c.frames()).noneMatch(f -> "after".equals(f.get("t").asString()));
+        assertThat(c.lost()).hasValue(1);
     }
 
     @Test

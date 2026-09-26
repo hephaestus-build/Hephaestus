@@ -48,6 +48,8 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     private static final String PROXY_URL_PLACEHOLDER = "{appServerIp}";
     private static final String MDC_SESSION_ID = "mentor.sessionId";
 
+    private static final Duration SUBSCRIBER_STALL_TIMEOUT = Duration.ofSeconds(15);
+
     private final InteractiveSandboxProperties properties;
     private final SandboxNetworkManager networkManager;
     private final SandboxWorkspaceManager workspaceManager;
@@ -323,6 +325,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                 mapper,
                 ring,
                 properties.subscriberQueueCapacity(),
+                SUBSCRIBER_STALL_TIMEOUT,
                 properties.stdinWriteTimeoutMs(),
                 properties.sendQueueCapacity(),
                 properties.maxFrameChars(),

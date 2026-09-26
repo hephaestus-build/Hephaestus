@@ -22,6 +22,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -64,12 +65,22 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
     private volatile Instant lastActivityAt;
     private final Instant attachedAt;
 
-    /** Serialises pump fan-out with subscribe(): guarantees snapshot replay precedes live frames. */
-    private final Object subscriberLock = new Object();
+    /**
+     * Serialises pump fan-out with subscribe(): guarantees snapshot replay precedes live frames. A lock
+     * rather than a monitor because fan-out blocks on a full subscriber queue, which would pin the
+     * pump's carrier thread on JDK 21.
+     */
+    private final ReentrantLock subscriberLock = new ReentrantLock();
 
     private final Consumer<DockerAttachedSandboxAdapter> onClosed;
     private final LifecycleOps lifecycle;
     private final int subscriberQueueCapacity;
+    /**
+     * How long one frame may wait for full subscriber queues before those subscribers are cut off. The
+     * deadline is shared by every subscriber of the frame, so a live subscriber waits at most this long
+     * for stalled peers, however many there are.
+     */
+    private final Duration subscriberStallTimeout;
     /** Platform-thread executor: docker-java sync calls pin virtual carriers on JDK 21. */
     private final Executor closeExecutor;
 
@@ -84,6 +95,7 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
             ObjectMapper mapper,
             FrameRingBuffer ring,
             int subscriberQueueCapacity,
+            Duration subscriberStallTimeout,
             int stdinWriteTimeoutMs,
             int sendQueueCapacity,
             int maxLineChars,
@@ -103,6 +115,7 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
         this.lifecycle = lifecycle;
         this.onClosed = onClosed;
         this.subscriberQueueCapacity = subscriberQueueCapacity;
+        this.subscriberStallTimeout = subscriberStallTimeout;
         this.defaultGrace = defaultGrace;
         this.closeExecutor = closeExecutor;
         this.attachedAt = Instant.now();
@@ -127,6 +140,7 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
                 channel.stdout(),
                 mapper,
                 this::onFrame,
+                this::onFrameLost,
                 this::onEof,
                 channel::exitValueOrAlive,
                 metrics.frameParseError,
@@ -170,44 +184,43 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
 
     @Override
     public Disposable subscribe(Consumer<JsonNode> listener) {
-        return subscribeInternal(listener, -1L);
+        return subscribeInternal(listener, -1L, () -> {});
     }
 
     @Override
-    public Disposable subscribeFromNow(Consumer<JsonNode> listener) {
-        return subscribeInternal(listener, ring.latestSequence());
+    public Disposable subscribeFromNow(Consumer<JsonNode> listener, Runnable onLost) {
+        return subscribeInternal(listener, ring.latestSequence(), onLost);
     }
 
-    private Disposable subscribeInternal(Consumer<JsonNode> listener, long replaySince) {
-        // CLOSING: late add would leak its dispatcher — runClose has already drained subscriptions.
-        AttachedSandboxState s = state.get();
-        if (s != AttachedSandboxState.ATTACHED) {
-            FrameSubscription disposed =
-                    new FrameSubscription(listener, 1, metrics.subscriberDropped, metrics.subscriberError, () -> {});
-            disposed.dispose();
-            return disposed;
-        }
+    private Disposable subscribeInternal(Consumer<JsonNode> listener, long replaySince, Runnable onLost) {
         FrameSubscription[] holder = new FrameSubscription[1];
         FrameSubscription sub = new FrameSubscription(
                 listener,
                 subscriberQueueCapacity,
-                metrics.subscriberDropped,
+                subscriberStallTimeout,
+                metrics.subscriberCutOff,
                 metrics.subscriberError,
+                onLost,
                 () -> subscriptions.remove(holder[0]));
         holder[0] = sub;
 
         // Snapshot+add atomic against pump fan-out → snapshot replay strictly precedes live frames.
-        synchronized (subscriberLock) {
+        subscriberLock.lock();
+        try {
+            // runClose has already ended every subscription, so a late one could never receive a frame.
             if (state.get() != AttachedSandboxState.ATTACHED) {
-                sub.dispose();
+                sub.lose("the sandbox is closing");
                 return sub;
             }
             List<JsonNode> snapshot = ring.snapshotSince(replaySince);
             subscriptions.add(sub);
             sub.start();
+            long deadline = System.nanoTime() + subscriberStallTimeout.toNanos();
             for (JsonNode frame : snapshot) {
-                sub.offer(frame);
+                sub.offer(frame, deadline);
             }
+        } finally {
+            subscriberLock.unlock();
         }
         return sub;
     }
@@ -300,17 +313,42 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
             firstFrame.complete(null);
         }
         metrics.recvBytes.increment(wireBytes);
-        synchronized (subscriberLock) {
+        subscriberLock.lock();
+        try {
             ring.offer(frame);
+            long deadline = System.nanoTime() + subscriberStallTimeout.toNanos();
             for (FrameSubscription sub : subscriptions) {
-                sub.offer(frame);
+                sub.offer(frame, deadline);
             }
+        } finally {
+            subscriberLock.unlock();
+        }
+    }
+
+    /** A line that never became a frame leaves a gap in every live subscriber's stream. */
+    private void onFrameLost() {
+        subscriberLock.lock();
+        try {
+            for (FrameSubscription sub : subscriptions) {
+                sub.lose("a runner frame could not be read");
+            }
+        } finally {
+            subscriberLock.unlock();
         }
     }
 
     /** The channel completes its exit before it closes the frame pipe, so EOF always carries the code. */
     private void onEof(int exitCode) {
+        // Every frame has been fanned out; a subscriber still attached will not get the rest of its turn.
+        endStreamForSubscribers();
         terminate(exitCode == 0 ? EvictionReason.NATURAL_EXIT : EvictionReason.ERROR);
+    }
+
+    /** Owners dispose their subscription when done, so one still attached here is mid-stream. */
+    private void endStreamForSubscribers() {
+        for (FrameSubscription sub : subscriptions) {
+            sub.endOfStream();
+        }
     }
 
     private void closeChannel() {
@@ -356,12 +394,7 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
             }
 
             int subscriberCount = subscriptions.size();
-            for (FrameSubscription sub : subscriptions) {
-                try {
-                    sub.dispose();
-                } catch (Exception ignored) {
-                }
-            }
+            endStreamForSubscribers();
             subscriptions.clear();
 
             try {

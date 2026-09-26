@@ -18,6 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterEach;
@@ -40,6 +41,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
     private MentorRunnerClient client;
     private final ObjectMapper mapper = new ObjectMapper();
     private final CopyOnWriteArrayList<JsonNode> events = new CopyOnWriteArrayList<>();
+    private final AtomicInteger streamLost = new AtomicInteger();
     private final AtomicReference<MentorRunnerClient.FetchContextRequest> lastFetchContext = new AtomicReference<>();
     private ScheduledExecutorService scheduler;
     private UUID threadId;
@@ -53,6 +55,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
                 sandbox,
                 mapper,
                 events::add,
+                streamLost::incrementAndGet,
                 req -> {
                     lastFetchContext.set(req);
                     return mapper.createObjectNode().put("ok", true);
@@ -81,6 +84,22 @@ class MentorRunnerClientTest extends BaseUnitTest {
 
         JsonNode result = future.get(2, TimeUnit.SECONDS);
         assertThat(result.get("protocolVersion").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldFailPendingAndLaterCallsWhenTheEventStreamIsLost() throws Exception {
+        CompletableFuture<JsonNode> inFlight = client.openThread(threadId);
+        sandbox.takeFrame();
+
+        sandbox.onLost.run();
+
+        assertThat(streamLost).hasValue(1);
+        assertThatThrownBy(() -> inFlight.get(1, TimeUnit.SECONDS))
+                .hasCauseInstanceOf(InteractiveSandboxException.class);
+        // A later request still reaches the runner, but fails at once: its reply cannot arrive.
+        CompletableFuture<JsonNode> abort = client.abort(threadId);
+        assertThat(sandbox.takeFrame().get("method").asString()).isEqualTo("abort");
+        assertThat(abort).isCompletedExceptionally();
     }
 
     @Test
@@ -129,6 +148,41 @@ class MentorRunnerClientTest extends BaseUnitTest {
 
         assertThat(events).hasSize(1);
         assertThat(events.get(0).get("type").asString()).isEqualTo("runner_ready");
+    }
+
+    @Test
+    void shouldEndTheStreamWhenAnEventForThisThreadBreaksTheProtocol() {
+        ObjectNode broken = eventFrame(threadId.toString());
+        ((ObjectNode) broken.path("params").path("event")).remove("type");
+
+        sandbox.pushFrame(broken);
+        sandbox.pushFrame(eventFrame(threadId.toString()));
+
+        assertThat(streamLost).hasValue(1);
+        assertThat(events).as("nothing after the broken frame is processed").isEmpty();
+    }
+
+    @Test
+    void shouldIgnoreAnotherThreadsFramesAndUnknownNotifications() {
+        ObjectNode foreign = eventFrame(UUID.randomUUID().toString());
+        ((ObjectNode) foreign.path("params").path("event")).remove("type");
+        ObjectNode unknownMethod =
+                mapper.createObjectNode().put("jsonrpc", "2.0").put("method", "log");
+
+        sandbox.pushFrame(foreign);
+        sandbox.pushFrame(unknownMethod);
+        sandbox.pushFrame(eventFrame(threadId.toString()));
+
+        assertThat(streamLost).hasValue(0);
+        assertThat(events).hasSize(1);
+    }
+
+    private ObjectNode eventFrame(String frameThreadId) {
+        ObjectNode frame = mapper.createObjectNode().put("jsonrpc", "2.0").put("method", "event");
+        ObjectNode params = frame.putObject("params");
+        params.put("threadId", frameThreadId);
+        params.putObject("event").put("type", "turn_end");
+        return frame;
     }
 
     @Test
@@ -224,6 +278,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
         private final UUID sessionId = UUID.randomUUID();
         private final LinkedBlockingDeque<JsonNode> sentFrames = new LinkedBlockingDeque<>();
         private final CopyOnWriteArrayList<Consumer<JsonNode>> listeners = new CopyOnWriteArrayList<>();
+        volatile Runnable onLost = () -> {};
 
         @Override
         public SandboxIdentity identity() {
@@ -239,6 +294,12 @@ class MentorRunnerClientTest extends BaseUnitTest {
         public Disposable subscribe(Consumer<JsonNode> listener) {
             listeners.add(listener);
             return () -> listeners.remove(listener);
+        }
+
+        @Override
+        public Disposable subscribeFromNow(Consumer<JsonNode> listener, Runnable onLost) {
+            this.onLost = onLost;
+            return subscribe(listener);
         }
 
         @Override

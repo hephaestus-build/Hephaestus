@@ -247,10 +247,10 @@ final class MentorSseChannel implements MentorChannel {
         completeWithDone();
     }
 
-    /** Idempotent: cancel heartbeat. The {@code finally} in the orchestrator calls this. */
+    /** Ends the response if no terminal did, so a turn can never leave the client waiting on an open stream. */
     @Override
     public void close() {
-        cancelHeartbeat();
+        completeWithDone();
     }
 
     private void cancelHeartbeat() {

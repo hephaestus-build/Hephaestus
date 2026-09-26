@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import type { ChatMessage } from "@/lib/types";
 import { STORY_NOW } from "@/stories/story-clock";
@@ -117,6 +117,34 @@ const createMessageWithAttachments = (text: string, id = "msg-4"): ChatMessage =
 		{ type: "text", text },
 	],
 });
+
+/**
+ * A reply read back after its turn was interrupted. Its text stopped part-way, so it carries a marker
+ * rather than passing as a finished answer.
+ */
+export const InterruptedAssistantMessage: Story = {
+	args: {
+		message: {
+			...createAssistantMessage("Link the issue in the description so reviewers can find it. The"),
+			metadata: { status: "interrupted" },
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/This reply was interrupted before it finished/u)).toBeVisible();
+	},
+};
+
+export const CompletedAssistantMessage: Story = {
+	args: {
+		message: {
+			...createAssistantMessage("Link the issue in the description so reviewers can find it."),
+			metadata: { status: "completed" },
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByText(/This reply was interrupted/u)).toBeNull();
+	},
+};
 
 /**
  * Simple user message with plain text content.

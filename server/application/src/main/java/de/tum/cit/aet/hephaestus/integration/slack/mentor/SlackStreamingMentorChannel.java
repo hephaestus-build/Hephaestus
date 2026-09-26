@@ -75,7 +75,9 @@ public class SlackStreamingMentorChannel implements MentorChannel {
     private final AtomicBoolean done = new AtomicBoolean(false);
     private final AtomicBoolean terminated = new AtomicBoolean(false);
     private final AtomicBoolean flushing = new AtomicBoolean(false);
-    private final AtomicBoolean contentDelivered = new AtomicBoolean(false);
+    /** The whole reply reached Slack and its stream was stopped; a prefix does not count. */
+    private final AtomicBoolean replyDelivered = new AtomicBoolean(false);
+
     private final AtomicBoolean silentModeSuppressed = new AtomicBoolean(false);
 
     private volatile @Nullable Runnable disconnectHook;
@@ -182,12 +184,12 @@ public class SlackStreamingMentorChannel implements MentorChannel {
 
     @Override
     public void close() {
-        // The turn always drives a completeWith* before close(); this just guarantees the stream is stopped.
+        // Ends the stream if no terminal did.
         finish(null);
     }
 
     private DeliveryOutcome deliveryOutcome() {
-        if (contentDelivered.get()) {
+        if (replyDelivered.get()) {
             return DeliveryOutcome.DELIVERED;
         }
         return silentModeSuppressed.get() ? DeliveryOutcome.INSTANCE_SILENCED : DeliveryOutcome.NOT_DELIVERED;
@@ -328,7 +330,6 @@ public class SlackStreamingMentorChannel implements MentorChannel {
             } else {
                 slack.appendStream(workspaceId, channel, ts, text);
             }
-            contentDelivered.set(true);
         } finally {
             streamLock.unlock();
         }
@@ -353,7 +354,8 @@ public class SlackStreamingMentorChannel implements MentorChannel {
         if (!done.compareAndSet(false, true)) {
             return; // idempotent terminal
         }
-        stopFlusher();
+        // A tick still in flight may yet fail and requeue text no one will send, so the reply cannot be vouched for.
+        boolean flusherStopped = stopFlusher();
 
         String remainder;
         lock.lock();
@@ -375,13 +377,12 @@ public class SlackStreamingMentorChannel implements MentorChannel {
         // run, so retry the terminal write inline rather than dropping it on a transient blip.
         boolean unopened = streamTs.get() == null;
         String body = (unopened && remainder.isBlank()) ? "_(the mentor produced no response)_" : remainder;
-        if (!body.isBlank() || unopened) {
-            terminalWrite(body);
-        }
+        boolean written = (body.isBlank() && !unopened) || terminalWrite(body);
         try {
             String ts = streamTs.get();
             if (ts != null && !terminated.get()) {
                 slack.stopStream(workspaceId, channel, ts, List.of());
+                replyDelivered.set(written && flusherStopped);
             }
         } catch (Exception e) {
             // Terminals never throw (contract). A gone recipient just means the stream is already finalized.
@@ -389,58 +390,69 @@ public class SlackStreamingMentorChannel implements MentorChannel {
         }
     }
 
-    /** Terminal content write (open or append) with a few transient retries — the flush loop is already stopped. */
-    private void terminalWrite(String text) {
+    /**
+     * Terminal content write (open or append) with a few transient retries — the flush loop is already stopped.
+     *
+     * @return whether the text reached Slack
+     */
+    private boolean terminalWrite(String text) {
         int attemptsLeft = 3;
         while (attemptsLeft > 0) {
             try {
                 openOrAppend(text);
-                return;
+                return true;
             } catch (SlackSendException e) {
                 if (isTerminal(e)) {
                     terminate();
-                    return;
+                    return false;
                 }
                 attemptsLeft--;
                 if (attemptsLeft == 0) {
                     log.debug("Slack terminal write gave up (channel={}): {}", channel, e.slackError());
-                    return;
+                    return false;
                 }
                 // Honor a throttle's Retry-After (bounded); otherwise a short fixed transient backoff.
                 honorRetryAfter(e.isRateLimited() ? e.retryAfterMillis() : 200L);
                 if (Thread.currentThread().isInterrupted()) {
-                    return;
+                    return false;
                 }
             }
         }
+        return false;
     }
 
     /**
-     * Stop the flush loop and wait for any in-flight tick so it can never race the terminal finalize. Called only
-     * from {@link #finish} (the runner thread) — never from the flush thread, which must not await itself.
+     * Stop the flush loop and wait, boundedly, for any in-flight tick before the terminal finalize. Called only on
+     * the runner thread ({@link #finish}, {@link #completeWithConflict}) — never the flush thread, which must not
+     * await itself.
      *
      * <p>OkHttp calls do not respond to {@code interrupt}, so a tick stuck inside {@code startStream}/
      * {@code appendStream} keeps running past {@code shutdownNow()}. We therefore await a second, longer bound so
      * the terminal write does not interleave with a live tick. {@link #streamLock} is the hard guarantee against a
      * double open even if that second wait also times out; this bounded wait just avoids overlapping writes.
+     *
+     * @return {@code false} when a tick outlived both waits and may still requeue text after the terminal drain
      */
-    private void stopFlusher() {
+    private boolean stopFlusher() {
         ScheduledFuture<?> task = flushTask;
         if (task != null) {
             task.cancel(false);
         }
         scheduler.shutdown();
         try {
-            if (!scheduler.awaitTermination(gracefulShutdownTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                scheduler.shutdownNow();
-                if (!scheduler.awaitTermination(forcedShutdownTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                    log.warn("Slack stream flush tick still in-flight at finalize (channel={})", channel);
-                }
+            if (scheduler.awaitTermination(gracefulShutdownTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                return true;
             }
+            scheduler.shutdownNow();
+            if (scheduler.awaitTermination(forcedShutdownTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                return true;
+            }
+            log.warn("Slack stream flush tick still in-flight at finalize (channel={})", channel);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             scheduler.shutdownNow();
         }
+        return false;
     }
 
     private void terminate() {

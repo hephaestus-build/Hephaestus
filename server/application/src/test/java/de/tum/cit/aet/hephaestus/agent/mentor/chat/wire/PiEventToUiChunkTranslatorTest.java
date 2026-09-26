@@ -10,6 +10,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -101,6 +103,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         JsonNode event = fixture("message_start_assistant.json");
 
         List<UIMessageChunk> first = translator.translate(event, state);
+        translator.translate(messageEnd(), state);
         List<UIMessageChunk> second = translator.translate(event, state);
 
         assertThat(first).extracting(c -> c.getClass().getSimpleName()).containsExactly("Start", "StartStep");
@@ -154,9 +157,11 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
     @Test
     void messageEnd_capturesUsage_emitsNothing() throws Exception {
-        JsonNode event = fixture("message_end_assistant.json");
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas("Hello!");
+        translator.translate(mapper.readTree("{\"type\":\"turn_end\"}"), state);
 
-        List<UIMessageChunk> out = translator.translate(event, state);
+        List<UIMessageChunk> out = translator.translate(fixture("message_end_assistant.json"), state);
 
         assertThat(out).isEmpty();
         assertThat(state.observedUsage()).isNotNull();
@@ -252,6 +257,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
     @Test
     void agentEnd_noEventUsage_harvestsFromMessages() throws Exception {
+        streamDeltas("Hi there!");
         JsonNode event = fixture("agent_end_no_usage.json");
 
         List<UIMessageChunk> out = translator.translate(event, state);
@@ -367,13 +373,6 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         assertThat(df.id()).isEqualTo(df.data().observationId());
     }
 
-    @Test
-    void linkFinding_invalidUuid_dropped() throws Exception {
-        assertThat(translator.translate(
-                        mapper.readTree("{\"type\":\"link_observation\",\"observationId\":\"nope\"}"), state))
-                .isEmpty();
-    }
-
     // synthetic runner events (snake-case, runner-owned)
 
     @Test
@@ -396,16 +395,22 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
     }
 
     @Test
-    void unknownEvent_dropped() throws Exception {
-        assertThat(translator.translate(mapper.readTree("{\"type\":\"future_event_we_dont_know\"}"), state))
-                .isEmpty();
+    void shouldFailTheTurnOnAnUnknownEventType() throws Exception {
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas("See ");
+
+        // A renamed link_observation must not disappear while the reply still finishes.
+        List<UIMessageChunk> out = translator.translate(
+                mapper.readTree("{\"type\":\"link_observations\",\"observationId\":\"" + UUID.randomUUID() + "\"}"),
+                state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(state.isStreamBroken()).isTrue();
     }
 
     @Test
     void piSessionLevelEvents_explicitlyDropped() throws Exception {
-        // These types are emitted by Pi but produce no UI chunks. Listing them as explicit
-        // `case` arms lets the `default` arm WARN on TRULY unknown types — otherwise a new
-        // Pi event variant would silently sail through as DEBUG. Each one must return empty.
+        // Unknown types fail the turn, so every housekeeping event Pi 0.84.4 emits must stay a no-op.
         String[] sessionEvents = {
             "agent_start",
             "turn_start",
@@ -417,6 +422,11 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
             "thinking_level_changed",
             "auto_retry_start",
             "auto_retry_end",
+            "entry_appended",
+            "summarization_retry_scheduled",
+            "summarization_retry_attempt_start",
+            "summarization_retry_finished",
+            "bash_execution_update",
             "runner_ready",
         };
         for (String type : sessionEvents) {
@@ -515,9 +525,10 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
     }
 
     @Test
-    void malformedEvent_dropped() {
+    void malformedEvent_failsTheTurn() {
         assertThat(translator.translate(mapper.createObjectNode().put("noType", true), state))
-                .isEmpty();
+                .extracting(c -> c.getClass().getSimpleName())
+                .containsExactly("Error");
     }
 
     // parts accumulation
@@ -540,6 +551,232 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         assertThat(snapshot.get(0).get("type").asString()).isEqualTo("step-start");
         assertThat(snapshot.get(1).get("type").asString()).isEqualTo("text");
         assertThat(snapshot.get(1).get("text").asString()).isEqualTo("hello");
+    }
+
+    @Test
+    void shouldOnlyCloseTheTextWhenStreamedTextMatchesTheFinalMessage() throws Exception {
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas("it. The ", "Closes #1");
+
+        assertThat(translator.translate(messageEnd("it. The ", "Closes #1"), state))
+                .extracting(c -> c.getClass().getSimpleName())
+                .containsExactly("TextEnd");
+        assertThat(state.isStreamBroken()).isFalse();
+    }
+
+    @Test
+    void shouldFailTheTurnAndStoreTheFinalTextWhenADeltaWasLost() throws Exception {
+        translator.translate(fixture("message_start_assistant.json"), state);
+        // ". The C" never arrived.
+        streamDeltas("it", "loses #1");
+
+        List<UIMessageChunk> out = translator.translate(messageEnd("it. The Closes #1"), state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(((UIMessageChunk.Error) out.get(1)).errorText())
+                .isEqualTo(PiEventToUiChunkTranslator.REPLY_LOST_IN_TRANSIT);
+        assertThat(state.isStreamBroken()).isTrue();
+        JsonNode parts = state.partsSnapshot();
+        assertThat(parts).hasSize(2);
+        assertThat(parts.get(0).get("type").asString()).isEqualTo("step-start");
+        assertThat(parts.get(1).get("text").asString()).isEqualTo("it. The Closes #1");
+    }
+
+    @Test
+    void shouldKeepALinkedObservationWhenReplacingTextWithALostDelta() throws Exception {
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas("a");
+        UUID observationId = UUID.randomUUID();
+        translator.translate(
+                mapper.createObjectNode()
+                        .put("type", "link_observation")
+                        .put("observationId", observationId.toString()),
+                state);
+        // "b" never arrived.
+
+        List<UIMessageChunk> out = translator.translate(messageEnd("ab"), state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        JsonNode parts = state.partsSnapshot();
+        assertThat(parts)
+                .extracting(p -> p.get("type").asString())
+                .containsExactly("step-start", "data-observation", "text");
+        assertThat(parts.get(1).path("data").path("observationId").asString()).isEqualTo(observationId.toString());
+        assertThat(parts.get(2).get("text").asString()).isEqualTo("ab");
+        assertThat(state.linkedObservationIds()).containsExactly(observationId);
+    }
+
+    @Test
+    void shouldFailInsteadOfFinishingWhenMessageEndWasLost() throws Exception {
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas("it");
+
+        List<UIMessageChunk> out = translator.translate(agentEnd("it. The Closes #1"), state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(state.isStreamBroken()).isTrue();
+        assertThat(state.partsSnapshot().get(1).get("text").asString()).isEqualTo("it. The Closes #1");
+    }
+
+    @Test
+    void shouldFinishWhenAgentEndConfirmsAMessageWithoutMessageEnd() throws Exception {
+        streamDeltas("stub: hi");
+
+        List<UIMessageChunk> out = translator.translate(agentEnd("stub: hi"), state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Finish");
+        assertThat(state.isStreamBroken()).isFalse();
+    }
+
+    @Test
+    void shouldFailWhenMessageStartWasLostAndTheTextDiffers() throws Exception {
+        streamDeltas("it", "loses #1");
+
+        List<UIMessageChunk> out = translator.translate(messageEnd("it. The Closes #1"), state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(state.isStreamBroken()).isTrue();
+    }
+
+    @Test
+    void shouldFailWhenANewMessageStartsBeforeThePreviousOneEnded() throws Exception {
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas("it");
+
+        List<UIMessageChunk> out = translator.translate(fixture("message_start_assistant.json"), state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(state.partsSnapshot())
+                .extracting(p -> p.get("type").asString())
+                .containsExactly("step-start");
+    }
+
+    @Test
+    void shouldFailWhenAgentEndCarriesAReplyThatNeverStreamed() {
+        List<UIMessageChunk> out = translator.translate(agentEnd("Link the issue."), state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("Error");
+        assertThat(state.isStreamBroken()).isTrue();
+    }
+
+    @Test
+    void shouldFailWhenAWholeMiddleMessageWasLost() throws Exception {
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas("Let me check.");
+        translator.translate(messageEnd("Let me check."), state);
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas("Done.");
+        translator.translate(messageEnd("Done."), state);
+
+        List<UIMessageChunk> out = translator.translate(agentEnd("Let me check.", "Link the issue.", "Done."), state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("Error");
+    }
+
+    @Test
+    void shouldFinishWhenEveryReplyTextStreamedIncludingToolOnlyAndRetriedMessages() throws Exception {
+        // A failed attempt that Pi retried streams text agent_end no longer carries.
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas("Partial attempt");
+        translator.translate(messageEnd("Partial attempt"), state);
+        translator.translate(fixture("message_start_assistant.json"), state);
+        translator.translate(messageEnd(), state);
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas("Done.");
+        translator.translate(messageEnd("Done."), state);
+
+        List<UIMessageChunk> out = translator.translate(agentEnd("", "Done."), state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("Finish");
+    }
+
+    @Test
+    void shouldFailWhenAgentEndOrdersTheStreamedMessagesDifferently() throws Exception {
+        streamMessage("First.");
+        streamMessage("Second.");
+
+        assertThat(translator.translate(agentEnd("Second.", "First."), state))
+                .extracting(c -> c.getClass().getSimpleName())
+                .containsExactly("Error");
+    }
+
+    @Test
+    void shouldFailWhenARetriedTextHidesAMissingFinalMessage() throws Exception {
+        // The failed attempt and the final one both said "Let me check."; the final "Done." never streamed.
+        streamMessage("Let me check.");
+        streamMessage("Let me check.");
+
+        assertThat(translator.translate(agentEnd("Let me check.", "Done."), state))
+                .extracting(c -> c.getClass().getSimpleName())
+                .containsExactly("Error");
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "{\"type\":\"message_update\",\"assistantMessageEvent\":{\"type\":\"citation_delta\",\"contentIndex\":0}}",
+                "{\"type\":\"message_update\"}",
+                "{\"type\":\"message_update\",\"assistantMessageEvent\":{\"type\":\"text_delta\",\"contentIndex\":0}}"
+            })
+    void shouldFailTheTurnOnAnInnerEventItCannotAccountFor(String event) throws Exception {
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas("Hi");
+
+        List<UIMessageChunk> out = translator.translate(mapper.readTree(event), state);
+        translator.translate(messageEnd("Hi"), state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(state.isStreamBroken()).isTrue();
+    }
+
+    private void streamMessage(String text) throws IOException {
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas(text);
+        translator.translate(messageEnd(text), state);
+    }
+
+    @Test
+    void shouldFailWhenALinkedObservationCannotBeRead() throws Exception {
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas("See this");
+
+        List<UIMessageChunk> out = translator.translate(
+                mapper.createObjectNode().put("type", "link_observation").put("observationId", "not-a-uuid"), state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(state.linkedObservationIds()).isEmpty();
+    }
+
+    private JsonNode agentEnd(String... texts) {
+        ObjectNode end = mapper.createObjectNode().put("type", "agent_end");
+        var messages = end.putArray("messages");
+        for (String text : texts) {
+            ObjectNode message = messages.addObject();
+            message.put("role", "assistant").put("stopReason", "stop");
+            var content = message.putArray("content");
+            if (!text.isEmpty()) {
+                content.addObject().put("type", "text").put("text", text);
+            }
+        }
+        return end;
+    }
+
+    private void streamDeltas(String... deltas) throws IOException {
+        for (String delta : deltas) {
+            ObjectNode update =
+                    (ObjectNode) fixture("message_update_text_delta.json").deepCopy();
+            ((ObjectNode) update.get("assistantMessageEvent")).put("delta", delta);
+            translator.translate(update, state);
+        }
+    }
+
+    private JsonNode messageEnd(String... textBlocks) throws IOException {
+        ObjectNode end = (ObjectNode) fixture("message_end_assistant.json").deepCopy();
+        var content = ((ObjectNode) end.get("message")).putArray("content");
+        for (String text : textBlocks) {
+            content.addObject().put("type", "text").put("text", text);
+        }
+        return end;
     }
 
     @Test

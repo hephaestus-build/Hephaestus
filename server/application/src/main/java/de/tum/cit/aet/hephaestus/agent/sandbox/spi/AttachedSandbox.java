@@ -9,9 +9,10 @@ import tools.jackson.databind.JsonNode;
 /**
  * Live handle to one attached sandbox session: bidirectional JSONL channel plus fan-out and idle
  * bookkeeping. {@link #subscribe} delivers a snapshot of the ring buffer followed by live frames,
- * each subscriber on its own bounded queue + virtual-thread dispatcher (slow listeners drop their
- * own frames, never the pump). After termination, {@code send} throws and {@code subscribe}
- * returns a disposed handle.
+ * each subscriber on its own bounded queue + virtual-thread dispatcher. Delivery never skips a
+ * frame: a full queue holds up the stream for a bounded time, and a subscriber that would miss a
+ * frame — it stalled, its listener threw, or the runner wrote a line that could not be read — is cut
+ * off instead. After termination, {@code send} throws and {@code subscribe} returns a disposed handle.
  */
 public interface AttachedSandbox extends AutoCloseable {
     /**
@@ -41,10 +42,11 @@ public interface AttachedSandbox extends AutoCloseable {
      * Like {@link #subscribe}, but skips the ring-buffer replay and only delivers frames that
      * arrive after the subscription is registered. Use this for subsequent turns on a reused
      * sandbox to avoid replaying terminal events from prior turns.
+     *
+     * @param onLost runs once if this subscriber is cut off; no frame reaches the listener after it.
+     *     Disposing the returned handle never triggers it. Must not block.
      */
-    default Disposable subscribeFromNow(Consumer<JsonNode> listener) {
-        return subscribe(listener);
-    }
+    Disposable subscribeFromNow(Consumer<JsonNode> listener, Runnable onLost);
 
     /** Wall-clock of the last frame in either direction. */
     Instant lastActivityAt();

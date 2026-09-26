@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.SessionRestore;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.ClientDisconnectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRefusedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerException;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorStreamLostException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.TurnAlreadyInFlightException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.PiEventToUiChunkTranslator;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState;
@@ -39,7 +40,6 @@ import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -51,6 +51,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -74,6 +75,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
 
     private static final Logger log = LoggerFactory.getLogger(MentorChatService.class);
     private static final JsonNodeFactory NODES = JsonNodeFactory.instance;
+    private static final String REPLY_NOT_SAVED = "Heph's reply couldn't be saved. Please try again.";
 
     private final UserRepository userRepository;
     private final ChatThreadRepository chatThreadRepository;
@@ -100,7 +102,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         MentorSseChannel channel = new MentorSseChannel(emitter, objectMapper, runnerTimeoutScheduler.scheduler());
         channel.bindLifecycle();
         AtomicReference<@Nullable MentorRunnerClient> clientHolder = new AtomicReference<>();
-        channel.onDisconnect(() -> abortRunnerOnDisconnect(clientHolder.get(), request.threadId()));
+        channel.onDisconnect(() -> abortRunner(clientHolder.get(), request.threadId()));
 
         // Record-started fires here so started/completed balance on the executor-rejected branch.
         metrics.recordStarted();
@@ -276,8 +278,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
 
         AttachedSandbox sandbox = null;
         MentorRunnerClient client = null;
-        CompletableFuture<Void> turnComplete = new CompletableFuture<>();
-        java.util.concurrent.atomic.AtomicBoolean errorChunkSeen = new java.util.concurrent.atomic.AtomicBoolean();
+        Turn turn = new Turn();
         channel.startKeepAlive();
         boolean poisoned = false;
         MentorChatMetrics.Outcome outcome = MentorChatMetrics.Outcome.ERROR;
@@ -296,106 +297,100 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     .orElse(null);
             InteractiveSandboxSpec spec =
                     mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig, contextInputs, sessionRestore);
-            RunnerHandle runner = startRunner(
-                    spec, request, channel, clientHolder, state, cookie, turnComplete, errorChunkSeen, contextInputs);
-            sandbox = runner.sandbox();
-            client = runner.client();
-
-            // Pi is single-session: keep the lock through the terminal chunk so a second turn cannot orphan this one.
+            // Pi is single-session: hold the lock from attach through the terminal chunk, so a second turn can
+            // neither orphan this one nor pick up a runner this turn is about to discard.
             MentorTurnLock.SandboxKey sandboxKey = new MentorTurnLock.SandboxKey(request.workspaceId(), user.getId());
-
             try (var ignored = turnLock.acquireSandboxLock(sandboxKey)) {
+                boolean poisoning = false;
                 try {
-                    client.openThread(request.threadId()).get(10, TimeUnit.SECONDS);
-                } catch (Exception openFailure) {
-                    if (sessionRestore == null) {
-                        throw openFailure;
-                    }
-                    log.warn(
-                            "Mentor session restore failed for thread {}; clearing session_jsonl and retrying once: {}",
-                            request.threadId(),
-                            openFailure.toString());
-                    chatThreadRepository.clearSessionJsonl(thread.getId());
-                    closeFailedRestoreRunner(client, sandbox);
-                    clientHolder.set(null);
-
-                    InteractiveSandboxSpec cleanSpec =
-                            mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig, contextInputs, null);
-                    runner = startRunner(
-                            cleanSpec,
-                            request,
-                            channel,
-                            clientHolder,
-                            state,
-                            cookie,
-                            turnComplete,
-                            errorChunkSeen,
-                            contextInputs);
-                    sandbox = runner.sandbox();
-                    client = runner.client();
-                    client.openThread(request.threadId()).get(10, TimeUnit.SECONDS);
-                }
-                // Bind and unbind INSIDE the sandbox lock: that exclusivity is what stops a call being
-                // attributed to the wrong turn. A late call outside the window has no row to bill and
-                // the proxy refuses it.
-                UUID sandboxSessionId = sandbox.identity().sessionId();
-                if (!proxyCredentialRegistry.bindTurn(sandboxSessionId, proxyMeter)) {
-                    log.warn(
-                            "Mentor sandbox session {} has no live proxy credential; this turn has no billing "
-                                    + "target, so the proxy will refuse its LLM calls",
-                            sandboxSessionId);
-                }
-                try {
-                    var prompt = client.prompt(
-                            request.threadId(), MentorTurnPromptFactory.forRunner(request, contextInputs));
-                    state.markLlmCallStarted();
-                    prompt.whenComplete((result, ex) -> {
-                        if (ex != null && !turnComplete.isDone()) {
-                            turnComplete.completeExceptionally(ex);
+                    sandbox = attachSandbox(spec);
+                    client = startRunner(sandbox, request, channel, clientHolder, state, cookie, turn, contextInputs);
+                    try {
+                        client.openThread(request.threadId()).get(10, TimeUnit.SECONDS);
+                    } catch (Exception openFailure) {
+                        if (sessionRestore == null || state.isStreamBroken()) {
+                            throw openFailure;
                         }
-                    });
+                        log.warn(
+                                "Mentor session restore failed for thread {}; clearing session_jsonl and retrying once: {}",
+                                request.threadId(),
+                                openFailure.toString());
+                        chatThreadRepository.clearSessionJsonl(thread.getId());
+                        discardRunner(client, sandbox);
+                        clientHolder.set(null);
 
-                    turnComplete.get(
-                            MentorRunnerClient.DEFAULT_PROMPT_TIMEOUT.toMillis() + 30_000, TimeUnit.MILLISECONDS);
+                        InteractiveSandboxSpec cleanSpec =
+                                mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig, contextInputs, null);
+                        sandbox = attachSandbox(cleanSpec);
+                        client = startRunner(
+                                sandbox, request, channel, clientHolder, state, cookie, turn, contextInputs);
+                        client.openThread(request.threadId()).get(10, TimeUnit.SECONDS);
+                    }
+                    // Bind and unbind INSIDE the sandbox lock: that exclusivity is what stops a call being
+                    // attributed to the wrong turn. A late call outside the window has no row to bill and
+                    // the proxy refuses it.
+                    UUID sandboxSessionId = sandbox.identity().sessionId();
+                    if (!proxyCredentialRegistry.bindTurn(sandboxSessionId, proxyMeter)) {
+                        log.warn(
+                                "Mentor sandbox session {} has no live proxy credential; this turn has no billing "
+                                        + "target, so the proxy will refuse its LLM calls",
+                                sandboxSessionId);
+                    }
+                    try {
+                        var prompt = client.prompt(
+                                request.threadId(), MentorTurnPromptFactory.forRunner(request, contextInputs));
+                        state.markLlmCallStarted();
+                        prompt.whenComplete((result, ex) -> {
+                            if (ex != null) {
+                                turn.done.completeExceptionally(ex);
+                            }
+                        });
+
+                        turn.done.get(
+                                MentorRunnerClient.DEFAULT_PROMPT_TIMEOUT.toMillis() + 30_000, TimeUnit.MILLISECONDS);
+                    } finally {
+                        proxyCredentialRegistry.unbindTurn(sandboxSessionId, proxyMeter);
+                    }
+                } catch (Exception failure) {
+                    poisoning = isPoisoning(failure);
+                    throw failure;
                 } finally {
-                    proxyCredentialRegistry.unbindTurn(sandboxSessionId, proxyMeter);
+                    // A runner with a broken stream may still be generating and cannot confirm an abort; a
+                    // poisoned one has corrupt state. Either way no later turn may reuse it.
+                    if (sandbox != null && (poisoning || state.isStreamBroken())) {
+                        discardRunner(client, sandbox);
+                    }
                 }
             }
-            // Error chunks interrupt rather than finalise, so they still need a transport terminal here.
-            if (errorChunkSeen.get()) {
-                channel.completeWithDone();
-            }
-            outcome = errorChunkSeen.get() ? MentorChatMetrics.Outcome.ERROR : MentorChatMetrics.Outcome.SUCCESS;
+            outcome = turn.terminal.get() == Terminal.FAILED_IN_STREAM
+                    ? MentorChatMetrics.Outcome.ERROR
+                    : MentorChatMetrics.Outcome.SUCCESS;
         } catch (TimeoutException timeout) {
             // Interrupt persistence here; the runner watchdog reclaims the session after a missing terminal event.
             log.warn(
                     "Mentor turn timed out waiting for agent_end (threadId={}): {}",
                     request.threadId(),
                     timeout.toString());
-            persistence.interrupt(cookie, state, timeout);
-            channel.completeWithError("Mentor turn timed out before completion.");
+            failTurn(turn, state, channel, cookie, timeout, "Mentor turn timed out before completion.");
             outcome = MentorChatMetrics.Outcome.TIMEOUT;
         } catch (ClientDisconnectedException disconnect) {
             if (clientHolder.get() == null) {
                 // No runner subscription exists to complete the persisted turn.
-                persistence.interrupt(cookie, state, disconnect);
+                failTurn(turn, state, channel, cookie, disconnect, null);
             } else {
                 log.info("Mentor client disconnected; runner draining: {}", disconnect.getMessage());
                 try {
-                    turnComplete.get(20, TimeUnit.SECONDS);
+                    turn.done.get(20, TimeUnit.SECONDS);
                 } catch (Exception drainEx) {
                     log.debug("Drain after client disconnect timed out / errored: {}", drainEx.toString());
-                    if (!turnComplete.isDone()) {
-                        persistence.interrupt(cookie, state, disconnect);
-                    }
+                    failTurn(turn, state, channel, cookie, disconnect, null);
                 }
             }
             outcome = MentorChatMetrics.Outcome.CLIENT_DISCONNECT;
         } catch (Exception e) {
             poisoned = isPoisoning(e);
             log.warn("Mentor turn errored (poisoned={}): {}", poisoned, e.getMessage(), e);
-            persistence.interrupt(cookie, state, e);
-            channel.completeWithError(userFacingError(e));
+            failTurn(turn, state, channel, cookie, e, userFacingError(e));
             outcome = poisoned ? MentorChatMetrics.Outcome.POISONED : MentorChatMetrics.Outcome.ERROR;
         } finally {
             channel.close();
@@ -417,32 +412,67 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 // the client owns timers / subscriptions independent of the thread session.
                 client.close();
             }
-            if (poisoned && sandbox != null) {
-                // Pi state is corrupt — force the registry to drop the sandbox so the next turn
-                // starts from a clean container instead of inheriting bad state.
-                try {
-                    sandbox.close(Duration.ofSeconds(5));
-                } catch (RuntimeException ex) {
-                    log.warn("Failed to terminate poisoned mentor sandbox: {}", ex.toString());
-                }
-            }
         }
         return outcome;
     }
 
-    private RunnerHandle startRunner(
-            InteractiveSandboxSpec spec,
+    /**
+     * One turn's single outcome. Whoever settles {@link #terminal} first owns the terminal chunk and the
+     * persisted row. The event handler holds {@link #delivery} while it translates and sends an event, and a
+     * failure is recorded under it too, so no chunk reaches the client after the failure it contradicts. The
+     * stream-loss callback runs on the sandbox's pump and never takes it.
+     */
+    private static final class Turn {
+        final AtomicReference<@Nullable Terminal> terminal = new AtomicReference<>();
+        final ReentrantLock delivery = new ReentrantLock();
+        final CompletableFuture<Void> done = new CompletableFuture<>();
+    }
+
+    private enum Terminal {
+        /** Finish arrived and the row is being completed; nothing has told the client yet. */
+        COMPLETING,
+        /** The row is durably completed, and only then does the client see Finish. */
+        COMPLETED,
+        /** The event stream settled a failure and interrupted the row itself. */
+        FAILED_IN_STREAM,
+        /** The turn failed outside the event stream; the turn thread records it. */
+        FAILED
+    }
+
+    /** Records a failure decided outside the event stream, unless the stream already settled the turn. */
+    private void failTurn(
+            Turn turn,
+            TranslatorState state,
+            MentorChannel channel,
+            MentorTurnPersistence.TurnPersistenceCookie cookie,
+            Throwable cause,
+            @Nullable String userError) {
+        turn.delivery.lock();
+        try {
+            if (!turn.terminal.compareAndSet(null, Terminal.FAILED) && turn.terminal.get() != Terminal.FAILED) {
+                return;
+            }
+            // Closing first also stores the block the client was still rendering.
+            closeOpenBlocks(state, channel);
+            interruptOrLeaveForReaper(cookie, state, cause);
+            if (userError != null) {
+                channel.completeWithError(userError);
+            }
+        } finally {
+            turn.delivery.unlock();
+        }
+    }
+
+    private MentorRunnerClient startRunner(
+            AttachedSandbox sandbox,
             MentorTurnRequest request,
             MentorChannel channel,
             AtomicReference<@Nullable MentorRunnerClient> clientHolder,
             TranslatorState state,
             MentorTurnPersistence.TurnPersistenceCookie cookie,
-            CompletableFuture<Void> turnComplete,
-            java.util.concurrent.atomic.AtomicBoolean errorChunkSeen,
+            Turn turn,
             Map<String, byte[]> contextInputs)
             throws InterruptedException, java.util.concurrent.ExecutionException, TimeoutException {
-        AttachedSandbox sandbox = attachSandbox(spec);
-
         if (channel.isClientGone()) {
             throw new ClientDisconnectedException("Client disconnected during sandbox attach");
         }
@@ -450,7 +480,18 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         MentorRunnerClient client = new MentorRunnerClient(
                 sandbox,
                 objectMapper,
-                event -> handleEvent(event, state, channel, cookie, turnComplete, errorChunkSeen),
+                event -> handleEvent(event, state, channel, cookie, turn),
+                // Runs on a sandbox thread, so it must not block: the turn thread records the failure. Only a
+                // reply already durably completed makes a later loss harmless; until then the runner is
+                // unusable, even if the stream settled the turn.
+                () -> {
+                    if (turn.terminal.compareAndSet(null, Terminal.FAILED)) {
+                        state.markStreamBroken();
+                        turn.done.completeExceptionally(new MentorStreamLostException());
+                    } else if (turn.terminal.get() != Terminal.COMPLETED) {
+                        state.markStreamBroken();
+                    }
+                },
                 callback -> handleFetchContext(callback, contextInputs),
                 runnerTimeoutScheduler.scheduler(),
                 // Per-thread event filter: the sandbox is shared by (userId, workspaceId), so
@@ -462,23 +503,14 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         try {
             client.start();
             if (channel.isClientGone()) {
-                abortRunnerOnDisconnect(client, request.threadId());
+                abortRunner(client, request.threadId());
                 throw new ClientDisconnectedException("Client disconnected after runner start");
             }
 
             JsonNode hello = client.hello().get(20, TimeUnit.SECONDS);
             verifyProtocol(hello);
             handedOff = true;
-            return new RunnerHandle(sandbox, client);
-        } catch (Exception failure) {
-            if (isPoisoning(failure)) {
-                try {
-                    sandbox.close(Duration.ofSeconds(5));
-                } catch (RuntimeException cleanupFailure) {
-                    failure.addSuppressed(cleanupFailure);
-                }
-            }
-            throw failure;
+            return client;
         } finally {
             if (!handedOff) {
                 clientHolder.compareAndSet(client, null);
@@ -487,20 +519,21 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         }
     }
 
-    private static void closeFailedRestoreRunner(MentorRunnerClient client, AttachedSandbox sandbox) {
+    /** Closes the client before the sandbox, so its own subscription ends deliberately rather than as a loss. */
+    private static void discardRunner(@Nullable MentorRunnerClient client, AttachedSandbox sandbox) {
         try {
-            client.close();
+            if (client != null) {
+                client.close();
+            }
         } catch (RuntimeException ignored) {
-            // Best-effort cleanup before retrying with a clean session.
+            // Best-effort: the sandbox close below is what matters.
         }
         try {
             sandbox.close(Duration.ofSeconds(5));
-        } catch (RuntimeException ignored) {
-            // Best-effort cleanup before retrying with a clean session.
+        } catch (RuntimeException e) {
+            log.warn("Failed to close mentor sandbox: {}", e.toString());
         }
     }
-
-    private record RunnerHandle(AttachedSandbox sandbox, MentorRunnerClient client) {}
 
     private AttachedSandbox attachSandbox(InteractiveSandboxSpec spec) {
         InteractiveSandboxService sandboxService = interactiveSandboxServiceProvider.getObject();
@@ -521,12 +554,12 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     }
 
     /**
-     * Ask the runner to stop generating tokens because the client is gone. The cost of tokens
+     * Ask the runner to stop generating tokens because nobody will receive them. The cost of tokens
      * already in flight is still charged (Pi can't unsend the LLM request), but no further
      * generation happens. {@code session.abort()} is documented idempotent — calling it after
      * the turn has naturally completed is harmless.
      */
-    private static void abortRunnerOnDisconnect(@Nullable MentorRunnerClient client, UUID threadId) {
+    private static void abortRunner(@Nullable MentorRunnerClient client, UUID threadId) {
         if (client == null) return;
         try {
             client.abort(threadId)
@@ -540,6 +573,15 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
 
     /** Bounds traversal of cyclic or unreasonably deep cause chains. */
     private static final int MAX_CAUSE_DEPTH = 32;
+
+    /** The AI SDK reducer rejects an error chunk that follows an unmatched text-start (vercel/ai #11700). */
+    private void closeOpenBlocks(TranslatorState state, MentorChannel channel) {
+        try {
+            translator.closeOpenBlocks(state).forEach(channel::send);
+        } catch (RuntimeException ignored) {
+            // Best-effort: the channel may already be gone.
+        }
+    }
 
     private static boolean isPoisoning(Throwable e) {
         Throwable cur = e;
@@ -560,53 +602,114 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             TranslatorState state,
             MentorChannel channel,
             MentorTurnPersistence.TurnPersistenceCookie cookie,
-            CompletableFuture<Void> turnComplete,
-            java.util.concurrent.atomic.AtomicBoolean errorChunkSeen) {
+            Turn turn) {
+        turn.delivery.lock();
         try {
-            List<UIMessageChunk> chunks = translator.translate(piEvent, state);
-            for (UIMessageChunk chunk : chunks) {
-                // Late chunks must not write to a closed channel or finalise the persisted turn twice.
-                if (turnComplete.isDone()) break;
+            if (turn.terminal.get() != null) {
+                return;
+            }
+            for (UIMessageChunk chunk : translator.translate(piEvent, state)) {
                 if (chunk instanceof UIMessageChunk.Finish finish) {
-                    UIMessageChunk.Finish toSend = finish;
-                    try {
-                        toSend = persistence.augmentFinishWithCost(finish, state);
-                    } catch (RuntimeException costEx) {
-                        // Cost-coverage metrics expose missing prices; avoid a warning on every affected turn.
-                        log.debug("Cost augmentation failed — sending raw Finish: {}", costEx.toString());
-                    }
-                    channel.send(toSend);
-                    // Slack discovers suppression only when its final buffer flushes; persist that observed outcome.
-                    MentorChannel.DeliveryOutcome deliveryOutcome = channel.completeWithDone();
-                    persistence.finalise(cookie, state, toSend, deliveryOutcome);
-                    Double costUsd = toSend.messageMetadata() != null
-                            ? toSend.messageMetadata().costUsd()
-                            : null;
-                    if (costUsd != null) metrics.recordCostUsd(costUsd);
-                    turnComplete.complete(null);
-                } else if (chunk instanceof UIMessageChunk.Error err) {
-                    // Complete normally: the error is already sent and persisted. An exceptional future would
-                    // make the outer catch emit another error and interrupt the same row again.
-                    channel.send(chunk);
-                    persistence.interrupt(cookie, state, new IllegalStateException(err.errorText()));
-                    errorChunkSeen.set(true);
-                    turnComplete.complete(null);
-                } else {
-                    channel.send(chunk);
+                    complete(finish, state, channel, cookie, turn);
+                    return;
                 }
+                if (chunk instanceof UIMessageChunk.Error err) {
+                    if (turn.terminal.compareAndSet(null, Terminal.FAILED_IN_STREAM)) {
+                        sendTerminal(channel, chunk);
+                        interruptOrLeaveForReaper(cookie, state, new IllegalStateException(err.errorText()));
+                        turn.done.complete(null);
+                    }
+                    return;
+                }
+                channel.send(chunk);
             }
         } catch (ClientDisconnectedException disconnect) {
             // Stop channel writes but keep the runner subscription alive until its terminal chunk
-            // finalises persistence; disconnection is not a second terminal result.
+            // settles persistence; disconnection is not a second terminal result.
             log.debug(
                     "SSE send failed inside event handler (clientGone={}): {}",
                     channel.isClientGone(),
                     disconnect.toString());
         } catch (RuntimeException e) {
             log.warn("Event translation/send failed: {}", e.getMessage(), e);
-            if (!turnComplete.isDone()) {
-                turnComplete.completeExceptionally(e);
+            turn.done.completeExceptionally(e);
+        } finally {
+            turn.delivery.unlock();
+        }
+    }
+
+    /**
+     * Commits the completed row before the client hears of it, so a reply shown as finished is always one
+     * stored as finished. A row another writer already settled, or a commit that fails, ends the turn with an
+     * error instead of Finish.
+     */
+    private void complete(
+            UIMessageChunk.Finish finish,
+            TranslatorState state,
+            MentorChannel channel,
+            MentorTurnPersistence.TurnPersistenceCookie cookie,
+            Turn turn) {
+        if (!turn.terminal.compareAndSet(null, Terminal.COMPLETING)) {
+            return;
+        }
+        UIMessageChunk.Finish toSend = finish;
+        try {
+            toSend = persistence.augmentFinishWithCost(finish, state);
+        } catch (RuntimeException costEx) {
+            // Cost-coverage metrics expose missing prices; avoid a warning on every affected turn.
+            log.debug("Cost augmentation failed — sending raw Finish: {}", costEx.toString());
+        }
+        boolean completed;
+        try {
+            completed = persistence.complete(cookie, state, toSend);
+            if (!completed) {
+                log.warn(
+                        "Mentor reply {} was already settled by another writer; not reporting it finished",
+                        cookie.assistantMessageId());
             }
+        } catch (RuntimeException saveFailure) {
+            log.warn("Mentor reply {} could not be saved", cookie.assistantMessageId(), saveFailure);
+            completed = false;
+            interruptOrLeaveForReaper(cookie, state, saveFailure);
+        }
+        if (!completed) {
+            turn.terminal.set(Terminal.FAILED_IN_STREAM);
+            sendTerminal(channel, new UIMessageChunk.Error(REPLY_NOT_SAVED));
+            turn.done.complete(null);
+            return;
+        }
+        turn.terminal.set(Terminal.COMPLETED);
+        sendTerminal(channel, toSend);
+        // Slack learns whether its buffered reply was suppressed only as it closes, so delivery is settled after.
+        MentorChannel.DeliveryOutcome deliveryOutcome = channel.completeWithDone();
+        try {
+            persistence.recordDelivery(cookie, state, deliveryOutcome);
+        } catch (RuntimeException e) {
+            // The linked feedback stays prepared, which the TTL sweep settles; it is never marked delivered unseen.
+            log.warn("Could not settle the feedback mentor reply {} linked", cookie.assistantMessageId(), e);
+        }
+        Double costUsd =
+                toSend.messageMetadata() != null ? toSend.messageMetadata().costUsd() : null;
+        if (costUsd != null) metrics.recordCostUsd(costUsd);
+        turn.done.complete(null);
+    }
+
+    /** The turn's outcome is already decided; a row that cannot be written now is settled by the in-flight reaper. */
+    private void interruptOrLeaveForReaper(
+            MentorTurnPersistence.TurnPersistenceCookie cookie, TranslatorState state, Throwable cause) {
+        try {
+            persistence.interrupt(cookie, state, cause);
+        } catch (RuntimeException e) {
+            log.warn("Mentor reply {} left in flight for the reaper", cookie.assistantMessageId(), e);
+        }
+    }
+
+    /** A client that has gone away must not stop the terminal chunk's row from being recorded. */
+    private static void sendTerminal(MentorChannel channel, UIMessageChunk chunk) {
+        try {
+            channel.send(chunk);
+        } catch (ClientDisconnectedException disconnect) {
+            log.debug("Terminal chunk not delivered, client gone: {}", disconnect.toString());
         }
     }
 
@@ -632,6 +735,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
      * internal ids or upstream errors. The server log retains those details.
      */
     private static String userFacingError(Throwable e) {
+        if (e.getCause() instanceof MentorStreamLostException || e instanceof MentorStreamLostException) {
+            return PiEventToUiChunkTranslator.REPLY_LOST_IN_TRANSIT;
+        }
         if (e instanceof LlmBudgetExhaustedException budget) {
             return Objects.requireNonNullElse(budget.getMessage(), "The mentor budget is exhausted.");
         }

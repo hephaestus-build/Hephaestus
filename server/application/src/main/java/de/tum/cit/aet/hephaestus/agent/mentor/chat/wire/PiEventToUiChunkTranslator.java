@@ -13,23 +13,20 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Translates Pi {@code AgentSessionEvent} JSON into AI SDK {@link UIMessageChunk}s. Stateful
- * per turn; the caller threads a {@link TranslatorState} through every call. Unknown event
- * types yield an empty list (do not throw — one bad frame must not poison the turn).
+ * per turn; the caller threads a {@link TranslatorState} through every call. An event it cannot
+ * account for — an unknown or malformed type, or streamed text that does not match the model's
+ * final text — fails the turn with an {@link UIMessageChunk.Error} rather than being dropped.
  */
 @Component
 public class PiEventToUiChunkTranslator {
 
     private static final Logger log = LoggerFactory.getLogger(PiEventToUiChunkTranslator.class);
 
-    /**
-     * Translate a single Pi event into zero or more UI chunks. Idempotency / replay handling is
-     * out of scope here — the runner is responsible for not double-emitting; the translator
-     * trusts the stream.
-     */
+    public static final String REPLY_LOST_IN_TRANSIT = "Part of Heph's reply was lost in transit. Please try again.";
+
     public List<UIMessageChunk> translate(JsonNode piEvent, TranslatorState state) {
-        if (piEvent == null || !piEvent.isObject() || !piEvent.has("type")) {
-            log.debug("Skipping malformed Pi event (missing type): {}", piEvent);
-            return List.of();
+        if (piEvent == null || !piEvent.path("type").isString()) {
+            return failTurn(state, "an event without a type");
         }
         String type = piEvent.get("type").asString();
         return switch (type) {
@@ -44,9 +41,9 @@ public class PiEventToUiChunkTranslator {
             case "pi_error" -> handleError(piEvent, state);
             case "turn_watchdog_fired" -> handleWatchdogFired(state);
             case "session_persisted" -> handleSessionPersisted(piEvent, state);
-            // Session-level events Pi emits that we intentionally drop. Listed explicitly so the
-            // `default` arm can WARN on TRULY unknown types — silent default-drops hide protocol
-            // drift (a new Pi event type would just disappear into DEBUG, never noticed).
+            // Every other AgentSessionEvent of the pinned Pi SDK, none of which carries reply content.
+            // An event not listed here may, so it fails the turn rather than vanishing: a Pi upgrade that
+            // adds one must add it here.
             case "runner_ready",
                     "agent_start",
                     "turn_start",
@@ -54,15 +51,26 @@ public class PiEventToUiChunkTranslator {
                     "queue_update",
                     "compaction_start",
                     "compaction_end",
+                    "entry_appended",
                     "session_info_changed",
                     "thinking_level_changed",
                     "auto_retry_start",
-                    "auto_retry_end" -> List.of();
-            default -> {
-                log.warn("Unknown Pi event type '{}' — dropping. Protocol drift?", type);
-                yield List.of();
-            }
+                    "auto_retry_end",
+                    "summarization_retry_scheduled",
+                    "summarization_retry_attempt_start",
+                    "summarization_retry_finished",
+                    "bash_execution_update" -> List.of();
+            default -> failTurn(state, "an unknown event type '" + type + "'");
         };
+    }
+
+    /** The stream carried something this turn cannot account for, so its reply cannot be vouched for. */
+    private List<UIMessageChunk> failTurn(TranslatorState state, String what) {
+        log.warn("Mentor stream carried {}; failing the turn", what);
+        state.markStreamBroken();
+        List<UIMessageChunk> out = new ArrayList<>(closeOpenStreamingBlocks(state));
+        out.add(new UIMessageChunk.Error(REPLY_LOST_IN_TRANSIT));
+        return out;
     }
 
     // session_persisted → capture verbatim Pi session JSONL into state
@@ -79,6 +87,11 @@ public class PiEventToUiChunkTranslator {
         return List.of();
     }
 
+    /** Closing chunks for any block still open when a turn fails outside the event stream. */
+    public List<UIMessageChunk> closeOpenBlocks(TranslatorState state) {
+        return closeOpenStreamingBlocks(state);
+    }
+
     // turn_watchdog_fired → Error with user-friendly text
 
     private List<UIMessageChunk> handleWatchdogFired(TranslatorState state) {
@@ -92,14 +105,14 @@ public class PiEventToUiChunkTranslator {
         return out;
     }
 
-    // message_end → no chunks, but captures the authoritative usage snapshot
+    // message_end → captures the authoritative usage snapshot and checks the streamed text against it
 
     private List<UIMessageChunk> handleMessageEnd(JsonNode event, TranslatorState state) {
         // Per pi-coding-agent dist/core/extensions/types.d.ts MessageEndEvent.message: AgentMessage.
         // For assistant messages the final, authoritative `usage` + `model` + `stopReason` live
-        // here. For tool result and user messages this branch is a no-op. We don't emit
-        // UIMessageChunks; the turn-level Finish chunk on agent_end carries the metadata to the
-        // client. Capturing `stopReason` here is the authoritative source — agent_end's walk
+        // here, as does the final `content`. For tool result and user messages this branch is a
+        // no-op. The turn-level Finish chunk on agent_end carries the metadata to the client.
+        // Capturing `stopReason` here is the authoritative source — agent_end's walk
         // through messages[] is a fallback for runners that omit message_end.
         JsonNode message = event.path("message");
         if (!"assistant".equals(optionalString(message, "role"))) return List.of();
@@ -109,7 +122,48 @@ public class PiEventToUiChunkTranslator {
         if (stopReason != null) {
             state.observeStopReason(stopReason);
         }
-        return List.of();
+        return verifyAssistantText(state, textBlocks(message));
+    }
+
+    /**
+     * Checks the streamed text of the last assistant message against its final text, closing its text
+     * block. The client has already rendered the deltas, so a mismatch cannot be repaired on the wire:
+     * the turn fails, and the stored message keeps the model's final text. {@code null} means no final
+     * text exists to check against, which fails the same way.
+     */
+    private List<UIMessageChunk> verifyAssistantText(TranslatorState state, @Nullable List<String> finalText) {
+        int streamedLength = state.unverifiedTextLength();
+        String openTextId = state.activeTextId();
+        boolean matched = state.verifyAssistantMessage(finalText);
+        List<UIMessageChunk> out = new ArrayList<>(2);
+        if (openTextId != null) {
+            out.add(new UIMessageChunk.TextEnd(openTextId));
+        }
+        if (!matched) {
+            log.warn(
+                    "Streamed assistant text ({} chars) does not match its final text ({} chars); failing the turn",
+                    streamedLength,
+                    finalText == null
+                            ? "no"
+                            : finalText.stream().mapToInt(String::length).sum());
+            out.add(new UIMessageChunk.Error(REPLY_LOST_IN_TRANSIT));
+        }
+        return out;
+    }
+
+    private static boolean failsTurn(List<UIMessageChunk> chunks) {
+        return chunks.stream().anyMatch(UIMessageChunk.Error.class::isInstance);
+    }
+
+    private static List<String> textBlocks(JsonNode message) {
+        List<String> blocks = new ArrayList<>();
+        for (JsonNode block : message.path("content")) {
+            String text = "text".equals(optionalString(block, "type")) ? optionalString(block, "text") : null;
+            if (text != null) {
+                blocks.add(text);
+            }
+        }
+        return blocks;
     }
 
     // message_start / Start + StartStep
@@ -118,6 +172,13 @@ public class PiEventToUiChunkTranslator {
         String role = optionalString(event.path("message"), "role");
         if (!"assistant".equals(role)) {
             return List.of();
+        }
+        // A message still unverified here never delivered its message_end.
+        if (state.hasUnverifiedAssistantMessage()) {
+            List<UIMessageChunk> gap = verifyAssistantText(state, null);
+            if (failsTurn(gap)) {
+                return gap;
+            }
         }
         // Capture model + any opening usage snapshot on the assistant message header.
         capturePartialUsage(event.path("message"), state);
@@ -133,6 +194,7 @@ public class PiEventToUiChunkTranslator {
             state.markStarted();
         }
         state.incrementStep();
+        state.openAssistantMessage();
         if (firstStart) {
             return List.of(new UIMessageChunk.Start(state.assistantMessageId(), null), new UIMessageChunk.StartStep());
         }
@@ -147,9 +209,8 @@ public class PiEventToUiChunkTranslator {
         // Pi shape: {type:"message_update", message: AgentMessage, assistantMessageEvent: {...}}
         // See pi-coding-agent extensions/types.ts MessageUpdateEvent for the union.
         JsonNode ame = event.path("assistantMessageEvent");
-        if (!ame.isObject() || !ame.has("type")) {
-            log.debug("message_update without assistantMessageEvent — skipping: {}", event);
-            return List.of();
+        if (!ame.path("type").isString()) {
+            return failTurn(state, "a message_update without an assistantMessageEvent type");
         }
         return handleAssistantMessageEvent(ame, event, state);
     }
@@ -174,12 +235,15 @@ public class PiEventToUiChunkTranslator {
         return switch (innerType) {
             case "text_delta" -> {
                 String delta = optionalString(ame, "delta");
-                yield delta == null ? List.of() : textDelta(blockId, delta, state);
+                yield delta == null
+                        ? failTurn(state, "a text_delta without its text")
+                        : textDelta(blockId, delta, state);
             }
             case "thinking_delta", "thinking_end" -> List.of();
             case "text_end" -> closeTextIfMatches(blockId, state);
-            // text_start / thinking_start are pure lifecycle markers; we open lazily on the
-            // first text delta, so the dedicated start events are no-ops.
+            // The rest of pi-ai's AssistantMessageEvent union. Text opens lazily on its first delta,
+            // hidden reasoning and tool internals are never user-facing, and message_end carries the
+            // final message these lifecycle markers describe.
             case "text_start",
                     "thinking_start",
                     "toolcall_start",
@@ -188,10 +252,7 @@ public class PiEventToUiChunkTranslator {
                     "start",
                     "done",
                     "error" -> List.of();
-            default -> {
-                log.debug("Unknown assistantMessageEvent.type '{}' — dropping", innerType);
-                yield List.of();
-            }
+            default -> failTurn(state, "an unknown assistantMessageEvent type '" + innerType + "'");
         };
     }
 
@@ -288,9 +349,13 @@ public class PiEventToUiChunkTranslator {
         // to the authoritative value captured on `message_end.message.stopReason` via state.
         String piStopReason = null;
         List<JsonNode> finalUsages = new ArrayList<>();
+        @Nullable JsonNode lastAssistant = null;
+        List<JsonNode> assistants = new ArrayList<>();
         if (event.path("messages").isArray()) {
             for (JsonNode msg : event.get("messages")) {
                 if (msg != null && msg.isObject() && "assistant".equals(optionalString(msg, "role"))) {
+                    lastAssistant = msg;
+                    assistants.add(msg);
                     captureModel(msg, state);
                     JsonNode usage = msg.path("usage");
                     if (usage.isObject() && !usage.isEmpty()) finalUsages.add(usage);
@@ -299,11 +364,27 @@ public class PiEventToUiChunkTranslator {
                 }
             }
         }
+        // A last message whose message_end never arrived is checked against its copy here.
+        List<UIMessageChunk> out = new ArrayList<>();
+        if (state.hasUnverifiedAssistantMessage()) {
+            out.addAll(verifyAssistantText(state, lastAssistant == null ? null : textBlocks(lastAssistant)));
+            if (failsTurn(out)) {
+                return out;
+            }
+        }
+        // An assistant message whose every event was lost leaves nothing unverified, but its text is
+        // still here; finishing without it would store a shorter answer as complete.
+        List<String> finalTexts =
+                assistants.stream().map(m -> String.join("", textBlocks(m))).toList();
+        if (!state.endsWithVerified(finalTexts)) {
+            out.addAll(failTurn(state, "agent_end text that did not stream in that order"));
+            return out;
+        }
         state.replaceCompletedUsage(finalUsages);
         if (piStopReason == null) {
             piStopReason = state.observedStopReason();
         }
-        List<UIMessageChunk> out = closeOpenStreamingBlocks(state);
+        out.addAll(closeOpenStreamingBlocks(state));
         UIMessageChunk.MessageMetadata metadata = UIMessageChunk.MessageMetadata.of(
                 state.observedModel(),
                 UIMessageChunk.MessageMetadata.Usage.fromJsonNode(state.observedUsage()),
@@ -338,19 +419,19 @@ public class PiEventToUiChunkTranslator {
 
     private List<UIMessageChunk> handleLinkObservation(JsonNode event, TranslatorState state) {
         // Runner emits camelCase `observationId` (pi-mentor-runner.ts defineLinkObservationTool).
+        // A link that cannot be read is feedback evidence this turn would silently lose, so it fails the turn.
         String observationIdStr = optionalString(event, "observationId");
-        if (observationIdStr == null) {
-            log.debug("link_observation missing observationId — skipping: {}", event);
-            return List.of();
-        }
+        @Nullable UUID observationId = null;
         try {
-            UUID observationId = UUID.fromString(observationIdStr);
-            state.recordDataObservation(observationId);
-            return List.of(UIMessageChunk.DataObservation.of(observationId));
+            observationId = observationIdStr == null ? null : UUID.fromString(observationIdStr);
         } catch (IllegalArgumentException e) {
-            log.warn("link_observation has invalid UUID '{}' — dropping", observationIdStr);
-            return List.of();
+            // Falls through to the failure below.
         }
+        if (observationId == null) {
+            return failTurn(state, "a link_observation without a readable observationId");
+        }
+        state.recordDataObservation(observationId);
+        return List.of(UIMessageChunk.DataObservation.of(observationId));
     }
 
     // pi_error / turn_watchdog_fired → Error

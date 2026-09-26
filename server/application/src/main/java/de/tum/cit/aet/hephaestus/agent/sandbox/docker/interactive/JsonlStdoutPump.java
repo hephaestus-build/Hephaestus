@@ -19,7 +19,8 @@ import tools.jackson.databind.ObjectMapper;
  * Reads JSONL frames from a runner's stdout. Frames are delimited by ASCII {@code \n} ONLY;
  * {@code \r} and U+2028/U+2029 are legal inside JSON string values and must survive framing —
  * {@link java.io.BufferedReader#readLine} would mis-split. Lines longer than {@code maxLineChars}
- * are dropped and terminate the pump.
+ * are dropped and terminate the pump. Every line that does not reach the sink as a frame is reported
+ * through {@code onFrameLost}: the stream around it is no longer complete.
  */
 final class JsonlStdoutPump {
 
@@ -29,6 +30,7 @@ final class JsonlStdoutPump {
     private final Reader source;
     private final ObjectMapper mapper;
     private final FrameSink sink;
+    private final Runnable onFrameLost;
     private final IntConsumer onEof;
     private final IntSupplier exitCodeSupplier;
     private final Counter parseErrorCounter;
@@ -40,6 +42,7 @@ final class JsonlStdoutPump {
             Reader source,
             ObjectMapper mapper,
             FrameSink sink,
+            Runnable onFrameLost,
             IntConsumer onEof,
             IntSupplier exitCodeSupplier,
             Counter parseErrorCounter,
@@ -50,6 +53,7 @@ final class JsonlStdoutPump {
         this.source = source instanceof BufferedReader br ? br : new BufferedReader(source);
         this.mapper = mapper;
         this.sink = sink;
+        this.onFrameLost = onFrameLost;
         this.onEof = onEof;
         this.exitCodeSupplier = exitCodeSupplier;
         this.parseErrorCounter = parseErrorCounter;
@@ -84,6 +88,7 @@ final class JsonlStdoutPump {
                     if (discardRemainder) {
                         parseErrorCounter.increment();
                         log.warn("Oversized JSONL line dropped: sessionId={}, cap={}", sessionId, maxLineChars);
+                        frameLost();
                         return;
                     }
                     if (buf.length() == 0) {
@@ -105,6 +110,7 @@ final class JsonlStdoutPump {
                 // so dashboards see the cause even when the runner exits before flushing.
                 parseErrorCounter.increment();
                 log.warn("Oversized JSONL line at EOF (no terminator): sessionId={}, cap={}", sessionId, maxLineChars);
+                frameLost();
             } else if (buf.length() > 0) {
                 handleLine(buf);
             }
@@ -126,11 +132,13 @@ final class JsonlStdoutPump {
             frame = mapper.readTree(text);
         } catch (JacksonException pe) {
             parseErrorCounter.increment();
-            log.debug("Skipping malformed JSONL frame: sessionId={}, len={}", sessionId, text.length());
+            log.warn("Malformed JSONL frame: sessionId={}, len={}", sessionId, text.length());
+            frameLost();
             return;
         }
         if (frame == null || frame.isMissingNode() || frame.isNull()) {
             parseErrorCounter.increment();
+            frameLost();
             return;
         }
         int wireBytes = utf8Length(text) + 1; // + \n terminator
@@ -138,6 +146,15 @@ final class JsonlStdoutPump {
             sink.acceptFrame(frame, wireBytes);
         } catch (Throwable t) {
             log.warn("Frame sink threw — pump continues: sessionId={}", sessionId, t);
+            frameLost();
+        }
+    }
+
+    private void frameLost() {
+        try {
+            onFrameLost.run();
+        } catch (RuntimeException e) {
+            log.warn("onFrameLost handler threw: sessionId={}", sessionId, e);
         }
     }
 

@@ -328,7 +328,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void finalise_writesCompletedRow() {
+    void complete_writesCompletedRow() {
         ChatThread thread =
                 persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "hello");
         UUID assistantId = UUID.randomUUID();
@@ -351,7 +351,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
                 /* costUsd */ null);
         UIMessageChunk.Finish finish = new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, finishMeta);
 
-        persistence.finalise(cookie, state, finish, MentorChannel.DeliveryOutcome.NOT_DELIVERED);
+        assertThat(persistence.complete(cookie, state, finish)).isTrue();
 
         ChatMessage assistant = chatMessageRepository.findById(assistantId).orElseThrow();
         assertThat(assistant.getStatus()).isEqualTo(ChatMessage.Status.completed);
@@ -369,7 +369,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void finalise_persistsProviderTotalTokensWhenItDivergesFromInputPlusOutput() {
+    void complete_persistsProviderTotalTokensWhenItDivergesFromInputPlusOutput() {
         // A provider-reported totalTokens that includes cache tokens legitimately exceeds input+output. The
         // persisted block must round-trip the WIRE total unchanged (single source of truth), NOT re-derive
         // it as input+output — otherwise a rehydrated thread renders a different token count than the stream.
@@ -393,11 +393,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
                 "openai/gpt-oss-120b",
                 new UIMessageChunk.MessageMetadata.Usage(100, 50, 50, null, 200),
                 /* costUsd */ null);
-        persistence.finalise(
-                cookie,
-                state,
-                new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, finishMeta),
-                MentorChannel.DeliveryOutcome.NOT_DELIVERED);
+        persistence.complete(cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, finishMeta));
 
         JsonNode meta =
                 chatMessageRepository.findById(assistantId).orElseThrow().getMetadata();
@@ -407,7 +403,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void finalise_storesSessionJsonlByteIdentically() {
+    void complete_storesSessionJsonlByteIdentically() {
         UUID threadId = UUID.randomUUID();
         ChatThread thread = persistence.ensureThread(workspace.getId(), threadId, user, Set.of(user.getId()), "hello");
         UUID assistantId = UUID.randomUUID();
@@ -421,11 +417,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
 
         TranslatorState state = new TranslatorState(assistantId);
         state.observeSessionJsonl(expectedBytes);
-        persistence.finalise(
-                cookie,
-                state,
-                new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null),
-                MentorChannel.DeliveryOutcome.NOT_DELIVERED);
+        persistence.complete(cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
 
         assertThat(chatThreadRepository.findSessionJsonl(threadId))
                 .as("byte-identical: any re-encoding kills prompt-cache prefix matching")
@@ -433,7 +425,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void finalise_storesSessionJsonlAboveToastThreshold() {
+    void complete_storesSessionJsonlAboveToastThreshold() {
         // Postgres TOAST threshold is ~2KB, so a 1MB payload exercises out-of-line storage and
         // detoast on read — the path that would surface an encoding/transport regression in JDBC
         // stream handling.
@@ -455,18 +447,14 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
 
         TranslatorState state = new TranslatorState(assistantId);
         state.observeSessionJsonl(bigBytes);
-        persistence.finalise(
-                cookie,
-                state,
-                new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null),
-                MentorChannel.DeliveryOutcome.NOT_DELIVERED);
+        persistence.complete(cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
 
         byte[] readBack = chatThreadRepository.findSessionJsonl(threadId).orElseThrow();
         assertThat(readBack).as("1MB TOAST round-trip preserves every byte").isEqualTo(bigBytes);
     }
 
     @Test
-    void finalise_withoutSessionJsonl_preservesPriorTurn() {
+    void complete_withoutSessionJsonl_preservesPriorTurn() {
         UUID threadId = UUID.randomUUID();
         ChatThread thread = persistence.ensureThread(workspace.getId(), threadId, user, Set.of(user.getId()), "hello");
 
@@ -476,11 +464,10 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         UUID assistantId = UUID.randomUUID();
         MentorTurnPersistence.TurnPersistenceCookie cookie =
                 persistence.persistInFlight(thread, "follow-up", assistantId, null, admittedMentorConfig());
-        persistence.finalise(
+        persistence.complete(
                 cookie,
                 new TranslatorState(assistantId),
-                new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null),
-                MentorChannel.DeliveryOutcome.NOT_DELIVERED);
+                new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
 
         assertThat(chatThreadRepository.findSessionJsonl(threadId)).contains(priorBytes);
     }
@@ -521,7 +508,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void finalise_cacheOnlyUsage_writesPricedLedgerEvent() {
+    void complete_cacheOnlyUsage_writesPricedLedgerEvent() {
         ChatThread thread =
                 persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "hello");
         UUID assistantId = UUID.randomUUID();
@@ -556,11 +543,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         usage.put("input", 0).put("output", 0).put("cacheRead", 500_000).put("cacheWrite", 0);
         state.observeUsage(usage);
 
-        persistence.finalise(
-                cookie,
-                state,
-                new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null),
-                MentorChannel.DeliveryOutcome.NOT_DELIVERED);
+        persistence.complete(cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
 
         var event = usageEventRepository.findAll().stream()
                 .filter(row -> row.getSourceId().equals(assistantId))
@@ -610,6 +593,49 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         ChatMessage finalState = chatMessageRepository.findById(assistantId).orElseThrow();
         assertThat(finalState.getStatus()).isEqualTo(ChatMessage.Status.interrupted);
         assertThat(finalState.getMetadata().path("error").asString()).isEqualTo("server restart");
+    }
+
+    @Test
+    void complete_leavesATurnTheReaperAlreadyInterruptedAsItWas() throws Exception {
+        ChatThread thread =
+                persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "hello");
+        UUID assistantId = UUID.randomUUID();
+        MentorTurnPersistence.TurnPersistenceCookie cookie =
+                persistence.persistInFlight(thread, "hello", assistantId, null, admittedMentorConfig());
+        setCreatedAt(assistantId, Instant.now().minus(Duration.ofMinutes(200)));
+        reaperWithAnUnsafeWindow().reap();
+        TranslatorState state = new TranslatorState(assistantId);
+        state.openTextBlock("text-0");
+        state.appendText("Hello there!");
+        state.closeTextBlock();
+
+        boolean completed =
+                persistence.complete(cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
+
+        assertThat(completed).isFalse();
+        ChatMessage row = chatMessageRepository.findById(assistantId).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(ChatMessage.Status.interrupted);
+        assertThat(row.getMetadata().path("error").asString()).isEqualTo("server restart");
+        assertThat(row.getParts()).isEmpty();
+    }
+
+    @Test
+    void interrupt_neverDowngradesACompletedTurn() {
+        ChatThread thread =
+                persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "hello");
+        UUID assistantId = UUID.randomUUID();
+        MentorTurnPersistence.TurnPersistenceCookie cookie =
+                persistence.persistInFlight(thread, "hello", assistantId, null, admittedMentorConfig());
+        TranslatorState state = new TranslatorState(assistantId);
+        assertThat(persistence.complete(
+                        cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null)))
+                .isTrue();
+
+        persistence.interrupt(cookie, state, new IllegalStateException("late loss"));
+
+        ChatMessage row = chatMessageRepository.findById(assistantId).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(ChatMessage.Status.completed);
+        assertThat(row.getMetadata().has("error")).isFalse();
     }
 
     @Test

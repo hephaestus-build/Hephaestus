@@ -138,11 +138,7 @@ class MentorTurnCrashBillingTest extends BaseUnitTest {
         reported.put("input", 11).put("output", 22);
         state.observeUsage(reported);
 
-        persistence.finalise(
-                cookie(),
-                state,
-                new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null),
-                MentorChannel.DeliveryOutcome.NOT_DELIVERED);
+        persistence.complete(cookie(), state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
 
         ArgumentCaptor<LlmUsageRecorder.LlmUsageSample> sample =
                 ArgumentCaptor.forClass(LlmUsageRecorder.LlmUsageSample.class);

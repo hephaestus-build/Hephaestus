@@ -159,8 +159,8 @@ public class ChatMessage {
 
     /**
      * Optimistic-lock version — Hibernate bumps it on every managed write, including the reaper's.
-     * Stale-snapshot writers (reaper-vs-finalise, finalise-vs-interrupt) get
-     * {@code OptimisticLockingFailureException}; the orchestrator skips so the winner survives.
+     * Stale-snapshot writers (reaper-vs-complete, complete-vs-interrupt) get
+     * {@code OptimisticLockingFailureException}; the first writer's outcome survives.
      * {@code accumulateLlmUsage} deliberately leaves it alone — see that query.
      */
     @org.hibernate.annotations.ColumnDefault("0")

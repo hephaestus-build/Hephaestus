@@ -355,7 +355,7 @@ class SlackStreamingMentorChannelTest extends BaseUnitTest {
     }
 
     @Test
-    void successfulContentWinsWhenSilentModeEngagesMidStream() {
+    void silentModeMidStreamSuppressesTheReply() {
         SlackMessageService slack = mock(SlackMessageService.class);
         when(slack.startStream(anyLong(), anyString(), anyString(), anyString()))
                 .thenReturn("ts");
@@ -370,6 +370,61 @@ class SlackStreamingMentorChannelTest extends BaseUnitTest {
         waitUntil(channel::isClientGone, 4000);
 
         assertThat(channel.isClientGone()).isTrue();
-        assertThat(channel.completeWithDone()).isEqualTo(MentorChannel.DeliveryOutcome.DELIVERED);
+        assertThat(channel.completeWithDone()).isEqualTo(MentorChannel.DeliveryOutcome.INSTANCE_SILENCED);
+    }
+
+    @Test
+    void replyWhoseTailNeverReachedSlackIsNotDelivered() {
+        SlackMessageService slack = mock(SlackMessageService.class);
+        when(slack.startStream(anyLong(), anyString(), anyString(), anyString()))
+                .thenReturn("ts");
+        doThrow(new SlackSendException(WS, CH, "internal_error"))
+                .when(slack)
+                .appendStream(anyLong(), anyString(), anyString(), anyString());
+        var channel = new SlackStreamingMentorChannel(slack, WS, CH, THREAD);
+
+        channel.send(delta("first "));
+        verify(slack, timeout(4000)).startStream(WS, CH, THREAD, "first ");
+        channel.send(delta("tail"));
+
+        assertThat(channel.completeWithDone()).isEqualTo(MentorChannel.DeliveryOutcome.NOT_DELIVERED);
+    }
+
+    @Test
+    void replyIsNotDeliveredWhenAFlushOutlivesTheFinishAndFails() throws Exception {
+        SlackMessageService slack = mock(SlackMessageService.class);
+        CountDownLatch flushing = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger opens = new AtomicInteger();
+        when(slack.startStream(anyLong(), anyString(), anyString(), anyString()))
+                .thenAnswer(inv -> {
+                    if (opens.incrementAndGet() > 1) {
+                        return "ts";
+                    }
+                    flushing.countDown();
+                    // Like an OkHttp call, the write ignores the interrupt that stops the flusher.
+                    while (true) {
+                        try {
+                            release.await();
+                            break;
+                        } catch (InterruptedException ignored) {
+                            // keep waiting
+                        }
+                    }
+                    throw new SlackSendException(WS, CH, "internal_error");
+                });
+        var channel = new SlackStreamingMentorChannel(
+                slack, WS, CH, THREAD, Duration.ofMillis(50), Duration.ofMillis(50), 0, 1000);
+        channel.send(delta("first "));
+        assertThat(flushing.await(4, TimeUnit.SECONDS)).isTrue();
+        channel.send(delta("tail"));
+
+        var outcome = new java.util.concurrent.CompletableFuture<MentorChannel.DeliveryOutcome>();
+        Thread finisher = Thread.ofVirtual().start(() -> outcome.complete(channel.completeWithDone()));
+        // The terminal write is queued behind the stuck flush once both shutdown waits have elapsed.
+        waitUntil(() -> finisher.getState() == Thread.State.WAITING, 4000);
+        release.countDown();
+
+        assertThat(outcome.get(4, TimeUnit.SECONDS)).isEqualTo(MentorChannel.DeliveryOutcome.NOT_DELIVERED);
     }
 }
