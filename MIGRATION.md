@@ -65,6 +65,156 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
+### v0.81.0
+
+#### 🔴 Check events and pipeline events
+
+The schema migration applies automatically. What needs a hand is the event stream: a GitHub App
+created from an earlier manifest does not subscribe to `check_suite` and `status`, and a GitLab group
+webhook registered by an earlier release does not send pipeline events. Add the two event
+subscriptions under the GitHub App's Permissions & events, and grant Checks and Commit statuses read
+if the app predates them (each installation approves the increase). Enable Pipeline events on each
+GitLab group hook under the group's Settings → Webhooks, or delete the hook so it is registered again
+on the next sync. Until then the head's check state arrives only with the scheduled sync, which reads
+it with the pull request; nothing else is affected.
+
+#### 🔴 Repository capture and agent image upgrade
+
+Deploy matching server, worker and agent images: the agent image now carries runtime contract 3.
+Drain running reviews before upgrading. Review and explicitly update stored source policies to
+contract `1.2.0` using the source-policy upgrade instructions. Startup does not rewrite installed
+policies; historical practice revisions and observations remain unchanged.
+
+Remove `GIT_TREE_MAX_FILES`, `GIT_TREE_MAX_TOTAL_SIZE` and `GIT_TREE_MAX_FILE_SIZE`. A review now
+captures the whole repository at the reviewed commit together with the Git history reachable from it,
+so the retired 32 MiB tree bound is no longer a capacity estimate: provision worker storage for
+repository mirrors, per-attempt snapshots and sandbox input archives. A repository whose checkout plus
+mirrored history exceeds `GIT_MAX_SNAPSHOT_BYTES` (8 GiB by default) is refused whole rather than
+captured in part; raise it for larger monorepos. `GIT_MAX_CONCURRENT_INGESTIONS` (default 2) caps how
+many captured commits a worker writes to PostgreSQL at once.
+
+Review the expanded repository-history scope with your deployment's privacy owner. Files deleted from
+the current checkout can remain accessible in history.
+
+Remove `SANDBOX_DOCKER_CLI`: sandbox inputs and results travel through the authenticated worker
+gateway, not through the Docker CLI or a host-mounted context directory.
+
+Remove `PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED`; private execution capture is no longer
+supported. A review retains its admitted observations and their citation verdicts, not its inputs,
+model requests or session transcripts, and archived transcripts from earlier releases are neither
+admission verdicts nor replay evidence.
+
+Remove `HEPHAESTUS_FABRIC_GC_RETENTION_DAYS`; the content-addressed store and its retention sweep are
+gone. Each server and worker container keeps its repository mirrors under its own
+`HEPHAESTUS_FABRIC_ROOT` as `mirrors/<workspace-id>/<repository-id>.git`, beside its attempt folders;
+the shipped Compose files give the worker its own volume for this. A mirror that is missing is cloned
+again on the next sync or review, so the previous release's mirrors need no migration. After the
+upgrade, once no attempt from the previous release is still running, delete the retired `sources/` and
+`cas/` directories and the previous layout's per-job `jobs/<job-id>/` directories under that root. Do
+not remove active attempt folders (`jobs/<workspace-id>/<job-id>/`) or `mirrors/`.
+
+#### 🔴 Observation status, behavior assessment and outcome are distinct
+
+Upgrade the server, sandbox runtime and webapp together. Drain running practice reviews before the
+upgrade: old runtimes emit a combined outcome contract that the new server deliberately rejects.
+Before resuming reviews, use the existing catalogue adoption flow to apply the updated bundled
+practice definitions to installed workspace practices. Review instance-level overrides and custom
+criteria for obsolete combined outcome labels and missing-capture instructions. Each observation must identify the specific behavior it assesses and explain that behavior’s desirability in context. Keep the behavior referent stable within the observation; different behaviors under one practice can receive different assessments. Adoption creates
+new practice revisions; historical revisions are deliberately not rewritten, and workspace
+customizations are not silently overwritten.
+
+Custom API consumers and custom runtime integrations must use:
+
+- `assessmentStatus`: `ASSESSED`, `NOT_APPLICABLE` or `UNDETERMINED`.
+- `presence`: `PRESENT` or `ABSENT` only for assessed observations, otherwise null.
+- `assessment`: contextual desirability of the specified behavior, `GOOD` or `BAD` only for assessed observations, otherwise null.
+- `outcome`: read-only `POSITIVE` for PRESENT/GOOD or ABSENT/BAD, `NEGATIVE` for PRESENT/BAD or ABSENT/GOOD, null when unassessed. Never annotate it independently.
+- `severity`: required exactly for negative outcomes, null otherwise.
+
+Use outcome—not assessment alone—for severity, feedback eligibility, counts and trends. Developer summaries expose `positiveCount` and `negativeCount`; standing observations expose their descriptive `kind` separately from outcome.
+
+Observation filters now have an independent assessment-status facet. Review observation counts use
+`undetermined`, not `inconclusive`. Raw historical review outputs remain historical artifacts; they
+are not rewritten to pretend that old runtimes emitted the new contract.
+
+Back up and verify restoration before upgrading. Liquibase maps existing PRESENT/ABSENT rows to
+ASSESSED, NOT_APPLICABLE rows to NOT_APPLICABLE and INCONCLUSIVE rows to UNDETERMINED. It clears
+presence for the two unassessed statuses and clears non-judgmental legacy severity values on non-BAD
+rows under the old assessment-as-verdict convention. It swaps GOOD/BAD on historical ABSENT rows to preserve their original outcome; it does not reinterpret their evidence against new criteria. Historical negative severity values and all evidence are retained. A historical BAD row without severity halts
+the migration: inspect its recorded evidence and repair through an audited operator procedure rather
+than assigning a fabricated default. Do not bypass this precondition.
+
+Downgrading in place is unsupported because the runtime and wire contracts also changed. Recover by
+restoring the verified pre-upgrade backup and the matching application/runtime versions together.
+
+#### 🔴 Review and update stored source policies before resuming reviews
+
+Pause new practice reviews and let in-flight reviews finish before upgrading. This runtime uses source
+contract `1.2.0`; it does not evaluate new reviews under `1.0.0` or `1.1.0`. A complete, verified empty diff now
+qualifies as captured evidence, while each practice still establishes its own occasion and observation.
+
+Review custom practices and instance catalogue overrides through their normal administration endpoints.
+Read the stored definition and replace `automatedReviewPolicy.sourceContractVersion` with `1.2.0` in an
+explicit policy update, preserving the remaining policy fields, bindings and criteria unless the review
+calls for a deliberate change. Merely updating criteria preserves the old policy and is not sufficient.
+Use the catalogue adoption flow for updated bundled definitions and for reviewed instance overrides in
+workspaces. Confirm the effective definition reports `1.2.0` before resuming reviews.
+
+Stored definitions remain readable and editable. Historical review evidence and its original contract
+and catalogue digest remain unchanged; historical readiness reports are not re-derived under the new
+policy. Do not edit stored evidence or rewrite released migrations to change their version.
+
+#### 🔴 Upgrade contextual practice assessment and delivery together
+
+Pause new practice reviews and let in-flight reviews and feedback dispatches finish before upgrading.
+Deploy the matching server and review runtime versions together; deploy the matching webapp for the
+updated assessment explanations. Resume reviews after the updated components are healthy.
+
+Use the existing catalogue adoption flow to apply the updated bundled definitions to workspace
+practices. Review instance overrides and customized criteria as well: each observation identifies a
+specific behavior, records whether it occurred, and assesses whether that behavior is desirable or
+undesirable in its evidenced context. Keep the behavior referent stable within the observation.
+Different behaviors under one practice can have different assessments. Outcomes remain derived from
+presence and assessment; unassessed statuses remain outside the outcome matrix. Catalogue adoption
+creates new revisions and does not rewrite historical judgments or silently replace customizations.
+
+Remove `PRACTICE_REVIEW_PROGRESS_FOOTER` and any
+`hephaestus.practice-review.progress-footer` override. Automatic cross-review progress footers and
+inferred resolved/regressed history summaries are no longer produced. Recorded observations,
+delivered feedback and prepared feedback remain available. Matching a location or omitting a prior
+observation does not establish that a concern was resolved.
+
+Reactions and delivery receipts apply to their exact bound observations. They do not suppress a new
+observation merely because its practice and file match an earlier one. Custom inline-delivery
+integrations must preserve the supplied `deliveryKey` unchanged as an opaque receipt-correlation key;
+newly composed placements use the observation occurrence identity rather than location grouping.
+
+#### 🔴 Research participation uses the consent API only
+
+Custom API clients must stop reading or writing `participateInResearch` on `/user/settings`.
+That endpoint now manages practice-feedback delivery only. Read the current decision through
+`GET /user/consent` and record a research choice through `PUT /user/consent/research`, using the
+current wording version and research organisation returned by the consent API. Use the generated
+OpenAPI contract for the complete request. Do not copy a historical preference flag into a new
+consent decision: the person must answer the wording and organisation shown to them.
+
+The shipped webapp already uses this consent flow. Slack App Home links to User settings instead of
+maintaining a separate research toggle. Historical database records are retained; no destructive
+migration or SMTP activation is required for this change.
+
+#### 🔴 Heph follows the workspace setting, not per-account grants
+
+Hephaestus no longer reads `mentor_access` rows in `account_feature`. Every member of a workspace
+with **Chat with Heph** turned on can use Heph, in the web app and in Slack direct messages, subject
+to their own AI choice. If you granted `mentor_access` to only some accounts to run a limited pilot,
+turn off **Chat with Heph** under the workspace's **Administration → Settings** before upgrading, in
+every workspace you are not ready to open to all of its members. Leftover `mentor_access` rows have
+no effect and need no clean-up.
+
+#### 🔴 Impersonation replaced by read-only user views
+
+Remove clients of `POST /auth/impersonate` and `POST /auth/impersonate:exit` and the `X-Impersonation-Allow-Writes` header. Drop `hephaestus.auth.impersonation-max-lifetime`. Replace `HEPHAESTUS_AUTH_RATE_LIMIT_IMPERSONATE_CAPACITY` / `_PERIOD` with `HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY` / `_PERIOD` where you override the defaults. Administrators who were inside an impersonation session sign in again.
+
 ### v0.80.0
 
 #### 🔴 Name your research organisation, and check your legal pages, before upgrading
