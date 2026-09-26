@@ -3,9 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.connection.identity.ConfiguredScmInstances;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.core.connection.identity.GitLabWorkspaceInstance;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabGroupDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabPreflightResponseDTO;
 import java.time.Duration;
@@ -41,28 +39,25 @@ public class GitLabPreflightService {
     private static final Logger log = LoggerFactory.getLogger(GitLabPreflightService.class);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
-    private final GitLabProperties gitLabProperties;
     private final ScmServerEndpointPolicy endpoints;
-    private final ConfiguredScmInstances instances;
+    private final GitLabWorkspaceInstance instance;
 
-    public GitLabPreflightService(
-            GitLabProperties gitLabProperties, ScmServerEndpointPolicy endpoints, ConfiguredScmInstances instances) {
-        this.gitLabProperties = gitLabProperties;
+    public GitLabPreflightService(ScmServerEndpointPolicy endpoints, GitLabWorkspaceInstance instance) {
         this.endpoints = endpoints;
-        this.instances = instances;
+        this.instance = instance;
     }
 
     /**
      * Validates a GitLab PAT by attempting to authenticate against the GitLab API.
      *
      * @param token         the personal access token
-     * @param serverUrl     a configured GitLab instance (nullable, defaults to the default instance)
+     * @param serverUrl     the default GitLab instance, or null for it
      * @param groupFullPath optional group path for group/project token fallback
      * @return validation result with user/group info on success, or error message on failure
      */
     public GitLabPreflightResponseDTO validateToken(
             String token, @Nullable String serverUrl, @Nullable String groupFullPath) {
-        String resolvedUrl = configuredInstance(serverUrl);
+        String resolvedUrl = instance.require(serverUrl);
 
         // Try personal token endpoint first
         try {
@@ -141,12 +136,12 @@ public class GitLabPreflightService {
      * Lists GitLab groups accessible to the provided PAT.
      *
      * @param token     the personal access token
-     * @param serverUrl a configured GitLab instance (nullable, defaults to the default instance)
+     * @param serverUrl the default GitLab instance, or null for it
      * @return list of accessible groups
-     * @throws ResponseStatusException 502 when GitLab refuses the token or cannot be reached
+     * @throws ResponseStatusException 422 when GitLab refuses the token, 502 when it cannot answer
      */
     public List<GitLabGroupDTO> listAccessibleGroups(String token, @Nullable String serverUrl) {
-        String resolvedUrl = configuredInstance(serverUrl);
+        String resolvedUrl = instance.require(serverUrl);
 
         try {
             List<GitLabGroupListItem> groups = endpoints
@@ -167,17 +162,15 @@ public class GitLabPreflightService {
                     .map(g -> new GitLabGroupDTO(
                             g.id(), g.name(), g.fullPath(), g.avatarUrl(), g.webUrl(), g.visibility()))
                     .toList();
+        } catch (WebClientResponseException.Unauthorized | WebClientResponseException.Forbidden e) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_CONTENT, "GitLab refused this token. Check it and validate it again.", e);
         } catch (Exception e) {
             log.warn("Failed to list accessible GitLab groups: serverUrl={}, error={}", resolvedUrl, e.getMessage());
             // An empty list would read as "this token sees no groups"; the caller must learn it failed.
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY, "GitLab did not return the groups for this token", e);
         }
-    }
-
-    /** The configured GitLab instance the request names, before the token is sent anywhere. */
-    private String configuredInstance(@Nullable String serverUrl) {
-        return instances.require(IdentityProviderType.GITLAB, serverUrl, gitLabProperties.defaultServerUrl());
     }
 
     // GitLab REST API Response Records

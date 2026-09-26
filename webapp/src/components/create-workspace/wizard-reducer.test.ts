@@ -39,18 +39,6 @@ function stateAt(step: 1 | 2 | 3, overrides: Partial<WizardState> = {}): WizardS
 }
 
 describe("wizardReducer", () => {
-	describe("SET_SERVER_URL", () => {
-		it("sets the server URL and clears preflight result", () => {
-			const state = stateAt(1, { preflightResult: validPreflight });
-			const result = wizardReducer(state, {
-				type: "SET_SERVER_URL",
-				value: "https://gitlab.example.com",
-			});
-			expect(result.serverUrl).toBe("https://gitlab.example.com");
-			expect(result.preflightResult).toBeNull();
-		});
-	});
-
 	describe("SET_PAT", () => {
 		it("sets the PAT and clears preflight result", () => {
 			const state = stateAt(1, { preflightResult: validPreflight });
@@ -70,7 +58,7 @@ describe("wizardReducer", () => {
 			expect(result.preflightResult).toStrictEqual(validPreflight);
 		});
 
-		it("drops a result for credentials edited since the request", () => {
+		it("drops a result for a token edited since the request", () => {
 			const state = stateAt(1, { personalAccessToken: "glpat-edited" });
 			const result = wizardReducer(state, {
 				type: "SET_PREFLIGHT_RESULT",
@@ -92,8 +80,8 @@ describe("wizardReducer", () => {
 			expect(result.groups).toStrictEqual(sampleGroups);
 		});
 
-		it("drops groups listed for credentials edited since the request", () => {
-			const state = stateAt(1, { serverUrl: "https://gitlab.example.com" });
+		it("drops groups listed for a token edited since the request", () => {
+			const state = stateAt(1, { personalAccessToken: "glpat-edited" });
 			const result = wizardReducer(state, { type: "ADVANCE_TO_GROUPS", groups: [], request });
 			expect(result).toBe(state);
 		});
@@ -242,9 +230,8 @@ describe("wizardReducer", () => {
 	describe("integration flows", () => {
 		it("full forward flow: step 1 → 2 → 3", () => {
 			let state = initialWizardState;
-			state = wizardReducer(state, { type: "SET_SERVER_URL", value: "https://gitlab.example.com" });
 			state = wizardReducer(state, { type: "SET_PAT", value: "glpat-test" });
-			const sent = { serverUrl: "https://gitlab.example.com", personalAccessToken: "glpat-test" };
+			const sent = { serverUrl: state.serverUrl, personalAccessToken: "glpat-test" };
 			state = wizardReducer(state, {
 				type: "SET_PREFLIGHT_RESULT",
 				result: validPreflight,

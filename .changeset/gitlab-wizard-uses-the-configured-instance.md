@@ -2,11 +2,14 @@
 "hephaestus": patch
 ---
 
-GitLab access tokens are now only validated against, and workspaces only created on, GitLab
-instances your administrator configured. The workspace wizard lists the instances you have linked
-your account on, and the new workspace belongs to your account on that instance. When GitLab does
-not return your groups, the wizard now says so instead of showing an empty list.
+The GitLab workspace wizard now waits until it knows your server's GitLab instance and creates the
+workspace there, instead of briefly showing gitlab.com and validating your token against the wrong
+server. GitLab workspaces are created only on the instance Hephaestus syncs from
+(`GITLAB_DEFAULT_SERVER_URL`); any other instance is refused before your token is sent or stored.
+The new workspace belongs to your GitLab account on that instance, so link it first. When GitLab
+refuses your token or does not return your groups, the wizard says so instead of showing an empty
+list. A GitHub workspace you create now belongs to your GitHub account, even if you linked GitLab
+first.
 
-**Operators:** keep one enabled GitLab login provider per GitLab instance. A second one for the same
-instance is now refused, and an existing pair blocks GitLab workspace creation on that instance until
-one is disabled.
+**Operators:** a GitLab connection can no longer be added to an existing workspace through
+`POST /workspaces/{slug}/connections`; GitLab is connected by creating a GitLab workspace.

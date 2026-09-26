@@ -22,7 +22,6 @@ export interface WizardState {
 }
 
 export type WizardAction =
-	| { type: "SET_SERVER_URL"; value: string }
 	| { type: "SET_PAT"; value: string }
 	| {
 			type: "SET_PREFLIGHT_RESULT";
@@ -50,35 +49,25 @@ export function createInitialWizardState(serverUrl: string): WizardState {
 	};
 }
 
-/** A response settles the credentials it was requested with; one that arrives after an edit is dropped. */
-export function isForCurrentCredentials(
-	state: WizardState,
-	request: GitLabPreflightRequest,
-): boolean {
-	return (
-		request.serverUrl === state.serverUrl &&
-		request.personalAccessToken === state.personalAccessToken
-	);
+/** A response settles the token it was requested with; one that arrives after an edit is dropped. */
+export function isForCurrentToken(state: WizardState, request: GitLabPreflightRequest): boolean {
+	return request.personalAccessToken === state.personalAccessToken;
 }
 
 export function wizardReducer(state: WizardState, action: WizardAction): WizardState {
 	switch (action.type) {
-		case "SET_SERVER_URL": {
-			// Changing server URL invalidates preflight result
-			return { ...state, serverUrl: action.value, preflightResult: null };
-		}
 		case "SET_PAT": {
 			// Changing PAT invalidates preflight result
 			return { ...state, personalAccessToken: action.value, preflightResult: null };
 		}
 		case "SET_PREFLIGHT_RESULT": {
-			if (!isForCurrentCredentials(state, action.request)) {
+			if (!isForCurrentToken(state, action.request)) {
 				return state;
 			}
 			return { ...state, preflightResult: action.result };
 		}
 		case "ADVANCE_TO_GROUPS": {
-			if (state.step !== 1 || !isForCurrentCredentials(state, action.request)) {
+			if (state.step !== 1 || !isForCurrentToken(state, action.request)) {
 				return state;
 			}
 			return { ...state, step: 2, groups: action.groups };

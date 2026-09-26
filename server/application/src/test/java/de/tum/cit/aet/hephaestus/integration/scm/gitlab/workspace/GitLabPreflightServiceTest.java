@@ -12,16 +12,16 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.core.auth.spi.LoginProviderQuery;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
-import de.tum.cit.aet.hephaestus.integration.core.connection.identity.ConfiguredScmInstances;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.core.connection.identity.GitLabWorkspaceInstance;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProviderAvailability;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabGroupDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabPreflightResponseDTO;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -48,19 +48,20 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
     @SuppressWarnings("unchecked")
     void setUp() {
         mockWebClient = mock(WebClient.class);
-        GitLabProperties properties = new GitLabProperties(
-                "https://gitlab.com",
-                Duration.ofSeconds(30),
-                Duration.ofSeconds(60),
-                Duration.ofMillis(200),
-                Duration.ofMinutes(5));
         endpoints = spy(new ScmServerEndpointPolicy(new MockEnvironment()));
         lenient().doReturn(mockWebClient).when(endpoints).clientFor(anyString());
-        LoginProviderQuery loginProviders = () -> List.of(
-                new LoginProviderQuery.Provider("lrz", "LRZ GitLab", "GITLAB", "https://gitlab.lrz.de"),
-                new LoginProviderQuery.Provider("gh", "GitHub", "GITHUB", "https://github.example.com"));
-        preflightService =
-                new GitLabPreflightService(properties, endpoints, new ConfiguredScmInstances(List.of(loginProviders)));
+        WorkspaceProviderAvailability defaultInstance = new WorkspaceProviderAvailability() {
+            @Override
+            public IntegrationKind kind() {
+                return IntegrationKind.GITLAB;
+            }
+
+            @Override
+            public Optional<String> hintUrl() {
+                return Optional.of("https://gitlab.lrz.de");
+            }
+        };
+        preflightService = new GitLabPreflightService(endpoints, new GitLabWorkspaceInstance(List.of(defaultInstance)));
     }
 
     @SuppressWarnings("unchecked")
@@ -135,19 +136,19 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldValidateAgainstConfiguredInstanceWhenItIsASignInProvider() {
+        void shouldValidateAgainstTheDefaultInstanceWhenItIsSpelledDifferently() {
             mockGetRequest(new GitLabPreflightService.GitLabUserResponse(99L, "lrz-user", "LRZ", null, null));
 
             GitLabPreflightResponseDTO result =
-                    preflightService.validateToken("glpat-test", "https://gitlab.lrz.de/", null);
+                    preflightService.validateToken("glpat-test", "HTTPS://GitLab.LRZ.de:443", null);
 
             assertThat(result.username()).isEqualTo("lrz-user");
             verify(endpoints).clientFor("https://gitlab.lrz.de");
         }
 
         @Test
-        void shouldRefuseBeforeAnyRequestWhenInstanceIsNotConfigured() {
-            for (String serverUrl : List.of("https://gitlab.example.com", "https://github.example.com")) {
+        void shouldRefuseBeforeAnyRequestWhenInstanceIsNotTheDefault() {
+            for (String serverUrl : List.of("https://gitlab.example.com", "https://gitlab.lrz.de:8443")) {
                 assertThatThrownBy(() -> preflightService.validateToken("glpat-test", serverUrl, null))
                         .isInstanceOfSatisfying(
                                 ResponseStatusException.class,
@@ -209,7 +210,7 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldFailInsteadOfReturningNoGroupsWhenGitLabRefusesTheToken() {
+        void shouldReportARefusedTokenWhenGitLabRejectsIt() {
             mockGetRequestThrows(WebClientResponseException.create(
                     HttpStatus.UNAUTHORIZED.value(),
                     "Unauthorized",
@@ -220,11 +221,26 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
             assertThatThrownBy(() -> preflightService.listAccessibleGroups("glpat-revoked", null))
                     .isInstanceOfSatisfying(
                             ResponseStatusException.class,
+                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT));
+        }
+
+        @Test
+        void shouldFailInsteadOfReturningNoGroupsWhenGitLabIsUnavailable() {
+            mockGetRequestThrows(WebClientResponseException.create(
+                    HttpStatus.SERVICE_UNAVAILABLE.value(),
+                    "Service Unavailable",
+                    HttpHeaders.EMPTY,
+                    new byte[0],
+                    StandardCharsets.UTF_8));
+
+            assertThatThrownBy(() -> preflightService.listAccessibleGroups("glpat-test", null))
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
                             e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY));
         }
 
         @Test
-        void shouldRefuseBeforeAnyRequestWhenInstanceIsNotConfigured() {
+        void shouldRefuseBeforeAnyRequestWhenInstanceIsNotTheDefault() {
             assertThatThrownBy(() -> preflightService.listAccessibleGroups("glpat-test", "https://gitlab.example.com"))
                     .isInstanceOfSatisfying(
                             ResponseStatusException.class,

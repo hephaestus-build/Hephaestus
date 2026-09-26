@@ -15,12 +15,17 @@ import { renderRouteAt, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/tes
 
 vi.setConfig({ testTimeout: 20_000 });
 
-// The GitLab login the shared fixtures configure and link the current user on; the server's own
-// default differs.
-const configuredInstance = "https://gitlab.lrz.de";
+// The GitLab instance the shared fixtures configure a login for and link the current user on.
+const lrz = "https://gitlab.lrz.de";
 
-/** Every token validates; the first validation answers only once `firstPreflightHeld` settles. */
-function serveGitLab(firstPreflightHeld?: Promise<void>) {
+/**
+ * The server creates GitLab workspaces on `instance`. Every token validates; the first validation
+ * answers only once `firstPreflightHeld` settles.
+ */
+function serveGitLab({
+	instance = lrz,
+	firstPreflightHeld,
+}: { instance?: string; firstPreflightHeld?: Promise<void> } = {}) {
 	const requests = {
 		preflight: [] as GitLabPreflightRequest[],
 		groups: [] as GitLabPreflightRequest[],
@@ -30,7 +35,7 @@ function serveGitLab(firstPreflightHeld?: Promise<void>) {
 		http.get("*/workspaces/providers", () =>
 			HttpResponse.json({
 				creationPolicy: "SELF_SERVICE",
-				gitlab: { defaultServerUrl: "https://gitlab.com" },
+				gitlab: { defaultServerUrl: instance },
 			}),
 		),
 		http.post<PathParams, GitLabPreflightRequest>(
@@ -72,25 +77,13 @@ function serveGitLab(firstPreflightHeld?: Promise<void>) {
 }
 
 describe("GitLab workspace wizard", () => {
-	it("creates the workspace on the linked instance when discovery spells its URL differently", async () => {
+	it("creates the workspace on the server's GitLab instance", async () => {
 		const user = userEvent.setup();
 		const requests = serveGitLab();
-		server.use(
-			http.get("*/identity-providers", () =>
-				HttpResponse.json([
-					{
-						registrationId: "gitlab",
-						displayName: "GitLab",
-						providerType: "GITLAB",
-						baseUrl: "HTTPS://GitLab.LRZ.de:443",
-					},
-				]),
-			),
-		);
 		const { router } = renderRouteAtWithRouter("/workspaces/new/gitlab");
 
-		await screen.findByDisplayValue(configuredInstance, {}, ROUTE_RENDER_WAIT);
-		expect(screen.queryByDisplayValue("https://gitlab.com")).toBeNull();
+		await screen.findByDisplayValue(lrz, {}, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("combobox")).toBeNull();
 
 		await user.type(screen.getByLabelText("Access Token"), "glpat-secret");
 		await user.click(screen.getByRole("button", { name: "Validate Token" }));
@@ -106,13 +99,13 @@ describe("GitLab workspace wizard", () => {
 		});
 		expect(
 			[...requests.preflight, ...requests.groups, ...requests.create].map((r) => r.serverUrl),
-		).toStrictEqual([configuredInstance, configuredInstance, configuredInstance]);
+		).toStrictEqual([lrz, lrz, lrz]);
 	});
 
 	it("ignores a validation that answers after the token was edited", async () => {
 		const user = userEvent.setup();
 		const firstAnswer = deferred();
-		const requests = serveGitLab(firstAnswer.promise);
+		const requests = serveGitLab({ firstPreflightHeld: firstAnswer.promise });
 		renderRouteAt("/workspaces/new/gitlab");
 
 		const token = await screen.findByLabelText("Access Token", {}, ROUTE_RENDER_WAIT);
@@ -138,8 +131,9 @@ describe("GitLab workspace wizard", () => {
 		});
 	});
 
-	it("offers only the instance the account is linked on and a way to link the other", async () => {
-		serveGitLab();
+	it("asks to link the server's instance when the account is linked only on another", async () => {
+		const example = "https://gitlab.example.com";
+		serveGitLab({ instance: example });
 		server.use(
 			http.get("*/identity-providers", () =>
 				HttpResponse.json([
@@ -148,25 +142,47 @@ describe("GitLab workspace wizard", () => {
 						registrationId: "gitlab-example",
 						displayName: "Example GitLab",
 						providerType: "GITLAB",
-						baseUrl: "https://gitlab.example.com",
+						baseUrl: example,
 					},
 				]),
 			),
 		);
 		renderRouteAt("/workspaces/new/gitlab");
 
-		await screen.findByDisplayValue(configuredInstance, {}, ROUTE_RENDER_WAIT);
-		expect(screen.queryByDisplayValue("https://gitlab.example.com")).toBeNull();
-		screen.getByRole("button", { name: "Link Example GitLab" });
+		await screen.findByText(
+			/link your GitLab account on https:\/\/gitlab\.example\.com/u,
+			{},
+			ROUTE_RENDER_WAIT,
+		);
+		screen.getByRole("button", { name: "Link GitLab account" });
+		expect(screen.queryByLabelText("Access Token")).toBeNull();
+	});
+
+	it("explains that the server's instance has no GitLab sign-in", async () => {
+		serveGitLab({ instance: "https://gitlab.example.com" });
+		renderRouteAt("/workspaces/new/gitlab");
+
+		await screen.findByRole(
+			"heading",
+			{ name: "GitLab sign-in isn’t configured" },
+			ROUTE_RENDER_WAIT,
+		);
+		screen.getByRole("link", { name: "Manage login providers" });
+		expect(screen.queryByLabelText("Access Token")).toBeNull();
 	});
 
 	it("keeps the token step on a failed group load and recovers on retry", async () => {
 		const user = userEvent.setup();
 		serveGitLab();
+		const detail = "GitLab refused this token. Check it and validate it again.";
 		server.use(
 			http.post(
 				"*/workspaces/gitlab/groups",
-				() => HttpResponse.json({ detail: "GitLab did not return the groups" }, { status: 502 }),
+				() =>
+					HttpResponse.json(
+						{ title: "Unprocessable Content", status: 422, detail },
+						{ status: 422, headers: { "Content-Type": "application/problem+json" } },
+					),
 				{ once: true },
 			),
 		);
@@ -181,55 +197,11 @@ describe("GitLab workspace wizard", () => {
 		await user.click(screen.getByRole("button", { name: "Next" }));
 
 		await screen.findByText("Failed to load groups");
+		screen.getByText(detail);
 		expect(screen.queryByRole("radiogroup")).toBeNull();
 
 		await user.click(screen.getByRole("button", { name: "Next" }));
 		await screen.findByRole("radio", { name: /Hephaestus/u });
-	});
-
-	it("offers no instance the server could not match, such as an IPv4-mapped address", async () => {
-		serveGitLab();
-		server.use(
-			http.get("*/identity-providers", () =>
-				HttpResponse.json([
-					{
-						registrationId: "gitlab-mapped",
-						displayName: "Mapped GitLab",
-						providerType: "GITLAB",
-						baseUrl: "https://[::ffff:1.1.1.1]",
-					},
-				]),
-			),
-		);
-		renderRouteAt("/workspaces/new/gitlab");
-
-		await screen.findByText("GitLab sign-in isn’t configured", {}, ROUTE_RENDER_WAIT);
-	});
-
-	it("explains a GitLab instance configured twice instead of offering it", async () => {
-		serveGitLab();
-		server.use(
-			http.get("*/identity-providers", () =>
-				HttpResponse.json(
-					["https://gitlab.lrz.de", "HTTPS://GitLab.LRZ.de:443"].map((baseUrl, index) => ({
-						registrationId: `gitlab-${index}`,
-						displayName: "LRZ GitLab",
-						providerType: "GITLAB",
-						baseUrl,
-					})),
-				),
-			),
-		);
-		renderRouteAt("/workspaces/new/gitlab");
-
-		await screen.findByRole(
-			"heading",
-			{ name: "GitLab sign-in is configured twice" },
-			ROUTE_RENDER_WAIT,
-		);
-		screen.getByText(/More than one GitLab login provider signs in to https:\/\/gitlab\.lrz\.de/u);
-		screen.getByRole("link", { name: "Manage login providers" });
-		expect(screen.queryByLabelText("Access Token")).toBeNull();
 	});
 
 	it("shows why the server refused to create the workspace", async () => {

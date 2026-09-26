@@ -3,73 +3,19 @@ import { assert, describe, expect, it } from "vitest";
 import { connectionSchema, workspaceDetailsSchema } from "@/components/create-workspace/schemas";
 
 describe("connectionSchema", () => {
-	it("accepts valid PAT with empty server URL (defaults to gitlab.com)", () => {
-		const result = connectionSchema.safeParse({
-			serverUrl: "",
-			personalAccessToken: "glpat-abc123",
-		});
-		expect(result.success).toBe(true);
-	});
-
-	it("accepts valid HTTPS server URL", () => {
-		const result = connectionSchema.safeParse({
-			serverUrl: "https://gitlab.example.com",
-			personalAccessToken: "token",
-		});
-		expect(result.success).toBe(true);
-	});
-
-	it("rejects HTTP server URL", () => {
-		const result = connectionSchema.safeParse({
-			serverUrl: "http://gitlab.example.com",
-			personalAccessToken: "token",
-		});
-		expect(result.success).toBe(false);
+	it("accepts a PAT and trims it", () => {
+		const result = connectionSchema.safeParse({ personalAccessToken: "  glpat-abc123  " });
+		assert(result.success);
+		expect(result.data.personalAccessToken).toBe("glpat-abc123");
 	});
 
 	it("rejects empty PAT", () => {
-		const result = connectionSchema.safeParse({ serverUrl: "", personalAccessToken: "" });
-		expect(result.success).toBe(false);
-	});
-
-	it("trims whitespace from server URL", () => {
-		const result = connectionSchema.safeParse({
-			serverUrl: "  https://gitlab.com  ",
-			personalAccessToken: "token",
-		});
-		assert(result.success);
-		expect(result.data.serverUrl).toBe("https://gitlab.com");
-	});
-
-	it("rejects non-URL string", () => {
-		const result = connectionSchema.safeParse({
-			serverUrl: "not-a-url",
-			personalAccessToken: "token",
-		});
-		expect(result.success).toBe(false);
-	});
-
-	it("rejects javascript: URL", () => {
-		const result = connectionSchema.safeParse({
-			serverUrl: "javascript:alert(1)",
-			personalAccessToken: "token",
-		});
-		expect(result.success).toBe(false);
-	});
-
-	it("rejects ftp: URL", () => {
-		const result = connectionSchema.safeParse({
-			serverUrl: "ftp://files.example.com",
-			personalAccessToken: "token",
-		});
+		const result = connectionSchema.safeParse({ personalAccessToken: "" });
 		expect(result.success).toBe(false);
 	});
 
 	it("rejects whitespace-only PAT", () => {
-		const result = connectionSchema.safeParse({
-			serverUrl: "",
-			personalAccessToken: "   ",
-		});
+		const result = connectionSchema.safeParse({ personalAccessToken: "   " });
 		expect(result.success).toBe(false);
 	});
 });

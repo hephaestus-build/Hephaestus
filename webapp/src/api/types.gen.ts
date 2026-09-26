@@ -1252,7 +1252,7 @@ export type CreateWorkspaceRequest = {
    */
   personalAccessToken?: string;
   /**
-   * GitLab instance configured for sign-in; the default GitLab instance when omitted.
+   * For GitLab, the default GitLab instance this server reads from, which is also used when omitted; any other instance is refused.
    */
   serverUrl?: string;
   /**
@@ -1370,7 +1370,6 @@ export type CurrentUserView = {
   avatarUrl?: string;
   displayName?: string;
   gitProviderId?: string;
-  hasGitLabIdentity?: boolean;
   id?: number;
   identityProvider?: string;
   linkedProviders?: Array<LinkedProvider>;
@@ -1772,7 +1771,7 @@ export type GitLabPreflightRequest = {
    */
   personalAccessToken: string;
   /**
-   * GitLab instance configured for sign-in; the default GitLab instance when omitted.
+   * The default GitLab instance this server reads from, which is also used when omitted; any other instance is refused.
    */
   serverUrl?: string;
 };
@@ -1804,7 +1803,7 @@ export type GitLabPreflightResponse = {
  */
 export type GitLabProvider = {
   /**
-   * Default GitLab server URL
+   * Origin of the one GitLab instance workspaces are created on
    */
   defaultServerUrl?: string;
 };
@@ -2006,8 +2005,8 @@ export type InAppFeedback = {
  * Inbound payload for <code>POST /workspaces/{workspaceSlug</code>/connections}.
  *
  *  <p><code>userInput</code> is intentionally a free-form map so per-kind ConnectionStrategy
- *  implementations can dictate their own field schema (e.g. GitLab needs <code>pat</code> +
- *  <code>group_id</code>; GitHub needs nothing because the install URL is server-configured).
+ *  implementations can dictate their own field schema (e.g. Outline needs <code>server_url</code>; GitHub
+ *  needs nothing because the install URL is server-configured).
  */
 export type InitiateConnectionRequest = {
   kind: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';

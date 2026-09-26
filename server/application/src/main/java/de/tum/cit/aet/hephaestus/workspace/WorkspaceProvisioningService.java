@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.connection.identity.ConfiguredScmInstances;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProviderAvailability;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -52,7 +51,6 @@ public class WorkspaceProvisioningService {
     private final ConnectionService connectionService;
     private final WebClient webClient;
     private final ScmServerEndpointPolicy endpoints;
-    private final ConfiguredScmInstances configuredScmInstances;
 
     /**
      * Per-kind availability providers — used to derive default server URLs for PAT
@@ -70,7 +68,6 @@ public class WorkspaceProvisioningService {
             IdentityProviderRepository gitProviderRepository,
             WorkspaceMembershipRepository workspaceMembershipRepository,
             WorkspaceMembershipService workspaceMembershipService,
-            ConfiguredScmInstances configuredScmInstances,
             ConnectionService connectionService,
             List<WorkspaceProviderAvailability> providerAvailabilityList,
             ScmServerEndpointPolicy endpoints) {
@@ -83,7 +80,6 @@ public class WorkspaceProvisioningService {
         this.gitProviderRepository = gitProviderRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceMembershipService = workspaceMembershipService;
-        this.configuredScmInstances = configuredScmInstances;
         this.connectionService = connectionService;
         Map<IntegrationKind, WorkspaceProviderAvailability> map = new EnumMap<>(IntegrationKind.class);
         for (WorkspaceProviderAvailability a : providerAvailabilityList) {
@@ -274,14 +270,6 @@ public class WorkspaceProvisioningService {
     public Long resolveOrCreateGitLabUser(String patToken, String serverUrl, String accountLogin) {
         String resolvedServerUrl = resolveGitLabServerUrl(serverUrl);
         return syncGitLabUserForPAT(patToken, resolvedServerUrl, accountLogin);
-    }
-
-    /**
-     * The canonical origin of the configured GitLab instance a creation request names; a blank URL names
-     * the default instance. Any other server is refused (422) before the token is stored.
-     */
-    public String requireGitLabInstance(@Nullable String serverUrl) {
-        return configuredScmInstances.require(IdentityProviderType.GITLAB, serverUrl, resolveGitLabServerUrl(null));
     }
 
     /**

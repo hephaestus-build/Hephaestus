@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -100,6 +101,32 @@ class RegistrationToGitProviderResolverTest {
 
         assertThat(resolver.resolveProviderId("GITLAB", "https://gitlab.lrz.de"))
                 .isEqualTo(3L);
+    }
+
+    @Test
+    void shouldFindTheRowByTheCanonicalOrigin() {
+        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, "https://gitlab.example.test"))
+                .thenReturn(Optional.of(stamped(IdentityProviderType.GITLAB, "https://gitlab.example.test", 10L)));
+
+        assertThat(resolver.resolveProviderId("GITLAB", "HTTPS://GitLab.Example.test:443"))
+                .isEqualTo(10L);
+    }
+
+    @Test
+    void shouldReuseARowThatSpellsTheSameOriginDifferently() {
+        when(gitProviderRepository.findAllByType(IdentityProviderType.GITLAB))
+                .thenReturn(List.of(stamped(IdentityProviderType.GITLAB, "HTTPS://GitLab.lrz.de:443", 4L)));
+
+        assertThat(resolver.resolveProviderId("GITLAB", "https://gitlab.lrz.de"))
+                .isEqualTo(4L);
+    }
+
+    @Test
+    void shouldReportTheServerUrlAsItsCanonicalOrigin() {
+        when(gitProviderRepository.findById(4L))
+                .thenReturn(Optional.of(stamped(IdentityProviderType.GITLAB, "HTTPS://GitLab.lrz.de:443", 4L)));
+
+        assertThat(resolver.providerServerUrl(4L)).isEqualTo("https://gitlab.lrz.de");
     }
 
     @Test

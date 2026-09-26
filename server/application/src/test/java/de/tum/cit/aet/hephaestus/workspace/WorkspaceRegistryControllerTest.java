@@ -2,9 +2,6 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -44,9 +41,6 @@ class WorkspaceRegistryControllerTest {
     private WorkspaceQueryService workspaceQueryService;
 
     @Mock
-    private WorkspaceProvisioningService workspaceProvisioningService;
-
-    @Mock
     private FeatureFlagService featureFlagService;
 
     private WorkspaceRegistryController controller;
@@ -70,7 +64,7 @@ class WorkspaceRegistryControllerTest {
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
-        verifyNoInteractions(workspaceService, workspaceProvisioningService);
+        verifyNoInteractions(workspaceService);
     }
 
     @Test
@@ -92,7 +86,6 @@ class WorkspaceRegistryControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isSameAs(dto);
         assertThat(response.getHeaders().getLocation()).hasPath("/workspaces/test-workspace");
-        verify(workspaceProvisioningService, never()).requireGitLabInstance(any());
     }
 
     @Test
@@ -106,22 +99,6 @@ class WorkspaceRegistryControllerTest {
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
-        verifyNoInteractions(workspaceService, workspaceProvisioningService);
-    }
-
-    @Test
-    void shouldNotCreateGitLabWorkspaceWhenInstanceIsNotConfigured() {
-        controller = controller(WorkspaceProperties.CreationPolicy.SELF_SERVICE);
-        authenticate(List.of());
-        when(featureFlagService.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION))
-                .thenReturn(true);
-        when(workspaceProvisioningService.requireGitLabInstance(null))
-                .thenThrow(new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT));
-
-        assertThatThrownBy(() -> controller.createWorkspace(request(IntegrationKind.GITLAB)))
-                .isInstanceOfSatisfying(
-                        ResponseStatusException.class,
-                        exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT));
         verifyNoInteractions(workspaceService);
     }
 
@@ -129,7 +106,6 @@ class WorkspaceRegistryControllerTest {
         return new WorkspaceRegistryController(
                 workspaceService,
                 workspaceQueryService,
-                workspaceProvisioningService,
                 featureFlagService,
                 new WorkspaceProperties(false, null, false, null, policy));
     }

@@ -18,7 +18,7 @@ import { workspaceDetailsSchema } from "@/components/create-workspace/schemas";
 import { SelectGroupStep } from "@/components/create-workspace/SelectGroupStep";
 import {
 	createInitialWizardState,
-	isForCurrentCredentials,
+	isForCurrentToken,
 	WizardContext,
 	type WizardStep,
 	wizardReducer,
@@ -47,17 +47,6 @@ const STEP_META: Record<WizardStep, { title: string; description: string }> = {
 interface GitLabProvider {
 	registrationId: string;
 	displayName: string;
-	baseUrl: string;
-}
-
-/**
- * The key GitLab instances are compared by here, matching the server's: a URL origin lower-cases scheme
- * and host, writes an IPv6 address one way and drops a default port. An IPv4-mapped IPv6 address has no
- * key on the server, so it has none here either.
- */
-function instanceOrigin(url: string | undefined): string | undefined {
-	const parsed = URL.parse(url ?? "");
-	return parsed === null || parsed.hostname.startsWith("[::ffff:") ? undefined : parsed.origin;
 }
 
 function BackToProviders() {
@@ -72,26 +61,29 @@ function BackToProviders() {
 	);
 }
 
-/** A GitLab sign-in problem only an instance admin can fix, under Instance admin → Login providers. */
-function GitLabSetupNotice({
-	title,
-	children,
+/**
+ * Shown when no GitLab sign-in is configured for the instance workspaces are created on, so there is
+ * nothing to link. An admin must add a GitLab login provider for it first (Instance admin → Login
+ * providers).
+ */
+function NoGitLabProviderNotice({
+	serverUrl,
 	isAppAdmin,
 }: {
-	title: string;
-	children: ReactNode;
+	serverUrl: string;
 	isAppAdmin: boolean;
 }) {
 	return (
 		<div className="mx-auto w-full max-w-2xl">
 			<BackToProviders />
 			<div className="space-y-4">
-				<h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+				<h1 className="text-2xl font-semibold tracking-tight">GitLab sign-in isn’t configured</h1>
 				<p className="text-muted-foreground">
-					{children}{" "}
+					GitLab workspaces are created on {serverUrl}, which has no GitLab login provider, so a
+					GitLab account there can’t be linked yet.
 					{isAppAdmin
-						? "Fix it under Login providers."
-						: "Ask an instance admin to fix it (Instance admin → Login providers)."}
+						? " Add one to enable GitLab sign-in."
+						: " Ask an instance admin to add one (Instance admin → Login providers)."}
 				</p>
 				{isAppAdmin && (
 					<Link to="/admin/login-providers" className={buttonVariants({ className: "w-fit" })}>
@@ -104,24 +96,16 @@ function GitLabSetupNotice({
 }
 
 /**
- * Prompts the user to link a GitLab account via re-login linking: a top-level redirect to the GitLab
- * identity provider that attaches the identity to the current account. When more than one GitLab
- * instance is configured, the user picks which instance to link (no arbitrary default).
+ * Prompts the user to link their GitLab account on the instance workspaces are created on, via re-login
+ * linking: a top-level redirect to that instance that attaches the identity to the current account.
  */
-function linkLabel(displayName: string, linked: boolean, multiple: boolean) {
-	if (linked) {
-		return `${displayName} — already linked`;
-	}
-	return multiple ? `Link ${displayName}` : "Link GitLab account";
-}
-
 function GitLabLinkPrompt({
+	serverUrl,
 	providers,
-	linkedServerUrls,
 	linkAccount,
 }: {
+	serverUrl: string;
 	providers: GitLabProvider[];
-	linkedServerUrls: Set<string>;
 	linkAccount: (alias: string) => void;
 }) {
 	const multiple = providers.length > 1;
@@ -132,25 +116,19 @@ function GitLabLinkPrompt({
 				<div className="space-y-1.5">
 					<h1 className="text-2xl font-semibold tracking-tight">Link your GitLab account</h1>
 					<p className="text-muted-foreground">
-						{multiple
-							? "To create a GitLab workspace, link the GitLab instance you'll monitor. You'll be redirected to sign in; the identity is then attached to your current account."
-							: "To create a GitLab workspace, link your GitLab account first. You'll be redirected to GitLab to sign in; the identity is then attached to your current account."}
+						To create a GitLab workspace, link your GitLab account on {serverUrl} first. You’ll be
+						redirected to GitLab to sign in; the identity is then attached to your current account.
 					</p>
 				</div>
 				<div className="flex flex-col items-start gap-2">
-					{providers.map((provider) => {
-						const linked = linkedServerUrls.has(provider.baseUrl);
-						return (
-							<Button
-								key={provider.registrationId}
-								variant={linked ? "outline" : "default"}
-								disabled={linked}
-								onClick={() => linkAccount(provider.registrationId)}
-							>
-								{linkLabel(provider.displayName, linked, multiple)}
-							</Button>
-						);
-					})}
+					{providers.map((provider) => (
+						<Button
+							key={provider.registrationId}
+							onClick={() => linkAccount(provider.registrationId)}
+						>
+							{multiple ? `Link ${provider.displayName}` : "Link GitLab account"}
+						</Button>
+					))}
 				</div>
 			</div>
 		</div>
@@ -187,7 +165,6 @@ function GitLabWizardPage() {
 		staleTime: 5 * 60 * 1000,
 	});
 
-	// One GitLab sign-in per configured instance: the only instances a token may be sent to.
 	const {
 		data: identityProviders,
 		isLoading: identityProvidersLoading,
@@ -196,32 +173,6 @@ function GitLabWizardPage() {
 		...listIdentityProvidersOptions(),
 		staleTime: 5 * 60 * 1000,
 	});
-	const gitlabProviders: GitLabProvider[] = (identityProviders ?? []).flatMap((p) => {
-		const baseUrl = instanceOrigin(p.baseUrl);
-		if (p.providerType !== "GITLAB" || !hasText(p.registrationId) || !hasText(baseUrl)) {
-			return [];
-		}
-		return [
-			{
-				registrationId: p.registrationId,
-				displayName: firstNonBlank(p.displayName) ?? p.registrationId,
-				baseUrl,
-			},
-		];
-	});
-	const linkedGitlabServerUrls = new Set(
-		linkedProviders.flatMap((p) => {
-			const origin = instanceOrigin(p.serverUrl);
-			return p.type === "GITLAB" && hasText(origin) ? [origin] : [];
-		}),
-	);
-
-	const gitlabEnabled = Boolean(providers?.gitlab);
-	const defaultServerUrl = instanceOrigin(providers?.gitlab?.defaultServerUrl);
-	// A workspace is owned by the account's identity on its own instance, so only linked ones are offered.
-	const linkedInstances = gitlabProviders.filter((p) => linkedGitlabServerUrls.has(p.baseUrl));
-	const defaultInstance =
-		linkedInstances.find((p) => p.baseUrl === defaultServerUrl) ?? linkedInstances.at(0);
 
 	if (providersLoading || identityProvidersLoading) {
 		return (
@@ -243,70 +194,48 @@ function GitLabWizardPage() {
 			</div>
 		);
 	}
-	if (!gitlabEnabled) {
+	const serverUrl = providers?.gitlab?.defaultServerUrl;
+	if (!hasText(serverUrl)) {
 		return <Navigate to="/workspaces/new" />;
 	}
 
-	if (gitlabProviders.length === 0) {
-		return (
-			<GitLabSetupNotice title="GitLab sign-in isn’t configured" isAppAdmin={isAppAdmin}>
-				This instance has no GitLab login provider, so a GitLab account can’t be linked yet.
-			</GitLabSetupNotice>
-		);
-	}
-
-	// The server refuses creation on such an instance too.
-	const duplicated = gitlabProviders.find(
-		(p, index) => gitlabProviders.findIndex((other) => other.baseUrl === p.baseUrl) !== index,
+	// Workspaces are created on the one GitLab instance the server syncs, and owned by the account's
+	// identity there. The server sends every URL here as an origin, so plain comparison matches.
+	const instanceLogins: GitLabProvider[] = (identityProviders ?? []).flatMap((p) =>
+		p.providerType === "GITLAB" && hasText(p.registrationId) && p.baseUrl === serverUrl
+			? [
+					{
+						registrationId: p.registrationId,
+						displayName: firstNonBlank(p.displayName) ?? p.registrationId,
+					},
+				]
+			: [],
 	);
-	if (duplicated !== undefined) {
-		return (
-			<GitLabSetupNotice title="GitLab sign-in is configured twice" isAppAdmin={isAppAdmin}>
-				More than one GitLab login provider signs in to {duplicated.baseUrl}, so Hephaestus can’t
-				tell which of your GitLab accounts there should own a workspace. One of them must be
-				disabled before GitLab workspaces can be created.
-			</GitLabSetupNotice>
-		);
-	}
+	const linked = linkedProviders.some((p) => p.type === "GITLAB" && p.serverUrl === serverUrl);
 
-	if (defaultInstance === undefined) {
+	if (!linked && instanceLogins.length === 0) {
+		return <NoGitLabProviderNotice serverUrl={serverUrl} isAppAdmin={isAppAdmin} />;
+	}
+	if (!linked) {
 		return (
 			<GitLabLinkPrompt
-				providers={gitlabProviders}
-				linkedServerUrls={linkedGitlabServerUrls}
+				serverUrl={serverUrl}
+				providers={instanceLogins}
 				linkAccount={linkAccount}
 			/>
 		);
 	}
 
-	return (
-		<GitLabWizard
-			instances={linkedInstances}
-			unlinkedInstances={gitlabProviders.filter((p) => !linkedGitlabServerUrls.has(p.baseUrl))}
-			linkAccount={linkAccount}
-			initialServerUrl={defaultInstance.baseUrl}
-		/>
-	);
+	return <GitLabWizard serverUrl={serverUrl} />;
 }
 
-/** Mounted once the configured instances are known, so the wizard starts on one of them. */
-function GitLabWizard({
-	instances,
-	unlinkedInstances,
-	linkAccount,
-	initialServerUrl,
-}: {
-	instances: GitLabProvider[];
-	unlinkedInstances: GitLabProvider[];
-	linkAccount: (alias: string) => void;
-	initialServerUrl: string;
-}) {
-	const [state, dispatch] = useReducer(wizardReducer, initialServerUrl, createInitialWizardState);
+/** Mounted once the server has named its GitLab instance, so no request goes anywhere else. */
+function GitLabWizard({ serverUrl }: { serverUrl: string }) {
+	const [state, dispatch] = useReducer(wizardReducer, serverUrl, createInitialWizardState);
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const stepAnnouncement = `Step ${state.step} of 3: ${STEP_META[state.step].title}`;
 
-	// No `onError`: the alert renders off `listGroups.isError` beside the token a reader can fix.
 	const listGroups = useMutation(listGitLabGroupsMutation());
 
 	const createWorkspace = useMutation({
@@ -417,37 +346,23 @@ function GitLabWizard({
 
 			<div className="mt-6" role="region" aria-labelledby="wizard-heading">
 				<WizardContext.Provider value={wizardContextValue}>
-					{state.step === 1 && <ConnectGitLabStep instances={instances} />}
+					{state.step === 1 && <ConnectGitLabStep />}
 					{state.step === 2 && <SelectGroupStep />}
 					{state.step === 3 && <ConfigureWorkspaceStep />}
 				</WizardContext.Provider>
 			</div>
 
-			{state.step === 1 && unlinkedInstances.length > 0 && (
-				<div className="mt-4 flex flex-wrap items-baseline gap-x-3 text-sm text-muted-foreground">
-					<span>Only instances your account is linked to are listed.</span>
-					{unlinkedInstances.map((instance) => (
-						<Button
-							key={instance.registrationId}
-							variant="link"
-							size="inline"
-							onClick={() => linkAccount(instance.registrationId)}
-						>
-							Link {instance.displayName}
-						</Button>
-					))}
-				</div>
-			)}
-
 			{listGroups.isError &&
 				state.step === 1 &&
-				isForCurrentCredentials(state, listGroups.variables.body) && (
+				isForCurrentToken(state, listGroups.variables.body) && (
 					<Alert variant="destructive" className="mt-4">
 						<OctagonXIcon aria-hidden="true" />
 						<AlertTitle>Failed to load groups</AlertTitle>
 						<AlertDescription>
-							GitLab did not return your groups. It may be unavailable, or the token may no longer
-							be valid. Try again in a moment, or validate the token again.
+							{problemDetailOf(
+								listGroups.error,
+								"GitLab did not return your groups. Try again in a moment.",
+							)}
 						</AlertDescription>
 					</Alert>
 				)}

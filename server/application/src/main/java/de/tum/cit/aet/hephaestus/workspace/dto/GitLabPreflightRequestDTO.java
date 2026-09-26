@@ -18,7 +18,8 @@ public record GitLabPreflightRequestDTO(
         String personalAccessToken,
 
         @Schema(
-                description = "GitLab instance configured for sign-in; the default GitLab instance when omitted.",
+                description =
+                        "The default GitLab instance this server reads from, which is also used when omitted; any other instance is refused.",
                 example = "https://gitlab.example.com")
         @ScmServerUrl
         @Nullable

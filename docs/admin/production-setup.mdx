@@ -226,7 +226,7 @@ GitLab login, GitLab workspaces, webhook auto-registration, and practice review 
 | `GITLAB_OAUTH_CLIENT_SECRET` | GitLab OAuth application client secret |
 | `GITLAB_OAUTH_BASE_URL` | GitLab instance the login button federates to. Defaults to `https://gitlab.com`; set to your self-hosted instance (e.g. `https://gitlab.lrz.de`) |
 | `GITLAB_OAUTH_DISPLAY_NAME` | Login-button label (defaults to `GitLab`; e.g. `gitlab.lrz.de`) |
-| `GITLAB_DEFAULT_SERVER_URL` | Default GitLab instance for workspace creation / SCM sync (not auth). Falls back to `GITLAB_OAUTH_BASE_URL` |
+| `GITLAB_DEFAULT_SERVER_URL` | The one GitLab instance workspaces are created on and synced from (not auth). Falls back to `GITLAB_OAUTH_BASE_URL` |
 | `GITLAB_ENABLED` | Enables server-side GitLab beans in the application server |
 | `GITLAB_WORKSPACE_CREATION` | Enables GitLab workspace creation in the UI and API |
 | `WEBHOOK_SECRET` | Shared secret used for GitLab webhook verification and auto-registration. One instance-wide value: GitHub webhooks are verified against the same secret |
@@ -239,7 +239,7 @@ The login provider is instance-agnostic: gitlab.com works out of the box, and an
 
 This env-seeds **one** default GitLab login provider (registration id `gitlab`). Additional GitLab instances are added at runtime by an instance admin under **Instance admin → Login providers** — no redeploy.
 
-GitLab workspaces can only be created on an instance with an enabled GitLab login provider, or on `GITLAB_DEFAULT_SERVER_URL`. Hephaestus refuses any other server before an access token is validated, used to list groups, or stored. The workspace owner is the creator's GitLab account on that same instance, so creators link that instance first. Keep one enabled GitLab login provider per instance: a second one for the same instance, even spelled differently (`https://gitlab.example.com` and `HTTPS://GitLab.example.com:443`), is refused, and an existing pair blocks GitLab workspace creation there until one is disabled.
+GitLab workspaces are created only on `GITLAB_DEFAULT_SERVER_URL`. Hephaestus reads every GitLab project, member and event from that one instance, so it refuses any other server before an access token is validated, used to list groups, or stored. A login provider for another GitLab instance lets people sign in and link that account, but cannot host a workspace. The workspace owner is the creator's GitLab account on the default instance, so creating one needs a GitLab login provider for that instance and a creator who has linked it.
 
 The auto-registered group webhook subscribes to merge request, issue, note, push, tag push, pipeline,
 milestone, member, subgroup and project events. A hook registered by an earlier release does not gain

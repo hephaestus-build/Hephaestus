@@ -7,20 +7,17 @@ const serverUrl = "https://gitlab.example.com";
 
 /**
  * Connection step in the GitLab workspace creation wizard.
- * Collects GitLab instance URL and personal access token,
+ * Shows the GitLab instance the server reads from and collects an access token for it,
  * validates via preflight API call, and shows feedback.
  */
 const meta = {
 	component: ConnectGitLabStep,
-	args: {
-		instances: [{ registrationId: "gitlab", displayName: "GitLab", baseUrl: serverUrl }],
-	},
 	parameters: {
 		layout: "centered",
 		docs: {
 			description: {
 				component:
-					"First step of the GitLab wizard. Validates server URL and PAT via preflight endpoint.",
+					"First step of the GitLab wizard. Validates the access token via preflight endpoint.",
 			},
 		},
 	},

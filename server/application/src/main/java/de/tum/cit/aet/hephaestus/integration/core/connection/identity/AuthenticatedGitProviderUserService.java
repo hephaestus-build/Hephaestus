@@ -60,7 +60,8 @@ public class AuthenticatedGitProviderUserService {
     /**
      * The account's GitLab actor on the instance at {@code serverUrl}, provisioned when absent. A link to
      * another GitLab instance, or to GitHub, never stands in for it. Without exactly one matching link this
-     * is 409: two links can match when two registrations name one instance, and neither may be picked.
+     * is 409: identity providers recorded before instances were compared by origin can name one instance
+     * twice, and neither link may be picked.
      */
     @Transactional
     public User resolveOrProvisionCurrentGitLabUser(String serverUrl) {
@@ -76,8 +77,8 @@ public class AuthenticatedGitProviderUserService {
         if (matching.size() > 1) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Your account is linked more than once to GitLab at " + serverUrl
-                            + ". Ask an instance admin to keep one GitLab login provider for it.");
+                    "Your account has more than one GitLab identity on " + serverUrl
+                            + ". Unlink the one you don't use in Settings → Linked Accounts.");
         }
         if (matching.isEmpty()) {
             throw new ResponseStatusException(

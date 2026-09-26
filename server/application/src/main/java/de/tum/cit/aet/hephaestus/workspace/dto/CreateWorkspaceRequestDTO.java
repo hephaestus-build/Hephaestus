@@ -69,7 +69,8 @@ public record CreateWorkspaceRequestDTO(
         String personalAccessToken,
 
         @Schema(
-                description = "GitLab instance configured for sign-in; the default GitLab instance when omitted.",
+                description =
+                        "For GitLab, the default GitLab instance this server reads from, which is also used when omitted; any other instance is refused.",
                 example = "https://gitlab.example.com")
         @Nullable
         @ScmServerUrl
@@ -77,19 +78,6 @@ public record CreateWorkspaceRequestDTO(
     @Deprecated(forRemoval = true)
     public @Nullable Long ownerUserId() {
         return ownerUserId;
-    }
-
-    /** This request aimed at {@code serverUrl}, the instance the server resolved it to. */
-    public CreateWorkspaceRequestDTO withServerUrl(String serverUrl) {
-        return new CreateWorkspaceRequestDTO(
-                workspaceSlug,
-                displayName,
-                accountLogin,
-                accountType,
-                ownerUserId,
-                kind,
-                personalAccessToken,
-                serverUrl);
     }
 
     @AssertTrue(message = "Personal access token is required")

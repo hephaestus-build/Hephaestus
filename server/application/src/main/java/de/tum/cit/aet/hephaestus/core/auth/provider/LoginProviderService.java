@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
-import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.ServerUrlValidator;
 import java.util.ArrayList;
@@ -15,7 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import org.jspecify.annotations.Nullable;
@@ -156,7 +154,6 @@ public class LoginProviderService {
         provider.setScopes(resolveScopes(draft.type(), draft.scopes()));
         provider.setEnabled(true);
         provider.setSeededFromEnv(false);
-        requireOnlyEnabledProviderForItsInstance(provider);
         LoginProvider saved = persist(provider);
         audit(AuthEvent.EventType.LOGIN_PROVIDER_CREATED, saved, null);
         log.info("auth.login-provider: admin created '{}' ({})", registrationId, saved.getType());
@@ -197,9 +194,6 @@ public class LoginProviderService {
         } else if (patch.enabled() != null && patch.enabled()) {
             provider.setEnabled(true);
             changed.add("enabled");
-        }
-        if (provider.isEnabled() && (changed.contains("baseUrl") || changed.contains("enabled"))) {
-            requireOnlyEnabledProviderForItsInstance(provider);
         }
         LoginProvider saved = persist(provider);
         audit(AuthEvent.EventType.LOGIN_PROVIDER_UPDATED, saved, changed);
@@ -300,9 +294,8 @@ public class LoginProviderService {
             }
             // One login app per SCM instance (uq on type+base_url): skip a duplicate so a misconfiguration
             // can't crash startup on a constraint violation.
-            if (!seededInstances.add(seed.type() + "|" + ScmOrigin.of(baseUrl).orElse(baseUrl))
-                    || repository.existsByTypeAndBaseUrl(seed.type(), baseUrl)
-                    || enabledProviderForSameInstance(seed.type(), baseUrl, id).isPresent()) {
+            if (!seededInstances.add(seed.type() + "|" + baseUrl)
+                    || repository.existsByTypeAndBaseUrl(seed.type(), baseUrl)) {
                 log.warn(
                         "auth.login-provider: skipping seed '{}' — a {} provider for {} already exists",
                         id,
@@ -439,33 +432,6 @@ public class LoginProviderService {
             }
         }
         return trimmed;
-    }
-
-    /**
-     * Two enabled providers of one type for one instance, even spelled differently, would leave which of a
-     * user's identities on it is theirs a guess — workspace ownership among them. A check, not a storage
-     * guarantee: the unique index is on the raw base URL, so concurrent admin writes can still race past it,
-     * and consumers refuse such a pair at runtime.
-     */
-    private void requireOnlyEnabledProviderForItsInstance(LoginProvider provider) {
-        enabledProviderForSameInstance(provider.getType(), provider.getBaseUrl(), provider.getRegistrationId())
-                .ifPresent(other -> {
-                    throw new ResponseStatusException(
-                            HttpStatus.CONFLICT,
-                            "login provider '" + other.getRegistrationId() + "' is already enabled for "
-                                    + provider.getBaseUrl() + "; edit or disable it instead");
-                });
-    }
-
-    private Optional<LoginProvider> enabledProviderForSameInstance(
-            LoginProvider.ProviderType type, String baseUrl, String registrationId) {
-        Optional<String> origin = ScmOrigin.of(baseUrl);
-        return repository.findByEnabledTrueOrderByDisplayNameAsc().stream()
-                .filter(other -> other.getType() == type
-                        && !other.getRegistrationId().equals(registrationId)
-                        && origin.isPresent()
-                        && origin.equals(ScmOrigin.of(other.getBaseUrl())))
-                .findFirst();
     }
 
     /**

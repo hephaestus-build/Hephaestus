@@ -14,7 +14,6 @@ function makeCurrentUser(overrides: CurrentUserView = {}): CurrentUserView {
 		appRole: "USER",
 		status: "ACTIVE",
 		roles: ["user"],
-		hasGitLabIdentity: false,
 		...overrides,
 	};
 }

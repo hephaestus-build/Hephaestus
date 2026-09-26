@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -123,7 +124,8 @@ public class WorkspaceQueryService {
         var gitlab = providerAvailability.getOrDefault(IntegrationKind.GITLAB, null)
                         instanceof WorkspaceProviderAvailability glAvail
                 ? glAvail.hintUrl()
-                        .map(WorkspaceProvidersDTO.GitLabProviderDTO::new)
+                        .map(url -> new WorkspaceProvidersDTO.GitLabProviderDTO(
+                                ScmOrigin.of(url).orElse(url)))
                         .orElse(null)
                 : null;
 
