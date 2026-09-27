@@ -8,8 +8,8 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.api.Assertions;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -279,13 +278,12 @@ class ConnectionControllerTest extends BaseUnitTest {
     }
 
     @Test
-    void updateStatus_toUninstalled_revokesAndTransitions() {
+    void updateStatus_toUninstalled_disconnectsThroughTheConnectionsStrategy() {
         long workspaceId = 42L;
         Connection c = newConnection(7L, workspaceId, IntegrationKind.GITHUB, "100", IntegrationState.ACTIVE);
         when(admin.findInWorkspaceOrThrow(workspaceId, 7L)).thenReturn(c);
-        when(connectionService.disconnect(any(Connection.class), any(TransitionRequest.class), any(Runnable.class)))
+        when(connectionService.disconnect(any(Connection.class), any(TransitionRequest.class), any()))
                 .thenAnswer(inv -> {
-                    inv.<Runnable>getArgument(2).run();
                     Connection conn = inv.getArgument(0);
                     conn.setState(IntegrationState.UNINSTALLED);
                     return conn;
@@ -298,57 +296,31 @@ class ConnectionControllerTest extends BaseUnitTest {
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         assertNotNull(response.getBody());
         assertThat(response.getBody().state()).isEqualTo(IntegrationState.UNINSTALLED);
-        assertThat(githubStrategy.revokeCalls).isEqualTo(1);
 
         ArgumentCaptor<TransitionRequest> req = ArgumentCaptor.forClass(TransitionRequest.class);
-        verify(connectionService).disconnect(any(Connection.class), req.capture(), any(Runnable.class));
+        verify(connectionService).disconnect(same(c), req.capture(), same(githubStrategy));
         verify(connectionService, never()).transition(any(Connection.class), any(TransitionRequest.class));
         assertThat(req.getValue().next()).isEqualTo(IntegrationState.UNINSTALLED);
         assertThat(req.getValue().eventType()).isEqualTo("DISCONNECT");
     }
 
-    /**
-     * The controller must NOT swallow a revoke failure itself — swallowing it inside the callback
-     * leaves the surrounding transaction rollback-only and turns "proceed locally" into a 500 at
-     * commit. It lets the exception out of the callback and {@code ConnectionService} absorbs it on
-     * the far side of its own transaction; the stub below mimics that real behaviour.
-     */
+    /** Only the strategy can erase the integration's data, so without one the connection stays as it is. */
     @Test
-    void updateStatus_uninstalledRevokeThrows_isNotSwallowedInTheCallbackButStillTransitions() {
+    void updateStatus_toUninstalledWithoutStrategy_isRefused() {
         long workspaceId = 42L;
-        Connection c = newConnection(7L, workspaceId, IntegrationKind.GITHUB, "100", IntegrationState.ACTIVE);
+        Connection c = newConnection(7L, workspaceId, IntegrationKind.SLACK, "T1", IntegrationState.ACTIVE);
         when(admin.findInWorkspaceOrThrow(workspaceId, 7L)).thenReturn(c);
-        githubStrategy.revokeThrows = true;
-        AtomicReference<RuntimeException> escaped = new AtomicReference<>();
-        when(connectionService.disconnect(any(Connection.class), any(TransitionRequest.class), any(Runnable.class)))
-                .thenAnswer(inv -> {
-                    // Stands in for ConnectionService#runRevokeIsolated: run the callback on its own
-                    // transaction, absorb whatever escapes, then commit the local transition anyway.
-                    try {
-                        inv.<Runnable>getArgument(2).run();
-                    } catch (RuntimeException e) {
-                        escaped.set(e);
-                    }
-                    Connection conn = inv.getArgument(0);
-                    conn.setState(IntegrationState.UNINSTALLED);
-                    return conn;
-                });
-        when(manifests.capabilitiesFor(IntegrationKind.GITHUB)).thenReturn(Set.of());
 
-        ResponseEntity<ConnectionSummaryDTO> response = controller.updateStatus(
-                ctx(workspaceId), 7L, new UpdateConnectionStatusRequestDTO(IntegrationState.UNINSTALLED, null), null);
+        assertThatThrownBy(() -> controller.updateStatus(
+                        ctx(workspaceId),
+                        7L,
+                        new UpdateConnectionStatusRequestDTO(IntegrationState.UNINSTALLED, null),
+                        null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("SLACK");
 
-        assertThat(response.getStatusCode().value()).isEqualTo(200);
-        assertNotNull(response.getBody());
-        assertThat(response.getBody().state()).isEqualTo(IntegrationState.UNINSTALLED);
-        assertThat(githubStrategy.revokeCalls).isEqualTo(1);
-        // The failure must reach the service — the only layer that can absorb it without poisoning
-        // the lifecycle transaction.
-        assertThat(escaped.get())
-                .as("revoke failure must escape the controller callback")
-                .isNotNull();
-        verify(connectionService, times(1))
-                .disconnect(any(Connection.class), any(TransitionRequest.class), any(Runnable.class));
+        verify(connectionService, never()).disconnect(any(), any(), any());
+        verify(connectionService, never()).transition(any(), any());
     }
 
     @Test
@@ -495,8 +467,6 @@ class ConnectionControllerTest extends BaseUnitTest {
         private final IntegrationKind kind;
         ConnectInitiation nextInitiation =
                 new ConnectInitiation.AcceptInline(new BearerToken("test-token", null), null);
-        int revokeCalls = 0;
-        boolean revokeThrows = false;
 
         FakeStrategy(IntegrationKind kind) {
             this.kind = kind;
@@ -522,11 +492,9 @@ class ConnectionControllerTest extends BaseUnitTest {
         }
 
         @Override
-        public void revoke(@Nullable IntegrationRef ref) {
-            revokeCalls++;
-            if (revokeThrows) {
-                throw new RuntimeException("vendor unreachable");
-            }
-        }
+        public void eraseLocalData(IntegrationRef ref) {}
+
+        @Override
+        public void revokeProvider(IntegrationRef ref) {}
     }
 }

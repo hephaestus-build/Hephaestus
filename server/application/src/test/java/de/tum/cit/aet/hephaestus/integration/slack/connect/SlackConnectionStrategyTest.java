@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -153,37 +152,15 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void revoke_withToken_revokesOAuthAndErasesWorkspaceContent() {
-        when(credentialProvider.resolve(any())).thenReturn(Optional.of(new BearerToken("xoxb-tok", null)));
+    void eraseLocalData_erasesWorkspaceContentWithoutCallingSlack() {
+        strategy.eraseLocalData(ref());
 
-        strategy.revoke(ref());
-
-        verify(oauthClient).revokeStrict("xoxb-tok");
         verify(workspaceContentEraser).eraseWorkspace(42L);
+        verifyNoInteractions(credentialProvider, oauthClient);
     }
 
     @Test
-    void revoke_withoutToken_stillErasesWorkspaceContent() {
-        when(credentialProvider.resolve(any())).thenReturn(Optional.empty());
-
-        strategy.revoke(ref());
-
-        verify(oauthClient, never()).revokeStrict(any());
-        verify(workspaceContentEraser).eraseWorkspace(42L);
-    }
-
-    @Test
-    void revoke_oauthRevokeThrows_stillErasesWorkspaceContent() {
-        when(credentialProvider.resolve(any())).thenReturn(Optional.of(new BearerToken("xoxb-tok", null)));
-        doThrow(new RuntimeException("slack down")).when(oauthClient).revokeStrict("xoxb-tok");
-
-        strategy.revoke(ref());
-
-        verify(workspaceContentEraser).eraseWorkspace(42L);
-    }
-
-    @Test
-    void purge_doesNotRevokeATeamStillUsedByAnotherConnection() {
+    void revokeProvider_doesNotRevokeATeamStillUsedByAnotherConnection() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.SLACK, 42L, "T1", 7L);
         when(connectionService.hasOtherInstalledConnection(ref)).thenReturn(true);
 
@@ -193,7 +170,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void purge_onlyRevokesTheProviderToken() {
+    void revokeProvider_onlyRevokesTheProviderToken() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.SLACK, 42L, "T1", 7L);
         when(credentialProvider.resolve(ref)).thenReturn(Optional.of(new BearerToken("xoxb-tok", null)));
 
@@ -204,7 +181,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void purge_propagatesProviderFailure() {
+    void revokeProvider_propagatesProviderFailure() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.SLACK, 42L, "T1", 7L);
         when(credentialProvider.resolve(ref)).thenReturn(Optional.of(new BearerToken("xoxb-tok", null)));
         doThrow(new RuntimeException("slack unavailable")).when(oauthClient).revokeStrict("xoxb-tok");

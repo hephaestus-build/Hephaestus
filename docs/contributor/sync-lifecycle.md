@@ -139,6 +139,6 @@ connection by the sync-job pruner. Global identity rows (`user`, `organization`,
 | Per-integration job bodies | `…{github,gitlab,slack,outline}…IntegrationSyncRunner` |
 | Deletion sweeps | `GitHubDeletionSweepService`, `GitLabDeletionSweepService`, `OutlineMirrorRetentionService#tombstoneVanished` |
 | SCM erasure | `workspace.ScmWorkspaceContentEraser`, `workspace.adapter.ScmWorkspacePurgeAdapter` |
-| Slack / Outline erasure | `SlackWorkspaceContentEraser`, `OutlineConnectionStrategy#revoke`, `OutlineWorkspacePurgeAdapter` |
+| Slack / Outline erasure | `SlackWorkspaceContentEraser`, `OutlineConnectionStrategy#eraseLocalData`, `OutlineWorkspacePurgeAdapter` |
 | Monitor identity healing | `BackfillStateProvider#reconcileSyncTargetIdentity` / `#reconcileSyncTargetsForRepository` |
 | Subject grammar | `…webhook.*SubjectKeyDeriver`, `integration.core.consumer.ConsumerSubjectMath` |

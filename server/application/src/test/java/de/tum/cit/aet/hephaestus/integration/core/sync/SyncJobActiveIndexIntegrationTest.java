@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionBusyExcep
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -27,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -166,7 +168,7 @@ class SyncJobActiveIndexIntegrationTest extends AbstractWorkspaceIntegrationTest
                                 "test-admin",
                                 "disconnect-race-test",
                                 "disconnect"),
-                        () -> {}))
+                        Mockito.mock(ConnectionStrategy.class)))
                 .isInstanceOf(ConnectionBusyException.class)
                 .hasMessageContaining("active sync job");
 

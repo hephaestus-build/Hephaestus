@@ -13,8 +13,8 @@ import org.springframework.stereotype.Component;
  * ({@code slack_message}, {@code slack_thread}, {@code slack_monitored_channel},
  * {@code slack_participant_consent}, {@code mentor_slack_thread}) is real and PII-bearing, and its GDPR
  * hard-erase runs synchronously inside the fenced disconnect transaction in
- * {@code SlackConnectionStrategy#revoke} (via {@code SlackWorkspaceContentEraser}) rather than on an
- * AFTER_COMMIT lifecycle event — see {@code OutlineConnectionStrategy#revoke} for the symmetric pattern.
+ * {@code SlackConnectionStrategy#eraseLocalData} (via {@code SlackWorkspaceContentEraser}) rather than on
+ * an AFTER_COMMIT lifecycle event, as Outline's does.
  */
 @Component
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true", matchIfMissing = false)

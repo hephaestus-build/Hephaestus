@@ -15,8 +15,6 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Objects;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -25,8 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnServerRole
 @Component
 public class GithubConnectionStrategy implements ConnectionStrategy {
-
-    private static final Logger log = LoggerFactory.getLogger(GithubConnectionStrategy.class);
 
     private static final String CALLBACK_PARAM_INSTALLATION_ID = "installation_id";
     private static final String CALLBACK_PARAM_STATE = "state";
@@ -93,26 +89,13 @@ public class GithubConnectionStrategy implements ConnectionStrategy {
     }
 
     @Override
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void revoke(@org.jspecify.annotations.Nullable IntegrationRef ref) {
-        if (ref == null) {
-            return;
-        }
-        try {
-            revokeProviderInternal(ref);
-        } catch (RuntimeException e) {
-            log.warn("GitHub uninstall failed during disconnect: ref={}, error={}", ref, e.toString());
-        }
+    public void eraseLocalData(IntegrationRef ref) {
         contentEraser.eraseWorkspaceScmMirror(ref.workspaceId());
     }
 
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void revokeProvider(IntegrationRef ref) {
-        revokeProviderInternal(ref);
-    }
-
-    private void revokeProviderInternal(IntegrationRef ref) {
         var connectionOpt = connectionService.findReferenced(ref);
         if (connectionOpt.isEmpty()) {
             return;

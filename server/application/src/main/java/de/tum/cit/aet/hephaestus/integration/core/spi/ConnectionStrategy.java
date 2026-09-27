@@ -28,13 +28,19 @@ public interface ConnectionStrategy {
      */
     ConnectFinalization finalizeConnect(IntegrationRef ref, Map<String, String> callbackParams);
 
-    /** Revoke vendor-side (best-effort) and signal local state change. */
-    void revoke(@org.jspecify.annotations.Nullable IntegrationRef ref);
+    /**
+     * Erases the data this integration mirrored into the workspace. Joins the caller's transaction and
+     * throws on failure, so a disconnect that cannot erase leaves the connection as it was. Idempotent.
+     */
+    void eraseLocalData(IntegrationRef ref);
 
-    /** Strict provider-only teardown used before a transactional workspace purge. */
-    default void revokeProvider(IntegrationRef ref) {
-        throw new UnsupportedOperationException("Strict provider teardown is not implemented for " + kind());
-    }
+    /**
+     * Removes what this connection installed at the provider — app installation, token, webhook — and
+     * throws when that cannot be confirmed. {@code ref} carries the connection id. The caller holds the
+     * connection row locked, credentials still stored, until its transition commits, so this reads the
+     * row but never writes it, and calls no provider inside a database transaction.
+     */
+    void revokeProvider(IntegrationRef ref);
 
     record InitiateRequest(
             long workspaceId,

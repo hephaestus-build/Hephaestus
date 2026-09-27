@@ -62,31 +62,15 @@ class GithubConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void revoke_uninstallsTheGitHubAppAndErasesTheLocalMirror() {
-        IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242");
-        when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
-        when(connection.getConfig()).thenReturn(new ConnectionConfig.GitHubAppConfig(4242L, null, null, Set.of()));
+    void eraseLocalData_erasesTheWorkspaceMirrorWithoutCallingGitHub() {
+        strategy().eraseLocalData(new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242", 9L));
 
-        strategy().revoke(ref);
-
-        verify(appTokenService).deleteInstallation(4242L);
         verify(contentEraser).eraseWorkspaceScmMirror(7L);
+        verifyNoInteractions(connectionService, appTokenService);
     }
 
     @Test
-    void revoke_patConnectionNeverDeletesAnInstallation() {
-        IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242");
-        when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
-        when(connection.getConfig()).thenReturn(new ConnectionConfig.GitHubPatConfig("org", null, Set.of()));
-
-        strategy().revoke(ref);
-
-        verifyNoInteractions(appTokenService);
-        verify(contentEraser).eraseWorkspaceScmMirror(7L);
-    }
-
-    @Test
-    void purge_revokesProviderWithoutErasingLocalData() {
+    void revokeProvider_uninstallsTheGitHubAppWithoutErasingLocalData() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242", 9L);
         when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
         when(connection.getConfig()).thenReturn(new ConnectionConfig.GitHubAppConfig(4242L, null, null, Set.of()));
@@ -98,7 +82,18 @@ class GithubConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void purge_doesNotDeleteAnInstallationStillUsedByAnotherConnection() {
+    void revokeProvider_patConnectionNeverDeletesAnInstallation() {
+        IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242", 9L);
+        when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
+        when(connection.getConfig()).thenReturn(new ConnectionConfig.GitHubPatConfig("org", null, Set.of()));
+
+        strategy().revokeProvider(ref);
+
+        verifyNoInteractions(appTokenService);
+    }
+
+    @Test
+    void revokeProvider_doesNotDeleteAnInstallationStillUsedByAnotherConnection() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242");
         IntegrationRef resolvedRef = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242", 9L);
         when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
@@ -112,7 +107,7 @@ class GithubConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void purge_propagatesProviderFailureWithoutErasingLocalData() {
+    void revokeProvider_propagatesProviderFailureWithoutErasingLocalData() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242", 9L);
         when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
         when(connection.getConfig()).thenReturn(new ConnectionConfig.GitHubAppConfig(4242L, null, null, Set.of()));
@@ -123,26 +118,5 @@ class GithubConnectionStrategyTest extends BaseUnitTest {
         assertThatThrownBy(() -> strategy().revokeProvider(ref)).hasMessage("github unavailable");
 
         verifyNoInteractions(contentEraser);
-    }
-
-    @Test
-    void revoke_erasesLocallyWhenGitHubUninstallFails() {
-        IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242");
-        when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
-        when(connection.getConfig()).thenReturn(new ConnectionConfig.GitHubAppConfig(4242L, null, null, Set.of()));
-        doThrow(new RuntimeException("github unavailable"))
-                .when(appTokenService)
-                .deleteInstallation(4242L);
-
-        strategy().revoke(ref);
-
-        verify(contentEraser).eraseWorkspaceScmMirror(7L);
-    }
-
-    @Test
-    void revoke_withNullRef_isANoOp() {
-        strategy().revoke(null);
-
-        verifyNoInteractions(connectionService, appTokenService, contentEraser);
     }
 }

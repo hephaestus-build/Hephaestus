@@ -534,8 +534,13 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         }
 
         @Override
-        public void revoke(@Nullable IntegrationRef ref) {
-            // unused in this controller
+        public void eraseLocalData(IntegrationRef ref) {
+            throw new UnsupportedOperationException("eraseLocalData() not exercised by OAuthCallbackController");
+        }
+
+        @Override
+        public void revokeProvider(IntegrationRef ref) {
+            throw new UnsupportedOperationException("revokeProvider() not exercised by OAuthCallbackController");
         }
     }
 }

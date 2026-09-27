@@ -110,7 +110,7 @@ public class ScmWorkspaceContentEraser {
         }
 
         log.info(
-                "scm.audit: revoke erase — actor={}, workspaceId={}, erasedRepositories={}, sharedRepositoriesSkipped={}, erasedTeams={}",
+                "scm.audit: mirror erase — actor={}, workspaceId={}, erasedRepositories={}, sharedRepositoriesSkipped={}, erasedTeams={}",
                 LoggingUtils.sanitizeForLog(SecurityUtils.getCurrentUserLogin().orElse("system")),
                 workspaceId,
                 erased,

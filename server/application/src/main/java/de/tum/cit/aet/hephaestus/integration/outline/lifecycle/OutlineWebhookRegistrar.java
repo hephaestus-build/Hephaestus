@@ -195,58 +195,14 @@ public class OutlineWebhookRegistrar {
     }
 
     /**
-     * Best-effort upstream delete of the workspace's change-notification subscription, resolved through
-     * the ACTIVE connection. Never throws — a left-over subscription auto-disables upstream after
-     * repeated delivery failures once the workspace is gone.
-     *
-     * <p>Deliberately does NOT clear the stored id/secret: both callers (connect-strategy revoke inside
-     * the disconnect request, and the workspace purge) run while another transaction holds the same
-     * Connection entity — a config rewrite here bumps the row's version and the caller's subsequent
-     * save throws {@code ObjectOptimisticLockingFailureException}. The stored fields are inert on a
-     * torn-down row, and reactivation's {@link #ensureSubscription} self-heal replaces a stale id.
-     *
-     * <p>Runs {@link Propagation#NOT_SUPPORTED}, matching {@code GitLabWebhookService}: the upstream
-     * DELETE is an external HTTP round-trip and the disconnect path calls it while holding the
-     * connection's {@code FOR UPDATE} lifecycle lock, so it must not also hold a DB transaction open
-     * for the length of a network call. The two lookups below each open their own read transaction.
-     */
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void deregister(long workspaceId) {
-        Optional<Connection> active = connectionService.findActive(workspaceId, IntegrationKind.OUTLINE);
-        if (active.isEmpty() || !(active.get().getConfig() instanceof ConnectionConfig.OutlineConfig config)) {
-            return;
-        }
-        String subscriptionId = config.webhookSubscriptionId();
-        if (subscriptionId == null || subscriptionId.isBlank()) {
-            return;
-        }
-        String serverUrl = config.serverUrl();
-        Optional<BearerToken> bearer = connectionService.findActiveBearerToken(workspaceId, IntegrationKind.OUTLINE);
-        if (serverUrl != null && !serverUrl.isBlank() && bearer.isPresent()) {
-            try {
-                outlineApiClient.deleteWebhookSubscription(
-                        serverUrl, bearer.get().token(), subscriptionId);
-            } catch (RuntimeException e) {
-                log.warn("outline.webhook: deregistration failed for workspaceId={}: {}", workspaceId, e.toString());
-            }
-        }
-        // Harmless here (the connection is still ACTIVE, so the subscription provider's view is
-        // unchanged) but required symmetry: this method runs before the caller's own state transition
-        // takes the connection off ACTIVE, and the {@code deregister(workspaceId, connectionId)}
-        // variant — called after that transition commits — does the reconcile that actually matters.
-        reconcileScopeConsumer(workspaceId);
-    }
-
-    /**
-     * Deactivation-time variant: the connection just left ACTIVE, so it is resolved by id regardless of
+     * Deactivation-time teardown: the connection just left ACTIVE, so it is resolved by id regardless of
      * state. SUSPENDED connections still carry credentials and get a real upstream delete; UNINSTALLED
      * ones had their credentials purged — then this only logs that the orphaned subscription will
      * auto-disable upstream. The stored id/secret stay on the row (the ACTIVE-scoped config mutator no
      * longer reaches it); reactivation's {@link #ensureSubscription} self-heal replaces them.
      *
-     * <p>{@link Propagation#NOT_SUPPORTED} for the same reason as the single-argument variant — this
-     * one already runs after commit, so suspending is a no-op in practice and simply keeps both vendor
-     * round-trips under one rule.
+     * <p>Runs {@link Propagation#NOT_SUPPORTED}, matching {@code GitLabWebhookService}: the upstream
+     * DELETE is an external HTTP round-trip that must not hold a database transaction open.
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void deregister(long workspaceId, long connectionId) {

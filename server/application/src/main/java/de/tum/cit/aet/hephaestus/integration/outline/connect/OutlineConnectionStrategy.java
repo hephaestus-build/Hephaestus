@@ -16,7 +16,6 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentEvent
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineWebhookRegistrar;
 import java.util.Map;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -37,11 +36,10 @@ import org.springframework.transaction.annotation.Transactional;
  * becomes the Connection's instance key, so a workspace can connect more than one Outline instance.
  * There is no vendor redirect, so {@link #finalizeConnect} is not applicable.
  *
- * <p>{@link #revoke} tears down the change-notification subscription and <b>erases the workspace's
- * mirrored documents</b> — disconnect is a GDPR erase, not just a state flip, so no cached bodies
- * outlive the connection (the workspace-purge path erases the same rows for the full teardown). The
- * Outline API token itself is revoked from the owner's settings; the local state transition to
- * UNINSTALLED is handled by the caller.
+ * <p>Disconnect is a GDPR erase, not just a state flip: {@link #eraseLocalData} removes the workspace's
+ * mirrored documents so no cached bodies outlive the connection (the workspace-purge path erases the
+ * same rows for the full teardown), and {@link #revokeProvider} deletes the change-notification
+ * subscription. The Outline API token itself is revoked from the owner's settings.
  */
 @ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.outline.enabled", havingValue = "true", matchIfMissing = false)
@@ -112,46 +110,27 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
                 "Outline uses API-token paste — finalizeConnect is not applicable; use initiate() output directly");
     }
 
-    /**
-     * Stays {@code @Transactional} (default {@code REQUIRED}) because the three {@code deleteByWorkspaceId}
-     * sweeps below are derived delete queries and need one. The vendor round-trip is NOT covered by it:
-     * {@code OutlineWebhookRegistrar#deregister} suspends via {@code Propagation.NOT_SUPPORTED}, so the
-     * subscription DELETE never runs inside this transaction. If the erase fails,
-     * {@code ConnectionService#disconnect} runs this whole callback on its own transaction and absorbs
-     * the failure, so the local UNINSTALLED transition still commits.
-     */
     @Override
     @Transactional
-    public void revoke(@Nullable IntegrationRef ref) {
-        log.info(
-                "Outline revoke called for workspace={} instanceKey={} (tokens are revoked in Outline; state change handled by caller)",
-                ref == null ? null : ref.workspaceId(),
-                ref == null ? null : ref.instanceKey());
-        if (ref != null) {
-            if (ref.connectionId() == null) {
-                webhookRegistrar.deregister(ref.workspaceId());
-            } else {
-                webhookRegistrar.deregister(ref.workspaceId(), ref.connectionId());
-            }
-            long erased = outlineDocumentRepository.deleteByWorkspaceId(ref.workspaceId());
-            long collections = outlineCollectionRepository.deleteByWorkspaceId(ref.workspaceId());
-            long events = outlineDocumentEventRepository.deleteByWorkspaceId(ref.workspaceId());
-            if (erased > 0 || collections > 0 || events > 0) {
-                log.info(
-                        "outline.audit: revoke erase — actor={} erased {} mirrored document(s), {} collection registration(s) and {} document event(s) for workspace={}",
-                        LoggingUtils.sanitizeForLog(
-                                SecurityUtils.getCurrentUserLogin().orElse("system")),
-                        erased,
-                        collections,
-                        events,
-                        ref.workspaceId());
-            }
+    public void eraseLocalData(IntegrationRef ref) {
+        long erased = outlineDocumentRepository.deleteByWorkspaceId(ref.workspaceId());
+        long collections = outlineCollectionRepository.deleteByWorkspaceId(ref.workspaceId());
+        long events = outlineDocumentEventRepository.deleteByWorkspaceId(ref.workspaceId());
+        if (erased > 0 || collections > 0 || events > 0) {
+            log.info(
+                    "outline.audit: disconnect erase — actor={} erased {} mirrored document(s), {} collection registration(s) and {} document event(s) for workspace={}",
+                    LoggingUtils.sanitizeForLog(
+                            SecurityUtils.getCurrentUserLogin().orElse("system")),
+                    erased,
+                    collections,
+                    events,
+                    ref.workspaceId());
         }
     }
 
     @Override
     public void revokeProvider(IntegrationRef ref) {
-        if (ref == null || ref.connectionId() == null) {
+        if (ref.connectionId() == null) {
             throw new IllegalArgumentException("Outline provider teardown requires a connection id");
         }
         webhookRegistrar.deregisterStrict(ref.workspaceId(), ref.connectionId());

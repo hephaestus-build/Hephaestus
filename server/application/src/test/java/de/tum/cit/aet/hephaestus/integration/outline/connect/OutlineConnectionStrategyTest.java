@@ -89,19 +89,18 @@ class OutlineConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void revoke_deregistersTheSubscriptionAndErasesMirroredDocuments() {
-        IntegrationRef ref = new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9");
+    void eraseLocalData_erasesMirroredDocumentsWithoutCallingOutline() {
+        strategy().eraseLocalData(new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9", 7L));
 
-        strategy().revoke(ref);
-
-        verify(webhookRegistrar).deregister(5L);
         verify(outlineDocumentRepository).deleteByWorkspaceId(5L);
+        verify(outlineCollectionRepository).deleteByWorkspaceId(5L);
         // GDPR erase on disconnect covers the event log too — actor subjects are personal data.
         verify(outlineDocumentEventRepository).deleteByWorkspaceId(5L);
+        verifyNoInteractions(webhookRegistrar);
     }
 
     @Test
-    void purge_onlyDeregistersTheProviderSubscription() {
+    void revokeProvider_onlyDeregistersTheProviderSubscription() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9", 7L);
 
         strategy().revokeProvider(ref);
