@@ -3,11 +3,13 @@ package de.tum.cit.aet.hephaestus.practices.curated;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.curated.BundledPracticeCatalog.BundledEntry;
 import java.io.IOException;
 import java.io.InputStream;
@@ -32,6 +34,7 @@ public class BundledPracticeCatalogLoader {
 
     private final BundledPracticeCatalog catalog;
     private final Map<String, String> holdsAsBySlug;
+    private final Map<String, PracticeDefinition> withdrawnBySlug;
 
     BundledPracticeCatalogLoader(
             JsonMapper objectMapper,
@@ -46,6 +49,13 @@ public class BundledPracticeCatalogLoader {
             }
         }
         this.holdsAsBySlug = Map.copyOf(phrases);
+        Map<String, PracticeDefinition> withdrawn = new HashMap<>();
+        for (BundledEntry<PracticeDefinition> practice : catalog.practices()) {
+            if (practice.definition().automatedReviewPolicy().insufficiencyReason() != null) {
+                withdrawn.put(practice.slug(), practice.definition());
+            }
+        }
+        this.withdrawnBySlug = Map.copyOf(withdrawn);
     }
 
     BundledPracticeCatalog catalog() {
@@ -61,6 +71,14 @@ public class BundledPracticeCatalogLoader {
      */
     public Optional<String> holdsAs(String bundledSlug) {
         return Optional.ofNullable(holdsAsBySlug.get(bundledSlug));
+    }
+
+    /**
+     * The bundled practices whose question the evidence Hephaestus collects cannot answer, as shipped. Read
+     * from the shipped file, so no instance or workspace edit can remove an entry.
+     */
+    public Map<String, PracticeDefinition> withdrawnFromAutomatedReview() {
+        return withdrawnBySlug;
     }
 
     private static BundledPracticeCatalog parse(
@@ -113,7 +131,8 @@ public class BundledPracticeCatalogLoader {
                                 practiceNode,
                                 slug),
                         practicePosition++,
-                        requiredText(practiceNode, "holdsAs")));
+                        // A practice Hephaestus does not review has no phrase: nothing it recorded can support one.
+                        practiceNode.has("insufficiencyReason") ? null : requiredText(practiceNode, "holdsAs")));
             }
         }
         if (groups.isEmpty() || practices.isEmpty()) {
@@ -144,15 +163,32 @@ public class BundledPracticeCatalogLoader {
                 bindings,
                 criteria,
                 loadPrecomputeScript(node, slug),
-                // The authoring file cannot override the review frame: every bundled practice takes its
-                // kind's default contract, mode and limits.
-                evidenceDefaults.policyFor(artifactKind),
+                policy(objectMapper, evidenceDefaults.policyFor(artifactKind), node, slug),
                 whyItMatters,
                 whatGoodLooksLike,
                 groupSlug,
                 deliveryBehavior(objectMapper, node, slug));
         definitionValidator.validate(definition);
         return definition;
+    }
+
+    /**
+     * Every bundled practice takes its kind's default contract, mode and limits. The one thing the authoring
+     * file may add is a reason the collected evidence cannot answer the practice's question, which ships it
+     * as needing human review: a question with no eligible evidence stays in the catalog as guidance
+     * rather than being put to a model that could only answer it from the wrong record.
+     */
+    private static PracticeAutomatedReviewPolicy policy(
+            JsonMapper mapper, PracticeAutomatedReviewPolicy defaults, JsonNode node, String slug) {
+        JsonNode reason = node.get("insufficiencyReason");
+        if (reason == null) {
+            return defaults;
+        }
+        try {
+            return defaults.withdrawnFor(mapper.treeToValue(reason, PracticeEvidenceLimitation.class));
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("invalid insufficiency reason: " + slug, exception);
+        }
     }
 
     private static PracticeDeliveryBehavior deliveryBehavior(JsonMapper mapper, JsonNode node, String slug) {

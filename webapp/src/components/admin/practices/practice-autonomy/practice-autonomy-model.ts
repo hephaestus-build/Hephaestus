@@ -1,9 +1,4 @@
-import type {
-	AutonomyAssignment,
-	AutonomyRollup,
-	Practice,
-	PracticeAutomatedReviewPolicy,
-} from "@/api/types.gen";
+import type { AutonomyAssignment, AutonomyRollup, Practice } from "@/api/types.gen";
 
 export const UNASSIGNED_GROUP_KEY = "__unassigned__";
 
@@ -18,10 +13,15 @@ export interface AutonomyGroup {
 	totalPractices: number;
 }
 
-export function reviewableByHephaestus(policy: PracticeAutomatedReviewPolicy): boolean {
+/** A review can run only when its own policy asks for one and its catalogue entry has not withdrawn it. */
+export function reviewableByHephaestus(
+	practice: Pick<Practice, "automatedReviewPolicy" | "automatedReviewWithdrawal">,
+): boolean {
+	const { automatedReview } = practice.automatedReviewPolicy;
 	return (
-		policy.automatedReview.mode === "LANGUAGE_MODEL" &&
-		policy.automatedReview.evidenceSufficiency === "SUFFICIENT_WHEN_REQUIREMENTS_MET"
+		!practice.automatedReviewWithdrawal &&
+		automatedReview.mode === "LANGUAGE_MODEL" &&
+		automatedReview.evidenceSufficiency === "SUFFICIENT_WHEN_REQUIREMENTS_MET"
 	);
 }
 

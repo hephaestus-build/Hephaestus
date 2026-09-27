@@ -13283,6 +13283,11 @@ components:
           $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
         automatedReviewValidation:
           $ref: "#/components/schemas/PracticeAutomatedReviewValidation"
+        automatedReviewWithdrawal:
+          $ref: "#/components/schemas/PracticeEvidenceLimitation"
+          description: "Why Hephaestus never reviews this practice whatever its own\
+            \ policy says: the catalogue entry it was copied from withdrew automated\
+            \ review. Absent when its own policy decides."
         autonomy:
           $ref: "#/components/schemas/AutonomyAssignment"
           description: "How much autonomy the system has over this practice, whether\

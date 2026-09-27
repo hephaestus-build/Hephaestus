@@ -148,6 +148,21 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
 
     @Test
     @WithUser
+    void shouldShowNoPhraseWhenTheCatalogWithdrewThePracticeFromAutomatedReview() {
+        // Earlier positives of a copy whose catalogue entry now needs human review.
+        jdbc.update(
+                "UPDATE practice SET source_curated_slug = 'issue-closed-with-unmet-outcome' WHERE id = ?",
+                describeWhatAndWhy.getId());
+
+        readOverview()
+                .jsonPath("$.holdingUp[0].practiceSlug")
+                .isEqualTo("explain-changes")
+                .jsonPath("$.holdingUp[0].holdsAs")
+                .doesNotExist();
+    }
+
+    @Test
+    @WithUser
     @DisplayName("the window opens at the previous run and reports what the latest one changed")
     void shouldReportWhatTheLatestRunChangedWhenTheWindowOpensAtThePreviousRun() {
         readOverview()

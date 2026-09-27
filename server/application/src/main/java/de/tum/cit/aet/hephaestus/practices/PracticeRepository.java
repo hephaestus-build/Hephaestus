@@ -111,6 +111,9 @@ public interface PracticeRepository extends JpaRepository<Practice, Long> {
             + "AND p.sourceCuratedFingerprint LIKE 'v1:%'")
     List<Long> findSourceAlignedV1PracticeIds();
 
+    @Query("SELECT p.id FROM Practice p WHERE p.sourceCuratedSlug IN :slugs")
+    List<Long> findIdsDescendedFrom(@Param("slugs") Collection<String> slugs);
+
     @Query("SELECT p.id FROM Practice p WHERE p.sourceCuratedSlug IS NOT NULL AND p.adoptedBase IS NULL")
     List<Long> findIdsMissingAdoptedBase();
 

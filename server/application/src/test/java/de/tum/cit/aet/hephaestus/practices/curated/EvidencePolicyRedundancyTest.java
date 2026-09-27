@@ -58,8 +58,8 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
      *
      * <p>Two different claims land a practice on this list, and both are absences.
      *
-     * <p>The first four assert a <em>gap</em> over a corpus that arrives in pages: "no reviewer raised this",
-     * "the issue closed with its outcome unmet". A partial capture of review threads is equally consistent
+     * <p>The first three assert a <em>gap</em> over a corpus that arrives in pages: "no reviewer raised this",
+     * "nobody answered this comment". A partial capture of review threads is equally consistent
      * with "nobody raised it" and "the raising was in the part we did not fetch", so the whole capture is
      * what makes the gap assertable at all.
      *
@@ -86,7 +86,6 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
                         // Gap-shaped absences over a paginated corpus.
                         "merged-past-unresolved-review-threads",
                         "engaging-with-inline-review-comments",
-                        "issue-closed-with-unmet-outcome",
                         "ready-and-traceable-handoff",
                         // Positive absence claims over the complete changed-file diff.
                         "keeps-the-test-suite-honest",
@@ -103,8 +102,6 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
                         "keeps-views-free-of-networking-and-persistence");
         assertThat(exhaustive.get("merged-past-unresolved-review-threads"))
                 .containsExactly(new SourceKind("scm.review-threads"));
-        assertThat(exhaustive.get("issue-closed-with-unmet-outcome"))
-                .containsExactly(new SourceKind("scm.issue.comments"));
         // A defect detector bounds the diff and nothing else: its clean verdict must not silently start
         // ranging over the repository tree, which no capture can ever cover whole.
         assertThat(exhaustive.get("handles-errors-instead-of-swallowing-them"))

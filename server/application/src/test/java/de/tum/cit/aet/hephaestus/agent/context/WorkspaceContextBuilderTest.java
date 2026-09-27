@@ -254,6 +254,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                     mapper,
                     new ClasspathArtifactSourceCatalogRegistry(mapper, java.time.Clock.systemUTC()),
                     new PracticeSubjectEvaluator(mapper),
+                    new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(bad), new SimpleMeterRegistry(), manifestBuilder);
             EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.PULL_REQUEST);
@@ -389,6 +390,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                     mapper,
                     new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
                     new PracticeSubjectEvaluator(mapper),
+                    new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
             EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.PULL_REQUEST);

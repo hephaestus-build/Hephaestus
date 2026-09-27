@@ -34,7 +34,10 @@ class CatalogOriginPresentationTest extends BaseUnitTest {
     void practiceBatchReadsTheCatalogOnce() {
         CuratedCatalogService service = mock(CuratedCatalogService.class);
         when(service.catalog()).thenReturn(new EffectiveCatalog(List.of(), List.of()));
-        CatalogOriginPresenter presenter = new CatalogOriginPresenter(service, workspaceDefaults());
+        CatalogOriginPresenter presenter = new CatalogOriginPresenter(
+                service,
+                workspaceDefaults(),
+                new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()));
         Practice first = mock(Practice.class);
         Practice second = mock(Practice.class);
         stubDefinition(first, "first");
@@ -54,7 +57,10 @@ class CatalogOriginPresentationTest extends BaseUnitTest {
         CuratedCatalogService service = mock(CuratedCatalogService.class);
         when(service.catalog()).thenReturn(new EffectiveCatalog(List.of(), List.of()));
         WorkspaceReviewDefaultsProvider defaults = workspaceDefaults();
-        CatalogOriginPresenter presenter = new CatalogOriginPresenter(service, defaults);
+        CatalogOriginPresenter presenter = new CatalogOriginPresenter(
+                service,
+                defaults,
+                new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()));
         Practice first = mock(Practice.class);
         Practice second = mock(Practice.class);
         stubDefinition(first, "first");
@@ -84,7 +90,10 @@ class CatalogOriginPresentationTest extends BaseUnitTest {
     void groupBatchReadsTheCatalogOnce() {
         CuratedCatalogService service = mock(CuratedCatalogService.class);
         when(service.catalog()).thenReturn(new EffectiveCatalog(List.of(), List.of()));
-        CatalogOriginPresenter presenter = new CatalogOriginPresenter(service, workspaceDefaults());
+        CatalogOriginPresenter presenter = new CatalogOriginPresenter(
+                service,
+                workspaceDefaults(),
+                new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()));
 
         presenter.presentGroups(WORKSPACE_ID, List.of(mock(PracticeGroup.class), mock(PracticeGroup.class)));
 

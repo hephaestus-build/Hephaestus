@@ -16,6 +16,7 @@ import {
 	type PracticeDefinitionValue,
 } from "@/components/admin/practice-editor/PracticeDefinitionForm";
 import { PracticeAutomatedReviewValidationSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { hasText } from "@/lib/text";
@@ -114,9 +115,19 @@ export function PracticeForm(props: PracticeFormProps) {
 			groupSlug ?? null,
 		);
 	};
+	const withdrawal = mode === "edit" ? props.initialData.automatedReviewWithdrawal : undefined;
 	const reviewResults =
 		mode === "edit" ? (
 			<>
+				{withdrawal && (
+					<Alert variant="warning">
+						<AlertTitle>Hephaestus no longer reviews this practice</AlertTitle>
+						<AlertDescription>
+							{withdrawal.description} The catalog it came from withdrew automated review, so it
+							stays off whatever its review settings say.
+						</AlertDescription>
+					</Alert>
+				)}
 				<Separator />
 				<section className="space-y-4">
 					<div>

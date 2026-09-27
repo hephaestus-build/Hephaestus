@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -68,6 +69,8 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     private static final String CHANGE_PATH = "inputs/context/change.json";
     private static final byte[] CHANGE_JSON =
             "{\"base_sha\":\"abc123\",\"head_sha\":\"def456\"}".getBytes(StandardCharsets.UTF_8);
+
+    private static final AutomatedReviewFence NO_FENCE = new AutomatedReviewFence(Map.of());
 
     private final JsonMapper mapper = JsonMapper.builder().build();
     private ContextManifestBuilder builder;
@@ -139,8 +142,8 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     @Test
     void shouldAuthorizeCaptureForTheDetectionAudience() {
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
-        ContextManifestBuilder target =
-                new ContextManifestBuilder(mapper, catalogs, new PracticeSubjectEvaluator(mapper), Clock.systemUTC());
+        ContextManifestBuilder target = new ContextManifestBuilder(
+                mapper, catalogs, new PracticeSubjectEvaluator(mapper), NO_FENCE, Clock.systemUTC());
         SourceContractVersion version = new SourceContractVersion("1.2.0");
 
         target.isSourceUsePermitted(version, DIFF);
@@ -504,6 +507,33 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldKeepACaptureFailureAsItsOwnReasonWhenThePracticeAlsoNeedsHumanReview() {
+        ArtifactSourceManifest manifest = coreManifest(builder, "job-human-review-failed-capture", NOW);
+        Practice practice = practiceRequiringComments();
+        PracticeAutomatedReviewPolicy policy = practice.getAutomatedReviewPolicy();
+        practice.setAutomatedReviewPolicy(new PracticeAutomatedReviewPolicy(
+                policy.sourceContractVersion(),
+                new PracticeAutomatedReview(
+                        PracticeAutomatedReviewMode.LANGUAGE_MODEL,
+                        PracticeEvidenceSufficiency.DECLARED_EVIDENCE_INSUFFICIENT),
+                policy.whenEvidenceIsInsufficient(),
+                policy.knownLimitations(),
+                new PracticeEvidenceLimitation("AT_CLOSE_STATE_NOT_CAPTURED", "Nothing records the close.")));
+
+        AutomatedReviewReadinessResult result =
+                builder.checkAutomatedReviewReadinessAsOfNow(manifest, List.of(practice));
+
+        assertThat(result.readyPractices()).isEmpty();
+        var decision = result.decisions().getFirst();
+        assertThat(decision.reasonCodes())
+                .containsExactly(AutomatedReviewReadinessReason.DECLARED_EVIDENCE_INSUFFICIENT);
+        assertThat(decision.sourceChecks())
+                .singleElement()
+                .satisfies(check ->
+                        assertThat(check.reasonCodes()).containsExactly(SourceReadinessReason.SOURCE_NOT_AVAILABLE));
+    }
+
+    @Test
     void shouldReviewWorkUnchangedUpstreamSinceTheLastSynchronization() {
         // A mirrored record upstream has not touched is current, however old the last write is.
         ArtifactSourceManifest manifest = coreManifest(builder, "job-quiet-mirror", NOW.minusSeconds(14 * 86_400));
@@ -709,8 +739,8 @@ class ContextManifestBuilderTest extends BaseUnitTest {
             SourceKind kind = invocation.getArgument(1);
             return kind.equals(DIFF) ? restrictedDiff : realCatalogs.requireSource(invocation.getArgument(0), kind);
         });
-        ContextManifestBuilder restrictedBuilder =
-                new ContextManifestBuilder(mapper, catalogs, new PracticeSubjectEvaluator(mapper), Clock.systemUTC());
+        ContextManifestBuilder restrictedBuilder = new ContextManifestBuilder(
+                mapper, catalogs, new PracticeSubjectEvaluator(mapper), NO_FENCE, Clock.systemUTC());
 
         // The live NOT_COLLECTED path: governance refused the source, and this contract says the diff may
         // never be reported that way.
@@ -839,6 +869,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                 mapper,
                 new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
                 new PracticeSubjectEvaluator(mapper),
+                NO_FENCE,
                 Clock.fixed(instant, java.time.ZoneOffset.UTC));
     }
 

@@ -1,6 +1,9 @@
 package de.tum.cit.aet.hephaestus.practices.curated;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
+import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
+import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
@@ -11,9 +14,12 @@ import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionService;
+import de.tum.cit.aet.hephaestus.practices.PracticeUsageSnapshot;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
@@ -40,9 +46,32 @@ public class CatalogProvenanceBackfill {
     private final BundledPracticeCatalogLoader bundledCatalogLoader;
     private final CuratedPracticeOverrideRepository practiceOverrideRepository;
     private final TransactionOperations transactionOperations;
+    private final AutomatedReviewFence fence;
+    private final ConfigAuditPort configAudit;
     private final Clock clock;
 
+    /**
+     * Links provenance first, so a copy this startup links to a withdrawn entry is switched off in the same run.
+     *
+     * @throws IllegalStateException when a withdrawn copy could not be switched off: a copy still shown as
+     *     reviewed is a partial repair, not a healthy one
+     */
     public Stamped run() {
+        Stamped stamped;
+        int unrepaired;
+        try {
+            stamped = repairProvenance();
+        } finally {
+            unrepaired = switchOffWithdrawnCopies();
+        }
+        if (unrepaired > 0) {
+            throw new IllegalStateException(
+                    "Could not switch off " + unrepaired + " practice(s) withdrawn from automated review");
+        }
+        return stamped;
+    }
+
+    private Stamped repairProvenance() {
         alignVersionedEvidence();
         fingerprintMigratedRevisions();
         Map<String, PracticeDefinition> bundled = bundledCatalogLoader.catalog().practices().stream()
@@ -111,6 +140,47 @@ public class CatalogProvenanceBackfill {
             practice.setAdoptedBase(PracticeDefinition.from(practice));
             practice.setAdoptedBaseSource(AdoptedBaseSource.CURRENT_DEFINITION);
         }
+    }
+
+    /**
+     * Switches off every copy whose catalogue entry withdrew automated review, with an audited reason, so each
+     * surface that shows autonomy agrees with the runtime fence; definitions, revisions and observations stay.
+     *
+     * @return how many withdrawn copies are still not switched off
+     */
+    int switchOffWithdrawnCopies() {
+        if (fence.withdrawnSlugs().isEmpty()) {
+            return 0;
+        }
+        int unrepaired = 0;
+        for (Long practiceId : practiceRepository.findIdsDescendedFrom(fence.withdrawnSlugs())) {
+            try {
+                transactionOperations.executeWithoutResult(ignored -> {
+                    Practice practice = practiceRepository.findById(practiceId).orElseThrow();
+                    PracticeAutonomy before = practice.getAutonomy();
+                    if (before == PracticeAutonomy.OFF) {
+                        return;
+                    }
+                    practice.setAutonomy(PracticeAutonomy.OFF);
+                    practiceRepository.save(practice);
+                    practice.getWorkspace().getReviewSettings().incrementRolloutRevision();
+                    configAudit.record(ConfigAuditEntry.updated(
+                            ConfigAuditEntityType.PRACTICE_USAGE,
+                            practice.getId(),
+                            practice.getWorkspace().getId(),
+                            new PracticeUsageSnapshot(before),
+                            new PracticeUsageSnapshot(PracticeAutonomy.OFF)));
+                    log.info(
+                            "Switched off a practice withdrawn from automated review: practiceId={}, workspaceId={}",
+                            practice.getId(),
+                            practice.getWorkspace().getId());
+                });
+            } catch (RuntimeException exception) {
+                unrepaired++;
+                log.error("Could not switch off a withdrawn practice: practiceId={}", practiceId, exception);
+            }
+        }
+        return unrepaired;
     }
 
     private void alignVersionedEvidence() {

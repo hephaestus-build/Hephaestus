@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalo
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Locale;
@@ -57,6 +58,26 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                 .hasSize(2)
                 .allSatisfy(practice ->
                         assertThat(practice.definition().criteria()).contains("PRESENT/GOOD", "not NOT_APPLICABLE"));
+    }
+
+    /** Pinned by slug so that shipping another practice without automated review is a decision. */
+    @Test
+    void shouldShipOnlyTheCloseOutcomePracticeAsNeedingHumanReview() {
+        assertThat(loader.catalog().practices())
+                .filteredOn(practice -> !practice.definition()
+                        .automatedReviewPolicy()
+                        .automatedReview()
+                        .canAttemptAutomatedReview())
+                .singleElement()
+                .satisfies(practice -> {
+                    assertThat(practice.slug()).isEqualTo("issue-closed-with-unmet-outcome");
+                    assertThat(practice.definition().automatedReviewPolicy().insufficiencyReason())
+                            .isNotNull()
+                            .extracting(PracticeEvidenceLimitation::code)
+                            .isEqualTo("AT_CLOSE_STATE_NOT_CAPTURED");
+                    assertThat(practice.definition().precomputeScript()).isNull();
+                    assertThat(loader.holdsAs(practice.slug())).isEmpty();
+                });
     }
 
     @Test
@@ -172,6 +193,10 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
         Pattern reviewVocabulary = Pattern.compile("\\b(?:PRESENT|ABSENT|GOOD|BAD|NOT_APPLICABLE)\\b");
 
         assertThat(loader.catalog().practices())
+                .filteredOn(practice -> practice.definition()
+                        .automatedReviewPolicy()
+                        .automatedReview()
+                        .canAttemptAutomatedReview())
                 .allSatisfy(practice -> assertThat(loader.holdsAs(practice.slug()))
                         .as("holdsAs for '%s'", practice.slug())
                         .hasValueSatisfying(phrase -> assertThat(phrase).doesNotContainPattern(reviewVocabulary)));

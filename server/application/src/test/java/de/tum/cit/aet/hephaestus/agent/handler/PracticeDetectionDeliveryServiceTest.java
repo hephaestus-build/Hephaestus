@@ -151,7 +151,8 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 cas,
                 sourceCatalogs,
                 historicalGit,
-                memberAiPolicy);
+                memberAiPolicy,
+                new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()));
 
         lenient().when(sourceCatalogs.isSourceUsePermitted(any(), any(), any())).thenReturn(true);
 

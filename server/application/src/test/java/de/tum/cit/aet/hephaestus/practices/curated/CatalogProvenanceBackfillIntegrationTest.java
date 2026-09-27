@@ -81,6 +81,24 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
     }
 
     @Test
+    void switchesOffAWithdrawnCopyTheSameRunLinksToTheCatalog() {
+        String withdrawn = "issue-closed-with-unmet-outcome";
+        PracticeDefinition entry = shipped(withdrawn);
+        seedLegacyWorkspace(matching, withdrawn, entry.criteria(), true, entry.automatedReviewPolicy(), null);
+
+        backfill.run();
+
+        assertThat(jdbcTemplate.queryForMap(
+                        "SELECT source_curated_slug, autonomy FROM practice WHERE workspace_id = ?", matching.getId()))
+                .containsEntry("source_curated_slug", withdrawn)
+                .containsEntry("autonomy", "OFF");
+        assertThat(count(
+                        "SELECT count(*) FROM config_audit_event WHERE workspace_id = ? AND entity_type = 'PRACTICE_USAGE'",
+                        matching.getId()))
+                .isOne();
+    }
+
+    @Test
     void looksAtEachWorkspaceOnlyOnce() {
         seedLegacyWorkspace(matching, shipped().criteria(), true);
         backfill.run();
@@ -334,7 +352,11 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
     }
 
     private PracticeDefinition shipped() {
-        return catalogService.catalog().practice(SHIPPED_SLUG).orElseThrow().effective();
+        return shipped(SHIPPED_SLUG);
+    }
+
+    private PracticeDefinition shipped(String slug) {
+        return catalogService.catalog().practice(slug).orElseThrow().effective();
     }
 
     @Test
@@ -375,7 +397,17 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
             boolean provenancePending,
             @Nullable PracticeAutomatedReviewPolicy evidence,
             @Nullable String fingerprint) {
-        PracticeDefinition shipped = shipped();
+        seedLegacyWorkspace(workspace, SHIPPED_SLUG, criteria, provenancePending, evidence, fingerprint);
+    }
+
+    private void seedLegacyWorkspace(
+            Workspace workspace,
+            String slug,
+            String criteria,
+            boolean provenancePending,
+            @Nullable PracticeAutomatedReviewPolicy evidence,
+            @Nullable String fingerprint) {
+        PracticeDefinition shipped = shipped(slug);
         transactionOperations.executeWithoutResult(ignored -> {
             Long groupId = jdbcTemplate.queryForObject("""
                 INSERT INTO practice_group (
@@ -396,13 +428,13 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                     Long.class,
                     workspace.getId(),
                     groupId,
-                    SHIPPED_SLUG,
+                    slug,
                     shipped.name(),
                     shipped.artifactKind().value(),
                     bindingsJson(shipped),
                     criteria,
                     evidenceJson(evidence),
-                    fingerprint == null ? null : SHIPPED_SLUG,
+                    fingerprint == null ? null : slug,
                     fingerprint);
             Long revisionId = jdbcTemplate.queryForObject(
                     """
@@ -414,7 +446,7 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                 """,
                     Long.class,
                     practiceId,
-                    SHIPPED_SLUG,
+                    slug,
                     shipped.name(),
                     shipped.artifactKind().value(),
                     bindingsJson(shipped),
@@ -433,7 +465,7 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                     """,
                         Long.class,
                         practiceId,
-                        SHIPPED_SLUG,
+                        slug,
                         shipped.name(),
                         shipped.artifactKind().value(),
                         bindingsJson(shipped),

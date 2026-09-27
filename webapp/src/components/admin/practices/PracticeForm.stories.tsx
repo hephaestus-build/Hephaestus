@@ -99,6 +99,25 @@ export const EditWithAdvanced: Story = {
 	args: { mode: "edit", initialData: mockPracticeWithAllTriggers, onSubmit: fn() },
 };
 
+/** A copy whose catalog entry withdrew automated review keeps its authored settings but never runs. */
+export const EditWithdrawnByTheCatalog: Story = {
+	args: {
+		mode: "edit",
+		initialData: {
+			...mockPracticeWithAllTriggers,
+			automatedReviewWithdrawal: {
+				code: "AT_CLOSE_STATE_NOT_CAPTURED",
+				description: "Nothing Hephaestus collects shows the issue as it was at its close.",
+			},
+		},
+		onSubmit: fn(),
+	},
+	play: async () => {
+		await settledDrawerPanel();
+		await expect(screen.getByText("Hephaestus no longer reviews this practice")).toBeVisible();
+	},
+};
+
 export const Submitting: Story = {
 	args: { isPending: true, onSubmit: fn() },
 	play: async () => {

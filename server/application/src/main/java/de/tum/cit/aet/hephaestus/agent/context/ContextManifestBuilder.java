@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -109,16 +110,19 @@ public class ContextManifestBuilder {
     private final JsonMapper objectMapper;
     private final ArtifactSourceCatalogRegistry catalogs;
     private final PracticeSubjectEvaluator subjectEvaluator;
+    private final AutomatedReviewFence fence;
     private final Clock clock;
 
     public ContextManifestBuilder(
             JsonMapper objectMapper,
             ArtifactSourceCatalogRegistry catalogs,
             PracticeSubjectEvaluator subjectEvaluator,
+            AutomatedReviewFence fence,
             Clock clock) {
         this.objectMapper = objectMapper;
         this.catalogs = catalogs;
         this.subjectEvaluator = subjectEvaluator;
+        this.fence = fence;
         this.clock = clock;
     }
 
@@ -313,10 +317,10 @@ public class ContextManifestBuilder {
         List<Practice> ready = new ArrayList<>();
         List<AutomatedReviewReadinessDecision> decisions = new ArrayList<>();
         for (Practice practice : practices) {
-            var requirements = practice.getAutomatedReviewPolicy();
-            if (requirements == null) {
+            if (practice.getAutomatedReviewPolicy() == null) {
                 throw new IllegalArgumentException("Practice has no evidence requirements: " + practice.getSlug());
             }
+            var requirements = fence.effectivePolicy(practice);
             if (!requirements.sourceContractVersion().equals(manifest.contractVersion())
                     || !practice.getArtifactKind().value().equals(manifest.artifactKind())) {
                 throw new IllegalArgumentException(

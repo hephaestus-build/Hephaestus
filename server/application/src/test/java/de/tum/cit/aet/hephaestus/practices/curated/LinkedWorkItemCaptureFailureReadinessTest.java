@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.util.LinkedHashMap;
@@ -43,8 +44,12 @@ class LinkedWorkItemCaptureFailureReadinessTest extends BaseUnitTest {
             mapper,
             new PracticeDefinitionValidator(catalogs, PracticeSignalOptionsFixture.real()),
             new PracticeEvidenceDefaults(catalogs, PracticeSignalOptionsFixture.catalog()));
-    private final ContextManifestBuilder builder =
-            new ContextManifestBuilder(mapper, catalogs, new PracticeSubjectEvaluator(mapper), Clock.systemUTC());
+    private final ContextManifestBuilder builder = new ContextManifestBuilder(
+            mapper,
+            catalogs,
+            new PracticeSubjectEvaluator(mapper),
+            new AutomatedReviewFence(loader.withdrawnFromAutomatedReview()),
+            Clock.systemUTC());
 
     @Test
     void shouldWithholdExactlyThePracticesThatRequireLinkedWorkItems() {

@@ -74,4 +74,15 @@ public record PracticeAutomatedReviewPolicy(
             throw new IllegalArgumentException("Only insufficient evidence carries a reason a human is needed");
         }
     }
+
+    /** This policy with automated review withdrawn for {@code reason}; the frame and limitations stay. */
+    public PracticeAutomatedReviewPolicy withdrawnFor(PracticeEvidenceLimitation reason) {
+        return new PracticeAutomatedReviewPolicy(
+                sourceContractVersion,
+                new PracticeAutomatedReview(
+                        automatedReview.mode(), PracticeEvidenceSufficiency.DECLARED_EVIDENCE_INSUFFICIENT),
+                whenEvidenceIsInsufficient,
+                knownLimitations,
+                reason);
+    }
 }
