@@ -8,6 +8,6 @@ request. Feedback that fails before it is sent, because GitHub or GitLab was rat
 find the pull request, merge request or issue, is now retried and marked failed if it still cannot be
 sent, instead of being held indefinitely.
 
-**Operators:** feedback already held uncertain by this fault is not retried or re-sent automatically. A
-missing Hephaestus comment on the reviewed work does not by itself prove it was never delivered; reconcile
-it against the provider before any operator-approved recovery.
+Upgrading requires no action. Feedback this fault left with an uncertain delivery outcome before the
+upgrade stays held; Hephaestus does not resend it automatically. A missing comment on the reviewed work
+does not prove the feedback was never delivered. Check the provider before any operator-approved recovery.
