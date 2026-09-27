@@ -110,13 +110,11 @@ function Practice({ practice, groupName }: { practice: PracticeEntry; groupName:
 			<Observations
 				title="To work on"
 				observations={toWorkOn}
-				practice={practice}
 				icon={{ ios: "exclamationmark.circle", android: "error" }}
 			/>
 			<Observations
 				title="Going well"
 				observations={strengths}
-				practice={practice}
 				icon={{ ios: "checkmark.circle", android: "check_circle" }}
 			/>
 			{practice.standing === "NOT_OBSERVED" ? null : (
@@ -169,12 +167,10 @@ function Practice({ practice, groupName }: { practice: PracticeEntry; groupName:
 function Observations({
 	title,
 	observations,
-	practice,
 	icon,
 }: {
 	title: string;
 	observations: PracticeStandingObservation[];
-	practice: PracticeEntry;
 	icon: IconName;
 }) {
 	const router = useRouter();
@@ -200,11 +196,7 @@ function Observations({
 					onPress={() =>
 						router.push({
 							pathname: "/practice/observation/[observationId]",
-							params: {
-								observationId: observation.observationId,
-								groupSlug: practice.groupSlug,
-								practiceSlug: practice.slug,
-							},
+							params: { observationId: observation.observationId },
 						})
 					}
 				/>

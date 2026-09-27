@@ -21,14 +21,18 @@ function capitalised(text: string): string {
 	return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** The reviewed work as its code host names it: its title, and "Pull request #12 · api" under it. */
+/**
+ * The reviewed work as its host names it: its title, and "Pull request #12 · api" under it. A
+ * document's label is its title, which the heading already says, so it is not repeated under it.
+ */
 export function workHeading(
 	work: ReviewedWorkRef,
 	provider: Provider,
 ): { title: string; detail: string } {
 	const kind = capitalised(workLabel(work.kind, work.provider ?? provider));
-	const numbered = work.label === "" ? kind : `${kind} ${work.label}`;
 	const title = work.title?.trim();
+	const label = work.label.trim();
+	const numbered = label === "" || label === title ? kind : `${kind} ${label}`;
 	return {
 		title: title !== undefined && title !== "" && title !== kind ? title : numbered,
 		detail: [numbered, work.repositoryName]

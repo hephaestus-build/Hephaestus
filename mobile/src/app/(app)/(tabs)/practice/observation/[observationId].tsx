@@ -1,15 +1,14 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { Platform, StyleSheet, View } from "react-native";
 
-import { getObservationOptions, getObservationQueryKey } from "@/api/@tanstack/react-query.gen";
+import { getObservationOptions } from "@/api/@tanstack/react-query.gen";
 import type { EvidenceCitation, ObservationDetail } from "@/api/types.gen";
 import { FeedbackAnswer } from "@/feedback/FeedbackAnswer";
 import { useFeedbackAnswer } from "@/feedback/use-feedback-answer";
 import { workLabel } from "@/feedback/work-kind";
 import { observationResult, openableUrl } from "@/practice/review-history";
-import { reviewHistoryKey } from "@/practice/use-review-history";
 import { DIFF_SIDE, NOT_CURRENT, NOT_LIVE_ORIGIN, SEVERITY } from "@/practice/vocabulary";
 import { setPendingReport } from "@/report/report";
 import { AppText } from "@/ui/AppText";
@@ -26,14 +25,12 @@ import { useWorkspace } from "@/workspace/workspace-context";
 /**
  * One observation, whole: what the review found and why, the exact lines it quoted from the work, how
  * current the review rules behind it are, the work itself, and the developer's answer to the feedback
- * it was delivered as. It is opened from a group's or practice's history, and the server returns its delivered feedback handle with the observation. The server shows it only to
- * the developer it is about.
+ * it was delivered as. It is opened from a group's or practice's history. The server returns the
+ * observation with the handle of the feedback delivered about it, which is what the answer names, and
+ * shows it only to the developer it is about.
  */
 export default function Observation() {
-	const { observationId, groupSlug } = useLocalSearchParams<{
-		observationId: string;
-		groupSlug: string;
-	}>();
+	const { observationId } = useLocalSearchParams<{ observationId: string }>();
 	const { workspaceSlug } = useWorkspace();
 	const detail = useQuery(getObservationOptions({ path: { workspaceSlug, observationId } }));
 	return (
@@ -52,23 +49,16 @@ export default function Observation() {
 					errorTitle="Could not load this observation"
 					errorMessage="It may no longer be shown, or the connection failed. Try again."
 				>
-					{(observation) => <Content observation={observation} groupSlug={groupSlug} />}
+					{(observation) => <Content observation={observation} />}
 				</QueryStates>
 			</Screen>
 		</>
 	);
 }
 
-function Content({
-	observation,
-	groupSlug,
-}: {
-	observation: ObservationDetail;
-	groupSlug: string;
-}) {
+function Content({ observation }: { observation: ObservationDetail }) {
 	const router = useRouter();
-	const queryClient = useQueryClient();
-	const { workspaceSlug, providerType } = useWorkspace();
+	const { providerType } = useWorkspace();
 	const feedbackId = observation.feedbackResponse?.feedbackId;
 	const result = observationResult(observation);
 	const work = openableUrl(observation.artifactUrl);
@@ -149,21 +139,7 @@ function Content({
 					/>
 				</Section>
 			)}
-			{feedbackId === undefined ? null : (
-				<Answer
-					feedbackId={feedbackId}
-					onChanged={() => {
-						void queryClient.invalidateQueries({
-							queryKey: reviewHistoryKey(workspaceSlug, groupSlug),
-						});
-						void queryClient.invalidateQueries({
-							queryKey: getObservationQueryKey({
-								path: { workspaceSlug, observationId: observation.id },
-							}),
-						});
-					}}
-				/>
-			)}
+			{feedbackId === undefined ? null : <Answer feedbackId={feedbackId} />}
 			{observation.deliveredFeedback === undefined ? null : (
 				<Section footer="If this feedback is offensive, harmful or wrong, tell the people who run this Hephaestus.">
 					<Row
@@ -272,7 +248,7 @@ const styles = StyleSheet.create({
 });
 
 /** Mounted only after this route has loaded a feedback record. */
-function Answer({ feedbackId, onChanged }: { feedbackId: string; onChanged?: () => void }) {
-	const answer = useFeedbackAnswer(feedbackId, onChanged);
+function Answer({ feedbackId }: { feedbackId: string }) {
+	const answer = useFeedbackAnswer(feedbackId);
 	return <FeedbackAnswer {...answer} />;
 }

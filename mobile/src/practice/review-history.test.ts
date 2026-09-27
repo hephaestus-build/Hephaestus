@@ -28,6 +28,21 @@ describe("workHeading", () => {
 			),
 		).toStrictEqual({ title: "Pull request", detail: "Pull request" });
 	});
+
+	it("says a document's title once, since its label is that title", () => {
+		expect(
+			workHeading(
+				{
+					id: "1",
+					kind: "docs.document",
+					label: "Release checklist",
+					title: "Release checklist",
+					provider: "OUTLINE",
+				},
+				"GITHUB",
+			),
+		).toStrictEqual({ title: "Release checklist", detail: "Document" });
+	});
 });
 
 function observation(

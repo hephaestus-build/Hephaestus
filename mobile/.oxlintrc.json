@@ -55,7 +55,8 @@
 		},
 		{
 			// Reusable native views take data and actions through props. Device geometry and visual state
-			// stay local; server reads, credentials and workspace selection belong to routes and hooks.
+			// stay local; server reads, credentials, workspace selection, navigation and the app's side
+			// effects belong to routes and hooks. A view may still place its route's `Stack` header slot.
 			"files": ["src/**/*.tsx"],
 			"excludeFiles": ["src/app/**", "src/workspace/workspace-context.tsx"],
 			"rules": {
@@ -65,16 +66,39 @@
 						"paths": [
 							{
 								"name": "expo-router",
-								"importNames": [
-									"useRouter",
-									"router",
-									"useLocalSearchParams",
-									"useGlobalSearchParams"
-								],
-								"message": "The route supplies navigation actions to reusable views."
+								"allowImportNames": ["Stack"],
+								"allowTypeImports": true,
+								"message": "A reusable view may place a Stack header slot; the route supplies navigation and its actions."
 							}
 						],
 						"patterns": [
+							{
+								"group": ["expo-router/*", "@react-navigation/*"],
+								"allowTypeImports": true,
+								"message": "The route supplies navigation and its actions to reusable views."
+							},
+							{
+								"group": [
+									"expo-web-browser",
+									"expo-linking",
+									"expo-notifications",
+									"expo-secure-store",
+									"@/report/**",
+									"@/push/**",
+									"@/instance/**",
+									"@/query-client",
+									"@/workspace/workspace-store",
+									"./workspace-store",
+									"@/heph/transport",
+									"@/heph/sharing",
+									"@/heph/drafts",
+									"./transport",
+									"./sharing",
+									"./drafts"
+								],
+								"allowTypeImports": true,
+								"message": "Reusable views take actions through props. Opening links, reporting, push, instance and storage effects, and sending to Heph belong to routes and feature hooks."
+							},
 							{
 								"group": [
 									"@tanstack/react-query",

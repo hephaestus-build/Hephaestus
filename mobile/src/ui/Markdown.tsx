@@ -1,3 +1,4 @@
+// oxlint-disable-next-line no-restricted-imports -- the one renderer of untrusted Markdown owns its HTTPS-only link policy
 import * as WebBrowser from "expo-web-browser";
 import { useMemo } from "react";
 import { useColorScheme } from "react-native";

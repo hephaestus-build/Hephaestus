@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
 });
 
 /** Mounted only after this route has loaded a feedback record. */
-function Answer({ feedbackId, onChanged }: { feedbackId: string; onChanged?: () => void }) {
-	const answer = useFeedbackAnswer(feedbackId, onChanged);
+function Answer({ feedbackId }: { feedbackId: string }) {
+	const answer = useFeedbackAnswer(feedbackId);
 	return <FeedbackAnswer {...answer} />;
 }

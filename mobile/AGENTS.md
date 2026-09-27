@@ -32,9 +32,13 @@ the personal-data map and the privacy notice.
 Routes under `src/app/` own navigation, server state, loading and side effects. Feature hooks carry
 reused or substantial orchestration; pure policy modules stay independent of views. Components outside
 routes take data and actions through props, including account, workspace and feedback UI. Generated
-DTO types are welcome; fetching, credential access and workspace selection are not. Oxlint enforces
-these boundaries and its contract canaries prove that imports cannot bypass them. Visual state,
-accessibility, keyboard geometry and animation stay with the component that renders them.
+DTO types are welcome; fetching, credential access, workspace selection, navigation and the app's side
+effects (opening links, reporting, push, storage, sending to Heph) are not, except that a view may place
+its route's `Stack` header slot. Oxlint enforces these imports in `.oxlintrc.json`, and the native
+canaries in `scripts/check-lint-contract.ts` prove representative bypasses fail. The one exception is
+`src/ui/Markdown.tsx`, which owns the HTTPS-only link policy for untrusted Markdown and says so where it
+imports the browser. Visual state, accessibility, keyboard geometry and animation stay with the
+component that renders them.
 
 Compose existing `Section`, `Row`, `QueryStates` and feature components through props and children.
 Add a context only for state descendants actually share, never to disguise a query inside a visual
@@ -57,9 +61,11 @@ component. Do not copy the web renderer, DOM rules or compiler configuration int
 - **Opening in-app feedback delivers it.** Only the Practice feedback list reads it, while it is on
   screen, and a feedback page opened directly reads it once when the list was not loaded: no prefetch,
   no background refetch, no count or preview on the practice profile, nothing from a notification.
-- **An answer names feedback the app loaded.** The observation page answers only the `feedbackResponse.feedbackId` its
-  loaded observation carries, never an id from a route; the server checks
-  ownership again.
+- **An answer names feedback the app loaded.** The observation page answers only the
+  `feedbackResponse.feedbackId` its loaded observation carries, never an id from a route; the server
+  checks ownership again. Once an answer changes, `useFeedbackAnswer` reads the workspace's observations
+  and review runs again, wherever it was given; never the in-app list, whose read delivers feedback. A
+  204 means "no answer" by its status: `expo/fetch` gives even an empty response a body stream.
 - **Long lists virtualize.** A group's or practice's page previews two review runs; the whole history
   is its own `FlatList` route. Never append pages of a list inside `Screen`'s scroll view.
 - **`src/api/` is generated**, from only the operations in `api-contract/operations.json`: a new

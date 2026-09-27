@@ -34,6 +34,11 @@ interface Fixture {
 	path: string;
 	code: string | null;
 	source: string;
+	/**
+	 * With `code` null, only this diagnostic must be missing: the fixture imports a package the
+	 * throwaway project cannot resolve, so the type checker reports that as well.
+	 */
+	absent?: string;
 }
 
 const story = (name: string) => `src/components/ui/LintContract-${name}.stories.tsx`;
@@ -512,6 +517,40 @@ void test("native lint rejects unsafe types, bypassed requests and handwritten s
 			source: 'import { useRouter } from "expo-router"; export const read = useRouter;',
 		},
 		{
+			path: "src/NavigationHookView.tsx",
+			code: "eslint(no-restricted-imports)",
+			source: 'import { useNavigation } from "expo-router"; export const read = useNavigation;',
+		},
+		{
+			path: "src/NamespaceRouterView.tsx",
+			code: "eslint(no-restricted-imports)",
+			source: 'import * as Router from "expo-router"; export const read = Router.router;',
+		},
+		{
+			path: "src/ReactNavigationView.tsx",
+			code: "eslint(no-restricted-imports)",
+			source:
+				'import { useNavigation } from "@react-navigation/native"; export const read = useNavigation;',
+		},
+		{
+			path: "src/HeaderSlotView.tsx",
+			code: null,
+			absent: "eslint(no-restricted-imports)",
+			source: 'import { Stack } from "expo-router"; export const Header = Stack.Screen;',
+		},
+		{
+			path: "src/BrowsingView.tsx",
+			code: "eslint(no-restricted-imports)",
+			source:
+				'import { openBrowserAsync } from "expo-web-browser"; export const open = openBrowserAsync;',
+		},
+		{
+			path: "src/ReportingView.tsx",
+			code: "eslint(no-restricted-imports)",
+			source:
+				'import { setPendingReport } from "@/report/report"; export const report = setPendingReport;',
+		},
+		{
 			path: "src/reversed.ts",
 			code: "eslint(no-restricted-imports)",
 			source: 'import { AppText } from "@/ui/AppText"; export const view = AppText;',
@@ -574,7 +613,11 @@ void test("native lint rejects unsafe types, bypassed requests and handwritten s
 				(entry) => String(entry.filename).replaceAll("\\", "/") === fixture.path,
 			);
 			if (fixture.code === null) {
-				assert.deepEqual(matches, [], result.stdout);
+				const unexpected =
+					fixture.absent === undefined
+						? matches
+						: matches.filter((entry) => entry.code === fixture.absent);
+				assert.deepEqual(unexpected, [], result.stdout);
 			} else {
 				assert.ok(
 					matches.some((entry) => entry.code === fixture.code && entry.severity === "error"),
