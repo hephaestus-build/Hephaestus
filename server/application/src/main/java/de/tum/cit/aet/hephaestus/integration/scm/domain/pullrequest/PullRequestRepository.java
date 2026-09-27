@@ -127,11 +127,17 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
 
     /**
      * The provider's closing candidates for the pull request, with their labels, in number order:
-     * the rows of {@code pull_request_closing_issue} for one pull request.
+     * the rows of {@code pull_request_closing_issue} for one pull request whose issue belongs to the
+     * pull request's own repository. A review names a candidate by its bare number, which only this
+     * repository's issue can own.
      */
     @Query("SELECT DISTINCT i FROM PullRequest p JOIN p.closingIssues i LEFT JOIN FETCH i.labels "
-            + "WHERE p.id = :id ORDER BY i.number")
+            + "WHERE p.id = :id AND i.repository = p.repository ORDER BY i.number")
     List<Issue> findClosingIssuesById(@Param("id") Long id);
+
+    /** How many rows {@link #findClosingIssuesById} would return, without loading them. */
+    @Query("SELECT COUNT(i) FROM PullRequest p JOIN p.closingIssues i WHERE p.id = :id AND i.repository = p.repository")
+    long countClosingIssuesById(@Param("id") Long id);
 
     /** The pull requests whose head is {@code headRefOid}: the ones a check on that commit is about. */
     List<PullRequest> findAllByRepository_IdAndHeadRefOid(Long repositoryId, String headRefOid);

@@ -154,6 +154,117 @@ void test("plans-first puts the issue's opening beside the earliest commit, neve
 	}
 });
 
+/** GitLab's partial workflow: the issue is named only by `Related to` in the description. */
+const partial = {
+	...unmerged,
+	source_branch: "tutor-question-draft",
+	title: "Add a persistent tutor question draft",
+	created_at: "2026-09-27T02:19:18Z",
+};
+
+async function planFirst(
+	body: string,
+	workItems: unknown[] | null,
+	envelope: { unresolvedReferences?: number[]; truncated?: boolean } = {},
+) {
+	const { root, script, contextDir, changeDir } = await stage(
+		"plans-the-work-in-an-issue-first",
+		workItems === null ? {} : { "linked_work_items.json": { workItems, ...envelope } },
+		[{ sha: "b08d591eaaaa", message: "Save the draft", authoredAt: "2026-09-27T02:18:53Z" }],
+	);
+	try {
+		return await script(
+			nodePath.join(root, "repo"),
+			new Map(),
+			{ ...partial, body },
+			contextDir,
+			changeDir,
+		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+}
+
+function linkedIssue(number: number, createdAt: string, how: "closesOnMerge" | "mentions") {
+	return { number, title: `Issue ${String(number)}`, state: "OPEN", how, createdAt, body: "" };
+}
+
+void test("plans-first dates an issue named only by Related to as a mention, before or after the work began", async () => {
+	for (const [openedAt, relation] of [
+		["2026-09-27T02:01:31Z", /the earliest commit was authored 0\.3 h after the issue was opened/u],
+		["2026-09-27T05:18:53Z", /the issue was opened 3\.0 h after the earliest commit was authored/u],
+	] as const) {
+		const result = await planFirst("Related to #5\n\nFirst slice only; #5 stays open.", [
+			linkedIssue(5, openedAt, "mentions"),
+		]);
+		const [hint] = result.hints;
+		assert.ok(hint);
+		assert.equal(result.hints.length, 1);
+		assert.equal(hint.flags.namedBy, "Related to");
+		assert.equal(hint.flags.providerLink, "mentions");
+		assert.match(hint.context, relation);
+	}
+});
+
+void test("plans-first names no candidate for a bare, quoted or fenced number, nor without the capture", async () => {
+	for (const body of [
+		"See also #5 for the sharing work.",
+		"> Related to #5",
+		"```\nRelated to #5\n```",
+		"```\nCloses #5\n```",
+		"> Fixes #5",
+	]) {
+		const result = await planFirst(body, [linkedIssue(5, "2026-09-27T02:01:31Z", "mentions")]);
+		assert.deepEqual(result.hints, [], body);
+		assert.equal(result.metrics.namedIssues, 0, body);
+	}
+	const uncaptured = await planFirst("Related to #5", null);
+	assert.deepEqual(uncaptured.hints, []);
+	assert.match(uncaptured.directions[0] ?? "", /was not captured: a collection gap/u);
+});
+
+void test("plans-first dates a provider closing link no text names, and lists it apart from a related issue", async () => {
+	const result = await planFirst("Related to #5", [
+		linkedIssue(4, "2026-09-27T05:00:00Z", "closesOnMerge"),
+		linkedIssue(5, "2026-09-27T02:01:31Z", "mentions"),
+	]);
+	assert.deepEqual(
+		result.hints.map((hint) => [hint.flags.number, hint.flags.namedBy, hint.flags.providerLink]),
+		[
+			[4, "provider closing link", "closesOnMerge"],
+			[5, "Related to", "mentions"],
+		],
+	);
+	assert.match(result.directions.join("\n"), /do not choose the favourable one/u);
+});
+
+void test("plans-first leaves an unresolved or undated named issue open to the description, and still dates the rest", async () => {
+	const closing = linkedIssue(4, "2026-09-27T01:00:00Z", "closesOnMerge");
+	const result = await planFirst("Related to #5", [closing], { unresolvedReferences: [5] });
+	assert.equal(result.metrics.unresolvedNamedIssues, 1);
+	assert.deepEqual(
+		result.hints.map((hint) => hint.flags.number),
+		[4],
+	);
+	assert.match(
+		result.directions[0] ?? "",
+		/#5 are among the capture's unresolved references.*if it is, the order stays open \(UNDETERMINED.*if the description rules it out, it is no occasion/u,
+	);
+	const { createdAt: _openedAt, ...undated } = linkedIssue(5, "", "mentions");
+	const undatedResult = await planFirst("Related to #5", [undated]);
+	const [hint] = undatedResult.hints;
+	assert.match(hint?.context ?? "", /its opening time is not captured/u);
+	for (const envelope of [{ unresolvedReferences: [9] }, { truncated: true }]) {
+		const unaffected = await planFirst(
+			"Related to #5",
+			[closing, linkedIssue(5, "2026-09-27T02:01:31Z", "mentions")],
+			envelope,
+		);
+		assert.equal(unaffected.metrics.unresolvedNamedIssues, 0);
+		assert.equal(unaffected.hints.length, 2);
+	}
+});
+
 void test("deferred asks are one row each, with the record's facts and none of the judgement", async () => {
 	const { root, script, contextDir, changeDir } = await stage(
 		"defers-review-asks-into-tracked-work",
