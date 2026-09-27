@@ -405,6 +405,7 @@ public class GitLabWorkspaceInitializationService {
             }
             RepositoryToMonitor monitor = new RepositoryToMonitor();
             monitor.setNameWithOwner(nwo);
+            monitor.setNativeId(repo.getNativeId());
             monitor.setWorkspace(workspace);
             repositoryToMonitorRepository.save(monitor);
             created++;

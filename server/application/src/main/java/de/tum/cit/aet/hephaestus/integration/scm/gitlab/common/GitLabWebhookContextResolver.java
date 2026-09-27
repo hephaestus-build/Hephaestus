@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,14 +30,17 @@ public class GitLabWebhookContextResolver {
     private final RepositoryRepository repositoryRepository;
     private final RepositoryScopeFilter repositoryScopeFilter;
     private final ScopeIdResolver scopeIdResolver;
+    private final GitLabRouteAdmission routeAdmission;
 
     GitLabWebhookContextResolver(
             RepositoryRepository repositoryRepository,
             RepositoryScopeFilter repositoryScopeFilter,
-            ScopeIdResolver scopeIdResolver) {
+            ScopeIdResolver scopeIdResolver,
+            GitLabRouteAdmission routeAdmission) {
         this.repositoryRepository = repositoryRepository;
         this.repositoryScopeFilter = repositoryScopeFilter;
         this.scopeIdResolver = scopeIdResolver;
+        this.routeAdmission = routeAdmission;
     }
 
     /**
@@ -49,6 +54,25 @@ public class GitLabWebhookContextResolver {
     @Nullable
     public ProcessingContext resolve(String pathWithNamespace, String action, String eventLabel) {
         String safePath = sanitizeForLog(pathWithNamespace);
+
+        // A delivery on a connection's own route acts for that connection's workspace, never for whichever workspace
+        // a payload path happens to match, and only on a project of that connection's GitLab instance that admission
+        // confirmed with GitLab.
+        Optional<GitLabRouteAdmission.AdmittedRoute> route = GitLabRouteAdmission.current();
+        if (route.isPresent()) {
+            Repository repository = repositoryRepository
+                    .findByNameWithOwnerAndProviderId(
+                            pathWithNamespace, route.get().providerId())
+                    .orElse(null);
+            if (repository == null) {
+                log.debug("Skipped {} event: reason=repositoryNotFound, repoName={}", eventLabel, safePath);
+                return null;
+            }
+            if (!routeAdmission.admitRepository(route.get(), repository)) {
+                return null;
+            }
+            return ProcessingContext.forWebhook(route.get().workspaceId(), repository, action);
+        }
 
         if (!repositoryScopeFilter.isRepositoryAllowed(pathWithNamespace)) {
             log.debug("Skipped {} event: reason=repositoryFiltered, repoName={}", eventLabel, safePath);
@@ -66,6 +90,14 @@ public class GitLabWebhookContextResolver {
 
         Long scopeId = resolveScopeId(repository);
         return ProcessingContext.forWebhook(scopeId, repository, action);
+    }
+
+    /**
+     * For a write transaction after the one {@link #resolve} ran in: whether the delivery may still write, which on a
+     * connection route means the connection is still active, held so until the transaction ends.
+     */
+    public boolean mayStillWrite() {
+        return GitLabRouteAdmission.current().map(routeAdmission::holdActive).orElse(true);
     }
 
     private @Nullable Long resolveScopeId(Repository repository) {

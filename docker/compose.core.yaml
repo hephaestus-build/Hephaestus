@@ -58,6 +58,8 @@ services:
       # WEBHOOK_EXTERNAL_URL is only used by auto-registration (server role) and is intentionally
       # not set on the webhook-server pod.
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:?Set WEBHOOK_SECRET to at least 32 printable ASCII characters}
+      WEBHOOK_ROUTING_SECRET: ${WEBHOOK_ROUTING_SECRET:?Set WEBHOOK_ROUTING_SECRET to at least 32 printable ASCII characters, different from WEBHOOK_SECRET}
+      WEBHOOK_ROUTING_PREVIOUS_SECRET: ${WEBHOOK_ROUTING_PREVIOUS_SECRET:-}
       # DataSource for the JPA layer (connection credentials used by the HMAC
       # path reads); the auth web layer and workspace-context filter are gated off this role.
       # Internal, trusted docker-network DB: skip TLS. pgJDBC doesn't validate Postgres' self-signed cert

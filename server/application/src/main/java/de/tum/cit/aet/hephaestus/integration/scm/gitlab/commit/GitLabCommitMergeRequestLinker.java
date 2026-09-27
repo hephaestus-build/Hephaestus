@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,6 +29,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.IntSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +38,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Links GitLab commits to their merge requests via GraphQL.
@@ -68,6 +71,8 @@ public class GitLabCommitMergeRequestLinker {
     private final GitLabGraphQlResponseHandler responseHandler;
     private final GitLabProperties gitLabProperties;
     private final ApplicationEventPublisher eventPublisher;
+    private final GitLabRouteAdmission routeAdmission;
+    private final TransactionTemplate transactions;
 
     public GitLabCommitMergeRequestLinker(
             CommitRepository commitRepository,
@@ -76,7 +81,9 @@ public class GitLabCommitMergeRequestLinker {
             GitLabGraphQlClientProvider graphQlClientProvider,
             GitLabGraphQlResponseHandler responseHandler,
             GitLabProperties gitLabProperties,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            GitLabRouteAdmission routeAdmission,
+            TransactionTemplate transactions) {
         this.commitRepository = commitRepository;
         this.commitContributorRepository = commitContributorRepository;
         this.userRepository = userRepository;
@@ -84,6 +91,21 @@ public class GitLabCommitMergeRequestLinker {
         this.responseHandler = responseHandler;
         this.gitLabProperties = gitLabProperties;
         this.eventPublisher = eventPublisher;
+        this.routeAdmission = routeAdmission;
+        this.transactions = transactions;
+    }
+
+    /**
+     * Runs {@code write}; for a delivery on a connection route only while the connection is still active, held so for
+     * the write's transaction. The GitLab reads before it stay outside that transaction.
+     */
+    private int whileActive(IntSupplier write) {
+        Optional<GitLabRouteAdmission.AdmittedRoute> route = GitLabRouteAdmission.current();
+        if (route.isEmpty()) {
+            return write.getAsInt();
+        }
+        Integer written = transactions.execute(status -> routeAdmission.holdActive(route.get()) ? write.getAsInt() : 0);
+        return written != null ? written : 0;
     }
 
     /**
@@ -202,7 +224,8 @@ public class GitLabCommitMergeRequestLinker {
                         }
                         int inserted = 0;
                         if (!shas.isEmpty()) {
-                            inserted = commitRepository.linkPullRequestToCommits(repositoryId, iid, shas);
+                            inserted = whileActive(
+                                    () -> commitRepository.linkPullRequestToCommits(repositoryId, iid, shas));
                             totalLinks += inserted;
                         }
 
@@ -220,8 +243,8 @@ public class GitLabCommitMergeRequestLinker {
                                 for (CommitNode node : fallbackNodes) {
                                     fallbackShas.add(node.sha());
                                 }
-                                int fallbackInserted =
-                                        commitRepository.linkPullRequestToCommits(repositoryId, iid, fallbackShas);
+                                int fallbackInserted = whileActive(() ->
+                                        commitRepository.linkPullRequestToCommits(repositoryId, iid, fallbackShas));
                                 totalLinks += fallbackInserted;
                                 if (fallbackInserted == 0) {
                                     log.debug(
@@ -281,8 +304,8 @@ public class GitLabCommitMergeRequestLinker {
             errorAborted = true;
         }
 
-        int attributed =
-                reconcileCommitContributorUsers(loginToEmails, providerId, scopeId, repository, safeProjectPath);
+        int attributed = whileActive(
+                () -> reconcileCommitContributorUsers(loginToEmails, providerId, scopeId, repository, safeProjectPath));
 
         SyncResult result;
         if (errorAborted) {

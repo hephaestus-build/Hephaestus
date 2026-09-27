@@ -44,6 +44,13 @@ public class GitlabSubjectKeyDeriver implements SubjectKeyDeriver {
     static final String UNKNOWN_TOKEN = "unknown";
     static final String PLACEHOLDER = "?";
 
+    /**
+     * Namespace token of a connection-scoped subject, {@code gitlab.?connection.<connectionId>.<event>}. Only the
+     * connection endpoint publishes it, after verifying that connection's credential; a namespace taken from a payload
+     * on the shared endpoint that spells it is replaced by {@link #PLACEHOLDER}.
+     */
+    public static final String CONNECTION_TOKEN = "?connection";
+
     private static final String HEADER_EVENT_UUID = "x-gitlab-event-uuid";
     private static final String HEADER_IDEMPOTENCY_KEY = "idempotency-key";
 
@@ -54,14 +61,7 @@ public class GitlabSubjectKeyDeriver implements SubjectKeyDeriver {
 
     @Override
     public String deriveSubject(JsonNode payload, Map<String, String> headers) {
-        String rawEvent = textOrEmpty(payload, "object_kind");
-        if (rawEvent.isEmpty()) {
-            rawEvent = textOrEmpty(payload, "event_name");
-        }
-        String event = normalizeEvent(rawEvent);
-        if (event.isEmpty()) {
-            event = UNKNOWN_TOKEN;
-        }
+        String event = eventToken(payload);
 
         // Group-tier lifecycle events (project/subgroup/member) are ORG-scoped. They carry no routable
         // project — subgroup/member payloads have no project.path_with_namespace at all, and a project
@@ -71,7 +71,7 @@ public class GitlabSubjectKeyDeriver implements SubjectKeyDeriver {
         // this they derive `gitlab.?.?.<event>` (matches no filter) or a repo-scoped subject that no
         // monitored-repo filter catches on create/rename — i.e. a silent drop.
         if (isGroupTierEvent(event)) {
-            return SUBJECT_PREFIX + rootGroupToken(payload) + "." + PLACEHOLDER + "." + event;
+            return SUBJECT_PREFIX + unreserved(rootGroupToken(payload)) + "." + PLACEHOLDER + "." + event;
         }
 
         String pathWithNs = firstNonBlank(
@@ -90,7 +90,25 @@ public class GitlabSubjectKeyDeriver implements SubjectKeyDeriver {
             }
         }
 
-        return SUBJECT_PREFIX + namespace + "." + project + "." + event;
+        return SUBJECT_PREFIX + unreserved(namespace) + "." + project + "." + event;
+    }
+
+    /** The subject a delivery authenticated for {@code connectionId} is published on, whatever its payload path. */
+    public String deriveConnectionSubject(long connectionId, JsonNode payload) {
+        return SUBJECT_PREFIX + CONNECTION_TOKEN + "." + connectionId + "." + eventToken(payload);
+    }
+
+    private static String eventToken(JsonNode payload) {
+        String rawEvent = textOrEmpty(payload, "object_kind");
+        if (rawEvent.isEmpty()) {
+            rawEvent = textOrEmpty(payload, "event_name");
+        }
+        String event = normalizeEvent(rawEvent);
+        return event.isEmpty() ? UNKNOWN_TOKEN : event;
+    }
+
+    private static String unreserved(String namespace) {
+        return CONNECTION_TOKEN.equals(namespace) ? PLACEHOLDER : namespace;
     }
 
     @Override
@@ -111,6 +129,20 @@ public class GitlabSubjectKeyDeriver implements SubjectKeyDeriver {
         byte[] digest = sha256(body, event.getBytes(StandardCharsets.UTF_8));
         String hex = HexFormat.of().formatHex(digest);
         return "gitlab-" + hex.substring(0, Math.min(32, hex.length()));
+    }
+
+    /**
+     * The dedup key of a delivery authenticated for {@code connectionId}. Every hook of one connection — an old and a new
+     * key generation during a rotation, say — sends the same event with the same event UUID and body but its own
+     * delivery id, so the key ignores the delivery id and the generation; two connections each keep their copy, and
+     * recursive events that share an event UUID keep theirs through the body.
+     */
+    public String deriveConnectionDedupKey(long connectionId, byte[] body, Map<String, String> headers) {
+        Map<String, String> lower = lowercaseKeys(headers);
+        String marker =
+                lower.getOrDefault(HEADER_EVENT_UUID, "").trim() + "|" + lower.getOrDefault("x-gitlab-event", "");
+        String hex = HexFormat.of().formatHex(sha256(body, marker.getBytes(StandardCharsets.UTF_8)));
+        return "gitlab-c" + connectionId + "-" + hex.substring(0, 32);
     }
 
     private static byte[] sha256(byte[] body, byte[] suffix) {

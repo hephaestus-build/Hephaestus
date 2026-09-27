@@ -35,6 +35,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -78,6 +79,10 @@ public class GitLabTeamSyncService {
     private static final String GET_GROUP_DESCENDANTS_DOCUMENT = "GetGroupDescendants";
     private static final String GET_GROUP_DOCUMENT = "GetGroup";
     private static final String GET_GROUP_MEMBERS_DOCUMENT = "GetGroupMembers";
+    private static final String GET_GROUPS_BY_IDS_DOCUMENT = "GetGroupsByIds";
+    private static final String GET_GROUP_MEMBER_DOCUMENT = "GetGroupMember";
+    private static final String GROUP_GLOBAL_ID_PREFIX = "gid://gitlab/Group/";
+    private static final String USER_GLOBAL_ID_PREFIX = "gid://gitlab/User/";
     private static final int TEAM_PAGE_SIZE = 20;
     private static final int MEMBER_PAGE_SIZE = 100;
 
@@ -656,7 +661,7 @@ public class GitLabTeamSyncService {
      * <p>
      * Returns null for access levels that should be skipped.
      */
-    static TeamMembership.@Nullable Role mapAccessLevel(@Nullable String accessLevel) {
+    public static TeamMembership.@Nullable Role mapAccessLevel(@Nullable String accessLevel) {
         if (accessLevel == null) {
             return TeamMembership.Role.MEMBER;
         }
@@ -821,5 +826,72 @@ public class GitLabTeamSyncService {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+    /**
+     * The group GitLab reports under {@code groupNativeId} to the workspace's own credential, whatever path it has now;
+     * empty when GitLab reports none. Only reads; a response GitLab could not give throws, so a caller can retry.
+     */
+    public Optional<GitLabDescendantGroupResponse> fetchGroup(Long scopeId, long groupNativeId) {
+        String globalId = GROUP_GLOBAL_ID_PREFIX + groupNativeId;
+        ClientGraphQlResponse response =
+                query(scopeId, GET_GROUPS_BY_IDS_DOCUMENT, Map.of("ids", List.of(globalId)), "group " + groupNativeId);
+        if (response.field("groups.nodes").getValue() == null) {
+            throw new GitLabSyncException("GitLab did not list group " + groupNativeId);
+        }
+        List<GitLabDescendantGroupResponse> groups =
+                response.field("groups.nodes").toEntityList(GitLabDescendantGroupResponse.class);
+        return groups.stream().filter(group -> globalId.equals(group.id())).findFirst();
+    }
+
+    /**
+     * What GitLab reports about {@code userNativeId}'s membership of the group at {@code groupFullPath}, which must still
+     * be the group {@code groupNativeId}: one entry per relation GitLab counts, none when the user is not a member. Empty
+     * when GitLab reports no such group, which proves nothing about the membership. Only reads; a response GitLab could
+     * not give throws, so a caller can retry.
+     */
+    public Optional<List<GitLabGroupMemberResponse>> fetchMembership(
+            Long scopeId, String groupFullPath, long groupNativeId, long userNativeId, boolean includeInherited) {
+        String userGlobalId = USER_GLOBAL_ID_PREFIX + userNativeId;
+        ClientGraphQlResponse response = query(
+                scopeId,
+                GET_GROUP_MEMBER_DOCUMENT,
+                Map.of(
+                        "fullPath",
+                        groupFullPath,
+                        "userIds",
+                        List.of(userGlobalId),
+                        "relations",
+                        includeInherited ? List.of("DIRECT", "INHERITED") : List.of("DIRECT")),
+                "membership in group " + groupNativeId);
+        String groupId = response.field("group.id").getValue();
+        if (!(GROUP_GLOBAL_ID_PREFIX + groupNativeId).equals(groupId)) {
+            return Optional.empty();
+        }
+        if (response.field("group.groupMembers.nodes").getValue() == null) {
+            throw new GitLabSyncException("GitLab did not list members for " + groupFullPath);
+        }
+        List<GitLabGroupMemberResponse> members =
+                response.field("group.groupMembers.nodes").toEntityList(GitLabGroupMemberResponse.class);
+        return Optional.of(members.stream()
+                .filter(member -> member.user() instanceof GitLabGroupMemberResponse.GitLabMemberUser user
+                        && userGlobalId.equals(user.id()))
+                .toList());
+    }
+
+    private ClientGraphQlResponse query(Long scopeId, String document, Map<String, Object> variables, String context) {
+        graphQlClientProvider.acquirePermission();
+        var request = graphQlClientProvider.forScope(scopeId).documentName(document);
+        variables.forEach(request::variable);
+        ClientGraphQlResponse response = request.execute().block(gitLabProperties.graphqlTimeout());
+        // A partial answer is no answer: an errored field would otherwise read as an absent group or member.
+        if (responseHandler.handle(response, context, log).action()
+                        != GitLabGraphQlResponseHandler.HandleResult.Action.CONTINUE
+                || !Objects.requireNonNull(response).getErrors().isEmpty()) {
+            GitLabSyncException failure = new GitLabSyncException("GitLab did not answer for " + context);
+            graphQlClientProvider.recordFailure(failure);
+            throw failure;
+        }
+        graphQlClientProvider.recordSuccess();
+        return Objects.requireNonNull(response);
     }
 }

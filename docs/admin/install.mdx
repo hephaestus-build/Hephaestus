@@ -95,7 +95,7 @@ cd docker/self-host
 `setup.sh` creates or updates `.env` with mode `0600` and generates the database password, both
 encryption keys — `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` and
 `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` — the OAuth state-cookie key, the webhook secret,
-and the message-broker credentials. It does not replace non-empty values and never prints a secret.
+the GitLab routing secret, and the message-broker credentials. It does not replace non-empty values and never prints a secret.
 Changing either encryption key on an existing installation makes everything encrypted under the old
 one unreadable.
 
@@ -126,6 +126,9 @@ credential key only with the [credential-key rotation procedure](./credential-ke
 The other generated values also have lifecycle consequences: changing the database password does not
 update an initialized PostgreSQL volume, rotating the state-cookie key invalidates OAuth flows already
 in progress, and rotating the webhook secret requires the same change at every configured provider.
+The GitLab routing secret is never entered anywhere; rotate it as the
+[production setup](./production-setup#gitlab-rollout-bundle) describes, or GitLab group hooks stop
+delivering until they are registered again.
 Back up `.env` with the database as described in [Backup & Restore](./backup-restore).
 
 ### Serving more than one hostname

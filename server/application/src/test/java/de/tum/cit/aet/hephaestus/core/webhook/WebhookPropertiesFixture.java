@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.webhook;
 
 import java.time.Duration;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.springframework.util.unit.DataSize;
 
 /** Shipped-shaped {@link WebhookProperties} for tests that care about one field of it. */
@@ -34,13 +35,27 @@ public final class WebhookPropertiesFixture {
     }
 
     public static WebhookProperties with(WebhookProperties.Stream stream) {
+        return configured(null, null, stream, new WebhookProperties.Routing(null, null));
+    }
+
+    public static WebhookProperties withRouting(WebhookProperties.Routing routing) {
+        return configured(null, null, stream(), routing);
+    }
+
+    /** Receiver and registration settings as a deployment that registers GitLab hooks has them. */
+    public static WebhookProperties configured(
+            @Nullable String externalUrl,
+            @Nullable String secret,
+            WebhookProperties.Stream stream,
+            WebhookProperties.Routing routing) {
         return new WebhookProperties(
-                null,
-                null,
+                externalUrl,
+                secret,
                 new WebhookProperties.TokenRotation(7, 90),
                 new WebhookProperties.Publish(Duration.ofSeconds(9), 5, Duration.ofMillis(200)),
                 stream,
                 new WebhookProperties.Shutdown(Duration.ofSeconds(15)),
-                new WebhookProperties.Http(26_214_400L));
+                new WebhookProperties.Http(26_214_400L),
+                routing);
     }
 }

@@ -39,6 +39,7 @@ const sandboxed: Stack = {
 				...REQUIRED_SWITCHES,
 				HEPHAESTUS_TRUSTED_PROXIES: "172.(1[6-9]|2[0-9]|3[01]).[0-9]{1,3}.[0-9]{1,3}",
 				WEBHOOK_SECRET: "0123456789012345678901234567890123456789",
+				WEBHOOK_ROUTING_SECRET: "9876543210987654321098765432109876543210",
 			},
 			deploy: { resources: { limits: { memory: "2147483648" } } },
 			security_opt: ["no-new-privileges:true"],

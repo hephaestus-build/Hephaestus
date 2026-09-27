@@ -73,6 +73,9 @@ const DELIBERATELY_OMITTED = new Set([
 	"HEPHAESTUS_LLM_FX_DAILY_URL",
 	// A preview is torn down long before any spend-ledger row reaches the retention window.
 	"HEPHAESTUS_LLM_USAGE_RETENTION",
+	// A preview runs with GitLab and the webhook receiver off, so it neither registers nor accepts GitLab hooks and
+	// has no hook signed with a previous routing key; the current key stays required by the readiness check.
+	"WEBHOOK_ROUTING_PREVIOUS_SECRET",
 	"SANDBOX_API_MAX_REQUEST_BYTES",
 	"SANDBOX_API_PORT",
 	"SANDBOX_API_REQUESTS_PER_MINUTE",
@@ -191,6 +194,7 @@ const RENDER_ENV: Record<string, string> = {
 	HEPHAESTUS_AUTH_STATE_COOKIE_KEY: "ci-not-a-real-state-cookie-key",
 	HEPHAESTUS_SECURITY_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef",
 	WEBHOOK_SECRET: "ci-not-a-real-webhook-secret-0123456789",
+	WEBHOOK_ROUTING_SECRET: "ci-not-a-real-routing-secret-0123456789",
 	HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef",
 	NATS_USERNAME: "ci-not-a-real-nats-user",
 	NATS_PASSWORD: "ci-not-a-real-nats-password",
@@ -209,7 +213,11 @@ const ALLOWED_CAPABILITIES: Record<string, readonly string[]> = {
 
 /** Values the server refuses to start without: it validates them before the context is built, so an
  * empty one here is a preview that restart-loops rather than a preview that misbehaves quietly. */
-const REQUIRED_NON_EMPTY = ["HEPHAESTUS_TRUSTED_PROXIES", "WEBHOOK_SECRET"];
+const REQUIRED_NON_EMPTY = [
+	"HEPHAESTUS_TRUSTED_PROXIES",
+	"WEBHOOK_SECRET",
+	"WEBHOOK_ROUTING_SECRET",
+];
 
 /**
  * Switches that keep a preview from reaching anything outside itself. A rename or a typo would not

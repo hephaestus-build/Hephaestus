@@ -1,0 +1,16 @@
+query GetGroupsByIds($ids: [ID!]!) {
+    groups(ids: $ids, first: 1) {
+        nodes {
+            id
+            fullPath
+            name
+            description
+            webUrl
+            visibility
+            parent {
+                id
+                fullPath
+            }
+        }
+    }
+}

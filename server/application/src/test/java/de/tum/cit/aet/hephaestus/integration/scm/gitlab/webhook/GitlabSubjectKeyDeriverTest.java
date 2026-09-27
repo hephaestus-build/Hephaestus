@@ -35,6 +35,50 @@ class GitlabSubjectKeyDeriverTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldScopeConnectionSubjectToTheConnectionWhateverThePayloadPath() throws Exception {
+        JsonNode member = json("{\"event_name\":\"user_add_to_group\",\"group_path\":\"leaf\"}");
+        JsonNode issue = json("{\"object_kind\":\"issue\",\"project\":{\"path_with_namespace\":\"other/group/p\"}}");
+
+        assertThat(deriver.deriveConnectionSubject(7L, member)).isEqualTo("gitlab.?connection.7.member");
+        assertThat(deriver.deriveConnectionSubject(7L, issue)).isEqualTo("gitlab.?connection.7.issue");
+        assertThat(resolvedEventKey(deriver.deriveConnectionSubject(7L, issue))).isEqualTo("issue");
+    }
+
+    @Test
+    void shouldDedupOneEventThatTwoHooksOfAConnectionDeliverButKeepEachConnectionsCopy() {
+        byte[] body = "{\"object_kind\":\"issue\"}".getBytes(StandardCharsets.UTF_8);
+        Map<String, String> oldKeyHook = Map.of(
+                "X-Gitlab-Event-UUID", "event-1", "Idempotency-Key", "delivery-a", "X-Gitlab-Event", "Issue Hook");
+        Map<String, String> newKeyHook = Map.of(
+                "X-Gitlab-Event-UUID", "event-1", "Idempotency-Key", "delivery-b", "X-Gitlab-Event", "Issue Hook");
+
+        String first = deriver.deriveConnectionDedupKey(7L, body, oldKeyHook);
+
+        assertThat(deriver.deriveConnectionDedupKey(7L, body, newKeyHook)).isEqualTo(first);
+        assertThat(deriver.deriveConnectionDedupKey(8L, body, newKeyHook)).isNotEqualTo(first);
+        assertThat(deriver.deriveDedupKey(body, oldKeyHook)).isNotEqualTo(deriver.deriveDedupKey(body, newKeyHook));
+    }
+
+    @Test
+    void shouldKeepRecursiveEventsThatShareAnEventUuidApart() {
+        Map<String, String> headers = Map.of("X-Gitlab-Event-UUID", "event-1", "X-Gitlab-Event", "Note Hook");
+
+        assertThat(deriver.deriveConnectionDedupKey(
+                        7L, "{\"object_kind\":\"note\",\"id\":1}".getBytes(StandardCharsets.UTF_8), headers))
+                .isNotEqualTo(deriver.deriveConnectionDedupKey(
+                        7L, "{\"object_kind\":\"note\",\"id\":2}".getBytes(StandardCharsets.UTF_8), headers));
+    }
+
+    @Test
+    void shouldNotDeriveTheConnectionTokenFromAPayloadPath() throws Exception {
+        JsonNode project = json("{\"object_kind\":\"push\",\"project\":{\"path_with_namespace\":\"?connection/7\"}}");
+        JsonNode lifecycle = json("{\"event_name\":\"project_create\",\"path_with_namespace\":\"?connection/7\"}");
+
+        assertThat(deriver.deriveSubject(project, Map.of())).isEqualTo("gitlab.?.7.push");
+        assertThat(deriver.deriveSubject(lifecycle, Map.of())).isEqualTo("gitlab.?.?.project");
+    }
+
+    @Test
     void buildsMergeRequestSubjectFromProjectPath() throws Exception {
         JsonNode payload =
                 json("{\"object_kind\":\"merge_request\",\"project\":{\"path_with_namespace\":\"group/web\"}}");

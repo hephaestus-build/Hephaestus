@@ -103,6 +103,17 @@ public final class ConsumerSubjectMath {
     }
 
     /**
+     * Filter for every delivery a connection's own hook authenticated, published by the receiver as
+     * {@code <stream>.?connection.<connectionId>.<event>}. The token can never be derived from a payload path.
+     */
+    public static String connectionFilter(String streamName, long connectionId) {
+        if (streamName == null || streamName.isBlank()) {
+            throw new IllegalArgumentException("Stream name cannot be null or empty.");
+        }
+        return streamName + ".?connection." + connectionId + ".>";
+    }
+
+    /**
      * Wildcard subject filter that matches every installation-level event for the given
      * {@link IntegrationKind}. Only GitHub publishes installation events today; the kind
      * stays a parameter so the SPI signature remains vendor-neutral.

@@ -8,11 +8,15 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabDescendantGroupResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.dto.GitLabSubgroupEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
 import java.util.Objects;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -38,11 +42,15 @@ public class GitLabSubgroupMessageHandler extends AbstractIntegrationMessageHand
     private final GitLabTeamProcessor teamProcessor;
     private final IdentityProviderRepository gitProviderRepository;
     private final GitLabProperties gitLabProperties;
+    private final GitLabRouteAdmission routeAdmission;
+    private final TeamRepository teamRepository;
 
     GitLabSubgroupMessageHandler(
             GitLabTeamProcessor teamProcessor,
             IdentityProviderRepository gitProviderRepository,
             GitLabProperties gitLabProperties,
+            GitLabRouteAdmission routeAdmission,
+            TeamRepository teamRepository,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -54,6 +62,8 @@ public class GitLabSubgroupMessageHandler extends AbstractIntegrationMessageHand
         this.teamProcessor = teamProcessor;
         this.gitProviderRepository = gitProviderRepository;
         this.gitLabProperties = gitLabProperties;
+        this.routeAdmission = routeAdmission;
+        this.teamRepository = teamRepository;
     }
 
     @Override
@@ -75,6 +85,12 @@ public class GitLabSubgroupMessageHandler extends AbstractIntegrationMessageHand
             return;
         }
 
+        Optional<GitLabRouteAdmission.AdmittedRoute> route = GitLabRouteAdmission.current();
+        if (route.isPresent()) {
+            applyReportedGroup(route.get(), event.groupId(), provider);
+            return;
+        }
+
         if (event.isCreation()) {
             handleSubgroupCreate(event, provider);
         } else if (event.isDeletion()) {
@@ -82,6 +98,33 @@ public class GitLabSubgroupMessageHandler extends AbstractIntegrationMessageHand
         } else {
             log.debug("Unhandled subgroup event action: eventName={}", event.eventName());
         }
+    }
+
+    /**
+     * On a connection route the event only says that a subgroup changed: the team stored is the group GitLab reports
+     * under that id now, and only while it lies inside the connected group. A team row another workspace's group owns
+     * is left to that workspace. Nothing is deleted here: GitLab not reporting a group to one connection does not prove
+     * it is gone, so a deleted subgroup's team stays until the next full team sync, which removes teams GitLab no longer
+     * lists.
+     */
+    private void applyReportedGroup(GitLabRouteAdmission.AdmittedRoute route, long groupId, IdentityProvider provider) {
+        GitLabDescendantGroupResponse reported =
+                GitLabRouteAdmission.reportedGroup().orElse(null);
+        if (reported == null
+                || groupId == route.groupId()
+                || !route.contains(reported.fullPath())
+                || !routeAdmission.holdActive(route)) {
+            log.info("Skipped subgroup event: reason=notReportedInsideConnectedGroup, groupId={}", groupId);
+            return;
+        }
+        Team existing = teamRepository
+                .findByNativeIdAndProviderId(groupId, Objects.requireNonNull(provider.getId()))
+                .orElse(null);
+        if (existing != null && !route.groupPath().equalsIgnoreCase(existing.getOrganization())) {
+            log.info("Skipped subgroup event: reason=teamOfAnotherGroup, groupId={}", groupId);
+            return;
+        }
+        teamProcessor.process(reported, route.groupPath(), provider);
     }
 
     private void handleSubgroupCreate(GitLabSubgroupEventDTO event, IdentityProvider provider) {

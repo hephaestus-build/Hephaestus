@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace.adapter;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
@@ -79,6 +80,14 @@ public class WorkspaceNatsSubscriptionProvider implements NatsSubscriptionProvid
         String organizationLogin = workspace.getAccountLogin();
         if (organizationLogin != null && !organizationLogin.isBlank()) {
             subjects.add(ConsumerSubjectMath.organizationFilter(streamName, organizationLogin));
+        }
+        // Everything the connection's own hook delivers, including projects not monitored yet; admission decides.
+        if (scmKind.get() == IntegrationKind.GITLAB) {
+            connectionService
+                    .findActive(workspace.getId(), IntegrationKind.GITLAB)
+                    .map(Connection::getId)
+                    .ifPresent(connectionId ->
+                            subjects.add(ConsumerSubjectMath.connectionFilter(streamName, connectionId)));
         }
         if (!subjects.isEmpty()) {
             out.add(new StreamSubscription(streamName, subjects));

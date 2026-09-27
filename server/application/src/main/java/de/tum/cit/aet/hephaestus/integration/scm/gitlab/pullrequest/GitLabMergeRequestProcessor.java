@@ -271,7 +271,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 attrs.milestoneId(),
                 Objects.requireNonNull(Objects.requireNonNull(context.repository())
                         .getProvider()
-                        .getId()));
+                        .getId()),
+                Objects.requireNonNull(context.repository()));
 
         String headRefOid = attrs.lastCommit() != null ? attrs.lastCommit().id() : null;
 
@@ -789,12 +790,13 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     @Nullable
-    private Long resolveWebhookMilestoneId(@Nullable Long gitlabMilestoneId, Long providerId) {
+    private Long resolveWebhookMilestoneId(@Nullable Long gitlabMilestoneId, Long providerId, Repository repository) {
         if (gitlabMilestoneId == null) {
             return null;
         }
         return milestoneRepository
                 .findByNativeIdAndProviderId(gitlabMilestoneId, providerId)
+                .filter(milestone -> milestone.getRepository().getId().equals(repository.getId()))
                 .map(Milestone::getId)
                 .orElse(null);
     }

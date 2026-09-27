@@ -170,6 +170,9 @@ public class GitLabDiffNoteWebhookProcessor extends BaseGitLabProcessor {
         var webhookThreadData = new GitLabPullRequestReviewThreadProcessor.WebhookThreadData(
                 threadNativeId, threadPath, threadLine, createdAt, updatedAt);
         PullRequestReviewThread thread = threadProcessor.findOrCreateWebhookThread(webhookThreadData, pr, provider);
+        if (thread == null) {
+            return null;
+        }
 
         // Resolve author
         User author = findOrCreateUser(event.user(), Objects.requireNonNull(context.providerId()));
