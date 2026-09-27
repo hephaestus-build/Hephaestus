@@ -3,14 +3,17 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionLifecycleEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -21,6 +24,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -39,7 +44,7 @@ public class ConnectionService {
     private final ApplicationEventPublisher eventPublisher;
     private final SyncJobService syncJobService;
 
-    private final TransactionTemplate revokeTransactionTemplate;
+    private final TransactionTemplate providerTeardownTemplate;
     private final CredentialReader credentialReader;
 
     public ConnectionService(
@@ -56,8 +61,8 @@ public class ConnectionService {
         this.credentialConverter = credentialConverter;
         this.eventPublisher = eventPublisher;
         this.syncJobService = syncJobService;
-        this.revokeTransactionTemplate = new TransactionTemplate(transactionManager);
-        this.revokeTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.providerTeardownTemplate = new TransactionTemplate(transactionManager);
+        this.providerTeardownTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_NOT_SUPPORTED);
     }
 
     @Transactional(readOnly = true)
@@ -433,58 +438,55 @@ public class ConnectionService {
      * ({@code noRollbackFor}), so this is a "retry in a moment", not a dead end: the runner aborts and
      * the admin's next click succeeds.
      *
-     * <p>{@code revoke} may kill vendor access or erase provider data, so it runs only after the fence
-     * and the state-machine check have passed, while the row lock is still held.
-     *
-     * <p>{@code revoke} is best effort: it runs in its own transaction and any {@code RuntimeException}
-     * it raises is logged and absorbed here, so the local {@code UNINSTALLED} transition still commits
-     * and the admin can always clear a stale row. Callers must NOT re-implement the swallow inside the
-     * callback — doing so converts the failure into an {@code UnexpectedRollbackException} at the nested
-     * commit instead of suppressing it (see {@link #runRevokeIsolated}).
-     *
-     * <p>The connection's lifecycle row lock is held for the whole disconnect, vendor round-trips
-     * included: that fence is what makes the sync-job check atomic with the state write. The vendor
-     * calls are individually kept out of a transaction ({@code Propagation.NOT_SUPPORTED}) so they do
-     * not also pin a DB transaction.
+     * <p>Once the fence and the state-machine check have passed, and while the row lock is still held,
+     * the strategy erases the integration's local data in this transaction. An erase failure propagates
+     * and rolls everything back, leaving the connection ACTIVE with its credentials so the admin can
+     * retry. Provider teardown is prepared from the stored credentials before they are cleared, but runs
+     * only after the transition commits, so a rolled-back disconnect never touches the provider. It is
+     * best effort: an unreachable provider must not keep an erased workspace connected.
      *
      * @throws ConnectionBusyException 409 — a sync job still holds the connection; its cancellation has
      *                                 been requested, so retrying shortly will succeed
      */
     @Transactional(noRollbackFor = ConnectionBusyException.class)
-    public Connection disconnect(Connection connection, TransitionRequest req, Runnable revoke) {
+    public Connection disconnect(Connection connection, TransitionRequest req, ConnectionStrategy strategy) {
         if (req.next() != IntegrationState.UNINSTALLED) {
             throw new IllegalArgumentException("Disconnect must transition to UNINSTALLED");
         }
         return applyTransition(
-                connection, req, revoke, /* fenceOnActiveSyncJob */ true, /* propagateRevokeFailure */ false);
+                connection,
+                req,
+                locked -> eraseAndTearDownProviderAfterCommit(locked, strategy),
+                /* fenceOnActiveSyncJob */ true);
     }
 
-    /** Disconnects for mandatory erasure without allowing a sync job to delay credential removal. */
+    /**
+     * Disconnects for mandatory erasure without allowing a sync job to delay credential removal. {@code
+     * revoke} runs with this transaction suspended, so its provider calls hold no transaction open; its
+     * failure still propagates and rolls the transition back.
+     */
     @Transactional
     public Connection disconnectForErasure(Connection connection, TransitionRequest req, Runnable revoke) {
         if (req.next() != IntegrationState.UNINSTALLED) {
             throw new IllegalArgumentException("Disconnect must transition to UNINSTALLED");
         }
         return applyTransition(
-                connection, req, revoke, /* fenceOnActiveSyncJob */ false, /* propagateRevokeFailure */ true);
+                connection,
+                req,
+                locked -> providerTeardownTemplate.executeWithoutResult(status -> revoke.run()),
+                /* fenceOnActiveSyncJob */ false);
     }
 
     private Connection applyTransition(
-            Connection connection, TransitionRequest req, @Nullable Runnable beforeLocalTransition) {
-        return applyTransition(
-                connection,
-                req,
-                beforeLocalTransition,
-                /* fenceOnActiveSyncJob */ false,
-                /* propagateRevokeFailure */ false);
+            Connection connection, TransitionRequest req, @Nullable Consumer<Connection> beforeLocalTransition) {
+        return applyTransition(connection, req, beforeLocalTransition, /* fenceOnActiveSyncJob */ false);
     }
 
     private Connection applyTransition(
             Connection requested,
             TransitionRequest req,
-            @Nullable Runnable beforeLocalTransition,
-            boolean fenceOnActiveSyncJob,
-            boolean propagateRevokeFailure) {
+            @Nullable Consumer<Connection> beforeLocalTransition,
+            boolean fenceOnActiveSyncJob) {
         // For a persisted argument the row transitioned below is the one re-read under the lifecycle
         // lock, never the caller's possibly-stale instance.
         Connection connection = requested;
@@ -512,11 +514,7 @@ public class ConnectionService {
                     "Illegal transition for connection " + connection.getId() + ": " + current + " → " + req.next());
         }
         if (beforeLocalTransition != null) {
-            if (propagateRevokeFailure) {
-                beforeLocalTransition.run();
-            } else {
-                runRevokeIsolated(connection, beforeLocalTransition);
-            }
+            beforeLocalTransition.accept(connection);
         }
         ConnectionAudit audit = new ConnectionAudit(
                 connection,
@@ -556,19 +554,44 @@ public class ConnectionService {
     }
 
     /**
-     * Isolates vendor revocation from the local lifecycle transition. A vendor failure rolls back its
-     * database work while the local transition proceeds, so the operation is intentionally non-atomic.
+     * The teardown is prepared with this transaction suspended, so a failed credential read cannot mark
+     * the disconnect rollback-only; those reads see the committed row, credentials included, since the
+     * lifecycle lock blocks writers, not readers.
      */
-    private void runRevokeIsolated(Connection connection, Runnable revoke) {
+    private void eraseAndTearDownProviderAfterCommit(Connection connection, ConnectionStrategy strategy) {
+        IntegrationRef ref = new IntegrationRef(
+                connection.getKind(),
+                connection.getWorkspace().getId(),
+                connection.getInstanceKey(),
+                connection.getId());
+        strategy.eraseLocalData(ref);
+        Optional<Runnable> teardown;
         try {
-            revokeTransactionTemplate.executeWithoutResult(status -> revoke.run());
+            teardown = Objects.requireNonNull(
+                    providerTeardownTemplate.execute(status -> strategy.prepareProviderTeardown(ref)));
         } catch (RuntimeException e) {
             log.warn(
-                    "Vendor revoke/erase failed for connection={} kind={}: {} — proceeding with the local transition",
-                    connection.getId(),
-                    connection.getKind(),
+                    "Provider teardown could not be prepared on disconnect of connection={} kind={}: {} — disconnecting without it",
+                    ref.connectionId(),
+                    ref.kind(),
                     e.toString());
+            return;
         }
+        teardown.ifPresent(call ->
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        try {
+                            call.run();
+                        } catch (RuntimeException e) {
+                            log.warn(
+                                    "Provider teardown failed after disconnect of connection={} kind={}: {} — local data already erased",
+                                    ref.connectionId(),
+                                    ref.kind(),
+                                    e.toString());
+                        }
+                    }
+                }));
     }
 
     /**

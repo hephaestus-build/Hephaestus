@@ -109,7 +109,7 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
     @DisplayName("feedback prepared for somebody else is not on this developer's page")
     void shouldNotReturnFeedbackWhenItIsPreparedForSomebodyElse() {
         Feedback theirs = persistInAppCard(
-                job, teammate, 7000, FeedbackDeliveryState.PREPARED, "Their habit", "Not about the caller.");
+                job, teammate, 7000, FeedbackDeliveryState.PREPARED, "Their way of working", "Not about the caller.");
         bind(theirs, persistObservation(practice, job, teammate, 202L));
 
         readInAppPage(workspace).jsonPath("$.length()").isEqualTo(0);

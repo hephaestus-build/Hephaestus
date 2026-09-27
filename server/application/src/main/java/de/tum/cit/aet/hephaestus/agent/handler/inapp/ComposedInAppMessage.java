@@ -9,13 +9,13 @@ import java.util.Objects;
  * <p>It names a practice, not a set of observations. The model reads a bounded, sanitised window of the
  * recipient's record and cannot know observation ids; the server resolves the practice to the
  * recipient's own measurements, so what a message is evidenced by is never the model's to assert. Nor
- * does it name what it replaces: the card still open about the same habit is the server's to find and
+ * does it name what it replaces: the card still open about the same practice is the server's to find and
  * retire, whatever the composer meant.
  *
  * @param practiceSlug the practice whose pattern this message is about
  * @param title        a short headline naming the pattern, not the person
  * @param body         the process-level message; the developer reads this verbatim
- * @param nextStep     one habit to try next time — the feed-forward half, which is never optional
+ * @param nextStep     one way of working to try next time — the feed-forward half, which is never optional
  */
 public record ComposedInAppMessage(String practiceSlug, String title, String body, String nextStep) {
     /** Guards on the ledger's own column widths, so a message can never be truncated after it is admitted. */

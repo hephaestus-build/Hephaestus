@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
  *
  * &lt;the process-level message&gt;
  *
- * **Try next:** &lt;the habit to try&gt;
+ * **Try next:** &lt;the way of working to try&gt;
  * </pre>
  *
  * <p><b>Why the headline rides in the body.</b> {@code feedback} has a {@code body} column and no title
@@ -58,7 +58,7 @@ public final class InAppFeedbackBody {
     }
 
     /**
-     * The habit to try next, or {@code null} for a body this class did not write — the same honesty as
+     * The way of working to try next, or {@code null} for a body this class did not write — the same honesty as
      * {@link #headlineOf}. Read off the last line, where {@link #render} puts it.
      */
     public static @Nullable String nextStepOf(@Nullable String body) {

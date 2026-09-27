@@ -20,7 +20,7 @@ const SENTENCE = [
 	work(pullRequest(22)),
 	text(" you kept to "),
 	practice(PRACTICE_SLUG, PRACTICE_NAME),
-	text(", the habit "),
+	text(", the way of working "),
 	group(packagingGroup.slug, packagingGroup.name),
 	text(" is built on, and said so in "),
 	work(conversation("#releases")),

@@ -26,7 +26,7 @@ import org.jspecify.annotations.Nullable;
  * One occasion may name several signals, which is how a practice judged all the way along a piece of
  * work is written; a practice that must read <em>different</em> evidence at a different moment is a
  * second practice, which is what the shipped catalogue does and what keeps one row, one autonomy setting
- * and one feedback history describing one habit.
+ * and one feedback history describing one practice.
  *
  * <p>The evidence therefore travels with the occasion rather than being named once and shared across
  * practices: shared evidence made adding a source to one practice a mutation invisible in that

@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
@@ -215,7 +216,11 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     private List<Observation> visibleObservations(
             long workspaceId, Long subjectUserId, Instant since, @Nullable UUID excludedJobId) {
         List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                subjectUserId, workspaceId, since, PageRequest.of(0, MAX_OBSERVATIONS));
+                subjectUserId,
+                workspaceId,
+                since,
+                List.of(AssessmentStatus.ASSESSED.name()),
+                PageRequest.of(0, MAX_OBSERVATIONS));
         Set<UUID> visible =
                 visibilityPolicy.permitsAll(workspaceId, recent, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
         Map<String, Integer> perPractice = new HashMap<>();

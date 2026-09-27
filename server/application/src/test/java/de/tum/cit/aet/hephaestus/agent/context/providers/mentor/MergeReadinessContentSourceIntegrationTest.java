@@ -502,7 +502,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
         ObjectNode payload = source.buildPayload(workspace.getId(), student.getId());
         String json = objectMapper.writeValueAsString(payload);
 
-        assertThat(json.length()).isLessThanOrEqualTo(MergeReadinessContentSource.MAX_JSON_CHARS);
+        assertThat(json.length()).isLessThanOrEqualTo(MentorContextKeys.FETCH_CONTEXT_MAX_CHARS);
         assertThat(objectMapper.readTree(json).path("sizeLimited").asBoolean()).isTrue();
         assertThat(payload.path("pullRequests").size()
                         + payload.path("notLoaded").size())

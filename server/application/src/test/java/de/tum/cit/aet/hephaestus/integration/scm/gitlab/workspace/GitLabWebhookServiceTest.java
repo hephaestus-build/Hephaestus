@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
@@ -565,64 +566,6 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     }
 
     @Nested
-    class DeregisterActiveWebhook {
-
-        @Test
-        void deletesUpstreamButDoesNotRewriteConfig() {
-            bindGitLabConfig(
-                    1L,
-                    new ConnectionConfig.GitLabConfig(
-                            "https://gitlab.com",
-                            42L,
-                            99L,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of()));
-            when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-
-            webhookService.deregisterActiveWebhook(1L);
-
-            verify(webhookClient).deregisterGroupWebhook(1L, 42L, 99L);
-            // Config is NOT cleared here — the disconnect txn holds the same row and saves it moments
-            // later; a rewrite would optimistic-lock-fail that save.
-            assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(99L);
-            assertThat(currentConfig(1L).gitlabGroupId()).isEqualTo(42L);
-            verify(connectionService, never()).updateConfig(anyLong(), any(), any());
-        }
-
-        @Test
-        void skipsWhenNoWebhookStored() {
-            // Default config from setUp has null webhook/group ids.
-            webhookService.deregisterActiveWebhook(1L);
-
-            verify(webhookClientProvider, never()).getIfAvailable();
-        }
-
-        @Test
-        void bestEffortSwallowsClientError() {
-            bindGitLabConfig(
-                    1L,
-                    new ConnectionConfig.GitLabConfig(
-                            "https://gitlab.com",
-                            42L,
-                            99L,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of()));
-            when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-            Mockito.doThrow(new IllegalStateException("scope not active"))
-                    .when(webhookClient)
-                    .deregisterGroupWebhook(1L, 42L, 99L);
-
-            assertThatCode(() -> webhookService.deregisterActiveWebhook(1L)).doesNotThrowAnyException();
-
-            // The swallow must be the ONLY effect: the vendor call was really attempted, and the failure
-            // left the stored ids intact for the disconnect txn that owns the row.
-            verify(webhookClient).deregisterGroupWebhook(1L, 42L, 99L);
-            assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(99L);
-            verify(connectionService, never()).updateConfig(anyLong(), any(), any());
-        }
-    }
-
-    @Nested
     class DeregisterWebhookForConnection {
 
         @Test
@@ -665,6 +608,29 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
             assertThatCode(() -> webhookService.deregisterWebhookForConnection(1L, 7L))
                     .doesNotThrowAnyException();
+
+            verify(webhookClient).deregisterGroupWebhookWithCredentials("https://gitlab.com", "glpat-token", 42L, 99L);
+        }
+
+        @Test
+        void preparedDeregistrationCallsGitLabOnlyWhenRun() {
+            var connection = Mockito.mock(de.tum.cit.aet.hephaestus.integration.core.connection.Connection.class);
+            when(connection.getConfig())
+                    .thenReturn(new ConnectionConfig.GitLabConfig(
+                            "https://gitlab.com",
+                            42L,
+                            99L,
+                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
+                            Set.of()));
+            when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
+            when(connectionService.findBearerToken(1L, 7L))
+                    .thenReturn(Optional.of(new BearerToken("glpat-token", null)));
+            when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
+
+            Runnable deletion =
+                    webhookService.prepareWebhookDeregistration(1L, 7L).orElseThrow();
+            verifyNoInteractions(webhookClient);
+            deletion.run();
 
             verify(webhookClient).deregisterGroupWebhookWithCredentials("https://gitlab.com", "glpat-token", 42L, 99L);
         }

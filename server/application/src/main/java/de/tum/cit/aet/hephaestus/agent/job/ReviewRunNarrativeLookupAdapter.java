@@ -50,7 +50,7 @@ class ReviewRunNarrativeLookupAdapter implements ReviewRunNarrativeLookup {
     /**
      * The next step of every piece of in-context feedback this run composed, addressed to each observation it
      * was based on. Only the lane that speaks about the piece of work under review: in-app feedback is a
-     * message about a habit across several pieces of work, so attaching its step to one observation would
+     * message about a way of working across several pieces of work, so attaching its step to one observation would
      * answer "what should I do about this" with advice that is explicitly not about it.
      */
     private Map<UUID, String> nextStepsByObservation(UUID jobId, @Nullable JsonNode output) {

@@ -541,20 +541,29 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("workspaceId") Long workspaceId);
 
     /**
-     * A developer's recent observations, newest first, each piece of work answering with its latest run.
+     * The run that speaks for the claim of the observation aliased {@code f}: the newest run that recorded this
+     * practice about this developer on this work within one origin class, and still stands. It is the rule
+     * {@link LatestRun#perClaim} applies in memory; native because it needs {@code ORDER BY ... LIMIT 1} in a
+     * correlated subquery.
+     */
+    String LATEST_RUN_OF_CLAIM = """
+                  (SELECT f2.agent_job_id FROM observation f2
+                   WHERE f2.practice_id = f.practice_id
+                     AND f2.about_user_id = f.about_user_id
+                     AND f2.artifact_kind = f.artifact_kind AND f2.artifact_id = f.artifact_id
+                     AND (f2.origin = 'BACKFILL') = (f.origin = 'BACKFILL')
+                     AND f2.superseded_at IS NULL
+                   ORDER BY f2.observed_at DESC, f2.agent_job_id DESC LIMIT 1)
+        """;
+
+    /**
+     * A developer's recent observations with one of {@code assessmentStatuses}, newest first, each claim answering
+     * with its latest run ({@link #LATEST_RUN_OF_CLAIM}): a re-pushed pull request's observations do not repeat
+     * across the list, the grain of {@link #findSummaryByDeveloperAndWorkspace}. A claim whose latest run has another
+     * status is not answered by an earlier run that had this one. The practice is loaded lazily per observation.
      *
-     * <p>Re-review deduped (same grain as {@link #findSummaryByDeveloperAndWorkspace}): a re-pushed pull
-     * request's observations do not repeat across the list. "Latest run" means the latest run that said
-     * something about THIS claim and still stands — the subquery correlates on practice, subject, artifact and
-     * origin class together and skips superseded rows, the rule {@link LatestRun#perClaim} applies to
-     * {@link #findByDeveloperAndWorkspaceBetween}. Native because the latest-run selection needs
-     * {@code ORDER BY ... LIMIT 1} in a correlated subquery; the practice is loaded lazily per observation
-     * rather than JOIN-fetched.
-     *
-     * <p>Verdicts only ({@code PRESENT} and {@code ABSENT}): a {@code NOT_APPLICABLE} run is nothing a reader can
-     * quote and would spend the page budget burying the rows that can be, and an {@code UNDETERMINED} one would
-     * invite the mentor to invent a direction the measurement declined to take. Both totals still reach the
-     * mentor through the presence-count summary.
+     * <p>Callers ask for verdicts ({@code ASSESSED}) and for abstentions separately: a {@code NOT_APPLICABLE} run
+     * is nothing a reader can quote, and in one page it would bury the rows that can be.
      *
      * <p>Backfilled observations are included: a campaign's {@code BAD} observation on a developer's own work
      * is exactly what "what should I work on" is asking for. {@code PracticeStandingObservationDTO.origin()}
@@ -568,19 +577,33 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             """ + HIDDEN_REPOSITORY_GUARD + """
               AND f.superseded_at IS NULL
               AND f.observed_at >= :since
-              AND f.presence IN ('PRESENT', 'ABSENT')
-              AND f.agent_job_id = (
-                  SELECT f2.agent_job_id FROM observation f2
-                  WHERE f2.practice_id = f.practice_id
-                    AND f2.about_user_id = f.about_user_id
-                    AND f2.artifact_kind = f.artifact_kind AND f2.artifact_id = f.artifact_id
-                    AND (f2.origin = 'BACKFILL') = (f.origin = 'BACKFILL')
-                    AND f2.superseded_at IS NULL
-                  ORDER BY f2.observed_at DESC, f2.agent_job_id DESC LIMIT 1
-              )
+              AND f.assessment_status IN (:assessmentStatuses)
+              AND f.agent_job_id =""" + LATEST_RUN_OF_CLAIM + """
             ORDER BY f.observed_at DESC
             """, nativeQuery = true)
     List<Observation> findRecentByDeveloperAndWorkspace(
+            @Param("aboutUserId") Long aboutUserId,
+            @Param("workspaceId") Long workspaceId,
+            @Param("since") Instant since,
+            @Param("assessmentStatuses") Collection<String> assessmentStatuses,
+            Pageable pageable);
+
+    /**
+     * A developer's recent observations from runs that no longer speak for their claim, newest first: what an
+     * earlier review recorded before a later one of the same work recorded that practice again. Neither is
+     * superseded; the earlier result stays true of the work as it was. Every status.
+     */
+    @Query(value = """
+                    SELECT f.* FROM observation f
+                    WHERE f.about_user_id = :aboutUserId
+                      AND f.workspace_id = :workspaceId
+            """ + HIDDEN_REPOSITORY_GUARD + """
+              AND f.superseded_at IS NULL
+              AND f.observed_at >= :since
+              AND f.agent_job_id <>""" + LATEST_RUN_OF_CLAIM + """
+            ORDER BY f.observed_at DESC, f.agent_job_id DESC, f.id DESC
+            """, nativeQuery = true)
+    List<Observation> findEarlierRunsByDeveloperAndWorkspace(
             @Param("aboutUserId") Long aboutUserId,
             @Param("workspaceId") Long workspaceId,
             @Param("since") Instant since,

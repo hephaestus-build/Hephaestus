@@ -77,7 +77,7 @@ public final class PracticeTrend {
      * a piece of reviewed work that went half well is counted as half well rather than rounded to a problem.
      *
      * <p>Weights fall geometrically with age ({@code decay^0, decay^1, …} from the newest), which is what lets
-     * one rule do the job two used to: recent evidence dominates, so a fixed habit is acknowledged within a
+     * one rule do the job two used to: recent evidence dominates, so a fixed lapse is acknowledged within a
      * couple of reviews without a separate clean-work override, and a fresh regression is visible just as fast.
      * A {@code decay} strictly below 0.5 is what makes the two newest opportunities outweigh everything older
      * — see the caller that chooses it.

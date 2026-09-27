@@ -171,7 +171,7 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractPracticeReviewInteg
                 selfHostedActor,
                 1,
                 FeedbackDeliveryState.DELIVERED,
-                InAppFeedbackBody.render("A habit", "What recurs.", "One thing to try."),
+                InAppFeedbackBody.render("A way of working", "What recurs.", "One thing to try."),
                 NOW.minus(Duration.ofDays(1)));
         bind(feedback, observation);
 

@@ -159,7 +159,7 @@ reframe end-to-end before paying for the migration:
     to or adopts the candidate issue's criteria before evaluating them against the change;
     **never asserts an AC is unmet** from code it cannot verify.
   - `branches-from-the-integration-branch` (goal `delivery-and-version-control-discipline`)
-    — consumes `branch_graph.json`; nudges the branching habit, MINOR-only, heuristic.
+    — consumes `branch_graph.json`; nudges the branching practice, MINOR-only, heuristic.
   - `keeps-the-test-suite-honest` — **revised** to read `test_presence.json`: when
     `repoHasTestTarget` is false, a "tests pass" DoD claim is vacuous; a calibrated,
     mostly-MINOR team-wide standing nudge, not a per-MR blocker.

@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link ConversationFeedbackErasure} port so no Spring Modulith cycle forms).
  *
  * <p>Shared by two callers so both erase the exact same rows: the workspace-purge contributor (full
- * tenant teardown) and the connection-disconnect revoke ({@code SlackConnectionStrategy#revoke} — a GDPR
+ * tenant teardown) and the connection disconnect ({@code SlackConnectionStrategy#eraseLocalData} — a GDPR
  * hard-erase so nothing ingested outlives the connection, mirroring Outline's disconnect-erase). {@code
  * @Transactional} with the default {@code REQUIRED} propagation, so it joins the caller's transaction (the
  * purge chain's single tx, or the fenced {@code ConnectionService#disconnect} tx) rather than opening its own.

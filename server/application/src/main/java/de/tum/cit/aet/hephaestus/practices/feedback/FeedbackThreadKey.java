@@ -23,9 +23,9 @@ import org.jspecify.annotations.Nullable;
  * <p><strong>What "the destination" means differs by lane, and that difference is the design.</strong> An
  * in-context note is delivered <em>onto a piece of work</em>, so the artifact is where it lands and
  * {@link #compute} keys on it. The two longitudinal lanes land on nothing — a in-app card and a
- * mentor turn are about a <em>habit</em> observed across several pieces of work — so their destination is
- * the practice, and {@link #forPractice} keys on that instead. A second card about the same habit
- * replaces the first rather than stacking beside it; a second card about a different habit is a different
+ * mentor turn are about a <em>way of working</em> observed across several pieces of work — so their destination is
+ * the practice, and {@link #forPractice} keys on that instead. A second card about the same practice
+ * replaces the first rather than stacking beside it; a second card about a different practice is a different
  * thread even though both land on the same page.
  *
  * <p>One computation for all three lanes, deliberately. The key is only useful because "find the queued
@@ -41,7 +41,7 @@ public final class FeedbackThreadKey {
 
     /**
      * The discriminator {@link #forPractice} puts where an artifact kind goes, so the two vocabularies
-     * cannot meet. Without it the habit thread for a practice slugged {@code "42"} is bit-identical to the
+     * cannot meet. Without it the practice thread for a practice slugged {@code "42"} is bit-identical to the
      * artifact thread for id 42 with no kind, and one card could retire the other. Every artifact kind is
      * namespaced ({@code scm.pull_request}, {@code chat.conversation_thread}), so an undotted word is a
      * shape none of them can take.
@@ -70,16 +70,16 @@ public final class FeedbackThreadKey {
     }
 
     /**
-     * Compute the stable continuity key for a longitudinal unit — one about a habit rather than about a
+     * Compute the stable continuity key for a longitudinal unit — one about a way of working rather than about a
      * piece of work.
      *
      * <p>It occupies the same tuple as {@link #compute}, with the practice standing where the artifact
      * stands, so the two lanes share one digest and one column vocabulary while staying disjoint — see
      * {@link #PRACTICE_SCOPE}. A blank slug is refused rather than quietly keyed, because it would
-     * collapse every habit of one person onto a single thread and let one card retire another about
+     * collapse every practice of one person onto a single thread and let one card retire another about
      * something else entirely.
      *
-     * @param practiceSlug the practice whose habit this unit is about (required, non-blank)
+     * @param practiceSlug the practice this unit is about (required, non-blank)
      * @param recipientUserId the user the unit is delivered to (required)
      * @param surface the delivery surface (required)
      * @return the lowercase SHA-256 hex digest (exactly 64 characters)

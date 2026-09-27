@@ -50,7 +50,7 @@ final class InContextDeliveryGateFixtures {
         return repository;
     }
 
-    /** A developer with no habit on record: every practice is explained in full. */
+    /** A developer with no recurring lapse on record: every practice is explained in full. */
     static RecurringLapses noRecurrence() {
         var lapses = org.mockito.Mockito.mock(RecurringLapses.class);
         org.mockito.Mockito.lenient()

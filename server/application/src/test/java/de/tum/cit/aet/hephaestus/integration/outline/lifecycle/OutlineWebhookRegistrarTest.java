@@ -238,31 +238,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
     }
 
     @Test
-    void deregister_deletesUpstreamWithoutTouchingConfig() {
-        // A config rewrite here would bump the row's version underneath the disconnect request's
-        // stale entity and its transition would die on optimistic locking.
-        stubActiveConnection(config("sub-99", "sec"));
-        stubToken();
-
-        registrar(EXTERNAL_URL).deregister(WORKSPACE_ID);
-
-        verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-99");
-        verify(connectionService, never()).updateConfig(eq(WORKSPACE_ID), eq(IntegrationKind.OUTLINE), any());
-        verifyScopeConsumerReconciled();
-    }
-
-    @Test
-    void deregister_skipsWhenNoSubscriptionStored() {
-        stubActiveConnection(config(null, null));
-
-        registrar(EXTERNAL_URL).deregister(WORKSPACE_ID);
-
-        verify(outlineApiClient, never()).deleteWebhookSubscription(any(), any(), any());
-        // Nothing was stored to invalidate — the scope consumer must not be poked.
-        verifyNoInteractions(natsConsumer);
-    }
-
-    @Test
     void deregisterByConnectionId_deletesUpstreamWhileCredentialsSurvive() {
         // SUSPENDED keeps credentials, so a deactivated connection can still tear its subscription down.
         when(connection.getConfig()).thenReturn(config("sub-77", "sec"));
@@ -274,6 +249,22 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
 
         verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-77");
         verifyScopeConsumerReconciled();
+    }
+
+    @Test
+    void preparedDeregistration_callsOutlineOnlyWhenRun() {
+        when(connection.getConfig()).thenReturn(config("sub-77", "sec"));
+        when(connectionService.findInWorkspace(WORKSPACE_ID, CONNECTION_ID)).thenReturn(Optional.of(connection));
+        when(connectionService.findBearerToken(WORKSPACE_ID, CONNECTION_ID))
+                .thenReturn(Optional.of(new BearerToken("tok", null)));
+
+        Runnable deletion = registrar(EXTERNAL_URL)
+                .prepareDeregistration(WORKSPACE_ID, CONNECTION_ID)
+                .orElseThrow();
+        verifyNoInteractions(outlineApiClient);
+        deletion.run();
+
+        verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-77");
     }
 
     @Test
@@ -309,7 +300,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
     private enum NoNatsConsumerBeanCase {
         ENSURE_SUBSCRIPTION_REGISTERS,
         ENSURE_SUBSCRIPTION_RE_REGISTERS,
-        DEREGISTER,
         DEREGISTER_BY_CONNECTION_ID,
     }
 
@@ -339,15 +329,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                         .doesNotThrowAnyException();
 
                 verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
-            }
-            case DEREGISTER -> {
-                stubActiveConnection(config("sub-99", "sec"));
-                stubToken();
-
-                assertThatCode(() -> registrar(EXTERNAL_URL, null).deregister(WORKSPACE_ID))
-                        .doesNotThrowAnyException();
-
-                verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-99");
             }
             case DEREGISTER_BY_CONNECTION_ID -> {
                 when(connection.getConfig()).thenReturn(config("sub-77", "sec"));

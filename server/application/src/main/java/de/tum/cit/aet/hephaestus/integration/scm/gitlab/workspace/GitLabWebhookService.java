@@ -347,55 +347,11 @@ public class GitLabWebhookService {
         clearWebhookFields(workspace);
     }
 
-    /**
-     * Deletes the workspace's GitLab group webhook upstream while its Connection is still ACTIVE —
-     * the disconnect flow calls this from {@code GitlabConnectionStrategy.revoke}, which runs BEFORE
-     * the {@code UNINSTALLED} transition purges the PAT. That ordering matters: the GitLab token
-     * provider refuses to hand out a token for a non-active scope, so this is the only window in
-     * which the group hook can actually be deleted vendor-side. Best-effort — never throws.
-     *
-     * <p>Deliberately does NOT clear the stored {@code gitlabWebhookId}/{@code gitlabGroupId} on the
-     * config (contrast {@link #deregisterWebhook(Workspace)}): the disconnect transaction holds the
-     * same Connection row and saves it moments after {@code revoke} returns, so a config rewrite here
-     * would bump the row version and fail that save with an optimistic-lock error. The stored ids go
-     * inert once the row leaves ACTIVE and {@link #registerWebhook}'s self-heal replaces a stale id on
-     * any future reconnect. Runs {@link Propagation#NOT_SUPPORTED} so the external HTTP call does not
-     * tie up (or run inside) the disconnect transaction.
-     *
-     * @param workspaceId the workspace whose still-ACTIVE GitLab webhook to remove
-     */
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void deregisterActiveWebhook(long workspaceId) {
-        Optional<GitLabConfig> configOpt = connectionService.findActiveGitLabConfig(workspaceId);
-        if (configOpt.isEmpty()) {
-            return;
-        }
-        GitLabConfig config = configOpt.get();
-        if (config.gitlabWebhookId() == null || config.gitlabGroupId() == null) {
-            return;
-        }
-        var client = webhookClientProvider.getIfAvailable();
-        if (client == null) {
-            log.debug("Webhook deregistration skipped: client unavailable, workspaceId={}", workspaceId);
-            return;
-        }
-        try {
-            client.deregisterGroupWebhook(workspaceId, config.gitlabGroupId(), config.gitlabWebhookId());
-        } catch (Exception e) {
-            // Best-effort: log and continue so the local UNINSTALLED transition still proceeds.
-            log.warn(
-                    "Webhook deregistration failed (best-effort): workspaceId={}, webhookId={}, error={}",
-                    workspaceId,
-                    config.gitlabWebhookId(),
-                    e.getMessage());
-        }
-    }
-
     /** Best-effort teardown for a connection that may no longer be active. */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void deregisterWebhookForConnection(long workspaceId, long connectionId) {
         try {
-            deregisterWebhookForConnectionInternal(workspaceId, connectionId);
+            prepareWebhookDeregistration(workspaceId, connectionId).ifPresent(Runnable::run);
         } catch (RuntimeException e) {
             log.info(
                     "Webhook deregistration at deactivation was a no-op (best-effort): workspaceId={}, connectionId={}, reason={}",
@@ -405,39 +361,44 @@ public class GitLabWebhookService {
         }
     }
 
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void deregisterWebhookForConnectionStrict(long workspaceId, long connectionId) {
-        deregisterWebhookForConnectionInternal(workspaceId, connectionId);
-    }
-
-    private void deregisterWebhookForConnectionInternal(long workspaceId, long connectionId) {
+    /**
+     * Reads the connection's stored webhook and PAT and returns the GitLab call that deletes the hook,
+     * which touches no database. Empty when no webhook is stored; throws when one is stored but cannot
+     * be deleted with what the connection holds.
+     */
+    public Optional<Runnable> prepareWebhookDeregistration(long workspaceId, long connectionId) {
         Optional<GitLabConfig> configOpt = connectionService
                 .findInWorkspace(workspaceId, connectionId)
                 .map(c -> c.getConfig())
                 .filter(cfg -> cfg instanceof GitLabConfig)
                 .map(cfg -> (GitLabConfig) cfg);
         if (configOpt.isEmpty()) {
-            return;
+            return Optional.empty();
         }
         GitLabConfig config = configOpt.get();
-        if (config.gitlabWebhookId() == null || config.gitlabGroupId() == null) {
-            return;
+        Long groupId = config.gitlabGroupId();
+        Long webhookId = config.gitlabWebhookId();
+        String serverUrl = config.serverUrl();
+        if (webhookId == null || groupId == null) {
+            return Optional.empty();
         }
         Optional<BearerToken> bearer = connectionService.findBearerToken(workspaceId, connectionId);
-        if (config.serverUrl() == null || config.serverUrl().isBlank() || bearer.isEmpty()) {
+        if (serverUrl == null || serverUrl.isBlank() || bearer.isEmpty()) {
             throw new IllegalStateException("GitLab webhook credentials are unavailable");
         }
         var client = webhookClientProvider.getIfAvailable();
         if (client == null) {
             throw new IllegalStateException("GitLab webhook client is unavailable");
         }
-        client.deregisterGroupWebhookWithCredentials(
-                config.serverUrl(), bearer.get().token(), config.gitlabGroupId(), config.gitlabWebhookId());
-        log.info(
-                "Deregistered GitLab webhook for deactivated connection: workspaceId={}, connectionId={}, webhookId={}",
-                workspaceId,
-                connectionId,
-                config.gitlabWebhookId());
+        String token = bearer.get().token();
+        return Optional.of(() -> {
+            client.deregisterGroupWebhookWithCredentials(serverUrl, token, groupId, webhookId);
+            log.info(
+                    "Deregistered GitLab webhook for deactivated connection: workspaceId={}, connectionId={}, webhookId={}",
+                    workspaceId,
+                    connectionId,
+                    webhookId);
+        });
     }
 
     /**

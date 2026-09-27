@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepos
 import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineWebhookRegistrar;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -89,24 +90,23 @@ class OutlineConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void revoke_deregistersTheSubscriptionAndErasesMirroredDocuments() {
-        IntegrationRef ref = new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9");
+    void eraseLocalData_erasesMirroredDocumentsWithoutCallingOutline() {
+        strategy().eraseLocalData(new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9", 7L));
 
-        strategy().revoke(ref);
-
-        verify(webhookRegistrar).deregister(5L);
         verify(outlineDocumentRepository).deleteByWorkspaceId(5L);
+        verify(outlineCollectionRepository).deleteByWorkspaceId(5L);
         // GDPR erase on disconnect covers the event log too — actor subjects are personal data.
         verify(outlineDocumentEventRepository).deleteByWorkspaceId(5L);
+        verifyNoInteractions(webhookRegistrar);
     }
 
     @Test
-    void purge_onlyDeregistersTheProviderSubscription() {
-        IntegrationRef ref = new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9", 7L);
+    void prepareProviderTeardown_isTheSubscriptionDeregistration() {
+        Runnable deletion = () -> {};
+        when(webhookRegistrar.prepareDeregistration(5L, 7L)).thenReturn(Optional.of(deletion));
 
-        strategy().revokeProvider(ref);
-
-        verify(webhookRegistrar).deregisterStrict(5L, 7L);
+        assertThat(strategy().prepareProviderTeardown(new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9", 7L)))
+                .containsSame(deletion);
         verifyNoInteractions(outlineDocumentRepository, outlineCollectionRepository, outlineDocumentEventRepository);
     }
 }

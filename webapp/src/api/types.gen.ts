@@ -1953,7 +1953,7 @@ export type InAppFeedback = {
    */
   closedBy?: 'WORK' | 'DEVELOPER' | 'PRACTICE_CHANGED';
   /**
-   * The pieces of work the habit was observed on, newest first
+   * The pieces of work the way of working was observed on, newest first
    */
   evidence: Array<InAppEvidence>;
   /**
@@ -1965,17 +1965,17 @@ export type InAppFeedback = {
    */
   groupSlug?: string;
   /**
-   * Short headline naming the habit, never the person
+   * Short headline naming the way of working, never the person
    */
   headline: string;
   id: string;
   /**
-   * The habit to try next, on its own; null for feedback prepared without one
+   * The way of working to try next, on its own; null for feedback prepared without one
    */
   nextStep?: string;
   practiceName: string;
   /**
-   * Practice this habit belongs to
+   * Practice this feedback is about
    */
   practiceSlug: string;
   /**

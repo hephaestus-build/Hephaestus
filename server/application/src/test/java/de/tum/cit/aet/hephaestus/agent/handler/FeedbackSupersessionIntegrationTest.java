@@ -86,7 +86,7 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
 
     /**
      * Two reviews of two different pull requests finish at the same instant and both compose a card about
-     * the same habit. The developer must end up with one current card about it, and the card that was
+     * the same practice. The developer must end up with one current card about it, and the card that was
      * retired must have a successor — a retirement that outlived its replacement would take a message out
      * of somebody's queue and put nothing back.
      */
@@ -121,7 +121,7 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
         assertThat(state(queued)).isEqualTo(FeedbackDeliveryState.SUPERSEDED);
         assertThat(thread)
                 .filteredOn(card -> card.getDeliveryState() == FeedbackDeliveryState.PREPARED)
-                .as("one habit, one live card — the pile is what supersession exists to prevent")
+                .as("one practice, one live card — the pile is what supersession exists to prevent")
                 .hasSize(1);
         assertThat(dispositions)
                 .filteredOn(disposition -> disposition == FeedbackSupersession.Disposition.SUPERSEDED)
@@ -186,7 +186,7 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
     /**
      * Mentor feedback the developer has already read is the case the un-saying rule is named for. It keeps
      * its state, and the new piece of feedback is written beside it pointing back at it, so the thread reads
-     * as one habit raised twice over time rather than as an edit to something they have in their head.
+     * as one practice raised twice over time rather than as an edit to something they have in their head.
      */
     @Test
     @DisplayName("mentor feedback that has been read is followed rather than replaced")
@@ -210,7 +210,7 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
     }
 
     /**
-     * The in-app lane: the page is a list of habits to work on, so the card still open about a habit is
+     * The in-app lane: the page is a list of practices to work on, so the card still open about a practice is
      * retired by the newer card about it, whether it was waiting to be read or already read. The ledger
      * keeps the retired row, and the new card points back at it.
      */

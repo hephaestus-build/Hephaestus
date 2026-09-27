@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import java.net.URI;
 import java.util.Map;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -28,13 +29,22 @@ public interface ConnectionStrategy {
      */
     ConnectFinalization finalizeConnect(IntegrationRef ref, Map<String, String> callbackParams);
 
-    /** Revoke vendor-side (best-effort) and signal local state change. */
-    void revoke(@org.jspecify.annotations.Nullable IntegrationRef ref);
+    /**
+     * Erases the data this integration mirrored into the workspace. Joins the caller's transaction and
+     * throws on failure, so a disconnect that cannot erase leaves the connection as it was. Idempotent.
+     */
+    void eraseLocalData(IntegrationRef ref);
 
-    /** Strict provider-only teardown used before a transactional workspace purge. */
-    default void revokeProvider(IntegrationRef ref) {
-        throw new UnsupportedOperationException("Strict provider teardown is not implemented for " + kind());
-    }
+    /**
+     * Reads what removing this connection's provider-side footprint — app installation, token, webhook —
+     * takes, while the connection still holds its credentials and config, and returns that removal. The
+     * returned call only talks to the provider: it holds no entity and opens no transaction, so it can
+     * run once the reading transaction has ended, and it throws when the removal cannot be confirmed.
+     * Empty when there is nothing to remove, including an installation another connection still uses.
+     * {@code ref} carries the connection id. The caller holds the connection row locked, so this reads
+     * the row but never writes it.
+     */
+    Optional<Runnable> prepareProviderTeardown(IntegrationRef ref);
 
     record InitiateRequest(
             long workspaceId,

@@ -67,12 +67,6 @@ public class MergeReadinessContentSource implements ContentSource {
     /** Mirrored by {@code MERGE_READINESS_ITEM} in {@code pi-mentor-protocol.ts}. */
     private static final Pattern ITEM_KEY = Pattern.compile("inputs/context/merge_readiness/(\\d{1,18})\\.json");
 
-    /**
-     * The runner's {@code FETCH_CONTEXT_MAX_CHARS}: beyond it the runner slices the JSON mid-document. Measured on
-     * the serialized output, because escaping can make one stored character six.
-     */
-    static final int MAX_JSON_CHARS = 200_000;
-
     private static final int MAX_DETAILED = 5;
     private static final int MAX_LISTED = 20;
     private static final int MAX_NOTES = 10;
@@ -189,7 +183,7 @@ public class MergeReadinessContentSource implements ContentSource {
                 || !(root.get("notLoaded") instanceof ArrayNode notLoaded)) {
             return root;
         }
-        while (objectMapper.writeValueAsString(root).length() > MAX_JSON_CHARS) {
+        while (objectMapper.writeValueAsString(root).length() > MentorContextKeys.FETCH_CONTEXT_MAX_CHARS) {
             if (!detailed.isEmpty()) {
                 JsonNode dropped = detailed.remove(detailed.size() - 1);
                 notLoaded.insert(0, indexEntry(dropped));

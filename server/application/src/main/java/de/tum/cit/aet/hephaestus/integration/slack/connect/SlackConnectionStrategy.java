@@ -15,15 +15,13 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /** Slack OAuth strategy. A rotating installation is rejected rather than stored: no refresh path exists,
  *  so accepting one would leave a connection that stops working at the first rotation. */
@@ -135,49 +133,26 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
                 r.team().id(), new BearerToken(r.accessToken(), null), r.team().name(), config);
     }
 
-    /**
-     * Runs {@link Propagation#NOT_SUPPORTED} — this method holds NO transaction of its own, matching
-     * {@code GitLabWebhookService#deregisterActiveWebhook}. The Slack token revoke below is an external
-     * HTTP round-trip, and the disconnect path already holds the connection's {@code FOR UPDATE}
-     * lifecycle lock on another connection; opening a transaction across the network call would pin a
-     * second pooled DB connection idle-in-transaction for its duration. Each collaborator still gets a
-     * transaction: the credential lookup and {@code SlackWorkspaceContentEraser#eraseWorkspace} are
-     * {@code @Transactional} on their own beans, so the erase remains atomic in itself.
-     */
     @Override
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void revoke(@Nullable IntegrationRef ref) {
-        if (ref == null) {
-            return;
-        }
-        try {
-            revokeProviderInternal(ref);
-        } catch (RuntimeException e) {
-            log.warn("Slack token revoke failed for workspace={}: {}", ref.workspaceId(), e.toString());
-        }
+    public void eraseLocalData(IntegrationRef ref) {
         workspaceContentEraser.eraseWorkspace(ref.workspaceId());
         log.info(
-                "slack.audit: revoke erase — cleared ingested Slack content + consent for workspace={}",
+                "slack.audit: disconnect erase — cleared ingested Slack content + consent for workspace={}",
                 ref.workspaceId());
     }
 
     @Override
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void revokeProvider(IntegrationRef ref) {
-        revokeProviderInternal(ref);
-    }
-
-    private void revokeProviderInternal(IntegrationRef ref) {
+    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref) {
         if (connectionService.hasOtherInstalledConnection(ref)) {
-            return;
+            return Optional.empty();
         }
-        BearerToken token = credentialProvider
+        String token = credentialProvider
                 .resolve(ref)
                 .filter(BearerToken.class::isInstance)
-                .map(BearerToken.class::cast)
+                .map(bundle -> ((BearerToken) bundle).token())
                 .orElseThrow(() -> new IllegalStateException("Slack bot token is unavailable"));
-        oauthClient.revokeStrict(token.token());
         // Token revocation does not remove the team-level Slack app installation.
+        return Optional.of(() -> oauthClient.revokeStrict(token));
     }
 
     private String redirectUri() {

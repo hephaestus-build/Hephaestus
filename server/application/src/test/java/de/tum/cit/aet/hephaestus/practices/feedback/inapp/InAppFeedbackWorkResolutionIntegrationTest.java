@@ -196,7 +196,7 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
     }
 
     /**
-     * The next card about this habit starts where this one was answered: after the developer marked it
+     * The next card about this practice starts where this one was answered: after the developer marked it
      * addressed, or after the third clean piece of work, whichever came first — and, while it is open,
      * after this card was prepared, since the next card replaces it and what it cited is not news.
      */

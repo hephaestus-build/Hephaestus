@@ -3655,9 +3655,10 @@ paths:
     patch:
       description: |-
         Resource-oriented lifecycle transition: <code>ACTIVE</code> (reactivate), <code>SUSPENDED</code>
-         (suspend), or <code>UNINSTALLED</code> (disconnect — also best-effort revokes the vendor token).
-         <code>PENDING</code> is internal to the OAuth handshake and rejected as a bad request; illegal
-         transitions surface as 400 via the state machine.
+         (suspend), or <code>UNINSTALLED</code> (disconnect). Disconnecting erases the integration's mirrored
+         data and then, best effort, removes what it installed at the provider; if the erase fails, the
+         connection is left unchanged. <code>PENDING</code> is internal to the OAuth handshake and rejected as
+         a bad request; illegal transitions surface as 409 via the state machine.
       operationId: updateConnectionStatus
       parameters:
       - description: Workspace slug
@@ -3688,7 +3689,7 @@ paths:
           description: OK
       summary: |-
         Resource-oriented lifecycle transition: <code>ACTIVE</code> (reactivate), <code>SUSPENDED</code>
-         (suspend), or <code>UNINSTALLED</code> (disconnect — also best-effort revokes the vendor token).
+         (suspend), or <code>UNINSTALLED</code> (disconnect).
       tags:
       - Connections
   /workspaces/{workspaceSlug}/features:
@@ -5827,11 +5828,11 @@ paths:
   /workspaces/{workspaceSlug}/practices/feedback/in-app:
     get:
       description: "Process-level messages prepared for the authenticated developer:\
-        \ for each habit that recurs in their work, what the pattern is, the pieces\
-        \ of work it was observed on, and one thing to try next. Distinct from in-context\
-        \ notes (which say what is wrong in one diff) and from the mentor conversation\
-        \ (which asks rather than tells). Reading a message is what delivers it, so\
-        \ this GET records the delivery."
+        \ for each way of working that recurs in their work, what the pattern is,\
+        \ the pieces of work it was observed on, and one thing to try next. Distinct\
+        \ from in-context notes (which say what is wrong in one diff) and from the\
+        \ mentor conversation (which asks rather than tells). Reading a message is\
+        \ what delivers it, so this GET records the delivery."
       operationId: getInAppFeedback
       parameters:
       - description: Workspace slug
@@ -11884,7 +11885,8 @@ components:
           - PRACTICE_CHANGED
         evidence:
           type: array
-          description: "The pieces of work the habit was observed on, newest first"
+          description: "The pieces of work the way of working was observed on, newest\
+            \ first"
           items:
             $ref: "#/components/schemas/InAppEvidence"
         groupName:
@@ -11895,19 +11897,19 @@ components:
           description: Group the practice sits in; null when the practice has none
         headline:
           type: string
-          description: "Short headline naming the habit, never the person"
+          description: "Short headline naming the way of working, never the person"
         id:
           type: string
           format: uuid
         nextStep:
           type: string
-          description: "The habit to try next, on its own; null for feedback prepared\
-            \ without one"
+          description: "The way of working to try next, on its own; null for feedback\
+            \ prepared without one"
         practiceName:
           type: string
         practiceSlug:
           type: string
-          description: Practice this habit belongs to
+          description: Practice this feedback is about
         preparedAt:
           type: string
           format: date-time

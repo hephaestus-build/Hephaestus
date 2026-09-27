@@ -24,5 +24,12 @@ public final class MentorContextKeys {
             CurrentThreadHistoryContentSource.OUTPUT_KEY,
             OutlineDocumentContentSource.OUTPUT_KEY);
 
+    /**
+     * The runner's {@code FETCH_CONTEXT_MAX_CHARS}: beyond it the runner slices the JSON mid-document. Both count
+     * UTF-16 units of compact JSON, and Jackson escapes no character more tersely than {@code JSON.stringify}, so a
+     * document whose {@code writeValueAsString} fits reaches the model whole.
+     */
+    public static final int FETCH_CONTEXT_MAX_CHARS = 200_000;
+
     private MentorContextKeys() {}
 }
