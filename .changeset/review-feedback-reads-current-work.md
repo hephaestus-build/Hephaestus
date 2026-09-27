@@ -8,3 +8,5 @@ about work you have already fixed. When an automatic review's note on your pull 
 no line comments and reads word for word like the note already recorded as delivered there for you, it is not posted
 again; it is recorded as withheld, and the review's feedback for your practice page and for Heph can still be
 prepared. Two reviews of the same work finishing at the same time can still each post a note.
+While a Slack channel's consent is paused, new reviews no longer read the earlier feedback and results from its
+conversations; they read them again once the channel is resumed.

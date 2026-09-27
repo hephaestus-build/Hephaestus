@@ -20,9 +20,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
-import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -54,7 +52,7 @@ class PracticeFeedbackDispatchService {
     private final DiffNotePoster diffNotePoster;
     private final FeedbackDispatchStateMachine stateMachine;
     private final ObservationInvalidationRepository invalidations;
-    private final ObservationRepository observationRepository;
+    private final RepeatedSummaryCheck repeatedSummaries;
 
     PracticeFeedbackDispatchService(
             FeedbackDispatchRepository repository,
@@ -66,7 +64,7 @@ class PracticeFeedbackDispatchService {
             DiffNotePoster diffNotePoster,
             FeedbackDispatchStateMachine stateMachine,
             ObservationInvalidationRepository invalidations,
-            ObservationRepository observationRepository) {
+            RepeatedSummaryCheck repeatedSummaries) {
         this.repository = repository;
         this.policy = policy;
         this.commentPoster = commentPoster;
@@ -76,7 +74,7 @@ class PracticeFeedbackDispatchService {
         this.diffNotePoster = diffNotePoster;
         this.stateMachine = stateMachine;
         this.invalidations = invalidations;
-        this.observationRepository = observationRepository;
+        this.repeatedSummaries = repeatedSummaries;
     }
 
     Result dispatchAutomaticPackage(
@@ -193,7 +191,7 @@ class PracticeFeedbackDispatchService {
                 } else {
                     PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
                     if (!decision.allowed()) return stateMachine.refuse(dispatch, owner, decision.refusal());
-                    if (inlineNotes(dispatch).isEmpty() && repeatsDeliveredNote(dispatch, job)) {
+                    if (inlineNotes(dispatch).isEmpty() && repeatedSummaries.repeatsLastPosted(dispatch, job)) {
                         return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE);
                     }
                     Integer began = transactionTemplate.execute(
@@ -469,36 +467,6 @@ class PracticeFeedbackDispatchService {
                         placement.deliveryKey(),
                         null))
                 .toList();
-    }
-
-    /**
-     * Whether this package's note reads exactly as the one last delivered on the same work to the same person,
-     * keyed the way the ledger records it: by this review's observations. Each note's first line is its own
-     * review's marker, which nobody reads. A package with line notes is left to their own reconciliation.
-     */
-    private boolean repeatsDeliveredNote(FeedbackDispatch dispatch, AgentJob job) {
-        List<Observation> observations = observationRepository.findByAgentJobId(job.getId(), dispatch.getWorkspaceId());
-        if (observations.isEmpty()) {
-            return false;
-        }
-        Observation any = observations.getFirst();
-        String note = withoutMarker(dispatch.getBody());
-        return feedbackRepository
-                .findLatestDeliveredNote(
-                        dispatch.getWorkspaceId(),
-                        any.getAboutUserId(),
-                        any.getArtifactKind().value(),
-                        any.getArtifactId())
-                .map(PracticeFeedbackDispatchService::withoutMarker)
-                .filter(note::equals)
-                .isPresent();
-    }
-
-    private static String withoutMarker(String note) {
-        int firstLineEnd = note.indexOf('\n');
-        return note.startsWith(PullRequestCommentPoster.SUMMARY_MARKER_PREFIX) && firstLineEnd >= 0
-                ? note.substring(firstLineEnd + 1)
-                : note;
     }
 
     /** The one routing decision for a package's summary: the reviewed work's own thread, under the package marker. */

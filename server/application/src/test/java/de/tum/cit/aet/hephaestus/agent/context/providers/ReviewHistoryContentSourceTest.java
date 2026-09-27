@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceContribution;
 import de.tum.cit.aet.hephaestus.agent.context.StagedArtifactNames;
+import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
@@ -47,6 +49,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -92,6 +95,12 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     private ObservationVisibilityPolicy visibilityPolicy;
 
     @Mock
+    private ConversationSourceLiveness conversationLiveness;
+
+    /** Threads whose channel no longer consents; every other thread asked about is live. */
+    private final Set<Long> inactiveThreads = new HashSet<>();
+
+    @Mock
     private PullRequestRepository pullRequestRepository;
 
     @Mock
@@ -108,10 +117,17 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 feedbackRepository,
                 feedbackObservationRepository,
                 visibilityPolicy,
+                conversationLiveness,
                 pullRequestRepository,
                 issueRepository,
                 new StagedArtifactNames(ReviewHistoryContentSourceTest::identitiesOf),
                 objectMapper);
+        lenient().when(conversationLiveness.activeThreadIds(anyLong(), any())).thenAnswer(invocation -> {
+            Collection<Long> threads = invocation.getArgument(1);
+            return threads.stream()
+                    .filter(thread -> !inactiveThreads.contains(thread))
+                    .collect(Collectors.toSet());
+        });
         lenient()
                 .when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
                 .thenReturn(List.of());
@@ -593,6 +609,106 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                     .isEmpty();
             assertThat(captured.contentStates())
                     .containsEntry(ReviewHistoryContentSource.FEEDBACK_HISTORY, SourceContentState.EMPTY);
+        }
+    }
+
+    @Nested
+    class ConversationsWhoseChannelNoLongerConsents {
+
+        private static final long PAUSED_THREAD = 41L;
+        private static final long ACTIVE_THREAD = 42L;
+
+        @Test
+        void stagesNoObservationFromAConversationWhoseChannelNoLongerConsents() {
+            inactiveThreads.add(PAUSED_THREAD);
+            when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
+                    .thenReturn(List.of(
+                            observation(
+                                    "paused-practice",
+                                    "rec-1",
+                                    "From the paused channel",
+                                    ArtifactKinds.CONVERSATION_THREAD,
+                                    PAUSED_THREAD),
+                            observation(
+                                    "active-practice",
+                                    "rec-2",
+                                    "From the active channel",
+                                    ArtifactKinds.CONVERSATION_THREAD,
+                                    ACTIVE_THREAD),
+                            observation(
+                                    "code-practice",
+                                    "rec-3",
+                                    "From the pull request",
+                                    ArtifactKinds.PULL_REQUEST,
+                                    OBSERVED_ARTIFACT_ROW_ID)));
+
+            JsonNode staged = read(captureObservationHistory().files().get("inputs/history/observations.json"));
+
+            assertThat(staged.get("observations"))
+                    .extracting(o -> o.get("summary").asString())
+                    .containsExactly("From the active channel", "From the pull request");
+            assertThat(staged.toString()).doesNotContain("paused-practice", "From the paused channel");
+        }
+
+        @Test
+        void stagesNoFeedbackBoundToOrAboutAConversationWhoseChannelNoLongerConsents() {
+            inactiveThreads.add(PAUSED_THREAD);
+            Feedback mixed = queued("in-app:1:mixed", "Bound to code and to the paused conversation.");
+            boundTo.put(mixed.getId(), List.of(boundObservation(false), boundConversation(PAUSED_THREAD)));
+            Feedback aboutPaused = Feedback.builder()
+                    .id(UUID.randomUUID())
+                    .channel(FeedbackChannel.IN_CHAT)
+                    .artifactKind(ArtifactKinds.CONVERSATION_THREAD)
+                    .artifactId(PAUSED_THREAD)
+                    .threadKey("in-chat:1:paused")
+                    .body("About the paused conversation.")
+                    .createdAt(Instant.parse("2026-07-02T09:00:00Z"))
+                    .build();
+            Feedback threadless = Feedback.builder()
+                    .id(UUID.randomUUID())
+                    .channel(FeedbackChannel.IN_CHAT)
+                    .artifactKind(ArtifactKinds.CONVERSATION_THREAD)
+                    .threadKey("in-chat:1:threadless")
+                    .body("About a conversation with no thread recorded.")
+                    .createdAt(Instant.parse("2026-07-02T09:00:00Z"))
+                    .build();
+            Feedback unanchored = queued("in-app:1:unanchored", "Not tied to any one piece of work.");
+            Feedback onCode = deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID);
+            Feedback onActive = queued("in-chat:1:active", "From the active conversation.");
+            boundTo.put(onActive.getId(), List.of(boundConversation(ACTIVE_THREAD)));
+            when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
+                    .thenReturn(List.of(onCode));
+            when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
+                    .thenReturn(List.of(mixed, aboutPaused, threadless, unanchored, onActive));
+
+            var captured = captureFeedbackHistory();
+            JsonNode said = read(captured.files().get("inputs/history/feedback.json"));
+            JsonNode waiting = read(captured.files().get("inputs/history/prepared.json"));
+
+            assertThat(said.get("feedback"))
+                    .extracting(f -> f.get("body").asString())
+                    .containsExactly("Consider handling this error rather than logging it.");
+            assertThat(waiting.get("prepared"))
+                    .extracting(
+                            f -> f.get("threadKey").asString(),
+                            f -> f.get("body").asString())
+                    .containsExactly(
+                            tuple("in-app:1:unanchored", "Not tied to any one piece of work."),
+                            tuple("in-chat:1:active", "From the active conversation."));
+            assertThat(waiting.toString())
+                    .doesNotContain(
+                            "in-app:1:mixed", "in-chat:1:paused", "paused conversation", "in-chat:1:threadless");
+        }
+
+        private static Observation boundConversation(long threadId) {
+            Observation current = boundObservation(false);
+            return Observation.builder()
+                    .id(current.getId())
+                    .practice(current.getPractice())
+                    .practiceRevision(current.getPracticeRevision())
+                    .artifactKind(ArtifactKinds.CONVERSATION_THREAD)
+                    .artifactId(threadId)
+                    .build();
         }
     }
 

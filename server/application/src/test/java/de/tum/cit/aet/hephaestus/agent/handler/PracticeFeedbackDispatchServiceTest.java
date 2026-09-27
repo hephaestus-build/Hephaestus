@@ -103,7 +103,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 diffNotePoster,
                 stateMachine,
                 mock(ObservationInvalidationRepository.class),
-                observationRepository);
+                new RepeatedSummaryCheck(observationRepository, feedbackRepository));
         lenient()
                 .when(channel.formatPullRequestSubjectId(anyString(), anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(0) + "!" + invocation.getArgument(1));
