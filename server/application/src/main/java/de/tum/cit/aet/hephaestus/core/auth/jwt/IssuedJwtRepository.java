@@ -110,8 +110,21 @@ public interface IssuedJwtRepository extends JpaRepository<IssuedJwt, UUID> {
             @Param("now") Instant now,
             @Param("reason") IssuedJwt.RevokedReason reason);
 
-    /** Periodic cleanup — physically removes expired rows so the table doesn't grow unbounded. */
+    /**
+     * Periodic cleanup — physically removes expired rows so the table doesn't grow unbounded. The row a
+     * live native session currently backs is kept past its expiry: its revocation is what ends that
+     * session, so it must stay revocable until the session's own deadline.
+     */
     @Modifying
-    @Query("DELETE FROM IssuedJwt j WHERE j.expiresAt < :cutoff")
+    @Query("""
+        DELETE FROM IssuedJwt j
+         WHERE j.expiresAt < :cutoff
+           AND NOT EXISTS (
+                SELECT 1
+                  FROM NativeSession s
+                 WHERE s.currentJti = j.jti
+                   AND s.revokedAt IS NULL
+                   AND s.sessionExpiresAt > :cutoff)
+        """)
     int deleteExpiredBefore(@Param("cutoff") Instant cutoff);
 }

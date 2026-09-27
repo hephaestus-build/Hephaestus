@@ -38,6 +38,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"),
             assignment("StartupBudgetIntegrationTest", "startup"),
             assignment("core.auth.dev.DevLoginIntegrationTest", "dev-login"),
+            assignment("core.auth.nativesession.NativeSessionIntegrationTest", "dev-login"),
             assignment("integration.scm.github.BaseGitHubLiveIntegrationTest", "github-live"),
             assignment("integration.outline.OutlineFrameworkRegistrationIntegrationTest", "outline-enabled"),
             assignment(
@@ -108,6 +109,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "notification.email.EmailAdminControllerIntegrationTest",
             "agent.job.IssueUpdateCoalescerIntegrationTest",
             "core.auth.dev.DevLoginIntegrationTest",
+            "core.auth.nativesession.NativeSessionIntegrationTest",
             "integration.outline.OutlineFrameworkRegistrationIntegrationTest",
             "integration.outline.collection.OutlineCollectionAdminControllerIntegrationTest",
             "integration.outline.connect.OutlineConnectionAdminControllerIntegrationTest",

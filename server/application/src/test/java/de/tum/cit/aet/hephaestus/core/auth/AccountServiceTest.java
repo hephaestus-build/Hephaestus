@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.auth.nativesession.NativeSessionService;
 import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -64,7 +65,8 @@ class AccountServiceTest extends BaseUnitTest {
                 new AuthEventLogger(auditWriter),
                 AuthPropertiesFixture.defaults(),
                 eventPublisher,
-                clock);
+                clock,
+                mock(NativeSessionService.class));
     }
 
     private static IdentityLink link(long id, long gitProviderId) {

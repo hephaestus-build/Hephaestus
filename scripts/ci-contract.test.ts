@@ -61,9 +61,10 @@ async function readSources(files: string[]): Promise<Map<string, string>> {
 const TASK_INVOCATION =
 	/\bvp run (?:(?:--(?!filter\b)[\w-]+|\$\{\{ *matrix\.\w+ *\}\}) +)*(?<name>(?:[\w:-]|\$\{\{ *matrix\.\w+ *\}\})+)/gu;
 
-// The two gates `check` cannot run: the k6 syntax check needs the pinned container, and the PMD
-// canary runs only when CI decides PMD inputs changed. Every other CI gate is part of `check`.
-const CI_ONLY_GATES = new Set(["gate:load-syntax", "gate:pmd-canary"]);
+// The gates `check` cannot run: the k6 syntax check needs the pinned container, the PMD canary runs
+// only when CI decides PMD inputs changed, and the mobile API check fetches oasdiff on first use.
+// Every other CI gate is part of `check`.
+const CI_ONLY_GATES = new Set(["gate:load-syntax", "gate:pmd-canary", "gate:mobile-api"]);
 
 /** The task names one job's steps invoke, with a `${{ matrix.<key> }}` resolved from its matrix. */
 function invokedTasks(definition: YAMLMap): string[] {
@@ -2743,7 +2744,7 @@ void test(
 		const workflow = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
 		const script = runScript(workflow, ["jobs", "quality"], "Quality gates");
 		const probe = `vp() { printf 'command=%s\\n' "$*" >> "$GITHUB_OUTPUT"; }\n${script}`;
-		for (const leg of ["server", "tooling", "webapp", "windows"]) {
+		for (const leg of ["server", "tooling", "webapp", "mobile", "windows"]) {
 			const result = await runStep(probe, { LEG: leg });
 			assert.equal(result.failed, false, result.diagnosis);
 			assert.equal(
@@ -2765,6 +2766,7 @@ void test("unchanged quality legs are skipped before runner allocation", async (
 		["server", "application_server"],
 		["tooling", "tooling"],
 		["webapp", "webapp"],
+		["mobile", "mobile"],
 		["windows", "tooling"],
 	]) {
 		assert.equal(

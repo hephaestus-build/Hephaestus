@@ -2,17 +2,20 @@ package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
+import de.tum.cit.aet.hephaestus.core.auth.nativesession.NativeClientProperties;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.servlet.http.Cookie;
 import java.security.SecureRandom;
+import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +40,9 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         loginProviderService = mock(LoginProviderService.class);
-        when(loginProviderService.findEnabled(any()))
+        // Lenient: the native tests refuse some requests before any provider is looked up.
+        lenient()
+                .when(loginProviderService.findEnabled(any()))
                 .thenReturn(Optional.of(providerRow("github", LoginProvider.ProviderType.GITHUB)));
         identityLinkAuthentication = mock(IdentityLinkAuthentication.class);
         byte[] key = new byte[32];
@@ -51,7 +56,8 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
                 loginProviderService,
                 authIntentCookie,
                 identityLinkAuthentication,
-                AuthPropertiesFixture.withApiBasePath(apiBasePath));
+                AuthPropertiesFixture.withApiBasePath(apiBasePath),
+                new NativeClientProperties(List.of("build.hephaestus.app:/auth/callback"), ""));
     }
 
     private static LoginProvider providerRow(String registrationId, LoginProvider.ProviderType type) {
@@ -186,5 +192,59 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
                 .begin("github", "ws", "/", "login", new MockHttpServletRequest(), new MockHttpServletResponse());
 
         assertThat(view.getUrl()).isEqualTo("/api/oauth2/authorization/github");
+    }
+
+    private static final String CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+    private static final String APP = "build.hephaestus.app:/auth/callback";
+
+    private RedirectView beginNative(
+            String provider, @Nullable String challenge, String redirect, MockHttpServletResponse res) {
+        return controller.beginNative(provider, challenge, "S256", "app-state", redirect, res);
+    }
+
+    @Test
+    void nativeMode_sealsTheChallengeStateAndRedirectIntoTheIntent() {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        RedirectView view = beginNative("github", CHALLENGE, APP, res);
+
+        assertThat(view.getUrl()).isEqualTo("/oauth2/authorization/github");
+        AuthIntentCookie.Intent intent = readIntent(res);
+        org.junit.jupiter.api.Assertions.assertNotNull(intent);
+        assertThat(intent.mode()).isEqualTo(AuthIntentCookie.Intent.Mode.NATIVE);
+        assertThat(intent.nativeRequest())
+                .isEqualTo(new AuthIntentCookie.Intent.NativeRequest(CHALLENGE, "app-state", APP));
+    }
+
+    @Test
+    void nativeMode_refusesARedirectThatIsNotExactlyAllowlistedWithoutRedirectingToIt() {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        RedirectView view = beginNative("github", CHALLENGE, APP + "/extra", res);
+
+        assertThat(view.getUrl()).isEqualTo("/auth/error?code=native_redirect_not_allowed");
+        assertThat(readIntent(res)).isNull();
+    }
+
+    @Test
+    void nativeMode_returnsAMalformedChallengeToTheAppWithItsState() {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        RedirectView view = beginNative("github", "too-short", APP, res);
+
+        assertThat(view.getUrl()).isEqualTo(APP + "?error=invalid_request&state=app-state");
+        assertThat(readIntent(res)).isNull();
+    }
+
+    @Test
+    void nativeMode_neverBeginsALinkOnlyProvider() {
+        when(loginProviderService.findEnabled("slack"))
+                .thenReturn(Optional.of(providerRow("slack", LoginProvider.ProviderType.SLACK)));
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        RedirectView view = beginNative("slack", CHALLENGE, APP, res);
+
+        assertThat(view.getUrl()).isEqualTo(APP + "?error=link_requires_auth&state=app-state");
+        assertThat(readIntent(res)).isNull();
     }
 }

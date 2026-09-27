@@ -138,6 +138,7 @@ version number promises.
 **Service scopes** (where the code lives):
 
 - `webapp`: React frontend
+- `mobile`: React Native app for iOS and Android
 - `server`: Java application server (includes the in-process Pi mentor agent and the webhook receiver)
 - `docs`: Documentation
 

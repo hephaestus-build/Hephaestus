@@ -84,4 +84,6 @@ do, its home is the Admin Guide (`docs/admin/`) and the runbook links to it.
 | [0043](0043-gradle-java-build.md) | Gradle owns the Java build | Accepted |
 | [0044](0044-email-is-a-notification-transport.md) | Email is a notification transport, delivered through the event publication registry | Accepted |
 
+| [0045](0045-mobile-app.md) | A native app on the existing sign-in, push as a nudge, and a contract per released version | Accepted |
+
 Template: [0000-template.md](0000-template.md).

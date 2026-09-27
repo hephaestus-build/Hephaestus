@@ -1,0 +1,136 @@
+{
+	"$schema": "../node_modules/oxlint/configuration_schema.json",
+
+	// The native app adds to the repository base and the React layer; neither is repeated here.
+	"extends": ["../.oxlintrc.json", "../oxlint.react.jsonc", "../oxlint.vitest.jsonc"],
+
+	// Named here because `load-config.ts` drops a base's `jsPlugins` on the object path (`AGENTS.md`
+	// § Lint and format).
+	"jsPlugins": ["../webapp/tools/oxlint/index.ts"],
+
+	// React Native has no DOM; Hermes provides the ES2022 globals `tsconfig.json` declares.
+	"env": { "es2022": true },
+	"settings": { "react": { "version": "19.2" } },
+
+	"ignorePatterns": [
+		// Generated.
+		"src/api",
+		".expo",
+		"expo-env.d.ts",
+		// Continuous Native Generation output, never committed.
+		"ios",
+		"android"
+	],
+
+	"rules": {
+		// As in `webapp/`, whose config gives the reason: cyclomatic complexity counts every `&&`, `??`
+		// and `?.` in JSX, so at the default 20 it grades how many optional props a screen has.
+		"complexity": ["error", { "max": 40 }],
+		// As in `webapp/`: a file that exports a component is PascalCase, everything else kebab-case.
+		"unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }],
+		// Its fix is `toSorted`, which Hermes does not have: the ES2023 change-array-by-copy methods
+		// (`toSorted`, `toReversed`, `toSpliced`, `with`) are missing, and the first call throws at runtime,
+		// where no test on Node sees it. Sort an array the code has just made instead.
+		"unicorn/no-array-sort": "off",
+		"no-console": "error",
+		"hephaestus/no-manual-query-key": "error",
+		"hephaestus/no-nondeterministic-render": "error"
+	},
+
+	"overrides": [
+		{
+			// Views use the authenticated generated client; streaming has one explicitly owned adapter.
+			"files": ["src/**"],
+			"excludeFiles": ["src/heph/transport.ts"],
+			"rules": {
+				"no-restricted-globals": [
+					"error",
+					{
+						"name": "fetch",
+						"message": "Use the generated client; Heph streaming belongs in heph/transport.ts."
+					},
+					{ "name": "XMLHttpRequest", "message": "Use the generated API client." }
+				]
+			}
+		},
+		{
+			// Reusable native views take data and actions through props. Device geometry and visual state
+			// stay local; server reads, credentials and workspace selection belong to routes and hooks.
+			"files": ["src/**/*.tsx"],
+			"excludeFiles": ["src/app/**", "src/workspace/workspace-context.tsx"],
+			"rules": {
+				"no-restricted-imports": [
+					"error",
+					{
+						"paths": [
+							{
+								"name": "expo-router",
+								"importNames": [
+									"useRouter",
+									"router",
+									"useLocalSearchParams",
+									"useGlobalSearchParams"
+								],
+								"message": "The route supplies navigation actions to reusable views."
+							}
+						],
+						"patterns": [
+							{
+								"group": [
+									"@tanstack/react-query",
+									"@ai-sdk/react",
+									"@/api/**",
+									"@/session/**",
+									"@/workspace/workspace-context",
+									"./workspace-context",
+									"@/**/use-*",
+									"./use-*",
+									"@/app/**"
+								],
+								"allowTypeImports": true,
+								"message": "Reusable views take props. Queries and application state belong to routes or feature hooks; generated types are allowed."
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			// Pure logic and orchestration cannot acquire a runtime dependency on the view layer.
+			"files": ["src/**/*.ts"],
+			"excludeFiles": ["src/**/*.test.ts", "src/ui/**", "src/api/**"],
+			"rules": {
+				"no-restricted-imports": [
+					"error",
+					{
+						"patterns": [
+							{
+								"regex": "(^|/)[A-Z][^/]*$|^@/app/",
+								"allowTypeImports": true,
+								"message": "Logic must not import views. Move shared policy into a pure module."
+							}
+						]
+					}
+				]
+			}
+		},
+
+		{
+			// Expo Router derives routes from these filenames (`[param]`, `(group)`, `_layout`,
+			// `+native-intent`) and owns their naming.
+			"files": ["src/app/**"],
+			"rules": { "unicorn/filename-case": "off" }
+		},
+		{
+			// The lint config loader lives with the house plugin under `webapp/tools/oxlint/`, which this
+			// tree already names by relative path in `jsPlugins`; there is no alias across the two trees.
+			"files": ["vite.config.ts"],
+			"rules": { "import/no-relative-parent-imports": "off" }
+		},
+		{
+			// Expo reads `app.config.ts` from the project root, above `src/`; its rules are tested from here.
+			"files": ["src/app-config.test.ts"],
+			"rules": { "import/no-relative-parent-imports": "off" }
+		}
+	]
+}

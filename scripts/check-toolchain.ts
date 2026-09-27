@@ -172,7 +172,7 @@ function expectConfig(name: string, expected: unknown): void {
 		);
 	}
 }
-expectConfig("packages", [".", "webapp", "docs"]);
+expectConfig("packages", [".", "webapp", "mobile", "docs"]);
 expectConfig("nodeLinker", "isolated");
 expectConfig("hoist", false);
 expectConfig("publicHoistPattern", [
@@ -203,12 +203,14 @@ expectConfig("allowBuilds", {
 	"@nestjs/core": false,
 	protobufjs: false,
 	"core-js": false,
+	"dtrace-provider": false,
 	"@openapitools/openapi-generator-cli": false,
 	msw: false,
 	esbuild: true,
 	"@google/genai": false,
 	"@swc/core": true,
 	"@sentry/cli": true,
+	"react-native-enriched-markdown": false,
 });
 const { overrides } = workspace;
 if (!isRecord(overrides)) {

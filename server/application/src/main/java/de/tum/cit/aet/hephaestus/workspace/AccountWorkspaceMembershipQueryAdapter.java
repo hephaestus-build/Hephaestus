@@ -79,6 +79,14 @@ public class AccountWorkspaceMembershipQueryAdapter implements AccountWorkspaceM
         return activeAdministratorAccounts(workspaceId).contains(accountId);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Long> activeAccountIdForMember(long workspaceId, long memberUserId) {
+        return workspaceMembershipRepository
+                .findByWorkspace_IdAndUser_Id(workspaceId, memberUserId)
+                .flatMap(membership -> activeAccountId(membership.getUser()));
+    }
+
     private List<Long> activeAdministratorAccounts(long workspaceId) {
         return workspaceMembershipRepository.findAllWithUserByWorkspaceId(workspaceId).stream()
                 .filter(membership -> membership.getRole().isAtLeast(WorkspaceMembership.WorkspaceRole.ADMIN))

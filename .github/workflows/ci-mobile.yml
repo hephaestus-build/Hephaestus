@@ -1,0 +1,183 @@
+name: Mobile
+
+on:
+  workflow_call:
+    inputs:
+      should_skip:
+        description: "Whether to skip the workflow"
+        required: false
+        type: string
+        default: "false"
+      postgres_base_sha:
+        description: "Commit whose published PostgreSQL image the Android journey reuses"
+        required: true
+        type: string
+      postgres_image_changed:
+        description: "Whether PostgreSQL image inputs changed"
+        required: false
+        type: string
+        default: "false"
+
+permissions: {}
+
+env:
+  SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
+
+# Real binaries on a simulator and an emulator, no credentials. iOS builds the production variant and
+# runs the server-free smoke flow, because a macOS runner has no Docker for the database; Android
+# builds the development variant and also signs in against the packaged server the other runtime
+# checks use. docs/contributor/mobile.mdx § Native CI owns the split.
+jobs:
+  ios:
+    name: "Mobile: iOS simulator"
+    if: inputs.should_skip != 'true'
+    # GitHub's Xcode 27 image, in public preview, is the one with the iPhone 18 Pro on iOS 27.0;
+    # macos-26 ships Xcode 26. Its README lists Xcode 27.0 (27A266a) as the default, with the
+    # `Xcode_27.0.app` alias used below: https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: "temurin"
+          java-version-file: .java-version
+          cache-jdk: false
+      - uses: ./.github/actions/setup-maestro
+      - name: Build the production app for the simulator
+        env:
+          APP_VARIANT: production
+        run: |
+          vp -C mobile exec expo prebuild --platform ios --clean
+          xcodebuild -quiet \
+            -workspace mobile/ios/Hephaestus.xcworkspace -scheme Hephaestus \
+            -configuration Release -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            -derivedDataPath mobile/ios/build CODE_SIGN_IDENTITY=- build
+      # The device the app is designed and verified on. A runner whose Xcode does not offer it fails
+      # here, saying so, rather than testing on whichever iPhone happens to be installed.
+      - name: Boot an iPhone 18 Pro and install the app
+        env:
+          DEVICE_TYPE: com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro
+          RUNTIME: com.apple.CoreSimulator.SimRuntime.iOS-27-0
+        run: |
+          if ! xcrun simctl list devicetypes --json | jq -e --arg type "$DEVICE_TYPE" '.devicetypes[] | select(.identifier == $type)' > /dev/null; then
+            echo "::error::This runner's Xcode has no iPhone 18 Pro simulator ($DEVICE_TYPE)"
+            exit 1
+          fi
+          if ! xcrun simctl list runtimes --json | jq -e --arg runtime "$RUNTIME" '.runtimes[] | select(.identifier == $runtime and .isAvailable)' > /dev/null; then
+            echo "::error::This runner's Xcode has no available iOS 27.0 simulator runtime ($RUNTIME)"
+            exit 1
+          fi
+          udid="$(xcrun simctl create "Hephaestus iPhone 18 Pro" "$DEVICE_TYPE" "$RUNTIME")"
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid"
+          xcrun simctl install "$udid" mobile/ios/build/Build/Products/Release-iphonesimulator/Hephaestus.app
+          echo "SIMULATOR=$udid" >> "$GITHUB_ENV"
+      - name: Smoke flow
+        run: vp run test:mobile:e2e --platform ios --flow smoke --device "$SIMULATOR" --app-id build.hephaestus.app
+      - name: Upload diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mobile-ios-results-${{ github.run_attempt }}
+          path: |
+            mobile/test-results
+            ~/.maestro/tests
+          if-no-files-found: warn
+          retention-days: 7
+
+  android:
+    name: "Mobile: Android emulator"
+    if: inputs.should_skip != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+      # The packaged server, Gradle for the app and Maestro all run on the one pinned JDK.
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: "temurin"
+          java-version-file: .java-version
+          cache-jdk: false
+      - uses: ./.github/actions/setup-maestro
+      - name: Build the development app
+        env:
+          APP_VARIANT: development
+        run: |
+          vp -C mobile exec expo prebuild --platform android --clean
+          cd mobile/android
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64
+      - name: Download the packaged server
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ env.SERVER_BUILD_ARTIFACT }}
+          path: server
+      # `server/compose.yaml` resolves the database by the `dev` tag, so that is the name it needs.
+      - uses: ./.github/actions/postgres-image
+        with:
+          base-sha: ${{ inputs.postgres_base_sha }}
+          image-changed: ${{ inputs.postgres_image_changed }}
+          tag: ghcr.io/hephaestus-build/postgres:dev
+      - name: Start the packaged server
+        run: |
+          docker compose -f server/compose.yaml up -d --wait --no-build postgres
+          mapfile -t SERVER_JARS < <(find server/application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar')
+          (( ${#SERVER_JARS[@]} == 1 ))
+          # `playwright` leaves only PostgreSQL: no worker, webhook, agent or NATS, as for the browser suite.
+          SERVER_PORT=8080 MANAGEMENT_PORT=8080 POSTGRES_PORT=5432 SPRING_DOCKER_COMPOSE_ENABLED=false \
+            setsid java -jar "${SERVER_JARS[0]}" --spring.profiles.active=e2e,playwright > mobile-server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          # Readiness includes signing-key initialization, which the native token exchange needs.
+          timeout 5m bash -c 'until curl --fail --silent http://localhost:8080/actuator/health/readiness >/dev/null; do sleep 2; done'
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      # The google_apis image ships Chrome for the sign-in Custom Tab. Maestro
+      # inputText hangs on Android 16: https://github.com/mobile-dev-inc/Maestro/issues/2718.
+      - name: Smoke and journey flows
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: |
+            adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk
+            vp run test:mobile:e2e --platform android --flow smoke
+            vp run test:mobile:e2e --platform android --flow journey --server-url http://localhost:8080
+      - name: Stop the server
+        if: always()
+        run: |
+          if [[ -n "${SERVER_PID:-}" ]]; then kill -TERM -- "-$SERVER_PID" 2>/dev/null || true; fi
+          docker compose -f server/compose.yaml down -v
+      - name: Upload diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mobile-android-results-${{ github.run_attempt }}
+          path: |
+            mobile/test-results
+            ~/.maestro/tests
+            mobile-server.log
+          if-no-files-found: warn
+          retention-days: 7

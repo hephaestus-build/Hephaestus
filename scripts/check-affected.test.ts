@@ -19,6 +19,26 @@ await test("accepts only the documented arguments", () => {
 await test("selects ordinary workspace changes", () => {
 	assert.deepEqual(scopesFor(["webapp/src/a.tsx"]), ["webapp"]);
 	assert.deepEqual(scopesFor(["server/application/src/main/java/A.java"]), ["server"]);
+	assert.deepEqual(scopesFor(["mobile/src/app/index.tsx"]), ["mobile"]);
+});
+
+await test("checks the mobile app when the web wording it mirrors changes", () => {
+	assert.deepEqual(scopesFor(["webapp/src/components/auth/ConsentPage.tsx"]), ["mobile", "webapp"]);
+	assert.deepEqual(
+		scopesFor(["webapp/src/components/practice-vocabulary/practice-trend-defs.ts"]),
+		["mobile", "webapp"],
+	);
+});
+
+await test("checks native catalog and review vocabulary mirrors", () => {
+	assert.deepEqual(
+		scopesFor(["server/application/src/main/resources/practices/default-catalog.json"]),
+		["mobile", "server"],
+	);
+	assert.deepEqual(scopesFor(["webapp/src/components/practice-vocabulary/ClaimCurrentness.tsx"]), [
+		"mobile",
+		"webapp",
+	]);
 });
 
 await test("combines independent workspaces", () => {
@@ -44,9 +64,10 @@ await test("selects documentation changes", () => {
 });
 
 await test("maps scopes to the documented commands", () => {
-	assert.deepEqual(commandsFor(["agents", "docs", "server", "webapp"]), [
+	assert.deepEqual(commandsFor(["agents", "docs", "mobile", "server", "webapp"]), [
 		["vp", "run", "affected:agents"],
 		["vp", "run", "affected:docs"],
+		["vp", "run", "affected:mobile"],
 		["vp", "run", "affected:server"],
 		["vp", "run", "affected:webapp"],
 	]);
@@ -62,6 +83,7 @@ await test("fails closed for shared, generated, contract, tooling, and unknown i
 		"scripts/check-affected.ts",
 		"server/openapi.yaml",
 		"webapp/src/api/core/a.ts",
+		"mobile/src/api/sdk.gen.ts",
 		"webapp/src/routeTree.gen.ts",
 		"webapp/tools/oxlint/index.ts",
 		"docs/contributor/erd/schema.mmd",

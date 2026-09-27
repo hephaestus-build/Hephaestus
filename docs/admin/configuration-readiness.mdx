@@ -48,6 +48,8 @@ Compose maps `POSTGRES_PASSWORD` to `DATABASE_PASSWORD` and owns the runtime-rol
 | `spring.mail.host` | `SPRING_MAIL_HOST` |
 | `hephaestus.email.from` | `HEPHAESTUS_EMAIL_FROM` |
 
+| `hephaestus.push.expo-access-token` | `HEPHAESTUS_PUSH_EXPO_ACCESS_TOKEN` |
+
 ## Runtime roles
 
 Enable at least one of `hephaestus.runtime.server.enabled`, `worker.enabled`, or `webhook.enabled`;
@@ -243,3 +245,9 @@ configure the capability in instance settings. See the supported no-email behavi
 Configuration and verification are in [Production setup → Email](./production-setup#email); activating
 email requires the processing review in the
 [processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).
+
+## Push notifications
+
+Push notifications to the mobile app are optional and off until `hephaestus.push.expo-access-token`
+is set; the fact is `OPTIONAL` and never prevents startup. Which token applies, what a notification
+contains and the processing review it needs are in [Mobile app § Push notifications](./mobile-app#push-notifications).

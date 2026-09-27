@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -398,7 +399,7 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
         // Re-affirming an already-linked identity persists NO new link, so it must NOT report a link
         // (the handler would otherwise audit a phantom IDENTITY_LINKED for what is really a login).
         assertThat(result.identityLinked()).isFalse();
-        verify(identityLinkRepository).touchLastLogin(any(), any());
+        verify(identityLinkRepository).refreshLoginProfile(any(), eq(NOW), isNull());
         verify(events, never()).publishEvent(any(AccountSecurityChangedEvent.class));
         verify(identityLinkRepository, never()).save(any());
     }

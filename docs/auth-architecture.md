@@ -101,6 +101,54 @@ Public login-provider discovery ignores credentials so revoked cookies cannot bl
 Locally invalid cookies are ignored without a clearing response that could erase a newer sign-in;
 protected endpoints still reject the resulting unauthenticated request.
 
+## Native app sessions
+
+The iOS and Android client uses the system authentication browser, following
+[RFC 8252](https://www.rfc-editor.org/rfc/rfc8252). GitHub and GitLab still authenticate through the
+existing Spring Security OAuth flow; Slack and Outline remain identity-linking integrations.
+The server does not expose a general-purpose OAuth authorization server.
+
+The app creates an S256 PKCE verifier and an independent state value before opening
+`/auth/login/native`. The sealed login intent carries the challenge, state and an **exactly
+allowlisted** app callback URI. On successful provider authentication the server returns a random,
+one-use handoff code to that callback. The app checks state and redeems the code and verifier at
+`POST /auth/native/token`. A handoff expires after 60 seconds; an incorrect verifier consumes it.
+Neither the callback nor an upstream provider token becomes an app credential.
+
+The result is an ES256 bearer access token and a random refresh secret. The access token uses the
+same database revocation checks as browser tokens and adds the `sid` claim defined in the
+[auth glossary](auth-glossary.md#jwt-claim-shape). Refresh secrets and handoff codes are stored only
+as hashes. Native token, refresh and logout endpoints refuse requests carrying a browser session
+cookie; the native client omits cookies. Browser refresh and impersonation cannot consume a native
+session.
+
+`POST /auth/native/refresh` atomically replaces both credentials and revokes the prior access token.
+Every consumed refresh hash and issued token identifier stays associated with its session until
+that session ends, independently of access-token cleanup. Reusing **any** earlier refresh secret
+revokes the entire session, including its newest access token. This is strict refresh rotation with
+reuse detection as described in [RFC 9700 §4.14.2](https://www.rfc-editor.org/rfc/rfc9700#section-4.14.2):
+there is no retry grace period. The app serializes refreshes and never automatically retries a refresh
+POST. If the server commits a rotation but its response is lost, the next attempt requires sign-in.
+Renewal preserves the original absolute session deadline.
+
+Logout accepts any refresh secret in the session's history, so a delayed logout still revokes a
+concurrently rotated session. Device revocation, sign-out-everywhere, account deletion and role
+changes also terminate the associated native sessions. These operations acquire locks in the same
+order: account, native session, issued token. Push eligibility reads native-session liveness through
+an auth SPI; ending a session immediately makes its device registration ineligible. Token responses
+also carry the stable, non-secret `nativeSessionId`. Push data names this same identifier; the app
+ignores a notification for any other session, including an old notification opened after changing
+accounts or instances. Refresh preserves this identifier.
+
+The app stores session material in the platform secure store and access tokens in memory. Its
+serialized session authority owns persistence, refresh and logout ordering; a session change replaces
+the query cache and clears drafts before the next account can render. A durable pending-revocation
+queue permits local sign-out while offline; server revocation completes when connectivity returns.
+Local sign-out therefore cannot promise immediate remote revocation without a server response.
+
+[Mobile operation](admin/mobile-app.mdx) owns callback allowlists, distribution configuration and
+push setup. [Mobile development](contributor/mobile.mdx) owns the client structure and native tests.
+
 ## Module boundaries
 
 `core.auth` owns accounts, login-provider configuration, OAuth exchange, token issuance and

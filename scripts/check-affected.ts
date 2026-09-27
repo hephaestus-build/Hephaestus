@@ -4,7 +4,7 @@ import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
-export type Scope = "agents" | "docs" | "full" | "server" | "webapp";
+export type Scope = "agents" | "docs" | "full" | "mobile" | "server" | "webapp";
 export type Command = readonly [string, ...string[]];
 
 export function parseBase(args: string[]): string {
@@ -32,11 +32,17 @@ const fullGateInputs = [
 	/^\.ox(?:fmt|lint)rc\.json$/u,
 	/^server\/openapi\.yaml$/u,
 	/^webapp\/src\/api\//u,
+	/^mobile\/src\/api\//u,
 	/^webapp\/src\/routeTree\.gen\.ts$/u,
 	/^webapp\/tools\/oxlint\//u,
 	/^docs\/contributor\/erd\/schema\.mmd$/u,
 	/(?:^|\/)AGENTS\.md$/u,
 	/(?:^|\/)CLAUDE\.md$/u,
+];
+
+const mobileMirrors = [
+	"webapp/src/components/auth/ConsentPage.tsx",
+	"webapp/src/components/practice-vocabulary/",
 ];
 
 export function scopesFor(paths: string[]): Scope[] {
@@ -50,7 +56,17 @@ export function scopesFor(paths: string[]): Scope[] {
 			scopes.add("webapp");
 		} else if (path.startsWith("webapp/")) {
 			scopes.add("webapp");
+			// The mobile app shows the web app's consent wording and practice vocabulary word for word,
+			// and its tests read these files to prove it.
+			if (mobileMirrors.some((mirrored) => path.startsWith(mirrored))) {
+				scopes.add("mobile");
+			}
+		} else if (path.startsWith("mobile/")) {
+			scopes.add("mobile");
 		} else if (path.startsWith("server/")) {
+			if (path === "server/application/src/main/resources/practices/default-catalog.json") {
+				scopes.add("mobile");
+			}
 			if (/\/resources\/(?:agent|practices\/precompute)\//u.test(path)) {
 				scopes.add("agents");
 			} else {
@@ -102,6 +118,7 @@ export function commandsFor(scopes: Scope[]): Command[] {
 	const commands: Record<Exclude<Scope, "full">, Command> = {
 		agents: ["vp", "run", "affected:agents"],
 		docs: ["vp", "run", "affected:docs"],
+		mobile: ["vp", "run", "affected:mobile"],
 		server: ["vp", "run", "affected:server"],
 		webapp: ["vp", "run", "affected:webapp"],
 	};

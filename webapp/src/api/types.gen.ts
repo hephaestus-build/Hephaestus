@@ -2488,6 +2488,31 @@ export type MemberAiChoiceRequest = {
   choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
 };
 
+export type NativeClientConfiguration = {
+  minimumAppVersion: string;
+  /**
+   * Web application address for privacy, account export and browser-only workflows
+   */
+  webappUrl: string;
+};
+
+export type NativeRefreshRequest = {
+  refreshToken: string;
+};
+
+export type NativeSessionTokens = {
+  accessToken: string;
+  accessTokenExpiresAt: Date;
+  nativeSessionId: string;
+  refreshToken: string;
+  sessionExpiresAt: Date;
+};
+
+export type NativeTokenRequest = {
+  code: string;
+  codeVerifier: string;
+};
+
 export type NotificationPreferences = {
   /**
    * This instance has an email transport and sender configured
@@ -4159,6 +4184,16 @@ export type PullRequestInfo = {
   updatedAt?: Date;
 };
 
+export type PushDeviceRegistration = {
+  expoPushToken: string;
+  platform: 'IOS' | 'ANDROID';
+};
+
+export type PushDeviceStatus = {
+  available: boolean;
+  registered: boolean;
+};
+
 export type Question = {
   allowOther: boolean;
   highLabel?: string;
@@ -5033,6 +5068,10 @@ export type SessionView = {
   ip?: string;
   issuedAt?: Date;
   jti?: string;
+  /**
+   * The native app, whose session outlives this token until expiresAt
+   */
+  nativeApp: boolean;
   userAgent?: string;
 };
 
@@ -8922,6 +8961,88 @@ export type LogoutResponses = {
   200: unknown;
 };
 
+export type GetNativeClientConfigurationData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/auth/native/configuration';
+};
+
+export type GetNativeClientConfigurationResponses = {
+  /**
+   * OK
+   */
+  200: NativeClientConfiguration;
+};
+
+export type GetNativeClientConfigurationResponse = GetNativeClientConfigurationResponses[keyof GetNativeClientConfigurationResponses];
+
+export type LogoutNativeSessionData = {
+  body: NativeRefreshRequest;
+  path?: never;
+  query?: never;
+  url: '/auth/native/logout';
+};
+
+export type LogoutNativeSessionResponses = {
+  /**
+   * Signed out, or the secret was already unknown
+   */
+  204: void;
+};
+
+export type LogoutNativeSessionResponse = LogoutNativeSessionResponses[keyof LogoutNativeSessionResponses];
+
+export type RefreshNativeSessionData = {
+  body: NativeRefreshRequest;
+  path?: never;
+  query?: never;
+  url: '/auth/native/refresh';
+};
+
+export type RefreshNativeSessionErrors = {
+  /**
+   * The session has ended; sign in again
+   */
+  401: ProblemDetail;
+};
+
+export type RefreshNativeSessionError = RefreshNativeSessionErrors[keyof RefreshNativeSessionErrors];
+
+export type RefreshNativeSessionResponses = {
+  /**
+   * Rotated
+   */
+  200: NativeSessionTokens;
+};
+
+export type RefreshNativeSessionResponse = RefreshNativeSessionResponses[keyof RefreshNativeSessionResponses];
+
+export type ExchangeNativeSignInData = {
+  body: NativeTokenRequest;
+  path?: never;
+  query?: never;
+  url: '/auth/native/token';
+};
+
+export type ExchangeNativeSignInErrors = {
+  /**
+   * The code is unknown, expired, used, or does not match the verifier
+   */
+  400: NativeSessionTokens;
+};
+
+export type ExchangeNativeSignInError = ExchangeNativeSignInErrors[keyof ExchangeNativeSignInErrors];
+
+export type ExchangeNativeSignInResponses = {
+  /**
+   * Signed in
+   */
+  200: NativeSessionTokens;
+};
+
+export type ExchangeNativeSignInResponse = ExchangeNativeSignInResponses[keyof ExchangeNativeSignInResponses];
+
 export type RefreshData = {
   body?: never;
   path?: never;
@@ -9353,6 +9474,71 @@ export type UpdateNotificationPreferencesResponses = {
 };
 
 export type UpdateNotificationPreferencesResponse = UpdateNotificationPreferencesResponses[keyof UpdateNotificationPreferencesResponses];
+
+export type UnregisterPushDeviceData = {
+  body?: never;
+  path: {
+    installationId: string;
+  };
+  query?: never;
+  url: '/user/push-devices/{installationId}';
+};
+
+export type UnregisterPushDeviceResponses = {
+  /**
+   * Unregistered, or it was not registered
+   */
+  204: void;
+};
+
+export type UnregisterPushDeviceResponse = UnregisterPushDeviceResponses[keyof UnregisterPushDeviceResponses];
+
+export type GetPushDeviceStatusData = {
+  body?: never;
+  path: {
+    installationId: string;
+  };
+  query?: never;
+  url: '/user/push-devices/{installationId}';
+};
+
+export type GetPushDeviceStatusResponses = {
+  /**
+   * OK
+   */
+  200: PushDeviceStatus;
+};
+
+export type GetPushDeviceStatusResponse = GetPushDeviceStatusResponses[keyof GetPushDeviceStatusResponses];
+
+export type RegisterPushDeviceData = {
+  body: PushDeviceRegistration;
+  path: {
+    installationId: string;
+  };
+  query?: never;
+  url: '/user/push-devices/{installationId}';
+};
+
+export type RegisterPushDeviceErrors = {
+  /**
+   * Not a native app session
+   */
+  400: unknown;
+  /**
+   * This server does not send push notifications
+   */
+  409: unknown;
+};
+
+export type RegisterPushDeviceResponses = {
+  /**
+   * Registered
+   */
+  204: void;
+};
+
+export type RegisterPushDeviceResponse = RegisterPushDeviceResponses[keyof RegisterPushDeviceResponses];
 
 export type RevokeOtherSessionsData = {
   body?: never;

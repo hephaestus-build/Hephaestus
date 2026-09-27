@@ -265,3 +265,20 @@ Markdown source under `webapp/public/legal/profiles/tumaet/`.
 ```text
 Bitte folgende Auftragsverarbeiter zum AET-Pool hinzufügen, soweit noch nicht vorhanden: GitHub Inc. (USA), Microsoft Corp. (Azure OpenAI Service, USA/EU), OpenAI OpCo, LLC (USA) ggf. mit OpenAI Ireland Ltd. (Irland) als EWR-Vertragspartner, Salesforce / Slack Technologies, LLC (USA). Beschreibungen unter "Recipient Categories"; Drittlandtransfers durch das EU–US Data Privacy Framework und Standardvertragsklauseln Modul 2 (jeweils im Rahmen des einschlägigen Enterprise-AVV) abgedeckt; DPF-Status pro Empfänger vor Anbindung verifizieren.
 ```
+
+## Native mobile client
+
+The native iOS/Android client uses the same account, workspace authorization and data services as the
+web client. Native-session and push records, their retention and erasure evidence have one home in
+the [personal-data map](./personal-data-map.md). The app's protected device storage holds the session
+renewal secret and workspace choice; loaded feedback and conversation drafts are not persisted as a
+content cache. Content reports are explicit instance-scoped product-feedback submissions, not
+research enrollment or an automatic copy of private conversations.
+
+Optional notification routing sends a push token, workspace slug, opaque app-session identifier and
+generic notification text through Expo to Apple or Google. It carries no practice-feedback text.
+EAS Update, when configured by the publisher, receives the requests needed to deliver compatible
+application updates, without Hephaestus bearer credentials or conversation content. These are new
+processing surfaces: the [processor checklist](./processor-checklist.md) records the contracts,
+recipient roles and transfer/retention assessment required before activation. Existing agreements
+with unrelated AI or integration providers do not cover them automatically.

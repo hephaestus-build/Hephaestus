@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipal;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.core.auth.nativesession.NativeSessionService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Duration;
@@ -59,7 +60,8 @@ class DevLoginServiceTest extends BaseUnitTest {
                 principalFactory,
                 jwtIssuer,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
-                environment);
+                environment,
+                mock(NativeSessionService.class));
     }
 
     private void stubIssuer() {

@@ -84,7 +84,9 @@ else. Before calling a change done, walk this list and say which entries applied
   tolerate its absence (`server/AGENTS.md` § Things that bite); production runs the webhook role in
   its own container.
 - **Wire contract.** Anything crossing HTTP is a DTO in `server/openapi.yaml` and the generated
-  client in `webapp/src/api/**`; change the controller, regenerate both, commit both.
+  clients in `webapp/src/api/**` and `mobile/src/api/**`; change the controller, regenerate the spec
+  and both clients, and include them with the change. Installed apps keep the API they shipped with:
+  `gate:mobile-api` fails a change that breaks one (`docs/contributor/mobile.mdx`).
 - **Schema.** An entity change is a changelog and an ERD (`vp run db:draft-changelog`), and a
   new workspace-owned table is workspace-scoped from its first migration.
 - **Channels.** Feedback appears on the reviewed work, on the developer's practice page and in
@@ -94,8 +96,9 @@ else. Before calling a change done, walk this list and say which entries applied
 - **Both admin consoles.** Instance-wide and per-workspace administration share components; a
   scope-specific field in a shared one breaks the other console silently
   (`webapp/AGENTS.md` § Which admin console a component belongs to).
-- **UI states.** Every component ships stories for its empty, loading and error states; the
-  loading rules in `webapp/AGENTS.md` decide skeleton versus spinner.
+- **UI states.** Web components ship stories for empty, loading and error states; the loading
+  rules in `webapp/AGENTS.md` decide skeleton versus spinner. Native flows prove these states on
+  devices, with behavioral tests for their state machines — `docs/contributor/mobile.mdx`.
 - **Docs by audience.** `docs/user/` is the shipped product in its own voice, with no repo tooling
   or source paths; `docs/admin/` is for operators; `docs/contributor/` is for engineers. New
   vocabulary lands in the two glossaries.
@@ -117,6 +120,9 @@ generated client. `docs/contributor/system-design.mdx` has the diagrams and
   `openapi.yaml`. `server/AGENTS.md` has the build traps and entity conventions.
 - `webapp/` — React 19 SPA, TanStack Router/Query, Tailwind 4, generated API client in `src/api/**`.
   `webapp/AGENTS.md` has the component and story conventions.
+- `mobile/` — Expo and React Native for iOS and Android, independent native UI and session state,
+  generated client from the same OpenAPI contract. `docs/contributor/mobile.mdx` owns its structure,
+  development builds and native tests; `/react-native-skills` supplies focused implementation guidance.
 - `docs/` — user, admin and contributor docs published to GitHub Pages, including the generated ERD.
 - `scripts/` — repository tooling in TypeScript, on the Node version pinned by
   `package.json#devEngines.runtime`, run through the Vite+ version pinned in `devDependencies`. The
@@ -126,7 +132,7 @@ generated client. `docs/contributor/system-design.mdx` has the diagrams and
   via `tsconfig.agents.json`.
 
 Skills live in `.claude/skills/<name>/`, read by Claude Code and opencode; Codex reads
-`.agents/skills/` and nothing else, so the four that drive a contribution are mirrored there byte
+`.agents/skills/` and nothing else, so contribution workflows and the React Native pack are mirrored there byte
 for byte and `gate:instructions` fails when a half drifts. Copy a skill nowhere else.
 
 | Skill | When |
@@ -137,6 +143,7 @@ for byte and `gate:instructions` fails when a half drifts. Copy a skill nowhere 
 | `/react-best-practices` | Frontend performance — a vendored Vercel pack; read its applicability table first, since much of it is Next.js-only |
 | `/fix-ci`, `/land-pr`, `/resolve-review` | CI triage, opening a PR, answering review comments — mirrored for Codex |
 | `/gh-stack` | Creating and maintaining stacked pull requests — mirrored for Codex |
+| `/react-native-skills` | Native mobile UI, navigation, gestures, lists and Expo integrations — adapted Vercel references; mirrored for Codex |
 
 ## Dev servers
 
@@ -202,7 +209,7 @@ first word says what kind of task it is, and only these prefixes are allowed:
 | `verify` | Run the complete credential-free local verification entry point |
 
 Segments after the prefix identify the subject and specialization, such as
-`test:server:integration`. `:webapp`, `:server` and `:agents` are the tree scopes; `:java` scopes
+`test:server:integration`. `:webapp`, `:mobile`, `:server` and `:agents` are the tree scopes; `:java` scopes
 only `format` and `lint`, and the Java leg of `check` is `gate:server`.
 
 ### Lint and format
@@ -277,8 +284,7 @@ change that ships, never a measurement or a verdict alone.
   and the `no-unsafe-*` family are errors, and a cast is usually the linter telling you the type is
   wrong upstream — reach for `satisfies`.
 - Validate anything crossing a trust boundary — a webhook body, a hand-parsed stream, a
-  `JSON.parse` — with a discriminated union, or with a `zod` schema in the SPA, the only tree that
-  has zod. Never log a token, a secret or a raw request body.
+  `JSON.parse` — with a discriminated union, or with a `zod` schema in the web or mobile client. Never log a token, a secret or a raw request body.
 - A leading `_` marks what the language or a tool reads that way — an unused binding, a server
   field name, a runtime global — never something private. Import groups are separated by blank
   lines where their evaluation order matters; oxfmt sorts within a group.
@@ -296,14 +302,14 @@ change that ships, never a measurement or a verdict alone.
 | Artefact | Command |
 |---|---|
 | `server/openapi.yaml` | `vp run generate:api:specs` |
-| `webapp/src/api/**` | `vp run generate:api:client` |
+| `webapp/src/api/**`, `mobile/src/api/**` | `vp run generate:api:client` |
 | `docs/contributor/erd/schema.mmd` | `vp run db:generate-erd-docs` |
 | `webapp/src/routeTree.gen.ts` | TanStack Router Vite plugin |
 | `server/generated-clients/build/generated/sources/**` | GraphQL and Outline codegen, owned by the generated-clients Gradle module |
 
-Never hand-edit these. `generate:api:client` empties `webapp/src/api/` first;
+Never hand-edit these. `generate:api:client` empties each client output before regeneration;
 Gradle-generated sources live under `build/` and are never committed. Commit `server/openapi.yaml`
-and `webapp/src/api/**` with the API change that produced them.
+and both generated client trees with the API change that produced them.
 
 ## Database changes
 

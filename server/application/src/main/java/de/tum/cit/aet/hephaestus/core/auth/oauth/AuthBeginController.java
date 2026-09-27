@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.auth.nativesession.NativeClientProperties;
+import de.tum.cit.aet.hephaestus.core.auth.nativesession.NativeSignInRedirect;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
@@ -41,6 +43,7 @@ public class AuthBeginController {
     private final LoginProviderService loginProviderService;
     private final AuthIntentCookie authIntentCookie;
     private final IdentityLinkAuthentication identityLinkAuthentication;
+    private final NativeClientProperties nativeClientProperties;
 
     /** Proxy-stripped API prefix re-added to the init redirect — see {@code AuthProperties#apiBasePath}. */
     private final String apiBasePath;
@@ -49,10 +52,12 @@ public class AuthBeginController {
             LoginProviderService loginProviderService,
             AuthIntentCookie authIntentCookie,
             IdentityLinkAuthentication identityLinkAuthentication,
-            AuthProperties authProperties) {
+            AuthProperties authProperties,
+            NativeClientProperties nativeClientProperties) {
         this.loginProviderService = loginProviderService;
         this.authIntentCookie = authIntentCookie;
         this.identityLinkAuthentication = identityLinkAuthentication;
+        this.nativeClientProperties = nativeClientProperties;
         this.apiBasePath = authProperties.apiBasePath();
     }
 
@@ -111,6 +116,49 @@ public class AuthBeginController {
         // takes over from here, building the upstream redirect with state + PKCE (see AuthSecurityConfig).
         // apiBasePath re-adds the proxy-stripped prefix so the browser lands on the proxied init endpoint,
         // not the SPA. (The /auth/error targets above are SPA routes at the origin root, so they keep none.)
+        String urlEncodedRegistration = URLEncoder.encode(registrationId, StandardCharsets.UTF_8);
+        return new RedirectView(apiBasePath + OAUTH_INIT_PATH + urlEncodedRegistration, false);
+    }
+
+    /**
+     * The native app's sign-in, opened in the app's sign-in sheet. The redirect is checked first and
+     * exactly: until it is known to be one of ours, nothing — not even an error — may be sent to it. After
+     * that every refusal goes back to the app with its {@code state}, so the app can close the sheet with a
+     * message instead of a web page. The browser never receives a Hephaestus session on this path.
+     */
+    @GetMapping("/login/native")
+    @PreAuthorize("permitAll()")
+    @Hidden
+    public RedirectView beginNative(
+            @RequestParam("provider") String registrationId,
+            @RequestParam(value = "code_challenge", required = false) @Nullable String codeChallenge,
+            @RequestParam(value = "code_challenge_method", required = false) @Nullable String codeChallengeMethod,
+            @RequestParam(value = "state", required = false) @Nullable String state,
+            @RequestParam(value = "redirect_uri", required = false) @Nullable String redirectUri,
+            HttpServletResponse response) {
+        if (redirectUri == null || !nativeClientProperties.allowsRedirect(redirectUri)) {
+            log.warn("auth.begin: native sign-in with a redirect that is not allowlisted");
+            return new RedirectView("/auth/error?code=native_redirect_not_allowed", false);
+        }
+        if (state == null || state.isBlank() || state.length() > 256) {
+            return new RedirectView(NativeSignInRedirect.error(redirectUri, "invalid_request", ""), false);
+        }
+        if (codeChallenge == null
+                || !"S256".equals(codeChallengeMethod)
+                || !NativeClientProperties.isPkceChallenge(codeChallenge)) {
+            return new RedirectView(NativeSignInRedirect.error(redirectUri, "invalid_request", state), false);
+        }
+        Optional<LoginProvider> provider = loginProviderService.findEnabled(registrationId);
+        if (provider.isEmpty()) {
+            return new RedirectView(NativeSignInRedirect.error(redirectUri, "unknown_provider", state), false);
+        }
+        if (provider.get().getType().isLinkOnly()) {
+            return new RedirectView(NativeSignInRedirect.error(redirectUri, "link_requires_auth", state), false);
+        }
+        authIntentCookie.write(
+                response,
+                AuthIntentCookie.Intent.nativeLogin(
+                        new AuthIntentCookie.Intent.NativeRequest(codeChallenge, state, redirectUri)));
         String urlEncodedRegistration = URLEncoder.encode(registrationId, StandardCharsets.UTF_8);
         return new RedirectView(apiBasePath + OAUTH_INIT_PATH + urlEncodedRegistration, false);
     }

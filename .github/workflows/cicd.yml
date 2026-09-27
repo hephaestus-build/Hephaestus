@@ -37,6 +37,7 @@ jobs:
     outputs:
       webapp: ${{ steps.filter.outputs.webapp }}
       webapp-image: ${{ steps.filter.outputs.webapp-image }}
+      mobile: ${{ steps.filter.outputs.mobile }}
       application-server: ${{ steps.filter.outputs.application-server }}
       tooling: ${{ steps.filter.outputs.tooling }}
       application-server-image: ${{ steps.filter.outputs.application-server-image == 'true' || steps.filter.outputs.docker-config == 'true' || steps.filter.outputs.build-config == 'true' }}
@@ -57,7 +58,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       release-candidate: ${{ steps.release_candidate.outputs.release-candidate }}
       release-preflight: ${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || steps.release_candidate.outputs.release-candidate == 'true' }}
-      any-code: ${{ steps.filter.outputs.webapp == 'true' || steps.filter.outputs.application-server == 'true' || steps.filter.outputs.tooling == 'true' || steps.filter.outputs.agent-images == 'true' || steps.filter.outputs.postgres-image == 'true' }}
+      any-code: ${{ steps.filter.outputs.webapp == 'true' || steps.filter.outputs.mobile == 'true' || steps.filter.outputs.application-server == 'true' || steps.filter.outputs.tooling == 'true' || steps.filter.outputs.agent-images == 'true' || steps.filter.outputs.postgres-image == 'true' }}
       # The vulnerability policy's match key includes the platform, so an arm64-only finding has to
       # be found before the release rather than by it, and only a manifest that exists can carry it.
       single-arch: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.release_candidate.outputs.release-candidate != 'true' }}
@@ -154,6 +155,7 @@ jobs:
               - 'docs/src/css/custom.css'
               - '.oxlintrc.json'
               - 'oxlint.react.jsonc'
+              - 'oxlint.vitest.jsonc'
               - '.oxfmtrc.json'
               - 'scripts/check-docs-tokens.ts'
               - 'scripts/check-docs-tokens.test.ts'
@@ -161,6 +163,25 @@ jobs:
               - 'scripts/check-story-prose.ts'
               - 'scripts/check-story-sort.ts'
               - 'scripts/install-browser-deps.ts'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+            # The app sources, API contract, catalog and web vocabulary its drift tests mirror,
+            # plus its native test harness and shared lint/dependency configuration.
+            mobile:
+              - 'mobile/**'
+              - 'server/openapi.yaml'
+              - 'webapp/src/components/auth/ConsentPage.tsx'
+              - 'server/application/src/main/resources/practices/default-catalog.json'
+              - 'webapp/src/components/practice-vocabulary/**'
+              - 'webapp/tools/oxlint/**'
+              - '.oxlintrc.json'
+              - 'oxlint.react.jsonc'
+              - 'oxlint.vitest.jsonc'
+              - '.oxfmtrc.json'
+              - 'scripts/mobile-e2e.ts'
+              - '.github/workflows/ci-mobile.yml'
+              - '.github/actions/setup-maestro/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
@@ -208,6 +229,7 @@ jobs:
               - 'tsconfig.json'
               - '.oxlintrc.json'
               - 'oxlint.react.jsonc'
+              - 'oxlint.vitest.jsonc'
               - '.oxfmtrc.json'
               - 'vite.config.ts'
               - 'package.json'
@@ -461,6 +483,7 @@ jobs:
       webapp_changed: ${{ (needs.detect-changes.outputs.webapp == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       tooling_changed: ${{ (needs.detect-changes.outputs.tooling == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      mobile_changed: ${{ (needs.detect-changes.outputs.mobile == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       pmd_canary: ${{ (needs.detect-changes.outputs.pmd-canary == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
 
   # Package once; artifact checks and the image independently consume the same JAR.
@@ -474,7 +497,7 @@ jobs:
         needs.detect-changes.outputs.any-code == 'true' ||
         needs.detect-changes.outputs.build-config == 'true'
       ) && (
-        needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'
+        needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.mobile == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'
       )
     env:
       SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
@@ -623,6 +646,24 @@ jobs:
       postgres_base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
       contracts_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+
+  # Native builds and Maestro flows. The Android journey signs in against the packaged server, so it
+  # consumes the same JAR as the other runtime checks.
+  Mobile:
+    uses: ./.github/workflows/ci-mobile.yml
+    needs: [detect-changes, server-package]
+    if: |
+      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
+      needs.detect-changes.outputs.should_skip != 'true' && (
+        needs.detect-changes.outputs.mobile == 'true' ||
+        needs.detect-changes.outputs.unfiltered == 'true'
+      )
+    permissions:
+      contents: read
+    with:
+      should_skip: ${{ needs.detect-changes.outputs.should_skip }}
+      postgres_base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
 
   Security:
@@ -839,7 +880,7 @@ jobs:
     permissions:
       actions: read
       statuses: write
-    needs: [detect-changes, vulnerability-database, gradle-wrapper, workflow-lint, zizmor, Quality, server-package, application-server-image, Build, Security, Test, Changesets, Compose, Docker, Supported-host-smoke, Release-preflight]
+    needs: [detect-changes, vulnerability-database, gradle-wrapper, workflow-lint, zizmor, Quality, server-package, application-server-image, Build, Mobile, Security, Test, Changesets, Compose, Docker, Supported-host-smoke, Release-preflight]
     if: always()
     steps:
       - name: Generate workflow timeline
@@ -896,6 +937,7 @@ jobs:
           echo "Package:        ${{ needs.server-package.result }}"
           echo "Server image:   ${{ needs.application-server-image.result }}"
           echo "Build:          ${{ needs.Build.result }}"
+          echo "Mobile:         ${{ needs.Mobile.result }}"
           echo "Security:       ${{ needs.Security.result }}"
           echo "Test:           ${{ needs.Test.result }}"
           echo "Changesets:     ${{ needs.Changesets.result }}"

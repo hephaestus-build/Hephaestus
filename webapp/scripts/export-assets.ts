@@ -12,6 +12,7 @@ const docsImageDirectory = path.resolve(webappDirectory, "../docs/static/img");
 const docsBrandDirectory = path.resolve(docsImageDirectory, "brand");
 const readmeImageDirectory = path.resolve(webappDirectory, "../docs/images/readme");
 const proxyComposePath = path.resolve(webappDirectory, "../docker/compose.proxy.yaml");
+const mobileAssetDirectory = path.resolve(webappDirectory, "../mobile/assets");
 const markSvg = await readFile(path.resolve(sourceDirectory, "hephaestus-mark.svg"), "utf8");
 const applicationMarkSvg = markSvg.replace(
 	'transform="translate(24 20) scale(3.3333)"',
@@ -19,6 +20,12 @@ const applicationMarkSvg = markSvg.replace(
 );
 if (applicationMarkSvg === markSvg) {
 	throw new Error("The application icon crop could not be applied.");
+}
+// Heph without the disc: Android composes it over its own signal-blue background layer, and draws a
+// notification icon as a white silhouette.
+const glyphSvg = markSvg.replace('<circle cx="64" cy="64" r="64" fill="#315FDC"/>', "");
+if (glyphSvg === markSvg) {
+	throw new Error("The glyph could not be separated from the mark.");
 }
 const interFont = await readFile(
 	new URL(import.meta.resolve("@fontsource-variable/inter/files/inter-latin-wght-normal.woff2")),
@@ -34,6 +41,7 @@ await rm(docsBrandDirectory, { recursive: true, force: true });
 await mkdir(docsBrandDirectory, { recursive: true });
 await rm(readmeImageDirectory, { recursive: true, force: true });
 await mkdir(readmeImageDirectory, { recursive: true });
+await mkdir(mobileAssetDirectory, { recursive: true });
 
 for (const [source, targets] of [
 	["hephaestus-mark.svg", [path.resolve(publicDirectory, "brand/hephaestus-mark.svg")]],
@@ -115,6 +123,20 @@ try {
 		1024,
 	);
 	await captureMark(path.resolve(docsImageDirectory, "favicon.png"), 64);
+
+	// Native app: iOS rounds an opaque square itself; Android masks the adaptive foreground to a circle
+	// or squircle, so the glyph stays inside its central 66% safe zone.
+	await captureApplicationMark(path.resolve(mobileAssetDirectory, "icon.png"), 1024);
+	const captureGlyph = async (target: string, size: number, share: number): Promise<void> => {
+		await page.setViewportSize({ width: size, height: size });
+		await page.setContent(
+			`<style>html,body{margin:0;width:100%;height:100%;background:transparent;display:grid;place-items:center}svg{display:block;width:${share * 100}%;height:${share * 100}%}</style>${glyphSvg}`,
+		);
+		await page.screenshot({ path: target, omitBackground: true });
+	};
+	await captureGlyph(path.resolve(mobileAssetDirectory, "adaptive-icon.png"), 1024, 0.66);
+	await captureGlyph(path.resolve(mobileAssetDirectory, "notification-icon.png"), 96, 1);
+	await captureMark(path.resolve(mobileAssetDirectory, "splash-icon.png"), 512);
 
 	const captureLockup = async (target: string, dark: boolean): Promise<void> => {
 		await page.setViewportSize({ width: 1240, height: 256 });

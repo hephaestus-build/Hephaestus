@@ -824,6 +824,34 @@ erDiagram
         BIGINT provider_id FK,UK "NOT NULL"
     }
 
+    NativeSession {
+        UUID id PK
+        BIGINT account_id FK "NOT NULL"
+        TIMESTAMPTZ auth_time "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        UUID current_jti "NOT NULL"
+        TIMESTAMPTZ revoked_at
+        VARCHAR(32) revoked_reason
+        TIMESTAMPTZ session_expires_at "NOT NULL"
+    }
+
+    NativeSessionToken {
+        UUID jti PK
+        VARCHAR(64) refresh_token_hash UK "NOT NULL"
+        UUID session_id FK "NOT NULL"
+    }
+
+    NativeSignInHandoff {
+        VARCHAR(64) code_hash PK
+        BIGINT account_id FK "NOT NULL"
+        TIMESTAMPTZ auth_time "NOT NULL"
+        VARCHAR(128) code_challenge "NOT NULL"
+        TIMESTAMPTZ consumed_at
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ expires_at "NOT NULL"
+        TIMESTAMPTZ session_expires_at "NOT NULL"
+    }
+
     NotificationSubscription {
         UUID id PK
         BIGINT account_id FK,UK "NOT NULL"
@@ -1252,6 +1280,37 @@ erDiagram
         VARCHAR(64) commit_sha
         VARCHAR(64) original_commit_sha
         TIMESTAMPTZ resolved_at
+    }
+
+    PushDevice {
+        UUID id PK
+        BIGINT account_id FK "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        VARCHAR(255) expo_push_token UK "NOT NULL"
+        VARCHAR(64) installation_id UK "NOT NULL"
+        UUID native_session_id FK "NOT NULL"
+        VARCHAR(16) platform "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+        BIGINT version "NOT NULL"
+    }
+
+    PushNotification {
+        UUID id PK
+        INTEGER attempts "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        VARCHAR(64) failure_reason
+        VARCHAR(32) kind UK "NOT NULL"
+        TIMESTAMPTZ next_attempt_at "NOT NULL"
+        UUID push_device_id FK,UK "NOT NULL"
+        BIGINT recipient_user_id FK "NOT NULL"
+        TIMESTAMPTZ sent_at
+        TIMESTAMPTZ settled_at
+        VARCHAR(16) state "NOT NULL"
+        VARCHAR(64) ticket_id
+        TIMESTAMPTZ window_start UK "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT sent_device_version
+        BIGINT version "NOT NULL"
     }
 
     Reaction {
@@ -1750,6 +1809,9 @@ erDiagram
     IdentityProvider ||--o{ Milestone : references
     Repository ||--o{ Milestone : has
     User ||--o{ Milestone : created_by
+    Account ||--o{ NativeSession : has
+    NativeSession ||--o{ NativeSessionToken : has
+    Account ||--o{ NativeSignInHandoff : has
     Account ||--o{ NotificationSubscription : has
     Practice ||--o{ Observation : practice_id
     Practice ||--o{ Observation : practice_id
@@ -1807,6 +1869,11 @@ erDiagram
     IdentityProvider ||--o{ PullRequestReviewThread : reviewed
     Issue ||--o{ PullRequestReviewThread : reviewed
     User ||--o{ PullRequestReviewThread : reviewed
+    Account ||--o{ PushDevice : has
+    NativeSession ||--o{ PushDevice : has
+    PushDevice ||--o{ PushNotification : has
+    User ||--o{ PushNotification : has
+    Workspace ||--o{ PushNotification : has
     Feedback ||--o{ Reaction : has
     User ||--o{ Reaction : has
     Organization ||--o{ Repository : has

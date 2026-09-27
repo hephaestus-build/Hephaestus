@@ -44,6 +44,12 @@ public class AccountPurger {
         jdbcTemplate.update("DELETE FROM account_feature WHERE account_id = ?", accountId);
         anonymizeAuditRows(accountId); // reads identity_link, so before it is deleted
         jdbcTemplate.update("DELETE FROM identity_link WHERE account_id = ?", accountId);
+        jdbcTemplate.update("DELETE FROM native_sign_in_handoff WHERE account_id = ?", accountId);
+        jdbcTemplate.update(
+                "DELETE FROM native_session_token WHERE session_id IN "
+                        + "(SELECT id FROM native_session WHERE account_id = ?)",
+                accountId);
+        jdbcTemplate.update("DELETE FROM native_session WHERE account_id = ?", accountId);
         jdbcTemplate.update("DELETE FROM issued_jwt WHERE account_id = ?", accountId);
         jdbcTemplate.update("DELETE FROM account_export WHERE account_id = ?", accountId);
         jdbcTemplate.update("UPDATE consent_decision SET account_id = NULL WHERE account_id = ?", accountId);

@@ -1,0 +1,65 @@
+name: Mobile release
+
+# A store-bound binary, built in EAS from a default-branch commit that passed CI. The job waits for EAS to report the
+# binaries finished, so a green run means installable artifacts exist; submitting them to the stores
+# stays a maintainer's step. docs/contributor/mobile.mdx § Releases owns the procedure.
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Build profile, and the update channel the binaries listen on"
+        required: true
+        type: choice
+        options: [preview, production]
+      platform:
+        description: "Which binaries to build"
+        required: true
+        type: choice
+        default: all
+        options: [all, ios, android]
+
+permissions: {}
+
+concurrency:
+  group: mobile-release-${{ inputs.profile }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: "Build ${{ inputs.profile }} binaries"
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    environment:
+      name: mobile-${{ inputs.profile }}
+    permissions:
+      contents: read
+      actions: read # the preflight reads this commit's CI result
+    env:
+      PROFILE: ${{ inputs.profile }}
+      PLATFORM: ${{ inputs.platform }}
+      APP_VARIANT: ${{ inputs.profile }}
+      EAS_PROJECT_ID: ${{ vars.EAS_PROJECT_ID }}
+      EAS_OWNER: ${{ vars.EAS_OWNER }}
+      PREVIEW_INSTANCE: ${{ vars.PREVIEW_INSTANCE }}
+      EXPO_UPDATES_CODE_SIGNING_CERTIFICATE: ${{ vars.EXPO_UPDATES_CODE_SIGNING_CERTIFICATE }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+      # The Expo token is given only to the steps that call EAS, never to checkout or the dependency
+      # install, whose lifecycle scripts would otherwise see it.
+      - name: Preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: vp run check:mobile:release --profile "$PROFILE" --mode build --commit "$GITHUB_SHA" --repository "$GITHUB_REPOSITORY"
+      # Cancelling this run stops the wait, not the EAS builds: cancel those with `eas build:cancel`
+      # (docs/contributor/mobile.mdx § Ship a binary).
+      - name: Build in EAS and wait for the binaries
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: vp -C mobile exec eas build --profile "$PROFILE" --platform "$PLATFORM" --non-interactive --wait

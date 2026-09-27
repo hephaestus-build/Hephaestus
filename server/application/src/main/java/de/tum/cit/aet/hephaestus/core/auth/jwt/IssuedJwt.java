@@ -85,5 +85,7 @@ public class IssuedJwt {
         ADMIN_REVOKE,
         IMPERSONATION_EXIT,
         ACCOUNT_DELETED,
+        /** A native session's replaced refresh secret was reused. */
+        REFRESH_REUSE,
     }
 }

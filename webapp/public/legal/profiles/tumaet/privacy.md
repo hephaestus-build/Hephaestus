@@ -1,6 +1,6 @@
 Privacy Statement for Hephaestus in accordance with Art. 13 and 14 GDPR.
 
-_Last updated: 2026-09-03._
+_Last updated: 2026-09-26._
 
 The Technical University of Munich (TUM), through the Research Group for Applied Education Technologies (AET), operates Hephaestus at https://hephaestus.build, which is also reachable at https://hephaestus.aet.cit.tum.de. This statement explains what personal data the platform processes, why, on what legal basis, who receives it, how long it is kept, and the rights you have. Personal data is processed under the GDPR, the Bavarian Data Protection Act (BayDSG), the Bavarian Higher Education Innovation Act (BayHIG), and the German Telecommunications Digital Services Data Protection Act (TDDDG).
 
@@ -82,6 +82,37 @@ copies outside this instance.
 
 Hephaestus uses technically necessary browser-side storage: the session cookie (`__Host-HEPHAESTUS_AT`) and the CSRF and OAuth-state cookies that maintain your login, and a `theme` entry in local storage that remembers your light/dark mode (no personal data). Legal basis: § 25 Abs. 2 Nr. 2 TDDDG i.V.m. Art. 6(1)(e) GDPR. Beyond these, a deployment may activate optional Sentry error monitoring. Where activated, it uses cookies or browser-side storage **only after you opt in** through the cookie-consent banner (legal basis: § 25 Abs. 1 TDDDG i.V.m. Art. 6(1)(a) GDPR); you can change or withdraw that choice at any time via the "Cookie preferences" link. Where the integration is not activated — the default, and the state of the TUM-operated deployment unless announced otherwise — no consent banner is shown and only the technically necessary storage above is used. Product feedback and survey submissions create no browser-side storage. No advertising or cross-site tracking cookies are used in any configuration.
 
+### Native app storage and services
+
+The iOS and Android app uses the same account and instance as the website. It keeps the secret
+needed to renew your sign-in in the operating system's protected credential storage, and keeps a
+random installation identifier and your selected workspace on the device. Conversation drafts and
+loaded feedback are held in memory rather than a persistent content cache. Signing out clears the
+app's account state. If you sign out while offline, the app keeps the revocation credential only to
+end that session when it next connects, or until the session expires. The server stores hashed
+refresh credentials and short-lived sign-in handoffs, not the plaintext refresh secret. Expired
+sessions and their credential history are removed by the daily retention job; revoked sessions
+become eligible after one day. Account erasure also removes these records.
+
+Push notifications are optional. Where the instance offers them, enabling notifications registers
+this installation's push token and sign-in with the server. A notification says only that new
+practice feedback is waiting: its text contains no feedback or source-work content. Delivery through
+Expo and Apple or Google includes the push token, workspace slug and a random identifier for the
+current app sign-in. Turning notifications off unregisters the installation; signing out or ending
+the session stops its eligibility for further notifications. The server removes notification records
+after 30 days. A notification already delivered to the operating system is not recalled by signing
+out.
+
+A published app may contact Expo's update service to obtain compatible application code and assets.
+Those update requests are separate from your Hephaestus conversations and feedback; the app does not
+attach that content or your Hephaestus sign-in token to them. The native app contains no advertising
+or cross-app tracking feature and does not enable the website's optional Sentry integration.
+
+An inappropriate-content report sent from the app goes to this instance's administrators through
+the product-feedback service. The report form shows the text you choose to send. It does not silently
+attach your whole conversation. These reports follow the account-bound product-feedback retention
+and erasure rules described below, and are not research submissions.
+
 ## 5. Recipients
 
 Within Hephaestus your data is visible to AET operators (platform administration and support) and, depending on the workspace, to other workspace members (your username, avatar, the feedback attached to pull/merge requests or issues you authored, per-practice summaries of your activity, and recognition signals where the workspace has enabled them). Workspaces marked publicly viewable by their administrator can be read by anyone on the open web; the upstream open-source contributor list at `/contributors` is also public.
@@ -91,6 +122,13 @@ External processors engaged under data-processing agreements (Auftragsverarbeitu
 - **GitHub, Inc.** (USA) — identity provider for GitHub sign-in; source-system API for connected GitHub repositories.
 - **The LLM provider configured by your workspace administrator** for AI-assisted feedback. Any OpenAI-API-compatible HTTPS endpoint (base URL, API token, model name) can be configured. The TUM-operated deployment uses **the Microsoft Azure OpenAI Service in an EU region** under enterprise no-training terms by default; an administrator may instead point a workspace at a different endpoint (for example, OpenAI OpCo, LLC with OpenAI Ireland Ltd. as the EEA contracting party, an institution-level enterprise gateway, or a self-hosted model). When the credentials come from a non-TUM institution, that institution maintains the AVV with the chosen provider.
 - **Salesforce, Inc. / Slack Technologies, LLC** (USA) — Slack app delivery, identity linking, App Home privacy controls, optional digests, Hephaestus DM mentor messages, and monitored-channel message delivery when your workspace administrator has enabled Slack.
+
+The native app's optional delivery services also involve **Expo, Apple and Google**: Expo routes push
+notifications to Apple Push Notification service or Firebase Cloud Messaging and serves compatible
+app updates. Notification delivery includes the identifiers described in section 4, not the body of
+your feedback. These mobile services are separate from the workspace's AI provider. The operator
+assesses the applicable contractual roles and transfer safeguards before enabling these services;
+their inclusion here does not mean every installation uses them.
 
 An Outline connection has no default vendor or origin. Before TUM/AET enables an Outline origin, it records the
 operator, hosting region, transfer basis, retention terms, and whether that operator is TUM-controlled infrastructure,

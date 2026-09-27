@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth.spi;
 
 import java.util.List;
+import java.util.Optional;
 
 /** Account-owned workspace membership, resolved through verified identities rather than usernames. */
 public interface AccountWorkspaceMembershipQuery {
@@ -10,6 +11,13 @@ public interface AccountWorkspaceMembershipQuery {
     List<Long> administratorAccountIds(long workspaceId);
 
     boolean isAdministrator(long workspaceId, long accountId);
+
+    /**
+     * The active account behind one workspace member, through the member's provider identity (provider
+     * and native id), never a cached actor id or a login; empty when the user is not a member of the
+     * workspace or no active account has that identity linked.
+     */
+    Optional<Long> activeAccountIdForMember(long workspaceId, long memberUserId);
 
     /**
      * A single workspace membership, flattened for export. Contains no SCM-user PII beyond what

@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipal;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
+import de.tum.cit.aet.hephaestus.core.auth.nativesession.NativeSessionService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
@@ -82,7 +83,8 @@ class AuthSessionServiceTest extends BaseUnitTest {
                 eventLogger,
                 properties,
                 clock,
-                new AuthMetrics(meterRegistry));
+                new AuthMetrics(meterRegistry),
+                mock(NativeSessionService.class));
     }
 
     private double refreshResult(String tag) {

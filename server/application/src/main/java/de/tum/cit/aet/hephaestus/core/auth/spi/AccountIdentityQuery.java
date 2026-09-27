@@ -29,7 +29,8 @@ public interface AccountIdentityQuery {
     void linkExternalActor(Long identityLinkId, Long externalActorId);
 
     /**
-     * Provider-scoped identity evidence plus the profile snapshot captured when it was linked.
+     * Provider-scoped identity evidence plus the profile snapshot captured when it was linked; the
+     * avatar is refreshed at each sign-in with that identity.
      * The subject is provider-native (numeric for GitHub/GitLab, opaque for Slack/Outline).
      * Usernames and cached actor ids are metadata, not proof of actor ownership.
      */

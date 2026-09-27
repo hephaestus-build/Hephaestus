@@ -141,6 +141,21 @@ public final class CurrentAccount {
         return authTime instanceof Number seconds ? Instant.ofEpochSecond(seconds.longValue()) : null;
     }
 
+    /** The native app session ({@code sid} claim) the token belongs to, or null for a browser session. */
+    @Nullable
+    public static UUID nativeSessionId() {
+        Jwt jwt = jwtOrNull();
+        Object sid = jwt == null ? null : jwt.getClaim("sid");
+        if (!(sid instanceof String value)) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
     private static Jwt requireJwt() {
         Jwt jwt = jwtOrNull();
         if (jwt == null) {

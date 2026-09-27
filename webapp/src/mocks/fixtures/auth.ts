@@ -72,6 +72,7 @@ export const sessions: Wire<SessionView>[] = [
 	{
 		jti: "sess-current-001",
 		current: true,
+		nativeApp: false,
 		userAgent: "Chrome 124 on macOS",
 		ip: "192.0.2.10",
 		issuedAt: "2026-05-29T09:00:00Z",
@@ -80,6 +81,7 @@ export const sessions: Wire<SessionView>[] = [
 	{
 		jti: "sess-other-002",
 		current: false,
+		nativeApp: false,
 		userAgent: "Firefox 126 on Ubuntu",
 		ip: "198.51.100.23",
 		issuedAt: "2026-05-25T14:12:00Z",
@@ -88,6 +90,7 @@ export const sessions: Wire<SessionView>[] = [
 	{
 		jti: "sess-other-003",
 		current: false,
+		nativeApp: false,
 		userAgent: "Mobile Safari on iOS 18",
 		ip: "203.0.113.77",
 		issuedAt: "2026-05-21T07:45:00Z",

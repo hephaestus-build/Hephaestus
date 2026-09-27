@@ -1,7 +1,7 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
 
-	// The React layer, extended by the two trees that render: `webapp/` and `docs/`. It adds to
+	// The React layer, extended by the React trees: `webapp/`, `docs/` and `mobile/`. It adds to
 	// `.oxlintrc.json` and never repeats it. A tree restates `settings.react.version` itself, since
 	// `settings` does not travel through `extends`.
 

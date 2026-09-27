@@ -1,0 +1,115 @@
+---
+title: Mobile app
+description: What a server needs for the iOS and Android app to sign in, and for push notifications.
+---
+
+# Mobile app
+
+The Hephaestus app for iOS and Android talks to the same server as the web app. A developer enters
+the instance's address, signs in through the system browser, and then reads practice feedback, answers
+it and talks to Heph. Nothing in this page is needed for the web app.
+
+## Requirements
+
+- **HTTPS.** Store builds of the app connect only over HTTPS. The address a developer enters is the
+  web address of the instance; the app finds the API under `/api` on the same origin, or at the root.
+  The discovery response supplies the web application address from `HEPHAESTUS_WEBAPP_URL` (or
+  `APPLICATION_HOST_URL`), so privacy and account-export links also work when web and API use different
+  hosts or development ports.
+- **A sign-in provider.** The app signs in with the GitHub or GitLab login the instance already
+  offers. Slack and Outline are integrations, not sign-in providers, in the app as on the web.
+- **Nothing else by default.** Sign-in, refresh and sign-out use the server's existing session policy:
+  the same revocation, the same absolute session deadline, and the same consent requirement.
+  [Auth architecture § Native app sessions](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/auth-architecture.md#native-app-sessions) describes
+  how an app session is issued, renewed and ended.
+
+## Sign-in callbacks
+
+After the provider signs a developer in, the server hands the app a one-use code on a callback
+address. The server only returns to addresses listed exactly in `hephaestus.auth.native.redirect-uris`
+(`HEPHAESTUS_AUTH_NATIVE_REDIRECT_URIS`), comma-separated. Anything else is refused before the provider
+is contacted.
+
+| App build | Callback |
+| --- | --- |
+| Store build | `build.hephaestus.app:/auth/callback` |
+| Preview build | `build.hephaestus.app.preview:/auth/callback` |
+| Development build | `build.hephaestus.app.dev:/auth/callback` |
+
+The default lists only the store build. Add the preview callback on a staging instance that testers
+reach with preview builds; add the development callback only where developers sign in from a local
+build. These identifiers are the project's defaults: a build published under other identifiers has
+its own callbacks, and the server must list those instead.
+
+The native sign-in, refresh and sign-out endpoints share one rate limit, keyed by client address:
+`HEPHAESTUS_AUTH_RATE_LIMIT_NATIVE_SESSION_CAPACITY` requests (default 30) per
+`HEPHAESTUS_AUTH_RATE_LIMIT_NATIVE_SESSION_PERIOD` (default `1m`).
+
+## Minimum app version
+
+`hephaestus.auth.native.minimum-app-version` (`HEPHAESTUS_AUTH_NATIVE_MINIMUM_APP_VERSION`) is the
+oldest app version, as `major.minor.patch`, that the instance still serves. An older app asks the
+developer to update it, instead of signing in or, if already signed in, the next time it opens. Leave it blank unless a release note tells you to
+raise it: the project keeps every server release compatible with every app version it has not
+retired, and names the version to require when it retires one.
+
+## Push notifications
+
+Push notifications tell a developer that new practice feedback is waiting for them. A notification
+never contains the feedback, its practice or the work it is about, because it can appear on a locked
+screen: it reads "New practice feedback — Open Hephaestus to read it", and opening it shows Practice feedback in
+the right workspace. A notification is not a delivery of feedback. Feedback counts as delivered only
+when the developer opens it in an app.
+
+Push is off until `hephaestus.push.expo-access-token` (`HEPHAESTUS_PUSH_EXPO_ACCESS_TOKEN`) is set.
+While it is off, devices do not register, nothing is queued, the app's notification setting explains
+that this instance does not send notifications, and the readiness fact `notification.push` reports
+`NOT_CONFIGURED`.
+
+The token must belong to the Expo project that **published the app installations your developers
+use**, with Expo's enhanced push security on: Apple and Google deliver a notification only on behalf
+of the app's publisher, and Expo rejects a send whose token belongs to another project. An Expo access
+token is an account credential, not a key limited to push or to one instance, so it stays with the
+publisher. That leaves two supported setups:
+
+- **The instance belongs to the app's publisher**, or to someone the publisher trusts with its Expo
+  account: set the publisher's token.
+- **An organisation publishes its own build** of the app under its own identifiers and Expo project:
+  set that project's token, and list that build's callback under [Sign-in callbacks](#sign-in-callbacks).
+
+Any other instance whose developers use the store app runs without push. Nothing else about the app
+depends on it: new feedback appears under Practice feedback the next time it is opened.
+
+With push on, the server:
+
+- sends at most one notification per device, workspace and hour, however many pieces of feedback a
+  review prepared;
+- checks at send time that the app session that registered the device is still signed in with
+  current consent and that the developer is still a member of the workspace, so signing out, revoking
+  the session, removing the member or deleting the account stops notifications already queued;
+- forgets a device when Apple or Google reports it unregistered, and deletes notification records
+  after 30 days.
+
+Push sends the device's push token, the notification text, the workspace's slug and a random id
+for the app's sign-in to Expo, which forwards them to Apple or Google. The app ignores a notification
+whose sign-in id is not its current one, such as one delivered before the developer switched
+account. Before turning it on, complete the processing review in the
+[processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).
+
+## Reports from the app
+
+Developers can report a reply from Heph, or a piece of practice feedback, as offensive, harmful or
+wrong from where they read it. A report arrives as product feedback from the developer's account, with
+the page `/mobile/heph` or `/mobile/feedback`, the reported text and their reason — never the rest of
+the conversation. It appears in the [product feedback inbox](./product-feedback#act-on-feedback), which
+sends no notifications, so whoever runs the instance checks it and acts on reports; app stores expect
+reports about AI-generated content to be followed up.
+
+## Verify
+
+1. `GET /api/auth/native/configuration` answers with the minimum app version, empty if none is set.
+   An app that gets no answer there tells the developer the address does not serve the app.
+2. In the app, sign in, then check **You → Signed-in devices**: the app session appears as
+   **Hephaestus app on iPhone or iPad** or **on Android**, and can be signed out there or from the web.
+3. With push on, **You → Notifications** offers the switch, and
+   `GET /api/admin/configuration-readiness` reports `notification.push` as `SATISFIED`.

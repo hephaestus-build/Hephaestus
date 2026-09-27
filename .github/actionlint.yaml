@@ -1,0 +1,5 @@
+# actionlint's label extension also covers GitHub-hosted preview images not in its built-in catalog.
+# https://github.com/actions/runner-images/issues/14404 documents this hosted Xcode 27 image.
+self-hosted-runner:
+  labels:
+    - xcode-27

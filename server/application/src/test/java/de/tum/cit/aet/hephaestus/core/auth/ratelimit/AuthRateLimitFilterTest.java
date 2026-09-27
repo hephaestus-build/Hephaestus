@@ -73,6 +73,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 overrides.length > 0 ? overrides[0] : new AuthRateLimitProperties.Limit(20, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(10, Duration.ofMinutes(1)),
+                new AuthRateLimitProperties.Limit(30, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(3, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(10, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(20, Duration.ofMinutes(10)),
@@ -96,6 +97,31 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"/auth/native/token", "/auth/native/refresh", "/auth/native/logout"})
+    void shouldLimitNativeCredentialRequestsByIpEvenWithAnAuthenticatedPrincipal(String path) throws Exception {
+        AuthRateLimitFilter limited = filter(props());
+        for (int attempt = 0; attempt < 30; attempt++) {
+            authenticateAs("account-" + attempt);
+            MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
+            request.setRemoteAddr("203.0.113.99");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            FilterChain chain = mock(FilterChain.class);
+            limited.doFilter(request, response, chain);
+            verify(chain).doFilter(request, response);
+        }
+        SecurityContextHolder.clearContext();
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
+        request.setRemoteAddr("203.0.113.99");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+        limited.doFilter(request, response, chain);
+        assertThat(response.getStatus()).isEqualTo(429);
+        assertThat(response.getHeader(HttpHeaders.RETRY_AFTER)).isNotBlank();
+        verify(chain, never()).doFilter(request, response);
+        assertThat(blockedCount("native-session")).isEqualTo(1);
+    }
+
     @Test
     void nonMatchingPathPassesThrough() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/workspaces");
@@ -112,6 +138,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     void disabledFilterPassesThroughWithoutTouchingBuckets() throws Exception {
         AuthRateLimitProperties disabled = new AuthRateLimitProperties(
                 false,
+                new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),

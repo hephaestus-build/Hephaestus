@@ -17,7 +17,7 @@ that reference it are still `user_id`. Read the "Lives in" column for the name y
 | **`AccountFeature`** | Per-account feature opt-in. | `core.auth.domain.AccountFeature` | composite `(account_id, flag)` |
 | **`AuthEvent`** | Append-only authentication and privileged-access event. Monthly RANGE-partitioned on `occurred_at`, managed by `pg_partman` (create-ahead + 12-month retention; maintenance via `AuthEventPartitionMaintenance`). `viewed_user_id` names the SCM user addressed by a `USER_VIEW`, who may have no account; [read-only user views](./contributor/instance-admin.md#read-only-user-views) has the row's attribution. INSERT-only at the SQL-grant level in non-test environments. | `core.auth.audit.AuthEvent` | composite `(id, occurred_at)` (Postgres partitioning requires it) |
 | **Elevated workspace access** | An instance admin reaching a workspace they hold no membership in. Marked once per access window as an `AuthEvent` of type `WORKSPACE_ELEVATION`, and per row as `elevated_via_instance_admin` on both `auth_event` and `config_audit_event`. Distinct from a [user view](./contributor/instance-admin.md#read-only-user-views), which names the viewed user in `viewed_user_id`; `false` means "no elevation recorded", never "the actor was a member". Recorded and read in [Instance administration](./contributor/instance-admin.md#elevated-workspace-access). | `core.security.WorkspaceElevationContext`; `core.auth.audit.WorkspaceElevationAuditAdapter` | `(account_id, workspace_id)` of the row |
-| **`IssuedJwt`** | Revocation list for Hephaestus-issued cookie JWTs. Inserted at issuance; consulted by `RevocationAwareJwtDecoder` on every request via an indexed `jti` lookup; a *negative* cache holds REVOKED verdicts only (TTL sheds replay load, never a false positive). Effective on every pod within DB lag — no cross-pod protocol. | `core.auth.jwt.IssuedJwt` | `jti` (UUID) |
+| **`IssuedJwt`** | Revocation list for Hephaestus-issued browser and native access JWTs. Inserted at issuance; consulted by `RevocationAwareJwtDecoder` on every request via an indexed `jti` lookup; a *negative* cache holds REVOKED verdicts only (TTL sheds replay load, never a false positive). Effective on every pod within DB lag — no cross-pod protocol. | `core.auth.jwt.IssuedJwt` | `jti` (UUID) |
 | **`JwtSigningKey`** | Hephaestus's own ES256 JWT-signing key set. The most recently inserted active key signs every token and every active key verifies; retiring one is a manual act, after which it verifies nothing. Private keys are sealed under the **system** master key (AAD = `system:jwt_signing_key.private_key_pem`) — distinct from the tenant-bound AAD domain used by `CredentialBundleConverter` for per-workspace integration secrets (confused-deputy defense). | `core.auth.jwt.JwtSigningKey` | `kid` |
 | **`LoginProvider`** | An instance-scoped OAuth login provider (a sign-in option: GitHub, GitLab.com, self-hosted GitLab). **One per SCM instance** — `UNIQUE(type, base_url)`. Env-seeds the defaults on first boot; an instance admin manages the rest at runtime (`/admin/login-providers`). The client secret is sealed at rest by `EncryptedStringConverter` (AES-256-GCM) and never returned. Authentication only — distinct from a workspace's SCM data-source `Connection`. | `core.auth.provider.LoginProvider` | `registration_id`; `UNIQUE(type, base_url)` |
 
@@ -37,7 +37,7 @@ author* to a mirrored git-provider account; it is not an authentication lookup.
 
 ## JWT claim shape
 
-Cookie access tokens combine standard JWT/OIDC claims with application-specific claims:
+Browser and native access tokens combine standard JWT/OIDC claims with application-specific claims:
 
 | Claim | Type | Notes |
 |---|---|---|
@@ -49,6 +49,7 @@ Cookie access tokens combine standard JWT/OIDC claims with application-specific 
 | `roles` | array | The account's roles, including `APP_ADMIN`. |
 | `preferred_username` | string | The account's login. |
 | `given_name` | string | Present when the account has one. |
+| `sid` | UUID string | Native app sessions only: identifies the refresh credential family in `native_session`. Browser refresh refuses this token kind. |
 | `session_exp` | Unix seconds | When the session, as opposed to this access token, expires. |
 | `auth_time` | Unix seconds | Standard OIDC claim: when the account last completed an interactive sign-in here. Stamped at login and copied unchanged through refresh, so it measures the age of the sign-in and not of the token. Read by the [recent sign-in gate](./contributor/instance-admin.md#recent-sign-in-gate); it is not evidence that an upstream credential was entered. |
 

@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackThreadKey;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.spi.InAppFeedbackPreparedListener;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -55,14 +56,17 @@ public class InAppFeedbackPreparer {
     private final FeedbackRepository feedbackRepository;
     private final FeedbackObservationRepository feedbackObservationRepository;
     private final FeedbackSupersession supersession;
+    private final List<InAppFeedbackPreparedListener> preparedListeners;
 
     public InAppFeedbackPreparer(
             FeedbackRepository feedbackRepository,
             FeedbackObservationRepository feedbackObservationRepository,
-            FeedbackSupersession supersession) {
+            FeedbackSupersession supersession,
+            List<InAppFeedbackPreparedListener> preparedListeners) {
         this.feedbackRepository = feedbackRepository;
         this.feedbackObservationRepository = feedbackObservationRepository;
         this.supersession = supersession;
+        this.preparedListeners = preparedListeners;
     }
 
     /**
@@ -174,6 +178,10 @@ public class InAppFeedbackPreparer {
             prepared++;
         }
         if (prepared > 0) {
+            // In this transaction: whatever the listeners queue commits or rolls back with the units.
+            for (InAppFeedbackPreparedListener listener : preparedListeners) {
+                listener.inAppFeedbackPrepared(workspaceId, recipientUserId);
+            }
             log.info(
                     "In-app feedback prepared: jobId={}, recipientUserId={}, units={}, superseded={}",
                     agentJobId,

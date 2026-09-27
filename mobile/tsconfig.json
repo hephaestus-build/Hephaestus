@@ -1,0 +1,26 @@
+{
+	"extends": "expo/tsconfig.base",
+	"include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+	"exclude": ["ios", "android", "node_modules"],
+	"compilerOptions": {
+		"strict": true,
+		"noEmit": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noFallthroughCasesInSwitch": true,
+		"noUncheckedIndexedAccess": true,
+		"noImplicitOverride": true,
+		"noImplicitReturns": true,
+		"verbatimModuleSyntax": true,
+		"allowUnreachableCode": false,
+		"allowImportingTsExtensions": true,
+		"paths": {
+			"@/*": ["./src/*"],
+			"@assets/*": ["./assets/*"],
+			"react-native": ["./node_modules/react-native"],
+			"react-native-keyboard-controller": ["./node_modules/react-native-keyboard-controller"],
+			"react-native-reanimated": ["./node_modules/react-native-reanimated"],
+			"expo-modules-core": ["./node_modules/expo-modules-core"]
+		}
+	}
+}

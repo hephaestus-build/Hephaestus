@@ -9,12 +9,15 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.auth.nativesession.NativeSessionService;
 import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
@@ -40,6 +43,7 @@ public class AccountService {
     private final AuthProperties authProperties;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
+    private final NativeSessionService nativeSessionService;
 
     public AccountService(
             AccountRepository accountRepository,
@@ -48,7 +52,8 @@ public class AccountService {
             AuthEventLogger authEventLogger,
             AuthProperties authProperties,
             ApplicationEventPublisher eventPublisher,
-            Clock clock) {
+            Clock clock,
+            NativeSessionService nativeSessionService) {
         this.accountRepository = accountRepository;
         this.identityLinkRepository = identityLinkRepository;
         this.issuedJwtRepository = issuedJwtRepository;
@@ -56,6 +61,7 @@ public class AccountService {
         this.authProperties = authProperties;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
+        this.nativeSessionService = nativeSessionService;
     }
 
     public Account requireById(Long id) {
@@ -65,7 +71,13 @@ public class AccountService {
     }
 
     public List<IdentityLink> activeIdentities(Long accountId) {
-        return identityLinkRepository.findActiveByAccountId(accountId);
+        // Presentation order belongs here: it must not change the JWT factory's login resolution.
+        return identityLinkRepository.findActiveByAccountId(accountId).stream()
+                .sorted(Comparator.comparing((IdentityLink link) ->
+                                Objects.requireNonNullElse(link.getLastLoginAt(), link.getLinkedAt()))
+                        .thenComparing(link -> Objects.requireNonNull(link.getId()))
+                        .reversed())
+                .toList();
     }
 
     /**
@@ -88,6 +100,7 @@ public class AccountService {
         account.setStatus(Account.Status.DELETING);
         account.setDeletedAt(deletedAt);
         accountRepository.save(account);
+        nativeSessionService.endAll(accountId, IssuedJwt.RevokedReason.ACCOUNT_DELETED);
         issuedJwtRepository.revokeAllForAccount(accountId, deletedAt, IssuedJwt.RevokedReason.ACCOUNT_DELETED);
         authEventLogger
                 .event(AuthEvent.EventType.ACCOUNT_DELETED, AuthEvent.Result.SUCCESS)
@@ -188,6 +201,7 @@ public class AccountService {
                 // lapses. The revoked rows carry revoked_reason=ADMIN_REVOKE for forensics. Promotion is
                 // deliberately NOT revoked — the new role is picked up on the next silent refresh with no
                 // forced re-login.
+                nativeSessionService.endAll(accountId, IssuedJwt.RevokedReason.ADMIN_REVOKE);
                 issuedJwtRepository.revokeAllForAccount(
                         accountId, clock.instant(), IssuedJwt.RevokedReason.ADMIN_REVOKE);
             }
@@ -214,8 +228,9 @@ public class AccountService {
     @Transactional
     public int adminRevokeAllSessions(Long accountId, Long actingAccountId) {
         requireById(accountId); // 404 if the account does not exist
-        int revoked = issuedJwtRepository.revokeAllForAccount(
-                accountId, clock.instant(), IssuedJwt.RevokedReason.ADMIN_REVOKE);
+        int revoked = nativeSessionService.endAll(accountId, IssuedJwt.RevokedReason.ADMIN_REVOKE)
+                + issuedJwtRepository.revokeAllForAccount(
+                        accountId, clock.instant(), IssuedJwt.RevokedReason.ADMIN_REVOKE);
         authEventLogger
                 .event(AuthEvent.EventType.JWT_REVOKED, AuthEvent.Result.SUCCESS)
                 .account(accountId)

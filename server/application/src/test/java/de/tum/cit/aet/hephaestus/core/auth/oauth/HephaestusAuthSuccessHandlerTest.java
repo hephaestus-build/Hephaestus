@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -17,6 +18,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipal;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.nativesession.NativeSessionService;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.servlet.http.Cookie;
@@ -60,6 +62,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
     private JwtPrincipalFactory principalFactory;
     private AuthIntentCookie authIntentCookie;
     private AuthEventWriter authEventWriter;
+    private NativeSessionService nativeSessionService;
     private IdentityLinkAuthentication identityLinkAuthentication;
     private HephaestusAuthSuccessHandler handler;
 
@@ -71,6 +74,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
         authIntentCookie = mock(AuthIntentCookie.class);
         authEventWriter = mock(AuthEventWriter.class);
         identityLinkAuthentication = mock(IdentityLinkAuthentication.class);
+        nativeSessionService = mock(NativeSessionService.class);
         AuthProperties authProperties = mock(AuthProperties.class);
         lenient().when(authProperties.cookieName()).thenReturn(COOKIE_NAME);
         lenient().when(authProperties.sessionMaxLifetime()).thenReturn(Duration.ofHours(12));
@@ -84,6 +88,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
                 authProperties,
                 new AuthEventLogger(authEventWriter),
                 identityLinkAuthentication,
+                nativeSessionService,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 /* webappBaseUrl */ "");
     }
@@ -115,6 +120,46 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
         assertThat(response.getRedirectedUrl()).isEqualTo("/auth/error?code=account_inactive");
         // A refused login must NOT be audited as a successful LOGIN.
         verify(authEventWriter, never()).write(any());
+    }
+
+    @Test
+    void nativeSignInEndsInAHandoffRedirectWithNoCookieAndNoToken() throws Exception {
+        Account account = account(Account.Status.ACTIVE);
+        when(provisioningService.resolveOrProvision(any(), any(), any(), any())).thenReturn(provision(account, false));
+        when(authIntentCookie.read(any()))
+                .thenReturn(AuthIntentCookie.Intent.nativeLogin(new AuthIntentCookie.Intent.NativeRequest(
+                        "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+                        "app-state",
+                        "build.hephaestus.app:/auth/callback")));
+        when(nativeSessionService.createHandoff(
+                        eq(42L), eq("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"), any(), eq(NOW)))
+                .thenReturn("one-time-code");
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        handler.onAuthenticationSuccess(githubRequest(), response, oauthToken("sub-1"));
+
+        verify(jwtIssuer, never()).issue(any(), any(), any());
+        assertThat(response.getCookie(COOKIE_NAME)).isNull();
+        assertThat(response.getRedirectedUrl())
+                .isEqualTo("build.hephaestus.app:/auth/callback?code=one-time-code&state=app-state");
+    }
+
+    @Test
+    void nativeSignInOfAnInactiveAccountReturnsTheErrorToTheApp() throws Exception {
+        Account account = account(Account.Status.SUSPENDED);
+        when(provisioningService.resolveOrProvision(any(), any(), any(), any())).thenReturn(provision(account, false));
+        when(authIntentCookie.read(any()))
+                .thenReturn(AuthIntentCookie.Intent.nativeLogin(new AuthIntentCookie.Intent.NativeRequest(
+                        "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+                        "app-state",
+                        "build.hephaestus.app:/auth/callback")));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        handler.onAuthenticationSuccess(githubRequest(), response, oauthToken("sub-1"));
+
+        verify(nativeSessionService, never()).createHandoff(any(), any(), any(), any());
+        assertThat(response.getRedirectedUrl())
+                .isEqualTo("build.hephaestus.app:/auth/callback?error=account_inactive&state=app-state");
     }
 
     @Test

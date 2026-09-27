@@ -51,6 +51,7 @@ import org.springframework.security.web.access.intercept.AuthorizationFilter;
  *   <li>{@code GET /oauth2/authorization/{registrationId}} — Spring's initiation filter.</li>
  *   <li>{@code GET /login/oauth2/code/{registrationId}} — Spring's callback filter.</li>
  *   <li>{@code GET /auth/login} — our intent-stamping wrapper that 302s to the initiation.</li>
+ *   <li>{@code GET /auth/login/native} — the same for the native app, sealing its PKCE challenge.</li>
  *   <li>{@code GET /auth/error} — public error page rendered by the SPA.</li>
  * </ul>
  *
@@ -164,7 +165,12 @@ public class AuthSecurityConfig {
             AuthRateLimitFilter authRateLimitFilter,
             ClientRegistrationRepository clientRegistrationRepository)
             throws Exception {
-        http.securityMatcher("/oauth2/authorization/**", "/login/oauth2/code/**", "/auth/login", "/auth/error")
+        http.securityMatcher(
+                        "/oauth2/authorization/**",
+                        "/login/oauth2/code/**",
+                        "/auth/login",
+                        "/auth/login/native",
+                        "/auth/error")
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(req -> {

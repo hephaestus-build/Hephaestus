@@ -80,8 +80,15 @@ public class AccountWebController {
     public ResponseEntity<CurrentUserViewDTO> currentUser() {
         Account account = accountService.requireById(CurrentAccount.requireId());
         var identities = accountService.activeIdentities(Objects.requireNonNull(account.getId()));
-        // Primary identity = most recently used active link (login source for the SPA).
-        IdentityLink primary = identities.stream().findFirst().orElse(null);
+        // Slack and Outline are link-only: connecting one must not replace the developer's SCM profile.
+        // AccountService returns active links in most-recent-login order.
+        IdentityLink primary = identities.stream()
+                .filter(link -> {
+                    String type = gitProviderRegistry.providerTypeName(link.getProviderId());
+                    return "GITHUB".equals(type) || "GITLAB".equals(type);
+                })
+                .findFirst()
+                .orElse(null);
         List<LinkedProviderDTO> linkedProviders = identities.stream()
                 .map(il -> new LinkedProviderDTO(
                         gitProviderRegistry.providerTypeName(il.getProviderId()),
