@@ -178,7 +178,8 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
                             numbers);
             if (!authoredFit) {
                 throw new EvidenceCollectionException(
-                        "The title, description and branch name more issue numbers than the capture holds", null);
+                        "The title, description and branch name mention more issue numbers than the capture holds",
+                        null);
             }
             AtomicBoolean truncated = new AtomicBoolean();
             if (prepared != null) {
