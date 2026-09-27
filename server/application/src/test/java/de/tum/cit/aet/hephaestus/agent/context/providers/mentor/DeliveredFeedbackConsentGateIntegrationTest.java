@@ -82,23 +82,27 @@ class DeliveredFeedbackConsentGateIntegrationTest extends AbstractSlackConsentGa
     }
 
     @Test
-    @DisplayName("consent gate: only an ACTIVE-channel conversation body surfaces; PAUSED/REVOKED are withheld")
-    void onlyActiveChannelConversationBodySurfaces() {
+    @DisplayName("consent gate: only an ACTIVE-channel conversation status surfaces, never its body; PAUSED/REVOKED are"
+            + " withheld")
+    void onlyActiveChannelConversationStatusSurfaces() {
         long activeThreadId = seedThread("C-active", "100.0", ConsentState.ACTIVE);
         long pausedThreadId = seedThread("C-paused", "200.0", ConsentState.PAUSED);
         long revokedThreadId = seedThread("C-revoked", "300.0", ConsentState.REVOKED);
 
-        saveDelivered(ArtifactKinds.CONVERSATION_THREAD, activeThreadId, FeedbackChannel.IN_CHAT, "active-body");
+        Feedback active = saveDelivered(
+                ArtifactKinds.CONVERSATION_THREAD, activeThreadId, FeedbackChannel.IN_CHAT, "active-body");
         saveDelivered(ArtifactKinds.CONVERSATION_THREAD, pausedThreadId, FeedbackChannel.IN_CHAT, "paused-body");
         saveDelivered(ArtifactKinds.CONVERSATION_THREAD, revokedThreadId, FeedbackChannel.IN_CHAT, "revoked-body");
-        saveDelivered(ArtifactKinds.PULL_REQUEST, 4242L, FeedbackChannel.IN_CONTEXT, "pr-body");
+        Feedback pr = saveDelivered(ArtifactKinds.PULL_REQUEST, 4242L, FeedbackChannel.IN_CONTEXT, "pr-body");
 
         JsonNode root = contribute();
 
         assertThat(root.get("_meta").get("trustLevel").asString()).isEqualTo("UNTRUSTED_EXTERNAL");
-
-        List<String> bodies = bodies(root);
-        assertThat(bodies).containsExactlyInAnyOrder("active-body", "pr-body");
+        assertThat(bodies(root)).containsExactly("pr-body");
+        assertThat(root.get("feedbackStates"))
+                .extracting(state -> state.get("feedbackId").asString())
+                .containsExactlyInAnyOrder(active.getId().toString(), pr.getId().toString());
+        assertThat(root.toString()).doesNotContain("active-body", "paused-body", "revoked-body");
     }
 
     @Test
@@ -141,7 +145,7 @@ class DeliveredFeedbackConsentGateIntegrationTest extends AbstractSlackConsentGa
         return bodies;
     }
 
-    private void saveDelivered(ArtifactKind artifactKind, long artifactId, FeedbackChannel channel, String body) {
+    private Feedback saveDelivered(ArtifactKind artifactKind, long artifactId, FeedbackChannel channel, String body) {
         Instant now = Instant.now();
         UUID observationId = UUID.randomUUID();
         observationRepository.insertIfAbsent(
@@ -180,6 +184,7 @@ class DeliveredFeedbackConsentGateIntegrationTest extends AbstractSlackConsentGa
                 .deliveredAt(now)
                 .build());
         feedbackObservationRepository.insertIfAbsent(feedback.getId(), observationId, EvidenceRole.PRIMARY.name(), 0);
+        return feedback;
     }
 
     private static String evidence(ArtifactKind artifactKind) {

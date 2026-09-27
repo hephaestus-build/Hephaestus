@@ -143,6 +143,67 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             Pageable pageable);
 
     /**
+     * The recipient's feedback since {@code since} that could have reached them, newest first: delivered in
+     * whole or part, a recorded failed delivery, or an unread card on their practice pages. Proposals, withheld
+     * and replaced units are the operator's to see. The body is loaded only for delivered units off the chat
+     * surface: a conversational unit's body is the composer's private notes to the mentor, never the words of a
+     * turn. Pass the last row's {@code createdAt} and {@code id} to read the next page; a write between pages
+     * cannot shift it.
+     */
+    @Query("""
+        SELECT f.id AS id, f.channel AS channel, f.deliveryState AS deliveryState,
+               f.artifactKind AS artifactKind, f.artifactId AS artifactId,
+               f.createdAt AS createdAt, f.deliveredAt AS deliveredAt,
+               CASE WHEN f.deliveryState = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.DELIVERED
+                         AND f.channel <> de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel.IN_CHAT
+                    THEN f.body END AS body
+        FROM Feedback f
+        WHERE f.workspaceId = :workspaceId
+          AND f.recipientUserId = :recipientUserId
+          AND f.createdAt >= :since
+          AND (f.deliveryState IN (
+                  de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.DELIVERED,
+                  de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.PARTIALLY_DELIVERED,
+                  de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.PARTIALLY_FAILED,
+                  de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.FAILED)
+              OR (f.channel = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel.IN_APP
+                  AND f.deliveryState = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.PREPARED))
+          AND (CAST(:beforeCreatedAt AS Instant) IS NULL
+              OR f.createdAt < :beforeCreatedAt
+              OR (f.createdAt = :beforeCreatedAt AND f.id < :beforeId))
+        ORDER BY f.createdAt DESC, f.id DESC
+        """)
+    List<RecipientFeedbackRow> findRecentReceivableForRecipient(
+            @Param("workspaceId") Long workspaceId,
+            @Param("recipientUserId") Long recipientUserId,
+            @Param("since") Instant since,
+            @Param("beforeCreatedAt") @Nullable Instant beforeCreatedAt,
+            @Param("beforeId") @Nullable UUID beforeId,
+            Pageable pageable);
+
+    interface RecipientFeedbackRow {
+        UUID getId();
+
+        FeedbackChannel getChannel();
+
+        FeedbackDeliveryState getDeliveryState();
+
+        @Nullable
+        ArtifactKind getArtifactKind();
+
+        @Nullable
+        Long getArtifactId();
+
+        Instant getCreatedAt();
+
+        @Nullable
+        Instant getDeliveredAt();
+
+        @Nullable
+        String getBody();
+    }
+
+    /**
      * Everything already composed for a recipient that they have not received yet — every lane, newest
      * first.
      *
