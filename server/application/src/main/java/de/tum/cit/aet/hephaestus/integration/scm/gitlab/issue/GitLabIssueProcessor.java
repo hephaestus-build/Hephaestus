@@ -111,12 +111,19 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         Long providerId = Objects.requireNonNull(
                 Objects.requireNonNull(context.repository()).getProvider().getId());
         Long milestoneId = resolveWebhookMilestoneId(attrs.milestoneId(), providerId);
+        Issue.State issueState = convertState(attrs.state());
+        // Resolved exactly as the GraphQL sync resolves them: the issue review revision digests both, so a
+        // field only one path fills would make a no-op sync look like an edit of the reviewed issue.
+        String stateReason = resolveStateReason(issueState, attrs.duplicatedToId() != null);
+        String issueTypeId = resolveIssueTypeId(attrs.type(), Objects.requireNonNull(context.repository()));
         Issue issue = upsertIssue(
                 attrs.id(),
                 attrs.iid(),
                 attrs.title(),
                 attrs.description(),
-                attrs.state(),
+                issueState,
+                stateReason,
+                issueTypeId,
                 attrs.url(),
                 attrs.createdAt(),
                 attrs.updatedAt(),
@@ -315,7 +322,8 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
                     .orElse(null);
         }
 
-        String stateReason = resolveStateReason(issueState, data.closedAsDuplicateOfGid());
+        String duplicateOfGid = data.closedAsDuplicateOfGid();
+        String stateReason = resolveStateReason(issueState, duplicateOfGid != null && !duplicateOfGid.isBlank());
         String issueTypeId = resolveIssueTypeId(data.typeName(), repository);
 
         Instant now = Instant.now();
@@ -493,7 +501,9 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
             Integer iid,
             @Nullable String title,
             @Nullable String description,
-            @Nullable String state,
+            Issue.State issueState,
+            @Nullable String stateReason,
+            @Nullable String issueTypeId,
             @Nullable String htmlUrl,
             @Nullable String createdAt,
             @Nullable String updatedAt,
@@ -514,8 +524,6 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         Optional<Issue> existingOpt = issueRepository.findByRepositoryIdAndNumber(repository.getId(), issueNumber);
         boolean isNew = existingOpt.isEmpty();
 
-        Issue.State issueState = convertState(state);
-
         Instant now = Instant.now();
         issueRepository.upsertCore(
                 nativeId,
@@ -524,7 +532,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
                 Objects.requireNonNullElse(sanitize(title), ""),
                 sanitize(description),
                 issueState.name(),
-                null, // stateReason
+                stateReason,
                 htmlUrl,
                 null, // locked — not in webhook, null lets COALESCE preserve existing or default
                 parseGitLabTimestamp(closedAt),
@@ -535,7 +543,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
                 author != null ? author.getId() : null,
                 repository.getId(),
                 milestoneId,
-                null,
+                issueTypeId,
                 null,
                 null,
                 null,
@@ -601,26 +609,23 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * Maps a GitLab issue state + {@code closedAsDuplicateOf} marker to the
-     * denormalized {@code issue.state_reason} column.
+     * Maps a GitLab issue state + duplicate marker ({@code closedAsDuplicateOf} in GraphQL,
+     * {@code duplicated_to_id} in webhooks) to the denormalized {@code issue.state_reason} column.
      * <p>
-     * Returns {@code null} for open issues and for closed issues that cannot be
-     * classified. The upsert COALESCE preserves any previously set reason.
+     * Returns {@code null} for open issues.
      */
     @Nullable
-    private static String resolveStateReason(Issue.State state, @Nullable String closedAsDuplicateOfGid) {
+    private static String resolveStateReason(Issue.State state, boolean duplicate) {
         if (state != Issue.State.CLOSED) {
             return null;
         }
-        if (closedAsDuplicateOfGid != null && !closedAsDuplicateOfGid.isBlank()) {
-            return "DUPLICATE";
-        }
-        return "COMPLETED";
+        return duplicate ? "DUPLICATE" : "COMPLETED";
     }
 
     /**
-     * Resolves the GitLab {@code Issue.type} enum ({@code ISSUE}, {@code TASK}, …)
-     * to an {@code issue_type_id} FK for the repository's owning organization.
+     * Resolves the GitLab issue type — the GraphQL {@code Issue.type} enum ({@code ISSUE}, {@code TASK}, …)
+     * or the webhook's {@code object_attributes.type} ({@code Issue}, {@code Task}, …) — to an
+     * {@code issue_type_id} FK for the repository's owning organization.
      * <p>
      * GitLab's GraphQL enum uses {@code SCREAMING_SNAKE_CASE}; the {@code IssueType}
      * name column stores the human-readable form ({@code "Test Case"}). This method

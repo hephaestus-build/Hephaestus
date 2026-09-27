@@ -159,6 +159,8 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
                     "2026-01-31 19:03:35 +0100",
                     "2026-01-31 19:03:35 +0100",
                     null,
+                    null,
+                    null,
                     "https://gitlab.lrz.de/hephaestustest/demo-repository/-/issues/5");
             GitLabIssueEventDTO event = new GitLabIssueEventDTO(
                     "issue",
@@ -214,6 +216,8 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
                     "2026-01-31 19:03:35 +0100",
                     "2026-01-31 19:03:35 +0100",
                     null,
+                    null,
+                    null,
                     "https://gitlab.lrz.de/hephaestustest/demo-repository/-/issues/6");
             GitLabIssueEventDTO event = new GitLabIssueEventDTO(
                     "issue", "confidential_issue", createUser(), createProject(), attrs, null, null, null);
@@ -268,6 +272,8 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
                     null,
                     "2026-01-31 19:03:35 +0100",
                     "2026-01-31 19:03:35 +0100",
+                    null,
+                    null,
                     null,
                     "https://example.com");
             GitLabIssueEventDTO event =
@@ -329,6 +335,8 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
                 null,
                 "2026-01-31 19:03:35 +0100",
                 "2026-01-31 19:03:35 +0100",
+                null,
+                null,
                 null,
                 "https://gitlab.lrz.de/hephaestustest/demo-repository/-/issues/5");
         return new GitLabIssueEventDTO(

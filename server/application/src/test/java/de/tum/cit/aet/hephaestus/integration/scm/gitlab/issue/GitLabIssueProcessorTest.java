@@ -40,12 +40,15 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -356,7 +359,8 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
         @Test
         void processMissingIdSkips() {
             var attrs = new GitLabIssueEventDTO.ObjectAttributes(
-                    null, null, "Title", "desc", "opened", "open", false, 18024L, null, null, null, null, null, null);
+                    null, null, "Title", "desc", "opened", "open", false, 18024L, null, null, null, null, null, null,
+                    null, null);
             GitLabIssueEventDTO event =
                     new GitLabIssueEventDTO("issue", "issue", createUser(), createProject(), attrs, null, null, null);
 
@@ -384,6 +388,70 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
             ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
             verify(eventPublisher).publishEvent(eventCaptor.capture());
             assertThat(eventCaptor.getValue()).isInstanceOf(ScmDomainEvent.IssueClosed.class);
+        }
+
+        @ParameterizedTest
+        @CsvSource(
+                nullValues = "null",
+                value = {"null, COMPLETED", "422297, DUPLICATE"})
+        void shouldStoreTheStateReasonTheSyncStoresWhenWebhookClosesAnIssue(
+                @Nullable Long duplicatedToId, String stateReason) {
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, ISSUE_IID))
+                    .thenReturn(Optional.of(createIssueEntity()));
+            var closed = createEvent("close", "closed", false);
+            var attrs = Objects.requireNonNull(closed.objectAttributes());
+            var duplicateAware = new GitLabIssueEventDTO(
+                    closed.objectKind(),
+                    closed.eventType(),
+                    closed.user(),
+                    closed.project(),
+                    new GitLabIssueEventDTO.ObjectAttributes(
+                            attrs.id(),
+                            attrs.iid(),
+                            attrs.title(),
+                            attrs.description(),
+                            attrs.state(),
+                            attrs.action(),
+                            attrs.confidential(),
+                            attrs.authorId(),
+                            attrs.assigneeId(),
+                            attrs.milestoneId(),
+                            attrs.createdAt(),
+                            attrs.updatedAt(),
+                            attrs.closedAt(),
+                            duplicatedToId,
+                            "Issue",
+                            attrs.url()),
+                    closed.labels(),
+                    closed.assignees(),
+                    closed.changes());
+
+            processor.processClosed(duplicateAware, createContext());
+
+            verify(issueRepository)
+                    .upsertCore(
+                            eq(RAW_ISSUE_ID),
+                            eq(PROVIDER_ID),
+                            eq(ISSUE_IID),
+                            any(),
+                            any(),
+                            eq("CLOSED"),
+                            eq(stateReason),
+                            any(),
+                            any(),
+                            any(),
+                            any(),
+                            any(),
+                            any(),
+                            any(),
+                            any(),
+                            eq(REPO_ID),
+                            any(),
+                            any(),
+                            any(),
+                            any(),
+                            any(),
+                            any());
         }
 
         @Test
@@ -1228,6 +1296,8 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                 "2026-01-31 19:03:35 +0100",
                 "2026-01-31 19:03:35 +0100",
                 null,
+                null,
+                null,
                 "https://gitlab.lrz.de/hephaestustest/demo-repository/-/issues/5");
         return new GitLabIssueEventDTO(
                 "issue",
@@ -1272,6 +1342,8 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                 null,
                 "2026-01-31 19:03:35 +0100",
                 "2026-01-31 19:03:35 +0100",
+                null,
+                null,
                 null,
                 "https://gitlab.lrz.de/hephaestustest/demo-repository/-/issues/5");
         return new GitLabIssueEventDTO(
