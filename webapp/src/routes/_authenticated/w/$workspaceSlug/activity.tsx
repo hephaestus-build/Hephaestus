@@ -66,7 +66,7 @@ function Activity() {
 	const scope = { workspaceSlug, login, from, enabled: login !== undefined };
 	const category = openCategory?.kind === "activity" ? openCategory.category : undefined;
 	const openWork = useOpenWork({ workspaceSlug, login });
-	const overview = useActivityOverview(scope);
+	const overview = useActivityOverview({ ...scope, range: search.range });
 	const timeline = useActivityWork({
 		...scope,
 		// Your own copy is headed by what it is; a member's or a team's names whose it is.

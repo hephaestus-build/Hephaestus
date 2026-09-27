@@ -1,18 +1,14 @@
 import { useId } from "react";
-import { Bar, BarChart, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, LabelList, XAxis, YAxis } from "recharts";
 
 import { cn } from "cn";
 import type { ActivityOverview } from "@/api/types.gen";
 import { FOCUS_RING } from "@/components/common/focus";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { useNow } from "@/components/common/use-now";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-	type ChartConfig,
-	ChartContainer,
-	ChartTooltip,
-	ChartTooltipContent,
-} from "@/components/ui/chart";
+import { type ChartConfig, ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 import { capitalise } from "@/lib/text";
@@ -23,9 +19,22 @@ import {
 	bucketLabel,
 	bucketSummary,
 	type DateSpan,
+	deltaPhrase,
+	edgeLabels,
+	trackRows,
+	type PreviousPeriod,
 	readSpan,
 	totalRows,
 } from "./activity-buckets";
+import {
+	BAR_RADIUS,
+	TRACK_FILL,
+	BarTooltip,
+	CountShape,
+	MAX_BAR_SIZE,
+	PeakLabel,
+	peakValue,
+} from "./activity-chart";
 import {
 	ACTIVITY_CATEGORIES,
 	ACTIVITY_CATEGORY_DEFS,
@@ -74,6 +83,7 @@ export function ActivityTiles({ state, providerType }: ActivityTilesProps) {
 								category={category}
 								overview={state.overview}
 								span={readSpan(state)}
+								previous={state.stale ? undefined : state.previous}
 								providerType={providerType}
 							/>
 						) : (
@@ -95,20 +105,28 @@ function ActivityTile({
 	category,
 	overview,
 	span,
+	previous,
 	providerType,
 }: {
 	category: ActivityCategory;
 	overview: ActivityOverview;
 	/** The span the overview was read for; none while it is the previous range's. */
 	span: DateSpan | undefined;
+	/** The period before, once it is in; without it the tile makes no comparison. */
+	previous: PreviousPeriod | undefined;
 	providerType: ProviderType;
 }) {
 	const descriptionId = useId();
+	const nowMs = useNow();
 	const def: ActivityCategoryDef = ACTIVITY_CATEGORY_DEFS[category];
 	const Icon = def.icon(providerType);
 	const headline = kindsTotal(overview.summary, def.headline.kinds);
 	const chips = summaryActions(overview.summary, def.chips);
 	const opens = headline > 0 || chips.length > 0;
+	const delta =
+		previous &&
+		deltaPhrase(headline, kindsTotal(previous.summary, def.headline.kinds), previous.name);
+	const edges = edgeLabels(overview.buckets, overview.bucket, nowMs);
 	const card = (
 		<Card variant={opens ? "interactive" : "muted"} size="sm" className="w-full">
 			<CardHeader>
@@ -124,29 +142,38 @@ function ActivityTile({
 				</CardTitle>
 			</CardHeader>
 			<CardContent className="flex flex-1 flex-col gap-3">
-				<p className="flex items-baseline gap-1.5">
-					<span
-						className={cn(
-							"text-2xl leading-none font-semibold tabular-nums",
-							opens ? "text-foreground" : "text-muted-foreground",
+				<div className="space-y-1">
+					<p className="flex items-baseline gap-1.5">
+						<span
+							className={cn(
+								"text-2xl leading-none font-semibold",
+								opens ? "text-foreground" : "text-muted-foreground",
+							)}
+						>
+							{headline}
+						</span>
+						{def.headline.qualifier !== undefined && (
+							<span className="text-sm text-muted-foreground">{def.headline.qualifier}</span>
 						)}
-					>
-						{headline}
-					</span>
-					{def.headline.qualifier !== undefined && (
-						<span className="text-sm text-muted-foreground">{def.headline.qualifier}</span>
-					)}
-				</p>
-				<div className="h-12">
-					{headline > 0 && (
+					</p>
+					{delta !== undefined && <p className="text-xs text-muted-foreground">{delta}</p>}
+				</div>
+				{opens && (
+					<div aria-hidden className="space-y-1">
 						<TileChart
 							category={category}
 							overview={overview}
 							span={span}
 							providerType={providerType}
 						/>
-					)}
-				</div>
+						{edges && (
+							<div className="flex justify-between text-xs text-muted-foreground">
+								<span>{edges[0]}</span>
+								<span>{edges[1]}</span>
+							</div>
+						)}
+					</div>
+				)}
 				{chips.length > 0 && (
 					<ActionChips actions={chips} providerType={providerType} display="labelled" />
 				)}
@@ -166,18 +193,20 @@ function ActivityTile({
 				{card}
 			</DetailStackLink>
 			<span id={descriptionId} hidden>
-				{bucketSummary(overview, span, def.headline.kinds, def.headline.noun(providerType))}
+				{[bucketSummary(overview, span, def.headline.kinds, def.headline.noun(providerType)), delta]
+					.filter((part) => part !== undefined)
+					.join(". ")}
 			</span>
 		</>
 	);
 }
 
 /**
- * The headline alone, one bar per bucket on this tile's own scale from zero, in the category's tone
- * — its state's where it has one, neutral where the headline sums several states, since a colour
- * there would claim a state the bars do not have. The breakdown by kind is the category level's
- * chart. No axes: the tile's number and its sentence carry the values, and the bars are hidden from
- * assistive technology, which reads the tile's description instead.
+ * The headline alone, one column per bucket on this tile's own scale from zero, in the category's
+ * tone, each standing in a faint full-height track so an empty day reads as present and zero. Only
+ * the peak carries its value; the tile's number, its sentence and the category level's table carry
+ * the rest. The breakdown by kind is the category level's. Hidden from assistive technology, which
+ * reads the tile's description instead.
  */
 function TileChart({
 	category,
@@ -192,34 +221,46 @@ function TileChart({
 }) {
 	const def: ActivityCategoryDef = ACTIVITY_CATEGORY_DEFS[category];
 	const { fill } = ACTIVITY_TONES[def.tone];
-	const config = {
-		count: { label: capitalise(def.headline.qualifier ?? def.label(providerType)), color: fill },
-	} satisfies ChartConfig;
+	const name = capitalise(def.headline.qualifier ?? def.label(providerType));
+	const rows = trackRows(totalRows(overview.buckets, def.headline.kinds));
+	const config = { count: { label: name, color: fill } } satisfies ChartConfig;
 	return (
-		<ChartContainer config={config} className="aspect-auto h-12 w-full" aria-hidden>
+		<ChartContainer config={config} className="aspect-auto h-16 w-full">
 			<BarChart
-				data={totalRows(overview.buckets, def.headline.kinds)}
-				margin={{ top: 2, right: 0, bottom: 0, left: 0 }}
+				data={rows}
+				margin={{ top: 16, right: 4, bottom: 0, left: 4 }}
 				barCategoryGap="20%"
 				accessibilityLayer={false}
 			>
 				<XAxis dataKey="start" hide />
 				<YAxis hide domain={[0, "dataMax"]} />
-				{/* The zero every bar stands on, so an empty day reads as none rather than missing. */}
-				<ReferenceLine y={0} stroke="var(--color-border)" />
 				<ChartTooltip
 					cursor={false}
 					content={
-						<ChartTooltipContent
-							labelFormatter={(label) =>
-								typeof label === "number"
-									? capitalise(bucketLabel(new Date(label), overview.bucket, span))
-									: null
-							}
+						<BarTooltip
+							name={name}
+							bucketLabel={(start) => capitalise(bucketLabel(start, overview.bucket, span))}
 						/>
 					}
 				/>
-				<Bar dataKey="count" fill={fill} maxBarSize={10} isAnimationActive={false} />
+				<Bar
+					dataKey="count"
+					stackId="track"
+					fill={fill}
+					maxBarSize={MAX_BAR_SIZE}
+					shape={<CountShape />}
+					isAnimationActive={false}
+				>
+					<LabelList valueAccessor={peakValue(rows)} content={<PeakLabel />} />
+				</Bar>
+				<Bar
+					dataKey="rest"
+					stackId="track"
+					fill={TRACK_FILL}
+					radius={BAR_RADIUS}
+					maxBarSize={MAX_BAR_SIZE}
+					isAnimationActive={false}
+				/>
 			</BarChart>
 		</ChartContainer>
 	);
@@ -234,7 +275,7 @@ function TileSkeleton() {
 			</CardHeader>
 			<CardContent className="flex flex-col gap-3">
 				<Skeleton className="h-6 w-16" />
-				<Skeleton className="h-12 w-full" />
+				<Skeleton className="h-16 w-full" />
 				<Skeleton className="h-4 w-20" />
 			</CardContent>
 		</Card>

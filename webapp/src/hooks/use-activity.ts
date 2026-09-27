@@ -1,4 +1,5 @@
 import { skipToken, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { subDays } from "date-fns";
 
 import {
 	getActivitySummaryOptions,
@@ -10,6 +11,7 @@ import {
 import type { ActivityWork, OpenWork } from "@/api/types.gen";
 import type { ActivityOverviewState } from "@/components/activity/activity-buckets";
 import type { ActivityKind } from "@/components/activity/activity-kind-defs";
+import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "@/components/activity/activity-range";
 import type { ActivityWorkLogState } from "@/components/activity/ActivityWorkLog";
 import type { MemberActivityState } from "@/components/activity/MemberActivityTable";
 import { workLogMarkdown } from "@/components/activity/work-log-markdown";
@@ -79,14 +81,20 @@ function browserTimeZone(): string {
 	return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
-/** What the range adds up to, in total and per day, week or month in the reader's time zone. */
+/**
+ * What the range adds up to, in total and per day, week or month in the reader's time zone — and
+ * the period of the same length before it, for the figures set against it. The earlier period is
+ * a second read that never holds up the first: while it loads or if it fails, the figures simply
+ * go without a comparison.
+ */
 export function useActivityOverview({
 	workspaceSlug,
 	login,
 	teamId,
 	from,
+	range,
 	enabled = true,
-}: ActivityScopeRequest): ActivityOverviewState {
+}: ActivityScopeRequest & { range: ActivityRange }): ActivityOverviewState {
 	const query = useQuery({
 		...getActivitySummaryOptions({
 			path: { workspaceSlug },
@@ -95,6 +103,16 @@ export function useActivityOverview({
 		placeholderData: keepSameSubject({ workspaceSlug, login, teamId }),
 		enabled,
 	});
+	const { days, previous: periodName } = ACTIVITY_RANGE_DEFS[range];
+	const earlier = useQuery({
+		...getActivitySummaryOptions({
+			path: { workspaceSlug },
+			query: { login, teamId, from: subDays(from, days), to: from, zone: browserTimeZone() },
+		}),
+		enabled,
+	});
+	const previous =
+		earlier.data === undefined ? undefined : { summary: earlier.data.summary, name: periodName };
 	// Placeholder data is another range's, read for a span this hook no longer knows, so it goes
 	// unlabelled rather than labelled with the new range's days.
 	return panelState(query, (overview) =>
@@ -105,6 +123,7 @@ export function useActivityOverview({
 					overview,
 					stale: false as const,
 					span: { from, to: new Date(query.dataUpdatedAt) },
+					previous,
 				},
 	);
 }

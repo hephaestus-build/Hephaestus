@@ -32,6 +32,7 @@ const meta = {
 	args: {
 		path: { behind: [{ label: "Workspace activity", depth: 0 }], onClose: fn() },
 		category: "reviews",
+		range: "30d",
 		description: "Last 30 days · Platform / Payments",
 		providerType: "GITHUB",
 		overview: readyOverview(WORKSPACE_OVERVIEW),

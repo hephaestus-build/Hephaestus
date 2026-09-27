@@ -24,7 +24,7 @@ import type {
 	WorkItemList,
 } from "@/api/types.gen";
 import type { ActivityOverviewState, DateSpan } from "@/components/activity/activity-buckets";
-import { rangeStart } from "@/components/activity/activity-range";
+import { ACTIVITY_RANGE_DEFS, rangeStart } from "@/components/activity/activity-range";
 import type { MemberActivityState } from "@/components/activity/MemberActivityTable";
 
 import { daysBefore, hoursBefore, minutesBefore, STORY_NOW } from "./story-clock";
@@ -456,12 +456,64 @@ export function spanOf(range: StoryRange): DateSpan {
 }
 
 /** An overview as the page receives it once it is in and current. */
+/**
+ * An overview as the page receives it once it is in and current — with the period before it, when
+ * the story sets a figure against one.
+ */
 export function readyOverview(
 	overview: ActivityOverview,
 	range: StoryRange = "30d",
+	previous?: ActivitySummary,
 ): ActivityOverviewState {
-	return { status: "ready", overview, span: spanOf(range), stale: false };
+	return {
+		status: "ready",
+		overview,
+		span: spanOf(range),
+		stale: false,
+		previous: previous && { summary: previous, name: ACTIVITY_RANGE_DEFS[range].previous },
+	};
 }
+
+/**
+ * Ada's month before this one: fewer merged, more reviews, fewer comments — so each tile says a
+ * different thing about the change.
+ */
+export const PREVIOUS_SUMMARY = summaryOf({
+	pullRequestsOpened: 3,
+	pullRequestsMerged: 1,
+	approvals: 14,
+	changeRequests: 3,
+	commentReviews: 4,
+	comments: 50,
+	codeComments: 70,
+	issuesOpened: 1,
+});
+
+/**
+ * A quiet month drawn day by day by hand, so its figures are known: one merge 20 days ago and two
+ * 5 days ago, one approval, and nothing else.
+ */
+const MERGED_DAYS_AGO = new Map([
+	[20, 1],
+	[5, 2],
+]);
+
+export const SPARSE_OVERVIEW: ActivityOverview = (() => {
+	const { bucket, starts } = bucketStarts("30d");
+	const buckets = starts.map((start, index) => {
+		const daysAgo = starts.length - 1 - index;
+		const merged = MERGED_DAYS_AGO.get(daysAgo) ?? 0;
+		return {
+			start,
+			summary: summaryOf({ pullRequestsMerged: merged, approvals: daysAgo === 5 ? 1 : 0 }),
+		};
+	});
+	return {
+		bucket,
+		buckets,
+		summary: sumSummaries(buckets.map((entry) => entry.summary)),
+	};
+})();
 
 export function readyMembers(members: MemberActivity[]): MemberActivityState {
 	return { status: "ready", members, stale: false };

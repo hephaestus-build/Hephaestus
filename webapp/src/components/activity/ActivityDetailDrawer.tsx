@@ -80,6 +80,7 @@ export function ActivityDetailDrawer({
 									nested={level.nested}
 									path={pathAt(level.depth)}
 									category={target.category}
+									range={range}
 									description={described(scope)}
 									providerType={providerType}
 									overview={page.overview}
@@ -94,6 +95,7 @@ export function ActivityDetailDrawer({
 									nested={level.nested}
 									path={pathAt(level.depth)}
 									category={target.category}
+									range={range}
 									description={described(nameOf(owner))}
 									providerType={providerType}
 									overview={member.overview}

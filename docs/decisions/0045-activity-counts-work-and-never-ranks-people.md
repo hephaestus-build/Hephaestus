@@ -71,11 +71,14 @@ Activity counts and lists work, for one developer (**Activity**) and for a works
 
 - **Counts, no score.** Each kind of work is its own count over a time range, with no weights and no
   total.
-- **One metric per chart, on its own scale.** Each kind of work is its own tile, with its headline's
-  bars over the range from zero; kinds of different units never share an axis or a total. Only the
-  kinds of one category share an axis, in that category's detail, and they stack only where they
-  partition it: a review's verdicts and a comment's place add up to the category's total, while a
-  pull request opened, merged and closed are steps of one lifecycle and stand side by side.
+- **One metric per chart, on its own scale.** Each kind of work is its own tile — its number, its
+  change on the period of the same length before, and its headline's bars over the range from
+  zero; kinds of different units never share an axis or a total. The change is stated, not
+  judged: more activity is neither better nor worse. A category's detail draws one small chart per
+  kind on a scale shared by the rows, since they count the same unit, never stacks or groups: kinds
+  in one bar hide each other's shape, grouped bars for thirty days are too thin to read, and an
+  approval's green beside a change request's red is a pair a red-green colour-blind reader cannot
+  tell apart. Every chart has its numbers in words or in a table, so no value needs a pointer.
 - **Members by name.** Workspace activity lists members alphabetically, never by a count, and the
   table has no count column to sort by. No bar, colour ramp or position compares one member with
   another: each member's cell is that member's own counts.

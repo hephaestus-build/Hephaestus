@@ -13,6 +13,7 @@ export type ActivityTone =
 	| "success"
 	| "danger"
 	| "attention"
+	| "accent"
 	| "muted";
 
 interface ToneDef {
@@ -47,6 +48,10 @@ export const ACTIVITY_TONES = {
 		text: "text-provider-attention-foreground",
 		fill: "var(--color-provider-attention-foreground)",
 	},
+	accent: {
+		text: "text-provider-accent-foreground",
+		fill: "var(--color-provider-accent-foreground)",
+	},
 	muted: {
 		text: "text-provider-muted-foreground",
 		fill: "var(--color-provider-muted-foreground)",
@@ -67,3 +72,12 @@ export function providerIcon(
  * faded: faded text falls below the contrast the figures need to stay readable.
  */
 export const STALE = "grayscale transition-[filter] motion-reduce:transition-none";
+
+/**
+ * The tone a kind's bars take. A neutral kind — a comment, a comment-only review — is grey on its
+ * icon, beside the state colours of the kinds around it, but grey bars read as disabled, so its
+ * bars take the accent: information, no state.
+ */
+export function markTone(tone: ActivityTone): ActivityTone {
+	return tone === "muted" ? "accent" : tone;
+}

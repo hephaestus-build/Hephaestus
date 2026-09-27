@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { ActivityBucket, ActivitySummary } from "@/api/types.gen";
 
-import { bucketLabel, bucketRows, bucketSummary, kindSeries } from "./activity-buckets";
+import {
+	averagePerBucket,
+	bucketLabel,
+	bucketSummary,
+	deltaPhrase,
+	edgeLabels,
+	totalRows,
+} from "./activity-buckets";
 
 const ZERO: ActivitySummary = {
 	pullRequestsOpened: 0,
@@ -88,22 +95,43 @@ describe("bucketLabel", () => {
 	});
 });
 
-describe("bucketRows", () => {
-	it("gives every bucket a row, zeros included, with a column per kind", () => {
-		expect(bucketRows(buckets, ["REVIEW_APPROVED", "REVIEW_CHANGES_REQUESTED"])).toStrictEqual([
-			{ start: buckets[0]?.start.getTime(), REVIEW_APPROVED: 1, REVIEW_CHANGES_REQUESTED: 0 },
-			{ start: buckets[1]?.start.getTime(), REVIEW_APPROVED: 2, REVIEW_CHANGES_REQUESTED: 1 },
-			{ start: buckets[2]?.start.getTime(), REVIEW_APPROVED: 3, REVIEW_CHANGES_REQUESTED: 0 },
-			{ start: buckets[3]?.start.getTime(), REVIEW_APPROVED: 0, REVIEW_CHANGES_REQUESTED: 0 },
+describe("totalRows", () => {
+	it("gives every bucket a row, zeros included, counting the kinds together", () => {
+		expect(totalRows(buckets, ["REVIEW_APPROVED", "REVIEW_CHANGES_REQUESTED"])).toStrictEqual([
+			{ start: buckets[0]?.start.getTime(), count: 1 },
+			{ start: buckets[1]?.start.getTime(), count: 3 },
+			{ start: buckets[2]?.start.getTime(), count: 3 },
+			{ start: buckets[3]?.start.getTime(), count: 0 },
 		]);
 	});
 });
 
-describe("kindSeries", () => {
-	it("paints each kind in its tone and lightens a tone the stack already used", () => {
-		expect(kindSeries(["COMMENTED", "CODE_COMMENTED"])).toStrictEqual([
-			{ kind: "COMMENTED", fill: "var(--color-provider-muted-foreground)", fillOpacity: 1 },
-			{ kind: "CODE_COMMENTED", fill: "var(--color-provider-muted-foreground)", fillOpacity: 0.45 },
-		]);
+describe("deltaPhrase", () => {
+	it("sets a count against the period before in words, without a verdict", () => {
+		expect(deltaPhrase(7, 3, "the previous 30 days")).toBe("4 more than the previous 30 days");
+		expect(deltaPhrase(1, 3, "the previous 7 days")).toBe("2 fewer than the previous 7 days");
+		expect(deltaPhrase(5, 5, "the previous 12 months")).toBe("Same as the previous 12 months");
+	});
+});
+
+describe("averagePerBucket", () => {
+	it("writes one decimal, and nothing over no buckets", () => {
+		expect(averagePerBucket(18, 30)).toBe("0.6");
+		expect(averagePerBucket(0, 0)).toBe("0.0");
+	});
+});
+
+describe("edgeLabels", () => {
+	it("names the first bucket and ends today, at every bucket size", () => {
+		const september = new Date(2026, 8, 27).getTime();
+		expect(edgeLabels(buckets, "DAY", september)).toStrictEqual(["21 Sep", "Today"]);
+		expect(edgeLabels(buckets, "WEEK", september)).toStrictEqual(["21 Sep", "Today"]);
+		expect(edgeLabels([], "DAY", september)).toBeUndefined();
+	});
+
+	it("gives the start its year when it is not this one", () => {
+		const nextYear = new Date(2027, 7, 27).getTime();
+		expect(edgeLabels([bucket(1, {})], "MONTH", nextYear)).toStrictEqual(["Sep 2026", "Today"]);
+		expect(edgeLabels([bucket(21, {})], "DAY", nextYear)).toStrictEqual(["21 Sep 2026", "Today"]);
 	});
 });

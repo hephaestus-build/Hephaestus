@@ -46,8 +46,9 @@ export interface ActivityKindDef {
 	/** The provider colour role it wears, on its icon and its bars; never on its count. */
 	tone: ActivityTone;
 	/**
-	 * What happened, as a row's chip and a chart's series name it: "Merged", "Approved". A count kind
-	 * names where it happened instead: "Conversation", "Code".
+	 * What happened, as a row's chip and a chart's row name it: "Merged", "Approved". A count kind
+	 * names where it happened instead: "In conversations", "On code". Always its `countLabel` with a
+	 * capital, so a kind reads the same on a chip, a chart and a table.
 	 */
 	label: string;
 	/**
@@ -155,7 +156,7 @@ export const ACTIVITY_KIND_DEFS = {
 	COMMENTED: {
 		icon: providerIcon(CommentDiscussionIcon, GitLabCommentIcon),
 		tone: "muted",
-		label: "Conversation",
+		label: "In conversations",
 		countLabel: "in conversations",
 		chip: "count",
 		noun: fixedNoun("comment in a conversation", "comments in conversations"),
@@ -166,7 +167,7 @@ export const ACTIVITY_KIND_DEFS = {
 	CODE_COMMENTED: {
 		icon: providerIcon(CodeReviewIcon, GitLabCodeIcon),
 		tone: "muted",
-		label: "Code",
+		label: "On code",
 		countLabel: "on code",
 		chip: "count",
 		noun: fixedNoun("comment on code", "comments on code"),
@@ -281,18 +282,19 @@ export interface ActivityCategoryDef {
 	label: (provider: ProviderType) => string;
 	icon: (provider: ProviderType) => IconComponent;
 	/**
-	 * The tone of its icon: its headline's, where one state is the headline; neutral where the
-	 * headline sums several, whose bars keep their own tones.
+	 * The tone of its icon and its tile's bars: its headline's, where one state is the headline
+	 * (merged, opened); the accent where the headline sums several, since no one state's colour is
+	 * true of the sum and grey would read as disabled.
 	 */
 	tone: ActivityTone;
 	/** Every kind it holds, in the registry's order: its table cell, its chart, its level's rows. */
 	kinds: readonly ActivityKind[];
 	/**
-	 * Whether its kinds partition it, so they add up to its total and stack in its chart: a review is
-	 * one verdict, a comment is in one place. The steps of a lifecycle — opened, then merged or
-	 * closed — do not add up to anything, and stand side by side.
+	 * Whether its kinds partition it, so they add up to a total worth a column: a review is one
+	 * verdict, a comment is in one place. The steps of a lifecycle — opened, then merged or closed —
+	 * add up to nothing.
 	 */
-	stacked: boolean;
+	partitioned: boolean;
 	/**
 	 * The one number its tile leads with and charts over time: the kinds summed for it, what the
 	 * number counts in a sentence ("3 pull requests merged"), and — only where the tile's title does
@@ -317,7 +319,7 @@ export const ACTIVITY_CATEGORY_DEFS = {
 		icon: providerIcon(GitMergeIcon, GitLabMergeIcon),
 		tone: "done",
 		kinds: ["PULL_REQUEST_OPENED", "PULL_REQUEST_MERGED", "PULL_REQUEST_CLOSED"],
-		stacked: false,
+		partitioned: false,
 		headline: {
 			kinds: ["PULL_REQUEST_MERGED"],
 			noun: pullRequestNoun("merged"),
@@ -328,18 +330,18 @@ export const ACTIVITY_CATEGORY_DEFS = {
 	reviews: {
 		label: () => "Reviews",
 		icon: providerIcon(EyeIcon, GitLabEyeIcon),
-		tone: "muted",
+		tone: "accent",
 		kinds: REVIEW_KINDS,
-		stacked: true,
+		partitioned: true,
 		headline: { kinds: REVIEW_KINDS, noun: fixedNoun("review", "reviews") },
 		chips: REVIEW_KINDS,
 	},
 	comments: {
 		label: () => "Comments",
 		icon: providerIcon(CommentDiscussionIcon, GitLabCommentsIcon),
-		tone: "muted",
+		tone: "accent",
 		kinds: COMMENT_KINDS,
-		stacked: true,
+		partitioned: true,
 		headline: { kinds: COMMENT_KINDS, noun: fixedNoun("comment", "comments") },
 		chips: COMMENT_KINDS,
 	},
@@ -348,7 +350,7 @@ export const ACTIVITY_CATEGORY_DEFS = {
 		icon: providerIcon(IssueOpenedIcon, GitLabIssueOpenIcon),
 		tone: "open",
 		kinds: ["ISSUE_OPENED", "ISSUE_CLOSED"],
-		stacked: false,
+		partitioned: false,
 		headline: {
 			kinds: ["ISSUE_OPENED"],
 			noun: fixedNoun("issue opened", "issues opened"),

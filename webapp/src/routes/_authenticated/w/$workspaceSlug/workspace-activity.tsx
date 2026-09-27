@@ -103,7 +103,7 @@ function WorkspaceActivity() {
 		providerType,
 		people,
 	});
-	const overview = useActivityOverview(scope);
+	const overview = useActivityOverview({ ...scope, range: search.range });
 	const timeline = useActivityWork({ ...scope, copy: copyOf(undefined, pageOwner, true) });
 	const categoryWorkLog = useActivityWork({
 		...scope,
@@ -119,7 +119,7 @@ function WorkspaceActivity() {
 		enabled: scopeKnown && memberLogin !== undefined,
 	};
 	const memberOpenWork = useOpenWork({ workspaceSlug, login: memberLogin });
-	const memberOverview = useActivityOverview(memberScope);
+	const memberOverview = useActivityOverview({ ...memberScope, range: search.range });
 	const memberWorkLog = useActivityWork({
 		...memberScope,
 		copy: copyOf(undefined, memberOwner, false),

@@ -6,6 +6,7 @@ import type { ProviderType } from "@/lib/provider/provider-terms";
 
 import type { ActivityOverviewState } from "./activity-buckets";
 import { ACTIVITY_CATEGORY_DEFS, type ActivityCategory } from "./activity-kind-defs";
+import type { ActivityRange } from "./activity-range";
 import { ActivityTrendChart } from "./ActivityTrendChart";
 import { ActivityWorkLog, type ActivityWorkLogState, type WorkLogSubject } from "./ActivityWorkLog";
 import { CopyMarkdownButton } from "./CopyMarkdownButton";
@@ -14,6 +15,8 @@ export interface ActivityCategoryLevelProps {
 	nested?: boolean;
 	path: LevelPath;
 	category: ActivityCategory;
+	/** The range the level counts. */
+	range: ActivityRange;
 	/** The range and whose activity it is: "Last 30 days · Platform". */
 	description: string;
 	providerType: ProviderType;
@@ -29,6 +32,7 @@ export function ActivityCategoryLevel({
 	nested,
 	path,
 	category,
+	range,
 	description,
 	providerType,
 	overview,
@@ -48,7 +52,12 @@ export function ActivityCategoryLevel({
 				</div>
 			</DetailDrawerHeader>
 			<DrawerBody className="flex flex-col gap-8 pt-2">
-				<ActivityTrendChart state={overview} category={category} providerType={providerType} />
+				<ActivityTrendChart
+					state={overview}
+					category={category}
+					range={range}
+					providerType={providerType}
+				/>
 				<Section
 					level={3}
 					size="lg"

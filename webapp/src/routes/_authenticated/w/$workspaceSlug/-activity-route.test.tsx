@@ -187,11 +187,15 @@ describe("Activity", () => {
 				"page-2",
 			),
 		);
-		const sent = ["/activity/summary", "/activity/work"].flatMap(readsOf);
 		// The range runs to whenever the server reads it; the cursor carries that end between pages.
-		expect(sent.map((url) => url.searchParams.has("to"))).not.toContain(true);
+		expect(readsOf("/activity/work").map((url) => url.searchParams.has("to"))).not.toContain(true);
 		const [first, next] = readsOf("/activity/work");
-		expect(next?.searchParams.get("from")).toBe(first?.searchParams.get("from"));
+		const from = first?.searchParams.get("from");
+		expect(next?.searchParams.get("from")).toBe(from);
+		// The one summary read with an end is the period before, which ends where the range begins.
+		const ended = readsOf("/activity/summary").filter((url) => url.searchParams.has("to"));
+		expect(ended.map((url) => url.searchParams.get("to"))).toContain(from);
+		expect(ended.map((url) => url.searchParams.get("from"))).not.toContain(from);
 	});
 
 	it("reads the summary from local midnight of the range's first day", async () => {
