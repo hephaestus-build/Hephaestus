@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -194,6 +195,8 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         databaseTestUtils.cleanDatabase();
         releaseSilentMode();
         when(commentPoster.findExistingSummaryComment(any())).thenReturn(ExistingDeliveryLookup.absent());
+        AgentHandlerTestDoubles.resolveSummaryWrites(commentPoster);
+        when(commentPoster.findExisting(any())).thenReturn(ExistingDeliveryLookup.absent());
 
         workspace = WorkspaceTestFixtures.activeWorkspace("pipeline-test");
         workspace.getFeatures().setPracticesEnabled(true);
@@ -478,7 +481,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                     .singleElement()
                     .extracting(Feedback::getDeliveryState, Feedback::getSuppressionReason)
                     .containsExactly(FeedbackDeliveryState.SUPPRESSED, FeedbackSuppressionReason.INSTANCE_SILENCED);
-            verify(commentPoster, never()).postFormattedBody(any(), any());
+            verify(commentPoster, never()).post(any());
             verify(diffNotePoster, never()).reconcileInlineNotes(any(), any());
 
             releaseSilentMode();
@@ -486,10 +489,10 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                     .noneMatch(feedback -> feedback.getDeliveryState() == FeedbackDeliveryState.PREPARED);
 
             AgentJob newEvent = newJobWithOutput(validAgentOutput());
-            when(commentPoster.postFormattedBody(any(), any())).thenReturn("comment-after-release");
+            when(commentPoster.post(any())).thenReturn("comment-after-release");
             handler.deliver(newEvent);
 
-            verify(commentPoster).postFormattedBody(eq(newEvent), any(String.class));
+            verify(commentPoster).post(argThat(write -> write.job().equals(newEvent)));
             verify(diffNotePoster).reconcileInlineNotes(eq(newEvent), any());
             assertThat(observationRepository.findAll()).hasSize(4);
             assertThat(feedbackRepository.findAll())
@@ -500,7 +503,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         @Test
         void fullPipelineFromParseToDelivery() {
             setJobOutput(validAgentOutput());
-            when(commentPoster.postFormattedBody(any(), any())).thenReturn("comment-123");
+            when(commentPoster.post(any())).thenReturn("comment-123");
             when(diffNotePoster.reconcileInlineNotes(any(), any()))
                     .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));
 
@@ -519,7 +522,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
             assertThat(events.get(0).observationsInserted()).isEqualTo(2);
             assertThat(events.get(0).hasNegative()).isTrue();
 
-            verify(commentPoster).postFormattedBody(eq(agentJob), any(String.class));
+            verify(commentPoster).post(argThat(write -> write.job().equals(agentJob)));
             verify(diffNotePoster).reconcileInlineNotes(eq(agentJob), any());
 
             // AgentJobExecutor persists deliveryStatus, not handler.deliver(), so it stays null here.
@@ -551,16 +554,17 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                   ]
                 }""";
             setJobOutput(output);
-            when(commentPoster.postFormattedBody(any(), any())).thenReturn("comment-approval");
+            when(commentPoster.post(any())).thenReturn("comment-approval");
 
             handler.deliver(agentJob);
 
             assertThat(observationRepository.findAll()).hasSize(2);
 
             // A observations summary reaches this same call, so only the body text tells an approval apart.
-            var body = ArgumentCaptor.forClass(String.class);
-            verify(commentPoster).postFormattedBody(eq(agentJob), body.capture());
-            assertThat(body.getValue()).contains("What's working well here");
+            var write = ArgumentCaptor.forClass(PullRequestCommentPoster.SummaryWrite.class);
+            verify(commentPoster).post(write.capture());
+            assertThat(write.getValue().job()).isEqualTo(agentJob);
+            assertThat(write.getValue().content().body()).contains("What's working well here");
 
             verify(diffNotePoster).reconcileInlineNotes(eq(agentJob), eq(List.of()));
         }
@@ -585,20 +589,20 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
             handler.deliver(agentJob);
 
             assertThat(observationRepository.findAll()).hasSize(1);
-            verify(commentPoster, never()).postFormattedBody(any(), any());
+            verify(commentPoster, never()).post(any());
         }
 
         @Test
         void aPartialReviewStillReportsTheProblemItFound() {
             agentJob = admitAndSetOutput(agentJob, validAgentOutput(), false);
-            when(commentPoster.postFormattedBody(any(), any())).thenReturn("comment-partial");
+            when(commentPoster.post(any())).thenReturn("comment-partial");
             when(diffNotePoster.reconcileInlineNotes(any(), any()))
                     .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));
 
             handler.deliver(agentJob);
 
             assertThat(observationRepository.findAll()).hasSize(2);
-            verify(commentPoster).postFormattedBody(eq(agentJob), any(String.class));
+            verify(commentPoster).post(argThat(write -> write.job().equals(agentJob)));
         }
     }
 
@@ -643,7 +647,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                     .hasMessageContaining("practice not admitted to the job");
 
             assertThat(observationRepository.findAll()).isEmpty();
-            verify(commentPoster, never()).postFormattedBody(any(), any());
+            verify(commentPoster, never()).post(any());
             verify(diffNotePoster, never()).reconcileInlineNotes(any(), any());
         }
 
@@ -696,7 +700,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
             // Observations are still persisted: deliver() persists first, then posts.
             assertThat(observationRepository.findAll()).hasSize(2);
 
-            verify(commentPoster, never()).postFormattedBody(any(), any());
+            verify(commentPoster, never()).post(any());
             verify(diffNotePoster, never()).reconcileInlineNotes(any(), any());
 
             assertThat(agentJob.getDeliveryCommentId()).isNull();
@@ -711,7 +715,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         @DisplayName("re-delivering same job creates no duplicate observations")
         void redeliveryNoDuplicates() {
             setJobOutput(validAgentOutput());
-            when(commentPoster.postFormattedBody(any(), any())).thenReturn("comment-789");
+            when(commentPoster.post(any())).thenReturn("comment-789");
             when(diffNotePoster.reconcileInlineNotes(any(), any()))
                     .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));
 

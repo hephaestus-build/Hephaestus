@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -14,10 +15,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackNotSentException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.ExistingSummaryLookup;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.FeedbackContent;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchCompletion;
@@ -47,6 +54,7 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
 
@@ -57,7 +65,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
     private PracticeFeedbackDeliveryPolicy policy;
 
     @Mock
-    private PullRequestCommentPoster poster;
+    private SummaryChannel channel;
 
     @Mock
     private TransactionTemplate transactions;
@@ -77,8 +85,22 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         var mapper = JsonMapper.builder().build();
         var stateMachine =
                 new FeedbackDispatchStateMachine(repository, transactions, new SimpleMeterRegistry(), mapper);
+        lenient().when(channel.kind()).thenReturn(IntegrationKind.GITLAB);
         service = new PracticeFeedbackDispatchService(
-                repository, policy, poster, transactions, mapper, feedbackRepository, diffNotePoster, stateMachine);
+                repository,
+                policy,
+                new PullRequestCommentPoster(List.of(channel)),
+                transactions,
+                mapper,
+                feedbackRepository,
+                diffNotePoster,
+                stateMachine);
+        lenient()
+                .when(channel.formatPullRequestSubjectId(anyString(), anyInt()))
+                .thenAnswer(invocation -> invocation.getArgument(0) + "!" + invocation.getArgument(1));
+        lenient()
+                .when(channel.formatIssueSubjectId(anyString(), anyInt()))
+                .thenAnswer(invocation -> invocation.getArgument(0) + "#" + invocation.getArgument(1));
         lenient()
                 .doAnswer(invocation -> {
                     Consumer<TransactionStatus> callback = invocation.getArgument(0);
@@ -93,10 +115,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         });
         Workspace workspace = new Workspace();
         workspace.setId(7L);
-        job = new AgentJob();
-        job.setId(UUID.randomUUID());
-        job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
-        job.setWorkspace(workspace);
+        job = reviewJob(workspace);
         dispatch = dispatch(FeedbackDispatchState.PENDING);
         lenient()
                 .when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
@@ -120,13 +139,13 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         dispatch = dispatch(FeedbackDispatchState.UNCERTAIN, true, 1);
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
                 .thenReturn(Optional.of(dispatch));
-        when(poster.findExistingSummaryComment(job)).thenReturn(ExistingDeliveryLookup.found("provider-42"));
+        when(channel.findExistingSummary(any(), eq(summaryMarker(job)))).thenReturn(found("provider-42"));
 
         PracticeFeedbackDispatchService.Result result = dispatchAutomaticReview(job, "body", Set.of("practice"));
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
         assertThat(result.externalRef()).isEqualTo("provider-42");
-        verify(poster, never()).postFormattedBody(any(), any());
+        verify(channel, never()).postSummary(any(), any());
         verify(repository)
                 .finish(argThat(completion -> completion.state().equals("SENT")
                         && "provider-42".equals(completion.externalRef())
@@ -142,28 +161,29 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(dispatch));
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + laterJob.getId(), 7L))
                 .thenReturn(Optional.of(laterDispatch));
-        when(poster.findExistingSummaryComment(job)).thenReturn(ExistingDeliveryLookup.absent());
-        when(poster.findExistingSummaryComment(laterJob)).thenReturn(ExistingDeliveryLookup.absent());
-        when(poster.postFormattedBody(job, "first review")).thenReturn("provider-1");
-        when(poster.postFormattedBody(laterJob, "later review")).thenReturn("provider-2");
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
+        when(channel.postSummary(any(), eq(new FeedbackContent("first review", summaryMarker(job)))))
+                .thenReturn(new SummaryHandle("provider-1"));
+        when(channel.postSummary(any(), eq(new FeedbackContent("later review", summaryMarker(laterJob)))))
+                .thenReturn(new SummaryHandle("provider-2"));
 
         var first = dispatchAutomaticReview(job, "first review", Set.of("practice"));
         var later = dispatchAutomaticReview(laterJob, "later review", Set.of("practice"));
 
         assertThat(first.externalRef()).isEqualTo("provider-1");
         assertThat(later.externalRef()).isEqualTo("provider-2");
-        verify(poster).postFormattedBody(job, "first review");
-        verify(poster).postFormattedBody(laterJob, "later review");
+        verify(channel).postSummary(any(), eq(new FeedbackContent("first review", summaryMarker(job))));
+        verify(channel).postSummary(any(), eq(new FeedbackContent("later review", summaryMarker(laterJob))));
     }
 
     @Test
     void unknownProviderLookupBecomesUncertainAndNeverPosts() {
-        when(poster.findExistingSummaryComment(job)).thenReturn(ExistingDeliveryLookup.unknown());
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.unknown());
 
         PracticeFeedbackDispatchService.Result result = dispatchAutomaticReview(job, "body", Set.of("practice"));
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
-        verify(poster, never()).postFormattedBody(any(), any());
+        verify(channel, never()).postSummary(any(), any());
         verify(repository)
                 .finish(argThat(completion -> completion.state().equals("UNCERTAIN")
                         && completion.externalRef() == null
@@ -181,7 +201,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
         assertThat(result.externalRef()).isEqualTo("provider-42");
         verify(repository, never()).claim(any(), any(), anyString(), any(), any(Integer.class));
-        verify(poster, never()).findExistingSummaryComment(any());
+        verify(channel, never()).findExistingSummary(any(), any());
     }
 
     @Test
@@ -192,13 +212,13 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         PracticeFeedbackDispatchService.Result result = dispatchAutomaticReview(job, "body", Set.of("practice"));
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.IN_PROGRESS);
-        verify(poster, never()).findExistingSummaryComment(any());
+        verify(channel, never()).findExistingSummary(any(), any());
     }
 
     @Test
     void claimUsesFullLeaseAndPolicyIsCheckedAfterLookupBeforePosting() {
-        when(poster.findExistingSummaryComment(job)).thenReturn(ExistingDeliveryLookup.absent());
-        when(poster.postFormattedBody(job, "body")).thenReturn("provider-42");
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
+        when(channel.postSummary(any(), any())).thenReturn(new SummaryHandle("provider-42"));
         Instant before = Instant.now();
 
         PracticeFeedbackDispatchService.Result result = dispatchAutomaticReview(job, "body", Set.of("practice"));
@@ -206,11 +226,11 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         ArgumentCaptor<Instant> leaseUntil = ArgumentCaptor.forClass(Instant.class);
         verify(repository).claim(any(), any(), anyString(), leaseUntil.capture(), any(Integer.class));
         assertThat(leaseUntil.getValue()).isAfterOrEqualTo(before.plus(PracticeFeedbackDispatchService.LEASE));
-        InOrder order = inOrder(poster, policy, repository);
-        order.verify(poster).findExistingSummaryComment(job);
+        InOrder order = inOrder(channel, policy, repository);
+        order.verify(channel).findExistingSummary(any(), eq(summaryMarker(job)));
         order.verify(policy).evaluatePullRequest(any(), any(), any(), any());
         order.verify(repository).beginWrite(any(), any(), anyString());
-        order.verify(poster).postFormattedBody(job, "body");
+        order.verify(channel).postSummary(any(), eq(new FeedbackContent("body", summaryMarker(job))));
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
     }
 
@@ -220,9 +240,9 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
                 .thenReturn(Optional.of(dispatch))
                 .thenReturn(Optional.of(recovering));
-        when(poster.findExistingSummaryComment(job))
-                .thenReturn(ExistingDeliveryLookup.absent(), ExistingDeliveryLookup.found("provider-42"));
-        when(poster.postFormattedBody(job, "body")).thenReturn("provider-42");
+        when(channel.findExistingSummary(any(), any()))
+                .thenReturn(ExistingSummaryLookup.absent(), found("provider-42"));
+        when(channel.postSummary(any(), any())).thenReturn(new SummaryHandle("provider-42"));
         when(repository.finish(any())).thenReturn(0, 1);
 
         var interrupted = dispatchAutomaticReview(job, "body", Set.of("practice"));
@@ -231,7 +251,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         assertThat(interrupted.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.IN_PROGRESS);
         assertThat(recovered.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
         assertThat(recovered.externalRef()).isEqualTo("provider-42");
-        verify(poster, times(1)).postFormattedBody(job, "body");
+        verify(channel, times(1)).postSummary(any(), any());
     }
 
     @Test
@@ -239,8 +259,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         dispatch = dispatch(FeedbackDispatchState.UNCERTAIN, false, PracticeFeedbackDispatchService.MAX_ATTEMPTS - 1);
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
                 .thenReturn(Optional.of(dispatch));
-        when(poster.findExistingSummaryComment(job)).thenReturn(ExistingDeliveryLookup.absent());
-        when(poster.postFormattedBody(job, "body")).thenThrow(new RuntimeException("connection reset"));
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
+        when(channel.postSummary(any(), any())).thenThrow(new RuntimeException("connection reset"));
 
         var result = dispatchAutomaticReview(job, "body", Set.of("practice"));
 
@@ -254,13 +274,13 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         dispatch = dispatch(FeedbackDispatchState.UNCERTAIN, true, PracticeFeedbackDispatchService.MAX_ATTEMPTS);
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
                 .thenReturn(Optional.of(dispatch));
-        when(poster.findExistingSummaryComment(job)).thenReturn(ExistingDeliveryLookup.absent());
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
 
         PracticeFeedbackDispatchService.Result result = dispatchAutomaticReview(job, "body", Set.of("practice"));
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
         verify(repository, never()).beginWrite(any(), any(), anyString());
-        verify(poster, never()).postFormattedBody(any(), any());
+        verify(channel, never()).postSummary(any(), any());
     }
 
     @Test
@@ -278,7 +298,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
 
     @Test
     void aPauseDropsAutomaticFeedbackTerminally() {
-        when(poster.findExistingSummaryComment(job)).thenReturn(ExistingDeliveryLookup.absent());
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
         when(policy.evaluatePullRequest(any(), any(), any(), any()))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.suppressed(
                         FeedbackSuppressionReason.WORKSPACE_DELIVERY_PAUSED));
@@ -292,7 +312,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         assertThat(completion.getValue().state()).isEqualTo(FeedbackDispatchState.SUPPRESSED.name());
         assertThat(completion.getValue().suppressionReason()).isEqualTo("WORKSPACE_DELIVERY_PAUSED");
         assertThat(completion.getValue().error()).isNull();
-        verify(poster, never()).postFormattedBody(any(), any());
+        verify(channel, never()).postSummary(any(), any());
     }
 
     @Test
@@ -305,7 +325,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(repository.findByDestinationKeyAndWorkspaceId("approved:" + feedback.getId(), 7L))
                 .thenReturn(Optional.of(approved));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
-        when(poster.findApprovedProposal(job, feedback.getId())).thenReturn(ExistingDeliveryLookup.absent());
+        when(channel.findExistingSummary(any(), eq(approvedMarker(feedback))))
+                .thenReturn(ExistingSummaryLookup.absent());
         when(policy.evaluatePullRequest(any(), any(), any(), any()))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.suppressed(
                         FeedbackSuppressionReason.WORKSPACE_DELIVERY_PAUSED));
@@ -317,7 +338,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         verify(repository).finish(completion.capture());
         assertThat(completion.getValue().state()).isEqualTo(FeedbackDispatchState.SUPPRESSED.name());
         assertThat(completion.getValue().suppressionReason()).isEqualTo("WORKSPACE_DELIVERY_PAUSED");
-        verify(poster, never()).postApprovedProposal(any(), any(), any());
+        verify(channel, never()).postSummary(any(), any());
     }
 
     @Test
@@ -327,9 +348,10 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(repository.findByDestinationKeyAndWorkspaceId("approved:" + feedback.getId(), 7L))
                 .thenReturn(Optional.of(approved));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
-        when(poster.findApprovedProposal(job, feedback.getId())).thenReturn(ExistingDeliveryLookup.absent());
-        when(poster.postApprovedProposal(job, feedback.getId(), "approved body"))
-                .thenReturn("summary-ref");
+        when(channel.findExistingSummary(any(), eq(approvedMarker(feedback))))
+                .thenReturn(ExistingSummaryLookup.absent());
+        when(channel.postSummary(any(), eq(new FeedbackContent("approved body", approvedMarker(feedback)))))
+                .thenReturn(new SummaryHandle("summary-ref"));
         var signal = new InlineFeedbackChannel.DeliveredSignal(
                 "approved:" + feedback.getId() + ":0",
                 new FeedbackAnchor.DiffAnchor("src/Review.java", 12, null),
@@ -361,10 +383,10 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(initial))
                 .thenReturn(Optional.of(recovering));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
-        when(poster.findApprovedProposal(job, feedback.getId()))
-                .thenReturn(ExistingDeliveryLookup.absent(), ExistingDeliveryLookup.found("summary-ref"));
-        when(poster.postApprovedProposal(job, feedback.getId(), "approved body"))
-                .thenReturn("summary-ref");
+        when(channel.findExistingSummary(any(), eq(approvedMarker(feedback))))
+                .thenReturn(ExistingSummaryLookup.absent(), found("summary-ref"));
+        when(channel.postSummary(any(), eq(new FeedbackContent("approved body", approvedMarker(feedback)))))
+                .thenReturn(new SummaryHandle("summary-ref"));
         var deliveredSignal = new InlineFeedbackChannel.DeliveredSignal(
                 "approved:" + feedback.getId() + ":0",
                 new FeedbackAnchor.DiffAnchor("src/Review.java", 12, null),
@@ -383,7 +405,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         assertThat(incomplete.externalRef()).isEqualTo("summary-ref");
         assertThat(recovered.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
         assertThat(recovered.externalRef()).isEqualTo("summary-ref");
-        verify(poster, times(1)).postApprovedProposal(job, feedback.getId(), "approved body");
+        verify(channel, times(1))
+                .postSummary(any(), eq(new FeedbackContent("approved body", approvedMarker(feedback))));
         verify(repository)
                 .finish(argThat(completion -> completion.state().equals(FeedbackDispatchState.UNCERTAIN.name())
                         && "summary-ref".equals(completion.externalRef())));
@@ -392,8 +415,161 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                         && "summary-ref".equals(completion.externalRef())));
     }
 
+    @Test
+    void shouldReopenOnlyItsOwnFenceWhenTheChannelProvesNothingWasSent() {
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
+        when(channel.postSummary(any(), any()))
+                .thenThrow(new FeedbackNotSentException("GitLab note not sent", new RuntimeException("timeout")));
+        when(repository.releaseUnsentWrite(any(), any(), anyString())).thenReturn(1);
+
+        var result = dispatchAutomaticReview(job, "body", Set.of("practice"));
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        var began = ArgumentCaptor.forClass(String.class);
+        var released = ArgumentCaptor.forClass(String.class);
+        InOrder order = inOrder(repository);
+        order.verify(repository).beginWrite(eq(dispatch.getId()), eq(7L), began.capture());
+        order.verify(repository).releaseUnsentWrite(eq(dispatch.getId()), eq(7L), released.capture());
+        order.verify(repository)
+                .finish(argThat(completion -> completion.state().equals(FeedbackDispatchState.UNCERTAIN.name())));
+        assertThat(released.getValue()).isEqualTo(began.getValue());
+    }
+
+    @Test
+    void shouldKeepTheFenceWhenTheCreateOutcomeIsUnknown() {
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
+        when(channel.postSummary(any(), any()))
+                .thenThrow(new FeedbackDeliveryException("createNote transport error: timeout"));
+
+        var result = dispatchAutomaticReview(job, "body", Set.of("practice"));
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        verify(repository).beginWrite(any(), any(), anyString());
+        verify(repository, never()).releaseUnsentWrite(any(), any(), anyString());
+    }
+
+    @Test
+    void shouldPostApprovedIssueFeedbackOnceOnTheIssueWhenTheJobNamesOnlyTheIssue() {
+        AgentJob issueJob = reviewJob(job.getWorkspace());
+        issueJob.setJobType(AgentJobType.ISSUE_REVIEW);
+        issueJob.setMetadata(JsonNodeFactory.instance
+                .objectNode()
+                .put("repository_full_name", "acme/api")
+                .put("issue_number", 5));
+        Feedback feedback = Feedback.builder()
+                .id(UUID.randomUUID())
+                .workspaceId(7L)
+                .body("approved body")
+                .proposedPlacements(new ArrayList<>(List.of(ProposedPlacement.summary("approved body"))))
+                .build();
+        FeedbackDispatch pending = approvedDispatch(FeedbackDispatchState.PENDING, feedback.getId(), false, null, 0);
+        FeedbackDispatch sent =
+                approvedDispatch(FeedbackDispatchState.SENT, feedback.getId(), true, "gid://gitlab/Note/5", 1);
+        when(repository.findByDestinationKeyAndWorkspaceId("approved:" + feedback.getId(), 7L))
+                .thenReturn(Optional.of(withoutInlineNotes(pending)))
+                .thenReturn(Optional.of(withoutInlineNotes(sent)));
+        when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
+        when(policy.evaluateIssue(any(), any(), any(), any()))
+                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(
+                        new de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue()));
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
+        when(channel.postSummary(any(), any())).thenReturn(new SummaryHandle("gid://gitlab/Note/5"));
+
+        var delivered = service.dispatchApproved(issueJob, feedback);
+        var repeated = service.dispatchApproved(issueJob, feedback);
+
+        assertThat(delivered.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
+        assertThat(delivered.externalRef()).isEqualTo("gid://gitlab/Note/5");
+        assertThat(repeated.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
+        InOrder order = inOrder(channel, repository);
+        order.verify(channel)
+                .findExistingSummary(
+                        argThat(target -> target.subjectExternalId().equals("acme/api#5")),
+                        eq(approvedMarker(feedback)));
+        order.verify(repository).beginWrite(any(), any(), anyString());
+        order.verify(channel)
+                .postSummary(
+                        argThat(target -> target.subjectExternalId().equals("acme/api#5")),
+                        eq(new FeedbackContent("approved body", approvedMarker(feedback))));
+        verify(channel, times(1)).postSummary(any(), any());
+        verify(policy, never()).evaluatePullRequest(any(), any(), any(), any());
+        verify(repository)
+                .finish(argThat(completion -> completion.state().equals(FeedbackDispatchState.SENT.name())
+                        && "gid://gitlab/Note/5".equals(completion.externalRef())));
+    }
+
+    @Test
+    void shouldRetryWithoutRecordingAWriteWhenTheTargetCannotBeResolved() {
+        job.setMetadata(JsonNodeFactory.instance.objectNode().put("repository_full_name", "acme/api"));
+        Feedback feedback = approvedFeedback();
+        when(repository.findByDestinationKeyAndWorkspaceId("approved:" + feedback.getId(), 7L))
+                .thenReturn(Optional.of(dispatch(FeedbackDispatchState.PENDING, feedback.getId())));
+        when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
+
+        var result = service.dispatchApproved(job, feedback);
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        verify(repository, never()).beginWrite(any(), any(), anyString());
+        verify(channel, never()).findExistingSummary(any(), any());
+        verify(channel, never()).postSummary(any(), any());
+        verify(repository)
+                .finish(argThat(completion -> completion.state().equals(FeedbackDispatchState.UNCERTAIN.name())
+                        && completion.error() != null
+                        && completion.error().contains("pr_number")));
+    }
+
+    @Test
+    void shouldFailATargetThatNeverResolvesInsteadOfHoldingAnUncertainWrite() {
+        job.setMetadata(JsonNodeFactory.instance.objectNode().put("repository_full_name", "acme/api"));
+        Feedback feedback = approvedFeedback();
+        when(repository.findByDestinationKeyAndWorkspaceId("approved:" + feedback.getId(), 7L))
+                .thenReturn(Optional.of(approvedDispatch(
+                        FeedbackDispatchState.UNCERTAIN,
+                        feedback.getId(),
+                        false,
+                        null,
+                        PracticeFeedbackDispatchService.MAX_ATTEMPTS - 1)));
+        when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
+
+        var result = service.dispatchApproved(job, feedback);
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.FAILED);
+        verify(repository, never()).beginWrite(any(), any(), anyString());
+        verify(channel, never()).postSummary(any(), any());
+    }
+
     private FeedbackDispatch dispatch(FeedbackDispatchState state, UUID feedbackId) {
         return approvedDispatch(state, feedbackId, false, null, 0);
+    }
+
+    private static FeedbackDispatch withoutInlineNotes(FeedbackDispatch approved) {
+        var mapper = JsonMapper.builder().build();
+        return new FeedbackDispatch(
+                approved.getId(),
+                approved.getDestinationKey(),
+                approved.getWorkspaceId(),
+                approved.getAgentJobId(),
+                approved.getFeedbackId(),
+                approved.getDestination(),
+                approved.getState(),
+                approved.getBody(),
+                approved.getPracticeSlugs(),
+                mapper.valueToTree(
+                        new PracticeDetectionResultParser.DeliveryContent(approved.getBody(), List.of(), List.of())),
+                approved.getDeliveredPlacements(),
+                approved.getWriteStarted(),
+                approved.getDeliveredExternalRef(),
+                approved.getLeaseOwner(),
+                approved.getLeaseExpiresAt(),
+                approved.getNextAttemptAt(),
+                approved.getAttemptCount(),
+                approved.getSuppressionReason(),
+                approved.getLastError(),
+                approved.getProjectedAt(),
+                approved.getProjectionOwner(),
+                approved.getProjectionExpiresAt(),
+                approved.getCreatedAt(),
+                approved.getUpdatedAt());
     }
 
     private static Feedback approvedFeedback() {
@@ -528,11 +704,28 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 Instant.now());
     }
 
-    private AgentJob reviewJob(Workspace workspace) {
+    private static AgentJob reviewJob(Workspace workspace) {
         AgentJob reviewJob = new AgentJob();
         reviewJob.setId(UUID.randomUUID());
         reviewJob.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        reviewJob.setIntegrationKind(IntegrationKind.GITLAB);
+        reviewJob.setMetadata(JsonNodeFactory.instance
+                .objectNode()
+                .put("repository_full_name", "acme/api")
+                .put("pr_number", 42));
         reviewJob.setWorkspace(workspace);
         return reviewJob;
+    }
+
+    private static String summaryMarker(AgentJob job) {
+        return PullRequestCommentPoster.summaryMarkerFor(job);
+    }
+
+    private static String approvedMarker(Feedback feedback) {
+        return PullRequestCommentPoster.approvedFeedbackMarker(feedback.getId());
+    }
+
+    private static ExistingSummaryLookup found(String ref) {
+        return ExistingSummaryLookup.found(new SummaryHandle(ref));
     }
 }

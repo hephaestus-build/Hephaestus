@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliverySuppressedExceptio
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppressedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackNotSentException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
@@ -144,70 +145,65 @@ class PullRequestCommentPoster {
         this.channels = map;
     }
 
-    @Nullable
-    String postFormattedBody(AgentJob job, String formattedBody) {
-        return postFormattedBody(job, formattedBody, summaryMarkerFor(job));
-    }
-
-    @Nullable
-    String postApprovedProposal(AgentJob job, java.util.UUID feedbackId, String formattedBody) {
-        return postFormattedBody(job, formattedBody, "<!-- hephaestus:approved-feedback:" + feedbackId + " -->");
-    }
-
-    private String postFormattedBody(AgentJob job, String formattedBody, String marker) {
+    /**
+     * Resolves where a summary would land without calling the provider, so a job that cannot name its target
+     * fails before its dispatch records a write, and the marker lookup reads the thread the write would post to.
+     */
+    SummaryWrite summaryWrite(AgentJob job, boolean issue, String formattedBody, String marker) {
         long workspaceId = job.getWorkspace().getId();
         IntegrationKind kind = requireIntegrationKind(job);
         SummaryChannel channel = requireChannel(kind);
-        FeedbackTarget target = buildTarget(job, kind, workspaceId);
+        FeedbackTarget target = issue ? buildIssueTarget(job, kind, workspaceId) : buildTarget(job, kind, workspaceId);
+        return new SummaryWrite(job, channel, target, new FeedbackContent(formattedBody, marker));
+    }
+
+    /** Returns {@code UNKNOWN}, never {@code ABSENT}, when the lookup cannot be completed. */
+    ExistingDeliveryLookup findExisting(SummaryWrite write) {
         try {
-            SummaryHandle handle = channel.postSummary(target, new FeedbackContent(formattedBody, marker));
-            log.info(
-                    "Posted feedback comment: jobId={}, kind={}, commentId={}", job.getId(), kind, handle.externalId());
-            return handle.externalId();
-        } catch (OutboundEgressSuppressedException e) {
-            throw new JobDeliverySuppressedException(e.toString(), e);
-        } catch (FeedbackDeliveryException e) {
-            throw new JobDeliveryException(e.toString(), e);
+            return lookup(write.channel(), write.target(), write.content().marker());
+        } catch (RuntimeException e) {
+            log.debug(
+                    "Existing-summary dedup lookup failed (treated as unknown): jobId={}, error={}",
+                    write.job().getId(),
+                    e.toString());
+            return ExistingDeliveryLookup.unknown();
         }
     }
 
-    @Nullable
-    String postIssueFormattedBody(AgentJob job, String formattedBody) {
-        return postIssueFormattedBody(job, formattedBody, summaryMarkerFor(job));
-    }
-
-    @Nullable
-    String postIssueApprovedProposal(AgentJob job, java.util.UUID feedbackId, String formattedBody) {
-        return postIssueFormattedBody(job, formattedBody, "<!-- hephaestus:approved-feedback:" + feedbackId + " -->");
-    }
-
-    private String postIssueFormattedBody(AgentJob job, String formattedBody, String marker) {
-        long workspaceId = job.getWorkspace().getId();
-        IntegrationKind kind = requireIntegrationKind(job);
-        SummaryChannel channel = requireChannel(kind);
-        FeedbackTarget target = buildIssueTarget(job, kind, workspaceId);
+    String post(SummaryWrite write) {
         try {
-            SummaryHandle handle = channel.postSummary(target, new FeedbackContent(formattedBody, marker));
+            SummaryHandle handle = write.channel().postSummary(write.target(), write.content());
             log.info(
-                    "Posted issue feedback comment: jobId={}, kind={}, commentId={}",
-                    job.getId(),
-                    kind,
+                    "Posted feedback comment: jobId={}, kind={}, subject={}, commentId={}",
+                    write.job().getId(),
+                    write.channel().kind(),
+                    write.target().subjectExternalId(),
                     handle.externalId());
             return handle.externalId();
         } catch (OutboundEgressSuppressedException e) {
             throw new JobDeliverySuppressedException(e.toString(), e);
+        } catch (FeedbackNotSentException e) {
+            throw new SummaryNotSentException(e.toString(), e);
         } catch (FeedbackDeliveryException e) {
             throw new JobDeliveryException(e.toString(), e);
         }
     }
 
+    /** The channel proved its create request was never sent, so the dispatch may release its write fence. */
+    static final class SummaryNotSentException extends JobDeliveryException {
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
+
+        SummaryNotSentException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
+    record SummaryWrite(AgentJob job, SummaryChannel channel, FeedbackTarget target, FeedbackContent content) {}
+
     /** Returns {@code UNKNOWN}, never {@code ABSENT}, when the lookup cannot be completed. */
     ExistingDeliveryLookup findExistingSummaryComment(AgentJob job) {
         return findExistingSummaryComment(job, summaryMarkerFor(job));
-    }
-
-    ExistingDeliveryLookup findApprovedProposal(AgentJob job, java.util.UUID feedbackId) {
-        return findExistingSummaryComment(job, "<!-- hephaestus:approved-feedback:" + feedbackId + " -->");
     }
 
     private ExistingDeliveryLookup findExistingSummaryComment(AgentJob job, String marker) {
@@ -236,14 +232,7 @@ class PullRequestCommentPoster {
             } else {
                 return ExistingDeliveryLookup.unknown();
             }
-            SummaryChannel.ExistingSummaryLookup lookup = channel.findExistingSummary(target, marker);
-            return switch (lookup.kind()) {
-                case FOUND ->
-                    ExistingDeliveryLookup.found(
-                            Objects.requireNonNull(lookup.handle()).externalId());
-                case ABSENT -> ExistingDeliveryLookup.absent();
-                case UNKNOWN -> ExistingDeliveryLookup.unknown();
-            };
+            return lookup(channel, target, marker);
         } catch (RuntimeException e) {
             log.debug(
                     "Existing-summary dedup lookup failed (treated as unknown): jobId={}, error={}",
@@ -251,6 +240,17 @@ class PullRequestCommentPoster {
                     e.toString());
             return ExistingDeliveryLookup.unknown();
         }
+    }
+
+    private static ExistingDeliveryLookup lookup(SummaryChannel channel, FeedbackTarget target, String marker) {
+        SummaryChannel.ExistingSummaryLookup lookup = channel.findExistingSummary(target, marker);
+        return switch (lookup.kind()) {
+            case FOUND ->
+                ExistingDeliveryLookup.found(
+                        Objects.requireNonNull(lookup.handle()).externalId());
+            case ABSENT -> ExistingDeliveryLookup.absent();
+            case UNKNOWN -> ExistingDeliveryLookup.unknown();
+        };
     }
 
     private SummaryChannel requireChannel(IntegrationKind kind) {
@@ -305,6 +305,10 @@ class PullRequestCommentPoster {
 
     static String summaryMarkerFor(AgentJob job) {
         return SUMMARY_MARKER_PREFIX + job.getId() + " -->";
+    }
+
+    static String approvedFeedbackMarker(java.util.UUID feedbackId) {
+        return "<!-- hephaestus:approved-feedback:" + feedbackId + " -->";
     }
 
     /**

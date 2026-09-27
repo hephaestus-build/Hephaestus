@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGateway;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppressedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackNotSentException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
@@ -90,33 +91,31 @@ public class GithubSummaryChannel implements SummaryChannel {
     @Override
     public SummaryHandle postSummary(FeedbackTarget target, FeedbackContent content) {
         long scopeId = target.ref().workspaceId();
-        if (gitHubProvider.isRateLimitCritical(scopeId)) {
-            throw new FeedbackDeliveryException(
-                    "GitHub rate limit critical — skipping summary post for scope " + scopeId);
+        String subjectNodeId;
+        try {
+            subjectNodeId = resolveSubject(scopeId, target.subjectExternalId());
+        } catch (RuntimeException e) {
+            throw new FeedbackNotSentException("GitHub comment not sent: " + e.getMessage(), e);
         }
-
-        String subject = target.subjectExternalId();
-        if (isIssueSubject(subject)) {
-            IssueCoordinates issue = parseIssueSubjectExternalId(subject);
-            String issueNodeId = prNodeIdResolver.resolveIssue(scopeId, issue.owner(), issue.name(), issue.number());
-            String commentNodeId = createComment(scopeId, issueNodeId, content.externalBody());
-            log.info(
-                    "Posted GitHub issue comment: workspaceId={}, issueNodeId={}, commentId={}",
-                    scopeId,
-                    issueNodeId,
-                    commentNodeId);
-            return new SummaryHandle(commentNodeId);
-        }
-
-        PrCoordinates pr = parseSubjectExternalId(subject);
-        String prNodeId = prNodeIdResolver.resolve(scopeId, pr.owner(), pr.name(), pr.number());
-        String commentNodeId = createComment(scopeId, prNodeId, content.externalBody());
+        String commentNodeId = createComment(scopeId, subjectNodeId, content.externalBody());
         log.info(
-                "Posted GitHub PR comment: workspaceId={}, prNodeId={}, commentId={}",
+                "Posted GitHub comment: workspaceId={}, subjectNodeId={}, commentId={}",
                 scopeId,
-                prNodeId,
+                subjectNodeId,
                 commentNodeId);
         return new SummaryHandle(commentNodeId);
+    }
+
+    private String resolveSubject(long scopeId, String subject) {
+        if (gitHubProvider.isRateLimitCritical(scopeId)) {
+            throw new FeedbackDeliveryException("GitHub rate limit critical for scope " + scopeId);
+        }
+        if (isIssueSubject(subject)) {
+            IssueCoordinates issue = parseIssueSubjectExternalId(subject);
+            return prNodeIdResolver.resolveIssue(scopeId, issue.owner(), issue.name(), issue.number());
+        }
+        PrCoordinates pr = parseSubjectExternalId(subject);
+        return prNodeIdResolver.resolve(scopeId, pr.owner(), pr.name(), pr.number());
     }
 
     /**

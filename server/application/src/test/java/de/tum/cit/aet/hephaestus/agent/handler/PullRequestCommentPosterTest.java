@@ -355,7 +355,7 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
             AgentJob job = createTestJob(IntegrationKind.GITHUB);
             when(githubChannel.postSummary(any(), any())).thenReturn(new SummaryChannel.SummaryHandle("IC_comment456"));
 
-            String commentId = poster.postFormattedBody(job, "Formatted review");
+            String commentId = post(job, "Formatted review");
 
             assertThat(commentId).isEqualTo("IC_comment456");
             verify(githubChannel).postSummary(any(), any());
@@ -367,7 +367,7 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
             when(gitlabChannel.postSummary(any(), any()))
                     .thenReturn(new SummaryChannel.SummaryHandle("gid://gitlab/Note/123"));
 
-            String noteId = poster.postFormattedBody(job, "Formatted review");
+            String noteId = post(job, "Formatted review");
 
             assertThat(noteId).isEqualTo("gid://gitlab/Note/123");
             verify(gitlabChannel).postSummary(any(), any());
@@ -377,7 +377,7 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
         void throwsWhenIntegrationKindMissing() {
             AgentJob job = createTestJob(null);
 
-            assertThatThrownBy(() -> poster.postFormattedBody(job, "Formatted review"))
+            assertThatThrownBy(() -> post(job, "Formatted review"))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("integrationKind is null");
         }
@@ -387,7 +387,7 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
             AgentJob job = createTestJob(IntegrationKind.GITLAB);
             PullRequestCommentPoster githubOnly = new PullRequestCommentPoster(List.of(githubChannel));
 
-            assertThatThrownBy(() -> githubOnly.postFormattedBody(job, "Formatted review"))
+            assertThatThrownBy(() -> githubOnly.summaryWrite(job, false, "Formatted review", "marker"))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("No SummaryChannel wired for kind GITLAB");
         }
@@ -397,25 +397,25 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
             AgentJob job = createTestJob(IntegrationKind.GITHUB);
             job.setMetadata(objectMapper.createObjectNode());
 
-            assertThatThrownBy(() -> poster.postFormattedBody(job, "Formatted review"))
+            assertThatThrownBy(() -> post(job, "Formatted review"))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("Missing required metadata field");
         }
 
         @Test
-        void postIssueFormattedBody_throwsWhenIntegrationKindMissing() {
+        void issueWrite_throwsWhenIntegrationKindMissing() {
             AgentJob job = createTestJob(null);
             ObjectNode metadata =
                     org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, job.getMetadata());
             metadata.put("issue_number", 7);
 
-            assertThatThrownBy(() -> poster.postIssueFormattedBody(job, "Formatted issue note"))
+            assertThatThrownBy(() -> poster.summaryWrite(job, true, "Formatted issue note", "marker"))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("integrationKind is null");
         }
 
         @Test
-        void postIssueFormattedBody_resolvesIssueSubjectAndPosts() {
+        void issueWrite_resolvesIssueSubjectAndPosts() {
             AgentJob job = createTestJob(IntegrationKind.GITLAB);
             ObjectNode metadata =
                     org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, job.getMetadata());
@@ -424,7 +424,7 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
             when(gitlabChannel.postSummary(any(), any()))
                     .thenReturn(new SummaryChannel.SummaryHandle("gid://gitlab/Note/77"));
 
-            String commentId = poster.postIssueFormattedBody(job, "Formatted issue note");
+            String commentId = poster.post(poster.summaryWrite(job, true, "Formatted issue note", "marker"));
 
             assertThat(commentId).isEqualTo("gid://gitlab/Note/77");
             verify(gitlabChannel).formatIssueSubjectId("owner/repo", 7);
@@ -438,7 +438,7 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
             when(githubChannel.postSummary(any(), any()))
                     .thenThrow(new FeedbackDeliveryException("rate limit critical"));
 
-            assertThatThrownBy(() -> poster.postFormattedBody(job, "Formatted review"))
+            assertThatThrownBy(() -> post(job, "Formatted review"))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("rate limit critical");
         }
@@ -466,10 +466,14 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
                     .thenThrow(new IllegalArgumentException(
                             "GitHub repoFullName must be 'owner/repo': repo-without-owner"));
 
-            assertThatThrownBy(() -> poster.postFormattedBody(job, "Formatted review"))
+            assertThatThrownBy(() -> post(job, "Formatted review"))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("'owner/repo'");
         }
+    }
+
+    private String post(AgentJob job, String body) {
+        return poster.post(poster.summaryWrite(job, false, body, PullRequestCommentPoster.summaryMarkerFor(job)));
     }
 
     private AgentJob createTestJob(@Nullable IntegrationKind kind) {

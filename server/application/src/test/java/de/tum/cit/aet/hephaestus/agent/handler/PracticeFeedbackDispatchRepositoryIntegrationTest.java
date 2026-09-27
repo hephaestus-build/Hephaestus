@@ -113,6 +113,28 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
     }
 
     @Test
+    void shouldReopenAnUnsentWriteOnlyForTheLeaseThatClosedIt() {
+        UUID dispatchId = insertDispatch(workspace.getId(), jobId, "unsent-write");
+        assertThat(releaseUnsentWrite(dispatchId, "first")).isZero();
+        assertThat(claim(dispatchId, "first", Instant.now().plusSeconds(60))).isEqualTo(1);
+        assertThat(beginWrite(dispatchId, "first")).isEqualTo(1);
+
+        assertThat(releaseUnsentWrite(dispatchId, "second")).isZero();
+        assertThat(releaseUnsentWrite(dispatchId, "first")).isEqualTo(1);
+        assertThat(releaseUnsentWrite(dispatchId, "first")).isZero();
+        assertThat(beginWrite(dispatchId, "first")).isEqualTo(1);
+
+        jdbcTemplate.update(
+                "UPDATE feedback_dispatch SET lease_expires_at = ? WHERE id = ?",
+                Timestamp.from(Instant.now().minusSeconds(1)),
+                dispatchId);
+        assertThat(releaseUnsentWrite(dispatchId, "first")).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT write_started FROM feedback_dispatch WHERE id = ?", Boolean.class, dispatchId))
+                .isTrue();
+    }
+
+    @Test
     void shouldRejectJobWhenItBelongsToAnotherWorkspace() {
         User otherOwner = persistUser("other-dispatch-owner");
         Workspace other = createWorkspace("other-dispatch", "Other", "other-org", AccountType.ORG, otherOwner);
@@ -315,6 +337,11 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
 
     private int beginWrite(UUID dispatchId, String owner) {
         return transactions.execute(status -> dispatchRepository.beginWrite(dispatchId, workspace.getId(), owner));
+    }
+
+    private int releaseUnsentWrite(UUID dispatchId, String owner) {
+        return transactions.execute(
+                status -> dispatchRepository.releaseUnsentWrite(dispatchId, workspace.getId(), owner));
     }
 
     private int claimProjection(UUID dispatchId, String owner) {

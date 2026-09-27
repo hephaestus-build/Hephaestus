@@ -127,22 +127,36 @@ is erased while the destination key and provider references remain as the idempo
 dispatch keeps its package because an administrator can still retry it. Selected coverage targets follow
 their workspace membership or monitored repository.
 
-**Dispatch recovery.** One dispatch owns the exact summary and inline comments in a review. Before each
-provider create, it reconciles the stable marker or recurrence key already stored with the provider. A
-found placement is preserved, a definitive not-found permits the first write, and an inconclusive lookup
-leaves the package `UNCERTAIN` rather than risking a duplicate. The dispatch becomes `SENT` only after the
-whole package converges.
+**Dispatch recovery.** One dispatch owns the exact summary and inline comments in a review. Each summary
+comment carries a stable marker, and each inline comment a recurrence key. Before creating the summary, the
+dispatch searches the reviewed work's comments for its marker:
 
-Two consequences to plan for:
+- **Found** — the comment is recorded and never created again.
+- **Search inconclusive** — the dispatch stays `UNCERTAIN` and retries later.
+- **Search complete, nothing found** — the dispatch creates the summary only if no earlier attempt closed its
+  write fence.
 
-- **Sustained `UNCERTAIN` means Hephaestus cannot prove whether the provider accepted the write**, not that
-  feedback is queued. Fix provider connectivity or credentials so reconciliation can continue.
-- **A dispatch interrupted mid-write can outlive its retry budget without reaching `FAILED`.** It is
-  deliberately not failed, because one of its provider objects may be live, and remains uncertain until
-  provider lookup can confirm the outcome.
+The write fence closes after delivery policy allows the write and before the provider adapter runs its own
+preparation: its rate-limit check, resolving the pull request, merge request or issue, and then the create
+request. If the adapter fails before it sends the create request, the attempt reopens its own fence while it
+still holds its lease. The dispatch becomes `SENT` only after the whole package converges.
 
-Do not repair an `UNCERTAIN` dispatch by editing its row. Restore provider lookup instead; the state, write
-fence, retry count, and lease together prevent duplicate provider writes.
+A sustained `UNCERTAIN` dispatch means one of two different things:
+
+- **Fence open: no create request has been sent.** The last attempt could not complete the marker search, or
+  failed before sending: provider connectivity or credentials, a critical rate limit, or reviewed work the
+  provider no longer resolves. The dispatch retries with backoff and is marked `FAILED` once its retry budget
+  is spent. A review whose target cannot be named at all fails the same way.
+- **Fence closed: a create request was sent, or may have been, and its outcome is unknown.** Hephaestus never
+  sends that create again. Every later attempt searches for the marker; a found comment completes the
+  dispatch, and a search that finds nothing leaves it `UNCERTAIN` with no retry budget, so it never reaches
+  `FAILED` and nothing is re-sent automatically.
+
+A marker that cannot be found now does not prove the feedback was never delivered: the provider may show the
+comment later. Reconcile a fenced dispatch deliberately, against that provider's own record of the reviewed
+work and its comments. Sending it again requires an operator-approved recovery procedure; Hephaestus has no
+action that does so. Do not edit a dispatch row to force a resend: the state, write fence, retry count and
+lease together are what prevent a duplicate comment.
 
 ## Limits you should know about
 

@@ -18,6 +18,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppressedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackNotSentException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
@@ -117,8 +118,22 @@ class GithubSummaryChannelTest extends BaseUnitTest {
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(true);
 
         assertThatThrownBy(() -> channel.postSummary(target, new FeedbackContent("body", "marker")))
-                .isInstanceOf(FeedbackDeliveryException.class)
+                .isInstanceOf(FeedbackNotSentException.class)
                 .hasMessageContaining("rate limit critical");
+        verify(gitHubProvider, never()).forScope(anyLong());
+    }
+
+    @Test
+    void anIssueThatCannotBeResolvedIsNotSent() {
+        FeedbackTarget target =
+                new FeedbackTarget(new IntegrationRef(IntegrationKind.GITHUB, 1L, null), "owner/repo/issues/42", null);
+        when(prNodeIdResolver.resolveIssue(1L, "owner", "repo", 42))
+                .thenThrow(new FeedbackDeliveryException("Issue not found via GraphQL"));
+
+        assertThatThrownBy(() -> channel.postSummary(target, new FeedbackContent("body", "marker")))
+                .isInstanceOf(FeedbackNotSentException.class)
+                .hasMessageContaining("Issue not found");
+        verify(gitHubProvider, never()).forScope(anyLong());
     }
 
     @Test
@@ -128,7 +143,7 @@ class GithubSummaryChannelTest extends BaseUnitTest {
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
 
         assertThatThrownBy(() -> channel.postSummary(target, new FeedbackContent("body", "marker")))
-                .isInstanceOf(FeedbackDeliveryException.class)
+                .isInstanceOf(FeedbackNotSentException.class)
                 .hasMessageContaining("Invalid GitHub PR subjectExternalId");
     }
 
@@ -152,6 +167,7 @@ class GithubSummaryChannelTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> channel.postSummary(target, new FeedbackContent("body", "marker")))
                 .isInstanceOf(FeedbackDeliveryException.class)
+                .isNotInstanceOf(FeedbackNotSentException.class)
                 .hasMessageContaining("addComment failed");
     }
 
