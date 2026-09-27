@@ -23,12 +23,12 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
         INSERT INTO feedback_dispatch (
             id, destination_key, workspace_id, agent_job_id, feedback_id, destination, state, body,
             practice_slugs, package_content, delivered_placements,
-            write_started, next_attempt_at, attempt_count, created_at, updated_at
+            write_started, inline_write_started, next_attempt_at, attempt_count, created_at, updated_at
         ) SELECT
             :#{#command.id()}, :#{#command.destinationKey()}, :#{#command.workspaceId()}, :#{#command.agentJobId()}, :#{#command.feedbackId()}, :#{#command.destination()}, 'PENDING', :#{#command.body()},
             CAST(:#{#command.practiceSlugs()} AS jsonb),
             CAST(:#{#command.packageContent()} AS jsonb), '[]'::jsonb,
-            FALSE, CURRENT_TIMESTAMP, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            FALSE, FALSE, CURRENT_TIMESTAMP, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
           FROM agent_job j
          WHERE j.id = :#{#command.agentJobId()} AND j.workspace_id = :#{#command.workspaceId()}
         ON CONFLICT (destination_key) DO NOTHING
@@ -42,7 +42,7 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
                attempt_count = attempt_count + 1,
                updated_at = CURRENT_TIMESTAMP
          WHERE id = :id AND workspace_id = :workspaceId
-           AND (attempt_count < :maxAttempts OR write_started = TRUE)
+           AND (attempt_count < :maxAttempts OR write_started = TRUE OR inline_write_started IS DISTINCT FROM FALSE)
            AND (state IN ('PENDING', 'UNCERTAIN')
                 OR (state = 'CLAIMED' AND lease_expires_at < CURRENT_TIMESTAMP))
            AND next_attempt_at <= CURRENT_TIMESTAMP
@@ -82,6 +82,16 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
         """;
 
     /**
+     * Whether an inline note of dispatch {@code d} may have been requested: recorded as begun, or unknown on a
+     * dispatch recorded before that was tracked unless its package names no inline notes at all. A cleared or
+     * missing package proves nothing.
+     */
+    String INLINE_WRITE_MAY_HAVE_STARTED = """
+        (d.inline_write_started IS TRUE
+         OR (d.inline_write_started IS NULL AND d.package_content -> 'diffNotes' IS DISTINCT FROM '[]'::jsonb))
+        """;
+
+    /**
      * Share-locks the observations this dispatch cites. A correction holds its observation {@code FOR UPDATE} while
      * it checks for a delivery in progress, so an attempt admitted here either sees that correction or is seen by it.
      */
@@ -108,8 +118,8 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
 
     /**
      * Whether a dispatch citing this observation ended withheld or failed without accounting for a write an earlier
-     * attempt may have made: it started a write, or retried after an attempt whose outcome was not recorded.
-     * Only a withholding for an invalidated observation reconciles those first, so it alone is trusted.
+     * attempt may have begun. Only a withholding for an invalidated observation reconciles those first, so it alone
+     * is trusted.
      */
     @Query(value = """
         SELECT EXISTS (
@@ -117,7 +127,9 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
             JOIN observation o ON o.id = :observationId AND o.workspace_id = d.workspace_id
             WHERE d.workspace_id = :workspaceId AND d.state IN ('SUPPRESSED', 'FAILED')
               AND COALESCE(d.suppression_reason, '') <> 'OBSERVATION_INVALIDATED'
-              AND (d.write_started OR d.attempt_count > 1)
+              AND (d.write_started OR
+        """ + INLINE_WRITE_MAY_HAVE_STARTED + """
+              )
               AND
         """ + CITES + """
         )
@@ -128,7 +140,10 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
     @Query(value = """
         SELECT MIN(COALESCE(d.write_started_at, d.created_at)) FROM feedback_dispatch d
         JOIN observation o ON o.id = :observationId AND o.workspace_id = d.workspace_id
-        WHERE d.workspace_id = :workspaceId AND d.projected_at IS NULL AND d.write_started
+        WHERE d.workspace_id = :workspaceId AND d.projected_at IS NULL
+          AND (d.write_started OR
+        """ + INLINE_WRITE_MAY_HAVE_STARTED + """
+          )
           AND
         """ + CITES, nativeQuery = true)
     @Nullable
@@ -157,6 +172,16 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
         """, nativeQuery = true)
     int beginWrite(@Param("id") UUID id, @Param("workspaceId") Long workspaceId, @Param("owner") String owner);
 
+    /** Records, before the first inline request leaves, that this lease is about to write inline notes. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE feedback_dispatch SET inline_write_started = TRUE,
+               write_started_at = COALESCE(write_started_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
+         WHERE id = :id AND workspace_id = :workspaceId AND state = 'CLAIMED'
+           AND lease_owner = :owner AND lease_expires_at > CURRENT_TIMESTAMP
+        """, nativeQuery = true)
+    int beginInlineWrite(@Param("id") UUID id, @Param("workspaceId") Long workspaceId, @Param("owner") String owner);
+
     /** Reopens the fence this lease closed, once its channel proved the create request was never sent. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
@@ -181,7 +206,8 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
     @Query("""
         SELECT d FROM FeedbackDispatch d
         WHERE d.nextAttemptAt <= :now
-          AND (d.attemptCount < :maxAttempts OR d.writeStarted = true)
+          AND (d.attemptCount < :maxAttempts OR d.writeStarted = true
+               OR d.inlineWriteStarted IS NULL OR d.inlineWriteStarted = true)
           AND (d.state IN (de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchState.PENDING,
                            de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchState.UNCERTAIN)
                OR (d.state = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchState.CLAIMED
@@ -195,6 +221,7 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
         SELECT d FROM FeedbackDispatch d
         WHERE d.attemptCount >= :maxAttempts
           AND d.writeStarted = false
+          AND d.inlineWriteStarted = false
           AND (d.state IN (de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchState.PENDING,
                            de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchState.UNCERTAIN)
             OR (d.state = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchState.CLAIMED

@@ -347,8 +347,9 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
     @Test
     void shouldFindAnAutomaticSummaryWhoseAcknowledgementWasLostAndCorrectIt() {
         provider.loseResponse = true;
-        dispatchAutomatic("Closes #1 already.", List.of());
+        dispatchAutomatic("Closes #1 already.", List.of(note));
         assertThat(dispatch("review:" + job.getId()).getWriteStarted()).isTrue();
+        assertThat(dispatch("review:" + job.getId()).getInlineWriteStarted()).isFalse();
         provider.loseResponse = false;
         invalidate();
 
@@ -358,6 +359,7 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
 
         assertThat(recovered.suppressionReason()).isEqualTo(FeedbackSuppressionReason.OBSERVATION_INVALIDATED);
         assertThat(recovered.externalRef()).isEqualTo("summary-1");
+        assertThat(provider.notes).isEmpty();
         assertThat(provider.comments.get("summary-1")).startsWith("> **Correction:**");
         assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.UPDATED);
     }
@@ -700,9 +702,18 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
 
         FeedbackDispatch unresolved = dispatch("review:" + job.getId());
         assertThat(unresolved.getState()).isEqualTo(FeedbackDispatchState.UNCERTAIN);
-        assertThat(unresolved.getWriteStarted()).isTrue();
+        assertThat(unresolved.getWriteStarted()).isFalse();
+        assertThat(unresolved.getInlineWriteStarted()).isTrue();
         settleCorrections();
         assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.PENDING);
+
+        for (int attempt = 0; attempt < PracticeFeedbackDispatchService.MAX_ATTEMPTS; attempt++) {
+            recover("review:" + job.getId());
+        }
+        FeedbackDispatch stillLooking = dispatch("review:" + job.getId());
+        assertThat(stillLooking.getState()).isEqualTo(FeedbackDispatchState.UNCERTAIN);
+        assertThat(stillLooking.getAttemptCount()).isGreaterThan(PracticeFeedbackDispatchService.MAX_ATTEMPTS);
+        assertThat(stillLooking.getWriteStarted()).isFalse();
 
         provider.lookupFails = false;
         recover("review:" + job.getId());
@@ -710,6 +721,81 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         settleCorrections();
 
         assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.INLINE_REMAINS);
+    }
+
+    @Test
+    void shouldWithholdWithNothingPostedWhenOnlyALookupRanBeforeTheCorrection() {
+        String key = "review:" + job.getId();
+        provider.lookupFails = true;
+        assertThat(dispatchAutomatic("Closes #1 already.", List.of(note)).status())
+                .isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        provider.lookupFails = false;
+        invalidate();
+
+        recover(key);
+
+        FeedbackDispatch withheld = dispatch(key);
+        assertThat(withheld.getState()).isEqualTo(FeedbackDispatchState.SUPPRESSED);
+        assertThat(withheld.getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.OBSERVATION_INVALIDATED.name());
+        assertThat(withheld.getWriteStarted()).isFalse();
+        assertThat(withheld.getInlineWriteStarted()).isFalse();
+        assertThat(provider.comments).isEmpty();
+        assertThat(provider.notes).isEmpty();
+        feedbackDeliveryService.recordAutomaticPackage(job, withheld);
+        settleCorrections();
+        assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.NONE);
+    }
+
+    @Test
+    void shouldKeepLookingForAnUntrackedInlineNoteAfterAFailedPackageIsReset() {
+        String key = "review:" + job.getId();
+        provider.failAfterAccept = true;
+        dispatchAutomatic("", List.of(note));
+        provider.failAfterAccept = false;
+        jdbc.update(
+                "UPDATE feedback_dispatch SET state = 'FAILED', inline_write_started = NULL WHERE destination_key = ?",
+                key);
+        transactionTemplate.executeWithoutResult(
+                status -> dispatchRepository.resetFailedAutomaticPackage(job.getId(), workspace.getId()));
+        provider.lookupFails = true;
+        invalidate();
+
+        recover(key);
+
+        FeedbackDispatch pending = dispatch(key);
+        assertThat(pending.getState()).isEqualTo(FeedbackDispatchState.UNCERTAIN);
+        assertThat(pending.getInlineWriteStarted()).isNull();
+        assertThat(provider.notes).hasSize(1);
+
+        provider.lookupFails = false;
+        recover(key);
+        feedbackDeliveryService.recordAutomaticPackage(job, dispatch(key));
+        settleCorrections();
+
+        assertThat(dispatch(key).getState()).isEqualTo(FeedbackDispatchState.SUPPRESSED);
+        assertThat(provider.notes).hasSize(1);
+        assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.INLINE_REMAINS);
+    }
+
+    @Test
+    void shouldReportNothingPostedForAnUntrackedPackageWithNoInlineNotesThatNeverWrote() {
+        String key = "review:" + job.getId();
+        provider.lookupFails = true;
+        dispatchAutomatic("Closes #1 already.", List.of());
+        for (int attempt = 1; attempt < PracticeFeedbackDispatchService.MAX_ATTEMPTS; attempt++) {
+            recover(key);
+        }
+        provider.lookupFails = false;
+        assertThat(dispatch(key).getState()).isEqualTo(FeedbackDispatchState.FAILED);
+        assertThat(dispatch(key).getWriteStarted()).isFalse();
+        jdbc.update("UPDATE feedback_dispatch SET inline_write_started = NULL WHERE destination_key = ?", key);
+        feedbackDeliveryService.recordAutomaticPackage(job, dispatch(key));
+        invalidate();
+
+        settleCorrections();
+
+        assertThat(provider.comments).isEmpty();
+        assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.NONE);
     }
 
     @Test
@@ -880,6 +966,9 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
 
         @Override
         public ExistingSummaryLookup findExistingSummary(FeedbackTarget target, String marker) {
+            if (lookupFails) {
+                return ExistingSummaryLookup.unknown();
+            }
             return comments.entrySet().stream()
                     .filter(comment -> comment.getValue().contains(marker))
                     .findFirst()

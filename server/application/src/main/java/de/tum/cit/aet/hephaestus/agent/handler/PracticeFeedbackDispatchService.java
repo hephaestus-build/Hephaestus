@@ -195,6 +195,7 @@ class PracticeFeedbackDispatchService {
                 PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
                 if (!decision.allowed())
                     return stateMachine.refuse(dispatch, owner, decision.refusal(), summaryRef, inlineSignals);
+                if (!inlineNotes.isEmpty() && !beginInlineWrite(dispatch, owner)) return Result.inProgress();
                 DiffNotePoster.DiffNoteResult inline = diffNotePoster.reconcileInlineNotes(job, inlineNotes);
                 inlineSignals = stateMachine.mergeSignals(inlineSignals, inline.signals());
                 if (inline.failed() > 0 || inline.suppressed()) {
@@ -272,6 +273,7 @@ class PracticeFeedbackDispatchService {
                             deliveredSummaryRef,
                             inlineSignals);
                 }
+                if (!beginInlineWrite(dispatch, owner)) return Result.inProgress();
                 DiffNotePoster.DiffNoteResult inline =
                         diffNotePoster.reconcileApprovedInlineNotes(job, feedback.getId(), inlineNotes);
                 inlineSignals = stateMachine.mergeSignals(inlineSignals, inline.signals());
@@ -327,9 +329,11 @@ class PracticeFeedbackDispatchService {
 
     /**
      * Withholds a dispatch whose cited observation was invalidated, once every write an earlier attempt started is
-     * accounted for. Only positive evidence settles a started write: an earlier POST may still land after its
-     * lease expired, so a lookup that finds nothing proves nothing. The dispatch stays uncertain and keeps looking,
-     * more slowly once {@link #UNCONFIRMED_WINDOW} has passed since the write began. Nothing is posted here.
+     * accounted for: the summary when its fence was set, inline notes when their own stage may have begun.
+     * Only positive evidence settles a started write: an earlier POST may still land after its lease expired, so a
+     * lookup that finds nothing proves nothing. The dispatch stays uncertain, claimable past the attempt budget by
+     * that same write record, and keeps looking, more slowly once {@link #UNCONFIRMED_WINDOW} has passed since the
+     * write began. Nothing is posted here.
      */
     private Result refuseInvalidated(FeedbackDispatch dispatch, AgentJob job, String owner) {
         boolean approved = dispatch.getDestination() == FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE;
@@ -348,7 +352,7 @@ class PracticeFeedbackDispatchService {
             summaryRef = existing.commentId();
             unconfirmed = existing.kind() != ExistingDeliveryLookup.Kind.FOUND;
         }
-        if (dispatch.getAttemptCount() > 0 && !isIssue(job)) {
+        if (dispatch.inlineWriteMayHaveStarted() && !isIssue(job)) {
             DiffNotePoster.InlineLookup lookup = diffNotePoster.findUnacknowledged(
                     job, inlineNotes(dispatch), approved ? dispatch.approvedFeedbackId() : null, signals);
             signals = stateMachine.mergeSignals(signals, lookup.found());
@@ -360,14 +364,19 @@ class PracticeFeedbackDispatchService {
         }
         String error = "An earlier provider write is not confirmed yet";
         Instant writeStartedAt = dispatch.getWriteStartedAt();
-        if (writeStartedAt != null && Instant.now().isAfter(writeStartedAt.plus(UNCONFIRMED_WINDOW))) {
+        Instant since = writeStartedAt != null ? writeStartedAt : dispatch.getCreatedAt();
+        if (Instant.now().isAfter(since.plus(UNCONFIRMED_WINDOW))) {
             return stateMachine.recheckAt(
                     dispatch, owner, error, summaryRef, signals, Instant.now().plus(UNCONFIRMED_RECHECK));
         }
-        // Recorded so the claim budget cannot exhaust this dispatch into a failure that says nothing was written.
-        transactionTemplate.execute(
-                status -> repository.beginWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
         return stateMachine.retry(dispatch, owner, error, summaryRef, true, signals);
+    }
+
+    /** Records that inline notes are about to be requested; false once the lease is lost, so nothing is sent. */
+    private boolean beginInlineWrite(FeedbackDispatch dispatch, String owner) {
+        Integer began = transactionTemplate.execute(
+                status -> repository.beginInlineWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
+        return began != null && began == 1;
     }
 
     private static boolean reviewedRevisionMatches(

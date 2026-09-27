@@ -126,6 +126,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .when(repository.claim(any(), any(), anyString(), any(), any(Integer.class)))
                 .thenReturn(1);
         lenient().when(repository.beginWrite(any(), any(), anyString())).thenReturn(1);
+        lenient().when(repository.beginInlineWrite(any(), any(), anyString())).thenReturn(1);
         lenient().when(repository.finish(any())).thenReturn(1);
         lenient()
                 .when(diffNotePoster.reconcileInlineNotes(any(), eq(List.of())))
@@ -561,6 +562,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 approved.getDeliveredPlacements(),
                 approved.getWriteStarted(),
                 approved.getWriteStartedAt(),
+                approved.getInlineWriteStarted(),
                 approved.getDeliveredExternalRef(),
                 approved.getLeaseOwner(),
                 approved.getLeaseExpiresAt(),
@@ -613,6 +615,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 mapper.valueToTree(List.of()),
                 writeStarted,
                 null,
+                false,
                 externalRef,
                 null,
                 null,
@@ -643,6 +646,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 base.getDeliveredPlacements(),
                 base.getWriteStarted(),
                 null,
+                false,
                 base.getDeliveredExternalRef(),
                 base.getLeaseOwner(),
                 base.getLeaseExpiresAt(),
@@ -699,6 +703,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 mapper.valueToTree(List.of()),
                 writeStarted,
                 null,
+                false,
                 state == FeedbackDispatchState.SENT ? "provider-42" : null,
                 null,
                 null,

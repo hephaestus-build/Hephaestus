@@ -85,4 +85,9 @@
             <column name="write_started_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
         </addColumn>
     </changeSet>
+    <changeSet id="1790457231249-8" author="hephaestus">
+        <addColumn tableName="feedback_dispatch">
+            <column name="inline_write_started" type="BOOLEAN"/>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>
