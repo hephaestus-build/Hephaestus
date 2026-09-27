@@ -60,6 +60,8 @@ import tools.jackson.databind.ObjectMapper;
 
 class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
 
+    private static final List<String> VERDICTS = List.of("ASSESSED");
+
     @Autowired
     private EntityManager entityManager;
 
@@ -216,7 +218,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         assertThat(observationRepository.findById(unrelatedId).orElseThrow().getSupersededAt())
                 .isNull();
         assertThat(observationRepository.findRecentByDeveloperAndWorkspace(
-                        aboutUser.getId(), workspace.getId(), Instant.EPOCH, PageRequest.of(0, 10)))
+                        aboutUser.getId(), workspace.getId(), Instant.EPOCH, VERDICTS, PageRequest.of(0, 10)))
                 .isEmpty();
         assertThat(observationRepository.findSummaryByDeveloperAndWorkspace(aboutUser.getId(), workspace.getId()))
                 .isEmpty();
@@ -246,12 +248,15 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                 issue.getId(), workspace.getId(), practice.getId(), agentJob.getId(), newerAt.minusSeconds(3600));
 
         List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                aboutUser.getId(), workspace.getId(), Instant.EPOCH, PageRequest.of(0, 10));
+                aboutUser.getId(), workspace.getId(), Instant.EPOCH, VERDICTS, PageRequest.of(0, 10));
         List<Observation> window = LatestRun.perClaim(observationRepository.findByDeveloperAndWorkspaceBetween(
                 aboutUser.getId(), workspace.getId(), Instant.EPOCH, newerAt.plusSeconds(60)));
 
         assertThat(recent).extracting(Observation::getId).containsExactly(standing);
         assertThat(window).extracting(Observation::getId).containsExactly(standing);
+        assertThat(observationRepository.findEarlierRunsByDeveloperAndWorkspace(
+                        aboutUser.getId(), workspace.getId(), Instant.EPOCH, PageRequest.of(0, 10)))
+                .isEmpty();
     }
 
     /**
@@ -785,7 +790,11 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             assertThat(row.getNegativeCount()).isEqualTo(1L);
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                    aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"), PageRequest.of(0, 50));
+                    aboutUser.getId(),
+                    workspace.getId(),
+                    Instant.parse("2026-01-01T00:00:00Z"),
+                    VERDICTS,
+                    PageRequest.of(0, 50));
 
             assertThat(recent).hasSize(1);
             assertThat(recent.get(0).getOccurrenceKey()).isEqualTo("bad-target");
@@ -891,8 +900,19 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             assertThat(summary.get(0).getNegativeCount()).isEqualTo(0L);
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                    aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"), PageRequest.of(0, 10));
+                    aboutUser.getId(),
+                    workspace.getId(),
+                    Instant.parse("2026-01-01T00:00:00Z"),
+                    VERDICTS,
+                    PageRequest.of(0, 10));
             assertThat(recent).extracting(Observation::getPresence).containsExactly(Presence.PRESENT);
+            assertThat(observationRepository.findEarlierRunsByDeveloperAndWorkspace(
+                            aboutUser.getId(),
+                            workspace.getId(),
+                            Instant.parse("2026-01-01T00:00:00Z"),
+                            PageRequest.of(0, 10)))
+                    .extracting(Observation::getPresence)
+                    .containsExactly(Presence.ABSENT);
 
             List<SeverityCount> severities = observationRepository.countBySeverityForDeveloper(
                     aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"));
@@ -972,7 +992,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             assertThat(summary.get(0).getLastObservedAt()).isEqualTo(Instant.parse("2026-03-20T10:00:00Z"));
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                    aboutUser.getId(), workspace.getId(), since, PageRequest.of(0, 50));
+                    aboutUser.getId(), workspace.getId(), since, VERDICTS, PageRequest.of(0, 50));
             assertThat(recent).extracting(Observation::getArtifactId).containsExactly(visiblePr.getId());
 
             List<SeverityCount> severities =
@@ -1198,7 +1218,11 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             insert("bf-only", campaignJob().getId(), 900L, Instant.parse("2026-03-20T10:00:00Z"), "BACKFILL");
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                    aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"), PageRequest.of(0, 50));
+                    aboutUser.getId(),
+                    workspace.getId(),
+                    Instant.parse("2026-01-01T00:00:00Z"),
+                    VERDICTS,
+                    PageRequest.of(0, 50));
 
             assertThat(recent).extracting(Observation::getArtifactId).containsExactly(900L);
         }
@@ -1209,7 +1233,11 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             insert("campaign-reading", campaignJob().getId(), 901L, Instant.parse("2026-03-21T10:00:00Z"), "BACKFILL");
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                    aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"), PageRequest.of(0, 50));
+                    aboutUser.getId(),
+                    workspace.getId(),
+                    Instant.parse("2026-01-01T00:00:00Z"),
+                    VERDICTS,
+                    PageRequest.of(0, 50));
 
             assertThat(recent)
                     .extracting(Observation::getOrigin)
@@ -1223,7 +1251,11 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             insert("bf-newer", campaignJob().getId(), 902L, Instant.parse("2026-03-21T10:00:00Z"), "BACKFILL");
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                    aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"), PageRequest.of(0, 50));
+                    aboutUser.getId(),
+                    workspace.getId(),
+                    Instant.parse("2026-01-01T00:00:00Z"),
+                    VERDICTS,
+                    PageRequest.of(0, 50));
 
             assertThat(recent).hasSize(1);
             assertThat(recent.get(0).getObservedAt()).isEqualTo(Instant.parse("2026-03-21T10:00:00Z"));

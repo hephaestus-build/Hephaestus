@@ -51,11 +51,11 @@ class MentorContextKeysRunnerMirrorTest {
     }
 
     @Test
-    @DisplayName("a fitted merge readiness payload is never sliced by the runner")
+    @DisplayName("a fitted context payload is never sliced by the runner")
     void mergeReadinessBudgetIsTheRunnerFetchCap() throws IOException {
         assertThat(Files.readString(RUNNER, StandardCharsets.UTF_8))
                 .contains("const FETCH_CONTEXT_MAX_CHARS = 200_000;");
-        assertThat(MergeReadinessContentSource.MAX_JSON_CHARS).isEqualTo(200_000);
+        assertThat(MentorContextKeys.FETCH_CONTEXT_MAX_CHARS).isEqualTo(200_000);
         assertThat(MergeReadinessContentSource.artifactIdOf("inputs/context/merge_readiness/42.json"))
                 .contains(42L);
         assertThat(MergeReadinessContentSource.artifactIdOf("inputs/context/merge_readiness/../user.json"))

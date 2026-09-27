@@ -66,8 +66,15 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     @InjectMocks
     ObservationHistoryContentSource provider;
 
+    private static final List<String> VERDICTS = List.of("ASSESSED");
+    private static final List<String> ABSTENTIONS = List.of("NOT_APPLICABLE", "UNDETERMINED");
+
     @BeforeEach
     void authorizeObservations() {
+        lenient()
+                .when(observationRepository.findRecentByDeveloperAndWorkspace(
+                        any(), any(), any(), eq(ABSTENTIONS), any()))
+                .thenReturn(List.of());
         lenient()
                 .when(visibilityPolicy.permitsAll(anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
                 .thenAnswer(invocation -> {
@@ -82,7 +89,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         user.setLogin("octo");
         when(userRepository.findById(eq(2L))).thenReturn(Optional.of(user));
         when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(2L), eq(1L), any(Instant.class), any(Pageable.class)))
+                        eq(2L), eq(1L), any(Instant.class), eq(VERDICTS), any(Pageable.class)))
                 .thenReturn(List.of());
         when(queryRepository.findReviewsReceivedSince(eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of());
@@ -110,10 +117,13 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     void unauthorizedObservationIsAbsentFromHistoryAndSummary() throws Exception {
         User user = new User();
         user.setLogin("octo");
-        Observation observation = Observation.builder().id(UUID.randomUUID()).build();
+        Observation observation = Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(UUID.randomUUID())
+                .build();
         when(userRepository.findById(2L)).thenReturn(Optional.of(user));
         when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(2L), eq(1L), any(Instant.class), any(Pageable.class)))
+                        eq(2L), eq(1L), any(Instant.class), eq(VERDICTS), any(Pageable.class)))
                 .thenReturn(List.of(observation));
         when(queryRepository.findReviewsReceivedSince(eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of());
@@ -140,6 +150,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 "The retry block swallows the IOException without logging it. The assessment is BAD, capped at MINOR.";
         var observation = Observation.builder()
                 .id(UUID.randomUUID())
+                .agentJobId(UUID.randomUUID())
                 .summary("Swallowed IOException")
                 .practice(practice)
                 .assessmentStatus(AssessmentStatus.ASSESSED)
@@ -151,7 +162,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .build();
 
         when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(2L), eq(1L), any(Instant.class), any(Pageable.class)))
+                        eq(2L), eq(1L), any(Instant.class), eq(VERDICTS), any(Pageable.class)))
                 .thenReturn(List.of(observation));
         when(queryRepository.findReviewsReceivedSince(eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of());
@@ -181,6 +192,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         Instant observedBad = Instant.parse("2025-06-10T08:00:00Z");
         var badObservation = Observation.builder()
                 .id(UUID.randomUUID())
+                .agentJobId(UUID.randomUUID())
                 .summary("Swallowed IOException")
                 .practice(practiceBad)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
@@ -202,6 +214,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         // NOT_APPLICABLE: assessment AND severity are null — must serialise as JSON null, not the enum name.
         var naObservation = Observation.builder()
                 .id(UUID.randomUUID())
+                .agentJobId(UUID.randomUUID())
                 .summary("No test surface")
                 .practice(practiceNa)
                 .assessmentStatus(AssessmentStatus.NOT_APPLICABLE)
@@ -213,8 +226,11 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .build();
 
         when(observationRepository.findRecentByDeveloperAndWorkspace(
-                        eq(2L), eq(1L), any(Instant.class), any(Pageable.class)))
-                .thenReturn(List.of(badObservation, naObservation));
+                        eq(2L), eq(1L), any(Instant.class), eq(VERDICTS), any(Pageable.class)))
+                .thenReturn(List.of(badObservation));
+        when(observationRepository.findRecentByDeveloperAndWorkspace(
+                        eq(2L), eq(1L), any(Instant.class), eq(ABSTENTIONS), any(Pageable.class)))
+                .thenReturn(List.of(naObservation));
 
         var pr = new PullRequest();
         pr.setNumber(42);
@@ -237,7 +253,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         JsonNode root = objectMapper.readTree(files.get("inputs/context/observations_history.json"));
 
         JsonNode obs = root.get("recentObservations");
-        assertThat(obs).hasSize(2);
+        assertThat(obs).hasSize(1);
         JsonNode bad = obs.get(0);
         assertThat(bad.get("practiceSlug").asString()).isEqualTo("robust-error-handling");
         assertThat(bad.get("summary").asString()).isEqualTo("Swallowed IOException");
@@ -252,7 +268,8 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         assertThat(bad.get("evidence").get("citations").get(0).get("quote").asString())
                 .contains("IOException");
 
-        JsonNode na = obs.get(1);
+        assertThat(root.get("abstentions")).hasSize(1);
+        JsonNode na = root.get("abstentions").get(0);
         assertThat(na.get("assessmentStatus").asString()).isEqualTo("NOT_APPLICABLE");
         // assessment/severity must be JSON null (not the string "null", not absent).
         assertThat(na.get("assessment").isNull()).isTrue();
