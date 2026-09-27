@@ -9,6 +9,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 /**
@@ -17,8 +18,16 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
  */
 public class CookieBearerTokenResolver implements BearerTokenResolver {
 
-    private static final RequestMatcher PUBLIC_DISCOVERY =
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/identity-providers");
+    /**
+     * Public endpoints that never read the caller's identity. Resolving a credential there only lets a
+     * revoked one, such as an old session cookie the browser still holds for this host, answer 401 in
+     * place of the sign-in it was meant to replace. The dev sign-ins take their account from the request,
+     * and authorization still decides whether they are reachable at all.
+     */
+    private static final RequestMatcher IDENTITY_FREE = new OrRequestMatcher(
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/identity-providers"),
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/dev-login"),
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/auth/dev-login/client"));
 
     private final String cookieName;
     private final DefaultBearerTokenResolver headerResolver = new DefaultBearerTokenResolver();
@@ -29,8 +38,7 @@ public class CookieBearerTokenResolver implements BearerTokenResolver {
 
     @Override
     public @Nullable String resolve(HttpServletRequest request) {
-        // Discovery never uses identity; revoked credentials must not block signing in again.
-        if (PUBLIC_DISCOVERY.matches(request)) {
+        if (IDENTITY_FREE.matches(request)) {
             return null;
         }
         // A rejected stale cookie must not authenticate this request.

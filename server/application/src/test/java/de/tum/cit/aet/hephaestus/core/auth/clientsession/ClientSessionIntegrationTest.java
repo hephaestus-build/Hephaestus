@@ -27,6 +27,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Installed-client sign-in end to end over real HTTP, against the real resource-server chain and
@@ -357,6 +358,71 @@ class ClientSessionIntegrationTest extends RealAuthIntegrationTest {
                 .expectBody(Void.class);
 
         flow.rotate(tokens.refreshToken());
+    }
+
+    /**
+     * A client's auth window shares the browser's cookies, so it can carry a web session this instance has
+     * since revoked. The sign-in must neither be refused for it nor touch it, and the stale session must
+     * stay refused everywhere it would authenticate.
+     */
+    @Test
+    void shouldSignTheClientInWithoutTouchingTheCookieWhenTheBrowserHoldsARevokedWebSession() {
+        String staleCookie = webLogin("web-stale");
+        Long staleAccountId = ClientSignInFlow.accountId(staleCookie);
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> issuedJwtRepository.revokeAllForAccount(
+                        staleAccountId, Instant.now(), IssuedJwt.RevokedReason.SIGN_OUT_EVERYWHERE));
+        String verifier = Pkce.newSecret() + "-verifier";
+
+        URI location = webTestClient
+                .get()
+                .uri(builder -> builder.path("/auth/dev-login/client")
+                        .queryParam("username", "ext-fresh")
+                        .queryParam("client_id", CLIENT_ID)
+                        .queryParam("redirect_uri", CALLBACK)
+                        .queryParam("code_challenge", ClientSignInFlow.challengeOf(verifier))
+                        .queryParam("code_challenge_method", "S256")
+                        .queryParam("state", "s-stale")
+                        .build())
+                .header(HttpHeaders.COOKIE, cookieName + "=" + staleCookie)
+                .exchange()
+                .expectStatus()
+                .is3xxRedirection()
+                .expectCookie()
+                .doesNotExist(cookieName)
+                .returnResult(Void.class)
+                .getResponseHeaders()
+                .getLocation();
+
+        assertThat(Objects.requireNonNull(location).toString()).startsWith(CALLBACK + "?code=");
+        Map<String, String> query =
+                UriComponentsBuilder.fromUri(location).build().getQueryParams().toSingleValueMap();
+        assertThat(query).containsEntry("state", "s-stale");
+        ClientSignInFlow.Tokens tokens = ClientSignInFlow.tokens(
+                flow.exchange(CLIENT_ID, CALLBACK, Objects.requireNonNull(query.get("code")), verifier));
+        flow.assertAccepted(tokens.accessToken());
+        assertThat(ClientSignInFlow.accountId(tokens.accessToken())).isNotEqualTo(staleAccountId);
+
+        webTestClient
+                .get()
+                .uri("/user")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + staleCookie)
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+        String csrf = csrfToken();
+        webTestClient
+                .post()
+                .uri("/auth/refresh")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + staleCookie + "; __Host-XSRF-TOKEN=" + csrf)
+                .header("X-XSRF-TOKEN", csrf)
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectCookie()
+                .doesNotExist(cookieName)
+                .expectBody(Void.class);
     }
 
     @Test

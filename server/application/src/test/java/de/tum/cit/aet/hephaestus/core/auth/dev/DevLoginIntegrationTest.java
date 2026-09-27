@@ -3,7 +3,10 @@ package de.tum.cit.aet.hephaestus.core.auth.dev;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
 
+import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +15,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * End-to-end contract of the passwordless dev sign-in with the flag ENABLED. Deliberately uses the
@@ -25,6 +30,12 @@ class DevLoginIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private WebTestClient webTestClient;
+
+    @Autowired
+    private IssuedJwtRepository issuedJwtRepository;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
@@ -86,6 +97,40 @@ class DevLoginIntegrationTest extends RealAuthIntegrationTest {
         long first = accountIdFrom(devLogin("{\"username\":\"sam\",\"admin\":false}"));
         long second = accountIdFrom(devLogin("{\"username\":\"sam\",\"admin\":false}"));
         assertThat(second).isEqualTo(first);
+    }
+
+    /** Signing in again is how a revoked browser session is replaced, so the revoked cookie must not refuse it. */
+    @Test
+    void shouldSignInAgainWhenTheBrowserStillPresentsARevokedSession() {
+        String stale = devLogin("{\"username\":\"revoked-rae\",\"admin\":false}");
+        long accountId = accountIdFrom(stale);
+        new TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> issuedJwtRepository.revokeAllForAccount(
+                        accountId, Instant.now(), IssuedJwt.RevokedReason.SIGN_OUT_EVERYWHERE));
+
+        var fresh = webTestClient
+                .post()
+                .uri("/auth/dev-login")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + stale)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"username\":\"revoked-rae\",\"admin\":false}")
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .returnResult(Void.class)
+                .getResponseCookies()
+                .getFirst(cookieName);
+        org.junit.jupiter.api.Assertions.assertNotNull(fresh);
+
+        assertThat(accountIdFrom(fresh.getValue())).isEqualTo(accountId);
+        webTestClient
+                .get()
+                .uri("/user")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + stale)
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test

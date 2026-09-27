@@ -151,7 +151,7 @@ final class ClientSignInFlow {
         getUser(accessToken).expectStatus().isUnauthorized().expectBody(Void.class);
     }
 
-    private static Tokens tokens(WebTestClient.ResponseSpec response) {
+    static Tokens tokens(WebTestClient.ResponseSpec response) {
         Map<?, ?> body = response.expectStatus()
                 .isOk()
                 .expectHeader()
