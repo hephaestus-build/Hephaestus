@@ -14,8 +14,8 @@ import org.springframework.stereotype.Component;
  * still PREPARED ({@link #supersede}), on the in-app lane the card still open, read or not
  * ({@link #replaceOpen}).
  *
- * <p>On the in-app lane the page, not the ledger, is what must hold one live card per habit: the card still
- * open about a habit is retired by the newer card about it, read or not ({@link #replaceOpen}). A closed card
+ * <p>On the in-app lane the page, not the ledger, is what must hold one live card per practice: the card still
+ * open about a practice is retired by the newer card about it, read or not ({@link #replaceOpen}). A closed card
  * — resolved by the work or the developer, or closed because the practice changed — is never replaced, and
  * only the caller can tell which it is, so only the caller decides.
  *
@@ -94,7 +94,7 @@ public class FeedbackSupersession {
     }
 
     /**
-     * Retire the card still open on one in-app thread so a newer card about the same habit can take its
+     * Retire the card still open on one in-app thread so a newer card about the same practice can take its
      * place — queued or already read, but never closed, which the caller has established by reading the
      * card the way the page reads it ({@code PreviousInAppFeedback}).
      *

@@ -10,7 +10,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * One card on a developer's own practice pages: a process-level message about a habit in their work, what
+ * One card on a developer's own practice pages: a process-level message about a way of working in their work, what
  * it is evidenced by, and one thing to try next.
  *
  * <p>Only ever returned to the person it is about. The endpoint takes no user parameter, and the
@@ -34,16 +34,17 @@ import org.jspecify.annotations.Nullable;
 public record InAppFeedbackDTO(
         @NonNull UUID id,
 
-        @NonNull @Schema(description = "Short headline naming the habit, never the person")
+        @NonNull @Schema(description = "Short headline naming the way of working, never the person")
         String headline,
 
         @NonNull @Schema(description = "The message, as Markdown, without the headline and the next step")
         String body,
 
-        @Schema(description = "The habit to try next, on its own; null for feedback prepared without one") @Nullable
+        @Schema(description = "The way of working to try next, on its own; null for feedback prepared without one")
+        @Nullable
         String nextStep,
 
-        @NonNull @Schema(description = "Practice this habit belongs to")
+        @NonNull @Schema(description = "Practice this feedback is about")
         String practiceSlug,
 
         @NonNull String practiceName,
@@ -60,7 +61,7 @@ public record InAppFeedbackDTO(
         @Schema(description = "What good looks like, in the developer's framing") @Nullable
         String whatGoodLooksLike,
 
-        @NonNull @Schema(description = "The pieces of work the habit was observed on, newest first")
+        @NonNull @Schema(description = "The pieces of work the way of working was observed on, newest first")
         List<InAppEvidenceDTO> evidence,
 
         @NonNull @Schema(description = "When the message was composed")

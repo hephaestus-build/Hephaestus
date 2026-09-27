@@ -548,15 +548,15 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 					    this form. Prose still gets a reading width of its own. */}
 					<div className="space-y-10">
 						<p className="max-w-2xl text-sm text-muted-foreground">
-							Define one observable habit. The same definition should make sense to a developer,
-							peer, human mentor, and an automated reviewer.
+							Define one observable way of working. The same definition should make sense to a
+							developer, peer, human mentor, and an automated reviewer.
 						</p>
 
 						<section className="space-y-4">
 							<div>
 								<h2 className="text-lg font-semibold">Practice</h2>
 								<p className="text-sm text-muted-foreground">
-									Name the habit and choose where it applies. Fields marked{" "}
+									Name the practice and choose where it applies. Fields marked{" "}
 									<span aria-hidden>*</span>
 									<span className="sr-only">with an asterisk</span> are required.
 								</p>
@@ -619,16 +619,17 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 							<div>
 								<h2 className="text-lg font-semibold">Review guidance</h2>
 								<p className="text-sm text-muted-foreground">
-									Explain the habit in plain language before configuring how it is reviewed.
+									Explain the practice in plain language before configuring how it is reviewed.
 								</p>
 							</div>
 							<Field data-invalid={hasText(shownErrors.criteria) ? "true" : undefined}>
 								<FieldLabel htmlFor="practice-criteria">What to look for *</FieldLabel>
 								<FieldDescription id="practice-criteria-description">
-									Describe one observable habit, what demonstrates it, and when a reviewer should
-									stay silent. Do not ask the reviewer to infer intent or facts outside the selected
-									work. For example: “Look for a description that explains the behavior change and
-									why. Stay silent for automated dependency updates.” Markdown is supported.
+									Describe one observable way of working, what demonstrates it, and when a reviewer
+									should stay silent. Do not ask the reviewer to infer intent or facts outside the
+									selected work. For example: “Look for a description that explains the behavior
+									change and why. Stay silent for automated dependency updates.” Markdown is
+									supported.
 								</FieldDescription>
 								<Textarea
 									id="practice-criteria"
@@ -705,9 +706,9 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 								</h2>
 								<p className="text-sm text-muted-foreground">
 									A practice is reviewed on one occasion: the moments that start a review, and what
-									that review reads. A habit worth judging differently at a different moment — what
-									is in front of you when the work arrives, what was never resolved by the merge —
-									is a second practice rather than a second occasion.
+									that review reads. A way of working worth judging differently at a different
+									moment — what is in front of you when the work arrives, what was never resolved by
+									the merge — is a second practice rather than a second occasion.
 								</p>
 							</div>
 

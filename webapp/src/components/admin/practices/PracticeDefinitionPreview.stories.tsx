@@ -128,7 +128,7 @@ export const CriteriaIsMarkdown: Story = {
 };
 
 /**
- * The decision being made is "do we want this habit", so the rationale leads. `criteria` answers a
+ * The decision being made is "do we want this practice", so the rationale leads. `criteria` answers a
  * different question — how the model judges — in text addressed to the model, so it sits behind a
  * disclosure with the precompute script rather than above the reason to adopt.
  */

@@ -40,7 +40,7 @@ public class PreviousInAppFeedback {
      */
     public record Previous(
             UUID id, Instant preparedAt, @Nullable Instant closedAt) {
-        /** Still on the developer's page as something to work on — what a newer card about the habit replaces. */
+        /** Still on the developer's page as something to work on — what a newer card about the practice replaces. */
         public boolean isOpen() {
             return closedAt == null;
         }

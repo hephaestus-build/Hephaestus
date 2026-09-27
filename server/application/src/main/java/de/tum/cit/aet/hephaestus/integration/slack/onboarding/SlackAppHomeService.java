@@ -168,7 +168,7 @@ public class SlackAppHomeService {
                     + "channel-message privacy here.");
         }
         return ("*AI mentor for software project practices.* Ask in the Messages tab about PRs, reviews, issues, "
-                + "tests, or team habits. Replies stay in DM.");
+                + "tests, or team ways of working. Replies stay in DM.");
     }
 
     private static String stateIcon(boolean ok) {

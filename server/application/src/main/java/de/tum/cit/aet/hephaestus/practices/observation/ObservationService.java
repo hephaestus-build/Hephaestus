@@ -117,7 +117,7 @@ public class ObservationService {
 
     /**
      * The lanes whose feedback this read model means: the ones that speak about the one observation they are
-     * bound to. {@code IN_APP} feedback is excluded because it is a message about a habit across several
+     * bound to. {@code IN_APP} feedback is excluded because it is a message about a way of working across several
      * pieces of work — it binds every problem behind it as evidence, so it would answer "what did you tell
      * me about this observation" with a paragraph that is explicitly not about it. Named here rather than
      * defaulted in the query so a fourth lane has to be admitted deliberately.

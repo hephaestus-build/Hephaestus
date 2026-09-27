@@ -130,7 +130,7 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
      * <p><b>Text and handle come from one row</b>, so on an observation carried by more than one piece of
      * feedback the developer always rates the words they just read. The channel set is the caller's to state
      * for the same reason {@link #findLatestFeedbackBodiesByObservationIds} makes it state one: IN_APP feedback
-     * is about a habit across several pieces of work, not about the one observation it is bound to.
+     * is about a way of working across several pieces of work, not about the one observation it is bound to.
      *
      * <p><b>{@code feedbackId} is null on {@code FAILED} feedback.</b> The words were composed and the
      * developer may have seen them on the artifact, so the text is shown; but the response endpoint accepts

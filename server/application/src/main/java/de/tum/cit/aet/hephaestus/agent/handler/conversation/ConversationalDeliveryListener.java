@@ -127,7 +127,7 @@ public class ConversationalDeliveryListener {
      *
      * <p>Empty means there is no mentor-ready brief to queue. It covers both an intentionally quiet turn and
      * a composition stage that was skipped, failed, or malformed; neither is permission to turn a severity
-     * ranking into feedback. A later review may compose a complete brief for the same habit.
+     * ranking into feedback. A later review may compose a complete brief for the same practice.
      */
     private List<ComposedFeedbackUnit> composedMoves(UUID agentJobId) {
         AgentJob job = agentJobRepository.findById(agentJobId).orElse(null);

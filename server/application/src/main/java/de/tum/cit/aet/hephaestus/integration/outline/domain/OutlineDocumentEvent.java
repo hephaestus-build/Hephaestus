@@ -14,7 +14,7 @@ import org.hibernate.annotations.Immutable;
 import org.jspecify.annotations.Nullable;
 
 /**
- * One append-only row per Outline {@code documents.*} webhook event — the longitudinal editing-habit
+ * One append-only row per Outline {@code documents.*} webhook event — the longitudinal editing-activity
  * signal (who touched which document when) the point-in-time mirror cannot answer, and the source of
  * the middle editors that {@code createdBy}/{@code updatedBy} miss. Written by the webhook consumer
  * from the delivery envelope only ({@code actorId} + {@code createdAt}); webhook-forward by design —

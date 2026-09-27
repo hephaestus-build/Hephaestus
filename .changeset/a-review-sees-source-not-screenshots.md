@@ -10,7 +10,7 @@ and supports verified historical citations.
 A review now uses one model session for grouped practice checks and feedback composition. It records
 valid observations independently, stages linked issues as citable text, and records per-turn calls,
 tools and refusals. Practice-page feedback requires recurring negative observations across work;
-a single occurrence does not create a recurring-habit card.
+a single occurrence does not create a card about a recurring lapse.
 
 Bundled criteria now use a common decision-procedure format and can exclude assessed cells that do
 not apply to the practice. The new **State how to verify the change** practice checks verification

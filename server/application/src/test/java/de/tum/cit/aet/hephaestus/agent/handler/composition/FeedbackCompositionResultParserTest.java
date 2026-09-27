@@ -169,7 +169,7 @@ class FeedbackCompositionResultParserTest extends BaseUnitTest {
             { "channel": "IN_APP", "practiceSlug": "ships-tests-with-the-change",
               "basedOn": ["obs-0"], "action": "SUPERSEDE",
               "supersedesThreadKey": "invented-key",
-              "title": "A habit", "body": "A body", "nextStep": "A next step" }
+              "title": "A way of working", "body": "A body", "nextStep": "A next step" }
             """;
 
         assertThat(parser.parse(output(unit, "[]"))).isEmpty();

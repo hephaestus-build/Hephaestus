@@ -37,7 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * {@code lastInAppSurfacedAt} — the cooldown that stops one habit being restated on every pull
+ * {@code lastInAppSurfacedAt} — the cooldown that stops one practice being restated on every pull
  * request. It is a {@code MAX()} over an implicit join, and every first-ever call for a workspace hits
  * its empty case, so what a NULL aggregate maps to is the behaviour the whole lane starts from: an empty
  * Optional means "never said", and anything else here would take the lane down through the listener's
@@ -96,7 +96,7 @@ class InAppCooldownQueryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("answers with the newest message about this habit, and only from this workspace")
+    @DisplayName("answers with the newest message about this practice, and only from this workspace")
     void answersTheNewestWithinTheWorkspace() {
         Instant older = Instant.parse("2026-01-01T00:00:00Z");
         Instant newer = Instant.parse("2026-02-01T00:00:00Z");
@@ -161,7 +161,7 @@ class InAppCooldownQueryIntegrationTest extends BaseIntegrationTest {
                 .channel(FeedbackChannel.IN_APP)
                 .position(7000)
                 .deliveryState(FeedbackDeliveryState.PREPARED)
-                .body("### A habit\n\nWhat keeps happening.\n\n**Try next:** Something.")
+                .body("### A way of working\n\nWhat keeps happening.\n\n**Try next:** Something.")
                 .source(FeedbackSource.AGENT)
                 .createdAt(createdAt)
                 .build());

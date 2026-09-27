@@ -43,7 +43,7 @@ public record WorkResolution(List<Work> cleanWork, @Nullable Instant resolvedAt,
 
     /**
      * One practice's opportunities since a horizon, bundled once and read by every piece of feedback about
-     * the practice, so a page with several cards on one habit bundles its work once rather than per card.
+     * the practice, so a page with several cards on one practice bundles its work once rather than per card.
      */
     public static final class Opportunities {
 

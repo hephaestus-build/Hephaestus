@@ -166,7 +166,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
     }
 
     @Test
-    void refusesAHabitTheDeveloperWasShownInsideTheCooldown() {
+    void refusesAPracticeTheDeveloperWasShownInsideTheCooldown() {
         Instant yesterday = NOW.minus(Duration.ofDays(1));
 
         assertThat(route(problems(3, ObservationOrigin.LIVE), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, yesterday))
@@ -174,7 +174,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
     }
 
     @Test
-    void admitsAHabitLastShownBeforeTheCooldownElapsed() {
+    void admitsAPracticeLastShownBeforeTheCooldownElapsed() {
         Instant longAgo = NOW.minus(Duration.ofDays(InAppFeedbackRouter.RESURFACE_COOLDOWN_DAYS + 1));
 
         assertThat(route(problems(3, ObservationOrigin.LIVE), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, longAgo))
@@ -189,7 +189,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
 
     /**
      * The evidence a card lists is the problems, not the window they were found in. Binding the window
-     * would put work where the practice went WELL under the heading "the pieces of work this habit was
+     * would put work where the practice went WELL under the heading "the pieces of work this way of working was
      * observed on", which reads as a false accusation to the one person who knows it is false.
      */
     @Test

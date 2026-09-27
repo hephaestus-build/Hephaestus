@@ -13,4 +13,4 @@ Practice reviews handle drafts, pushes and merges consistently across GitHub and
 - Feedback from a review that ends after the work was merged now reaches the developer's practice page
   and conversations. The setting for merged work now controls only comments on the merged work itself.
 - A lapse that a later review of the same work found fixed no longer counts toward a developer's
-  recurring habit.
+  recurring lapses.

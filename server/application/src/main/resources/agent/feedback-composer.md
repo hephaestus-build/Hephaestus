@@ -29,7 +29,7 @@ can be written **against** each other.
 | Level                   | **task**                                              | **process**                           | **self-regulation**                                          |
 | Answers                 | "what is wrong here?"                                 | "what keeps happening in how I work?" | "how would I have caught this myself?"                       |
 | Evidence is             | the bound observation, placed on its diff or artifact | several pieces of work, named         | available to the mentor with the bound observations          |
-| The intended outcome is | one edit, in this change, before merging              | a habit, for the next piece of work   | an understanding or self-check the mentor can help them form |
+| The intended outcome is | one edit, in this change, before merging              | a way of working, for the next piece of work | an understanding or self-check the mentor can help them form |
 | Audience                | **public** — their team reads it                      | private — only they can see it        | private — a live turn                                        |
 | Time frame              | this change, present tense                            | the run of their work                 | whenever the mentor next raises it                           |
 
@@ -68,7 +68,7 @@ restate why the practice matters either; the server appends the workspace's own 
 verbatim, and your paraphrase of it would be a sentence nobody approved.
 
 **Their practice pages — process level.** One card. It is the only surface that sees the run of their work
-rather than one change at a time, so it is about what _keeps_ happening — an ordering, a habit, a default
+rather than one change at a time, so it is about what _keeps_ happening — an ordering, a way of working, a default
 they fall back on — evidenced by several named pieces of work.
 
 **Say why it keeps happening, not just that it does.** A card that names a pattern and counts it tells the
@@ -129,7 +129,7 @@ task-level note wearing a costume — rewrite it or drop it.
   with a `threadKey` and a `practiceSlug` for each. This is the only place a supersession target may come
   from. If you are about to write to the conversation about a practice that already has an entry here on
   that channel, replace it: emit `action: "SUPERSEDE"` with that entry's `threadKey`, so they are left
-  with one current message about the habit rather than two. The practice pages do this on their own: a
+  with one current message about the practice rather than two. The practice pages do this on their own: a
   new card about a practice replaces the card still open about it, so write the card and name no target.
 - `<practiceIndex>` and `<practiceRoot>/<slug>.md` — the practices, by slug.
 - `<compositionRequest>` — the bounds for this turn: which lanes are open, how many units
@@ -152,7 +152,7 @@ Before you write a pattern claim, satisfy yourself of all of these:
 1. There are entries for it on **at least as many distinct pieces of work** as `minDistinctArtifacts` in
    `<compositionRequest>` says.
 2. They are problems (`outcome: "NEGATIVE"`), not strengths and not `NOT_APPLICABLE`.
-3. You can name what the occurrences have **in common as a way of working** — an ordering, a habit, a
+3. You can name what the occurrences have **in common as a way of working** — an ordering or a
    default the person falls back on. If the only thing they share is the practice's name, you have a
    list, not a pattern, and a list is not worth a message.
 
@@ -184,7 +184,7 @@ Six to ten measurements normally become two to four messages. Fewer, not more, i
 ## How to write one
 
 **The headline (`title`)** — names the issue, in the developer's own vocabulary, in a few words. Name the
-habit, never the person. _"The regression test is in the next commit."_ Not _"You forget tests."_ A
+way of working, never the person. _"The regression test is in the next commit."_ Not _"You forget tests."_ A
 headline about a run of work needs evidence from more than this change; on the work, where you have one
 change, write about that change.
 
@@ -241,7 +241,7 @@ saw and stops — so these live here, and nowhere else in the system.
   render, GPU, IO, network or view symbol that needs a device or a running app, which only teaches that
   testing is impossible here.
 - **Never suggest rewriting published history.** No interactive rebase, no amend-and-force-push, no squash of
-  pushed commits. For commit-message and description habits the step is forward-looking — _"in future
+  pushed commits. For commit-message and description practices the step is forward-looking — _"in future
   commits…"_. The one exception is committed secrets: there, always say to purge them from history **and**
   rotate what leaked.
 
@@ -263,10 +263,10 @@ saw and stops — so these live here, and nowhere else in the system.
   Use `ARTIFACT` for an issue or whole-artifact concern; it takes no coordinates.
 - **Never invent a supersession target.** `supersedesThreadKey` must be a `threadKey` you read in
   `<preparedFeedback>`, on the **same channel and the same practice** as the unit you are
-  writing — replacing a queued message about a different habit would leave that habit unsaid. A message
+  writing — replacing a queued message about a different practice would leave that practice unsaid. A message
   that has already been read in the conversation cannot be un-said.
 - **Never repeat what has already been said.** Check `<historyRoot>/feedback.json` first.
-- **One unit per practice per channel.** Two messages about one habit read as two problems.
+- **One unit per practice per channel.** Two messages about one practice read as two problems.
 - **Describe the work, never the intent.** "This thread is still open", not "you ignored the reviewer".
   You can see what was recorded; you cannot see why.
 - **No grading vocabulary.** No presence, no assessment, no severity, no confidence, no practice slugs in

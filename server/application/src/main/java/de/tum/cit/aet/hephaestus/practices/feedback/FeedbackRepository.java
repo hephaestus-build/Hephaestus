@@ -209,7 +209,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
      *
      * <p>Deliberately not filtered by {@code createdAt}: a queued message is queued however long ago it
      * was written, and a window that hid the old ones would let composition write a second message about
-     * a habit whose first message is still waiting to be read.
+     * a practice whose first message is still waiting to be read.
      */
     @Query("""
         SELECT f FROM Feedback f
@@ -224,7 +224,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     /**
      * Retires DELIVERED feedback that newer feedback replaces (compare-and-set): a prior in-context summary
      * when a new one is posted, while inline-only deliveries stay DELIVERED on the same thread; and an open
-     * in-app card when a newer card about the same habit is prepared. The state predicate makes concurrent
+     * in-app card when a newer card about the same practice is prepared. The state predicate makes concurrent
      * retries idempotent, and {@link #markSuperseded} is its twin for feedback still queued.
      *
      * @return {@code 1} when this caller retired it, {@code 0} when it was not delivered
@@ -300,7 +300,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
      * The practice each of these units is about, read off its headline observation.
      *
      * <p>Staged onto {@code prepared.json} so a composer choosing to replace a queued message can tell
-     * <em>which habit</em> each queued message is about. Without it the thread keys on that file are
+     * <em>which practice</em> each queued message is about. Without it the thread keys on that file are
      * opaque digests and the composer would be picking one blind — and on the conversation lane, whose
      * body is composed at the turn, there is not even a body to guess from.
      *
@@ -694,7 +694,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
 
     /**
      * The readable IN_APP feedback about one practice for the recipient, newest first — the cards a new card
-     * about the same habit follows. The same "about this practice" as {@link #lastInAppSurfacedAt}: the
+     * about the same practice follows. The same "about this practice" as {@link #lastInAppSurfacedAt}: the
      * practice the card's bound evidence measures.
      */
     @Query("SELECT f FROM Feedback f WHERE " + READABLE_IN_APP + """
@@ -753,7 +753,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
 
     /**
      * When an IN_APP unit about this practice was last written for this recipient, whatever became of it
-     * — the cooldown that stops one habit being restated on every pull request.
+     * — the cooldown that stops one practice being restated on every pull request.
      *
      * <p>Deliberately unfiltered by delivery state: the question is when we last said this, and a unit
      * that was written and then superseded still said it.

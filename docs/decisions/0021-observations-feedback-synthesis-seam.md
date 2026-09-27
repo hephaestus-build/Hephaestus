@@ -45,7 +45,7 @@ one unit may appear in a summary and as an inline note, each with its own provid
 Observation identity and feedback continuity solve different problems:
 
 - observation fingerprints correlate equivalent measurements across reviews;
-- feedback thread keys identify the habit or intervention that may be superseded;
+- feedback thread keys identify the practice or intervention that may be superseded;
 - provider placement identifiers track the concrete delivered artifact.
 
 These identities must not be substituted for one another.

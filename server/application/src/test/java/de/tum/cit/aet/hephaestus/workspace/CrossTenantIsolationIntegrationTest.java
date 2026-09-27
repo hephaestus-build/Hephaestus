@@ -367,8 +367,8 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         @Test
         @WithMentorUser
         void readsOnlyTheMessagesPreparedInThisWorkspace() {
-            seedInAppUnit(workspaceA, "A habit measured in tenant A");
-            seedInAppUnit(workspaceB, "A habit measured in tenant B");
+            seedInAppUnit(workspaceA, "A way of working measured in tenant A");
+            seedInAppUnit(workspaceB, "A way of working measured in tenant B");
 
             webTestClient
                     .get()
@@ -381,7 +381,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                     .jsonPath("$.length()")
                     .isEqualTo(1)
                     .jsonPath("$[0].headline")
-                    .isEqualTo("A habit measured in tenant A");
+                    .isEqualTo("A way of working measured in tenant A");
         }
 
         @Test
@@ -389,8 +389,8 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         void neverRetiresACardQueuedInAnotherTenant() {
             String sharedKey = FeedbackThreadKey.forPractice(
                     "ships-tests-with-the-change", overlapUser.getId(), FeedbackChannel.IN_APP);
-            Feedback inA = seedInAppUnit(workspaceA, "A habit measured in tenant A", sharedKey);
-            Feedback inB = seedInAppUnit(workspaceB, "A habit measured in tenant B", sharedKey);
+            Feedback inA = seedInAppUnit(workspaceA, "A way of working measured in tenant A", sharedKey);
+            Feedback inB = seedInAppUnit(workspaceB, "A way of working measured in tenant B", sharedKey);
 
             assertThat(feedbackRepository.findLatestOnThread(
                             workspaceA.getId(), overlapUser.getId(), FeedbackChannel.IN_APP.name(), sharedKey))
@@ -406,8 +406,8 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         @Test
         @WithMentorUser
         void namesOnlyThisTenantsPracticeForAQueuedCard() {
-            Feedback inA = seedInAppUnit(workspaceA, "A habit measured in tenant A");
-            Feedback inB = seedInAppUnit(workspaceB, "A habit measured in tenant B");
+            Feedback inA = seedInAppUnit(workspaceA, "A way of working measured in tenant A");
+            Feedback inB = seedInAppUnit(workspaceB, "A way of working measured in tenant B");
 
             assertThat(feedbackRepository.findHeadlinePractices(workspaceA.getId(), List.of(inA.getId(), inB.getId())))
                     .singleElement()
@@ -473,7 +473,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .channel(FeedbackChannel.IN_APP)
                 .position(7000)
                 .deliveryState(FeedbackDeliveryState.PREPARED)
-                .body(InAppFeedbackBody.render(headline, "The message.", "The habit to try."))
+                .body(InAppFeedbackBody.render(headline, "The message.", "The way of working to try."))
                 .source(FeedbackSource.AGENT)
                 .threadKey(threadKey)
                 .createdAt(Instant.now())

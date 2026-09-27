@@ -167,7 +167,7 @@ export const MarkdownBody: Story = {
 /**
  * Two of the three clean pieces of work are in: the strip lists them where their review dates put
  * them, each a strength shown, and the meter is two-thirds full. The label still counts the three
- * pieces the habit was seen on; the clean work is what resolves the feedback.
+ * pieces the practice was seen on; the clean work is what resolves the feedback.
  */
 export const TwoOfThreeClean: Story = {
 	args: { card: { ...card, state: "open", cleanWork: twoClean } },

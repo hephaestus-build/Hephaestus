@@ -3913,7 +3913,7 @@ export const getInAppFeedbackQueryKey = (options: Options<GetInAppFeedbackData>)
 /**
  * The current developer's in-app feedback
  *
- * Process-level messages prepared for the authenticated developer: for each habit that recurs in their work, what the pattern is, the pieces of work it was observed on, and one thing to try next. Distinct from in-context notes (which say what is wrong in one diff) and from the mentor conversation (which asks rather than tells). Reading a message is what delivers it, so this GET records the delivery.
+ * Process-level messages prepared for the authenticated developer: for each way of working that recurs in their work, what the pattern is, the pieces of work it was observed on, and one thing to try next. Distinct from in-context notes (which say what is wrong in one diff) and from the mentor conversation (which asks rather than tells). Reading a message is what delivers it, so this GET records the delivery.
  */
 export const getInAppFeedbackOptions = (options: Options<GetInAppFeedbackData>) => queryOptions<GetInAppFeedbackResponse, DefaultError, GetInAppFeedbackResponse, ReturnType<typeof getInAppFeedbackQueryKey>>({
   queryFn: async ({ queryKey, signal }) => {
