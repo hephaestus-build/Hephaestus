@@ -136,6 +136,13 @@ dispatch searches the reviewed work's comments for its marker:
 - **Search complete, nothing found** — the dispatch creates the summary only if no earlier attempt closed its
   write fence.
 
+A summary with no inline comments whose visible text matches, word for word, the summary whose posting was
+recorded last on the same work for the same person is withheld as `REPEATS_DELIVERED_NOTE` instead of being
+created. Nothing is compared, and the new summary is created, while that earlier summary carries a correction or
+awaits the restore of its original text.
+The check compares against the delivered ledger only, after delivery policy allows the write, so two reviews
+of the same work whose summaries are both still being dispatched can each post one.
+
 The write fence closes after delivery policy allows the write and before the provider adapter runs its own
 preparation: its rate-limit check, resolving the pull request, merge request or issue, and then the create
 request. If the adapter fails before it sends the create request, the attempt reopens its own fence while it

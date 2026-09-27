@@ -34,7 +34,10 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.ProposedPlacement;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -77,6 +80,9 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
     @Mock
     private DiffNotePoster diffNotePoster;
 
+    @Mock
+    private ObservationRepository observationRepository;
+
     private PracticeFeedbackDispatchService service;
     private AgentJob job;
     private FeedbackDispatch dispatch;
@@ -96,7 +102,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 feedbackRepository,
                 diffNotePoster,
                 stateMachine,
-                mock(ObservationInvalidationRepository.class));
+                mock(ObservationInvalidationRepository.class),
+                observationRepository);
         lenient()
                 .when(channel.formatPullRequestSubjectId(anyString(), anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(0) + "!" + invocation.getArgument(1));
@@ -177,6 +184,107 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         assertThat(later.externalRef()).isEqualTo("provider-2");
         verify(channel).postSummary(any(), eq(new FeedbackContent("first review", summaryMarker(job))));
         verify(channel).postSummary(any(), eq(new FeedbackContent("later review", summaryMarker(laterJob))));
+    }
+
+    @Test
+    void shouldWithholdANoteThatReadsExactlyAsTheOneLastDeliveredOnTheWork() {
+        givenLastDeliveredNote("<!-- hephaestus:practice-review:" + UUID.randomUUID() + " -->\nSix surfaces.\n");
+        dispatch = dispatch(job, FeedbackDispatchState.PENDING, false, 0, summaryMarker(job) + "\nSix surfaces.\n");
+        when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
+                .thenReturn(Optional.of(dispatch));
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
+
+        var result = dispatchAutomaticReview(job, dispatch.getBody(), Set.of("practice"));
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
+        assertThat(result.suppressionReason()).isEqualTo(FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE);
+        verify(channel, never()).postSummary(any(), any());
+        verify(repository, never()).beginWrite(any(), any(), anyString());
+    }
+
+    @Test
+    void shouldPostANoteThatSaysSomethingTheLastDeliveredOneDidNot() {
+        givenLastDeliveredNote("<!-- hephaestus:practice-review:" + UUID.randomUUID() + " -->\nFive surfaces.\n");
+        dispatch = dispatch(job, FeedbackDispatchState.PENDING, false, 0, summaryMarker(job) + "\nSix surfaces.\n");
+        when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
+                .thenReturn(Optional.of(dispatch));
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
+        when(channel.postSummary(any(), any())).thenReturn(new SummaryHandle("provider-7"));
+
+        var result = dispatchAutomaticReview(job, dispatch.getBody(), Set.of("practice"));
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
+        assertThat(result.externalRef()).isEqualTo("provider-7");
+    }
+
+    @Test
+    void shouldLeaveAPackageWithLineNotesToTheirOwnReconciliation() {
+        String body = summaryMarker(job) + "\nSix surfaces.\n";
+        givenLastDeliveredNote("<!-- hephaestus:practice-review:" + UUID.randomUUID() + " -->\nSix surfaces.\n");
+        var lineNotes = List.of(new PracticeDetectionResultParser.DiffNote("src/App.java", 3, null, "Split this."));
+        dispatch = withPackage(
+                dispatch(job, FeedbackDispatchState.PENDING, false, 0, body),
+                new PracticeDetectionResultParser.DeliveryContent(body, lineNotes, List.of(), null));
+        when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
+                .thenReturn(Optional.of(dispatch));
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
+        when(channel.postSummary(any(), any())).thenReturn(new SummaryHandle("provider-8"));
+        when(diffNotePoster.reconcileInlineNotes(any(), any()))
+                .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));
+
+        service.dispatchAutomaticPackage(
+                job,
+                new PracticeDetectionResultParser.DeliveryContent(body, lineNotes, List.of(), null),
+                Set.of("practice"));
+
+        verify(channel).postSummary(any(), any());
+    }
+
+    /** The last note delivered on this review's work to its developer, as the ledger stored it. */
+    private void givenLastDeliveredNote(String storedBody) {
+        Observation observation = Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(job.getId())
+                .aboutUserId(11L)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(42L)
+                .build();
+        lenient().when(observationRepository.findByAgentJobId(job.getId(), 7L)).thenReturn(List.of(observation));
+        lenient()
+                .when(feedbackRepository.findLatestDeliveredNote(7L, 11L, "scm.pull_request", 42L))
+                .thenReturn(Optional.of(storedBody));
+    }
+
+    private static FeedbackDispatch withPackage(
+            FeedbackDispatch base, PracticeDetectionResultParser.DeliveryContent content) {
+        var mapper = JsonMapper.builder().build();
+        return new FeedbackDispatch(
+                base.getId(),
+                base.getDestinationKey(),
+                base.getWorkspaceId(),
+                base.getAgentJobId(),
+                base.getFeedbackId(),
+                base.getDestination(),
+                base.getState(),
+                base.getBody(),
+                base.getPracticeSlugs(),
+                mapper.valueToTree(content),
+                base.getDeliveredPlacements(),
+                base.getWriteStarted(),
+                base.getWriteStartedAt(),
+                base.getInlineWriteStarted(),
+                base.getDeliveredExternalRef(),
+                base.getLeaseOwner(),
+                base.getLeaseExpiresAt(),
+                base.getNextAttemptAt(),
+                base.getAttemptCount(),
+                base.getSuppressionReason(),
+                base.getLastError(),
+                base.getProjectedAt(),
+                base.getProjectionOwner(),
+                base.getProjectionExpiresAt(),
+                base.getCreatedAt(),
+                base.getUpdatedAt());
     }
 
     @Test

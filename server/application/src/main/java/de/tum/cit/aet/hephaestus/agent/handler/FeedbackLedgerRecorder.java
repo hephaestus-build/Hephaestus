@@ -464,16 +464,19 @@ public class FeedbackLedgerRecorder {
      * (ordinal {@link #GATE_SUPPRESSED_UNIT_ORDINAL}) binding its assessed observations, with the composed body
      * kept for audit. Without it, a gate-withheld review reads exactly like one that was delivered and ignored.
      *
-     * <p>Publishes the lane trigger for exactly one reason, {@link FeedbackSuppressionReason#INSTANCE_SILENCED}:
-     * silence stops what leaves the instance and nothing else, so the developer's own pages must still get
-     * their card now rather than when the hourly sweeper next passes. Every other gate decision (closed PR,
-     * opted-out author) applies to every channel, so those loci must not resurface anywhere. No-ops when a
-     * DELIVERED feedback already exists for the job or on retry. REQUIRES_NEW, best-effort: callers wrap in try/catch.
+     * <p>Publishes the lane trigger when the reason concerns only the note on the work:
+     * {@link FeedbackSuppressionReason#INSTANCE_SILENCED}, which stops what leaves the instance, and
+     * {@link FeedbackSuppressionReason#REPEATS_DELIVERED_NOTE}, whose words are already there. The developer's
+     * own pages and conversations are then prepared now rather than when the hourly sweeper next passes, each
+     * under its own policy. Every other gate decision (closed PR, opted-out author) applies to every channel, so
+     * those loci must not resurface anywhere. No-ops when a DELIVERED feedback already exists for the job or on
+     * retry. REQUIRES_NEW, best-effort: callers wrap in try/catch.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSuppressedUnit(AgentJob job, DeliveryContent delivery, FeedbackSuppressionReason reason) {
         recordSuppressedUnitInCurrentTransaction(job, delivery, reason);
-        if (reason == FeedbackSuppressionReason.INSTANCE_SILENCED) {
+        if (reason == FeedbackSuppressionReason.INSTANCE_SILENCED
+                || reason == FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE) {
             publishFeedbackLaneTrigger(job);
         }
     }

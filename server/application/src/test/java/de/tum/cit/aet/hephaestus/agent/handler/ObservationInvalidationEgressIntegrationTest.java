@@ -149,7 +149,8 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
                 feedbackRepository,
                 new DiffNotePoster(poster, commentFormatter, List.of(provider)),
                 stateMachine,
-                invalidationRepository);
+                invalidationRepository,
+                observationRepository);
         corrector = new PostedCopyCorrector(
                 invalidationRepository,
                 observationRepository,

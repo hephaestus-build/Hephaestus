@@ -17,7 +17,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -29,9 +32,11 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,6 +91,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
 
     private final ObservationRepository observationRepository;
     private final FeedbackRepository feedbackRepository;
+    private final FeedbackObservationRepository feedbackObservationRepository;
     private final ObservationVisibilityPolicy visibilityPolicy;
     private final PullRequestRepository pullRequestRepository;
     private final IssueRepository issueRepository;
@@ -95,6 +101,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     public ReviewHistoryContentSource(
             ObservationRepository observationRepository,
             FeedbackRepository feedbackRepository,
+            FeedbackObservationRepository feedbackObservationRepository,
             ObservationVisibilityPolicy visibilityPolicy,
             PullRequestRepository pullRequestRepository,
             IssueRepository issueRepository,
@@ -102,6 +109,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             ObjectMapper objectMapper) {
         this.observationRepository = observationRepository;
         this.feedbackRepository = feedbackRepository;
+        this.feedbackObservationRepository = feedbackObservationRepository;
         this.visibilityPolicy = visibilityPolicy;
         this.pullRequestRepository = pullRequestRepository;
         this.issueRepository = issueRepository;
@@ -187,14 +195,21 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         }
 
         if (selectedKinds.contains(FEEDBACK_HISTORY)) {
-            List<Feedback> delivered = feedbackRepository.findRecentDeliveredForRecipient(
+            List<Feedback> deliveredRows = feedbackRepository.findRecentDeliveredForRecipient(
                     workspaceId, subjectUserId, since, PageRequest.of(0, MAX_FEEDBACK));
-            feedbackCount = delivered.size();
-            files.put(FEEDBACK_FILE, serialize(feedbackPayload(workspaceId, delivered, since), FEEDBACK_FILE));
-            List<Feedback> queued = feedbackRepository.findPreparedForRecipient(
+            List<Feedback> queuedRows = feedbackRepository.findPreparedForRecipient(
                     workspaceId, subjectUserId, PageRequest.of(0, MAX_PREPARED));
+            Map<UUID, ReviewClaimCurrentness> shown = shownFeedback(workspaceId, deliveredRows, queuedRows);
+            List<Feedback> delivered = deliveredRows.stream()
+                    .filter(f -> shown.containsKey(f.getId()))
+                    .toList();
+            List<Feedback> queued = queuedRows.stream()
+                    .filter(f -> shown.containsKey(f.getId()))
+                    .toList();
+            feedbackCount = delivered.size();
+            files.put(FEEDBACK_FILE, serialize(feedbackPayload(workspaceId, delivered, shown, since), FEEDBACK_FILE));
             preparedCount = queued.size();
-            files.put(PREPARED_FILE, serialize(preparedPayload(workspaceId, queued), PREPARED_FILE));
+            files.put(PREPARED_FILE, serialize(preparedPayload(workspaceId, queued, shown), PREPARED_FILE));
             completeness.put(FEEDBACK_HISTORY, SourceCompleteness.PARTIAL);
             // Reported off what has been delivered, not off the queue: the kind is "what was said to this
             // person", and a full queue with nothing delivered is still an empty record of having spoken.
@@ -235,6 +250,39 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                 .toList();
     }
 
+    /**
+     * The feedback this review may read, as the developer's own surfaces decide it: every observation it is
+     * bound to may be shown. A row whose evidence is no longer current keeps its record but not its words, which
+     * describe work as it was and are not evidence about the work as it is.
+     */
+    private Map<UUID, ReviewClaimCurrentness> shownFeedback(
+            long workspaceId, List<Feedback> delivered, List<Feedback> queued) {
+        List<UUID> ids = Stream.concat(delivered.stream(), queued.stream())
+                .map(Feedback::getId)
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        List<FeedbackObservationVisibility> bindings =
+                feedbackObservationRepository.findForVisibility(workspaceId, ids);
+        Set<UUID> visible = visibilityPolicy.permitsShown(
+                workspaceId,
+                bindings.stream()
+                        .map(FeedbackObservationVisibility::getObservation)
+                        .toList(),
+                SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
+        return FeedbackObservationVisibility.shown(bindings, visible);
+    }
+
+    /** The words of a row whose evidence is still current; a stale row is staged without them. */
+    private static void putBody(ObjectNode node, Feedback f, Map<UUID, ReviewClaimCurrentness> shown) {
+        ReviewClaimCurrentness currentness = Objects.requireNonNull(shown.get(f.getId()));
+        node.put("evidenceCurrentness", currentness.name());
+        if (currentness == ReviewClaimCurrentness.CURRENT) {
+            node.put("body", f.getBody());
+        }
+    }
+
     private static @Nullable UUID sourceJobExcludedFromHistory(AgentJob job) {
         String raw = job.getMetadata() == null
                 ? ""
@@ -257,7 +305,8 @@ public class ReviewHistoryContentSource implements EvidenceSource {
      * opaque string is picking blind — most visibly on the conversation lane, where a run that composed
      * nothing leaves the body null and the slug is all there is to recognise the entry by.
      */
-    private ObjectNode preparedPayload(long workspaceId, List<Feedback> queued) {
+    private ObjectNode preparedPayload(
+            long workspaceId, List<Feedback> queued, Map<UUID, ReviewClaimCurrentness> shown) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("limit", MAX_PREPARED);
         StagedArtifactNames.Resolved names = artifactNames.resolve(
@@ -290,7 +339,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             // situation, coaching goal, evidence summary and success signal, and the turn itself is still written live.
             // Null when the run that queued it composed nothing,
             // which leaves only the fact that something is queued.
-            node.put("body", f.getBody());
+            putBody(node, f, shown);
         }
         return root;
     }
@@ -329,7 +378,8 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         return root;
     }
 
-    private ObjectNode feedbackPayload(long workspaceId, List<Feedback> delivered, Instant since) {
+    private ObjectNode feedbackPayload(
+            long workspaceId, List<Feedback> delivered, Map<UUID, ReviewClaimCurrentness> shown, Instant since) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("since", since.toString());
         root.put("limit", MAX_FEEDBACK);
@@ -346,7 +396,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             node.put(
                     "deliveredAt",
                     f.getDeliveredAt() == null ? null : f.getDeliveredAt().toString());
-            node.put("body", f.getBody());
+            putBody(node, f, shown);
         }
         return root;
     }

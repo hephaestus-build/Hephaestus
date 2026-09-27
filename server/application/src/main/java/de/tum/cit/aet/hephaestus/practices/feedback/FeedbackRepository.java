@@ -132,6 +132,43 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
         Long getUnconfirmed();
     }
 
+    /**
+     * The words of the summary last posted on a piece of work for one person, while they are still what the provider
+     * shows. "Last" is the order in which confirmed summary placements were recorded, since an approved note can be
+     * created long before it is posted; a summary still standing may have had line notes fail beside it. There are no
+     * words to compare when that summary no longer stands, or while any observation it cites is invalidated or
+     * restored without its posted copy settled back, because a correction edits the posted copy and keeps the stored
+     * body. An older summary is never used instead.
+     */
+    @Query(value = """
+        SELECT f.body FROM feedback f
+        WHERE f.id = (
+                SELECT placement.feedback_id FROM feedback_placement placement
+                JOIN feedback posted ON posted.id = placement.feedback_id
+                WHERE posted.workspace_id = :workspaceId
+                  AND posted.recipient_user_id = :recipientUserId
+                  AND posted.artifact_kind = :artifactKind
+                  AND posted.artifact_id = :artifactId
+                  AND posted.channel = 'IN_CONTEXT'
+                  AND placement.placement_type = 'SUMMARY'
+                  AND placement.posted_comment_ref IS NOT NULL
+                ORDER BY placement.created_at DESC, placement.id DESC
+                LIMIT 1)
+          AND f.delivery_state IN ('DELIVERED', 'PARTIALLY_DELIVERED', 'PARTIALLY_FAILED')
+          AND f.body IS NOT NULL
+          AND NOT EXISTS (
+                SELECT 1 FROM feedback_observation fo
+                JOIN observation_invalidation oi
+                  ON oi.observation_id = fo.observation_id AND oi.workspace_id = f.workspace_id
+                WHERE fo.feedback_id = f.id
+                  AND (oi.restored_at IS NULL OR oi.provider_copy NOT IN ('UPDATED', 'NONE')))
+        """, nativeQuery = true)
+    Optional<String> findLatestDeliveredNote(
+            @Param("workspaceId") long workspaceId,
+            @Param("recipientUserId") long recipientUserId,
+            @Param("artifactKind") String artifactKind,
+            @Param("artifactId") long artifactId);
+
     /** Delivered summary and inline-only feedback for a recipient, newest first. */
     @Query("""
         SELECT f FROM Feedback f

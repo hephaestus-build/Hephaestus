@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationProjector;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
 import de.tum.cit.aet.hephaestus.testconfig.TestCacheConfiguration;
@@ -44,6 +45,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -432,6 +434,21 @@ class ProductionSchemaContractIntegrationTest {
                         "UPDATE feedback_dispatch SET state = 'SUPPRESSED', suppression_reason = "
                                 + "'WORKSPACE_DELIVERY_PAUSED' WHERE id = ?",
                         suppressed))
+                .isEqualTo(1);
+    }
+
+    /** The migrated constraint and the enum the server records must admit the same reasons. */
+    @ParameterizedTest
+    @EnumSource(FeedbackSuppressionReason.class)
+    void feedbackAcceptsEverySuppressionReasonTheServerRecords(FeedbackSuppressionReason reason) {
+        String key = "reason-" + reason.ordinal() + "-"
+                + UUID.randomUUID().toString().substring(0, 8);
+        UUID feedbackId = insertFeedback(insertDispatchOwner(key), key);
+
+        assertThat(jdbcTemplate.update(
+                        "UPDATE feedback SET delivery_state = 'SUPPRESSED', suppression_reason = ? WHERE id = ?",
+                        reason.name(),
+                        feedbackId))
                 .isEqualTo(1);
     }
 

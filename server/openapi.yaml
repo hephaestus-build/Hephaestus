@@ -6483,6 +6483,7 @@ paths:
             - VOLUME_CAPPED
             - COMPOSER_DEDUPED
             - COMPOSER_WITHHELD
+            - REPEATS_DELIVERED_NOTE
             - REACTED_DISPUTED
             - REACTED_NOT_APPLICABLE
             - CONVERSATION_EXPIRED
@@ -10978,6 +10979,7 @@ components:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
           - COMPOSER_WITHHELD
+          - REPEATS_DELIVERED_NOTE
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -14444,6 +14446,7 @@ components:
             - VOLUME_CAPPED
             - COMPOSER_DEDUPED
             - COMPOSER_WITHHELD
+            - REPEATS_DELIVERED_NOTE
             - REACTED_DISPUTED
             - REACTED_NOT_APPLICABLE
             - CONVERSATION_EXPIRED
@@ -15507,6 +15510,7 @@ components:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
           - COMPOSER_WITHHELD
+          - REPEATS_DELIVERED_NOTE
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -15682,6 +15686,7 @@ components:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
           - COMPOSER_WITHHELD
+          - REPEATS_DELIVERED_NOTE
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED
@@ -15830,6 +15835,7 @@ components:
           - VOLUME_CAPPED
           - COMPOSER_DEDUPED
           - COMPOSER_WITHHELD
+          - REPEATS_DELIVERED_NOTE
           - REACTED_DISPUTED
           - REACTED_NOT_APPLICABLE
           - CONVERSATION_EXPIRED

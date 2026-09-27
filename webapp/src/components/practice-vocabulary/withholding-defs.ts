@@ -77,6 +77,7 @@ const REASON_FAMILY: Record<WithholdingReason, WithholdingFamily> = {
 	OBSERVATION_INVALIDATED: "ADMIN_CORRECTION",
 	COMPOSER_DEDUPED: "HOUSEKEEPING",
 	COMPOSER_WITHHELD: "HOUSEKEEPING",
+	REPEATS_DELIVERED_NOTE: "HOUSEKEEPING",
 	EMPTY_AFTER_SANITIZE: "HOUSEKEEPING",
 	CONVERSATION_EXPIRED: "HOUSEKEEPING",
 };
@@ -112,6 +113,8 @@ export const WITHHOLDING_REASON_DEFS: Record<WithholdingReason, string> = {
 		"A workspace admin marked an observation behind it as incorrect, so nothing more of it was sent.",
 	COMPOSER_DEDUPED: "Nearly the same as other feedback from the same review.",
 	COMPOSER_WITHHELD: "The review decided, with a reason, not to put this on the work.",
+	REPEATS_DELIVERED_NOTE:
+		"It read word for word like the note already posted on the same work for the same person.",
 	EMPTY_AFTER_SANITIZE: "Nothing was left to send once the text had been cleaned up.",
 	CONVERSATION_EXPIRED: "It waited for a conversation that never happened, then aged out.",
 };
