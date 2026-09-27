@@ -54,10 +54,29 @@ export function parseTranscript(messages: unknown): HephMessage[] | undefined {
 	return isTranscript(messages) ? messages : undefined;
 }
 
-/** The readable text of a message, its text parts in order. */
+/**
+ * A `data-observation` part: the feedback Heph wrote about one observation, shown as part of its reply.
+ * Those words live only here, never in the reply's text. A link stored before links carried text showed
+ * nothing and says nothing.
+ */
+const observationData = z.object({ observationId: z.uuid(), text: z.string().optional() });
+
+/** The feedback one part shows, checked as the web checks it, so a streamed and a stored part agree. */
+function shownFeedbackText(piece: HephMessage["parts"][number]): string | undefined {
+	if (piece.type !== "data-observation") {
+		return undefined;
+	}
+	const parsed = observationData.safeParse(piece.data);
+	return parsed.success && (parsed.data.text?.trim() ?? "") !== "" ? parsed.data.text : undefined;
+}
+
+/**
+ * The readable text of a message, in the order its parts arrived: its text, and the feedback its reply
+ * showed. It is what the bubble renders and what a report of the reply quotes.
+ */
 export function textOf(item: HephMessage): string {
 	return item.parts
-		.map((piece) => (piece.type === "text" ? piece.text : ""))
+		.map((piece) => (piece.type === "text" ? piece.text : (shownFeedbackText(piece) ?? "")))
 		.filter((text) => text !== "")
 		.join("\n\n");
 }

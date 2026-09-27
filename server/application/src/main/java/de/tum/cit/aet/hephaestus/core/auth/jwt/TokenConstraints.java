@@ -14,7 +14,9 @@ import org.jspecify.annotations.Nullable;
  *                         sessions, which only the cookie refresh may rotate.
  */
 public record TokenConstraints(
-        @Nullable Instant sessionExpiresAt, @Nullable Instant authTime, @Nullable UUID nativeSessionId) {
+        @Nullable Instant sessionExpiresAt,
+        @Nullable Instant authTime,
+        @Nullable UUID nativeSessionId) {
     public static TokenConstraints session(@Nullable Instant sessionExpiresAt, @Nullable Instant authTime) {
         return new TokenConstraints(sessionExpiresAt, authTime, null);
     }

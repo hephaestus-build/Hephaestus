@@ -146,8 +146,8 @@ public class PushDispatcher {
         if (!workspaceMemberQuery.isMember(notification.getWorkspaceId(), notification.getRecipientUserId())) {
             return "not_a_member";
         }
-        Optional<Long> recipientAccount = memberships.activeAccountIdForMember(
-                notification.getWorkspaceId(), notification.getRecipientUserId());
+        Optional<Long> recipientAccount =
+                memberships.activeAccountIdForMember(notification.getWorkspaceId(), notification.getRecipientUserId());
         if (recipientAccount.isEmpty() || !recipientAccount.get().equals(device.getAccountId())) {
             return "recipient_changed";
         }

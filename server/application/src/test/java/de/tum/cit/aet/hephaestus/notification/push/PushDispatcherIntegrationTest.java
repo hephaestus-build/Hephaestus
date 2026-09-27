@@ -496,8 +496,7 @@ class PushDispatcherIntegrationTest extends RealAuthIntegrationTest {
     }
 
     private void linkRecipient(SignedIn account) {
-        when(memberships.activeAccountIdForMember(WORKSPACE, RECIPIENT))
-                .thenReturn(Optional.of(account.accountId()));
+        when(memberships.activeAccountIdForMember(WORKSPACE, RECIPIENT)).thenReturn(Optional.of(account.accountId()));
     }
 
     private void enqueue(SignedIn account) {

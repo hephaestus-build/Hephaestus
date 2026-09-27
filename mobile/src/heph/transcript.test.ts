@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readUIMessageStream, type UIMessageChunk } from "ai";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -15,6 +16,10 @@ import {
 
 const USER = "7b6f3f5e-8a4d-4b36-9e1f-0a9c4f6e2d11";
 const HEPH = "2c1d9e7a-5b3f-4e8d-a6c2-1f0e9d8c7b6a";
+const OBSERVATION = "5f0c2b8e-3d7a-4c1e-9b6f-8a2d4e6c0b13";
+
+/** A stored `data-observation` part, as the mentor writes one. */
+const shown = (data: unknown) => ({ type: "data-observation", id: crypto.randomUUID(), data });
 
 describe("parseTranscript", () => {
 	it("keeps part kinds this build does not render", () => {
@@ -91,6 +96,80 @@ describe("textOf", () => {
 		assert.ok(message);
 
 		expect(textOf(message)).toBe("A\n\nB");
+	});
+
+	it("shows the feedback a stored reply showed, where it stood among the reply's words", () => {
+		const messages = parseTranscript([
+			{
+				id: HEPH,
+				role: "assistant",
+				parts: [
+					{ type: "text", text: "One habit stands out." },
+					shown({ observationId: OBSERVATION, text: "Add a test for the retry limit." }),
+					{ type: "text", text: "Want to go through it?" },
+				],
+			},
+		]);
+		assert.ok(messages);
+		const [message] = messages;
+		assert.ok(message);
+
+		expect(textOf(message)).toBe(
+			"One habit stands out.\n\nAdd a test for the retry limit.\n\nWant to go through it?",
+		);
+	});
+
+	it("shows only feedback a well-formed link says, and keeps the conversation readable around the rest", () => {
+		const messages = parseTranscript([
+			{
+				id: HEPH,
+				role: "assistant",
+				parts: [
+					// Stored before links carried text: it showed nothing then, and says nothing now.
+					shown({ observationId: OBSERVATION }),
+					shown({ observationId: OBSERVATION, text: "   \n " }),
+					shown({ observationId: "not-an-id", text: "Unverifiable." }),
+					shown({ observationId: OBSERVATION, text: 42 }),
+					shown(undefined),
+					{ type: "text", text: "Only this." },
+				],
+			},
+		]);
+		assert.ok(messages);
+		const [message] = messages;
+		assert.ok(message);
+
+		expect(textOf(message)).toBe("Only this.");
+	});
+
+	it("shows feedback as it streams in, from the chunks the mentor sends", async () => {
+		const chunks: UIMessageChunk[] = [
+			{ type: "start", messageId: HEPH },
+			{ type: "text-start", id: "t1" },
+			{ type: "text-delta", id: "t1", delta: "Here is what I noticed." },
+			{ type: "text-end", id: "t1" },
+			{
+				type: "data-observation",
+				id: crypto.randomUUID(),
+				data: { observationId: OBSERVATION, text: "Name the failing case in the title." },
+			},
+			{ type: "finish" },
+		];
+		const stream = new ReadableStream<UIMessageChunk>({
+			start(controller) {
+				for (const chunk of chunks) {
+					controller.enqueue(chunk);
+				}
+				controller.close();
+			},
+		});
+		let last: HephMessage | undefined;
+		for await (const message of readUIMessageStream<HephMessage>({ stream })) {
+			last = message;
+		}
+		assert.ok(last);
+
+		expect(textOf(last)).toBe("Here is what I noticed.\n\nName the failing case in the title.");
 	});
 });
 

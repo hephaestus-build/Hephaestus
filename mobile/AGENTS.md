@@ -114,6 +114,12 @@ component. Do not copy the web renderer, DOM rules or compiler configuration int
   `regenerate`, which resends the last user message under its id, is refused. "Send again" sends the
   question text as a new message through the same path as a typed one (`startTurn`), and appears only
   when `questionToResend` finds a question.
+- **Feedback in a reply is shown, or the server is wrong about it.** The server records conversation
+  feedback as delivered once a completed reply showed its words, which travel only in the reply's
+  `data-observation` parts, never in its text. `textOf` in `heph/transcript.ts` shows them among the
+  reply's text in part order, checked as the web's `shownFeedbackText` checks them (an observation id
+  and text that is not blank), for streamed and stored replies alike. The bubble and a report of the
+  reply both read `textOf`; there is no second rendering path.
 - **Markdown is untrusted.** Feedback and Heph's replies render only through `src/ui/Markdown.tsx`,
   which turns images into links and HTML into text before the native renderer, which would load an
   image the moment it draws it, sees them.
