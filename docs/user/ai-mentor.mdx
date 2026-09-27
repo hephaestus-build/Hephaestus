@@ -44,12 +44,19 @@ Depending on your workspace configuration, Heph can use:
   comments and inline review threads on them. Neither an approval nor a resolved thread shows that a condition
   written in a comment or thread was met. This record can lag GitHub or GitLab, so Heph says what it could not
   confirm and asks you to check there before you merge
-- your most recent practice feedback: what Hephaestus recorded as delivered to you, whether feedback prepared for
-  your practice page has been recorded as opened, and whether Hephaestus recorded that delivering a piece of feedback
+- your most recent practice feedback: what Hephaestus recorded as delivered to you, whether feedback prepared for your
+  practice page has been recorded as opened, and whether Hephaestus recorded that delivering a piece of feedback
   failed. This record shows Heph text only for feedback recorded as delivered on your work or your practice page,
-  never for conversations, and not your full feedback history; a private coaching brief prepared for Heph reaches it
-  separately, as described below. A practice that keeps going well shows as going well on your practice page without
-  producing private feedback there, so Heph does not treat the absence of feedback as a failed delivery
+  never for conversations, and not necessarily your full feedback history; a private coaching brief prepared for Heph
+  reaches it separately, as described below. A practice that keeps going well shows as going well on your practice
+  page without producing private feedback there, so Heph does not treat the absence of feedback as a failed delivery.
+  Heph sees only the records of your feedback it may use in conversation. It does not see feedback proposed for a
+  reviewer to approve or the reviewer's decision, feedback that was held back or replaced, feedback whose evidence can
+  no longer be used in conversations, or feedback about a Slack conversation whose consent is paused or revoked, even
+  if that feedback reached you. So when Heph sees no note for a piece of work, it says it cannot tell whether one
+  reached you, was drafted or was rejected, rather than saying there was none. Changing your work does not by itself
+  remove delivered feedback from this record; when the work or the practice has changed since the review the feedback
+  is based on, Heph treats that feedback as possibly out of date.
 - the engineering practices configured for your workspace
 - messages from Slack channels that the workspace monitors and you have allowed Hephaestus to use
 - selected team documents from a connected Outline workspace

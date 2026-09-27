@@ -21,6 +21,10 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepositor
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.RecipientFeedbackRow;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
+import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalDecision;
+import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalService;
+import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackRejectionReason;
+import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.DecideFeedbackProposalRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
@@ -44,6 +48,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * What the mentor learns about the developer's feedback: only what could have reached them, each status tied to its
@@ -53,6 +58,8 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
 
     private static final long FIRST_MR = 4009491064L;
     private static final long SECOND_MR = 4009506317L;
+    private static final long ISSUE = 4009520006L;
+    private static final long REVIEWER_ACCOUNT_ID = 7L;
 
     @Autowired
     private DeliveredFeedbackContentSource contentSource;
@@ -71,6 +78,9 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
 
     @Autowired
     private PracticeRevisionRepository practiceRevisionRepository;
+
+    @Autowired
+    private FeedbackApprovalService feedbackApprovalService;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -138,7 +148,165 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
 
         feedbackRepository.decideProposal(workspace.getId(), proposal.getId(), "DISCARDED");
 
-        assertThat(objectMapper.readTree(contribute())).isEqualTo(root);
+        assertThat(withoutPreparedAt(contribute())).isEqualTo(withoutPreparedAt(pending));
+    }
+
+    @Test
+    void shouldShowNothingAboutRejectedProposalsWhenNoFeedbackReachedTheDeveloper() {
+        UUID strength = observeStrength(ArtifactKinds.PULL_REQUEST, SECOND_MR);
+        User otherRecipient =
+                userRepository.save(TestUserFactory.createUser(102L, "other-recipient", recipient.getProvider()));
+        Feedback othersNote = feedbackRepository.save(Feedback.builder()
+                .agentJobId(job.getId())
+                .workspaceId(workspace.getId())
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(SECOND_MR)
+                .recipientUserId(otherRecipient.getId())
+                .aboutUserId(otherRecipient.getId())
+                .channel(FeedbackChannel.IN_CONTEXT)
+                .position(nextPosition)
+                .deliveryState(FeedbackDeliveryState.DELIVERED)
+                .source(FeedbackSource.AGENT)
+                .body("someone-elses-note")
+                .createdAt(base.plusSeconds(nextPosition++))
+                .build());
+        feedbackObservationRepository.insertIfAbsent(othersNote.getId(), strength, EvidenceRole.PRIMARY.name(), 0);
+        JsonNode withoutProposals = withoutPreparedAt(contribute());
+
+        List<Feedback> proposals = List.of(
+                save(
+                        job,
+                        SECOND_MR,
+                        FeedbackChannel.IN_CONTEXT,
+                        FeedbackDeliveryState.AWAITING_APPROVAL,
+                        "first-rejected-proposal",
+                        strength),
+                save(
+                        job,
+                        SECOND_MR,
+                        FeedbackChannel.IN_CONTEXT,
+                        FeedbackDeliveryState.AWAITING_APPROVAL,
+                        "second-rejected-proposal",
+                        strength));
+        for (Feedback proposal : proposals) {
+            feedbackApprovalService.decide(
+                    workspace.getId(),
+                    proposal.getId(),
+                    REVIEWER_ACCOUNT_ID,
+                    new DecideFeedbackProposalRequestDTO(
+                            FeedbackApprovalDecision.REJECTED,
+                            FeedbackRejectionReason.DUPLICATE,
+                            "repeats-the-first-merge-request"));
+        }
+        assertThat(feedbackRepository.findAllById(
+                        proposals.stream().map(Feedback::getId).toList()))
+                .extracting(Feedback::getDeliveryState)
+                .containsOnly(FeedbackDeliveryState.DISCARDED);
+
+        byte[] bytes = contribute();
+        JsonNode root = objectMapper.readTree(bytes);
+
+        assertThat(root.get("feedbackStates")).isEmpty();
+        assertThat(root.path("coverage").path("outsideScope"))
+                .extracting(JsonNode::asString)
+                .contains("PROPOSALS", "REVIEWER_DECISIONS");
+        assertThat(withoutPreparedAt(bytes)).isEqualTo(withoutProposals);
+        assertThat(new String(bytes, StandardCharsets.UTF_8))
+                .doesNotContain(
+                        proposals.get(0).getId().toString(),
+                        proposals.get(1).getId().toString(),
+                        "rejected-proposal",
+                        "repeats-the-first-merge-request",
+                        "DUPLICATE",
+                        "DISCARDED",
+                        othersNote.getId().toString(),
+                        "someone-elses-note");
+    }
+
+    @Test
+    void shouldShowNothingOfDeliveredFeedbackWhenThisConversationMayNotUseIt() {
+        JsonNode withoutRecords = withoutPreparedAt(contribute());
+        UUID withdrawn = observeStrength(ArtifactKinds.PULL_REQUEST, SECOND_MR);
+        Feedback note = save(
+                job,
+                SECOND_MR,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.DELIVERED,
+                "note-on-withdrawn-evidence",
+                withdrawn);
+        withdrawEvidence(withdrawn);
+        UUID erased = observeStrength(ArtifactKinds.PULL_REQUEST, FIRST_MR);
+        Feedback erasedNote = save(
+                job,
+                FIRST_MR,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.DELIVERED,
+                "note-on-erased-evidence",
+                erased);
+        jdbcTemplate.update("DELETE FROM observation WHERE id = ?", erased);
+        long revokedThread = seedThread("C-revoked", "300.0", ConsentState.REVOKED);
+        Feedback topic = save(
+                job,
+                ArtifactKinds.CONVERSATION_THREAD,
+                revokedThread,
+                FeedbackChannel.IN_CHAT,
+                FeedbackDeliveryState.DELIVERED,
+                "topic-in-a-revoked-thread",
+                observeStrength(ArtifactKinds.CONVERSATION_THREAD, revokedThread));
+        assertThat(feedbackRepository.findAllById(List.of(note.getId(), erasedNote.getId(), topic.getId())))
+                .extracting(Feedback::getDeliveryState)
+                .containsOnly(FeedbackDeliveryState.DELIVERED);
+
+        byte[] bytes = contribute();
+        JsonNode root = objectMapper.readTree(bytes);
+
+        assertThat(root.get("feedbackStates")).isEmpty();
+        assertThat(root.path("coverage").path("outsideScope"))
+                .extracting(JsonNode::asString)
+                .contains("EVIDENCE_NOT_USABLE_IN_CONVERSATION", "CONVERSATION_CONSENT_NOT_ACTIVE");
+        assertThat(withoutPreparedAt(bytes)).isEqualTo(withoutRecords);
+        assertThat(new String(bytes, StandardCharsets.UTF_8))
+                .doesNotContain(
+                        note.getId().toString(),
+                        erasedNote.getId().toString(),
+                        topic.getId().toString(),
+                        "note-on-withdrawn-evidence",
+                        "note-on-erased-evidence",
+                        "topic-in-a-revoked-thread");
+    }
+
+    @Test
+    void shouldKeepDeliveredFeedbackDescribableWhenTheWorkIsRevisedAfterIt() {
+        UUID linksIssue = observeStrength(ArtifactKinds.ISSUE, ISSUE);
+        UUID describesIssue = observeStrength(ArtifactKinds.ISSUE, ISSUE);
+        Feedback note = save(
+                job,
+                ArtifactKinds.ISSUE,
+                ISSUE,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.DELIVERED,
+                "issue-note",
+                linksIssue);
+        feedbackObservationRepository.insertIfAbsent(note.getId(), describesIssue, EvidenceRole.SUPPORTING.name(), 1);
+        JsonNode before = objectMapper.readTree(contribute());
+        assertThat(before.path("feedbackStates")
+                        .path(0)
+                        .path("evidenceCurrentness")
+                        .asString())
+                .isEqualTo("CURRENT");
+
+        jdbcTemplate.update(
+                "UPDATE observation SET superseded_at = now() WHERE id IN (?, ?)", linksIssue, describesIssue);
+        JsonNode after = objectMapper.readTree(contribute());
+
+        assertThat(after.get("deliveredFeedback")).isEqualTo(before.get("deliveredFeedback"));
+        assertThat(after.get("feedbackStates"))
+                .extracting(
+                        e -> e.get("feedbackId").asString(),
+                        e -> e.get("artifactKind").asString(),
+                        e -> e.get("status").asString(),
+                        e -> e.get("evidenceCurrentness").asString())
+                .containsExactly(tuple(note.getId().toString(), "scm.issue", "DELIVERED", "STALE"));
     }
 
     @Test
@@ -252,9 +420,9 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
 
     @Test
     void shouldWithholdStatusWhenItsEvidenceOrConsentNoLongerAuthorizesIt() {
-        UUID superseded = observeStrength(ArtifactKinds.PULL_REQUEST, FIRST_MR);
-        Feedback failed = save(
-                job, FIRST_MR, FeedbackChannel.IN_CONTEXT, FeedbackDeliveryState.FAILED, "superseded-note", superseded);
+        UUID withdrawn = observeStrength(ArtifactKinds.PULL_REQUEST, FIRST_MR);
+        Feedback failed =
+                save(job, FIRST_MR, FeedbackChannel.IN_CONTEXT, FeedbackDeliveryState.FAILED, "failed-note", withdrawn);
         saveUnbound(workspace.getId(), recipient.getId());
         long activeThread = seedThread("C-active", "100.0", ConsentState.ACTIVE);
         long revokedThread = seedThread("C-revoked", "200.0", ConsentState.REVOKED);
@@ -279,7 +447,7 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
                 .extracting(e -> e.get("feedbackId").asString())
                 .containsExactlyInAnyOrder(
                         failed.getId().toString(), active.getId().toString());
-        jdbcTemplate.update("UPDATE observation SET superseded_at = now() WHERE id = ?", superseded);
+        withdrawEvidence(withdrawn);
 
         byte[] bytes = contribute();
         JsonNode root = objectMapper.readTree(bytes);
@@ -364,6 +532,13 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
         assertThat(objectMapper.readTree(contribute()).get("feedbackStates"))
                 .extracting(e -> e.get("feedbackId").asString())
                 .containsExactly(oldest.getId().toString());
+    }
+
+    /** The payload with the one field that differs between two reads of the same rows. */
+    private JsonNode withoutPreparedAt(byte[] bytes) {
+        JsonNode root = objectMapper.readTree(bytes);
+        ((ObjectNode) root.get("coverage")).remove("preparedAt");
+        return root;
     }
 
     private List<UUID> nextPage(RecipientFeedbackRow after) {
@@ -469,10 +644,22 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
                 .build());
     }
 
+    /** The evidence now cites a source no purpose may use, so no surface may show it. */
+    private void withdrawEvidence(UUID observationId) {
+        jdbcTemplate.update(
+                "UPDATE observation SET evidence = CAST(? AS jsonb) WHERE id = ?",
+                citing("unapproved.source"),
+                observationId);
+    }
+
     private static String evidence(ArtifactKind artifactKind) {
-        String sourceKind = ArtifactKinds.CONVERSATION_THREAD.equals(artifactKind)
-                ? "slack.conversation.thread"
-                : "scm.pull-request.core";
+        return citing(
+                ArtifactKinds.CONVERSATION_THREAD.equals(artifactKind)
+                        ? "slack.conversation.thread"
+                        : "scm.pull-request.core");
+    }
+
+    private static String citing(String sourceKind) {
         return """
         {"citations":[{"sourceKind":"%s","artifactPath":"inputs/context/source.json",\
         "path":"source.json","startLine":1,"endLine":1,"quote":"evidence",\

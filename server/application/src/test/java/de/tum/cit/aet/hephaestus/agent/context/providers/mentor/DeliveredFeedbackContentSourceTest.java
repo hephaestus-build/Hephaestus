@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.RecipientFeedbackRow;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
@@ -81,6 +82,33 @@ class DeliveredFeedbackContentSourceTest extends BaseUnitTest {
         assertThat(root.get("user").get("login").asString()).isEqualTo("octo");
         assertThat(root.get("deliveredFeedback")).isEmpty();
         assertThat(root.get("feedbackStates")).isEmpty();
+    }
+
+    @Test
+    void shouldNameWhatTheSampleCannotShowWhenItIsEmpty() throws Exception {
+        givenUser();
+        givenRows();
+        Instant before = Instant.now();
+
+        JsonNode root = contribute();
+
+        JsonNode coverage = root.get("coverage");
+        assertThat(coverage.propertyNames())
+                .containsExactlyInAnyOrder("scope", "preparedAt", "lookbackDays", "maxEntries", "outsideScope");
+        assertThat(coverage.get("scope").asString()).isEqualTo("CONVERSATION_AUTHORIZED_RECIPIENT_RECORDS");
+        assertThat(Instant.parse(coverage.get("preparedAt").asString())).isBetween(before, Instant.now());
+        assertThat(coverage.get("lookbackDays").asInt()).isEqualTo(90);
+        assertThat(coverage.get("maxEntries").asInt()).isEqualTo(30);
+        assertThat(coverage.get("outsideScope"))
+                .extracting(JsonNode::asString)
+                .containsExactly(
+                        "PROPOSALS",
+                        "REVIEWER_DECISIONS",
+                        "WITHHELD",
+                        "REPLACED",
+                        "EVIDENCE_NOT_USABLE_IN_CONVERSATION",
+                        "CONVERSATION_CONSENT_NOT_ACTIVE");
+        assertThat(root.has("lookbackDays")).isFalse();
     }
 
     @Test
@@ -150,7 +178,7 @@ class DeliveredFeedbackContentSourceTest extends BaseUnitTest {
         givenRows(row);
         FeedbackObservationVisibility binding = binding(row);
         when(feedbackObservationRepository.findForVisibility(eq(1L), any())).thenReturn(List.of(binding));
-        when(visibilityPolicy.permitsAll(eq(1L), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
+        when(visibilityPolicy.permitsShown(eq(1L), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
                 .thenReturn(Set.of());
 
         ObjectNode root = provider.buildPayload(1L, 2L);
@@ -209,13 +237,14 @@ class DeliveredFeedbackContentSourceTest extends BaseUnitTest {
             permitted.add(binding.getObservation().getId());
         }
         when(feedbackObservationRepository.findForVisibility(eq(1L), any())).thenReturn(bindings);
-        when(visibilityPolicy.permitsAll(eq(1L), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
+        when(visibilityPolicy.permitsShown(eq(1L), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
                 .thenReturn(permitted);
     }
 
     private static FeedbackObservationVisibility binding(Row row) {
         Observation observation = mock(Observation.class);
         when(observation.getId()).thenReturn(UUID.randomUUID());
+        when(observation.getPractice()).thenReturn(new Practice());
         FeedbackObservationVisibility binding = mock(FeedbackObservationVisibility.class);
         when(binding.getFeedbackId()).thenReturn(row.getId());
         when(binding.getObservation()).thenReturn(observation);

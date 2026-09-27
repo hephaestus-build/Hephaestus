@@ -40,10 +40,10 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
     /**
      * The observations behind a batch of delivered feedback, carrying what decides their visibility.
      *
-     * <p>Both revisions are fetch-joined because every caller compares them the moment it has a row:
-     * an observation is only shown if the rules it was evaluated under are still the practice's current
-     * ones. Fetched rather than joined — a plain join narrows the result and preloads nothing, so the
-     * comparison would lazy-load its way through the batch one row at a time.
+     * <p>Both revisions are fetch-joined because every caller compares them the moment it has a row, through
+     * {@link de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy}, which decides what the
+     * comparison means for that caller. Fetched rather than joined — a plain join narrows the result and preloads
+     * nothing, so the comparison would lazy-load its way through the batch one row at a time.
      */
     @Query("""
         SELECT fo.feedback.id AS feedbackId, observation AS observation
