@@ -203,7 +203,7 @@ export const ConnectedWithDisconnect: Story = {
 		await expectSettledVisible(dialog);
 		within(dialog).getByText(/the slack connection for this workspace is removed/iu);
 		within(dialog).getByText(/every ingested slack message/iu);
-		within(dialog).getByText(/the app stays installed in slack/iu);
+		within(dialog).getByText(/messages already sent in slack remain there/iu);
 		await expect(within(dialog).queryByText(/bot is uninstalled/iu)).not.toBeInTheDocument();
 		within(dialog).getByRole("button", { name: /^disconnect$/iu });
 	},

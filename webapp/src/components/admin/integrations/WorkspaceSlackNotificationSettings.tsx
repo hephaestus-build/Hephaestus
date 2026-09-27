@@ -249,7 +249,7 @@ export function WorkspaceSlackNotificationSettings({
 							</ItemMedia>
 							<ItemContent>
 								<ItemTitle>Slack workspace</ItemTitle>
-								<ItemDescription>
+								<ItemDescription className={credentialUnreadable ? "line-clamp-none" : undefined}>
 									{credentialUnreadable
 										? "Can't post with this token. Restore the original server key or reconnect Slack."
 										: "Hephaestus is installed and can post as the app."}
@@ -486,9 +486,8 @@ export function WorkspaceSlackNotificationSettings({
 						<AlertDialogDescription>
 							The weekly digest stops posting, the Slack connection for this workspace is removed,
 							and every ingested Slack message, thread, and per-channel consent record for this
-							workspace is erased. The app stays installed in Slack, and messages in Slack itself
-							are not affected. You can reconnect later, but you will need to re-authorize via OAuth
-							and re-activate channels from scratch.
+							workspace is erased. Messages already sent in Slack remain there. To use Slack with
+							this workspace again, re-authorize via OAuth and re-activate channels.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
