@@ -41,7 +41,7 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
            SET state = 'CLAIMED', lease_owner = :owner, lease_expires_at = :leaseUntil,
                attempt_count = attempt_count + 1,
                updated_at = CURRENT_TIMESTAMP
-         WHERE id = :id AND workspace_id = :workspaceId
+         WHERE id = :id AND workspace_id = :workspaceId AND attempt_count = :loadedAttempts
            AND (attempt_count < :maxAttempts OR write_started = TRUE OR inline_write_started IS DISTINCT FROM FALSE)
            AND (state IN ('PENDING', 'UNCERTAIN')
                 OR (state = 'CLAIMED' AND lease_expires_at < CURRENT_TIMESTAMP))
@@ -52,7 +52,8 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
             @Param("workspaceId") Long workspaceId,
             @Param("owner") String owner,
             @Param("leaseUntil") Instant leaseUntil,
-            @Param("maxAttempts") int maxAttempts);
+            @Param("maxAttempts") int maxAttempts,
+            @Param("loadedAttempts") int loadedAttempts);
 
     /**
      * Whether dispatch {@code d} cites observation {@code o}, the one rule every read below shares. An approved

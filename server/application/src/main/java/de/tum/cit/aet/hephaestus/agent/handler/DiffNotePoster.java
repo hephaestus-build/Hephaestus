@@ -70,13 +70,7 @@ class DiffNotePoster {
             List<DiffNote> diffNotes,
             @Nullable UUID packageId,
             List<InlineFeedbackChannel.DeliveredSignal> acknowledged) {
-        Set<String> known = new HashSet<>();
-        for (InlineFeedbackChannel.DeliveredSignal signal : acknowledged) {
-            // An adapter reports FAILED for a write whose response was lost, too, so only a posted note is known.
-            if (signal.deliveryKey() != null && signal.disposition() != InlineFeedbackChannel.Disposition.FAILED) {
-                known.add(signal.deliveryKey());
-            }
-        }
+        Set<String> known = acknowledgedKeys(acknowledged);
         List<InlineFeedbackChannel.InlineFeedback> unacknowledged = mapObservations(diffNotes, packageId).stream()
                 .filter(item -> !known.contains(item.deliveryKey()))
                 .toList();
@@ -104,6 +98,27 @@ class DiffNotePoster {
             return InlineLookup.INCONCLUSIVE;
         }
         return new InlineLookup(found, found.size() == unacknowledged.size());
+    }
+
+    /** Whether every note has been acknowledged by a posted signal; a missing note list never has. */
+    static boolean acknowledgesAll(
+            @Nullable List<DiffNote> diffNotes, List<InlineFeedbackChannel.DeliveredSignal> acknowledged) {
+        if (diffNotes == null) {
+            return false;
+        }
+        Set<String> known = acknowledgedKeys(acknowledged);
+        return diffNotes.stream().allMatch(note -> note.deliveryKey() != null && known.contains(note.deliveryKey()));
+    }
+
+    private static Set<String> acknowledgedKeys(List<InlineFeedbackChannel.DeliveredSignal> acknowledged) {
+        Set<String> known = new HashSet<>();
+        for (InlineFeedbackChannel.DeliveredSignal signal : acknowledged) {
+            // An adapter reports FAILED for a write whose response was lost, too, so only a posted note is known.
+            if (signal.deliveryKey() != null && signal.disposition() != InlineFeedbackChannel.Disposition.FAILED) {
+                known.add(signal.deliveryKey());
+            }
+        }
+        return known;
     }
 
     record InlineLookup(List<InlineFeedbackChannel.DeliveredSignal> found, boolean complete) {

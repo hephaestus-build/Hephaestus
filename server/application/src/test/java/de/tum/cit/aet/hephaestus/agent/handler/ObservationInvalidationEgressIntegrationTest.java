@@ -799,6 +799,72 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
     }
 
     @Test
+    void shouldNotDeliverAnUntrackedPackagePastItsAttemptBudget() {
+        String key = "review:" + job.getId();
+        provider.lookupFails = true;
+        dispatchAutomatic("Closes #1 already.", List.of());
+        provider.lookupFails = false;
+        jdbc.update(
+                "UPDATE feedback_dispatch SET attempt_count = ?, inline_write_started = NULL WHERE destination_key = ?",
+                PracticeFeedbackDispatchService.MAX_ATTEMPTS,
+                key);
+
+        recover(key);
+
+        assertThat(dispatch(key).getState()).isEqualTo(FeedbackDispatchState.FAILED);
+        assertThat(provider.comments).isEmpty();
+    }
+
+    @Test
+    void shouldNotRequestInlineNotesAgainPastTheAttemptBudget() {
+        String key = "review:" + job.getId();
+        provider.failAfterAccept = true;
+        dispatchAutomatic("", List.of(note));
+        provider.failAfterAccept = false;
+        jdbc.update("""
+                UPDATE feedback_dispatch SET state = 'CLAIMED', lease_owner = 'lost-worker',
+                    lease_expires_at = now() - interval '1 second', attempt_count = ?
+                WHERE destination_key = ?
+                """, PracticeFeedbackDispatchService.MAX_ATTEMPTS, key);
+
+        recover(key);
+
+        assertThat(dispatch(key).getState()).isEqualTo(FeedbackDispatchState.FAILED);
+        assertThat(provider.notes.values()).containsExactly("note-1");
+        feedbackDeliveryService.recordAutomaticPackage(job, dispatch(key));
+        invalidate();
+        settleCorrections();
+        assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.UNRESOLVED);
+    }
+
+    @Test
+    void shouldNotWriteFromAnAttemptCountAnotherWorkerHasSinceSpent() {
+        String key = "review:" + job.getId();
+        provider.failAfterAccept = true;
+        dispatchAutomatic("", List.of(note));
+        provider.failAfterAccept = false;
+        jdbc.update(
+                "UPDATE feedback_dispatch SET attempt_count = ?, next_attempt_at = now() WHERE destination_key = ?",
+                PracticeFeedbackDispatchService.MAX_ATTEMPTS - 1,
+                key);
+        FeedbackDispatch stale = dispatch(key);
+        jdbc.update("""
+                UPDATE feedback_dispatch SET state = 'CLAIMED', lease_owner = 'lost-worker',
+                    lease_expires_at = now() - interval '1 second', attempt_count = ?
+                WHERE destination_key = ?
+                """, PracticeFeedbackDispatchService.MAX_ATTEMPTS, key);
+
+        assertThat(dispatchService.recover(stale, job).status())
+                .isEqualTo(PracticeFeedbackDispatchService.Result.Status.IN_PROGRESS);
+        assertThat(provider.notes.values()).containsExactly("note-1");
+
+        recover(key);
+
+        assertThat(dispatch(key).getState()).isEqualTo(FeedbackDispatchState.FAILED);
+        assertThat(provider.notes.values()).containsExactly("note-1");
+    }
+
+    @Test
     void shouldCorrectAPostedSummaryAndRestoreItsText() {
         Feedback delivered = deliveredWith(observation, 0, PlacementType.SUMMARY, "summary-1");
         post(place(delivered, PlacementType.INLINE, "note-1"));

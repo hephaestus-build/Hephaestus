@@ -58,7 +58,7 @@
             ALTER TABLE observation_invalidation ADD CONSTRAINT ck_observation_invalidation_restoration
                 CHECK ((restored_at IS NULL AND restored_by_account_id IS NULL AND restoration_reason IS NULL)
                     OR (restored_at IS NOT NULL AND restored_by_account_id IS NOT NULL
-                        AND btrim(restoration_reason) <> ''));
+                        AND restoration_reason IS NOT NULL AND btrim(restoration_reason) <> ''));
             ALTER TABLE observation_invalidation ADD CONSTRAINT ck_observation_invalidation_provider_copy
                 CHECK (provider_copy IN ('PENDING', 'NONE', 'UPDATED', 'INLINE_REMAINS', 'UNRESOLVED'));
             CREATE INDEX idx_observation_invalidation_provider_copy_due

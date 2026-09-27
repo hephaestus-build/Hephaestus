@@ -150,13 +150,19 @@ class PracticeFeedbackDispatchService {
                 dispatch.getWorkspaceId(),
                 owner,
                 Instant.now().plus(LEASE),
-                MAX_ATTEMPTS));
+                MAX_ATTEMPTS,
+                dispatch.getAttemptCount()));
+        // The claim only succeeds on the count this dispatch was loaded with, so that count is this claim's own.
         if (claimed == null || claimed == 0) {
             return Result.inProgress();
         }
 
         if (Boolean.TRUE.equals(transactionTemplate.execute(status -> citesInvalidated(dispatch)))) {
             return refuseInvalidated(dispatch, job, owner);
+        }
+        // Past the budget only a write that may already have happened admitted the claim: reconcile, never write.
+        if (dispatch.getAttemptCount() >= MAX_ATTEMPTS) {
+            return reconcileBeyondBudget(dispatch, job, owner);
         }
         return dispatch.getDestination() == FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE
                 ? dispatchApprovedPackage(dispatch, job, owner)
@@ -195,7 +201,9 @@ class PracticeFeedbackDispatchService {
                 PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
                 if (!decision.allowed())
                     return stateMachine.refuse(dispatch, owner, decision.refusal(), summaryRef, inlineSignals);
-                if (!inlineNotes.isEmpty() && !beginInlineWrite(dispatch, owner)) return Result.inProgress();
+                if (!inlineNotes.isEmpty() && !stateMachine.beginInlineWrite(dispatch, owner)) {
+                    return Result.inProgress();
+                }
                 DiffNotePoster.DiffNoteResult inline = diffNotePoster.reconcileInlineNotes(job, inlineNotes);
                 inlineSignals = stateMachine.mergeSignals(inlineSignals, inline.signals());
                 if (inline.failed() > 0 || inline.suppressed()) {
@@ -273,7 +281,7 @@ class PracticeFeedbackDispatchService {
                             deliveredSummaryRef,
                             inlineSignals);
                 }
-                if (!beginInlineWrite(dispatch, owner)) return Result.inProgress();
+                if (!stateMachine.beginInlineWrite(dispatch, owner)) return Result.inProgress();
                 DiffNotePoster.DiffNoteResult inline =
                         diffNotePoster.reconcileApprovedInlineNotes(job, feedback.getId(), inlineNotes);
                 inlineSignals = stateMachine.mergeSignals(inlineSignals, inline.signals());
@@ -372,11 +380,33 @@ class PracticeFeedbackDispatchService {
         return stateMachine.retry(dispatch, owner, error, summaryRef, true, signals);
     }
 
-    /** Records that inline notes are about to be requested; false once the lease is lost, so nothing is sent. */
-    private boolean beginInlineWrite(FeedbackDispatch dispatch, String owner) {
-        Integer began = transactionTemplate.execute(
-                status -> repository.beginInlineWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
-        return began != null && began == 1;
+    /**
+     * Settles an attempt claimed past the budget without writing. An unconfirmed summary is looked up by its marker;
+     * the package is sent only once every stage it has is accounted for, and fails otherwise.
+     */
+    private Result reconcileBeyondBudget(FeedbackDispatch dispatch, AgentJob job, String owner) {
+        boolean summaryStage = dispatch.getDestination() == FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE
+                || !dispatch.getBody().isBlank();
+        @Nullable String summaryRef = dispatch.getDeliveredExternalRef();
+        List<DeliveredSignal> signals = deliveredSignals(dispatch);
+        if (summaryStage && summaryRef == null && dispatch.getWriteStarted()) {
+            ExistingDeliveryLookup existing;
+            try {
+                existing = commentPoster.findExisting(summaryWrite(dispatch, job));
+            } catch (RuntimeException e) {
+                existing = ExistingDeliveryLookup.unknown();
+            }
+            if (existing.kind() != ExistingDeliveryLookup.Kind.FOUND) {
+                return stateMachine.retry(dispatch, owner, "A prior provider write has not been reconciled");
+            }
+            summaryRef = existing.commentId();
+        }
+        boolean summaryAccounted = !summaryStage || summaryRef != null;
+        boolean inlineAccounted = isIssue(job) || DiffNotePoster.acknowledgesAll(inlineNotes(dispatch), signals);
+        if (summaryAccounted && inlineAccounted && (summaryRef != null || !signals.isEmpty())) {
+            return stateMachine.sent(dispatch, owner, summaryRef, signals);
+        }
+        return stateMachine.retryPackage(dispatch, owner, "Dispatch retry limit exhausted", summaryRef, signals);
     }
 
     private static boolean reviewedRevisionMatches(

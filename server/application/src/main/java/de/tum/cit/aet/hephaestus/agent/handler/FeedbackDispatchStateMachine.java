@@ -158,6 +158,13 @@ class FeedbackDispatchStateMachine {
         return retry(dispatch, owner, error, null, true, deliveredSignals(dispatch));
     }
 
+    /** Records that inline notes are about to be requested; false once the lease is lost, so nothing is sent. */
+    boolean beginInlineWrite(FeedbackDispatch dispatch, String owner) {
+        Integer began = transactionTemplate.execute(
+                status -> repository.beginInlineWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
+        return began != null && began == 1;
+    }
+
     void fail(FeedbackDispatch dispatch, String error) {
         transactionTemplate.executeWithoutResult(
                 status -> repository.fail(dispatch.getId(), dispatch.getWorkspaceId(), bounded(error)));

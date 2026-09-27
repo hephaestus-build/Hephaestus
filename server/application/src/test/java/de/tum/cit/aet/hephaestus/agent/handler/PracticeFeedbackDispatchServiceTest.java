@@ -123,7 +123,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
                 .thenReturn(Optional.of(dispatch));
         lenient()
-                .when(repository.claim(any(), any(), anyString(), any(), any(Integer.class)))
+                .when(repository.claim(any(), any(), anyString(), any(), any(Integer.class), anyInt()))
                 .thenReturn(1);
         lenient().when(repository.beginWrite(any(), any(), anyString())).thenReturn(1);
         lenient().when(repository.beginInlineWrite(any(), any(), anyString())).thenReturn(1);
@@ -203,13 +203,13 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
         assertThat(result.externalRef()).isEqualTo("provider-42");
-        verify(repository, never()).claim(any(), any(), anyString(), any(), any(Integer.class));
+        verify(repository, never()).claim(any(), any(), anyString(), any(), any(Integer.class), anyInt());
         verify(channel, never()).findExistingSummary(any(), any());
     }
 
     @Test
     void losingAClaimToAnotherWorkerDefersWithoutProviderIo() {
-        when(repository.claim(any(), any(), anyString(), any(), any(Integer.class)))
+        when(repository.claim(any(), any(), anyString(), any(), any(Integer.class), anyInt()))
                 .thenReturn(0);
 
         PracticeFeedbackDispatchService.Result result = dispatchAutomaticReview(job, "body", Set.of("practice"));
@@ -227,7 +227,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         PracticeFeedbackDispatchService.Result result = dispatchAutomaticReview(job, "body", Set.of("practice"));
 
         ArgumentCaptor<Instant> leaseUntil = ArgumentCaptor.forClass(Instant.class);
-        verify(repository).claim(any(), any(), anyString(), leaseUntil.capture(), any(Integer.class));
+        verify(repository).claim(any(), any(), anyString(), leaseUntil.capture(), any(Integer.class), anyInt());
         assertThat(leaseUntil.getValue()).isAfterOrEqualTo(before.plus(PracticeFeedbackDispatchService.LEASE));
         InOrder order = inOrder(channel, policy, repository);
         order.verify(channel).findExistingSummary(any(), eq(summaryMarker(job)));
@@ -287,6 +287,24 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void anInlineOnlyPackageClaimedPastTheBudgetIsSentWhenEveryNoteIsAcknowledged() {
+        var result = service.recover(pastBudgetInlineOnly("POSTED"), job);
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
+        verify(diffNotePoster, never()).reconcileInlineNotes(any(), any());
+        verify(repository, never()).beginInlineWrite(any(), any(), anyString());
+    }
+
+    @Test
+    void anInlineOnlyPackageClaimedPastTheBudgetFailsWhileANoteIsUnaccounted() {
+        var result = service.recover(pastBudgetInlineOnly("FAILED"), job);
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.FAILED);
+        verify(diffNotePoster, never()).reconcileInlineNotes(any(), any());
+        verify(repository, never()).beginInlineWrite(any(), any(), anyString());
+    }
+
+    @Test
     void anAlreadySuppressedDispatchReportsTheReasonItStored() {
         dispatch = dispatch(FeedbackDispatchState.SUPPRESSED, FeedbackSuppressionReason.OUTSIDE_CURRENT_COVERAGE);
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
@@ -296,7 +314,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
         assertThat(result.suppressionReason()).isEqualTo(FeedbackSuppressionReason.OUTSIDE_CURRENT_COVERAGE);
-        verify(repository, never()).claim(any(), any(), anyString(), any(), any(Integer.class));
+        verify(repository, never()).claim(any(), any(), anyString(), any(), any(Integer.class), anyInt());
     }
 
     @Test
@@ -367,7 +385,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         var result = service.dispatchApproved(job, feedback);
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
-        verify(repository).claim(any(), any(), anyString(), any(), any(Integer.class));
+        verify(repository).claim(any(), any(), anyString(), any(), any(Integer.class), anyInt());
         verify(diffNotePoster)
                 .reconcileApprovedInlineNotes(
                         job,
@@ -621,6 +639,52 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 null,
                 base.getNextAttemptAt(),
                 attemptCount,
+                null,
+                null,
+                null,
+                null,
+                null,
+                base.getCreatedAt(),
+                base.getUpdatedAt());
+    }
+
+    /** An automatic package with no summary and one inline note whose last recorded outcome is {@code disposition}. */
+    private FeedbackDispatch pastBudgetInlineOnly(String disposition) {
+        FeedbackDispatch base = dispatch(job, FeedbackDispatchState.UNCERTAIN, false, 0, "");
+        var mapper = JsonMapper.builder().build();
+        var placements = mapper.createArrayNode();
+        placements
+                .addObject()
+                .put("deliveryKey", "observation:k1")
+                .put("path", "src/Main.java")
+                .put("startLine", 3)
+                .put("disposition", disposition)
+                .put("externalRef", disposition.equals("POSTED") ? "note-1" : null);
+        return new FeedbackDispatch(
+                base.getId(),
+                base.getDestinationKey(),
+                base.getWorkspaceId(),
+                base.getAgentJobId(),
+                null,
+                base.getDestination(),
+                FeedbackDispatchState.UNCERTAIN,
+                "",
+                base.getPracticeSlugs(),
+                mapper.valueToTree(new PracticeDetectionResultParser.DeliveryContent(
+                        null,
+                        List.of(new PracticeDetectionResultParser.DiffNote(
+                                "src/Main.java", 3, null, "note", "observation:k1", List.of("k1"))),
+                        List.of(),
+                        List.of())),
+                placements,
+                false,
+                base.getCreatedAt(),
+                true,
+                null,
+                null,
+                null,
+                base.getNextAttemptAt(),
+                PracticeFeedbackDispatchService.MAX_ATTEMPTS,
                 null,
                 null,
                 null,
