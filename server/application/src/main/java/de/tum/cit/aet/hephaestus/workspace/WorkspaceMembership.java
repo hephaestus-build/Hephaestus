@@ -10,7 +10,7 @@ import lombok.*;
 import org.hibernate.annotations.DynamicUpdate;
 import org.jspecify.annotations.Nullable;
 
-/** One SCM actor's membership and league state in a workspace. */
+/** One SCM actor's membership in a workspace. */
 @Entity
 @Table(name = "workspace_membership")
 @DynamicUpdate
@@ -44,11 +44,10 @@ public class WorkspaceMembership {
     @Column(name = "role", nullable = false, length = 16)
     private WorkspaceRole role = WorkspaceRole.MEMBER;
 
-    /** Recalculated from contributions by {@link LeaguePointsRecalculator}. */
-    @Column(name = "league_points", nullable = false)
-    private int leaguePoints = 0;
-
-    /** Whether this member is hidden from the leaderboard */
+    /**
+     * Whether this member is left out of workspace activity lists and totals. Any member of the workspace can
+     * still read their activity by login.
+     */
     @Column(name = "hidden", nullable = false)
     private boolean hidden = false;
 

@@ -189,7 +189,7 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
                 workspace,
                 IntegrationKind.SLACK,
                 teamId,
-                new ConnectionConfig.SlackConfig(teamId, teamName, null, null, null, Set.of()));
+                new ConnectionConfig.SlackConfig(teamId, teamName, null, Set.of()));
         connection.setState(IntegrationState.ACTIVE);
         connection.setDisplayName(teamName);
         return connection;

@@ -189,10 +189,10 @@ describe("user view guard", () => {
 	});
 
 	it.each([
-		["/settings", "/w/engineering/user/alex"],
-		["/w/other/user/alex", "/w/engineering/user/alex"],
-		["/w/engineering/admin", "/w/engineering/user/alex"],
-		["/w/engineering/user/sam", "/w/engineering/user/sam"],
+		["/settings", "/w/engineering/activity"],
+		["/w/other/user/alex", "/w/engineering/activity"],
+		["/w/engineering/admin", "/w/engineering/activity"],
+		["/w/engineering/user/sam", "/w/engineering/workspace-activity"],
 	])("resolves %s to %s", async (path, expected) => {
 		const { router } = renderRouteAtWithRouter(path);
 		await waitFor(

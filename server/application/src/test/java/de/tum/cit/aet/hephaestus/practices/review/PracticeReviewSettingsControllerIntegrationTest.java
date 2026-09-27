@@ -60,8 +60,6 @@ class PracticeReviewSettingsControllerIntegrationTest extends AbstractWorkspaceI
                 // Feature flags aren't review policy and already live on the workspace itself.
                 .jsonPath("$.practicesEnabled")
                 .doesNotExist()
-                .jsonPath("$.mentorEnabled")
-                .doesNotExist()
                 .jsonPath("$.workspaceConnectionsAllowed")
                 .doesNotExist();
     }

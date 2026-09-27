@@ -40,12 +40,11 @@ export const Route = createFileRoute("/_authenticated/integrations")({
 			return;
 		}
 		window.sessionStorage.removeItem("slack-connect-return-slug");
-		if (search.status) {
-			window.sessionStorage.setItem("slack-connect-result", search.status);
-			const detail = failureDetail(search);
-			if (hasText(detail)) {
-				window.sessionStorage.setItem("slack-connect-reason", detail);
-			}
+		// Sonner hands a toast raised before its Toaster mounts to the Toaster once it does.
+		if (search.status === "success") {
+			toast.success("Slack workspace connected");
+		} else if (search.status === "error") {
+			toast.error("Slack connection failed", { description: failureDetail(search) });
 		}
 		throw redirect({
 			to: "/w/$workspaceSlug/admin/integrations/slack",

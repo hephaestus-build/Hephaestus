@@ -27,9 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
  * with state {@link PullRequestReview.State#COMMENTED}.
  * <p>
  * Unlike GitHub, GitLab has no first-class "review" entity. We derive one COMMENTED
- * review per {@code (author, discussion)} cluster so that leaderboard and profile
- * scoring can attribute inline feedback submissions to a review and stay at parity
- * with GitHub. Approvals are handled separately (see {@code GitLabMergeRequestProcessor}).
+ * review per {@code (author, discussion)} cluster so that inline feedback is attributed
+ * to a review, as on GitHub. Approvals are handled separately (see
+ * {@code GitLabMergeRequestProcessor}).
  * <p>
  * Idempotency: a deterministic {@code nativeId} is derived by hashing
  * {@code (discussionGlobalId, authorNativeId)}; re-running the sync reuses the same
@@ -84,11 +84,9 @@ public class GitLabReviewReconciler {
             return null;
         }
 
-        // Parity with GitHub: a PR author replying to their own MR does not produce a
-        // Review entity. Those notes are attributed via numberOfOwnReplies on the
-        // leaderboard; synthesising a COMMENTED review here would inflate peer-review
-        // counts (students whose only discussion activity is on their own MR would
-        // appear to have reviewed peers).
+        // Parity with GitHub: a PR author replying on their own MR produces no Review entity.
+        // A synthesised COMMENTED review would read as a review of someone else's work; the
+        // author's notes stay discussion comments.
         if (pr.getAuthor() != null
                 && pr.getAuthor().getId() != null
                 && pr.getAuthor().getId().equals(author.getId())) {

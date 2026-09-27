@@ -426,7 +426,7 @@ for ((taskName, command) in
                 // Hibernate cannot emit unmapped tables, partitions, or scalar-id foreign keys.
                 // Pending contractions are listed in docs/contributor/database-migration.mdx.
                 // event_publication is the JDBC registry.
-                "--exclude-objects=table:shedlock,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,table:consent_notice,column:notice_sha256,table:product_survey_submission,column:supports_reasoning,foreignkey:sfk_.*",
+                "--exclude-objects=table:shedlock,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,table:consent_notice,column:notice_sha256,table:product_survey_submission,column:supports_reasoning,column:mentor_enabled,column:leaderboard_enabled,column:progression_enabled,column:leagues_enabled,column:leaderboard_schedule_day,column:leaderboard_schedule_time,column:leaderboard_notification_enabled,column:leaderboard_league_cycle_at,column:league_points,column:xp,foreignkey:sfk_.*",
             )
         }
     }

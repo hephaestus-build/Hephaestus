@@ -330,8 +330,9 @@ What each `FeedbackChannel` value is and where it lands is defined in the
 "what capability could this conversation support?" — and the level is **derived from the channel and
 never stored**: there is no `level` column, and a stored copy would be a second truth that can disagree.
 
-Two exact names are close enough to be tempting and are still wrong. **Profile** is the
-workspace-readable page at `/w/{workspaceSlug}/user/{username}`, not `IN_APP`; and
+Two exact names are close enough to be tempting and are still wrong.
+[**Activity**](./practice-feedback-language.md) is the member-readable page of counted work at
+`/w/{workspaceSlug}/activity`, not `IN_APP`; and
 `chat.conversation_thread` is a kind of work Hephaestus *reviews*, not the place `IN_CHAT` delivers to.
 
 ### Thread key and supersession

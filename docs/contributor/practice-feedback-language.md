@@ -39,6 +39,9 @@ area*, `PracticeArea`, `areaSlug`, and `/practice-areas` are retired names, not 
 | **Heph**                            | The conversational assistant                                                                                                                               | agent, bot                                                           |
 | **Mentor**                          | The product area for conversations with Heph                                                                                                               |                                                                      |
 | **Practice profile**                | The developer's own page: how their reviewed work stands across practice groups, how it developed, and one next step from Heph. A surface, not a channel   | practice dashboard, standings page                                   |
+| **Activity**                        | The developer's own page of what waits on them, what they have open, and counts and lists of what they did in a time range. Counts work, never scores it   | profile, stats, contributions                                        |
+| **Workspace activity**              | The same counts and lists for everyone in a workspace or one team, with members listed by name                                                             | leaderboard, ranking, standings                                      |
+| **Open work**                       | Pull or merge requests awaiting someone's review, their own open pull or merge requests, and open issues assigned to them                                  | backlog, inbox, to-do                                                |
 | **Holds as**                        | The one present-tense sentence a bundled practice reads as when it holds — what the developer keeps doing — shown on the Practice profile beside a practice that is going well, and written by [the catalogue rules](./practice-catalogue.md#changing-bundled-defaults) | strength summary, praise, positive feedback |
 | **Hephaestus**                      | The application, named only where the application itself is the subject — installing it, an account linked to it, a release of it                          | agent                                                                |
 | **Hephaestus default**              | A practice or group bundled with the running Hephaestus release                                                                                             | shipped entry                                                        |
@@ -52,6 +55,10 @@ area*, `PracticeArea`, `areaSlug`, and `/practice-areas` are retired names, not 
 
 Use provider-specific names such as **pull request** or **merge request** when the provider is known;
 otherwise write **pull or merge request**.
+
+*Leaderboard*, *league*, *league points*, *XP*, *level*, *score*, *rank* and *streak* are retired for
+activity and do not describe anything in the product
+([ADR 0045](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0045-activity-counts-work-and-never-ranks-people.md)).
 
 **Feedback is the countable unit, and there is no other word for it.** Do not reach for *message*, *item*,
 *note*, or *entry* to get a noun that pluralises; *feedback* is uncountable, so the fix is to phrase the

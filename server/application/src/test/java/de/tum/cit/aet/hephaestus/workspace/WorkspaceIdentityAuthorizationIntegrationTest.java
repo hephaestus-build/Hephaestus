@@ -3,17 +3,22 @@ package de.tum.cit.aet.hephaestus.workspace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
+import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
+import de.tum.cit.aet.hephaestus.activity.ActivityTargetType;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -35,6 +40,9 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
 
     @Autowired
     private WorkspaceRepository workspaces;
+
+    @Autowired
+    private ActivityEventRepository activityEvents;
 
     @Test
     void shouldRejectAnUnlinkedCreatorInsteadOfUsingTheirNamesakeOrTheSubmittedOwner() {
@@ -164,7 +172,7 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
     }
 
     @Test
-    void shouldOpenTheSignedInActorsOwnProfileWhenAnEarlierMemberSharesItsLogin() {
+    void shouldReadTheSignedInActorsOwnActivityWhenAnEarlierMemberSharesItsLogin() {
         var namesake = persistUser("shared-profile");
         var provider = ensureGitLabProvider();
         var actor = userRepository.saveAndFlush(TestUserFactory.createUser(989L, "shared-profile", provider));
@@ -176,15 +184,19 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
         link.setProviderId(Objects.requireNonNull(provider.getId()));
         link.setSubject(actor.getNativeId().toString());
         identities.saveAndFlush(link);
+        recordIssueOpened(workspace, namesake);
+        recordIssueOpened(workspace, actor);
 
         client.get()
-                .uri("/workspaces/identity-profile/profile/shared-profile")
+                .uri("/workspaces/identity-profile/activity/timeline?login=shared-profile")
                 .headers(headers -> headers.setBearerAuth("mock-jwt-user-sub-" + account.getId()))
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.userInfo.id")
+                .jsonPath("$.content.length()")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].actor.id")
                 .isEqualTo(actor.getId());
     }
 
@@ -237,5 +249,19 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
         assertThat(identityQuery.resolveAccountId(providerId, "789", null)).contains(accountId);
         assertThat(identityQuery.resolveActiveAccountId(providerId, "789", null).isPresent())
                 .isEqualTo(status == Account.Status.ACTIVE);
+    }
+
+    private void recordIssueOpened(Workspace workspace, User actor) {
+        UUID id = UUID.randomUUID();
+        activityEvents.insertIfAbsent(
+                id,
+                "issue-" + id,
+                ActivityEventType.ISSUE_CREATED.name(),
+                Instant.now().minusSeconds(60),
+                actor.getId(),
+                workspace.getId(),
+                null,
+                ActivityTargetType.ISSUE.getValue(),
+                id.getMostSignificantBits());
     }
 }

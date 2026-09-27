@@ -23,8 +23,7 @@ public record WorkspaceTeamRepositorySettingsDTO(
         @NonNull @Schema(description = "The repository ID these settings apply to")
         Long repositoryId,
 
-        @NonNull
-        @Schema(description = "Whether contributions from this repository are hidden from leaderboard calculations")
+        @NonNull @Schema(description = "Whether activity in this repository is left out of the team's activity")
         Boolean hiddenFromContributions) {
     /**
      * Creates a DTO from the entity.

@@ -38,7 +38,6 @@ const WORKSPACE = {
 	slug: "acme",
 	displayName: "Acme",
 	practicesEnabled: true,
-	mentorEnabled: true,
 };
 
 const WORKSPACE_LIST_ITEM = { ...WORKSPACE, workspaceSlug: "acme", accountLogin: "acme" };

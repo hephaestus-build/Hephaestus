@@ -1,10 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.user;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import java.time.Instant;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -97,20 +95,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
         """)
     List<User> findAllByName(@Param("name") String name);
 
-    /**
-     * By id, never by login: a login is not unique across providers, and the caller has already
-     * chosen the member through the workspace.
-     */
-    @WorkspaceAgnostic("Pull requests are scoped through repository_id -> repository.workspace_id, and a"
-            + " developer's league placement reads their merged pull requests as one history")
-    @Query("""
-            SELECT DISTINCT u
-            FROM User u
-            LEFT JOIN FETCH u.mergedPullRequests mpr
-            WHERE u.id = :id
-        """)
-    Optional<User> findByIdWithEagerMergedPullRequests(@Param("id") Long id);
-
     @Query("""
             SELECT u
             FROM User u
@@ -126,23 +110,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
             WHERE u.type = 'USER'
         """)
     List<User> findAllHumanInTeams();
-
-    @Query("""
-            SELECT DISTINCT u
-            FROM User u
-            JOIN u.teamMemberships m
-            JOIN m.team t
-            WHERE t.id IN :teamIds
-            AND u.type = 'USER'
-        """)
-    List<User> findAllByTeamIds(@Param("teamIds") Collection<Long> teamIds);
-
-    default List<User> findAllByTeamId(Long teamId) {
-        if (teamId == null) {
-            return List.of();
-        }
-        return findAllByTeamIds(List.of(teamId));
-    }
 
     /** Only a verified actor pinned by the workspace boundary or a non-HTTP caller identifies the developer. */
     default Optional<User> getCurrentUser() {

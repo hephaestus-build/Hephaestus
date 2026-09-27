@@ -115,13 +115,13 @@ The bot token scope set stays minimal — every scope maps to a feature the code
 
 | Scope | Feature |
 | --- | --- |
-| `chat:write` | Mentor DM replies and admin/leaderboard-channel announcements |
+| `chat:write` | Mentor DM replies and monitored-channel announcements |
 | `assistant:write` | The DM "Thinking…" streaming status and suggested prompts on the Agent messaging surface |
 | `im:history` | Receiving the DM `message` events that drive a mentor turn |
 | `channels:history` / `groups:history` | Reading messages in workspace-admin-consented monitored channels (public / private) |
 | `channels:read` / `groups:read` | Channel directory listing for the admin channel picker and periodic channel-metadata refresh |
 | `channels:join` | Letting an admin add a public channel to monitoring directly from the picker |
-| `users:read` | Resolving a Slack user to a workspace member for mentor identity and digest delivery |
+| `users:read` | Resolving a Slack user to a workspace member for mentor identity |
 
 The user token scope set is only for Sign in with Slack account linking:
 
@@ -519,7 +519,6 @@ for the authority and [elevated-access audit policy](/contributor/instance-admin
 
 - Monitor services with the central Prometheus/Loki stack; ensure trace IDs appear in logs.
 - Schedule regular backups for PostgreSQL (it holds auth state — accounts, identity links, sessions — in addition to application data).
-- Review weekly leaderboard Slack posts to ensure the automation is active.
 - A preview deployment only represents the GitLab practice-review rollout if it is wired with the same GitLab IdP, sandbox, git-checkout, and agent-job-queue settings. Verify a rollout on staging, not on a preview.
 
 ## Support

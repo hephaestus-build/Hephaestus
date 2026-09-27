@@ -514,8 +514,6 @@ function AppSidebarContainer() {
 
 	return (
 		<AppSidebar
-			// Only the loading skeleton renders while `selfLogin` is still undefined.
-			username={workspaceAccess.selfLogin ?? username}
 			isAdmin={workspaceAccess.isAdmin}
 			isOwner={workspaceAccess.role === "OWNER"}
 			isAppAdmin={isAppAdmin}

@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
-import static de.tum.cit.aet.hephaestus.leaderboard.LeaguePointsConstants.POINTS_DEFAULT;
-
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
@@ -15,12 +13,10 @@ import de.tum.cit.aet.hephaestus.workspace.exception.InsufficientWorkspacePermis
 import de.tum.cit.aet.hephaestus.workspace.exception.LastOwnerRemovalException;
 import jakarta.persistence.EntityManager;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -30,7 +26,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -41,7 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
  * <li>Creating and removing memberships</li>
  * <li>Updating member roles</li>
  * <li>Syncing GitHub organization members with workspace memberships</li>
- * <li>Managing league points snapshots</li>
  * </ul>
  */
 @Service
@@ -70,73 +64,6 @@ public class WorkspaceMembershipService {
         this.accessService = accessService;
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Map<Long, Integer> getLeaguePointsSnapshot(Collection<User> users, Long workspaceId) {
-        if (users == null || users.isEmpty()) {
-            return Collections.emptyMap();
-        }
-
-        Set<Long> userIds =
-                users.stream().map(User::getId).filter(Objects::nonNull).collect(Collectors.toSet());
-
-        if (userIds.isEmpty()) {
-            return Collections.emptyMap();
-        }
-
-        if (workspaceId == null) {
-            return userIds.stream().collect(Collectors.toMap(id -> id, id -> POINTS_DEFAULT));
-        }
-
-        Set<Long> existingUserIds =
-                workspaceMembershipRepository.findAllByWorkspace_IdAndUser_IdIn(workspaceId, userIds).stream()
-                        .map(member -> member.getUser().getId())
-                        .collect(Collectors.toSet());
-
-        for (User user : users) {
-            Long userId = user.getId();
-            if (userId == null || existingUserIds.contains(userId)) {
-                continue;
-            }
-            workspaceMembershipRepository.insertIfAbsent(
-                    workspaceId, userId, WorkspaceMembership.WorkspaceRole.MEMBER.name(), POINTS_DEFAULT);
-        }
-
-        Map<Long, Integer> leaguePointsByUserId =
-                workspaceMembershipRepository.findAllByWorkspace_IdAndUser_IdIn(workspaceId, userIds).stream()
-                        .collect(Collectors.toMap(
-                                member -> member.getUser().getId(), WorkspaceMembership::getLeaguePoints));
-
-        for (Long userId : userIds) {
-            leaguePointsByUserId.putIfAbsent(userId, POINTS_DEFAULT);
-        }
-
-        return leaguePointsByUserId;
-    }
-
-    @Transactional
-    public int getCurrentLeaguePoints(Long workspaceId, User user) {
-        if (user == null || user.getId() == null) {
-            return POINTS_DEFAULT;
-        }
-        if (workspaceId == null) {
-            return POINTS_DEFAULT;
-        }
-
-        Workspace workspace = workspaceRepository.findById(workspaceId).orElse(null);
-        if (workspace == null) {
-            return POINTS_DEFAULT;
-        }
-
-        WorkspaceMembership member = workspaceMembershipRepository
-                .findByWorkspace_IdAndUser_Id(workspaceId, user.getId())
-                .orElseGet(() -> {
-                    WorkspaceMembership created = createMembershipInternal(workspace, user);
-                    created.setLeaguePoints(POINTS_DEFAULT);
-                    return workspaceMembershipRepository.save(created);
-                });
-        return member.getLeaguePoints();
-    }
-
     @Transactional(readOnly = true)
     public Optional<User> findMemberByLogin(Long workspaceId, String login) {
         // A login is not unique across providers; the request's own actor is the one it means.
@@ -153,51 +80,10 @@ public class WorkspaceMembershipService {
                 .map(WorkspaceMembership::getUser);
     }
 
-    @Transactional
-    public void updateLeaguePoints(Long workspaceId, User user, int newPoints) {
-        if (user == null || user.getId() == null) {
-            return;
-        }
-        if (workspaceId == null) {
-            log.debug("Skipped league point update: reason=noWorkspaceConfigured, userLogin={}", user.getLogin());
-            return;
-        }
-
-        Workspace workspace = workspaceRepository.findById(workspaceId).orElse(null);
-        if (workspace == null) {
-            log.debug(
-                    "Skipped league point update: reason=workspaceNotFound, userLogin={}, workspaceId={}",
-                    user.getLogin(),
-                    workspaceId);
-            return;
-        }
-
-        WorkspaceMembership member = workspaceMembershipRepository
-                .findByWorkspace_IdAndUser_Id(workspaceId, user.getId())
-                .orElseGet(() -> createMembershipInternal(workspace, user));
-        member.setLeaguePoints(newPoints);
-        workspaceMembershipRepository.save(member);
-    }
-
-    @Transactional
-    public void resetLeaguePoints(Long workspaceId, int points) {
-        if (workspaceId == null) {
-            log.debug("Skipped league point reset: reason=noWorkspaceConfigured");
-            return;
-        }
-
-        List<WorkspaceMembership> members = workspaceMembershipRepository.findByWorkspace_Id(workspaceId);
-        if (members.isEmpty()) {
-            return;
-        }
-        members.forEach(member -> member.setLeaguePoints(points));
-        workspaceMembershipRepository.saveAll(members);
-    }
-
     /**
-     * Human members of the workspace, team memberships fetched — the roster used to pad zero-activity
-     * leaderboard entries. Scoped by {@code workspace_id}, not by the org-login string, so it cannot
-     * leak members between workspaces that share an {@code account_login}. Empty for a null id.
+     * Human members of the workspace, team memberships fetched — the roster of workspace activity. Scoped by
+     * {@code workspace_id}, not by the org-login string, so it cannot leak members between workspaces that share
+     * an {@code account_login}. Empty for a null id.
      */
     @Transactional(readOnly = true)
     public List<User> getHumanMembersWithTeams(Long workspaceId) {
@@ -213,9 +99,8 @@ public class WorkspaceMembershipService {
      * <p>
      * Uses the race-safe native upsert in
      * {@link WorkspaceMembershipRepository#insertIfAbsent}: if a membership already
-     * exists for the user, it is left untouched (role, league points, hidden flag all
-     * preserved). Only missing memberships are created with role {@code MEMBER} and
-     * default league points.
+     * exists for the user, it is left untouched (role and hidden flag preserved). Only missing
+     * memberships are created, with role {@code MEMBER}.
      * <p>
      * Intended for reconciliation paths that discover users via the team graph or
      * other side channels and must never downgrade existing OWNER/ADMIN roles.
@@ -240,7 +125,7 @@ public class WorkspaceMembershipService {
                 continue;
             }
             inserted += workspaceMembershipRepository.insertIfAbsent(
-                    workspaceId, userId, WorkspaceMembership.WorkspaceRole.MEMBER.name(), POINTS_DEFAULT);
+                    workspaceId, userId, WorkspaceMembership.WorkspaceRole.MEMBER.name());
         }
 
         if (inserted > 0) {
@@ -292,7 +177,6 @@ public class WorkspaceMembershipService {
                     continue;
                 }
                 WorkspaceMembership member = createMembershipInternal(workspace, user, desiredRole);
-                member.setLeaguePoints(POINTS_DEFAULT);
                 toCreate.add(member);
             } else if (existing.getRole() != desiredRole) {
                 var beforeSync = new WorkspaceAuditSnapshots.RoleSnapshot(
@@ -317,7 +201,7 @@ public class WorkspaceMembershipService {
             if (memberUserId == null || desiredUserIds.contains(memberUserId)) {
                 continue;
             }
-            // Preserve memberships an admin has explicitly hidden from the leaderboard.
+            // Preserve memberships an admin has explicitly hidden from workspace activity.
             // `hidden=true` is a sticky, admin-authored signal that must survive org-sync
             // churn (transient API gaps, webhook reorder, remove-then-re-add). Deleting
             // the row would lose that signal on re-creation and silently un-hide the user.
@@ -369,7 +253,6 @@ public class WorkspaceMembershipService {
         membership.setWorkspace(workspace);
         membership.setUser(userReference);
         membership.setRole(role);
-        membership.setLeaguePoints(POINTS_DEFAULT);
         membership.setId(new WorkspaceMembership.Id(workspace.getId(), userId));
 
         return workspaceMembershipRepository.save(membership);
@@ -406,7 +289,6 @@ public class WorkspaceMembershipService {
             }
 
             WorkspaceMembership membership = createMembershipInternal(workspace, user, role);
-            membership.setLeaguePoints(POINTS_DEFAULT);
             configAudit.record(ConfigAuditEntry.created(
                     ConfigAuditEntityType.WORKSPACE_ROLE,
                     userId,
@@ -432,10 +314,6 @@ public class WorkspaceMembershipService {
         configAudit.record(
                 ConfigAuditEntry.deleted(ConfigAuditEntityType.WORKSPACE_ROLE, userId, workspaceId, beforeRole));
         log.info("Removed membership: userId={}, workspaceId={}", userId, workspaceId);
-    }
-
-    private WorkspaceMembership createMembershipInternal(Workspace workspace, User user) {
-        return createMembershipInternal(workspace, user, WorkspaceMembership.WorkspaceRole.MEMBER);
     }
 
     private WorkspaceMembership createMembershipInternal(

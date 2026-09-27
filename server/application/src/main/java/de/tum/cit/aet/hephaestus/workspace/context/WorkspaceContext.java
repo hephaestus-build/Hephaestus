@@ -10,9 +10,6 @@ import org.jspecify.annotations.Nullable;
  * Immutable request-scoped context containing workspace metadata and user roles.
  * Used for isolation, authorization, and observability (MDC enrichment).
  *
- * <p>{@code mentorEnabled} is captured here so per-request mentor controllers can short-circuit
- * without re-loading the {@link Workspace} entity — the filter already has the row in hand.
- *
  * @param id Workspace internal ID
  * @param slug Workspace URL-safe slug
  * @param displayName Workspace display name
@@ -21,7 +18,6 @@ import org.jspecify.annotations.Nullable;
  *                       {@code GITHUB} Connection by the resolver — Workspace no longer
  *                       carries the column directly)
  * @param publiclyViewable Whether the workspace allows public read access
- * @param mentorEnabled Whether the Pi mentor chat feature is enabled for this workspace
  * @param roles Set of workspace roles for the current user
  */
 public record WorkspaceContext(
@@ -31,7 +27,6 @@ public record WorkspaceContext(
         @Nullable AccountType accountType,
         @Nullable Long installationId,
         boolean publiclyViewable,
-        boolean mentorEnabled,
         Set<WorkspaceRole> roles) {
     /**
      * Builds a context from a {@link Workspace} plus a pre-resolved
@@ -48,7 +43,6 @@ public record WorkspaceContext(
                 workspace.getAccountType(),
                 installationId,
                 Boolean.TRUE.equals(workspace.getIsPubliclyViewable()),
-                Boolean.TRUE.equals(workspace.getFeatures().getMentorEnabled()),
                 roles != null ? roles : Set.of());
     }
 

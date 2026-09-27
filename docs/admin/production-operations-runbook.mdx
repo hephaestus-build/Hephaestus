@@ -29,7 +29,7 @@ recall a request already accepted by a provider. Stop ingress too when preservin
 | Workspace/group/practice autonomy **Off** | Reviewing those practices under the effective inherited policy | Other practices and other AI features; a workspace default does not override explicit group/practice choices |
 | Workspace **Sending feedback → Send feedback** off | External practice feedback and mentor delivery for that workspace | Measurement and in-app feedback; not an instance restore boundary |
 | Recipient **Comments and Slack reminders** off | Covered feedback comments and related reminders for that recipient | All other recipients, integration plumbing, or all mentor activity |
-| Workspace mentor disabled (`mentorEnabled`); `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on applicable roles | Respective mentor/Slack features | SCM writes, other AI work, or restored database credentials |
+| Every **Heph** row turned off under the workspace's **AI models**; `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on applicable roles | Respective mentor/Slack features | SCM writes, other AI work, or restored database credentials |
 | Model/connection disabled; each funding source's budget set to zero | Work using that model/connection or budget | Other funding sources; already-incurred costs; budgets are not strict reservations |
 
 [Practice review](./practice-review#autonomy-coverage-and-delivery) defines workspace and recipient
@@ -178,7 +178,8 @@ preserve them for gap analysis, not automatic replay after PITR.
    `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on Slack-capable roles. Withhold SCM write credentials,
    including app signing keys, PATs and credentials encrypted **inside the restored database**. Removing
    `.env` seeds does not remove database-backed credentials. Keep network denial while inspecting them.
-   Disable workspace mentors before permitting interactive access; `mentorEnabled` alone is never a boundary.
+   Turn off every Heph model row before permitting interactive access (the restore-clone lockdown does this);
+   a turned-off row alone is never a boundary.
    Arrange admin authentication under isolation before the drill; stop if it is unavailable.
 4. Review effective Compose configuration privately (it contains secrets); verify the variables reach
    the containers. Boot only infrastructure and run the

@@ -1,0 +1,81 @@
+---
+id: activity
+title: Activity
+description: See what is waiting on you, what you have open, and what you and your workspace did lately.
+---
+
+Activity shows the work you and your workspace already do on GitHub or GitLab: what is waiting on you,
+what you have open, and what happened lately. It counts and lists that work; it never scores the work
+or ranks anyone.
+
+There are two pages, both in the sidebar under **Dashboards**:
+
+- **Activity** is your own page. It is also the page a workspace opens on.
+- **Workspace activity** shows everyone in the workspace, or one team.
+
+Every workspace has both pages; there is nothing to turn on. They show the work in the workspace's
+repositories. Everyone with a role in the workspace sees it, regardless of what each of them can see
+on GitHub or GitLab. On GitLab, pages say *merge request* where this guide says *pull request*.
+
+## Your Activity
+
+- **Waiting on you** lists open pull requests that ask for your review.
+- **Your open pull requests** lists the pull requests you opened that are still open, drafts
+  included. Each one shows whether it is a **Draft**, whether a reviewer asked for **Changes
+  requested**, whether it is **Approved**, and whether **Checks failing** on its latest commit.
+  Requesting changes on a merge request is a GitLab Premium feature; without it, GitLab work never
+  shows **Changes requested** and no change requests are counted.
+- **Assigned to you** lists open issues assigned to you.
+- **Summary** counts what you did in a time range: the last 7 days, 30 days, 90 days or 12 months.
+- **Recent activity** lists what you did in that range, newest first and grouped by day.
+
+When your workspace reviews practices, a link at the end of the page opens your
+[Practice profile](./practice-profile).
+
+Every item opens the work on GitHub or GitLab, where you act on it. Hephaestus does not change
+anything there.
+
+### The summary
+
+The summary has one row for each kind of work:
+
+| Row | What it counts |
+| --- | --- |
+| **Pull requests** | Pull requests you opened, and those of yours that were merged or closed without merging |
+| **Reviews** | Your reviews of other people's pull requests: approvals, change requests and reviews with comments only |
+| **Issues** | Issues you opened, and those of yours that were closed |
+| **Comments** | Your comments in the conversation of a pull request or issue, and your comments on code |
+
+Open a row to see the activity behind its count; the count and the list follow the same rules.
+
+A few rules decide who a count belongs to:
+
+- **A merge counts for the pull request's author**, whoever pressed the button. The same goes for a
+  pull request closed without merging. When the author is unknown, it counts for nobody.
+- **A closed issue counts for the issue's author**, whoever closed it.
+- **A review of your own pull request is not counted.** A review is something you do for someone
+  else's work. Your comments on your own pull request do count as comments.
+- **Bots are not counted.**
+
+A count says how much of something happened, not how good the work was. Planning, pairing and
+helping in a chat do not show up here.
+
+## Workspace activity
+
+Workspace activity shows the same kinds of counts for everyone. Use **Team** to narrow it to one
+team; **Everyone** shows the whole workspace. A team includes its sub-teams, and its activity is
+counted in the repositories that team's settings include. Where a team filters reviews by label,
+only reviews of pull requests with one of those labels count for it. Workspace totals count only
+current members.
+
+- **Summary** counts the workspace's or the team's activity in the time range, and says how many
+  members were active.
+- **Members** lists the members by name. Open a member to see what is waiting on their review, what
+  they have open, their summary and their recent activity, with a link to their GitHub or GitLab
+  profile. With a team selected, a member's summary and activity are that team's, so they match
+  the member's row.
+- **Recent activity** lists what happened, with who did it.
+
+A workspace admin can hide a member or a team from workspace activity. A hidden member is left out
+of every count and list here. A hidden team is not offered in **Team** and does not count toward the
+team above it. Hiding someone does not change their own Activity page.

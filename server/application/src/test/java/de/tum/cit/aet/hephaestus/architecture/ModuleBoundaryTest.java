@@ -19,7 +19,7 @@ import org.springframework.data.repository.Repository;
  * <ul>
  *   <li><b>integration.scm</b> - Shared kernel for git provider data sync (GitHub now, GitLab coming)</li>
  *   <li><b>workspace</b> - Cross-cutting context (multi-tenancy)</li>
- *   <li><b>Feature modules</b> - leaderboard, activity, mentor, profile depend on both</li>
+ *   <li><b>Feature modules</b> - activity, mentor, practices depend on both</li>
  *   <li><b>Provider subpackages</b> - github/ and (future) gitlab/ isolate provider-specific logic</li>
  * </ul>
  *
@@ -129,7 +129,7 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
          *
          * <p>The vendor-neutral SCM layer (integration.scm.* minus the per-vendor
          * adapters scm.github/scm.gitlab) is the core ETL engine for git data sync.
-         * It should not have direct dependencies on workspace, leaderboard, or other
+         * It should not have direct dependencies on workspace, activity, or other
          * feature modules - only on SPIs in {@code integration.core.spi}.
          *
          * <p>Vendor adapters under scm.github/scm.gitlab are exempt because their job
@@ -173,13 +173,7 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
                     .should()
                     .dependOnClassesThat()
                     .resideInAnyPackage(
-                            "..leaderboard..",
-                            "..activity..",
-                            "..mentor..",
-                            "..notification..",
-                            "..profile..",
-                            "..account..",
-                            "..contributors..")
+                            "..activity..", "..mentor..", "..notification..", "..account..", "..contributors..")
                     .because(
                             "Vendor-neutral SCM domain must be isolated - use domain events for cross-cutting concerns");
             rule.check(classes);
@@ -356,7 +350,7 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
         /**
          * Feature modules should only depend on integration.scm's public contracts.
          *
-         * <p>Feature modules (leaderboard, activity, profile, practices) must NOT bypass
+         * <p>Feature modules (activity, practices) must NOT bypass
          * the SPI layer and directly depend on integration.scm internals like:
          * <ul>
          *   <li>integration.scm.sync - internal sync orchestration</li>
@@ -407,7 +401,7 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
 
             ArchRule rule = noClasses()
                     .that()
-                    .resideInAnyPackage("..leaderboard..", "..activity..", "..profile..", "..practices..")
+                    .resideInAnyPackage("..activity..", "..practices..")
                     .should()
                     .dependOnClassesThat()
                     .resideInAnyPackage(forbiddenInternalPackages)
@@ -440,7 +434,7 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
             // they can't bypass an SPI because they don't have one.
             ArchRule rule = noClasses()
                     .that()
-                    .resideInAnyPackage("..leaderboard..", "..activity..", "..profile..", "..practices..")
+                    .resideInAnyPackage("..activity..", "..practices..")
                     .should()
                     .dependOnClassesThat(DescribedPredicate.describe(
                             "reside in ..integration.scm.github.. but not ..integration.scm.github.project.. "
@@ -463,37 +457,19 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
     class FeatureModuleBoundaryTests {
 
         /**
-         * Leaderboard should not depend on workspace internal implementation.
+         * Activity should not depend on workspace internal implementation.
          *
          * <p>Feature modules should depend on public APIs, not internal details.
          */
         @Test
-        void leaderboardDoesNotDependOnWorkspaceInternals() {
-            ArchRule rule = noClasses()
-                    .that()
-                    .resideInAPackage("..leaderboard..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAnyPackage("..workspace..internal..", "..workspace..adapter..")
-                    .because("Leaderboard should depend on workspace public API, not internals");
-            rule.check(classes);
-        }
-
-        /**
-         * Activity module should not depend on leaderboard internals.
-         *
-         * <p>Activity and leaderboard are peer modules - they should not
-         * have direct dependencies on each other's internal implementation.
-         */
-        @Test
-        void activityDoesNotDependOnLeaderboardInternals() {
+        void activityDoesNotDependOnWorkspaceInternals() {
             ArchRule rule = noClasses()
                     .that()
                     .resideInAPackage("..activity..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAnyPackage("..leaderboard..internal..", "..leaderboard..repository..")
-                    .because("Activity should not depend on leaderboard internal classes");
+                    .resideInAnyPackage("..workspace..internal..", "..workspace..adapter..")
+                    .because("Activity should depend on workspace public API, not internals");
             rule.check(classes);
         }
 
@@ -509,26 +485,26 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
                     .resideInAPackage("..mentor..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAnyPackage("..leaderboard..", "..activity..", "..notification..")
+                    .resideInAnyPackage("..activity..", "..notification..")
                     .because("Mentor should be isolated from other feature modules");
             rule.check(classes);
         }
 
         /**
-         * Profile module should not depend on core sync logic.
+         * The activity read model should not depend on core sync logic.
          *
-         * <p>Profile is a read-only view module that should not modify
+         * <p>The Activity pages are a read-only view that should not modify
          * or depend on the sync engine internals.
          */
         @Test
-        void profileDoesNotDependOnSyncInternals() {
+        void activityOverviewDoesNotDependOnSyncInternals() {
             ArchRule rule = noClasses()
                     .that()
-                    .resideInAPackage("..profile..")
+                    .resideInAPackage("..activity.overview..")
                     .should()
                     .dependOnClassesThat()
                     .resideInAnyPackage("..integration.scm.sync..", "..integration.scm.github..")
-                    .because("Profile should only read data, not depend on sync internals");
+                    .because("The activity read model should only read data, not depend on sync internals");
             rule.check(classes);
         }
 
@@ -545,7 +521,7 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
                     .resideInAPackage("..notification..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAnyPackage("..leaderboard..service..", "..activity..service..", "..mentor..service..")
+                    .resideInAnyPackage("..activity..service..", "..mentor..service..")
                     .because("Notification should use domain events for cross-module communication");
             rule.check(classes);
         }

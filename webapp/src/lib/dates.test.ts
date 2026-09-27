@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { asDate, type Wire } from "./dates";
+import { asDate, formatWeekdayDay, type Wire } from "./dates";
 
 describe("asDate", () => {
 	// The instant, not merely the type: `toBeInstanceOf(Date)` is satisfied by `new Date(0)`.
@@ -66,5 +66,19 @@ describe("Wire", () => {
 		const id: Wire<View>["id"] = "a";
 
 		expect(id).toBe("a");
+	});
+});
+
+describe("formatWeekdayDay", () => {
+	const today = new Date(2026, 8, 27, 15, 0);
+
+	it("names the weekday and leaves out the current year", () => {
+		expect(formatWeekdayDay(new Date(2026, 8, 21, 9, 30), today)).toBe("Monday, 21 September");
+	});
+
+	it("writes the year of a day in another one", () => {
+		expect(formatWeekdayDay(new Date(2025, 11, 31, 9, 30), today)).toBe(
+			"Wednesday, 31 December 2025",
+		);
 	});
 });

@@ -26,7 +26,6 @@ import org.springframework.beans.factory.annotation.Autowired;
  * <p>Tests verify database-level behavior including:
  * <ul>
  *   <li>Idempotency via unique constraint on event_key</li>
- *   <li>XP clamping and precision rounding</li>
  *   <li>Relationship to workspace, user, and repository entities</li>
  *   <li>Cache eviction behavior</li>
  * </ul>
@@ -119,8 +118,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                     testUser,
                     testRepository,
                     ActivityTargetType.PULL_REQUEST,
-                    100L,
-                    1.5);
+                    100L);
 
             assertThat(result).isTrue();
 
@@ -136,7 +134,6 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
             assertThat(event.getWorkspace().getId()).isEqualTo(testWorkspace.getId());
             assertThat(event.getTargetType()).isEqualTo(ActivityTargetType.PULL_REQUEST.getValue());
             assertThat(event.getTargetId()).isEqualTo(100L);
-            assertThat(event.getXp()).isEqualTo(1.5);
         }
 
         @Test
@@ -148,8 +145,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                     null, // No actor (system event)
                     null, // No repository
                     ActivityTargetType.ISSUE,
-                    200L,
-                    0.0);
+                    200L);
 
             assertThat(result).isTrue();
 
@@ -175,8 +171,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                     testUser,
                     testRepository,
                     ActivityTargetType.PULL_REQUEST,
-                    100L,
-                    1.0);
+                    100L);
 
             // Second record with same key - should be rejected
             boolean second = activityEventService.record(
@@ -186,8 +181,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                     testUser,
                     testRepository,
                     ActivityTargetType.PULL_REQUEST,
-                    100L,
-                    1.0);
+                    100L);
 
             assertThat(first).isTrue();
             assertThat(second).isFalse();
@@ -206,8 +200,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                     testUser,
                     testRepository,
                     ActivityTargetType.REVIEW,
-                    100L,
-                    2.0);
+                    100L);
 
             boolean second = activityEventService.record(
                     testWorkspace.getId(),
@@ -216,69 +209,11 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                     testUser,
                     testRepository,
                     ActivityTargetType.REVIEW,
-                    100L,
-                    2.5);
+                    100L);
 
             assertThat(first).isTrue();
             assertThat(second).isTrue();
             assertThat(activityEventRepository.findAll()).hasSize(2);
-        }
-    }
-
-    @Nested
-    class XpHandling {
-
-        @Test
-        void clampsNegativeXpToZero() {
-            activityEventService.record(
-                    testWorkspace.getId(),
-                    ActivityEventType.PULL_REQUEST_OPENED,
-                    Instant.now(),
-                    testUser,
-                    testRepository,
-                    ActivityTargetType.PULL_REQUEST,
-                    100L,
-                    -50.0);
-
-            List<ActivityEvent> events = activityEventRepository.findAll();
-            assertThat(events).hasSize(1);
-            assertThat(events.get(0).getXp()).isZero();
-        }
-
-        @Test
-        void roundsXpTo2DecimalPlaces() {
-            activityEventService.record(
-                    testWorkspace.getId(),
-                    ActivityEventType.REVIEW_APPROVED,
-                    Instant.now(),
-                    testUser,
-                    testRepository,
-                    ActivityTargetType.REVIEW,
-                    100L,
-                    3.14159 // Should be rounded to 3.14
-                    );
-
-            List<ActivityEvent> events = activityEventRepository.findAll();
-            assertThat(events).hasSize(1);
-            assertThat(events.get(0).getXp()).isEqualTo(3.14);
-        }
-
-        @Test
-        void roundsXpWithHalfUp() {
-            activityEventService.record(
-                    testWorkspace.getId(),
-                    ActivityEventType.REVIEW_CHANGES_REQUESTED,
-                    Instant.now(),
-                    testUser,
-                    testRepository,
-                    ActivityTargetType.REVIEW,
-                    101L, // Different target to avoid duplicate
-                    2.555 // Should round UP to 2.56 (HALF_UP)
-                    );
-
-            List<ActivityEvent> events = activityEventRepository.findAll();
-            assertThat(events).hasSize(1);
-            assertThat(events.get(0).getXp()).isEqualTo(2.56);
         }
     }
 
@@ -294,8 +229,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                     testUser,
                     testRepository,
                     ActivityTargetType.PULL_REQUEST,
-                    100L,
-                    1.0);
+                    100L);
 
             assertThat(result).isFalse();
             assertThat(activityEventRepository.findAll()).isEmpty();
@@ -316,8 +250,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                     testUser,
                     testRepository,
                     ActivityTargetType.PULL_REQUEST,
-                    42L,
-                    1.0);
+                    42L);
 
             List<ActivityEvent> events = activityEventRepository.findAll();
             assertThat(events).hasSize(1);

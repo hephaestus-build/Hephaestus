@@ -114,8 +114,10 @@ provider egress denied, `AGENT_ENABLED=false` on server **and** worker, and Sile
 before any application role starts. The PostgreSQL health check alone does not show that recovery
 has finished; the command above waits for promotion before it changes restored data. The lockdown
 transaction engages Silent Mode, pauses every workspace's feedback delivery, disables
-automatic/manual reviews and mentors, and advances the rollout revision so prepared work cannot
-use an earlier policy. It changes the **clone only**;
+automatic/manual reviews, turns off every Heph row under each workspace's **AI models** so Heph
+answers nobody, and advances the rollout revision so prepared work cannot use an earlier policy.
+After lifting the lockdown, a workspace admin turns the Heph rows back on under **AI models**; the
+lockdown does not record which were on before. It changes the **clone only**;
 never pipe this file into the production database. The restore overlay also refuses direct starts
 of the server, worker and webhook roles. An operator who later inspects application health must
 use a separately reviewed isolated override; removing this brake is an explicit release step,

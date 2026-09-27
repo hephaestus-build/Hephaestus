@@ -35,7 +35,6 @@ import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 export type SidebarContext = "main" | "mentor" | "admin";
 
 export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-	username: string;
 	isAdmin: boolean;
 	isOwner?: boolean;
 	isAppAdmin: boolean;
@@ -55,7 +54,6 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 }
 
 export function AppSidebar({
-	username,
 	isAdmin,
 	isOwner = false,
 	isAppAdmin,
@@ -139,14 +137,10 @@ export function AppSidebar({
 		sidebarContent = (
 			<>
 				<NavDashboards
-					username={username}
 					workspaceSlug={activeWorkspace.workspaceSlug}
-					leaderboardEnabled={activeWorkspace.leaderboardEnabled}
 					practicesEnabled={activeWorkspace.practicesEnabled}
 				/>
-				{isMember && activeWorkspace.mentorEnabled && (
-					<NavMentor workspaceSlug={activeWorkspace.workspaceSlug} />
-				)}
+				{isMember && <NavMentor workspaceSlug={activeWorkspace.workspaceSlug} />}
 				{isAdmin && (
 					<NavAdmin
 						isOwner={isOwner}

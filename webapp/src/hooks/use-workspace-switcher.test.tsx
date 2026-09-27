@@ -11,7 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Route as workspaceHomeRoute } from "@/routes/_authenticated/w/$workspaceSlug/index";
+import { Route as workspaceActivityRoute } from "@/routes/_authenticated/w/$workspaceSlug/workspace-activity";
 
 import { useWorkspaceSwitcher } from "./use-workspace-switcher";
 
@@ -67,17 +67,24 @@ function renderRoute(initialEntry: string, path: string, { mountAtRoot = false }
 		path,
 		component: mountAtRoot ? () => null : SwitchWorkspace,
 	});
-	// The workspace home's own schema and search middleware, not a copy: which of its options survive
-	// a switch is the thing under test, so a key added to the retain list is tested here too.
 	const indexRoute = createRoute({
 		getParentRoute: () => workspaceRoute,
 		path: "/",
 		component: () => null,
-		validateSearch: workspaceHomeRoute.options.validateSearch,
-		search: workspaceHomeRoute.options.search,
+	});
+	// Workspace activity's own schema and search middleware, not a copy: which of its options survive
+	// a switch is the thing under test, so a key added to the retain list is tested here too.
+	const activityRoute = createRoute({
+		getParentRoute: () => workspaceRoute,
+		path: "workspace-activity",
+		component: () => null,
+		validateSearch: workspaceActivityRoute.options.validateSearch,
+		search: workspaceActivityRoute.options.search,
 	});
 	const router = createRouter({
-		routeTree: rootRoute.addChildren([workspaceRoute.addChildren([indexRoute, currentRoute])]),
+		routeTree: rootRoute.addChildren([
+			workspaceRoute.addChildren([indexRoute, activityRoute, currentRoute]),
+		]),
 		history: createMemoryHistory({ initialEntries: [initialEntry] }),
 	});
 
@@ -123,21 +130,15 @@ describe("useWorkspaceSwitcher", () => {
 		expect(toast.info).not.toHaveBeenCalled();
 	});
 
-	it("clears the leaderboard's team filter and keeps its workspace-independent options", async () => {
-		const router = renderRoute(
-			"/w/alpha?team=Backend&sort=LEAGUE_POINTS&mode=INDIVIDUAL",
-			"teams",
-			{
-				mountAtRoot: true,
-			},
-		);
+	it("clears workspace activity's team and keeps its range", async () => {
+		const router = renderRoute("/w/alpha/workspace-activity?range=30d&team=5", "teams", {
+			mountAtRoot: true,
+		});
 
 		await clickWorkspaceSwitch();
 
 		await waitFor(() =>
-			expect(router.state.location.href).toBe(
-				"/w/beta?team=all&sort=LEAGUE_POINTS&mode=INDIVIDUAL",
-			),
+			expect(router.state.location.href).toBe("/w/beta/workspace-activity?range=30d"),
 		);
 	});
 
@@ -163,7 +164,7 @@ describe("useWorkspaceSwitcher", () => {
 
 	it.each([
 		["mentor thread", "/w/alpha/mentor/thread-1?message=foreign", "mentor/$threadId"],
-		["user profile", "/w/alpha/user/octocat?group=foreign", "user/$username"],
+		["member", "/w/alpha/user/octocat?group=foreign", "user/$username"],
 		[
 			"practice",
 			"/w/alpha/admin/practices/testing?status=foreign",
@@ -174,10 +175,8 @@ describe("useWorkspaceSwitcher", () => {
 
 		await clickWorkspaceSwitch();
 
-		// The workspace home writes its own defaults into the URL; nothing of the previous page's.
-		await waitFor(() =>
-			expect(router.state.location.href).toBe("/w/beta?team=all&sort=SCORE&mode=INDIVIDUAL"),
-		);
+		// Nothing of the previous page's search follows into the new workspace.
+		await waitFor(() => expect(router.state.location.href).toBe("/w/beta"));
 		expect(toast.info).toHaveBeenCalledExactlyOnceWith("Switched to Beta workspace", {
 			description:
 				"This page is specific to the previous workspace, so Hephaestus opened the new workspace's home page.",

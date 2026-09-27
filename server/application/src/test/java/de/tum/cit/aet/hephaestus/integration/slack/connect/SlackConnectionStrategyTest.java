@@ -121,8 +121,6 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
         ConnectionConfig.SlackConfig cfg = (ConnectionConfig.SlackConfig) c.config();
         assertThat(cfg.teamId()).isEqualTo("T9");
         assertThat(cfg.teamName()).isEqualTo("Hephaestus Test");
-        assertThat(cfg.notificationChannelId()).isNull();
-        assertThat(cfg.teamLabel()).isNull();
     }
 
     @Test

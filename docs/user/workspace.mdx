@@ -4,11 +4,11 @@ title: Workspace basics
 description: Understand how workspaces separate repositories, members, practices, integrations, and settings.
 ---
 
-A workspace contains the repositories, members, teams, practice catalog, integrations, and feature settings for one group. A Hephaestus deployment can host more than one workspace, and a person can belong to several.
+A workspace contains the repositories, members, teams, practice catalog, integrations, and settings for one group. A Hephaestus deployment can host more than one workspace, and a person can belong to several.
 
 Use the workspace switcher at the top of the sidebar to move between the workspaces you can access.
 
-Hephaestus keeps you on the same kind of page when it applies to both workspaces. From a page for a specific person, conversation, practice, or other workspace item, switching opens the workspace home page instead. A page option that names something in the workspace you are leaving, such as a team filter, is cleared. Most other page options reset too; the leaderboard keeps its sorting, time range and view. If you open a link to a workspace that is no longer available to you, Hephaestus opens the home page of another workspace you can access, or tells you that you are not in a workspace yet. Signing in opens the first workspace you can access.
+Hephaestus keeps you on the same kind of page when it applies to both workspaces. From a page for a specific person, conversation, practice, or other workspace item, switching opens the workspace home page instead. A page option that names something in the workspace you are leaving, such as a team filter, is cleared. Most other page options reset too; the Activity pages keep their time range. If you open a link to a workspace that is no longer available to you, Hephaestus opens the home page of another workspace you can access, or tells you that you are not in a workspace yet. Signing in opens the first workspace you can access.
 
 ## Create a workspace
 
@@ -46,15 +46,14 @@ Workspace admins choose:
 
 - which engineering practices are active
 - whether practice reviews run automatically or can be triggered manually
-- whether Heph is available
-- which connected AI model powers practice reviews and Heph
+- which connected AI model powers practice reviews and Heph; Heph is offered to every member once a
+  model for it is set up
 - the monthly AI spending cap
 
 These settings apply only to that workspace.
 
-## Optional features
-
-Workspace admins can separately enable the leaderboard, progression, leagues, and Slack. A feature that is off does not appear in the member navigation.
+[Activity](./activity) is part of every workspace and has no setting of its own; see there for hiding
+a member or a team from workspace activity.
 
 ## Troubleshooting
 
@@ -62,7 +61,8 @@ Workspace admins can separately enable the leaderboard, progression, leagues, an
 - **Repository missing?** Check the GitHub App installation or the monitored repository list, depending on the connection type.
 - **Repository or Slack channel sync error?** Open **Administration → Integrations** and check the affected resource's last error. Check its access in the connected service, then run a new sync. Each error clears after its affected sync path succeeds; a skipped pass keeps its error.
 - **Team missing?** Confirm that the team exists in the connected source platform and has synced.
-- **Feature missing?** Ask a workspace admin whether it is enabled in this workspace.
+- **Practice profile or Review activity missing?** Ask a workspace admin whether practice reviews are on in this workspace.
+- **Heph not answering?** See [Who can use Heph](./ai-mentor#who-can-use-heph).
 
 ## Your AI choice
 

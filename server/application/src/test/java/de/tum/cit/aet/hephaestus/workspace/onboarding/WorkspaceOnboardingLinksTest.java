@@ -44,7 +44,7 @@ class WorkspaceOnboardingLinksTest extends BaseUnitTest {
                 new Workspace(),
                 IntegrationKind.SLACK,
                 "T123",
-                new ConnectionConfig.SlackConfig("T123", "Engineering", null, null, null, Set.of()));
+                new ConnectionConfig.SlackConfig("T123", "Engineering", null, Set.of()));
         org.springframework.test.util.ReflectionTestUtils.setField(connection, "id", 9L);
         connection.setState(IntegrationState.ACTIVE);
         return connection;

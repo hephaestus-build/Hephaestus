@@ -87,7 +87,7 @@ public class SlackRetentionSweeper {
 
     private int retentionWindowDays(long workspaceId) {
         int configured = connectionService
-                .findSlackNotificationConfig(workspaceId)
+                .findSlackConfig(workspaceId)
                 .map(ConnectionConfig.SlackConfig::retentionDaysOrDefault)
                 .orElse(ConnectionConfig.SlackConfig.DEFAULT_RETENTION_DAYS);
         return Math.min(configured, MAX_RETENTION_DAYS);

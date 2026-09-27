@@ -3,6 +3,8 @@ import {
 	GitPullRequestClosedIcon,
 	GitPullRequestDraftIcon,
 	GitPullRequestIcon,
+	IssueClosedIcon,
+	IssueOpenedIcon,
 } from "@primer/octicons-react";
 import type { ComponentType } from "react";
 
@@ -65,4 +67,14 @@ export function getPullRequestStateIcon(
 		return icons.closed;
 	}
 	return icons.open;
+}
+
+/**
+ * An issue's state, drawn the same on both providers. The state enum is the one pull requests use,
+ * and an issue is never MERGED.
+ */
+export function getIssueStateIcon(state: PullRequestState): PullRequestStateIconResult {
+	return state === "OPEN"
+		? { icon: IssueOpenedIcon, colorClass: "text-provider-open-foreground" }
+		: { icon: IssueClosedIcon, colorClass: "text-provider-done-foreground" };
 }

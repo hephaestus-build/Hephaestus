@@ -24,7 +24,7 @@ class WorkspaceContextExecutorTest {
     @Test
     void shouldPropagateContextToRunnable() throws Exception {
         WorkspaceContext context = new WorkspaceContext(
-                1L, "test-workspace", "Test", AccountType.ORG, 100L, false, false, Set.of(WorkspaceRole.OWNER));
+                1L, "test-workspace", "Test", AccountType.ORG, 100L, false, Set.of(WorkspaceRole.OWNER));
         WorkspaceContextHolder.setContext(context);
 
         AtomicReference<WorkspaceContext> capturedContext = new AtomicReference<>();
@@ -50,7 +50,7 @@ class WorkspaceContextExecutorTest {
     @Test
     void shouldPropagateContextToCallable() throws Exception {
         WorkspaceContext workspaceContext =
-                new WorkspaceContext(42L, "callable-test", "Test", AccountType.USER, null, false, false, Set.of());
+                new WorkspaceContext(42L, "callable-test", "Test", AccountType.USER, null, false, Set.of());
         WorkspaceContextHolder.setContext(workspaceContext);
 
         Callable<String> wrapped = WorkspaceContextExecutor.wrap(() -> {
@@ -74,7 +74,7 @@ class WorkspaceContextExecutorTest {
     @Test
     void shouldPropagateMDCToRunnable() throws Exception {
         WorkspaceContext context =
-                new WorkspaceContext(99L, "mdc-test", "Test", AccountType.ORG, 777L, false, false, Set.of());
+                new WorkspaceContext(99L, "mdc-test", "Test", AccountType.ORG, 777L, false, Set.of());
         WorkspaceContextHolder.setContext(context);
 
         AtomicReference<String> capturedWorkspaceId = new AtomicReference<>();
@@ -99,7 +99,7 @@ class WorkspaceContextExecutorTest {
     @Test
     void shouldCleanupContextAfterRunnableExecution() throws Exception {
         WorkspaceContext context =
-                new WorkspaceContext(1L, "cleanup-test", "Test", AccountType.ORG, null, false, false, Set.of());
+                new WorkspaceContext(1L, "cleanup-test", "Test", AccountType.ORG, null, false, Set.of());
         WorkspaceContextHolder.setContext(context);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -158,10 +158,8 @@ class WorkspaceContextExecutorTest {
 
     @Test
     void shouldNotLeakContextBetweenExecutions() throws Exception {
-        WorkspaceContext context1 =
-                new WorkspaceContext(1L, "ws1", "WS1", AccountType.ORG, null, false, false, Set.of());
-        WorkspaceContext context2 =
-                new WorkspaceContext(2L, "ws2", "WS2", AccountType.USER, null, false, false, Set.of());
+        WorkspaceContext context1 = new WorkspaceContext(1L, "ws1", "WS1", AccountType.ORG, null, false, Set.of());
+        WorkspaceContext context2 = new WorkspaceContext(2L, "ws2", "WS2", AccountType.USER, null, false, Set.of());
 
         AtomicReference<String> capturedSlug1 = new AtomicReference<>();
         AtomicReference<String> capturedSlug2 = new AtomicReference<>();
@@ -194,9 +192,9 @@ class WorkspaceContextExecutorTest {
     @Test
     void shouldRestorePreviousContextAndMdcAfterExecution() throws Exception {
         WorkspaceContext previousContext =
-                new WorkspaceContext(10L, "base", "Base", AccountType.ORG, null, false, false, Set.of());
+                new WorkspaceContext(10L, "base", "Base", AccountType.ORG, null, false, Set.of());
         WorkspaceContext wrappedContext =
-                new WorkspaceContext(11L, "wrapped", "Wrapped", AccountType.USER, null, false, false, Set.of());
+                new WorkspaceContext(11L, "wrapped", "Wrapped", AccountType.USER, null, false, Set.of());
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
         CountDownLatch latch = new CountDownLatch(1);

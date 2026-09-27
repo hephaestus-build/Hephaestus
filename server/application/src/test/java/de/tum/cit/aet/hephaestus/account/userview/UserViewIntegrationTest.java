@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.account.userview;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
+import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
+import de.tum.cit.aet.hephaestus.activity.ActivityTargetType;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
@@ -14,6 +17,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -46,6 +50,9 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private IdentityLinkRepository identityLinks;
+
+    @Autowired
+    private ActivityEventRepository activityEvents;
 
     @Autowired
     @Qualifier("requestMappingHandlerMapping")
@@ -295,13 +302,15 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldReadTheNormalProfileAsTheSelectedAccountlessUser() {
-        sessionRequest("/workspaces/acme/profile/" + viewed.getLogin())
+    void shouldReadTheNormalActivityAsTheSelectedAccountlessUser() {
+        recordReview(viewed);
+
+        sessionRequest("/workspaces/acme/activity/timeline?login=" + viewed.getLogin())
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.userInfo.id")
+                .jsonPath("$.content[0].actor.id")
                 .isEqualTo(viewed.getId());
         assertThat(userViewRowsFor(viewed)).isEqualTo(1);
     }
@@ -311,29 +320,44 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         User gitLabNamesake =
                 TestUserFactory.ensureUser(userRepository, viewed.getLogin(), 700_002L, ensureGitLabProvider());
         ensureWorkspaceMembership(workspace, gitLabNamesake, WorkspaceMembership.WorkspaceRole.MEMBER);
+        recordReview(viewed);
+        recordReview(gitLabNamesake);
 
-        sessionRequest("/workspaces/acme/profile/" + gitLabNamesake.getLogin(), token(), gitLabNamesake.getId())
+        sessionRequest(
+                        "/workspaces/acme/activity/timeline?login=" + gitLabNamesake.getLogin(),
+                        token(),
+                        gitLabNamesake.getId())
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.userInfo.id")
+                .jsonPath("$.content.length()")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].actor.id")
                 .isEqualTo(gitLabNamesake.getId());
     }
 
     @Test
-    void shouldReadATeammatesProfileAndRecordTheViewWhenViewingAMember() {
-        User teammate = persistUser("teammate-profile");
+    void shouldReadATeammatesActivityAndRecordTheViewWhenViewingAMember() {
+        User teammate = persistUser("teammate-activity");
         ensureWorkspaceMembership(workspace, teammate, WorkspaceMembership.WorkspaceRole.MEMBER);
+        recordReview(teammate);
 
-        sessionRequest("/workspaces/acme/profile/" + teammate.getLogin())
+        sessionRequest("/workspaces/acme/activity/timeline?login=" + teammate.getLogin())
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.userInfo.id")
+                .jsonPath("$.content[0].actor.id")
                 .isEqualTo(teammate.getId());
-        assertThat(userViewRowsFor(viewed)).isEqualTo(1);
+        sessionRequest("/workspaces/acme/activity/members/" + teammate.getLogin() + "/open-work")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.reviewRequests.content")
+                .isArray();
+        assertThat(userViewRowsFor(viewed)).isEqualTo(2);
     }
 
     @Test
@@ -547,6 +571,21 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
             headers.set(UserViewContextHolder.USER_HEADER, String.valueOf(userId));
             headers.set(UserViewContextHolder.REASON_HEADER, "Support");
         };
+    }
+
+    /** One review by {@code actor} in the viewed workspace, on a pull request that is not theirs. */
+    private void recordReview(User actor) {
+        UUID id = UUID.randomUUID();
+        activityEvents.insertIfAbsent(
+                id,
+                "review-" + id,
+                ActivityEventType.REVIEW_APPROVED.name(),
+                Instant.now().minusSeconds(60),
+                actor.getId(),
+                workspace.getId(),
+                null,
+                ActivityTargetType.REVIEW.getValue(),
+                id.getMostSignificantBits());
     }
 
     private ChatThread thread(Workspace ownerWorkspace, User owner, String title) {

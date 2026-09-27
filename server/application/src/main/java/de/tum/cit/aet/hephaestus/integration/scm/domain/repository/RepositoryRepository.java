@@ -16,15 +16,13 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>This repository contains only domain-agnostic queries for the integration.scm domain.
  * Scope-filtered queries (those that join with RepositoryToMonitor or other consuming module
- * entities) belong in the consuming packages (leaderboard, profile, etc.) to maintain
+ * entities) belong in the consuming packages (activity, practices, etc.) to maintain
  * clean architecture boundaries.
  *
  * <p>Workspace-agnostic by design: provider-domain lookups (by native ID, full name) run
  * during sync flows that resolve the workspace later via {@code repository_to_monitor}
  * joins or {@code WorkspaceContext}. Direct entity load/save SQL is allowed by the
  * PK-only DML carve-out in {@code WorkspaceStatementInspector}.
- *
- * @see de.tum.cit.aet.hephaestus.profile.ProfileRepositoryQueryRepository
  */
 @org.springframework.stereotype.Repository
 @WorkspaceAgnostic("Provider-domain lookups by native ID / full name; workspace resolved downstream")
