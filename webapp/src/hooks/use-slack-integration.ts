@@ -208,6 +208,7 @@ export function useSlackIntegration(workspaceSlug: string) {
 		notificationSettingsProps: {
 			workspaceSlug,
 			hasSlackConnection: isConnectionActive,
+			credentialsUnreadableSince: entry?.credentialsUnreadableSince,
 			...digestSettings,
 			channelCandidates: slackChannelCandidates ?? [],
 			onSaved: () => {
