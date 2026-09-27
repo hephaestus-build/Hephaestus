@@ -19,7 +19,6 @@ import java.text.BreakIterator;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -27,6 +26,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -117,6 +117,10 @@ class DeliveryComposer {
                     .filter(f -> !withheldSlugs.contains(f.practiceSlug()))
                     .toList();
             composerWithheld.addAll(identityDiff(before, negatives));
+            observations.stream()
+                    .filter(DeliveryComposer::isStrength)
+                    .filter(f -> withheldSlugs.contains(f.practiceSlug()))
+                    .forEach(composerWithheld::add);
         }
 
         if (ArtifactKinds.ISSUE.equals(artifact)) {
@@ -155,46 +159,61 @@ class DeliveryComposer {
         }
 
         if (negatives.isEmpty() && !recurring.isEmpty()) {
-            Rendering rendering = new Rendering(whyBySlug, emittedWhy, ComposedNotes.claim(recurring, composed), lead);
+            Rendering rendering =
+                    new Rendering(whyBySlug, emittedWhy, ComposedNotes.claim(recurring, observations, composed), lead);
             var sb = new StringBuilder(1024);
             sb.append(openingOf(rendering));
             appendRecurring(sb, recurring);
             return new DeliveryContent(
-                    sb.toString(), List.of(), withheldObservations(dedupDropped, capDropped, composerWithheld));
+                    sb.toString(),
+                    List.of(),
+                    withheldObservations(dedupDropped, capDropped, composerWithheld),
+                    keysOf(recurring));
         }
         if (negatives.isEmpty()) {
-            // Ranked best-attested first, so the strengths that survive the cap are the ones we saw in the
-            // most of the work, and so a practice's single composed message is claimed by its widest
-            // signal. Strengths carry no severity, so breadth is the only ranking dimension there is here.
-            List<ValidatedObservation> observed = observations.stream()
+            // A strength reaches the work only as the composition stage's own note for it: an observation
+            // summary is a measurement, not an intervention, and a lead has nothing to introduce without one.
+            // Ranked best-attested first, so a practice's single composed message is claimed by its widest signal.
+            List<ValidatedObservation> strengths = observations.stream()
                     .filter(DeliveryComposer::isStrength)
                     .sorted(ObservationOrder.bestAttestedFirst())
                     .toList();
-            if (observed.isEmpty()) {
-                // Every observation NOT_APPLICABLE or UNDETERMINED: nothing was actually assessed, so deliver
-                // nothing rather than a misleading "nothing to change here" all-clear.
-                return null;
+            ComposedNotes notes = ComposedNotes.claim(strengths, observations, composed);
+            List<ValidatedObservation> said = strengths.stream()
+                    .filter(f -> notes.byObservation().containsKey(f))
+                    .toList();
+            if (said.size() > MAX_STRENGTH_REINFORCEMENTS) {
+                capDropped.addAll(said.subList(MAX_STRENGTH_REINFORCEMENTS, said.size()));
+                said = said.subList(0, MAX_STRENGTH_REINFORCEMENTS);
             }
-            Rendering rendering = new Rendering(whyBySlug, emittedWhy, ComposedNotes.claim(observed, composed), lead);
-            return new DeliveryContent(composeNoIssuesNote(observed, rendering), List.of(), List.of());
+            var withheld = withheldObservations(dedupDropped, capDropped, composerWithheld);
+            if (said.isEmpty()) {
+                return withheld.isEmpty() ? null : new DeliveryContent(null, List.of(), withheld, List.of());
+            }
+            Rendering rendering = new Rendering(whyBySlug, emittedWhy, notes, lead);
+            return new DeliveryContent(
+                    composeStrengthsNote(said, rendering), List.of(), withheld, keysOf(rendering.writtenFrom(said)));
         }
 
+        // Claimed over the severity-sorted negatives, BEFORE either surface renders, so the summary and
+        // the inline notes agree on which locus carries a practice's composed message.
+        Rendering rendering =
+                new Rendering(whyBySlug, emittedWhy, ComposedNotes.claim(negatives, observations, composed), lead);
         // Issues carry no diff, so every issue observation must expand in full in the note itself rather than
         // demote to a diff note that silently vanishes.
         boolean inlineSupported = ArtifactKinds.hasInlineLane(artifact);
         List<ValidatedObservation> inlinable = new ArrayList<>();
         List<ValidatedObservation> nonInlinable = new ArrayList<>();
         for (ValidatedObservation f : negatives) {
-            if (inlineSupported && !isNonInlinable(f) && !hasArtifactPlacement(f.practiceSlug(), composed)) {
+            ComposedNote note = rendering.noteFor(f);
+            boolean onTheArtifact = note != null
+                    && note.placement().kind() == ComposedFeedbackUnit.InContextPlacement.PlacementKind.ARTIFACT;
+            if (inlineSupported && !isNonInlinable(f) && !onTheArtifact) {
                 inlinable.add(f);
             } else {
                 nonInlinable.add(f);
             }
         }
-
-        // Claimed over the severity-sorted negatives, BEFORE either surface renders, so the summary and
-        // the inline notes agree on which locus carries a practice's composed message.
-        Rendering rendering = new Rendering(whyBySlug, emittedWhy, ComposedNotes.claim(negatives, composed), lead);
 
         // The notes on the diff are built first, because a finding that could not be placed on a line —
         // capped, or its anchor no longer in the diff — has to fall back into the summary rather than
@@ -211,17 +230,22 @@ class DeliveryComposer {
             mrNote = sb.toString();
         }
         List<DiffNote> diffNotes = placed.notes();
-
-        return new DeliveryContent(mrNote, diffNotes, withheldObservations(dedupDropped, capDropped, composerWithheld));
+        var withheld = withheldObservations(dedupDropped, capDropped, composerWithheld);
+        if (diffNotes.isEmpty() && rendering.summarised().isEmpty() && recurring.isEmpty()) {
+            // Every remaining problem scrubbed to nothing: an opening alone is not a note.
+            return withheld.isEmpty() ? null : new DeliveryContent(null, List.of(), withheld, List.of());
+        }
+        List<ValidatedObservation> summarisedFrom = new ArrayList<>(rendering.writtenFrom(rendering.summarised()));
+        summarisedFrom.addAll(recurring);
+        return new DeliveryContent(mrNote, diffNotes, withheld, keysOf(summarisedFrom));
     }
 
-    private static boolean hasArtifactPlacement(String practiceSlug, List<ComposedFeedbackUnit> composed) {
-        return composed.stream()
-                .anyMatch(unit -> unit.channel() == FeedbackChannel.IN_CONTEXT
-                        && unit.action() != ComposedFeedbackUnit.Action.WITHHOLD
-                        && unit.practiceSlug().equals(practiceSlug)
-                        && unit.placement() != null
-                        && unit.placement().kind() == ComposedFeedbackUnit.InContextPlacement.PlacementKind.ARTIFACT);
+    private static List<String> keysOf(List<ValidatedObservation> observations) {
+        return observations.stream()
+                .map(ValidatedObservation::occurrenceKey)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
     }
 
     private static List<ValidatedObservation> identityDiff(
@@ -359,48 +383,20 @@ class DeliveryComposer {
                     + "|before merging|(?:this|it) can merge|approv(?:e|es|ed|ing|al))\\b",
             Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
 
-    private static String composeNoIssuesNote(List<ValidatedObservation> observed, Rendering rendering) {
+    /** Every strength here carries its composed note, and the caller has already capped them. */
+    private static String composeStrengthsNote(List<ValidatedObservation> said, Rendering rendering) {
         String opening = openingOf(rendering);
-        // Already ranked most-certain first by the caller. A strength earns a bullet when there is
-        // something to say about it — the composed message where the stage wrote one, and the
-        // observation's own summary where it did not. Never the evidence rationale: that is written
-        // for whoever audits the review, in the first person and about the search ("I walked all six
-        // sink classes"), and a developer reading their own pull request is owed what was found about
-        // their work rather than how the instrument looked for it.
-        List<ValidatedObservation> withSomethingToSay = observed.stream()
-                .filter(f -> rendering.noteFor(f) != null || !f.summary().isBlank())
-                .toList();
-
-        if (withSomethingToSay.isEmpty()) {
-            return opening + "Reviewed against the active practices \u2014 nothing to change here.\n";
-        }
-
         var bullets = new StringBuilder(1024);
-        int shown = 0;
-        for (ValidatedObservation f : withSomethingToSay) {
-            if (shown >= MAX_STRENGTH_REINFORCEMENTS) break;
-            ComposedNote note = rendering.noteFor(f);
-            String summary = clampToSentenceBudget(
-                    note == null ? sanitizeStudentText(f.summary()).strip() : note.title(), STRENGTH_BUDGET);
-            if (summary.isBlank()) {
-                // Reasoning was entirely grading-meta and scrubbed to nothing — skip rather than emit a
-                // bare bullet with no observation behind it.
-                continue;
-            }
+        for (ValidatedObservation f : said) {
+            ComposedNote note = Objects.requireNonNull(rendering.noteFor(f));
+            String summary = clampToSentenceBudget(note.title(), STRENGTH_BUDGET);
             String label = capitalize(f.practiceSlug().replace('-', ' '));
             bullets.append("- **").append(label).append(":** ").append(summary);
-            // Only a composed message carries a forward step; a measurement writes none, so an uncomposed
-            // strength is the observation alone. Bare, empty, or "No change needed." text degrades to the
-            // same thing.
-            String forward = clampToSentenceBudget(note == null ? "" : note.nextStep(), STRENGTH_BUDGET);
-            if (!forward.isBlank() && !forward.replace(".", "").equalsIgnoreCase("No change needed")) {
+            String forward = clampToSentenceBudget(note.nextStep(), STRENGTH_BUDGET);
+            if (!forward.replace(".", "").strip().equalsIgnoreCase("No change needed")) {
                 bullets.append(endSentence(summary)).append(' ').append(forward);
             }
             bullets.append("\n");
-            shown++;
-        }
-        if (shown == 0) {
-            return opening + "Reviewed against the active practices \u2014 nothing to change here.\n";
         }
         // The review's own opening already introduces the list; a second header would say it again, worse.
         String header = opening.isEmpty() ? "What's working well here, and how to keep building on it:\n\n" : "";
@@ -535,6 +531,7 @@ class DeliveryComposer {
             composeArtifactObservation(sb, f, rendering);
             return;
         }
+        rendering.summarised().add(f);
         appendObservationHeader(sb, f, true, rendering);
         sb.append("\n\n");
 
@@ -573,6 +570,7 @@ class DeliveryComposer {
         if (claim.isBlank()) {
             return;
         }
+        rendering.summarised().add(f);
         // Written as a clause so it reads as part of a sentence, which leaves the server to start it like
         // one. A note about the pull request lands between the review's own paragraphs, not under a header.
         sb.append(capitalize(claim));
@@ -753,7 +751,8 @@ class DeliveryComposer {
                         startLine,
                         endLine,
                         body,
-                        f.occurrenceKey() == null ? null : "observation:" + f.occurrenceKey()));
+                        f.occurrenceKey() == null ? null : "observation:" + f.occurrenceKey(),
+                        keysOf(rendering.writtenFrom(List.of(f)))));
             } else {
                 unplaced.add(f);
             }
@@ -805,56 +804,116 @@ class DeliveryComposer {
         return "`".repeat(Math.max(3, longest + 1));
     }
 
+    /** @param summarised every observation the summary rendered a sentence from, in rendering order */
     record Rendering(
             Map<String, String> whyBySlug,
             Set<String> emittedWhy,
             ComposedNotes notes,
-            @Nullable String lead) {
+            @Nullable String lead,
+            List<ValidatedObservation> summarised) {
+        Rendering(Map<String, String> whyBySlug, Set<String> emittedWhy, ComposedNotes notes, @Nullable String lead) {
+            this(whyBySlug, emittedWhy, notes, lead, new ArrayList<>());
+        }
+
         @Nullable
         ComposedNote noteFor(ValidatedObservation f) {
             return notes.byObservation().get(f);
         }
+
+        /** Each rendered observation's evidence: everything its composed unit cites, or itself alone. */
+        List<ValidatedObservation> writtenFrom(List<ValidatedObservation> rendered) {
+            List<ValidatedObservation> evidence = new ArrayList<>();
+            for (ValidatedObservation f : rendered) {
+                ComposedNote note = noteFor(f);
+                evidence.addAll(note == null ? List.of(f) : note.cited());
+            }
+            return evidence;
+        }
     }
 
     record ComposedNotes(Map<ValidatedObservation, ComposedNote> byObservation) {
-        static ComposedNotes none() {
-            return new ComposedNotes(Map.of());
-        }
-
-        static ComposedNotes claim(List<ValidatedObservation> ordered, List<ComposedFeedbackUnit> units) {
-            if (units.isEmpty()) {
-                return none();
-            }
-            Map<String, ComposedNote> unclaimed = new HashMap<>();
+        /**
+         * Gives each composed unit to the observation it is rendered at: one of its own practice that it cites,
+         * and for a line note the one it anchors to. A unit citing anything this delivery does not admit is
+         * refused rather than moved onto another observation of the same practice.
+         */
+        static ComposedNotes claim(
+                List<ValidatedObservation> ordered,
+                List<ValidatedObservation> admitted,
+                List<ComposedFeedbackUnit> units) {
+            Map<ValidatedObservation, ComposedNote> byObservation = new IdentityHashMap<>();
             for (ComposedFeedbackUnit unit : units) {
                 if (unit.channel() != FeedbackChannel.IN_CONTEXT
                         || unit.action() == ComposedFeedbackUnit.Action.WITHHOLD) {
                     continue;
                 }
-                ComposedNote note = ComposedNote.of(unit);
-                if (note != null) {
-                    unclaimed.putIfAbsent(unit.practiceSlug(), note);
+                List<ValidatedObservation> cited = resolve(unit.basedOn(), admitted);
+                ComposedNote note = cited == null ? null : ComposedNote.of(unit, cited);
+                if (note == null) {
+                    continue;
                 }
-            }
-            Map<ValidatedObservation, ComposedNote> byObservation = new IdentityHashMap<>();
-            for (ValidatedObservation f : ordered) {
-                ComposedNote note = unclaimed.remove(f.practiceSlug());
-                if (note != null) {
-                    byObservation.put(f, note);
+                ComposedFeedbackUnit.ResolvedAnchor anchor = note.placement().diffAnchor();
+                UUID anchored = anchor == null ? null : idOf(anchor.observationId());
+                if (anchor != null && anchored == null) {
+                    continue;
+                }
+                for (ValidatedObservation f : ordered) {
+                    if (!byObservation.containsKey(f)
+                            && f.practiceSlug().equals(unit.practiceSlug())
+                            && note.cited().stream().anyMatch(c -> c == f)
+                            && (anchored == null || anchored.equals(f.observationId()))) {
+                        byObservation.put(f, note);
+                        break;
+                    }
                 }
             }
             return new ComposedNotes(byObservation);
         }
+
+        /** The admitted observations {@code basedOn} names, or null when any id names none of them. */
+        private static @Nullable List<ValidatedObservation> resolve(
+                List<String> basedOn, List<ValidatedObservation> admitted) {
+            List<ValidatedObservation> cited = new ArrayList<>(basedOn.size());
+            for (String id : basedOn) {
+                UUID observationId = idOf(id);
+                ValidatedObservation match = observationId == null
+                        ? null
+                        : admitted.stream()
+                                .filter(f -> observationId.equals(f.observationId()))
+                                .findFirst()
+                                .orElse(null);
+                if (match == null) {
+                    return null;
+                }
+                if (cited.stream().noneMatch(c -> c == match)) {
+                    cited.add(match);
+                }
+            }
+            return cited;
+        }
+
+        private static @Nullable UUID idOf(String id) {
+            try {
+                return UUID.fromString(id);
+            } catch (IllegalArgumentException notAnId) {
+                return null;
+            }
+        }
     }
 
-    record ComposedNote(String title, String nextStep, ComposedFeedbackUnit.InContextPlacement placement) {
+    /** @param cited every admitted observation the unit is based on, in the order it names them */
+    record ComposedNote(
+            String title,
+            String nextStep,
+            ComposedFeedbackUnit.InContextPlacement placement,
+            List<ValidatedObservation> cited) {
         @Nullable
-        static ComposedNote of(ComposedFeedbackUnit unit) {
+        static ComposedNote of(ComposedFeedbackUnit unit, List<ValidatedObservation> cited) {
             String title = clamp(sanitizeStudentText(unit.title()), ComposedFeedbackUnit.MAX_TITLE_LENGTH);
             String nextStep = clamp(sanitizeStudentText(unit.nextStep()), ComposedFeedbackUnit.MAX_NEXT_STEP_LENGTH);
             return title.isBlank() || nextStep.isBlank() || unit.placement() == null
                     ? null
-                    : new ComposedNote(title, nextStep, unit.placement());
+                    : new ComposedNote(title, nextStep, unit.placement(), cited);
         }
     }
 

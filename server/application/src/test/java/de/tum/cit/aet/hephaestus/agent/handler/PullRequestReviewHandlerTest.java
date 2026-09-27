@@ -533,6 +533,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     .thenReturn(de.tum.cit.aet.hephaestus.practices.model.Assessment.GOOD);
             lenient().when(observation.getSeverity()).thenReturn(severity);
             lenient().when(observation.getEvidenceRationale()).thenReturn("Reasoning for " + practice.getSlug() + ".");
+            lenient().when(observation.getId()).thenReturn(UUID.randomUUID());
             lenient().when(observation.getOccurrenceKey()).thenReturn("occ-" + practice.getSlug());
             lenient().when(observation.getRecurrenceKey()).thenReturn("rk-" + practice.getSlug());
             return observation;
@@ -591,10 +592,164 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             handler.deliver(job);
 
             var proposal = org.mockito.ArgumentCaptor.forClass(PracticeDetectionResultParser.DeliveryContent.class);
-            verify(feedbackService).recordProposal(org.mockito.ArgumentMatchers.eq(job), proposal.capture(), any());
+            verify(feedbackService).recordProposal(org.mockito.ArgumentMatchers.eq(job), proposal.capture());
             verify(feedbackService, never()).deliverFeedback(any(), any(), any());
 
             assertThat(proposal.getValue().mrNote()).startsWith(lead);
+        }
+
+        @Test
+        void shouldSendTheAutomaticProblemAloneAndKeepAnApprovalGatedWithholdBesideIt() {
+            ObjectNode metadata = sampleJobMetadata();
+            metadata.put(ObservationAdmissionService.DIGEST_METADATA_KEY, "digest-1");
+            AgentJob job = jobWithMetadata(metadata);
+            ObjectNode output = objectMapper.createObjectNode();
+            output.putObject("feedback")
+                    .put("admissionDigest", "digest-1")
+                    .put("lead", "The error path can wait; the description is the thing to fix.");
+            job.setOutput(output);
+
+            Practice approvalGated = createPractice("error-handling", "Error Handling", "criteria");
+            approvalGated.setAutonomy(de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy.HUMAN_APPROVAL);
+            Practice automatic = createPractice("describe-what-and-why", "Describe What And Why", "criteria");
+            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID))
+                    .thenReturn(java.util.List.of(approvalGated, automatic));
+            var gated = persisted(
+                    job,
+                    approvalGated,
+                    "Unhandled error path",
+                    de.tum.cit.aet.hephaestus.practices.model.Severity.MAJOR);
+            var auto = persisted(
+                    job, automatic, "No rationale sentence", de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR);
+            when(observationRepository.findByAgentJobId(
+                            job.getId(), job.getWorkspace().getId()))
+                    .thenReturn(java.util.List.of(gated, auto));
+            composed(job, List.of(gated, auto), withholding(gated));
+
+            handler.deliver(job);
+
+            verify(feedbackService, never()).recordProposal(any(), any());
+            var content = org.mockito.ArgumentCaptor.forClass(PracticeDetectionResultParser.DeliveryContent.class);
+            verify(feedbackService)
+                    .deliverFeedback(eq(job), content.capture(), eq(java.util.Set.of("describe-what-and-why")));
+            assertThat(content.getValue().mrNote())
+                    .contains("No rationale sentence")
+                    .doesNotContain("Unhandled error path")
+                    .doesNotContain("can wait");
+            assertThat(content.getValue().contributors()).containsExactly("occ-describe-what-and-why");
+            assertThat(content.getValue().withheld())
+                    .extracting(PracticeDetectionResultParser.WithheldObservation::occurrenceKey)
+                    .containsExactly("occ-error-handling");
+        }
+
+        @Test
+        void shouldProposeANoteWhoseUnitCitesAnObservationOfAPracticeNeedingApproval() {
+            AgentJob job = composedJob();
+            Practice gatedPractice = createPractice("error-handling", "Error Handling", "criteria");
+            gatedPractice.setAutonomy(de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy.HUMAN_APPROVAL);
+            Practice automatic = createPractice("describe-what-and-why", "Describe What And Why", "criteria");
+            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID))
+                    .thenReturn(java.util.List.of(gatedPractice, automatic));
+            var auto = persisted(
+                    job, automatic, "No rationale sentence", de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR);
+            var gated = persisted(
+                    job,
+                    gatedPractice,
+                    "Errors reach the caller",
+                    de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR);
+            lenient().when(gated.getSeverity()).thenReturn(null);
+            lenient().when(gated.getPresence()).thenReturn(Presence.PRESENT);
+            when(observationRepository.findByAgentJobId(
+                            job.getId(), job.getWorkspace().getId()))
+                    .thenReturn(java.util.List.of(auto, gated));
+            composed(job, List.of(auto, gated), noteCiting(auto, gated));
+
+            handler.deliver(job);
+
+            verify(feedbackService, never()).deliverFeedback(any(), any(), any());
+            var proposal = org.mockito.ArgumentCaptor.forClass(PracticeDetectionResultParser.DeliveryContent.class);
+            verify(feedbackService).recordProposal(eq(job), proposal.capture());
+            assertThat(proposal.getValue().contributors())
+                    .containsExactlyInAnyOrder("occ-describe-what-and-why", "occ-error-handling");
+        }
+
+        @Test
+        void shouldSendAutomaticallyWhenTheOnlyObservationNeedingApprovalIsAnUncitedAbstention() {
+            AgentJob job = composedJob();
+            Practice gatedPractice = createPractice("error-handling", "Error Handling", "criteria");
+            gatedPractice.setAutonomy(de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy.HUMAN_APPROVAL);
+            Practice automatic = createPractice("describe-what-and-why", "Describe What And Why", "criteria");
+            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID))
+                    .thenReturn(java.util.List.of(gatedPractice, automatic));
+            var auto = persisted(
+                    job, automatic, "No rationale sentence", de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR);
+            var abstention = persisted(
+                    job,
+                    gatedPractice,
+                    "No error path changed",
+                    de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR);
+            lenient().when(abstention.getSeverity()).thenReturn(null);
+            lenient().when(abstention.getAssessmentStatus()).thenReturn(AssessmentStatus.NOT_APPLICABLE);
+            lenient().when(abstention.getPresence()).thenReturn(null);
+            lenient().when(abstention.getAssessment()).thenReturn(null);
+            when(observationRepository.findByAgentJobId(
+                            job.getId(), job.getWorkspace().getId()))
+                    .thenReturn(java.util.List.of(auto, abstention));
+            composed(job, List.of(auto, abstention), noteCiting(auto));
+
+            handler.deliver(job);
+
+            verify(feedbackService, never()).recordProposal(any(), any());
+            var content = org.mockito.ArgumentCaptor.forClass(PracticeDetectionResultParser.DeliveryContent.class);
+            verify(feedbackService)
+                    .deliverFeedback(eq(job), content.capture(), eq(java.util.Set.of("describe-what-and-why")));
+            assertThat(content.getValue().mrNote()).contains("Say why the change is needed");
+            assertThat(content.getValue().contributors()).containsExactly("occ-describe-what-and-why");
+        }
+
+        /** A job past admission whose composition output is filled in by {@link #composed}. */
+        private AgentJob composedJob() {
+            ObjectNode metadata = sampleJobMetadata();
+            metadata.put(ObservationAdmissionService.DIGEST_METADATA_KEY, "digest-1");
+            AgentJob job = jobWithMetadata(metadata);
+            ObjectNode output = objectMapper.createObjectNode();
+            output.putObject("feedback").put("admissionDigest", "digest-1");
+            job.setOutput(output);
+            return job;
+        }
+
+        /** Stages the admitted observations under their persisted ids, as admission hands them to the runner. */
+        private void composed(
+                AgentJob job, List<de.tum.cit.aet.hephaestus.practices.model.Observation> admitted, String... units) {
+            ObjectNode feedback = (ObjectNode)
+                    java.util.Objects.requireNonNull(job.getOutput()).get("feedback");
+            var staged = feedback.putArray("observations");
+            for (var observation : admitted) {
+                staged.addObject()
+                        .put("id", String.valueOf(observation.getId()))
+                        .put("practiceSlug", observation.getPractice().getSlug())
+                        .put("anchorable", false)
+                        .putArray("citations");
+            }
+            feedback.set("units", objectMapper.readTree("[" + String.join(",", units) + "]"));
+        }
+
+        private static String withholding(de.tum.cit.aet.hephaestus.practices.model.Observation observation) {
+            return """
+                    {"channel":"IN_CONTEXT","action":"WITHHOLD","practiceSlug":"%s","basedOn":["%s"],
+                     "withholdReason":"ALREADY_SAID"}""".formatted(observation.getPractice().getSlug(), observation.getId());
+        }
+
+        /** A note of the first observation's practice, based on every observation given. */
+        private static String noteCiting(de.tum.cit.aet.hephaestus.practices.model.Observation... cited) {
+            return """
+                    {"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"%s","basedOn":[%s],
+                     "title":"Say why the change is needed","nextStep":"Add one sentence of motivation",
+                     "placement":{"kind":"ARTIFACT"}}""".formatted(
+                            cited[0].getPractice().getSlug(),
+                            java.util.Arrays.stream(cited)
+                                    .map(observation -> "\"" + observation.getId() + "\"")
+                                    .collect(java.util.stream.Collectors.joining(",")));
         }
 
         /** A job past admission, carrying the coverage ledger its run wrote. */
@@ -611,7 +766,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             return job;
         }
 
-        private void observed(AgentJob job, Practice practice, Assessment assessment) {
+        private de.tum.cit.aet.hephaestus.practices.model.Observation observed(
+                AgentJob job, Practice practice, Assessment assessment) {
             when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(java.util.List.of(practice));
             var observation = org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.model.Observation.class);
             lenient().when(observation.getPractice()).thenReturn(practice);
@@ -626,25 +782,33 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             lenient().when(observation.getAssessment()).thenReturn(Assessment.GOOD);
             lenient().when(observation.getSeverity()).thenReturn(assessment == Assessment.BAD ? Severity.MAJOR : null);
             lenient().when(observation.getEvidenceRationale()).thenReturn("The evidence warrants it.");
+            lenient().when(observation.getId()).thenReturn(UUID.randomUUID());
             lenient().when(observation.getOccurrenceKey()).thenReturn("occ-" + practice.getSlug());
             lenient().when(observation.getRecurrenceKey()).thenReturn("rk-" + practice.getSlug());
             when(observationRepository.findByAgentJobId(
                             job.getId(), job.getWorkspace().getId()))
                     .thenReturn(java.util.List.of(observation));
+            return observation;
         }
 
         @Test
-        void shouldWithholdAnAllClearWhenTheReviewDidNotReachEveryPractice() {
+        void shouldPostNoAllClearButKeepTheWithholdWhenTheReviewDidNotReachEveryPractice() {
             AgentJob job = jobAwaitingDelivery(2, 1);
-            observed(
+            var strength = observed(
                     job,
                     createPractice("pr-description-quality", "PR Description Quality", "criteria"),
                     Assessment.GOOD);
+            composed(job, List.of(strength), withholding(strength));
 
             handler.deliver(job);
 
-            verify(feedbackService, never()).deliverFeedback(any(), any(), any());
-            verify(feedbackService, never()).recordProposal(any(), any(), any());
+            var content = org.mockito.ArgumentCaptor.forClass(PracticeDetectionResultParser.DeliveryContent.class);
+            verify(feedbackService).deliverFeedback(eq(job), content.capture(), eq(java.util.Set.of()));
+            assertThat(content.getValue().mrNote()).isNull();
+            assertThat(content.getValue().withheld())
+                    .extracting(PracticeDetectionResultParser.WithheldObservation::occurrenceKey)
+                    .containsExactly("occ-pr-description-quality");
+            verify(feedbackService, never()).recordProposal(any(), any());
         }
 
         @Test

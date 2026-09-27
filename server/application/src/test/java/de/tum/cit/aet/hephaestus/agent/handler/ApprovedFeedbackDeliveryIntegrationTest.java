@@ -18,7 +18,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DeliveryContent;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
@@ -42,12 +41,10 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.DecideFeedbackProposalRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.AdmittedReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedCommentThreads;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
@@ -66,6 +63,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -73,6 +71,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * An administrator approves a proposal on a merge request or an issue, and the note is posted from the approval
@@ -94,6 +93,9 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
 
     @Autowired
     private FeedbackLedgerRecorder ledgerRecorder;
+
+    @Autowired
+    private JobTypeHandlerRegistry handlerRegistry;
 
     @Autowired
     private FeedbackDispatchRepository dispatchRepository;
@@ -388,11 +390,131 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
         assertDelivered(proposal, onlyNote(host.threads(), host.thread(), proposal));
     }
 
+    @Test
+    void shouldPostAnAutomaticIssueProblemAloneWhenAnApprovalGatedPracticeBesideItDidNotApply() {
+        IssueReview issue = reviewBesideTriage(ObservationKind.NOT_APPLICABLE);
+        compose(issue, issue.gap());
+
+        handlerRegistry.getHandler(AgentJobType.ISSUE_REVIEW).deliver(issue.job());
+
+        assertThat(issue.host().threads().on(issue.host().thread()))
+                .singleElement()
+                .extracting(ScriptedCommentThreads.Comment::body)
+                .asString()
+                .contains("Split the three deliverables")
+                .doesNotContain("triage can wait");
+        assertThat(jdbcTemplate.queryForList(
+                        "SELECT delivery_state FROM feedback WHERE agent_job_id = ?",
+                        String.class,
+                        issue.job().getId()))
+                .containsExactly("DELIVERED");
+        assertThat(linkedTo(issue.job())).containsExactly(issue.gap());
+    }
+
+    @Test
+    void shouldProposeAnIssueNoteWhoseUnitCitesAnObservationOfAPracticeNeedingApproval() {
+        IssueReview issue = reviewBesideTriage(ObservationKind.DEMONSTRATED_STRENGTH);
+        compose(issue, issue.gap(), issue.triage());
+
+        handlerRegistry.getHandler(AgentJobType.ISSUE_REVIEW).deliver(issue.job());
+
+        assertThat(issue.host().threads().on(issue.host().thread())).isEmpty();
+        assertThat(jdbcTemplate.queryForList(
+                        "SELECT delivery_state FROM feedback WHERE agent_job_id = ?",
+                        String.class,
+                        issue.job().getId()))
+                .containsExactly("AWAITING_APPROVAL");
+        assertThat(linkedTo(issue.job())).containsExactlyInAnyOrder(issue.gap(), issue.triage());
+    }
+
+    private record IssueReview(AgentJob job, IssueHost host, UUID gap, UUID triage) {}
+
+    /** The issue #7 shape: an automatic problem beside one result of a practice that needs approval. */
+    private IssueReview reviewBesideTriage(ObservationKind triageKind) {
+        practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
+        practiceRepository.saveAndFlush(practice);
+        Practice triage = persistPractice(workspace, null, "triage-labels-owner", "Triage the issue", null);
+        triage.setAutonomy(PracticeAutonomy.HUMAN_APPROVAL);
+        practiceRepository.saveAndFlush(triage);
+        IssueHost host = onGitLab();
+        AgentJob review = reviewIssue(host);
+        long issueId =
+                Objects.requireNonNull(review.getMetadata()).path("issue_id").asLong();
+        String evidence = AdmittedObservationFixtures.evidence(review.getId(), "scm.issue.core")
+                .toString();
+        UUID gap = observe(
+                practice,
+                review,
+                ArtifactKinds.ISSUE.value(),
+                issueId,
+                host.author(),
+                "The issue bundles three deliverables with no subtasks",
+                ObservationKind.OMISSION_GAP,
+                Severity.MAJOR,
+                Instant.now(),
+                evidence,
+                null);
+        UUID triaged = observe(
+                triage,
+                review,
+                ArtifactKinds.ISSUE.value(),
+                issueId,
+                host.author(),
+                "Labels and an owner are set",
+                triageKind,
+                null,
+                Instant.now(),
+                evidence,
+                null);
+        return new IssueReview(review, host, gap, triaged);
+    }
+
+    /** The composer's output for the review: both observations staged by id, one note of the problem's practice. */
+    private void compose(IssueReview issue, UUID... basedOn) {
+        AgentJob review = issue.job();
+        ((ObjectNode) Objects.requireNonNull(review.getMetadata()))
+                .put(ObservationAdmissionService.DIGEST_METADATA_KEY, "digest-7");
+        ObjectNode feedback = objectMapper.createObjectNode().putObject("feedback");
+        feedback.put("admissionDigest", "digest-7")
+                .put("lead", "Worth splitting before anyone starts, and triage can wait.");
+        var staged = feedback.putArray("observations");
+        staged.addObject()
+                .put("id", issue.gap().toString())
+                .put("practiceSlug", practice.getSlug())
+                .put("anchorable", false)
+                .putArray("citations");
+        staged.addObject()
+                .put("id", issue.triage().toString())
+                .put("practiceSlug", "triage-labels-owner")
+                .put("anchorable", false)
+                .putArray("citations");
+        ObjectNode unit = feedback.putArray("units").addObject();
+        unit.put("channel", "IN_CONTEXT")
+                .put("action", "NEW")
+                .put("practiceSlug", practice.getSlug())
+                .put("title", "Split the three deliverables into subtasks")
+                .put("nextStep", "Open one subtask per deliverable and link them here");
+        var cited = unit.putArray("basedOn");
+        for (UUID id : basedOn) cited.add(id.toString());
+        unit.putObject("placement").put("kind", "ARTIFACT");
+        ObjectNode output = objectMapper.createObjectNode();
+        output.set("feedback", feedback);
+        review.setOutput(output);
+        agentJobRepository.save(review);
+    }
+
+    private List<@Nullable UUID> linkedTo(AgentJob review) {
+        return jdbcTemplate.queryForList("""
+                SELECT fo.observation_id FROM feedback_observation fo
+                JOIN feedback f ON f.id = fo.feedback_id WHERE f.agent_job_id = ?
+                """, UUID.class, review.getId());
+    }
+
     private void shouldPostAnAutomaticPackageOnceAfterTheIssueFailedToResolve(IssueHost host) {
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         practiceRepository.saveAndFlush(practice);
         AgentJob review = reviewIssue(host);
-        var reviewPackage = new DeliveryContent(NOTE, List.of(), List.of());
+        var reviewPackage = new DeliveryContent(NOTE, List.of(), List.of(), null);
         Set<String> practices = Set.of(practice.getSlug());
         host.threads().failNextResolution();
 
@@ -551,18 +673,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
 
     private Feedback recordProposal(AgentJob review, UUID observation) {
         ledgerRecorder.recordProposal(
-                review,
-                new DeliveryContent(NOTE, List.of(), List.of()),
-                List.of(new ValidatedObservation(
-                        practice.getSlug(),
-                        "Explains the split",
-                        AssessmentStatus.ASSESSED,
-                        Presence.PRESENT,
-                        Assessment.GOOD,
-                        null,
-                        null,
-                        null,
-                        new ObservationKeys("occ-" + observation, null))));
+                review, new DeliveryContent(NOTE, List.of(), List.of(), List.of("occ-" + observation)));
 
         UUID proposalId = Objects.requireNonNull(jdbcTemplate.queryForObject(
                 "SELECT id FROM feedback WHERE agent_job_id = ? AND workspace_id = ? AND channel = 'IN_CONTEXT'",

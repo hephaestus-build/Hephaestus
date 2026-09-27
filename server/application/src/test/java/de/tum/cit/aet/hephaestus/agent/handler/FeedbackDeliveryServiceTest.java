@@ -72,9 +72,21 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
 
     @Test
     void nullDeliveryStopsBeforePolicyOrDispatch() {
-        service.deliverFeedback(job(), null);
+        AgentJob job = job();
 
-        verifyNoInteractions(deliveryPolicy, dispatchService, ledgerRecorder);
+        var withheldOnly = new DeliveryContent(
+                null,
+                List.of(),
+                List.of(new PracticeDetectionResultParser.WithheldObservation(
+                        "occ-1", FeedbackSuppressionReason.COMPOSER_WITHHELD)),
+                List.of());
+
+        service.deliverFeedback(job, null);
+        service.deliverFeedback(job, withheldOnly, Set.of());
+
+        verifyNoInteractions(deliveryPolicy, dispatchService);
+        verify(ledgerRecorder).recordNothingToPost(job, null);
+        verify(ledgerRecorder).recordNothingToPost(job, withheldOnly);
     }
 
     @Test
@@ -168,9 +180,10 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
         DeliveryContent delivery = new DeliveryContent(
                 "Summary",
                 List.of(
-                        new DiffNote("src/One.java", 10, null, "One", "inline-1"),
-                        new DiffNote("src/Two.java", 20, null, "Two", "inline-2")),
-                List.of());
+                        new DiffNote("src/One.java", 10, null, "One", "inline-1", null),
+                        new DiffNote("src/Two.java", 20, null, "Two", "inline-2", null)),
+                List.of(),
+                null);
         DeliveredSignal delivered = signal("inline-1", "note-1");
         project(dispatch, delivery, List.of(delivered));
 
@@ -260,7 +273,10 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
 
     private DeliveryContent delivery() {
         return new DeliveryContent(
-                "Summary", List.of(new DiffNote("src/App.java", 10, null, "Inline", "inline-1")), List.of());
+                "Summary",
+                List.of(new DiffNote("src/App.java", 10, null, "Inline", "inline-1", null)),
+                List.of(),
+                null);
     }
 
     private DeliveredSignal signal(String recurrenceKey, String externalRef) {

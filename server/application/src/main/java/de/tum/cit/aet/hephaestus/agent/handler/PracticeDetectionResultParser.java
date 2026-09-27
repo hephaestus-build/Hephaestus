@@ -13,6 +13,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -377,6 +379,10 @@ public class PracticeDetectionResultParser {
         public @Nullable String occurrenceKey() {
             return keys == null ? null : keys.occurrenceKey();
         }
+
+        public @Nullable UUID observationId() {
+            return keys == null ? null : keys.id();
+        }
     }
 
     /** Validates axes without changing the practice's contextual judgment or severity. */
@@ -396,11 +402,51 @@ public class PracticeDetectionResultParser {
      * and posts it without further rendering.
      *
      * @param withheld the observations the composer chose not to render, for the ledger to record as SUPPRESSED
+     * @param summaryContributors occurrence keys of the observations the summary note was written from; each line
+     *     note carries its own. Null only on a dispatch package persisted before they were recorded
      */
     public record DeliveryContent(
-            @Nullable String mrNote, List<DiffNote> diffNotes, List<WithheldObservation> withheld) {
+            @Nullable String mrNote,
+            List<DiffNote> diffNotes,
+            List<WithheldObservation> withheld,
+            @Nullable List<String> summaryContributors) {
         public DeliveryContent withDiffNotes(List<DiffNote> notes) {
-            return new DeliveryContent(mrNote, notes, withheld);
+            return new DeliveryContent(mrNote, notes, withheld, summaryContributors);
+        }
+
+        /** The same decisions with nothing to place on the work. */
+        public DeliveryContent withoutNote() {
+            return new DeliveryContent(null, List.of(), withheld, List.of());
+        }
+
+        /** Every observation some part of the content was written from; null on a pre-upgrade package. */
+        public @Nullable List<String> contributors() {
+            if (summaryContributors == null) return null;
+            List<String> keys = new ArrayList<>(summaryContributors);
+            for (DiffNote note : diffNotes) {
+                List<String> noteKeys = note.contributors();
+                if (noteKeys != null) keys.addAll(noteKeys);
+            }
+            return keys.stream().distinct().toList();
+        }
+
+        /** Whether the content was written from any of these observations. */
+        public boolean writtenFromAny(List<ValidatedObservation> observations) {
+            List<String> keys = contributors();
+            return keys != null
+                    && observations.stream()
+                            .map(ValidatedObservation::occurrenceKey)
+                            .anyMatch(keys::contains);
+        }
+
+        /** The practices of the observations the content was written from, which delivery policy checks. */
+        public Set<String> contributingPracticeSlugs(List<ValidatedObservation> observations) {
+            List<String> contributors = contributors();
+            List<String> keys = contributors == null ? List.of() : contributors;
+            return observations.stream()
+                    .filter(observation -> keys.contains(observation.occurrenceKey()))
+                    .map(ValidatedObservation::practiceSlug)
+                    .collect(Collectors.toUnmodifiableSet());
         }
     }
 
@@ -418,16 +464,19 @@ public class PracticeDetectionResultParser {
      * @param endLine  optional last line number for multi-line (GitHub only; GitLab ignores)
      * @param deliveryKey opaque receipt-correlation key for this exact observation, carried from its
      *     occurrence identity by {@link DeliveryComposer}; null before server-side correlation.
+     * @param contributors occurrence keys of every observation this note's text was written from: its own, and
+     *     any other the composed unit cites. Null before server-side correlation and on a pre-upgrade package
      */
     public record DiffNote(
             String filePath,
             int startLine,
             @Nullable Integer endLine,
             String body,
-            @Nullable String deliveryKey) {
+            @Nullable String deliveryKey,
+            @Nullable List<String> contributors) {
         /** The parser's pre-correlation output shape: a note with no correlation key yet. */
         public DiffNote(String filePath, int startLine, @Nullable Integer endLine, String body) {
-            this(filePath, startLine, endLine, body, null);
+            this(filePath, startLine, endLine, body, null, null);
         }
     }
 }
