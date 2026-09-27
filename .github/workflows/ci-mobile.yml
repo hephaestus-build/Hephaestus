@@ -167,6 +167,14 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          # The adb server starts before the emulator, with transport tracing, so its log records
+          # every emulator connection, drop and reconnect from boot onwards: the host side of a
+          # "device offline" that the device log alone cannot attribute. The emulator then
+          # registers with a listening server instead of finding none and waiting for its scan.
+          pre-emulator-launch-script: |
+            mkdir -p mobile/test-results
+            adb version
+            ANDROID_ADB_LOG_PATH="$PWD/mobile/test-results/adb-server.log" ADB_TRACE=adb,transport adb start-server
           script: |
             adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk
             vp run test:mobile:e2e --platform android --flow smoke
