@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -161,7 +161,13 @@ describe("workspace practice scope", () => {
 			vi.fn<(slug: string, request: UpdatePracticeRequest, group: string | null) => void>();
 		await renderPractice({ ...mockPullRequestBinding, subject: "REVIEWER" }, onSubmit);
 		const user = userEvent.setup();
-		await user.click(screen.getByRole("combobox", { name: "Person this practice judges" }));
+		const subject = screen.getByRole("combobox", { name: "Person this practice judges" });
+		// A pointer press opens Base UI's select on the next animation frame, which jsdom runs on a
+		// timer that `user.click` does not wait for; the arrow key opens it inside its own keydown.
+		act(() => {
+			subject.focus();
+		});
+		await user.keyboard("{ArrowDown}");
 		await user.click(screen.getByRole("option", { name: "author" }));
 		await waitFor(() =>
 			expect(
