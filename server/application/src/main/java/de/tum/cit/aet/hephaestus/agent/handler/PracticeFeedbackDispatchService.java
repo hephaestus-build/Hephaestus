@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -37,6 +38,10 @@ class PracticeFeedbackDispatchService {
 
     static final Duration LEASE = Duration.ofMinutes(5);
     static final int MAX_ATTEMPTS = 8;
+    /** How long after a write began an unconfirmed one is still expected; after it, it is checked every six hours. */
+    static final Duration UNCONFIRMED_WINDOW = Duration.ofHours(24);
+
+    static final Duration UNCONFIRMED_RECHECK = Duration.ofHours(6);
 
     private final FeedbackDispatchRepository repository;
     private final PracticeFeedbackDeliveryPolicy policy;
@@ -46,6 +51,7 @@ class PracticeFeedbackDispatchService {
     private final FeedbackRepository feedbackRepository;
     private final DiffNotePoster diffNotePoster;
     private final FeedbackDispatchStateMachine stateMachine;
+    private final ObservationInvalidationRepository invalidations;
 
     PracticeFeedbackDispatchService(
             FeedbackDispatchRepository repository,
@@ -55,7 +61,8 @@ class PracticeFeedbackDispatchService {
             ObjectMapper objectMapper,
             FeedbackRepository feedbackRepository,
             DiffNotePoster diffNotePoster,
-            FeedbackDispatchStateMachine stateMachine) {
+            FeedbackDispatchStateMachine stateMachine,
+            ObservationInvalidationRepository invalidations) {
         this.repository = repository;
         this.policy = policy;
         this.commentPoster = commentPoster;
@@ -64,6 +71,7 @@ class PracticeFeedbackDispatchService {
         this.feedbackRepository = feedbackRepository;
         this.diffNotePoster = diffNotePoster;
         this.stateMachine = stateMachine;
+        this.invalidations = invalidations;
     }
 
     Result dispatchAutomaticPackage(
@@ -147,11 +155,12 @@ class PracticeFeedbackDispatchService {
             return Result.inProgress();
         }
 
-        if (dispatch.getDestination() == FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE) {
-            return dispatchApprovedPackage(dispatch, job, owner);
+        if (Boolean.TRUE.equals(transactionTemplate.execute(status -> citesInvalidated(dispatch)))) {
+            return refuseInvalidated(dispatch, job, owner);
         }
-
-        return dispatchAutomaticPackage(dispatch, job, owner);
+        return dispatch.getDestination() == FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE
+                ? dispatchApprovedPackage(dispatch, job, owner)
+                : dispatchAutomaticPackage(dispatch, job, owner);
     }
 
     private Result dispatchAutomaticPackage(FeedbackDispatch dispatch, AgentJob job, String owner) {
@@ -302,6 +311,64 @@ class PracticeFeedbackDispatchService {
                 status -> repository.releaseUnsentWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
         if (released == null || released != 1) return stateMachine.retryAfterWrite(dispatch, owner, error);
         return stateMachine.retry(dispatch, owner, error, null, false, deliveredSignals(dispatch));
+    }
+
+    /**
+     * Admits this claimed attempt only while no cited observation is invalidated. The live claim is what a
+     * correction checks for, so once admitted the attempt runs to its end without a correction landing mid-write.
+     */
+    private boolean citesInvalidated(FeedbackDispatch dispatch) {
+        List<UUID> cited = repository.lockCitedObservations(
+                dispatch.getWorkspaceId(), dispatch.getAgentJobId(), dispatch.getFeedbackId());
+        return !cited.isEmpty()
+                && !invalidations
+                        .findActiveObservationIds(dispatch.getWorkspaceId(), cited)
+                        .isEmpty();
+    }
+
+    /**
+     * Withholds a dispatch whose cited observation was invalidated, once every write an earlier attempt started is
+     * accounted for. Only positive evidence settles a started write: an earlier POST may still land after its
+     * lease expired, so a lookup that finds nothing proves nothing. The dispatch stays uncertain and keeps looking,
+     * more slowly once {@link #UNCONFIRMED_WINDOW} has passed since the write began. Nothing is posted here.
+     */
+    private Result refuseInvalidated(FeedbackDispatch dispatch, AgentJob job, String owner) {
+        boolean approved = dispatch.getDestination() == FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE;
+        @Nullable String summaryRef = dispatch.getDeliveredExternalRef();
+        List<DeliveredSignal> signals = deliveredSignals(dispatch);
+        boolean unconfirmed = false;
+        if (summaryRef == null
+                && dispatch.getWriteStarted()
+                && (approved || !dispatch.getBody().isBlank())) {
+            ExistingDeliveryLookup existing;
+            try {
+                existing = commentPoster.findExisting(summaryWrite(dispatch, job));
+            } catch (RuntimeException e) {
+                existing = ExistingDeliveryLookup.unknown();
+            }
+            summaryRef = existing.commentId();
+            unconfirmed = existing.kind() != ExistingDeliveryLookup.Kind.FOUND;
+        }
+        if (dispatch.getAttemptCount() > 0 && !isIssue(job)) {
+            DiffNotePoster.InlineLookup lookup = diffNotePoster.findUnacknowledged(
+                    job, inlineNotes(dispatch), approved ? dispatch.approvedFeedbackId() : null, signals);
+            signals = stateMachine.mergeSignals(signals, lookup.found());
+            unconfirmed |= !lookup.complete();
+        }
+        if (!unconfirmed) {
+            return stateMachine.refuse(
+                    dispatch, owner, FeedbackSuppressionReason.OBSERVATION_INVALIDATED, summaryRef, signals);
+        }
+        String error = "An earlier provider write is not confirmed yet";
+        Instant writeStartedAt = dispatch.getWriteStartedAt();
+        if (writeStartedAt != null && Instant.now().isAfter(writeStartedAt.plus(UNCONFIRMED_WINDOW))) {
+            return stateMachine.recheckAt(
+                    dispatch, owner, error, summaryRef, signals, Instant.now().plus(UNCONFIRMED_RECHECK));
+        }
+        // Recorded so the claim budget cannot exhaust this dispatch into a failure that says nothing was written.
+        transactionTemplate.execute(
+                status -> repository.beginWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
+        return stateMachine.retry(dispatch, owner, error, summaryRef, true, signals);
     }
 
     private static boolean reviewedRevisionMatches(

@@ -132,7 +132,7 @@ class PracticeFeedbackDispatchRecoveryTest extends BaseUnitTest {
 
         recovery.recover();
 
-        verify(feedbackDeliveryService).projectAutomaticPackage(job, terminal);
+        verify(feedbackDeliveryService).recordAutomaticPackage(job, terminal);
         verify(service, never()).projectRecovered(any(), any());
     }
 
@@ -196,6 +196,7 @@ class PracticeFeedbackDispatchRecoveryTest extends BaseUnitTest {
                         new PracticeDetectionResultParser.DeliveryContent("body", List.of(), List.of(), null)),
                 mapper.valueToTree(List.of()),
                 false,
+                null,
                 externalRef,
                 null,
                 null,

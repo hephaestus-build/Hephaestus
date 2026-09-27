@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
@@ -55,6 +56,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -105,6 +107,12 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IssueRepository issueRepository;
+
+    @Autowired
+    private ObservationInvalidationRepository invalidationRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private Workspace workspace;
     private Practice practice;
@@ -799,6 +807,138 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             assertThat(recent).hasSize(1);
             assertThat(recent.get(0).getOccurrenceKey()).isEqualTo("bad-target");
             assertThat(recent.get(0).getPresence()).isEqualTo(Presence.ABSENT);
+        }
+    }
+
+    @Nested
+    class InvalidationTests {
+
+        private final Instant olderAt = Instant.parse("2026-03-18T10:00:00Z");
+        private final Instant newerAt = Instant.parse("2026-03-20T10:00:00Z");
+
+        private AgentJob newerRun() {
+            AgentJob job = new AgentJob();
+            job.setWorkspace(workspace);
+            job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+            job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
+            return agentJobRepository.save(job);
+        }
+
+        private UUID insertStrength(UUID jobId, String summary, Instant observedAt) {
+            UUID id = UUID.randomUUID();
+            observationRepository.insertIfAbsent(
+                    id,
+                    "invalidation-" + id,
+                    jobId,
+                    workspace.getId(),
+                    practice.getId(),
+                    null,
+                    "scm.pull_request",
+                    42L,
+                    aboutUser.getId(),
+                    summary,
+                    "ASSESSED",
+                    "PRESENT",
+                    "GOOD",
+                    null,
+                    null,
+                    null,
+                    null,
+                    observedAt,
+                    "LIVE");
+            return id;
+        }
+
+        private ObservationInvalidation invalidate(UUID observationId) {
+            Observation observation = observationRepository
+                    .findByIdAndWorkspaceId(observationId, workspace.getId())
+                    .orElseThrow();
+            return invalidationRepository.save(
+                    new ObservationInvalidation(observation, 1L, "Wrong when made", newerAt));
+        }
+
+        private List<UUID> recent() {
+            return observationRepository
+                    .findRecentByDeveloperAndWorkspace(
+                            aboutUser.getId(), workspace.getId(), Instant.EPOCH, PageRequest.of(0, 10))
+                    .stream()
+                    .map(Observation::getId)
+                    .toList();
+        }
+
+        private List<UUID> window() {
+            return LatestRun.perClaim(observationRepository.findByDeveloperAndWorkspaceBetween(
+                            aboutUser.getId(), workspace.getId(), Instant.EPOCH, newerAt.plusSeconds(60)))
+                    .stream()
+                    .map(Observation::getId)
+                    .toList();
+        }
+
+        @Test
+        void shouldLetTheEarlierValidRunSpeakWhenTheNewestRunsOnlyClaimIsInvalidated() {
+            UUID older = insertStrength(agentJob.getId(), "Valid earlier claim", olderAt);
+            UUID wrong = insertStrength(newerRun().getId(), "Wrong newer claim", newerAt);
+            assertThat(recent()).containsExactly(wrong);
+
+            invalidate(wrong);
+
+            assertThat(recent()).containsExactly(older);
+            assertThat(window()).containsExactly(older);
+            DeveloperPracticeSummaryProjection summary = observationRepository
+                    .findSummaryByDeveloperAndWorkspace(aboutUser.getId(), workspace.getId())
+                    .getFirst();
+            assertThat(summary.getTotalObservations()).isEqualTo(1L);
+            assertThat(summary.getLastObservedAt()).isEqualTo(olderAt);
+        }
+
+        @Test
+        void shouldKeepAValidSiblingOfTheNewestRunInsteadOfFallingBack() {
+            insertStrength(agentJob.getId(), "Valid earlier claim", olderAt);
+            AgentJob run = newerRun();
+            UUID wrong = insertStrength(run.getId(), "Wrong newer claim", newerAt);
+            UUID sibling = insertStrength(run.getId(), "Valid newer claim", newerAt);
+
+            invalidate(wrong);
+
+            assertThat(recent()).containsExactly(sibling);
+            assertThat(window()).containsExactly(sibling);
+        }
+
+        @Test
+        void shouldCountTheClaimAgainOnceRestored() {
+            insertStrength(agentJob.getId(), "Valid earlier claim", olderAt);
+            UUID wrong = insertStrength(newerRun().getId(), "Wrong newer claim", newerAt);
+            ObservationInvalidation invalidation = invalidate(wrong);
+
+            invalidation.restore(1L, "Right after all", newerAt.plusSeconds(1));
+            invalidationRepository.save(invalidation);
+
+            assertThat(recent()).containsExactly(wrong);
+            assertThat(window()).containsExactly(wrong);
+        }
+
+        @Test
+        void shouldRefuseACorrectionNamingAnotherWorkspacesObservation() {
+            UUID observationId = insertStrength(agentJob.getId(), "Claim", olderAt);
+            Workspace other = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("invalidation-other"));
+
+            assertThatThrownBy(() -> jdbcTemplate.update("""
+                            INSERT INTO observation_invalidation (id, workspace_id, observation_id, reason,
+                                invalidated_by_account_id, invalidated_at, provider_copy)
+                            VALUES (?, ?, ?, 'Wrong', 1, now(), 'PENDING')
+                            """, UUID.randomUUID(), other.getId(), observationId))
+                    .isInstanceOf(DataIntegrityViolationException.class);
+        }
+
+        @Test
+        void shouldEraseCorrectionsWithTheObservation() {
+            UUID wrong = insertStrength(agentJob.getId(), "Wrong claim", olderAt);
+            invalidate(wrong);
+
+            observationRepository.deleteAllByPracticeWorkspaceId(workspace.getId());
+
+            assertThat(invalidationRepository.findHistory(workspace.getId(), wrong))
+                    .isEmpty();
         }
     }
 

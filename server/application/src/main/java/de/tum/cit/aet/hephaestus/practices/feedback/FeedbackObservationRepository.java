@@ -37,6 +37,12 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
             @Param("evidenceRole") String evidenceRole,
             @Param("ordinal") int ordinal);
 
+    @Query("""
+        SELECT COUNT(fo) FROM FeedbackObservation fo
+        WHERE fo.feedback.id = :feedbackId AND fo.feedback.workspaceId = :workspaceId
+        """)
+    int countForFeedback(@Param("workspaceId") Long workspaceId, @Param("feedbackId") UUID feedbackId);
+
     /**
      * The observations behind a batch of delivered feedback, carrying what decides their visibility.
      *

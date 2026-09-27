@@ -15,15 +15,18 @@ import org.springframework.stereotype.Component;
 public class ObservationVisibilityPolicy {
 
     private final EvidenceAuthorization evidenceAuthorization;
+    private final ObservationInvalidationRepository invalidations;
 
-    public ObservationVisibilityPolicy(EvidenceAuthorization evidenceAuthorization) {
+    public ObservationVisibilityPolicy(
+            EvidenceAuthorization evidenceAuthorization, ObservationInvalidationRepository invalidations) {
         this.evidenceAuthorization = evidenceAuthorization;
+        this.invalidations = invalidations;
     }
 
     /**
-     * The ids of the observations measured against a current practice revision whose evidence remains
-     * authorized for the requested use. Currentness is checked first so stale claims do not trigger
-     * authorization reads; the rest are authorized in one batch.
+     * The ids of the observations measured against a current practice revision, not invalidated by an admin,
+     * whose evidence remains authorized for the requested use. Currentness is checked first so stale claims do
+     * not trigger authorization reads; the rest are authorized in one batch.
      */
     public Set<UUID> permitsAll(long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose) {
         return permitted(workspaceId, observations, purpose, false);
@@ -54,7 +57,7 @@ public class ObservationVisibilityPolicy {
         return evidenceAuthorization.permitsAll(workspaceId, verifiable, purpose);
     }
 
-    /** Read-only history keeps superseded rows, but still enforces evidence authorization. */
+    /** Read-only history keeps superseded and invalidated rows, but still enforces evidence authorization. */
     public Set<UUID> permitsHistory(long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose) {
         return evidenceAuthorization.permitsAll(workspaceId, observations, purpose);
     }
@@ -68,6 +71,11 @@ public class ObservationVisibilityPolicy {
                     == ReviewClaimCurrentness.CURRENT) {
                 current.add(observation);
             }
+        }
+        if (!current.isEmpty()) {
+            Set<UUID> invalidated = invalidations.findActiveObservationIds(
+                    workspaceId, current.stream().map(Observation::getId).toList());
+            current.removeIf(observation -> invalidated.contains(observation.getId()));
         }
         if (current.isEmpty()) {
             return Set.of();

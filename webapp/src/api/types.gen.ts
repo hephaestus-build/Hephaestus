@@ -1409,7 +1409,7 @@ export type DeliveryPolicyTrace = {
   admittedRevision: number;
   allowed: boolean;
   checks: Array<DeliveryPolicyTraceCheck>;
-  decisiveReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  decisiveReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED';
   evaluatedAt: Date;
   evaluatedRevision?: number;
   facts: DeliveryPolicyFactsSnapshot;
@@ -2548,6 +2548,14 @@ export type ObservationDetail = {
    */
   id: string;
   /**
+   * When a workspace admin marked this observation as incorrect; null while it stands. An invalidated observation counts toward nothing current.
+   */
+  invalidatedAt?: Date;
+  /**
+   * The admin's reason for the invalidation; null while the observation stands
+   */
+  invalidationReason?: string;
+  /**
    * The next step the review wrote about this observation, whether or not the feedback carrying it was delivered (null when it wrote none)
    */
   nextStep?: string;
@@ -2607,6 +2615,32 @@ export type ObservationEvidence = {
    * What the review could not settle; null unless it recorded an open question
    */
   undecidability?: EvidenceUndecidability;
+};
+
+/**
+ * One correction of an observation by a workspace admin, and its restoration if any
+ */
+export type ObservationInvalidation = {
+  id: string;
+  invalidatedAt: Date;
+  /**
+   * Who invalidated it; null once that account is erased
+   */
+  invalidatedBy?: string;
+  /**
+   * What became of the comments Hephaestus had already posted on the provider
+   */
+  providerCopy: 'PENDING' | 'NONE' | 'UPDATED' | 'INLINE_REMAINS' | 'UNRESOLVED';
+  reason: string;
+  /**
+   * Why it was restored; null while the invalidation is in force
+   */
+  restorationReason?: string;
+  restoredAt?: Date;
+  /**
+   * Who restored it; null while in force or once that account is erased
+   */
+  restoredBy?: string;
 };
 
 /**
@@ -3754,7 +3788,7 @@ export type PracticeTraceEntry = {
   /**
    * Why prepared feedback was withheld. Non-empty with observations present means we measured and deliberately said nothing.
    */
-  withheldReasons: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
+  withheldReasons: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED'>;
 };
 
 export type PracticeTrend = {
@@ -4437,7 +4471,7 @@ export type ReviewBoundFeedback = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED';
 };
 
 /**
@@ -4519,7 +4553,7 @@ export type ReviewFeedback = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED';
 };
 
 /**
@@ -4594,7 +4628,7 @@ export type ReviewFeedbackDetail = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED';
   /**
    * Cross-run continuity key tying successive deliveries together
    */
@@ -4654,6 +4688,10 @@ export type ReviewObservation = {
    */
   group?: ReviewPracticeGroup;
   id: string;
+  /**
+   * When a workspace admin invalidated this observation; null while it stands
+   */
+  invalidatedAt?: Date;
   observedAt: Date;
   /**
    * What occasioned the measurement. BACKFILL came from a confirmed campaign over work that already existed, so it is not a point on the live trend line.
@@ -4723,6 +4761,10 @@ export type ReviewObservationDetail = {
    */
   group?: ReviewPracticeGroup;
   id: string;
+  /**
+   * Every correction by a workspace admin, newest first; the first is in force while it has no restoration
+   */
+  invalidations: Array<ObservationInvalidation>;
   observedAt: Date;
   /**
    * Derived from presence and contextual behavior assessment; null unless assessed
@@ -5797,6 +5839,20 @@ export type UpdateNotificationPreferences = {
   researchSurveys: boolean;
   surveySummaries: boolean;
   workspaceAlerts: boolean;
+};
+
+/**
+ * Invalidate an observation that was wrong when recorded, or restore it
+ */
+export type UpdateObservationValidityRequest = {
+  /**
+   * Why, kept with the correction; an invalidation reason is shown to the developer
+   */
+  reason: string;
+  /**
+   * false invalidates the observation; true restores it
+   */
+  valid: boolean;
 };
 
 /**
@@ -6882,6 +6938,14 @@ export type ObservationDetailWritable = {
    */
   id: string;
   /**
+   * When a workspace admin marked this observation as incorrect; null while it stands. An invalidated observation counts toward nothing current.
+   */
+  invalidatedAt?: Date;
+  /**
+   * The admin's reason for the invalidation; null while the observation stands
+   */
+  invalidationReason?: string;
+  /**
    * The next step the review wrote about this observation, whether or not the feedback carrying it was delivered (null when it wrote none)
    */
   nextStep?: string;
@@ -7260,7 +7324,7 @@ export type ReviewFeedbackDetailWritable = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED';
   /**
    * Cross-run continuity key tying successive deliveries together
    */
@@ -7290,6 +7354,10 @@ export type ReviewObservationWritable = {
    */
   group?: ReviewPracticeGroup;
   id: string;
+  /**
+   * When a workspace admin invalidated this observation; null while it stands
+   */
+  invalidatedAt?: Date;
   observedAt: Date;
   /**
    * What occasioned the measurement. BACKFILL came from a confirmed campaign over work that already existed, so it is not a point on the live trend line.
@@ -7339,6 +7407,10 @@ export type ReviewObservationDetailWritable = {
    */
   group?: ReviewPracticeGroup;
   id: string;
+  /**
+   * Every correction by a workspace admin, newest first; the first is in force while it has no restoration
+   */
+  invalidations: Array<ObservationInvalidation>;
   observedAt: Date;
   practiceName: string;
   /**
@@ -12614,7 +12686,7 @@ export type ListPracticeReviewFeedbackData = {
     page?: number;
     size?: number;
     deliveryState?: Array<'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED' | 'UNCONFIRMED'>;
-    suppressionReason?: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
+    suppressionReason?: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED'>;
     channel?: Array<'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP'>;
     agentJobId?: string;
     /**
@@ -12826,6 +12898,41 @@ export type GetPracticeReviewObservationResponses = {
 };
 
 export type GetPracticeReviewObservationResponse = GetPracticeReviewObservationResponses[keyof GetPracticeReviewObservationResponses];
+
+export type UpdatePracticeReviewObservationValidityData = {
+  body: UpdateObservationValidityRequest;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    observationId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/reviews/observations/{observationId}/validity';
+};
+
+export type UpdatePracticeReviewObservationValidityErrors = {
+  /**
+   * Observation not found in this workspace
+   */
+  404: ProblemDetail;
+  /**
+   * The observation is already in the requested state
+   */
+  409: ProblemDetail;
+};
+
+export type UpdatePracticeReviewObservationValidityError = UpdatePracticeReviewObservationValidityErrors[keyof UpdatePracticeReviewObservationValidityErrors];
+
+export type UpdatePracticeReviewObservationValidityResponses = {
+  /**
+   * Observation detail after the change
+   */
+  200: ReviewObservationDetail;
+};
+
+export type UpdatePracticeReviewObservationValidityResponse = UpdatePracticeReviewObservationValidityResponses[keyof UpdatePracticeReviewObservationValidityResponses];
 
 export type ListPracticeStandingsData = {
   body?: never;

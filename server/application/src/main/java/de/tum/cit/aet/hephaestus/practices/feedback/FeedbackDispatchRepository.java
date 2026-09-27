@@ -54,9 +54,90 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
             @Param("leaseUntil") Instant leaseUntil,
             @Param("maxAttempts") int maxAttempts);
 
+    /**
+     * Share-locks the observations a dispatch cites: an automatic package its whole run, an approved one the
+     * observations bound to its feedback. A correction holds its observation {@code FOR UPDATE} while it checks
+     * for a delivery in progress, so an attempt admitted here either sees that correction or is seen by it.
+     */
+    @Query(value = """
+        SELECT o.id FROM observation o
+        WHERE o.workspace_id = :workspaceId
+          AND ((CAST(:feedbackId AS uuid) IS NULL AND o.agent_job_id = :jobId)
+               OR o.id IN (SELECT fo.observation_id FROM feedback_observation fo
+                           WHERE fo.feedback_id = CAST(:feedbackId AS uuid)))
+        FOR SHARE OF o
+        """, nativeQuery = true)
+    List<UUID> lockCitedObservations(
+            @Param("workspaceId") Long workspaceId,
+            @Param("jobId") UUID jobId,
+            @Param("feedbackId") @Nullable UUID feedbackId);
+
+    /** Whether a delivery citing this observation holds a live claim, so it may be talking to the provider now. */
+    @Query(value = """
+        SELECT EXISTS (
+            SELECT 1 FROM feedback_dispatch d
+            WHERE d.workspace_id = :workspaceId AND d.state = 'CLAIMED' AND d.lease_expires_at > CURRENT_TIMESTAMP
+              AND ((d.feedback_id IS NULL AND d.agent_job_id = :jobId)
+                   OR EXISTS (SELECT 1 FROM feedback_observation fo
+                              WHERE fo.feedback_id = d.feedback_id AND fo.observation_id = :observationId)))
+        """, nativeQuery = true)
+    boolean existsInFlightCiting(
+            @Param("workspaceId") Long workspaceId,
+            @Param("jobId") UUID jobId,
+            @Param("observationId") UUID observationId);
+
+    /**
+     * Whether a dispatch citing this observation ended withheld or failed without accounting for a write an earlier
+     * attempt may have made: it started a write, or retried after an attempt whose outcome was not recorded.
+     * Only a withholding for an invalidated observation reconciles those first, so it alone is trusted.
+     */
+    @Query(value = """
+        SELECT EXISTS (
+            SELECT 1 FROM feedback_dispatch d
+            WHERE d.workspace_id = :workspaceId AND d.state IN ('SUPPRESSED', 'FAILED')
+              AND COALESCE(d.suppression_reason, '') <> 'OBSERVATION_INVALIDATED'
+              AND (d.write_started OR d.attempt_count > 1)
+              AND ((d.feedback_id IS NULL AND d.agent_job_id = :jobId)
+                   OR EXISTS (SELECT 1 FROM feedback_observation fo
+                              WHERE fo.feedback_id = d.feedback_id AND fo.observation_id = :observationId)))
+        """, nativeQuery = true)
+    boolean existsUnconfirmedCiting(
+            @Param("workspaceId") Long workspaceId,
+            @Param("jobId") UUID jobId,
+            @Param("observationId") UUID observationId);
+
+    /** When the earliest still-unsettled dispatch citing this observation began a write it has not confirmed. */
+    @Query(value = """
+        SELECT MIN(COALESCE(d.write_started_at, d.created_at)) FROM feedback_dispatch d
+        WHERE d.workspace_id = :workspaceId AND d.projected_at IS NULL AND d.write_started
+          AND ((d.feedback_id IS NULL AND d.agent_job_id = :jobId)
+               OR EXISTS (SELECT 1 FROM feedback_observation fo
+                          WHERE fo.feedback_id = d.feedback_id AND fo.observation_id = :observationId))
+        """, nativeQuery = true)
+    @Nullable
+    Instant findUnconfirmedWriteSince(
+            @Param("workspaceId") Long workspaceId,
+            @Param("jobId") UUID jobId,
+            @Param("observationId") UUID observationId);
+
+    /** Whether a dispatch citing this observation is still unsettled, so what it posted is not yet in the ledger. */
+    @Query(value = """
+        SELECT EXISTS (
+            SELECT 1 FROM feedback_dispatch d
+            WHERE d.workspace_id = :workspaceId AND d.projected_at IS NULL
+              AND ((d.feedback_id IS NULL AND d.agent_job_id = :jobId)
+                   OR EXISTS (SELECT 1 FROM feedback_observation fo
+                              WHERE fo.feedback_id = d.feedback_id AND fo.observation_id = :observationId)))
+        """, nativeQuery = true)
+    boolean existsUnsettledCiting(
+            @Param("workspaceId") Long workspaceId,
+            @Param("jobId") UUID jobId,
+            @Param("observationId") UUID observationId);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
-        UPDATE feedback_dispatch SET write_started = TRUE, updated_at = CURRENT_TIMESTAMP
+        UPDATE feedback_dispatch SET write_started = TRUE, write_started_at = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
          WHERE id = :id AND workspace_id = :workspaceId AND state = 'CLAIMED'
            AND lease_owner = :owner AND write_started = FALSE
            AND lease_expires_at > CURRENT_TIMESTAMP
@@ -66,7 +147,7 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
     /** Reopens the fence this lease closed, once its channel proved the create request was never sent. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
-        UPDATE feedback_dispatch SET write_started = FALSE, updated_at = CURRENT_TIMESTAMP
+        UPDATE feedback_dispatch SET write_started = FALSE, write_started_at = NULL, updated_at = CURRENT_TIMESTAMP
          WHERE id = :id AND workspace_id = :workspaceId AND state = 'CLAIMED'
            AND lease_owner = :owner AND write_started = TRUE
            AND lease_expires_at > CURRENT_TIMESTAMP

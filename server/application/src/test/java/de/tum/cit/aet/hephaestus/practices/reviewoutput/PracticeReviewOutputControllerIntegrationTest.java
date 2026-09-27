@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.reviewoutput;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -28,9 +30,11 @@ import de.tum.cit.aet.hephaestus.practices.feedback.PlacementAnchorKind;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementAnchorSide;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
@@ -88,6 +92,9 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
 
     @Autowired
     private DeliveryPolicyEvaluationRepository deliveryPolicyEvaluationRepository;
+
+    @Autowired
+    private ObservationInvalidationRepository invalidationRepository;
 
     private Workspace workspace;
     private Workspace otherWorkspace;
@@ -1285,6 +1292,179 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     .isEqualTo(1)
                     .jsonPath("$.content[0].deliveryState")
                     .isEqualTo("DELIVERED");
+        }
+    }
+
+    @Nested
+    @DisplayName("Observation validity")
+    class ObservationValidity {
+
+        private static final String VALIDITY = OBSERVATIONS + "/{id}/validity";
+
+        private WebTestClient.ResponseSpec patchValidity(
+                Workspace ws, UUID observationId, boolean valid, String reason) {
+            return webTestClient
+                    .patch()
+                    .uri(VALIDITY, ws.getWorkspaceSlug(), observationId)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(Map.of("valid", valid, "reason", reason))
+                    .exchange();
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldInvalidateOnlyTheSelectedObservationWithItsActorAndReason() {
+            UUID wrong = insertProblem(practiceA, job, alice, "Closed issue #1 already", "MINOR");
+            UUID sibling = insertProblem(practiceB, job, alice, "Sibling claim", "MINOR");
+
+            patchValidity(workspace, wrong, false, "  Issue #1 was still open  ")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.summary")
+                    .isEqualTo("Closed issue #1 already")
+                    .jsonPath("$.invalidations.length()")
+                    .isEqualTo(1)
+                    .jsonPath("$.invalidations[0].reason")
+                    .isEqualTo("Issue #1 was still open")
+                    .jsonPath("$.invalidations[0].invalidatedBy")
+                    .isEqualTo("admin")
+                    .jsonPath("$.invalidations[0].restoredAt")
+                    .doesNotExist();
+
+            ObservationInvalidation recorded =
+                    invalidationRepository.findActive(workspace.getId(), wrong).orElseThrow();
+            assertThat(recorded.getInvalidatedByAccountId()).isNotNull();
+            assertThat(invalidationRepository.findHistory(workspace.getId(), sibling))
+                    .isEmpty();
+            assertThat(observationRepository
+                            .findByIdAndWorkspaceId(wrong, workspace.getId())
+                            .orElseThrow()
+                            .getSummary())
+                    .isEqualTo("Closed issue #1 already");
+            getOk(OBSERVATIONS + "?agentJobId=" + job.getId(), workspace.getWorkspaceSlug())
+                    .jsonPath("$.content[?(@.id == '%s')].invalidatedAt".formatted(wrong))
+                    .isNotEmpty()
+                    .jsonPath("$.content[?(@.id == '%s')].invalidatedAt".formatted(sibling))
+                    .doesNotExist();
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldStopFeedbackNobodyHasReceivedAndKeepTheDeliveredRecord() {
+            UUID wrong = insertProblem(practiceA, job, alice, "Wrong claim", "MINOR");
+            UUID other = insertProblem(practiceB, job, alice, "Other claim", "MINOR");
+            Feedback proposal =
+                    persistUnit(workspace, job, alice, 1, FeedbackDeliveryState.AWAITING_APPROVAL, null, "Proposal");
+            Feedback prepared = persistUnit(workspace, job, alice, 2, FeedbackDeliveryState.PREPARED, null, "Prepared");
+            Feedback delivered =
+                    persistUnit(workspace, job, alice, 3, FeedbackDeliveryState.DELIVERED, null, "Delivered");
+            Feedback unrelated =
+                    persistUnit(workspace, job, alice, 4, FeedbackDeliveryState.PREPARED, null, "Unrelated");
+            bind(proposal, wrong);
+            bind(prepared, wrong);
+            bind(delivered, wrong);
+            bind(unrelated, other);
+
+            patchValidity(workspace, wrong, false, "Wrong when made")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+
+            for (Feedback stopped : List.of(proposal, prepared)) {
+                Feedback reread = feedbackRepository
+                        .findByIdAndWorkspaceId(stopped.getId(), workspace.getId())
+                        .orElseThrow();
+                assertThat(reread.getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
+                assertThat(reread.getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.OBSERVATION_INVALIDATED);
+            }
+            assertThat(feedbackRepository
+                            .findByIdAndWorkspaceId(delivered.getId(), workspace.getId())
+                            .orElseThrow()
+                            .getDeliveryState())
+                    .isEqualTo(FeedbackDeliveryState.DELIVERED);
+            assertThat(feedbackRepository
+                            .findByIdAndWorkspaceId(unrelated.getId(), workspace.getId())
+                            .orElseThrow()
+                            .getDeliveryState())
+                    .isEqualTo(FeedbackDeliveryState.PREPARED);
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldRefuseRepeatedTransitionsAndKeepEveryCorrectionInTheHistory() {
+            UUID observation = insertProblem(practiceA, job, alice, "Contested claim", "MINOR");
+
+            patchValidity(workspace, observation, false, "First look")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+            patchValidity(workspace, observation, false, "Again")
+                    .expectStatus()
+                    .isEqualTo(409)
+                    .expectBody(Void.class);
+            patchValidity(workspace, observation, true, "The claim was right after all")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.invalidations[0].restorationReason")
+                    .isEqualTo("The claim was right after all")
+                    .jsonPath("$.invalidations[0].restoredBy")
+                    .isEqualTo("admin");
+            patchValidity(workspace, observation, true, "Again")
+                    .expectStatus()
+                    .isEqualTo(409)
+                    .expectBody(Void.class);
+            patchValidity(workspace, observation, false, "Second look")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.invalidations.length()")
+                    .isEqualTo(2)
+                    .jsonPath("$.invalidations[0].reason")
+                    .isEqualTo("Second look")
+                    .jsonPath("$.invalidations[1].reason")
+                    .isEqualTo("First look");
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldNotFindOrChangeAnotherWorkspacesObservation() {
+            UUID foreign = insertProblem(otherPractice, otherJob, alice, "Other tenant claim", "MINOR");
+
+            patchValidity(workspace, foreign, false, "Not yours")
+                    .expectStatus()
+                    .isNotFound()
+                    .expectBody(Void.class);
+
+            assertThat(invalidationRepository.findHistory(otherWorkspace.getId(), foreign))
+                    .isEmpty();
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldRequireAReason() {
+            UUID observation = insertProblem(practiceA, job, alice, "Claim", "MINOR");
+
+            patchValidity(workspace, observation, false, "   ")
+                    .expectStatus()
+                    .isBadRequest()
+                    .expectBody(Void.class);
+
+            assertThat(invalidationRepository.findHistory(workspace.getId(), observation))
+                    .isEmpty();
+        }
+
+        @Test
+        @WithUser
+        void shouldForbidAWorkspaceMember() {
+            UUID observation = insertProblem(practiceA, job, alice, "Claim", "MINOR");
+
+            patchValidity(workspace, observation, false, "Members cannot correct")
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
     }
 

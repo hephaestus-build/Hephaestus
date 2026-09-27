@@ -55,6 +55,13 @@ public record ReviewObservationDetailDTO(
         String recurrenceKey,
 
         @NonNull ReviewClaimCurrentness claimCurrentness,
+
+        @NonNull
+        @Schema(
+                description = "Every correction by a workspace admin, newest first; the first is in force while it "
+                        + "has no restoration")
+        List<ObservationInvalidationDTO> invalidations,
+
         @NonNull Instant observedAt,
 
         @NonNull @Schema(description = "Linked feedback, newest first")
@@ -72,6 +79,7 @@ public record ReviewObservationDetailDTO(
             ReviewedWorkRefDTO reviewedWork,
             @Nullable ReviewSubjectDTO subject,
             List<ReviewBoundFeedbackDTO> feedback,
+            List<ObservationInvalidationDTO> invalidations,
             boolean includeEvidence) {
         var practice = observation.getPractice();
         var revision = observation.getPracticeRevision();
@@ -93,6 +101,7 @@ public record ReviewObservationDetailDTO(
                 observation.getEvidenceRationale(),
                 observation.getRecurrenceKey(),
                 ReviewClaimCurrentness.of(revision, practice, observation.getSupersededAt()),
+                invalidations,
                 observation.getObservedAt(),
                 feedback);
     }

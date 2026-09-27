@@ -1,9 +1,20 @@
-import { ArchiveIcon, BrushCleaningIcon, UserRoundXIcon, VolumeOffIcon } from "lucide-react";
+import {
+	ArchiveIcon,
+	BrushCleaningIcon,
+	CircleSlashIcon,
+	UserRoundXIcon,
+	VolumeOffIcon,
+} from "lucide-react";
 import type { ReviewFeedback } from "@/api/types.gen";
 import type { StatusDefs } from "@/components/common/status-def";
 
 export type WithholdingReason = NonNullable<ReviewFeedback["suppressionReason"]>;
-export type WithholdingFamily = "WORK_MOVED_ON" | "POLICY" | "DEVELOPER_CHOICE" | "HOUSEKEEPING";
+export type WithholdingFamily =
+	| "WORK_MOVED_ON"
+	| "POLICY"
+	| "DEVELOPER_CHOICE"
+	| "ADMIN_CORRECTION"
+	| "HOUSEKEEPING";
 
 /**
  * The filter grain over the withholding reasons. Each family answers "who decided", which is the cut
@@ -29,6 +40,12 @@ export const WITHHOLDING_FAMILY_DEFS: StatusDefs<WithholdingFamily> = {
 		icon: UserRoundXIcon,
 		badgeVariant: "outline",
 		description: "The developer opted out, or already told us this kind of feedback was wrong.",
+	},
+	ADMIN_CORRECTION: {
+		label: "An admin corrected it",
+		icon: CircleSlashIcon,
+		badgeVariant: "outline",
+		description: "A workspace admin marked an observation behind it as incorrect.",
 	},
 	HOUSEKEEPING: {
 		label: "Housekeeping",
@@ -57,6 +74,7 @@ const REASON_FAMILY: Record<WithholdingReason, WithholdingFamily> = {
 	RECIPIENT_OPTED_OUT: "DEVELOPER_CHOICE",
 	REACTED_DISPUTED: "DEVELOPER_CHOICE",
 	REACTED_NOT_APPLICABLE: "DEVELOPER_CHOICE",
+	OBSERVATION_INVALIDATED: "ADMIN_CORRECTION",
 	COMPOSER_DEDUPED: "HOUSEKEEPING",
 	COMPOSER_WITHHELD: "HOUSEKEEPING",
 	EMPTY_AFTER_SANITIZE: "HOUSEKEEPING",
@@ -90,6 +108,8 @@ export const WITHHOLDING_REASON_DEFS: Record<WithholdingReason, string> = {
 	RECIPIENT_OPTED_OUT: "The developer has opted out of AI feedback.",
 	REACTED_DISPUTED: "The developer disputed feedback like this before.",
 	REACTED_NOT_APPLICABLE: "The developer marked feedback like this not applicable before.",
+	OBSERVATION_INVALIDATED:
+		"A workspace admin marked an observation behind it as incorrect, so nothing more of it was sent.",
 	COMPOSER_DEDUPED: "Nearly the same as other feedback from the same review.",
 	COMPOSER_WITHHELD: "The review decided, with a reason, not to put this on the work.",
 	EMPTY_AFTER_SANITIZE: "Nothing was left to send once the text had been cleaned up.",
@@ -112,6 +132,7 @@ const WITHHOLDING_FAMILY_REASONS: Record<WithholdingFamily, WithholdingReason[]>
 	WORK_MOVED_ON: [],
 	POLICY: [],
 	DEVELOPER_CHOICE: [],
+	ADMIN_CORRECTION: [],
 	HOUSEKEEPING: [],
 };
 for (const reason of Object.keys(REASON_FAMILY).filter(isWithholdingReason)) {

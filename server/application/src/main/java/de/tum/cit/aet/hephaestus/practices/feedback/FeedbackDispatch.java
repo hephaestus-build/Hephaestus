@@ -94,6 +94,10 @@ public class FeedbackDispatch {
     @Column(name = "write_started", nullable = false)
     private Boolean writeStarted;
 
+    /** When the first provider write began; what an unconfirmed write is timed from. */
+    @Column(name = "write_started_at")
+    private @Nullable Instant writeStartedAt;
+
     @Column(name = "delivered_external_ref", length = 255)
     private @Nullable String deliveredExternalRef;
 

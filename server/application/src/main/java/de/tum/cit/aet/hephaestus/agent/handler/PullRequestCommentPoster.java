@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.FeedbackContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.UpdateOutcome;
 import java.time.Duration;
 import java.util.EnumMap;
 import java.util.List;
@@ -200,6 +201,27 @@ class PullRequestCommentPoster {
     }
 
     record SummaryWrite(AgentJob job, SummaryChannel channel, FeedbackTarget target, FeedbackContent content) {}
+
+    /**
+     * Rewrites a summary Hephaestus already posted, addressed by the id its post returned. A channel that cannot
+     * edit, or a job that no longer names one, answers {@code UNSUPPORTED}; a brake or transport failure answers
+     * {@code TRANSIENT}, so the caller tries again rather than reporting the comment as changed.
+     */
+    UpdateOutcome editSummary(
+            AgentJob job, String externalId, String formattedBody, java.util.@Nullable UUID approvedFeedbackId) {
+        try {
+            JsonNode metadata = job.getMetadata();
+            String marker =
+                    approvedFeedbackId == null ? summaryMarkerFor(job) : approvedFeedbackMarker(approvedFeedbackId);
+            SummaryWrite write = summaryWrite(
+                    job, metadata != null && metadata.has("issue_number"), formattedBody, marker);
+            return write.channel().updateSummary(write.target(), externalId, write.content());
+        } catch (JobDeliveryException e) {
+            return UpdateOutcome.unsupported();
+        } catch (FeedbackDeliveryException e) {
+            return UpdateOutcome.transientFailure(e.toString());
+        }
+    }
 
     /** Returns {@code UNKNOWN}, never {@code ABSENT}, when the lookup cannot be completed. */
     ExistingDeliveryLookup findExistingSummaryComment(AgentJob job) {

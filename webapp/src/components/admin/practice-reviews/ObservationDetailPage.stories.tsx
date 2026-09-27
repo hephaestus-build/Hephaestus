@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, screen, within } from "storybook/test";
+import { expect, fn, screen, waitFor, within } from "storybook/test";
 
+import { expectSettledVisible } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { daysBefore, hoursBefore } from "@/stories/story-clock";
 
 import { observationDetail, reviewObservationDetail, workspacePractices } from "./fixtures";
 import { ObservationDetailPage } from "./ObservationDetailPage";
@@ -27,6 +29,8 @@ const meta = {
 		isLoading: false,
 		error: undefined,
 		practices: workspacePractices,
+		onChangeValidity: fn(async () => undefined),
+		isChangingValidity: false,
 	},
 } satisfies Meta<typeof ObservationDetailPage>;
 
@@ -133,6 +137,102 @@ export const PracticeSaysWhatItIs: Story = {
 		await userEvent.hover(await canvas.findByRole("link", { name: /Errors carry their context/u }));
 		// The card is a portal, so it is looked for on the whole screen rather than in the canvas.
 		await screen.findByText(errorsCarryContext.whyItMatters ?? "");
+	},
+};
+
+/** The reason is required: an invalidation without one is not something the developer could read. */
+export const MarkAsIncorrect: Story = {
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async ({ args, canvas, userEvent }) => {
+		await userEvent.click(await canvas.findByRole("button", { name: "Mark as incorrect" }));
+		const reason = await screen.findByRole("textbox", { name: "Reason" });
+		await expectSettledVisible(reason);
+		const submit = screen.getAllByRole("button", { name: "Mark as incorrect" }).at(-1);
+		await expect(submit).toBeDisabled();
+		await userEvent.type(reason, "  The 404 comes from the router, not the cache.  ");
+		if (submit) {
+			await userEvent.click(submit);
+		}
+		await expect(args.onChangeValidity).toHaveBeenCalledWith(
+			false,
+			"The 404 comes from the router, not the cache.",
+		);
+		await waitFor(async () => expect(screen.queryByRole("textbox", { name: "Reason" })).toBeNull());
+	},
+};
+
+/** A refused change keeps the form open with the reason the admin wrote, ready for another try. */
+export const MarkAsIncorrectFails: Story = {
+	args: {
+		onChangeValidity: fn(async () => {
+			throw new Error("409");
+		}),
+	},
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async ({ args, canvas, userEvent }) => {
+		await userEvent.click(await canvas.findByRole("button", { name: "Mark as incorrect" }));
+		const reason = await screen.findByRole("textbox", { name: "Reason" });
+		await expectSettledVisible(reason);
+		await userEvent.type(reason, "The 404 comes from the router.");
+		const submit = screen.getAllByRole("button", { name: "Mark as incorrect" }).at(-1);
+		if (submit) {
+			await userEvent.click(submit);
+		}
+		await expect(args.onChangeValidity).toHaveBeenCalledOnce();
+		await expect(screen.getByRole("textbox", { name: "Reason" })).toHaveValue(
+			"The 404 comes from the router.",
+		);
+	},
+};
+
+/**
+ * A comment already on the work could not be changed, so the page says so rather than implying the
+ * correction reached it.
+ */
+export const MarkedIncorrect: Story = {
+	args: {
+		observation: {
+			...reviewObservationDetail,
+			invalidations: [
+				{
+					id: "inv-2",
+					reason: "The 404 comes from the router, not the cache.",
+					invalidatedAt: hoursBefore(2),
+					invalidatedBy: "Ada Admin",
+					providerCopy: "INLINE_REMAINS",
+				},
+				{
+					id: "inv-1",
+					reason: "Looked like a false positive at first.",
+					invalidatedAt: daysBefore(3),
+					invalidatedBy: "Ada Admin",
+					restorationReason: "The diff does conflate the two after all.",
+					restoredAt: daysBefore(2),
+					providerCopy: "UPDATED",
+				},
+			],
+		},
+	},
+	play: async ({ canvas, canvasElement }) => {
+		await canvas.findByText("Marked as incorrect");
+		const header = canvasElement.querySelector("header");
+		if (!header) {
+			throw new Error("The page has no header");
+		}
+		await expect(within(header).getByText("Marked incorrect")).toBeVisible();
+		await expect(
+			canvas.getByText(
+				/Inline comments Hephaestus posted about it are still on the work unchanged/u,
+			),
+		).toBeVisible();
+		await expect(
+			canvas.getByText("The correction notice was removed from posted comments."),
+		).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Restore observation" })).toBeEnabled();
+		const corrections = within(canvas.getByRole("list", { name: "Corrections" }));
+		await expect(corrections.getAllByRole("listitem")).toHaveLength(3);
+		// The erased restorer is named as such, not left blank.
+		await expect(corrections.getByText(/an account that no longer exists/u)).toBeVisible();
 	},
 };
 

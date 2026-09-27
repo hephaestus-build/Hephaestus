@@ -132,6 +132,27 @@ class FeedbackDispatchStateMachine {
         return retry(dispatch, owner, error, externalRef, true, signals);
     }
 
+    /** Keeps a dispatch whose started write is unconfirmed looking for it, at {@code nextAttemptAt}. */
+    PracticeFeedbackDispatchService.Result recheckAt(
+            FeedbackDispatch dispatch,
+            String owner,
+            String error,
+            @Nullable String externalRef,
+            List<DeliveredSignal> signals,
+            Instant nextAttemptAt) {
+        return finish(
+                        dispatch,
+                        owner,
+                        FeedbackDispatchState.UNCERTAIN,
+                        externalRef,
+                        error,
+                        null,
+                        nextAttemptAt,
+                        signals)
+                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef)
+                : PracticeFeedbackDispatchService.Result.inProgress();
+    }
+
     PracticeFeedbackDispatchService.Result retryAfterWrite(
             FeedbackDispatch dispatch, String owner, @Nullable String error) {
         return retry(dispatch, owner, error, null, true, deliveredSignals(dispatch));

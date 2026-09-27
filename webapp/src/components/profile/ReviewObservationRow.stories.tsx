@@ -219,6 +219,26 @@ export const StaleWithoutEvidence: Story = {
 };
 
 /**
+ * An admin found the claim wrong when it was made. The row stays in the developer's history, marked,
+ * with the admin's reason in its own words.
+ */
+export const MarkedIncorrect: Story = {
+	args: {
+		observation: {
+			...strength,
+			invalidatedAt: daysBefore(1),
+			invalidationReason: "Issue #1 was still open; it closes when the merge request is merged.",
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Marked incorrect")).toBeVisible();
+		await expect(
+			canvas.getByText(/Issue #1 was still open; it closes when the merge request is merged\./u),
+		).toBeVisible();
+	},
+};
+
+/**
  * What the reader already said: the resolution stands pressed, the rating given on the feedback
  * card and the comment sent with the response are shown as they are.
  */

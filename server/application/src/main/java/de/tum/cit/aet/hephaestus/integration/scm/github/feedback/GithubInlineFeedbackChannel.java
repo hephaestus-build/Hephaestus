@@ -109,6 +109,37 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
         return postInlineFeedback(target, feedbackItems, true);
     }
 
+    @Override
+    public @Nullable List<DeliveredSignal> findPosted(
+            SummaryChannel.FeedbackTarget target, List<InlineFeedback> feedbackItems, boolean immutablePackage) {
+        long scopeId = target.ref().workspaceId();
+        if (feedbackItems.isEmpty()
+                || gitHubProvider.isRateLimitCritical(scopeId)
+                || feedbackItems.stream().anyMatch(item -> item.deliveryKey() == null)) {
+            return feedbackItems.isEmpty() ? List.of() : null;
+        }
+        try {
+            PrCoordinates pr = GithubSummaryChannel.parseSubjectExternalId(target.subjectExternalId());
+            Map<String, PriorThread> priorByKey = indexPriorThreads(
+                    scopeId, pr, immutablePackage ? feedbackItems.get(0).marker() : null, true);
+            List<DeliveredSignal> found = new ArrayList<>();
+            for (InlineFeedback item : feedbackItems) {
+                PriorThread prior = priorByKey.get(item.deliveryKey());
+                if (prior != null) {
+                    found.add(new DeliveredSignal(
+                            item.deliveryKey(),
+                            item.anchor(),
+                            Disposition.PRESERVED_EXISTING,
+                            prior.commentId(),
+                            prior.threadId()));
+                }
+            }
+            return found;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     private InlineResult postInlineFeedback(
             SummaryChannel.FeedbackTarget target, List<InlineFeedback> feedbackItems, boolean immutablePackage) {
         if (feedbackItems == null || feedbackItems.isEmpty()) {
@@ -126,7 +157,7 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
         PrCoordinates pr = GithubSummaryChannel.parseSubjectExternalId(target.subjectExternalId());
 
         String marker = immutablePackage ? feedbackItems.get(0).marker() : null;
-        Map<String, PriorThread> priorByKey = indexPriorThreads(scopeId, pr, marker);
+        Map<String, PriorThread> priorByKey = indexPriorThreads(scopeId, pr, marker, false);
 
         // Partition feedbackItems: those whose key already has a live prior thread are preserved; the rest are posted.
         List<InlineFeedback> toPost = new ArrayList<>(feedbackItems.size());
@@ -287,7 +318,7 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
             throw new FeedbackDeliveryException("GitHub rate limit is too low to reconcile stale inline threads");
         }
         PrCoordinates pr = GithubSummaryChannel.parseSubjectExternalId(target.subjectExternalId());
-        Map<String, PriorThread> priorByKey = indexPriorThreads(scopeId, pr, null);
+        Map<String, PriorThread> priorByKey = indexPriorThreads(scopeId, pr, null, false);
         int minimized = minimizeVanishedThreads(scopeId, priorByKey.values(), Set.of());
         if (minimized > 0) {
             log.info("Minimized {} stale GitHub inline threads: workspaceId={}", minimized, scopeId);
@@ -346,7 +377,9 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
         return body.contains(marker) ? body : body + "\n\n" + marker;
     }
 
-    private Map<String, PriorThread> indexPriorThreads(long scopeId, PrCoordinates pr, @Nullable String marker) {
+    /** {@code requireComplete} fails a scan the page budget cuts short, so it cannot pass for proof of absence. */
+    private Map<String, PriorThread> indexPriorThreads(
+            long scopeId, PrCoordinates pr, @Nullable String marker, boolean requireComplete) {
         Map<String, PriorThread> byKey = new LinkedHashMap<>();
         String after = null;
         try {
@@ -382,6 +415,9 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
                         .getValue();
                 if (!Boolean.TRUE.equals(hasNext)) {
                     break;
+                }
+                if (requireComplete && page == MAX_THREAD_PAGES - 1) {
+                    throw new FeedbackDeliveryException("GitHub review threads exceed the lookup page budget");
                 }
                 after = response.field("repository.pullRequest.reviewThreads.pageInfo.endCursor")
                         .getValue();

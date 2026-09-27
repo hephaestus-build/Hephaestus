@@ -6502,6 +6502,7 @@ paths:
             - APPROVAL_NO_LONGER_ELIGIBLE
             - PRACTICE_REQUIRES_APPROVAL
             - BACKFILL_QUIET
+            - OBSERVATION_INVALIDATED
       - in: query
         name: channel
         required: false
@@ -6861,6 +6862,55 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Observation not found in this workspace
       summary: Get an observation with its evidence and linked feedback
+      tags:
+      - Practice reviews
+  /workspaces/{workspaceSlug}/practices/reviews/observations/{observationId}/validity:
+    patch:
+      description: "Invalidating stops feedback citing the observation that has not\
+        \ reached anyone yet. Feedback already delivered keeps its record, and a comment\
+        \ already posted on the provider stays there. Restoring does not re-send anything."
+      operationId: updatePracticeReviewObservationValidity
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: observationId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateObservationValidityRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewObservationDetail"
+          description: Observation detail after the change
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Observation not found in this workspace
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The observation is already in the requested state
+      summary: "Invalidate an observation that was wrong when recorded, or restore\
+        \ it"
       tags:
       - Practice reviews
   /workspaces/{workspaceSlug}/practices/standings:
@@ -10947,6 +10997,7 @@ components:
           - APPROVAL_NO_LONGER_ELIGIBLE
           - PRACTICE_REQUIRES_APPROVAL
           - BACKFILL_QUIET
+          - OBSERVATION_INVALIDATED
         evaluatedAt:
           type: string
           format: date-time
@@ -12570,6 +12621,16 @@ components:
           type: string
           format: uuid
           description: Observation ID
+        invalidatedAt:
+          type: string
+          format: date-time
+          description: When a workspace admin marked this observation as incorrect;
+            null while it stands. An invalidated observation counts toward nothing
+            current.
+        invalidationReason:
+          type: string
+          description: The admin's reason for the invalidation; null while the observation
+            stands
         nextStep:
           type: string
           description: "The next step the review wrote about this observation, whether\
@@ -12655,6 +12716,47 @@ components:
             open question
       required:
       - citations
+    ObservationInvalidation:
+      type: object
+      description: "One correction of an observation by a workspace admin, and its\
+        \ restoration if any"
+      properties:
+        id:
+          type: string
+          format: uuid
+        invalidatedAt:
+          type: string
+          format: date-time
+        invalidatedBy:
+          type: string
+          description: Who invalidated it; null once that account is erased
+        providerCopy:
+          type: string
+          description: What became of the comments Hephaestus had already posted on
+            the provider
+          enum:
+          - PENDING
+          - NONE
+          - UPDATED
+          - INLINE_REMAINS
+          - UNRESOLVED
+        reason:
+          type: string
+        restorationReason:
+          type: string
+          description: Why it was restored; null while the invalidation is in force
+        restoredAt:
+          type: string
+          format: date-time
+        restoredBy:
+          type: string
+          description: Who restored it; null while in force or once that account is
+            erased
+      required:
+      - id
+      - invalidatedAt
+      - providerCopy
+      - reason
     ObservationList:
       type: object
       description: Practice observation summary for list views
@@ -14361,6 +14463,7 @@ components:
             - APPROVAL_NO_LONGER_ELIGIBLE
             - PRACTICE_REQUIRES_APPROVAL
             - BACKFILL_QUIET
+            - OBSERVATION_INVALIDATED
       required:
       - autonomy
       - deliveredCount
@@ -15423,6 +15526,7 @@ components:
           - APPROVAL_NO_LONGER_ELIGIBLE
           - PRACTICE_REQUIRES_APPROVAL
           - BACKFILL_QUIET
+          - OBSERVATION_INVALIDATED
       required:
       - agentJobId
       - channel
@@ -15597,6 +15701,7 @@ components:
           - APPROVAL_NO_LONGER_ELIGIBLE
           - PRACTICE_REQUIRES_APPROVAL
           - BACKFILL_QUIET
+          - OBSERVATION_INVALIDATED
       required:
       - agentJobId
       - bodyTruncated
@@ -15744,6 +15849,7 @@ components:
           - APPROVAL_NO_LONGER_ELIGIBLE
           - PRACTICE_REQUIRES_APPROVAL
           - BACKFILL_QUIET
+          - OBSERVATION_INVALIDATED
         threadKey:
           type: string
           description: Cross-run continuity key tying successive deliveries together
@@ -15830,6 +15936,11 @@ components:
         id:
           type: string
           format: uuid
+        invalidatedAt:
+          type: string
+          format: date-time
+          description: When a workspace admin invalidated this observation; null while
+            it stands
         observedAt:
           type: string
           format: date-time
@@ -15958,6 +16069,12 @@ components:
         id:
           type: string
           format: uuid
+        invalidations:
+          type: array
+          description: "Every correction by a workspace admin, newest first; the first\
+            \ is in force while it has no restoration"
+          items:
+            $ref: "#/components/schemas/ObservationInvalidation"
         observedAt:
           type: string
           format: date-time
@@ -16007,6 +16124,7 @@ components:
       - claimCurrentness
       - feedback
       - id
+      - invalidations
       - observedAt
       - practiceName
       - practiceSlug
@@ -17577,6 +17695,23 @@ components:
       - researchSurveys
       - surveySummaries
       - workspaceAlerts
+    UpdateObservationValidityRequest:
+      type: object
+      description: "Invalidate an observation that was wrong when recorded, or restore\
+        \ it"
+      properties:
+        reason:
+          type: string
+          description: "Why, kept with the correction; an invalidation reason is shown\
+            \ to the developer"
+          maxLength: 500
+          minLength: 0
+        valid:
+          type: boolean
+          description: false invalidates the observation; true restores it
+      required:
+      - reason
+      - valid
     UpdateOutlineCollectionStateRequest:
       type: object
       description: Transition a mirrored Outline collection to a target mirror state

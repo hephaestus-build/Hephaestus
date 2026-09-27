@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.DeveloperPracticeSummaryProjection;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -22,6 +23,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -70,9 +72,38 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                   )
         """;
 
+    /**
+     * Drops a claim a workspace admin invalidated and has not restored, so current reads treat it as never made.
+     * Requires the observation alias {@code f}; {@link #VALID_LATEST_RUN_GUARD} is its twin for a latest-run
+     * subquery ({@link #LATEST_RUN_OF_CLAIM} carries it), which must skip the claim too so an earlier valid run can
+     * speak for the work again.
+     */
+    String VALID_CLAIM_GUARD = """
+                  AND NOT EXISTS (
+                      SELECT 1 FROM observation_invalidation oi
+                      WHERE oi.observation_id = f.id AND oi.restored_at IS NULL
+                  )
+        """;
+
+    /** {@link #VALID_CLAIM_GUARD} for the latest-run subquery alias {@code f2}. */
+    String VALID_LATEST_RUN_GUARD = """
+                    AND NOT EXISTS (
+                        SELECT 1 FROM observation_invalidation oi2
+                        WHERE oi2.observation_id = f2.id AND oi2.restored_at IS NULL
+                    )
+        """;
+
     @EntityGraph(attributePaths = {"practice.currentRevision", "practiceRevision"})
     @Query("SELECT f FROM Observation f WHERE f.id = :id AND f.workspaceId = :workspaceId")
     Optional<Observation> findByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
+
+    /**
+     * Serializes corrections of one observation with each other and with delivery admission, which holds it
+     * {@code FOR SHARE}; the row itself is never written.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT f FROM Observation f WHERE f.id = :id AND f.workspaceId = :workspaceId")
+    Optional<Observation> lockByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
     /**
      * Loads both practice revisions for batched currentness checks without per-observation lazy loads.
@@ -309,6 +340,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
         AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
+        AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
         """, countQuery = """
         SELECT COUNT(f) FROM Observation f
         JOIN f.practice p
@@ -322,6 +354,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
         AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
+        AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
         """)
     Page<Observation> findByAboutUserAndWorkspace(
             @Param("aboutUserId") Long aboutUserId,
@@ -362,6 +395,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
         AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
+        AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
         ORDER BY (CASE
             WHEN f.severity = de.tum.cit.aet.hephaestus.practices.model.Severity.CRITICAL THEN 0
             WHEN f.severity = de.tum.cit.aet.hephaestus.practices.model.Severity.MAJOR THEN 1
@@ -382,6 +416,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
         AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
+        AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
         """)
     Page<Observation> findByAboutUserAndWorkspaceSeverityFirst(
             @Param("aboutUserId") Long aboutUserId,
@@ -480,7 +515,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * lower-case). Enum columns compare against their {@code STRING} storage form. {@code positiveCount} is
      * the positive outcomes; {@code negativeCount} is the negative outcomes.
      */
-    @Query(value = """
+    @Query(
+            value = """
                     SELECT p.slug AS "practiceSlug",
                            p.name AS "practiceName",
                            COUNT(f.id) AS "totalObservations",
@@ -491,7 +527,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                     JOIN practice p ON p.id = f.practice_id
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
-            """ + HIDDEN_REPOSITORY_GUARD + """
+            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
               AND f.superseded_at IS NULL
               AND f.origin <> 'BACKFILL'
               AND f.agent_job_id = (
@@ -503,12 +539,14 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                     AND f2.artifact_kind = f.artifact_kind
                     AND f2.artifact_id = f.artifact_id
                     AND f2.origin <> 'BACKFILL'
+            """ + VALID_LATEST_RUN_GUARD + """
                   ORDER BY f2.observed_at DESC, f2.agent_job_id DESC
                   LIMIT 1
               )
             GROUP BY p.slug, p.name
             ORDER BY p.name ASC
-            """, nativeQuery = true)
+            """,
+            nativeQuery = true)
     List<DeveloperPracticeSummaryProjection> findSummaryByDeveloperAndWorkspace(
             @Param("aboutUserId") Long aboutUserId, @Param("workspaceId") Long workspaceId);
 
@@ -533,6 +571,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         WHERE f.artifactKind = :artifactKind
         AND f.artifactId = :pullRequestId
         AND f.workspaceId = :workspaceId
+        AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
         ORDER BY f.observedAt DESC
         """)
     List<Observation> findByPullRequestAndWorkspace(
@@ -542,9 +581,9 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
 
     /**
      * The run that speaks for the claim of the observation aliased {@code f}: the newest run that recorded this
-     * practice about this developer on this work within one origin class, and still stands. It is the rule
-     * {@link LatestRun#perClaim} applies in memory; native because it needs {@code ORDER BY ... LIMIT 1} in a
-     * correlated subquery.
+     * practice about this developer on this work within one origin class, and still stands, not superseded and not
+     * invalidated. It is the rule {@link LatestRun#perClaim} applies in memory; native because it needs
+     * {@code ORDER BY ... LIMIT 1} in a correlated subquery.
      */
     String LATEST_RUN_OF_CLAIM = """
                   (SELECT f2.agent_job_id FROM observation f2
@@ -553,6 +592,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                      AND f2.artifact_kind = f.artifact_kind AND f2.artifact_id = f.artifact_id
                      AND (f2.origin = 'BACKFILL') = (f.origin = 'BACKFILL')
                      AND f2.superseded_at IS NULL
+        """ + VALID_LATEST_RUN_GUARD + """
                    ORDER BY f2.observed_at DESC, f2.agent_job_id DESC LIMIT 1)
         """;
 
@@ -569,18 +609,20 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * is exactly what "what should I work on" is asking for. {@code PracticeStandingObservationDTO.origin()}
      * carries the class through so a surface can label a backfilled item rather than pass it off as live.
      */
-    @Query(value = """
+    @Query(
+            value = """
                     SELECT f.* FROM observation f
                     JOIN practice p ON p.id = f.practice_id
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
-            """ + HIDDEN_REPOSITORY_GUARD + """
+            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
               AND f.superseded_at IS NULL
               AND f.observed_at >= :since
               AND f.assessment_status IN (:assessmentStatuses)
               AND f.agent_job_id =""" + LATEST_RUN_OF_CLAIM + """
             ORDER BY f.observed_at DESC
-            """, nativeQuery = true)
+            """,
+            nativeQuery = true)
     List<Observation> findRecentByDeveloperAndWorkspace(
             @Param("aboutUserId") Long aboutUserId,
             @Param("workspaceId") Long workspaceId,
@@ -597,7 +639,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                     SELECT f.* FROM observation f
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
-            """ + HIDDEN_REPOSITORY_GUARD + """
+            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
               AND f.superseded_at IS NULL
               AND f.observed_at >= :since
               AND f.agent_job_id <>""" + LATEST_RUN_OF_CLAIM + """
@@ -614,13 +656,14 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * what the practice standing and the work resolution narrow in memory to each claim's latest run as of
      * the moment they read at ({@link LatestRun#perClaim}), so that two standings of one developer come from
      * one query. Carries {@link #HIDDEN_REPOSITORY_GUARD} like every developer surface, and skips a claim the work
-     * has moved on from since it was reviewed ({@code superseded_at}), as every developer surface does.
+     * has moved on from since it was reviewed ({@code superseded_at}) or an admin invalidated, as every developer
+     * surface does.
      */
     @Query(value = """
                     SELECT f.* FROM observation f
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
-            """ + HIDDEN_REPOSITORY_GUARD + """
+            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
               AND f.superseded_at IS NULL
               AND f.observed_at >= :since
               AND f.observed_at <= :until
@@ -685,7 +728,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                     JOIN practice p ON p.id = f.practice_id
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
-            """ + HIDDEN_REPOSITORY_GUARD + """
+            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
             GROUP BY p.slug
             """, nativeQuery = true)
     List<FirstObservedRow> findFirstObservedAtByPractice(
@@ -705,13 +748,14 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * the mentor's "how am I doing" histogram reflects current state, not the re-push multiplier. Only
      * Negative outcomes carry a non-null severity, so the histogram is over problems.
      */
-    @Query(value = """
+    @Query(
+            value = """
                     SELECT f.severity AS severity, COUNT(f.id) AS count
                     FROM observation f
                     JOIN practice p ON p.id = f.practice_id
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
-            """ + HIDDEN_REPOSITORY_GUARD + """
+            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
               AND f.superseded_at IS NULL
               AND f.observed_at >= :since
               AND f.severity IS NOT NULL
@@ -724,10 +768,12 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                     AND f2.about_user_id = f.about_user_id
                     AND f2.artifact_kind = f.artifact_kind AND f2.artifact_id = f.artifact_id
                     AND f2.origin <> 'BACKFILL'
+            """ + VALID_LATEST_RUN_GUARD + """
                   ORDER BY f2.observed_at DESC, f2.agent_job_id DESC LIMIT 1
               )
             GROUP BY f.severity
-            """, nativeQuery = true)
+            """,
+            nativeQuery = true)
     List<SeverityCount> countBySeverityForDeveloper(
             @Param("aboutUserId") Long aboutUserId,
             @Param("workspaceId") Long workspaceId,
@@ -738,13 +784,14 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      *
      * <p>Aggregate policy matches {@link #findSummaryByDeveloperAndWorkspace}.
      */
-    @Query(value = """
+    @Query(
+            value = """
                     SELECT f.presence AS presence, COUNT(f.id) AS count
                     FROM observation f
                     JOIN practice p ON p.id = f.practice_id
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
-            """ + HIDDEN_REPOSITORY_GUARD + """
+            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
               AND f.superseded_at IS NULL
               AND f.observed_at >= :since
               AND f.origin <> 'BACKFILL'
@@ -756,10 +803,12 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                     AND f2.about_user_id = f.about_user_id
                     AND f2.artifact_kind = f.artifact_kind AND f2.artifact_id = f.artifact_id
                     AND f2.origin <> 'BACKFILL'
+            """ + VALID_LATEST_RUN_GUARD + """
                   ORDER BY f2.observed_at DESC, f2.agent_job_id DESC LIMIT 1
               )
             GROUP BY f.presence
-            """, nativeQuery = true)
+            """,
+            nativeQuery = true)
     List<PresenceCount> countByPresenceForDeveloper(
             @Param("aboutUserId") Long aboutUserId,
             @Param("workspaceId") Long workspaceId,
@@ -819,6 +868,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                    evaluated_revision.review_rule_fingerprint AS "practiceRevisionFingerprint",
                    current_revision.review_rule_fingerprint AS "currentPracticeRevisionFingerprint",
                    o.superseded_at AS "supersededAt",
+                   (SELECT oi.invalidated_at FROM observation_invalidation oi
+                    WHERE oi.observation_id = o.id AND oi.restored_at IS NULL) AS "invalidatedAt",
                    o.observed_at AS "observedAt"
             FROM observation o
             JOIN practice p ON p.id = o.practice_id
@@ -918,6 +969,10 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
 
         @Nullable
         Instant getSupersededAt();
+
+        /** When a workspace admin invalidated this claim; null while it stands. */
+        @Nullable
+        Instant getInvalidatedAt();
 
         Instant getObservedAt();
     }
@@ -1046,6 +1101,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
           AND p.slug = :practiceSlug
           AND o.aboutUserId = :aboutUserId
           AND o.observedAt >= :since
+          AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = o.id AND oi.restoredAt IS NULL)
         ORDER BY o.observedAt DESC
         """)
     List<Observation> findRecentForSubjectAndPractice(

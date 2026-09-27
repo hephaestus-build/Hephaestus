@@ -12,11 +12,13 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -42,6 +44,9 @@ import tools.jackson.databind.ObjectMapper;
  * the inspectable record, so a practice that ran and hedged must not read like one that never ran.
  */
 class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegrationTest {
+
+    @Autowired
+    private ObservationInvalidationRepository invalidationRepository;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String REVIEW_RUNS_URI = "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/review-runs";
@@ -304,6 +309,29 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
                 .isEqualTo(1)
                 .jsonPath("$.content[0].observations[0].claimCurrentness")
                 .isEqualTo("STALE");
+    }
+
+    @Test
+    @WithUser
+    @DisplayName("an invalidated observation stays in history, labelled with the admin's reason")
+    void shouldLabelAnInvalidatedObservationInsteadOfDroppingIt() {
+        UUID wrong =
+                observe("Closed issue #1 already", DEMONSTRATED_STRENGTH, null, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        invalidationRepository.save(new ObservationInvalidation(
+                observationRepository
+                        .findByIdAndWorkspaceId(wrong, workspace.getId())
+                        .orElseThrow(),
+                1L,
+                "Issue #1 was still open",
+                Instant.now()));
+
+        getHistory()
+                .jsonPath("$.content[0].observations[0].id")
+                .isEqualTo(wrong.toString())
+                .jsonPath("$.content[0].observations[0].invalidationReason")
+                .isEqualTo("Issue #1 was still open")
+                .jsonPath("$.content[0].observations[0].invalidatedAt")
+                .exists();
     }
 
     @Test

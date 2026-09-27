@@ -478,6 +478,49 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
         assertThat(signalForKey(result, "ck-bar").disposition()).isEqualTo(Disposition.FAILED);
     }
 
+    @Test
+    void findPostedIsInconclusiveWhenThePageBudgetEndsWithMorePages() {
+        when(gitHubProvider.forScope(1L)).thenReturn(client);
+        stubReviewThreadPages(20, true);
+
+        assertThat(channel.findPosted(githubTarget(), List.of(lookedUp()), false))
+                .isNull();
+    }
+
+    @Test
+    void findPostedAnswersWhenTheLastBudgetedPageIsTheLastPage() {
+        when(gitHubProvider.forScope(1L)).thenReturn(client);
+        stubReviewThreadPages(20, false);
+
+        assertThat(channel.findPosted(githubTarget(), List.of(lookedUp()), false))
+                .isEmpty();
+    }
+
+    private static InlineFeedback lookedUp() {
+        return new InlineFeedback(new DiffAnchor("src/Foo.java", 10, null), "fix", "marker", "observation:key");
+    }
+
+    /** Stubs {@code pages} empty pages of review threads; the last one reports more after it or not. */
+    private void stubReviewThreadPages(int pages, boolean moreAfterLast) {
+        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        when(client.documentName("GetPullRequestReviewThreads")).thenReturn(spec);
+        when(spec.variable(any(), any())).thenReturn(spec);
+        List<Mono<ClientGraphQlResponse>> responses = new ArrayList<>();
+        for (int page = 1; page <= pages; page++) {
+            ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
+            lenient().when(response.getErrors()).thenReturn(List.of());
+            stubField(response, "repository.pullRequest.reviewThreads.nodes", List.of());
+            stubField(
+                    response,
+                    "repository.pullRequest.reviewThreads.pageInfo.hasNextPage",
+                    page < pages || moreAfterLast);
+            stubField(response, "repository.pullRequest.reviewThreads.pageInfo.endCursor", "cursor-" + page);
+            responses.add(Mono.just(response));
+        }
+        var next = responses.iterator();
+        when(spec.execute()).thenAnswer(invocation -> next.next());
+    }
+
     // --- stubbing helpers ----------------------------------------------------------------------------------
 
     /** Stubs GetPullRequestReviewThreads to return a single page of the given thread nodes. */

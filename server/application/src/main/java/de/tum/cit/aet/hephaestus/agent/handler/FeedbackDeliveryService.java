@@ -66,7 +66,7 @@ class FeedbackDeliveryService {
         if (existing == null) return false;
         PracticeFeedbackDispatchService.Result result = dispatchService.recover(existing, job);
         FeedbackDispatch recovered = dispatchService.automaticPackage(job);
-        if (isTerminal(recovered.getState())) projectAutomaticPackage(job, recovered);
+        recordAutomaticPackage(job, recovered);
         if (result.status() == PracticeFeedbackDispatchService.Result.Status.SENT) {
             job.setDeliveryCommentId(result.externalRef());
             return true;
@@ -94,7 +94,7 @@ class FeedbackDeliveryService {
         PracticeFeedbackDispatchService.Result result =
                 dispatchService.dispatchAutomaticPackage(job, providerPackage, contributingPracticeSlugs);
         FeedbackDispatch dispatch = dispatchService.automaticPackage(job);
-        if (isTerminal(dispatch.getState())) projectAutomaticPackage(job, dispatch);
+        recordAutomaticPackage(job, dispatch);
 
         if (result.status() == PracticeFeedbackDispatchService.Result.Status.SENT) {
             job.setDeliveryCommentId(result.externalRef());
@@ -102,6 +102,27 @@ class FeedbackDeliveryService {
         }
         if (result.status() == PracticeFeedbackDispatchService.Result.Status.SUPPRESSED) return;
         throw new JobDeliveryException("Review package dispatch is awaiting reconciliation: jobId=" + job.getId());
+    }
+
+    /**
+     * Projects a settled package; one still settling records only the copies it has placed so far, so a correction
+     * can reach them before the rest of the package is known.
+     */
+    void recordAutomaticPackage(AgentJob job, FeedbackDispatch dispatch) {
+        if (isTerminal(dispatch.getState())) {
+            projectAutomaticPackage(job, dispatch);
+            return;
+        }
+        List<DeliveredSignal> signals = dispatchService.deliveredSignals(dispatch);
+        boolean inlineDelivered = signals.stream().anyMatch(signal -> signal.disposition() != Disposition.FAILED);
+        if (dispatch.getDeliveredExternalRef() == null && !inlineDelivered) return;
+        feedbackLedgerRecorder.recordWithoutConversation(
+                job,
+                dispatchService.packageContent(dispatch),
+                artifactKind(job),
+                signals,
+                dispatch.getDeliveredExternalRef(),
+                inlineDelivered);
     }
 
     void projectAutomaticPackage(AgentJob job, FeedbackDispatch dispatch) {

@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.ProposedPlacement;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -94,7 +95,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 mapper,
                 feedbackRepository,
                 diffNotePoster,
-                stateMachine);
+                stateMachine,
+                mock(ObservationInvalidationRepository.class));
         lenient()
                 .when(channel.formatPullRequestSubjectId(anyString(), anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(0) + "!" + invocation.getArgument(1));
@@ -558,6 +560,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                         approved.getBody(), List.of(), List.of(), null)),
                 approved.getDeliveredPlacements(),
                 approved.getWriteStarted(),
+                approved.getWriteStartedAt(),
                 approved.getDeliveredExternalRef(),
                 approved.getLeaseOwner(),
                 approved.getLeaseExpiresAt(),
@@ -609,6 +612,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                         null)),
                 mapper.valueToTree(List.of()),
                 writeStarted,
+                null,
                 externalRef,
                 null,
                 null,
@@ -638,6 +642,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 base.getPackageContent(),
                 base.getDeliveredPlacements(),
                 base.getWriteStarted(),
+                null,
                 base.getDeliveredExternalRef(),
                 base.getLeaseOwner(),
                 base.getLeaseExpiresAt(),
@@ -693,6 +698,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 mapper.valueToTree(new PracticeDetectionResultParser.DeliveryContent(body, List.of(), List.of(), null)),
                 mapper.valueToTree(List.of()),
                 writeStarted,
+                null,
                 state == FeedbackDispatchState.SENT ? "provider-42" : null,
                 null,
                 null,

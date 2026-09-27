@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.WorkResolution;
@@ -42,6 +43,7 @@ public class InAppFeedbackEvidence {
     private final ObservationRepository observationRepository;
     private final PracticeRevisionRepository practiceRevisionRepository;
     private final ObservationVisibilityPolicy visibilityPolicy;
+    private final ObservationInvalidationRepository invalidations;
 
     /**
      * The observations behind these pieces of feedback that may still be shown, per piece, newest first.
@@ -50,7 +52,8 @@ public class InAppFeedbackEvidence {
      * <p>The gate runs again although composition ran it, because the composed body is frozen and the gate
      * is not. Evidence whose source may no longer be cited, or whose rules cannot be verified at all, hides
      * the card; evidence measured by rules the practice has since changed stays, and
-     * {@link #practiceChangedAt} closes the card instead.
+     * {@link #practiceChangedAt} closes the card instead. A card citing an invalidated observation is hidden
+     * whole, since its frozen prose may rest on the false claim.
      */
     public Map<UUID, List<Observation>> visibleEvidence(Long workspaceId, Collection<UUID> feedbackIds) {
         if (feedbackIds.isEmpty()) {
@@ -62,8 +65,20 @@ public class InAppFeedbackEvidence {
                 rows.stream().map(FeedbackObservationVisibility::getObservation).toList();
         Set<UUID> authorized =
                 visibilityPolicy.permitsShown(workspaceId, observations, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        Set<UUID> invalidated = observations.isEmpty()
+                ? Set.of()
+                : invalidations.findActiveObservationIds(
+                        workspaceId,
+                        observations.stream().map(Observation::getId).toList());
+        Set<UUID> hidden = rows.stream()
+                .filter(row -> invalidated.contains(row.getObservation().getId()))
+                .map(FeedbackObservationVisibility::getFeedbackId)
+                .collect(Collectors.toSet());
         Map<UUID, List<Observation>> byFeedback = new LinkedHashMap<>();
         for (FeedbackObservationVisibility row : rows) {
+            if (hidden.contains(row.getFeedbackId())) {
+                continue;
+            }
             Observation observation = row.getObservation();
             if (observation.getId() != null && authorized.contains(observation.getId())) {
                 byFeedback
