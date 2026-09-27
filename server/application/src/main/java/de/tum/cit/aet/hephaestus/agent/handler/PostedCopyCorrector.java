@@ -17,7 +17,6 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.jspecify.annotations.Nullable;
@@ -107,7 +106,6 @@ class PostedCopyCorrector {
             return null;
         }
         boolean inForce = invalidation.getRestoredAt() == null;
-        UUID jobId = observation.getAgentJobId();
         // Every copy already known is corrected now, even while another may still be unconfirmed; the edit
         // rebuilds the body from its stored original, so repeating it changes nothing.
         boolean retry = false;
@@ -128,13 +126,13 @@ class PostedCopyCorrector {
                 case UNSUPPORTED -> unresolved = true;
             }
         }
-        if (dispatches.existsUnsettledCiting(workspaceId, jobId, observation.getId())) {
-            Instant unconfirmedSince = dispatches.findUnconfirmedWriteSince(workspaceId, jobId, observation.getId());
+        if (dispatches.existsUnsettledCiting(workspaceId, observation.getId())) {
+            Instant unconfirmedSince = dispatches.findUnconfirmedWriteSince(workspaceId, observation.getId());
             boolean overdue = unconfirmedSince != null
                     && now.isAfter(unconfirmedSince.plus(PracticeFeedbackDispatchService.UNCONFIRMED_WINDOW));
             return inForce && (overdue || unresolved) ? ProviderCopy.UNRESOLVED : null;
         }
-        unresolved |= inForce && dispatches.existsUnconfirmedCiting(workspaceId, jobId, observation.getId());
+        unresolved |= inForce && dispatches.existsUnconfirmedCiting(workspaceId, observation.getId());
         if (retry) {
             return null;
         }

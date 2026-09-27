@@ -55,42 +55,56 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
             @Param("maxAttempts") int maxAttempts);
 
     /**
-     * Share-locks the observations a dispatch may cite: an automatic package its whole run, an approved one the
-     * observations bound to its feedback. A correction holds its observation {@code FOR UPDATE} while it checks
-     * for a delivery in progress, so an attempt admitted here either sees that correction or is seen by it.
+     * Whether dispatch {@code d} cites observation {@code o}, the one rule every read below shares. An approved
+     * package cites the observations bound to its feedback. An automatic package cites those its persisted package
+     * names as contributors, or its whole run if it was persisted before contributors were recorded. Once
+     * projection has cleared a sent or withheld package, the ledger it wrote first answers instead: the delivered
+     * unit (position 0) and the withheld remainder (position 5000) bind exactly what the package was written from.
+     */
+    String CITES = """
+        (CASE
+            WHEN d.feedback_id IS NOT NULL THEN EXISTS (
+                SELECT 1 FROM feedback_observation fo
+                WHERE fo.feedback_id = d.feedback_id AND fo.observation_id = o.id)
+            WHEN o.agent_job_id <> d.agent_job_id THEN FALSE
+            WHEN d.projected_at IS NOT NULL AND d.state IN ('SENT', 'SUPPRESSED') THEN EXISTS (
+                SELECT 1 FROM feedback f
+                JOIN feedback_observation fo ON fo.feedback_id = f.id
+                WHERE f.workspace_id = d.workspace_id AND f.agent_job_id = d.agent_job_id
+                  AND f.channel = 'IN_CONTEXT' AND f.position IN (0, 5000) AND fo.observation_id = o.id)
+            WHEN jsonb_typeof(d.package_content -> 'summaryContributors') = 'array' THEN
+                (d.package_content -> 'summaryContributors') @> jsonb_build_array(o.occurrence_key)
+                OR EXISTS (
+                    SELECT 1 FROM jsonb_array_elements(d.package_content -> 'diffNotes') note
+                    WHERE (note -> 'contributors') @> jsonb_build_array(o.occurrence_key))
+            ELSE TRUE
+        END)
+        """;
+
+    /**
+     * Share-locks the observations this dispatch cites. A correction holds its observation {@code FOR UPDATE} while
+     * it checks for a delivery in progress, so an attempt admitted here either sees that correction or is seen by it.
      */
     @Query(value = """
-        SELECT o.id AS "id", o.occurrence_key AS "occurrenceKey" FROM observation o
-        WHERE o.workspace_id = :workspaceId
-          AND ((CAST(:feedbackId AS uuid) IS NULL AND o.agent_job_id = :jobId)
-               OR o.id IN (SELECT fo.observation_id FROM feedback_observation fo
-                           WHERE fo.feedback_id = CAST(:feedbackId AS uuid)))
+        SELECT o.id FROM observation o
+        JOIN feedback_dispatch d ON d.id = :dispatchId AND d.workspace_id = o.workspace_id
+        WHERE o.workspace_id = :workspaceId AND
+        """ + CITES + """
         FOR SHARE OF o
         """, nativeQuery = true)
-    List<CitedObservation> lockCitedObservations(
-            @Param("workspaceId") Long workspaceId,
-            @Param("jobId") UUID jobId,
-            @Param("feedbackId") @Nullable UUID feedbackId);
-
-    interface CitedObservation {
-        UUID getId();
-
-        String getOccurrenceKey();
-    }
+    List<UUID> lockCitedObservations(@Param("workspaceId") Long workspaceId, @Param("dispatchId") UUID dispatchId);
 
     /** Whether a delivery citing this observation holds a live claim, so it may be talking to the provider now. */
     @Query(value = """
         SELECT EXISTS (
             SELECT 1 FROM feedback_dispatch d
+            JOIN observation o ON o.id = :observationId AND o.workspace_id = d.workspace_id
             WHERE d.workspace_id = :workspaceId AND d.state = 'CLAIMED' AND d.lease_expires_at > CURRENT_TIMESTAMP
-              AND ((d.feedback_id IS NULL AND d.agent_job_id = :jobId)
-                   OR EXISTS (SELECT 1 FROM feedback_observation fo
-                              WHERE fo.feedback_id = d.feedback_id AND fo.observation_id = :observationId)))
+              AND
+        """ + CITES + """
+        )
         """, nativeQuery = true)
-    boolean existsInFlightCiting(
-            @Param("workspaceId") Long workspaceId,
-            @Param("jobId") UUID jobId,
-            @Param("observationId") UUID observationId);
+    boolean existsInFlightCiting(@Param("workspaceId") Long workspaceId, @Param("observationId") UUID observationId);
 
     /**
      * Whether a dispatch citing this observation ended withheld or failed without accounting for a write an earlier
@@ -100,45 +114,38 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
     @Query(value = """
         SELECT EXISTS (
             SELECT 1 FROM feedback_dispatch d
+            JOIN observation o ON o.id = :observationId AND o.workspace_id = d.workspace_id
             WHERE d.workspace_id = :workspaceId AND d.state IN ('SUPPRESSED', 'FAILED')
               AND COALESCE(d.suppression_reason, '') <> 'OBSERVATION_INVALIDATED'
               AND (d.write_started OR d.attempt_count > 1)
-              AND ((d.feedback_id IS NULL AND d.agent_job_id = :jobId)
-                   OR EXISTS (SELECT 1 FROM feedback_observation fo
-                              WHERE fo.feedback_id = d.feedback_id AND fo.observation_id = :observationId)))
+              AND
+        """ + CITES + """
+        )
         """, nativeQuery = true)
-    boolean existsUnconfirmedCiting(
-            @Param("workspaceId") Long workspaceId,
-            @Param("jobId") UUID jobId,
-            @Param("observationId") UUID observationId);
+    boolean existsUnconfirmedCiting(@Param("workspaceId") Long workspaceId, @Param("observationId") UUID observationId);
 
     /** When the earliest still-unsettled dispatch citing this observation began a write it has not confirmed. */
     @Query(value = """
         SELECT MIN(COALESCE(d.write_started_at, d.created_at)) FROM feedback_dispatch d
+        JOIN observation o ON o.id = :observationId AND o.workspace_id = d.workspace_id
         WHERE d.workspace_id = :workspaceId AND d.projected_at IS NULL AND d.write_started
-          AND ((d.feedback_id IS NULL AND d.agent_job_id = :jobId)
-               OR EXISTS (SELECT 1 FROM feedback_observation fo
-                          WHERE fo.feedback_id = d.feedback_id AND fo.observation_id = :observationId))
-        """, nativeQuery = true)
+          AND
+        """ + CITES, nativeQuery = true)
     @Nullable
     Instant findUnconfirmedWriteSince(
-            @Param("workspaceId") Long workspaceId,
-            @Param("jobId") UUID jobId,
-            @Param("observationId") UUID observationId);
+            @Param("workspaceId") Long workspaceId, @Param("observationId") UUID observationId);
 
     /** Whether a dispatch citing this observation is still unsettled, so what it posted is not yet in the ledger. */
     @Query(value = """
         SELECT EXISTS (
             SELECT 1 FROM feedback_dispatch d
+            JOIN observation o ON o.id = :observationId AND o.workspace_id = d.workspace_id
             WHERE d.workspace_id = :workspaceId AND d.projected_at IS NULL
-              AND ((d.feedback_id IS NULL AND d.agent_job_id = :jobId)
-                   OR EXISTS (SELECT 1 FROM feedback_observation fo
-                              WHERE fo.feedback_id = d.feedback_id AND fo.observation_id = :observationId)))
+              AND
+        """ + CITES + """
+        )
         """, nativeQuery = true)
-    boolean existsUnsettledCiting(
-            @Param("workspaceId") Long workspaceId,
-            @Param("jobId") UUID jobId,
-            @Param("observationId") UUID observationId);
+    boolean existsUnsettledCiting(@Param("workspaceId") Long workspaceId, @Param("observationId") UUID observationId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """

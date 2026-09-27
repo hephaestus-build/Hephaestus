@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DeliveryContent;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DiffNote;
+import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.WithheldObservation;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
@@ -172,21 +173,20 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         invalidationService.setValidity(workspace.getId(), observation, ADMIN_ACCOUNT, false, "Issue #1 was open");
     }
 
-    private DiffNote noteAbout(UUID observationId, int line, String body) {
-        String occurrenceKey = observationRepository
+    private String occurrenceKey(UUID observationId) {
+        return observationRepository
                 .findByIdAndWorkspaceId(observationId, workspace.getId())
                 .orElseThrow()
                 .getOccurrenceKey();
+    }
+
+    private DiffNote noteAbout(UUID observationId, int line, String body) {
+        String occurrenceKey = occurrenceKey(observationId);
         return new DiffNote("src/Main.java", line, null, body, "observation:" + occurrenceKey, List.of(occurrenceKey));
     }
 
     private PracticeFeedbackDispatchService.Result dispatchAutomatic(String summary, List<DiffNote> notes) {
-        List<String> summaryContributors = summary.isBlank()
-                ? List.of()
-                : List.of(observationRepository
-                        .findByIdAndWorkspaceId(observation, workspace.getId())
-                        .orElseThrow()
-                        .getOccurrenceKey());
+        List<String> summaryContributors = summary.isBlank() ? List.of() : List.of(occurrenceKey(observation));
         return dispatchService.dispatchAutomaticPackage(
                 job, new DeliveryContent(summary, notes, List.of(), summaryContributors), Set.of(practice.getSlug()));
     }
@@ -251,6 +251,35 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
         assertThat(provider.comments).hasSize(1);
         assertThat(provider.notes).containsKey(String.valueOf(otherNote.deliveryKey()));
+    }
+
+    @Test
+    void shouldCorrectOnlyTheObservationsAnAutomaticPackageWasWrittenFrom() {
+        String key = "review:" + job.getId();
+        UUID written = observe(practice, job, 7L, developer, ObservationKind.OMISSION_GAP, Severity.MAJOR, Instant.now());
+        provider.duringWrite = this::invalidate;
+
+        PracticeFeedbackDispatchService.Result result = dispatchService.dispatchAutomaticPackage(
+                job,
+                new DeliveryContent(
+                        "Closes #2 already.",
+                        List.of(),
+                        List.of(new WithheldObservation(
+                                occurrenceKey(observation), FeedbackSuppressionReason.COMPOSER_WITHHELD)),
+                        List.of(occurrenceKey(written))),
+                Set.of(practice.getSlug()));
+        provider.duringWrite = () -> {};
+        settleCorrections();
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
+        assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.NONE);
+
+        feedbackDeliveryService.recordAutomaticPackage(job, dispatch(key));
+        invalidationService.setValidity(workspace.getId(), written, ADMIN_ACCOUNT, false, "Issue #2 was open");
+        settleCorrections();
+
+        assertThat(provider.comments.get("summary-1")).startsWith("> **Correction:**");
+        assertThat(active(written).getProviderCopy()).isEqualTo(ProviderCopy.UPDATED);
     }
 
     @Test

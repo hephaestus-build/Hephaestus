@@ -377,9 +377,9 @@ observation. While one is in force:
   A Practice profile card citing it is hidden, however many other observations it cites.
 - A correction and a delivery citing the same observation never overlap. A delivery attempt, automatic,
   approved or retried, is admitted only while its claim is live and a short transaction share-locking the
-  observations it may cite (a whole run for an automatic package) finds none of those it was written from
-  invalidated. The correction takes its observation `FOR UPDATE` and is refused with a conflict while a claim
-  that may cite it is live. No connection is
+  observations it cites finds none invalidated. The correction takes its observation `FOR UPDATE` and is
+  refused with a conflict while a claim citing it is live. An automatic package cites the observations it was
+  written from, or its whole run if it predates recording them; an approved one, those bound to it. No connection is
   held across provider calls. A claim whose lease expired mid-write is no longer counted, which is the one
   window this leaves.
 - Before an invalidated delivery is withheld, every write an earlier attempt started is accounted for by
