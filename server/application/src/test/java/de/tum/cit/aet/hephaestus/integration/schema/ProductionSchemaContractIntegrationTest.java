@@ -369,13 +369,12 @@ class ProductionSchemaContractIntegrationTest {
      * Foreign-key triggers are off for this one rolled-back insert, so only the row's own checks decide it: a
      * restoration carries its time, actor and reason together, or none of them.
      */
-    @ParameterizedTest(name = "{3}")
+    @ParameterizedTest(name = "{argumentSetName}")
     @MethodSource("restorationStates")
     void observationCorrectionRecordsARestorationWhole(
             @Nullable Instant restoredAt,
             @Nullable Long restoredBy,
             @Nullable String restorationReason,
-            String state,
             boolean accepted) {
         Boolean inserted = jdbcTemplate.execute((ConnectionCallback<Boolean>) connection -> {
             boolean autoCommit = connection.getAutoCommit();
@@ -410,12 +409,14 @@ class ProductionSchemaContractIntegrationTest {
     static Stream<org.junit.jupiter.params.provider.Arguments> restorationStates() {
         Instant now = Instant.now();
         return Stream.of(
-                org.junit.jupiter.params.provider.Arguments.of(null, null, null, "active", true),
-                org.junit.jupiter.params.provider.Arguments.of(now, 1L, "Right after all", "restored", true),
-                org.junit.jupiter.params.provider.Arguments.of(null, 1L, "Right after all", "missing time", false),
-                org.junit.jupiter.params.provider.Arguments.of(now, null, "Right after all", "missing actor", false),
-                org.junit.jupiter.params.provider.Arguments.of(now, 1L, null, "missing reason", false),
-                org.junit.jupiter.params.provider.Arguments.of(now, 1L, "   ", "blank reason", false));
+                org.junit.jupiter.params.provider.Arguments.argumentSet("active", null, null, null, true),
+                org.junit.jupiter.params.provider.Arguments.argumentSet("restored", now, 1L, "Right after all", true),
+                org.junit.jupiter.params.provider.Arguments.argumentSet(
+                        "missing time", null, 1L, "Right after all", false),
+                org.junit.jupiter.params.provider.Arguments.argumentSet(
+                        "missing actor", now, null, "Right after all", false),
+                org.junit.jupiter.params.provider.Arguments.argumentSet("missing reason", now, 1L, null, false),
+                org.junit.jupiter.params.provider.Arguments.argumentSet("blank reason", now, 1L, "   ", false));
     }
 
     @Test
