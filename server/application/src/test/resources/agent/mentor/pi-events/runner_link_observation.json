@@ -1,4 +1,5 @@
 {
   "type": "link_observation",
-  "observationId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+  "observationId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  "text": "Your description names the decision but not why; one sentence on the trade-off would help reviewers."
 }

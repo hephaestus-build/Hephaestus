@@ -102,7 +102,7 @@ public class ConversationalDeliveryReconciler {
      * still settled, by {@link ConversationFeedbackTtlSweeper} at the end of its window.
      *
      * <p>Two queries for the whole turn, not one per linked id — nothing caps how many observations a mentor
-     * turn links (TranslatorState appends a row per {@code link_observation} tool call).
+     * turn links (the reply stores a part per {@code link_observation} tool call).
      */
     private Map<UUID, Observation> admitted(long workspaceId, List<UUID> linkedObservationIds) {
         if (linkedObservationIds == null || linkedObservationIds.isEmpty()) {

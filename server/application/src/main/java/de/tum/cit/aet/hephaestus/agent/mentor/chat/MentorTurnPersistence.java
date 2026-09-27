@@ -301,14 +301,14 @@ public class MentorTurnPersistence {
     }
 
     /**
-     * Settles the feedback a completed reply linked, by what its channel reports reached the developer.
-     * Runs after the channel closes, because only then is that known.
+     * Settles the feedback a completed reply showed, by what its channel reports reached the developer. Runs after
+     * the channel closes, because only then is that known, and reads the stored reply, so what settles is what was
+     * sent.
      */
-    public void recordDelivery(
-            TurnPersistenceCookie cookie, TranslatorState state, MentorChannel.DeliveryOutcome deliveryOutcome) {
+    public void recordDelivery(TurnPersistenceCookie cookie, MentorChannel.DeliveryOutcome deliveryOutcome) {
         requiresNewTx.executeWithoutResult(tx -> chatMessageRepository
                 .findById(cookie.assistantMessageId())
-                .ifPresent(assistant -> reconcileConversationalDelivery(assistant, state, deliveryOutcome)));
+                .ifPresent(assistant -> reconcileConversationalDelivery(assistant, deliveryOutcome)));
     }
 
     /**
@@ -374,10 +374,9 @@ public class MentorTurnPersistence {
                 && usage.cacheWriteTokens() <= 0);
     }
 
-    private void reconcileConversationalDelivery(
-            ChatMessage assistant, TranslatorState state, MentorChannel.DeliveryOutcome deliveryOutcome) {
-        List<UUID> linkedObservationIds = state.linkedObservationIds();
-        if (linkedObservationIds.isEmpty()) {
+    private void reconcileConversationalDelivery(ChatMessage assistant, MentorChannel.DeliveryOutcome deliveryOutcome) {
+        List<UUID> shownObservationIds = UIMessageChunk.DataObservation.shownObservationIds(assistant.getParts());
+        if (shownObservationIds.isEmpty()) {
             return;
         }
         ChatThread thread = assistant.getThread();
@@ -387,13 +386,13 @@ public class MentorTurnPersistence {
         switch (deliveryOutcome) {
             case INSTANCE_SILENCED ->
                 conversationalDeliveryReconciler.suppressForSilentMode(
-                        thread.getWorkspace().getId(), thread.getUser().getId(), linkedObservationIds);
+                        thread.getWorkspace().getId(), thread.getUser().getId(), shownObservationIds);
             case DELIVERED ->
                 conversationalDeliveryReconciler.reconcile(
                         thread.getWorkspace().getId(),
                         thread.getUser().getId(),
                         assistant.getId(),
-                        linkedObservationIds);
+                        shownObservationIds);
             case NOT_DELIVERED -> {}
         }
     }

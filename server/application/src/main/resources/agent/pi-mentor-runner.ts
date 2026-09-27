@@ -527,26 +527,34 @@ function defineLinkObservationTool(sdk: PiSdk) {
 		name: "link_observation",
 		label: "Link Observation",
 		description:
-			"Surface a Hephaestus practice observation inline in the chat by linking it to its UUID. " +
-			"Use this when referring to a specific observation from a prior review.",
+			"Give the developer your feedback about one Hephaestus practice observation. `text` is shown to them " +
+			"as part of your reply, exactly where you call this, so write it to them in your own words and do not " +
+			"repeat it in your answer. Only feedback shown this way counts as raised with them.",
 		parameters: {
 			type: "object",
 			additionalProperties: false,
-			required: ["observationId"],
+			required: ["observationId", "text"],
 			properties: {
 				observationId: { type: "string", minLength: 1 },
+				text: { type: "string", minLength: 1 },
 			},
 		},
 		execute: async (_toolCallId, params): Promise<AgentToolResult<{ observationId: string }>> => {
 			const observationId = jsonText(params.observationId).trim();
-			if (!observationId) {
-				throw new Error("link_observation: observationId is required");
+			const text = jsonText(params.text).trim();
+			if (!observationId || !text) {
+				throw new Error("link_observation: observationId and text are required");
 			}
 			if (activeThreadId !== null) {
-				sendEvent(activeThreadId, { type: "link_observation", observationId });
+				sendEvent(activeThreadId, { type: "link_observation", observationId, text });
 			}
 			return {
-				content: [{ type: "text", text: `Linked observation ${observationId}` }],
+				content: [
+					{
+						type: "text",
+						text: `Shown to the developer: feedback on observation ${observationId}`,
+					},
+				],
 				details: { observationId },
 			};
 		},

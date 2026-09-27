@@ -19,13 +19,21 @@ public record ReviewFeedbackDispositionDTO(
         Long suppressed,
 
         @NonNull @Schema(description = "Linked feedback whose delivery failed")
-        Long failed) {
+        Long failed,
+
+        @NonNull @Schema(description = "Linked feedback a conversation linked without a record that it was shown")
+        Long unconfirmed) {
     public static ReviewFeedbackDispositionDTO empty() {
-        return new ReviewFeedbackDispositionDTO(0L, 0L, 0L, 0L, 0L);
+        return new ReviewFeedbackDispositionDTO(0L, 0L, 0L, 0L, 0L, 0L);
     }
 
     public static ReviewFeedbackDispositionDTO from(ObservationFeedbackDisposition row) {
         return new ReviewFeedbackDispositionDTO(
-                row.getPrepared(), row.getDelivered(), row.getSuperseded(), row.getSuppressed(), row.getFailed());
+                row.getPrepared(),
+                row.getDelivered(),
+                row.getSuperseded(),
+                row.getSuppressed(),
+                row.getFailed(),
+                row.getUnconfirmed());
     }
 }

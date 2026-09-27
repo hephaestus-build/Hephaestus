@@ -370,7 +370,50 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         assertThat(out).hasSize(1);
         UIMessageChunk.DataObservation df = (UIMessageChunk.DataObservation) out.get(0);
         assertThat(df.data().observationId()).isEqualTo(UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"));
-        assertThat(df.id()).isEqualTo(df.data().observationId());
+        assertThat(df.data().text()).startsWith("Your description names the decision");
+        JsonNode stored = state.partsSnapshot().get(0);
+        assertThat(stored.path("id").asString()).isEqualTo(df.id().toString());
+        assertThat(stored.path("data").path("text").asString())
+                .isEqualTo(df.data().text());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"text\":\"   \"}", "{\"text\":7}"})
+    void shouldFailTheTurnWhenALinkCarriesNoFeedbackText(String extra) throws Exception {
+        ObjectNode link = (ObjectNode) mapper.readTree(extra);
+        link.put("type", "link_observation")
+                .put("observationId", UUID.randomUUID().toString());
+
+        assertThat(translator.translate(link, state))
+                .extracting(c -> c.getClass().getSimpleName())
+                .containsExactly("Error");
+        assertThat(state.partsSnapshot()).isEmpty();
+    }
+
+    @Test
+    void shouldFinishWhenFeedbackIsShownBetweenVerifiedMessages() throws Exception {
+        streamMessage("Let me look at your pull request.");
+        translator.translate(fixture("runner_link_observation.json"), state);
+        streamMessage("What made you choose that approach?");
+
+        List<UIMessageChunk> out = translator.translate(
+                agentEnd("Let me look at your pull request.", "What made you choose that approach?"), state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("Finish");
+        assertThat(state.partsSnapshot())
+                .extracting(p -> p.get("type").asString())
+                .containsExactly("step-start", "text", "data-observation", "step-start", "text");
+    }
+
+    @Test
+    void shouldStillFailWhenShownFeedbackSitsBesideALostMessage() throws Exception {
+        streamMessage("Let me look at your pull request.");
+        translator.translate(fixture("runner_link_observation.json"), state);
+
+        List<UIMessageChunk> out = translator.translate(
+                agentEnd("Let me look at your pull request.", "What made you choose that approach?"), state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("Error");
     }
 
     // synthetic runner events (snake-case, runner-owned)
@@ -590,7 +633,8 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         translator.translate(
                 mapper.createObjectNode()
                         .put("type", "link_observation")
-                        .put("observationId", observationId.toString()),
+                        .put("observationId", observationId.toString())
+                        .put("text", "Name the trade-off."),
                 state);
         // "b" never arrived.
 
@@ -603,7 +647,6 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
                 .containsExactly("step-start", "data-observation", "text");
         assertThat(parts.get(1).path("data").path("observationId").asString()).isEqualTo(observationId.toString());
         assertThat(parts.get(2).get("text").asString()).isEqualTo("ab");
-        assertThat(state.linkedObservationIds()).containsExactly(observationId);
     }
 
     @Test
@@ -741,10 +784,16 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         streamDeltas("See this");
 
         List<UIMessageChunk> out = translator.translate(
-                mapper.createObjectNode().put("type", "link_observation").put("observationId", "not-a-uuid"), state);
+                mapper.createObjectNode()
+                        .put("type", "link_observation")
+                        .put("observationId", "not-a-uuid")
+                        .put("text", "Name the trade-off."),
+                state);
 
         assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
-        assertThat(state.linkedObservationIds()).isEmpty();
+        assertThat(state.partsSnapshot())
+                .extracting(p -> p.get("type").asString())
+                .doesNotContain("data-observation");
     }
 
     private JsonNode agentEnd(String... texts) {

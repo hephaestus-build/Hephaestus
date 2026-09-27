@@ -151,6 +151,9 @@ public class SlackStreamingMentorChannel implements MentorChannel {
         if (chunk instanceof UIMessageChunk.TextDelta delta) {
             append(textFilter.onDelta(delta.delta()));
             ensureFlushing();
+        } else if (chunk instanceof UIMessageChunk.DataObservation observation) {
+            append(textFilter.feedback(observation.data().text()));
+            ensureFlushing();
         } else if (chunk instanceof UIMessageChunk.Error error) {
             // Surface mid-turn errors in the visible stream rather than dropping them.
             append(textFilter.finish() + "\n\n⚠️ " + SlackMentorTextFilter.normalize(safeError(error.errorText())));

@@ -38,6 +38,7 @@ class UIMessageChunkSerializationTest extends BaseUnitTest {
     static List<Object[]> chunkFixtures() {
         UUID messageId = UUID.fromString("11111111-2222-3333-4444-555555555555");
         UUID observationId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        UUID partId = UUID.fromString("bbbbbbbb-cccc-dddd-eeee-ffffffffffff");
         UIMessageChunk.MessageMetadata finishMeta = new UIMessageChunk.MessageMetadata(
                 "openai/gpt-oss-120b", new UIMessageChunk.MessageMetadata.Usage(655, 65, null, null, 720), 0.0042);
         ObjectNode toolOutput = NODES.objectNode().put("status", "ok").put("count", 7);
@@ -113,11 +114,13 @@ class UIMessageChunkSerializationTest extends BaseUnitTest {
                             + "\"data\":{\"state\":\"warming-up\",\"reason\":\"container-cold\"},\"transient\":true}",
                 },
                 new Object[] {
-                    UIMessageChunk.DataObservation.of(observationId),
-                    "{\"type\":\"data-observation\",\"id\":\"" + observationId
+                    new UIMessageChunk.DataObservation(
+                            partId,
+                            new UIMessageChunk.DataObservation.DataObservationPayload(observationId, "Say why.")),
+                    "{\"type\":\"data-observation\",\"id\":\"" + partId
                             + "\",\"data\":{\"observationId\":\""
                             + observationId
-                            + "\"}}",
+                            + "\",\"text\":\"Say why.\"}}",
                 },
                 new Object[] {
                     new UIMessageChunk.Error("container died mid-turn"),

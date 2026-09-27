@@ -907,7 +907,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                COUNT(*) FILTER (WHERE f.delivery_state = 'SUPERSEDED') AS "superseded",
                COUNT(*) FILTER (WHERE f.delivery_state = 'SUPPRESSED' OR
                    (f.delivery_state = 'PARTIALLY_DELIVERED' AND f.suppression_reason IS NOT NULL)) AS "suppressed",
-               COUNT(*) FILTER (WHERE f.delivery_state IN ('FAILED', 'PARTIALLY_FAILED')) AS "failed"
+               COUNT(*) FILTER (WHERE f.delivery_state IN ('FAILED', 'PARTIALLY_FAILED')) AS "failed",
+               COUNT(*) FILTER (WHERE f.delivery_state = 'UNCONFIRMED') AS "unconfirmed"
         FROM feedback_observation fo
         JOIN feedback f ON f.id = fo.feedback_id
         WHERE fo.observation_id IN :observationIds
@@ -929,6 +930,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         Long getSuppressed();
 
         Long getFailed();
+
+        Long getUnconfirmed();
     }
 
     @Query("""

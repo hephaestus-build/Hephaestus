@@ -213,10 +213,14 @@ export interface TurnWatchdogFiredEvent {
 	threadId: string;
 }
 
-/** Emitted by the `link_observation` tool; Java requires `observationId` to parse as a UUID. */
+/**
+ * Emitted by the `link_observation` tool. Java requires `observationId` to parse as a UUID and `text` to be
+ * nonblank: `text` is shown to the developer as part of the reply, and only a link that carries it settles feedback.
+ */
 export interface LinkObservationEvent {
 	type: "link_observation";
 	observationId: string;
+	text: string;
 }
 
 /** The events the runner constructs itself, as opposed to forwarding from the Pi SDK. */
