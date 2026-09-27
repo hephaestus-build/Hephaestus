@@ -500,11 +500,21 @@ export const NotReviewable: Story = {
 	},
 };
 
-/** A copy whose catalog entry withdrew automated review keeps its own policy but still cannot be switched on. */
+const withdrawnOff = buildAutonomyFixture({
+	groups: [
+		{
+			slug: "testing",
+			name: "Testing",
+			practices: [{ name: "Covers the new branch", override: "OFF" }],
+		},
+	],
+});
+
+/** A copy whose catalog entry withdrew automated review is off and cannot be switched on. */
 export const WithdrawnByTheCatalog: Story = {
 	args: {
-		...from(nothingSetByHand),
-		practices: nothingSetByHand.practices.map((practice) => ({
+		...from(withdrawnOff),
+		practices: withdrawnOff.practices.map((practice) => ({
 			...practice,
 			automatedReviewWithdrawal: {
 				code: "AT_CLOSE_STATE_NOT_CAPTURED",
@@ -515,6 +525,11 @@ export const WithdrawnByTheCatalog: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: /Testing/u }));
 		await expect(canvas.getByText("Human review needed")).toBeVisible();
+		await expect(
+			within(
+				canvas.getByRole("radiogroup", { name: "How far reviews go on Covers the new branch" }),
+			).getByRole("radio", { name: "Off" }),
+		).toBeChecked();
 		await expect(canvas.getByRole("checkbox", { name: /^Select /u })).toHaveAttribute(
 			"aria-disabled",
 			"true",
