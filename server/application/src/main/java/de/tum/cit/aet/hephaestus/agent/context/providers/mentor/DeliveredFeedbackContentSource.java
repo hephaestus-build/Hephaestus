@@ -7,12 +7,14 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.RecipientFeedbackRow;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -76,11 +78,12 @@ public class DeliveredFeedbackContentSource implements ContentSource {
         User user = userRepository
                 .findById(developerId)
                 .orElseThrow(() -> new EntityNotFoundException("User", developerId.toString()));
-        Instant since = Instant.now().minus(LOOKBACK_DAYS, ChronoUnit.DAYS);
+        Instant preparedAt = Instant.now();
+        Instant since = preparedAt.minus(LOOKBACK_DAYS, ChronoUnit.DAYS);
 
         // A recent sample, not a history: rows this conversation may not use are skipped rather than counted
         // against the cap, but a turn reads at most MAX_PAGES pages however many of them it skips.
-        List<RecipientFeedbackRow> sample = new ArrayList<>();
+        List<Usable> sample = new ArrayList<>();
         @Nullable RecipientFeedbackRow last = null;
         for (int page = 0; page < MAX_PAGES && sample.size() < MAX_FEEDBACK; page++) {
             List<RecipientFeedbackRow> rows = feedbackRepository.findRecentReceivableForRecipient(
@@ -101,37 +104,75 @@ public class DeliveredFeedbackContentSource implements ContentSource {
         ObjectNode root = objectMapper.createObjectNode();
         // Untrusted-content quarantine: only when a Slack-derived (attacker-controllable) row survives the gate does
         // this file carry the envelope — a PR/issue-only payload stays byte-identical (no _meta).
-        if (sample.stream().anyMatch(row -> ArtifactKinds.CONVERSATION_THREAD.equals(row.getArtifactKind()))) {
+        if (sample.stream()
+                .anyMatch(usable ->
+                        ArtifactKinds.CONVERSATION_THREAD.equals(usable.row().getArtifactKind()))) {
             conversationConsentGate.writeUntrustedEnvelope(root);
         }
         root.putObject("user").put("login", user.getLogin()).put("name", user.getName());
-        root.put("lookbackDays", LOOKBACK_DAYS);
+        root.set("coverage", objectMapper.valueToTree(Coverage.of(preparedAt)));
 
         ArrayNode delivered = root.putArray("deliveredFeedback");
         ArrayNode states = root.putArray("feedbackStates");
-        for (RecipientFeedbackRow row : sample) {
+        for (Usable usable : sample) {
+            RecipientFeedbackRow row = usable.row();
             String body = deliveredText(row);
             if (body != null) {
                 describe(delivered.addObject(), row).put("body", body);
             }
             describe(states.addObject(), row)
                     .put("status", status(row))
+                    .put("evidenceCurrentness", usable.evidence().name())
                     .put("createdAt", row.getCreatedAt().toString());
         }
         return root;
     }
 
     /**
-     * The rows whose every bound observation this conversation may use, and whose conversation, if any, still
-     * has consent; a row bound to no observation is withheld.
+     * The bounds of {@code feedbackStates}. Apart from {@code preparedAt} it is constant, so it reveals nothing about
+     * records outside the scope, including whether any exist.
      */
-    private List<RecipientFeedbackRow> authorized(Long workspaceId, List<RecipientFeedbackRow> rows) {
+    record Coverage(
+            Scope scope, Instant preparedAt, int lookbackDays, int maxEntries, List<OutsideScope> outsideScope) {
+
+        static Coverage of(Instant preparedAt) {
+            return new Coverage(
+                    Scope.CONVERSATION_AUTHORIZED_RECIPIENT_RECORDS,
+                    preparedAt,
+                    LOOKBACK_DAYS,
+                    MAX_FEEDBACK,
+                    List.of(OutsideScope.values()));
+        }
+
+        enum Scope {
+            CONVERSATION_AUTHORIZED_RECIPIENT_RECORDS,
+        }
+
+        enum OutsideScope {
+            PROPOSALS,
+            REVIEWER_DECISIONS,
+            WITHHELD,
+            REPLACED,
+            EVIDENCE_NOT_USABLE_IN_CONVERSATION,
+            CONVERSATION_CONSENT_NOT_ACTIVE,
+        }
+    }
+
+    /** A row this conversation may use, and whether every review behind it is still current. */
+    private record Usable(RecipientFeedbackRow row, ReviewClaimCurrentness evidence) {}
+
+    /**
+     * The rows whose every bound observation may still be shown to the developer, as on their practice page, and
+     * whose conversation, if any, still has consent; a row bound to no observation is withheld. Evidence the work
+     * or the practice has since moved past stays: a later change does not alter what became of the feedback.
+     */
+    private List<Usable> authorized(Long workspaceId, List<RecipientFeedbackRow> rows) {
         if (rows.isEmpty()) {
             return List.of();
         }
         List<FeedbackObservationVisibility> bindings = feedbackObservationRepository.findForVisibility(
                 workspaceId, rows.stream().map(RecipientFeedbackRow::getId).toList());
-        Set<UUID> visible = visibilityPolicy.permitsAll(
+        Set<UUID> visible = visibilityPolicy.permitsShown(
                 workspaceId,
                 bindings.stream()
                         .map(FeedbackObservationVisibility::getObservation)
@@ -142,6 +183,17 @@ public class DeliveredFeedbackContentSource implements ContentSource {
                         FeedbackObservationVisibility::getFeedbackId,
                         binding -> visible.contains(binding.getObservation().getId()),
                         Boolean::logicalAnd));
+        Set<UUID> stale = bindings.stream()
+                .filter(binding -> {
+                    Observation observation = binding.getObservation();
+                    return ReviewClaimCurrentness.of(
+                                    observation.getPracticeRevision(),
+                                    observation.getPractice(),
+                                    observation.getSupersededAt())
+                            != ReviewClaimCurrentness.CURRENT;
+                })
+                .map(FeedbackObservationVisibility::getFeedbackId)
+                .collect(Collectors.toSet());
         Set<Long> activeThreadIds = conversationConsentGate.activeThreadIds(
                 workspaceId,
                 rows.stream()
@@ -153,6 +205,9 @@ public class DeliveredFeedbackContentSource implements ContentSource {
                 .filter(row -> permitted.getOrDefault(row.getId(), false))
                 .filter(row -> !ArtifactKinds.CONVERSATION_THREAD.equals(row.getArtifactKind())
                         || (row.getArtifactId() != null && activeThreadIds.contains(row.getArtifactId())))
+                .map(row -> new Usable(
+                        row,
+                        stale.contains(row.getId()) ? ReviewClaimCurrentness.STALE : ReviewClaimCurrentness.CURRENT))
                 .toList();
     }
 
