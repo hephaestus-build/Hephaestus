@@ -64,6 +64,7 @@ export interface WorkspaceSlackNotificationSettingsProps {
 	workspaceSlug: string;
 	hasSlackConnection: boolean;
 	slackConnectionId?: number;
+	credentialsUnreadableSince?: Date;
 	channelId?: string;
 	teamLabel?: string;
 	enabled: boolean;
@@ -91,6 +92,7 @@ export function WorkspaceSlackNotificationSettings({
 	workspaceSlug,
 	hasSlackConnection,
 	slackConnectionId,
+	credentialsUnreadableSince,
 	channelId,
 	teamLabel,
 	enabled,
@@ -99,6 +101,8 @@ export function WorkspaceSlackNotificationSettings({
 	channelCandidates,
 	onSaved,
 }: WorkspaceSlackNotificationSettingsProps) {
+	const credentialUnreadable = credentialsUnreadableSince != null;
+
 	const selectableDigestChannels = channelCandidates.filter(
 		(candidate) => candidate.archived !== true,
 	);
@@ -245,17 +249,25 @@ export function WorkspaceSlackNotificationSettings({
 							</ItemMedia>
 							<ItemContent>
 								<ItemTitle>Slack workspace</ItemTitle>
-								<ItemDescription>Hephaestus is installed and can post as the app.</ItemDescription>
+								<ItemDescription className={credentialUnreadable ? "line-clamp-none" : undefined}>
+									{credentialUnreadable
+										? "Can't post with this token. Restore the original server key or reconnect Slack."
+										: "Hephaestus is installed and can post as the app."}
+								</ItemDescription>
 							</ItemContent>
 							<ItemActions>
-								<Badge variant="success">Connected</Badge>
+								{credentialUnreadable ? (
+									<Badge variant="warning">Token unreadable</Badge>
+								) : (
+									<Badge variant="success">Connected</Badge>
+								)}
 							</ItemActions>
 						</Item>
 
 						<div>
 							<h3 className="font-medium">Weekly digest</h3>
 							<p className="text-sm text-muted-foreground">
-								Optional leaderboard summary posted to one Slack channel on a schedule.
+								Optional weekly leaderboard summary for one Slack channel.
 							</p>
 						</div>
 
@@ -266,7 +278,9 @@ export function WorkspaceSlackNotificationSettings({
 										Send weekly digest
 									</FieldLabel>
 									<FieldDescription>
-										Posts on the schedule below; the leaderboard cycle ends at the same moment.
+										{credentialUnreadable
+											? "Nothing posts until the stored token can be read again; the schedule below is kept."
+											: "Posts on the schedule below; the leaderboard cycle ends at the same moment."}
 									</FieldDescription>
 								</FieldContent>
 								<Switch
@@ -316,7 +330,7 @@ export function WorkspaceSlackNotificationSettings({
 										aria-invalid={timeInvalid}
 									/>
 									<FieldDescription>
-										When the weekly cycle ends and the digest posts (workspace timezone).
+										When the weekly cycle ends and the digest is due (workspace timezone).
 									</FieldDescription>
 									{timeInvalid && <FieldError>Time must be in HH:mm format.</FieldError>}
 								</Field>
@@ -417,7 +431,9 @@ export function WorkspaceSlackNotificationSettings({
 											body: { channelId: selectedChannelId },
 										})
 									}
-									disabled={test.isPending || selectedChannelId.length === 0}
+									disabled={
+										test.isPending || credentialUnreadable || selectedChannelId.length === 0
+									}
 								>
 									<SendIcon className="size-3.5" />
 									{test.isPending ? "Sending…" : "Send test message"}
@@ -468,10 +484,10 @@ export function WorkspaceSlackNotificationSettings({
 					<AlertDialogHeader>
 						<AlertDialogTitle>Disconnect Slack?</AlertDialogTitle>
 						<AlertDialogDescription>
-							The weekly digest stops posting, the bot is uninstalled from this workspace, and every
-							ingested Slack message, thread, and per-channel consent record for this workspace is
-							erased. Messages in Slack itself are not affected. You can reconnect later, but you
-							will need to re-authorize via OAuth and re-activate channels from scratch.
+							The weekly digest stops posting, the Slack connection for this workspace is removed,
+							and every ingested Slack message, thread, and per-channel consent record for this
+							workspace is erased. Messages already sent in Slack remain there. To use Slack with
+							this workspace again, re-authorize via OAuth and re-activate channels.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
