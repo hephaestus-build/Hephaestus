@@ -19,9 +19,9 @@ export interface PracticeDefinitionPreviewProps {
 }
 
 /**
- * The habit first, the rule last. `criteria` addresses the *model* in the second person and runs to
+ * The practice first, the rule last. `criteria` addresses the *model* in the second person and runs to
  * thousands of characters once the server composes its work-type preamble in, so leading with it
- * buries `whyItMatters` — the field that answers "do we want this habit". It stays reachable behind
+ * buries `whyItMatters` — the field that answers "do we want this practice". It stays reachable behind
  * a disclosure, next to the precompute script, because adopting an automated critic without being
  * able to read its rule is worse.
  */

@@ -35,7 +35,7 @@ public class InAppFeedbackController {
     @GetMapping
     @Operation(
             summary = "The current developer's in-app feedback",
-            description = "Process-level messages prepared for the authenticated developer: for each habit "
+            description = "Process-level messages prepared for the authenticated developer: for each way of working "
                     + "that recurs in their work, what the pattern is, the pieces of work it was observed on, and "
                     + "one thing to try next. Distinct from in-context notes (which say what is wrong in one diff) "
                     + "and from the mentor conversation (which asks rather than tells). Reading a message is what "

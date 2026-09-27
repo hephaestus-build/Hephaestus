@@ -322,7 +322,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 .thenReturn(List.of(Feedback.builder()
                         .channel(FeedbackChannel.IN_APP)
                         .threadKey("in-app:99:swallows-errors")
-                        .body("A habit nobody has read yet.")
+                        .body("A way of working nobody has read yet.")
                         .createdAt(Instant.parse("2026-07-02T09:00:00Z"))
                         .build()));
 

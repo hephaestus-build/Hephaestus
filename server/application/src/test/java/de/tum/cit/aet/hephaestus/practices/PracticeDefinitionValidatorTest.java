@@ -66,7 +66,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
 
     /**
      * A second occasion is refused rather than merged, and the refusal names the alternative — the one
-     * the shipped catalogue already takes, where a habit judged differently at a different moment is a
+     * the shipped catalogue already takes, where a way of working judged differently at a different moment is a
      * separate practice with its own tier, history and copy.
      */
     @Test

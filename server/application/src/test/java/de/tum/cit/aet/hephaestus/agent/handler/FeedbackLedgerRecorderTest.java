@@ -543,7 +543,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     @Test
     void recordUndelivered_wakesTheLongitudinalLanes_evenWithNothingToPostOnTheWork() {
         // The composer can decline to say anything on the merge request and still have written a message
-        // about the habit behind it. Waking the private lanes used to be gated on there being a note, so
+        // about the way of working behind it. Waking the private lanes used to be gated on there being a note, so
         // those messages were composed and then dropped until the hourly sweeper found them.
         recorder().recordUndelivered(job(), null);
 

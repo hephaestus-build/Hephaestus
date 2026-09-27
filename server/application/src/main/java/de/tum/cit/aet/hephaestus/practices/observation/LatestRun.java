@@ -49,7 +49,7 @@ public final class LatestRun {
      * Narrows a developer's whole window to the newest run of each claim: one practice on one piece of work,
      * read within one origin class. A run does not necessarily evaluate every practice, so correlating on the
      * work alone would let a later run supersede a verdict it never re-examined, and a partial capture or a
-     * timeout would read like a fixed habit. A campaign's reading and a live reading of the same work are two
+     * timeout would read like a fixed lapse. A campaign's reading and a live reading of the same work are two
      * claims: origin-blind, a later campaign would erase already-delivered live feedback from the answer.
      */
     public static List<Observation> perClaim(Collection<Observation> observations) {

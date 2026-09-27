@@ -52,7 +52,8 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     private static final Instant FIRST_RUN_AT = NOW.minus(Duration.ofDays(10));
     private static final Instant PREVIOUS_RUN_AT = NOW.minus(Duration.ofDays(5));
     private static final Instant LATEST_RUN_AT = NOW.minus(Duration.ofDays(1));
-    private static final String BODY = InAppFeedbackBody.render("A habit", "What recurs.", "One thing to try.");
+    private static final String BODY =
+            InAppFeedbackBody.render("A way of working", "What recurs.", "One thing to try.");
 
     @Autowired
     private PracticeGroupRepository groupRepository;

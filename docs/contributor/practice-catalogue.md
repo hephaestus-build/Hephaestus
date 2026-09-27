@@ -49,7 +49,7 @@ The badge tables an administrator reads for both scopes live in the
 
 | Stakeholder                | Primary task                                                                                                               | Deliberately not their task                      |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| Practice author            | Define the habit, guidance, and responsible mentoring support                                                              | Authorize collection or certify review accuracy  |
+| Practice author            | Define the practice, guidance, and responsible mentoring support                                                           | Authorize collection or certify review accuracy  |
 | Instance administrator     | Curate the library workspaces may adopt from                                                                               | Rewrite existing workspace practices             |
 | Workspace administrator    | Adapt practices, set the workspace default autonomy and override it per group or practice, and scope which work is reviewed | Authorize a new data source for the instance     |
 | Instance operator          | Approve source purposes, privacy, retention, and erasure coverage                                                          | Decide that connected evidence proves a practice |
@@ -59,7 +59,7 @@ The badge tables an administrator reads for both scopes live in the
 
 The practice editor follows the decisions an author can make confidently:
 
-1. **Practice** — give one observable habit a short, action-oriented name, choose the work it
+1. **Practice** — give one observable way of working a short, action-oriented name, choose the work it
    applies to, and optionally place it in a group.
 2. **Review guidance** — describe what to look for, why it matters, and one concrete example.
 3. **How Hephaestus can help** — choose AI-supported mentoring, human review, or guidance only.
@@ -76,7 +76,7 @@ disagree about what is bindable. The practice never states its artifact kind: it
 signals' shared prefix, which is what stops a declared kind and its triggers from drifting apart.
 
 Write **What to look for** as a review boundary, not as a personality or a score. Define one
-observable habit, the signals that demonstrate it, and the cases where a reviewer should stay
+observable way of working, the signals that demonstrate it, and the cases where a reviewer should stay
 silent. Do not require intent, private context, runtime behavior, or any other fact outside the
 selected work and evidence boundary.
 

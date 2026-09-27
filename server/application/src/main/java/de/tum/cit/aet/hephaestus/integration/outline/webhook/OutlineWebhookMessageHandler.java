@@ -29,7 +29,7 @@ import tools.jackson.databind.ObjectMapper;
  * workspace's mirror: {@code documents.*} refreshes one document (falling back to a whole-workspace reconcile when
  * the delivery carries no payload id), {@code collections.*} refreshes the catalog, anything else is acked and
  * ignored. Every {@code documents.*} delivery also appends one {@link OutlineDocumentEvent} before routing — the
- * longitudinal editing-habit log.
+ * longitudinal editing-activity log.
  *
  * <p>All Outline events collapse onto a single logical key ({@link #EVENT_TYPE}); routing happens on the body's
  * event name, while the specific event still travels on the subject and dedup key for observability.

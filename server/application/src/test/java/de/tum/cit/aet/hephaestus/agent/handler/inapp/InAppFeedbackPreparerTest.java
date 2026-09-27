@@ -137,11 +137,11 @@ class InAppFeedbackPreparerTest extends BaseUnitTest {
 
     /**
      * The key is what makes "find the card I would replace" a lookup rather than a guess, so a card must
-     * be written under the same key the next run will compute for the same habit — hashed, in the one
+     * be written under the same key the next run will compute for the same practice — hashed, in the one
      * vocabulary the column holds, not a lane-local spelling.
      */
     @Test
-    void keysACardOnTheHabitItIsAbout() {
+    void keysACardOnThePracticeItIsAbout() {
         stubSave();
 
         preparer.prepare(JOB_ID, WORKSPACE_ID, 11L, List.of(admitted("ships-tests")), BASE);
@@ -150,7 +150,7 @@ class InAppFeedbackPreparerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldReplaceNothingWhenNoCardAboutTheHabitIsOpen() {
+    void shouldReplaceNothingWhenNoCardAboutThePracticeIsOpen() {
         stubSave();
 
         preparer.prepare(JOB_ID, WORKSPACE_ID, 11L, List.of(admitted("ships-tests")), BASE);
@@ -219,7 +219,7 @@ class InAppFeedbackPreparerTest extends BaseUnitTest {
                 message(practiceSlug), InAppRoutingDecision.ADMIT, List.of(), null);
     }
 
-    /** An admitted message about a habit whose previous card is still open on the page. */
+    /** An admitted message about a practice whose previous card is still open on the page. */
     private static InAppFeedbackPreparer.RoutedMessage replacing(String practiceSlug, UUID open) {
         return new InAppFeedbackPreparer.RoutedMessage(
                 message(practiceSlug), InAppRoutingDecision.ADMIT, List.of(), open);

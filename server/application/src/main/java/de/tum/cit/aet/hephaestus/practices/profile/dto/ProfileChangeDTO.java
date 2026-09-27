@@ -66,7 +66,7 @@ public record ProfileChangeDTO(
                         + " that raised the problem again")
         List<ReviewedWorkRefDTO> evidence) {
     public enum Type {
-        /** Practice feedback about a habit was prepared for the developer. */
+        /** Practice feedback about a way of working was prepared for the developer. */
         FEEDBACK_NEW,
         /** A piece of practice feedback was resolved, by the work or by the developer: {@link ResolvedBy}. */
         FEEDBACK_RESOLVED,

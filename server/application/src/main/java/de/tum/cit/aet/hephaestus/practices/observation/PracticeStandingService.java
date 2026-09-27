@@ -47,7 +47,7 @@ public class PracticeStandingService {
     private static final int STANDING_WINDOW = 4;
     /**
      * Per-opportunity weight decay, newest first. Derived rather than picked: two problem-free pieces of reviewed work in a
-     * row must be enough to acknowledge a fixed habit, which with weights {@code 1, d, d², d³} holds exactly
+     * row must be enough to acknowledge a fixed lapse, which with weights {@code 1, d, d², d³} holds exactly
      * when {@code (1 + d) > 4·(d² + d³)}, i.e. {@code d < 0.5}. The effect is symmetric and intended: a fresh
      * regression shows up as fast as a fresh fix.
      */
@@ -349,7 +349,7 @@ public class PracticeStandingService {
 
     /**
      * The lanes whose text this read model's guidance means: the ones that speak about the one observation
-     * they are bound to. {@code IN_APP} is excluded because it is feedback about a habit across several
+     * they are bound to. {@code IN_APP} is excluded because it is feedback about a way of working across several
      * pieces of work, so it would answer "what did you tell me about this observation" with a paragraph that
      * is explicitly not about it.
      */

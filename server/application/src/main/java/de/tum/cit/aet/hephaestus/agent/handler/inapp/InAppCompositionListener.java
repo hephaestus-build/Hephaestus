@@ -174,7 +174,7 @@ public class InAppCompositionListener {
         Instant windowStart = now.minus(Duration.ofDays(InAppFeedbackRouter.PATTERN_WINDOW_DAYS));
         List<InAppFeedbackPreparer.RoutedMessage> routed = new ArrayList<>(messages.size());
         for (ComposedInAppMessage message : messages) {
-            // A new card about a habit starts where the previous card about it left off: work that resolved
+            // A new card about a practice starts where the previous card about it left off: work that resolved
             // the last card, or that the developer answered it over, or that the last card already cited
             // while it stays open, is never cited again. An open previous card is what the new one replaces.
             Optional<PreviousInAppFeedback.Previous> previous =

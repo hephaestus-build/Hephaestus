@@ -23,7 +23,7 @@ import org.jspecify.annotations.Nullable;
 public final class InAppFeedbackRouter {
 
     /**
-     * How long the same practice stays quiet on this surface after it was last shown. A habit does not
+     * How long the same practice stays quiet on this surface after it was last shown. A way of working does not
      * change week to week; re-posting it every time a pull request lands turns a private surface into
      * nagging and teaches the developer to stop opening it.
      */
@@ -93,7 +93,7 @@ public final class InAppFeedbackRouter {
      *
      * <p>Public because it is the single definition of "the evidence" for this lane, and both the
      * decision here and the rows bound to the written unit must use it. Binding the unfiltered window
-     * instead would list, under "the pieces of work this habit was observed on", work where the practice
+     * instead would list, under "the pieces of work this way of working was observed on", work where the practice
      * was done well — which reads as a false accusation to the one person who knows it is false. The same
      * goes for a pull request whose re-review came back clean: a piece of work counts once, at its newest
      * review ({@link LatestRun}), so a problem a later run no longer found is neither counted nor cited.

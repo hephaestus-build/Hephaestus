@@ -1816,7 +1816,7 @@ function buildFeedbackTool(
 									type: "string",
 									maxLength: FEEDBACK_TEXT_BOUNDS.nextStep,
 									description:
-										"IN_CONTEXT: one edit before merging. IN_APP: one repeatable habit for the next piece of work. Name the missing decision, not a heading/template unless the practice requires one; never provide paste-ready prose.",
+										"IN_CONTEXT: one edit before merging. IN_APP: one repeatable way of working for the next piece of work. Name the missing decision, not a heading/template unless the practice requires one; never provide paste-ready prose.",
 								},
 								notes: {
 									type: "object",

@@ -57,18 +57,18 @@ class FeedbackThreadKeyTest extends BaseUnitTest {
     }
 
     /**
-     * The longitudinal lanes key on the habit rather than on a piece of work, because a card about one
-     * habit must replace the previous card about that habit and stand beside a card about another. These
+     * The longitudinal lanes key on the practice rather than on a piece of work, because a card about one
+     * practice must replace the previous card about that practice and stand beside a card about another. These
      * cases pin that grain — {@code (practice, recipient, surface)} — and, as importantly, that it lives
      * in the same digest as the artifact-keyed lane, since a supersession lookup is one predicate on one
      * indexed column and two vocabularies would make it unwritable.
      */
     @Nested
-    @DisplayName("Longitudinal lanes (keyed by habit, not by artifact)")
+    @DisplayName("Longitudinal lanes (keyed by practice, not by artifact)")
     class ByPractice {
 
         @Test
-        @DisplayName("same habit, same person, same surface → one thread across runs")
+        @DisplayName("same practice, same person, same surface → one thread across runs")
         void deterministic() {
             String a = FeedbackThreadKey.forPractice("ships-tests", 7L, FeedbackChannel.IN_APP);
             String b = FeedbackThreadKey.forPractice("ships-tests", 7L, FeedbackChannel.IN_APP);
@@ -80,7 +80,7 @@ class FeedbackThreadKeyTest extends BaseUnitTest {
         void axesDiscriminate() {
             String base = FeedbackThreadKey.forPractice("ships-tests", 7L, FeedbackChannel.IN_APP);
             assertThat(FeedbackThreadKey.forPractice("small-changes", 7L, FeedbackChannel.IN_APP))
-                    .as("a card about another habit stands beside this one, it does not replace it")
+                    .as("a card about another practice stands beside this one, it does not replace it")
                     .isNotEqualTo(base);
             assertThat(FeedbackThreadKey.forPractice("ships-tests", 8L, FeedbackChannel.IN_APP))
                     .as("two people's pages never collapse onto one thread")
@@ -93,11 +93,11 @@ class FeedbackThreadKeyTest extends BaseUnitTest {
         /**
          * The two lanes share a digest without sharing a thread, and the separation has to be structural
          * rather than a bet that no practice is ever slugged like an artifact id. This case is the bet: a
-         * practice named {@code "42"} against artifact 42, which collided until the habit key took a scope
+         * practice named {@code "42"} against artifact 42, which collided until the practice key took a scope
          * of its own.
          */
         @Test
-        @DisplayName("a habit thread never collides with an artifact thread, whatever the practice is called")
+        @DisplayName("a practice thread never collides with an artifact thread, whatever the practice is called")
         void neverCollidesWithAnArtifactThread() {
             assertThat(FeedbackThreadKey.forPractice("42", 7L, FeedbackChannel.IN_APP))
                     .as("a practice slugged like an id is still not that artifact")
@@ -108,18 +108,18 @@ class FeedbackThreadKeyTest extends BaseUnitTest {
         }
 
         /**
-         * A blank slug would key every one of a person's habits onto one thread, so the first card
+         * A blank slug would key every one of a person's practices onto one thread, so the first card
          * written would be retired by the next card about anything at all — refused rather than hashed.
          */
         @Test
-        @DisplayName("a blank practice is refused rather than collapsing every habit onto one thread")
+        @DisplayName("a blank practice is refused rather than collapsing every practice onto one thread")
         void blankPracticeIsRefused() {
             assertThatThrownBy(() -> FeedbackThreadKey.forPractice(" ", 7L, FeedbackChannel.IN_APP))
                     .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
-        @DisplayName("golden vector: the habit digest is pinned so a queued card stays findable")
+        @DisplayName("golden vector: the practice digest is pinned so a queued card stays findable")
         void goldenVector() {
             assertThat(FeedbackThreadKey.forPractice("ships-tests", 7L, FeedbackChannel.IN_APP))
                     .isEqualTo("214edb3230788fc4d0a5147bffff8a4964ffa5f2320c6c7a867d0e351c149b0c");
@@ -139,7 +139,7 @@ class FeedbackThreadKeyTest extends BaseUnitTest {
         // The first move was free — the lane had no producer yet, so no thread existed under the old
         // spelling. This one was not: the lane had shipped and written rows, and 1785743133884-57
         // deliberately renames the channel without recomputing thread_key (its comment says why). Those
-        // rows are therefore orphaned for supersession — the next message about the same habit is written
+        // rows are therefore orphaned for supersession — the next message about the same practice is written
         // beside the old one instead of replacing it — and the repair is to drop them, not to migrate them.
         //
         // A future rename of a channel that has shipped feedback costs the same thing again. Price it

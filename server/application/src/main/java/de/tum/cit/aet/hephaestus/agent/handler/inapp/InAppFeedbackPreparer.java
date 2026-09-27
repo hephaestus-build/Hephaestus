@@ -29,8 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
  * in {@code FeedbackRepository#markInAppDelivered}). We own this surface, so "delivered" can be an
  * observation instead of an assumption.
  *
- * <p>One open card per habit, not a pile. A newer card about a habit replaces the card still open about
- * it, queued or already read: the page is a list of habits to work on, and the newer card is the live
+ * <p>One open card per practice, not a pile. A newer card about a practice replaces the card still open about
+ * it, queued or already read: the page is a list of practices to work on, and the newer card is the live
  * statement of this one. A card that is closed — resolved by the work or the developer, or closed because
  * the practice changed — is left as the record and the new card is written beside it. Which it is was
  * decided by whoever routed the message, from the same read the page makes
@@ -71,7 +71,7 @@ public class InAppFeedbackPreparer {
      * @param decision {@link InAppRoutingDecision#ADMIT} for a message the recipient will see; any
      *     other value is skipped without a row — a refusal that is a property of the evidence is not a
      *     withholding to explain, it is a message that was never owed.
-     * @param replaces the card about this habit still open on the recipient's page, which this message
+     * @param replaces the card about this practice still open on the recipient's page, which this message
      *     retires; {@code null} when there is none, or when the previous card is closed and stays as the record
      */
     public record RoutedMessage(
@@ -145,7 +145,7 @@ public class InAppFeedbackPreparer {
             Feedback unit = feedbackRepository.save(Feedback.builder()
                     .agentJobId(agentJobId)
                     .workspaceId(workspaceId)
-                    // Unanchored on purpose: the message is about a habit across several pieces of work,
+                    // Unanchored on purpose: the message is about a way of working across several pieces of work,
                     // so naming one of them as "the" artifact would misdescribe what it is evidenced by.
                     // The bound observations carry the artifacts, which is where the evidence belongs.
                     .recipientUserId(recipientUserId)
@@ -155,10 +155,10 @@ public class InAppFeedbackPreparer {
                     .deliveryState(FeedbackDeliveryState.PREPARED)
                     .source(FeedbackSource.AGENT)
                     .body(body(message))
-                    // Cross-run identity for this habit, so a later message about the same practice
+                    // Cross-run identity for this practice, so a later message about the same practice
                     // supersedes this one rather than stacking beside it.
                     .threadKey(threadKey)
-                    // What this card retired: the chain is the temporal record of one habit being raised
+                    // What this card retired: the chain is the temporal record of one practice being raised
                     // over time.
                     .replacesId(outcome.replacesId())
                     .createdAt(now)
