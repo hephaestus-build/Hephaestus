@@ -208,7 +208,9 @@ public class OutlineWebhookRegistrar {
     public void deregister(long workspaceId, long connectionId) {
         boolean hadSubscription;
         try {
-            hadSubscription = deregisterStrictInternal(workspaceId, connectionId);
+            Optional<Runnable> deletion = prepareDeregistration(workspaceId, connectionId);
+            deletion.ifPresent(Runnable::run);
+            hadSubscription = deletion.isPresent();
         } catch (RuntimeException e) {
             log.warn("outline.webhook: deregistration failed for connectionId={}: {}", connectionId, e.toString());
             hadSubscription = true;
@@ -218,31 +220,33 @@ public class OutlineWebhookRegistrar {
         }
     }
 
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public boolean deregisterStrict(long workspaceId, long connectionId) {
-        return deregisterStrictInternal(workspaceId, connectionId);
-    }
-
-    private boolean deregisterStrictInternal(long workspaceId, long connectionId) {
+    /**
+     * Reads the connection's stored subscription and token and returns the Outline call that deletes the
+     * subscription, which touches no database. Empty when no subscription is stored; throws when one is
+     * stored but cannot be deleted with what the connection holds.
+     */
+    public Optional<Runnable> prepareDeregistration(long workspaceId, long connectionId) {
         Optional<Connection> connection = connectionService.findInWorkspace(workspaceId, connectionId);
         if (connection.isEmpty() || !(connection.get().getConfig() instanceof ConnectionConfig.OutlineConfig config)) {
-            return false;
+            return Optional.empty();
         }
         String subscriptionId = config.webhookSubscriptionId();
         if (subscriptionId == null || subscriptionId.isBlank()) {
-            return false;
+            return Optional.empty();
         }
         String serverUrl = config.serverUrl();
         Optional<BearerToken> bearer = connectionService.findBearerToken(workspaceId, connectionId);
         if (serverUrl == null || serverUrl.isBlank() || bearer.isEmpty()) {
             throw new IllegalStateException("Outline webhook credentials are unavailable");
         }
-        outlineApiClient.deleteWebhookSubscription(serverUrl, bearer.get().token(), subscriptionId);
-        log.info(
-                "outline.webhook: deleted subscription {} for deactivated connectionId={}",
-                subscriptionId,
-                connectionId);
-        return true;
+        String token = bearer.get().token();
+        return Optional.of(() -> {
+            outlineApiClient.deleteWebhookSubscription(serverUrl, token, subscriptionId);
+            log.info(
+                    "outline.webhook: deleted subscription {} for deactivated connectionId={}",
+                    subscriptionId,
+                    connectionId);
+        });
     }
 
     /** A 256-bit hex signing secret (64 chars), comfortably above the NIST-recommended HMAC key length. */

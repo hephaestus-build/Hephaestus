@@ -160,35 +160,36 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void revokeProvider_doesNotRevokeATeamStillUsedByAnotherConnection() {
+    void prepareProviderTeardown_keepsATeamStillUsedByAnotherConnection() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.SLACK, 42L, "T1", 7L);
         when(connectionService.hasOtherInstalledConnection(ref)).thenReturn(true);
 
-        strategy.revokeProvider(ref);
-
+        assertThat(strategy.prepareProviderTeardown(ref)).isEmpty();
         verifyNoInteractions(credentialProvider, oauthClient);
     }
 
     @Test
-    void revokeProvider_onlyRevokesTheProviderToken() {
+    void prepareProviderTeardown_revokesTheReadTokenOnlyWhenRun() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.SLACK, 42L, "T1", 7L);
         when(credentialProvider.resolve(ref)).thenReturn(Optional.of(new BearerToken("xoxb-tok", null)));
 
-        strategy.revokeProvider(ref);
+        Runnable teardown = strategy.prepareProviderTeardown(ref).orElseThrow();
+        verifyNoInteractions(oauthClient);
+        teardown.run();
 
         verify(oauthClient).revokeStrict("xoxb-tok");
         verifyNoInteractions(workspaceContentEraser);
     }
 
     @Test
-    void revokeProvider_propagatesProviderFailure() {
+    void prepareProviderTeardown_runPropagatesProviderFailure() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.SLACK, 42L, "T1", 7L);
         when(credentialProvider.resolve(ref)).thenReturn(Optional.of(new BearerToken("xoxb-tok", null)));
         doThrow(new RuntimeException("slack unavailable")).when(oauthClient).revokeStrict("xoxb-tok");
 
-        assertThatThrownBy(() -> strategy.revokeProvider(ref)).hasMessage("slack unavailable");
+        Runnable teardown = strategy.prepareProviderTeardown(ref).orElseThrow();
 
-        verifyNoInteractions(workspaceContentEraser);
+        assertThatThrownBy(teardown::run).hasMessage("slack unavailable");
     }
 
     @Test

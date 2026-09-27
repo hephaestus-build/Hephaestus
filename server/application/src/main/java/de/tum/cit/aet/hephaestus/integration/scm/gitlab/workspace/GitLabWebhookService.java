@@ -351,7 +351,7 @@ public class GitLabWebhookService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void deregisterWebhookForConnection(long workspaceId, long connectionId) {
         try {
-            deregisterWebhookForConnectionInternal(workspaceId, connectionId);
+            prepareWebhookDeregistration(workspaceId, connectionId).ifPresent(Runnable::run);
         } catch (RuntimeException e) {
             log.info(
                     "Webhook deregistration at deactivation was a no-op (best-effort): workspaceId={}, connectionId={}, reason={}",
@@ -361,39 +361,44 @@ public class GitLabWebhookService {
         }
     }
 
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void deregisterWebhookForConnectionStrict(long workspaceId, long connectionId) {
-        deregisterWebhookForConnectionInternal(workspaceId, connectionId);
-    }
-
-    private void deregisterWebhookForConnectionInternal(long workspaceId, long connectionId) {
+    /**
+     * Reads the connection's stored webhook and PAT and returns the GitLab call that deletes the hook,
+     * which touches no database. Empty when no webhook is stored; throws when one is stored but cannot
+     * be deleted with what the connection holds.
+     */
+    public Optional<Runnable> prepareWebhookDeregistration(long workspaceId, long connectionId) {
         Optional<GitLabConfig> configOpt = connectionService
                 .findInWorkspace(workspaceId, connectionId)
                 .map(c -> c.getConfig())
                 .filter(cfg -> cfg instanceof GitLabConfig)
                 .map(cfg -> (GitLabConfig) cfg);
         if (configOpt.isEmpty()) {
-            return;
+            return Optional.empty();
         }
         GitLabConfig config = configOpt.get();
-        if (config.gitlabWebhookId() == null || config.gitlabGroupId() == null) {
-            return;
+        Long groupId = config.gitlabGroupId();
+        Long webhookId = config.gitlabWebhookId();
+        String serverUrl = config.serverUrl();
+        if (webhookId == null || groupId == null) {
+            return Optional.empty();
         }
         Optional<BearerToken> bearer = connectionService.findBearerToken(workspaceId, connectionId);
-        if (config.serverUrl() == null || config.serverUrl().isBlank() || bearer.isEmpty()) {
+        if (serverUrl == null || serverUrl.isBlank() || bearer.isEmpty()) {
             throw new IllegalStateException("GitLab webhook credentials are unavailable");
         }
         var client = webhookClientProvider.getIfAvailable();
         if (client == null) {
             throw new IllegalStateException("GitLab webhook client is unavailable");
         }
-        client.deregisterGroupWebhookWithCredentials(
-                config.serverUrl(), bearer.get().token(), config.gitlabGroupId(), config.gitlabWebhookId());
-        log.info(
-                "Deregistered GitLab webhook for deactivated connection: workspaceId={}, connectionId={}, webhookId={}",
-                workspaceId,
-                connectionId,
-                config.gitlabWebhookId());
+        String token = bearer.get().token();
+        return Optional.of(() -> {
+            client.deregisterGroupWebhookWithCredentials(serverUrl, token, groupId, webhookId);
+            log.info(
+                    "Deregistered GitLab webhook for deactivated connection: workspaceId={}, connectionId={}, webhookId={}",
+                    workspaceId,
+                    connectionId,
+                    webhookId);
+        });
     }
 
     /**

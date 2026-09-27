@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -24,6 +22,7 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -81,16 +80,14 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
         Connection connection = activeConnectionWithCredentials();
         connection.setState(IntegrationState.SUSPENDED);
         when(connectionRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(connection));
-        doAnswer(invocation -> {
-                    assertThat(connection.getCredentialsEncrypted()).isNotNull();
-                    return null;
-                })
-                .when(connectionStrategy)
-                .revokeProvider(erasureRef(connection));
+        AtomicBoolean tornDownWithCredentials = new AtomicBoolean();
+        when(connectionStrategy.prepareProviderTeardown(erasureRef(connection)))
+                .thenReturn(
+                        Optional.of(() -> tornDownWithCredentials.set(connection.getCredentialsEncrypted() != null)));
 
         contributor(List.of(connectionStrategy)).deleteWorkspaceData(WORKSPACE_ID);
 
-        verify(connectionStrategy).revokeProvider(erasureRef(connection));
+        assertThat(tornDownWithCredentials).isTrue();
         assertThat(connection.getState()).isEqualTo(IntegrationState.UNINSTALLED);
         assertThat(connection.getCredentialsEncrypted()).isNull();
         verify(syncJobService, never()).requestCancelForTeardown(anyLong());
@@ -100,9 +97,9 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
     void purge_preservesCredentialsWhenProviderRevokeFails() throws Exception {
         Connection connection = activeConnectionWithCredentials();
         when(connectionRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(connection));
-        doThrow(new RuntimeException("provider unavailable"))
-                .when(connectionStrategy)
-                .revokeProvider(erasureRef(connection));
+        when(connectionStrategy.prepareProviderTeardown(erasureRef(connection))).thenReturn(Optional.of(() -> {
+            throw new RuntimeException("provider unavailable");
+        }));
 
         assertThatThrownBy(() -> contributor(List.of(connectionStrategy)).deleteWorkspaceData(WORKSPACE_ID))
                 .isInstanceOf(WorkspacePurgeBlockedException.class)
@@ -133,7 +130,7 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
         contributor(List.of(connectionStrategy)).deleteWorkspaceData(WORKSPACE_ID);
 
         verify(auditRepository, never()).save(any());
-        verify(connectionStrategy, never()).revokeProvider(any());
+        verify(connectionStrategy, never()).prepareProviderTeardown(any());
     }
 
     private ConnectionPurgeContributor contributor(List<ConnectionStrategy> strategies) {

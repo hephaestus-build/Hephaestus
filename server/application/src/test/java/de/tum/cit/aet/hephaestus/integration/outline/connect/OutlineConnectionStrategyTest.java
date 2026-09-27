@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepos
 import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineWebhookRegistrar;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -100,12 +101,12 @@ class OutlineConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void revokeProvider_onlyDeregistersTheProviderSubscription() {
-        IntegrationRef ref = new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9", 7L);
+    void prepareProviderTeardown_isTheSubscriptionDeregistration() {
+        Runnable deletion = () -> {};
+        when(webhookRegistrar.prepareDeregistration(5L, 7L)).thenReturn(Optional.of(deletion));
 
-        strategy().revokeProvider(ref);
-
-        verify(webhookRegistrar).deregisterStrict(5L, 7L);
+        assertThat(strategy().prepareProviderTeardown(new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9", 7L)))
+                .containsSame(deletion);
         verifyNoInteractions(outlineDocumentRepository, outlineCollectionRepository, outlineDocumentEventRepository);
     }
 }

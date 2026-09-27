@@ -25,8 +25,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * falling to an unrecorded body. {@code initializeAsync} confirms the NATS scope consumer for the discovered
  * repositories before it registers the webhook, and runs the full sync after both.
  *
- * <p><b>Deactivation</b> tears the group webhook down (best-effort). An admin disconnect deletes it
- * earlier, in {@code GitlabConnectionStrategy#revokeProvider}, while the connection still holds its PAT;
+ * <p><b>Deactivation</b> tears the group webhook down (best-effort). An admin disconnect deletes it with
+ * the PAT {@code GitlabConnectionStrategy#prepareProviderTeardown} read before the transition cleared it;
  * this AFTER_COMMIT hook is the symmetric guard mirroring
  * {@code OutlineConnectionStateListener.onDeactivated} and covers a torn-down row by connection id.
  *

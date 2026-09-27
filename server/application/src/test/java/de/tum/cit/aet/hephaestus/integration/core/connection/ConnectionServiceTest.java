@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -25,6 +26,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
@@ -41,6 +43,8 @@ import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * State-machine contract for {@link ConnectionService#transition}. Exercises the legal
@@ -74,6 +78,8 @@ class ConnectionServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        // Stands in for the transaction a proxied call runs in, so after-commit work can be registered.
+        TransactionSynchronizationManager.initSynchronization();
         // Real converter so the credential-purge case operates on a genuine AES-GCM blob,
         // not a mock stand-in.
         credentialConverter = new CredentialBundleConverter("a".repeat(32), false);
@@ -101,6 +107,15 @@ class ConnectionServiceTest extends BaseUnitTest {
         workspace.setId(7L);
         // transition() returns the saved entity; echo it back so callers see the mutated row.
         Mockito.lenient().when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    @AfterEach
+    void clearSynchronization() {
+        TransactionSynchronizationManager.clearSynchronization();
+    }
+
+    private void commit() {
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
     }
 
     @Test
@@ -305,10 +320,12 @@ class ConnectionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void disconnect_erasesUnderTheFenceBeforeTearingDownTheProvider() {
+    void disconnect_erasesAndPreparesTeardownUnderTheFenceButTearsDownOnlyAfterCommit() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
         ConnectionStrategy strategy = Mockito.mock(ConnectionStrategy.class);
+        Runnable teardown = Mockito.mock(Runnable.class);
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, workspace.getId(), "100", connection.getId());
+        when(strategy.prepareProviderTeardown(ref)).thenReturn(Optional.of(teardown));
         InOrder order = Mockito.inOrder(connectionRepository, syncJobService, strategy, auditRepository);
 
         service.disconnect(connection, disconnectRequest(), strategy);
@@ -318,15 +335,19 @@ class ConnectionServiceTest extends BaseUnitTest {
         order.verify(connectionRepository).acquireLifecycleLock(connection.getId(), workspace.getId());
         order.verify(syncJobService).requestCancelForTeardown(connection.getId());
         order.verify(strategy).eraseLocalData(ref);
-        order.verify(connectionRepository).flush();
-        order.verify(strategy).revokeProvider(ref);
+        order.verify(strategy).prepareProviderTeardown(ref);
         order.verify(auditRepository).save(any(ConnectionAudit.class));
         assertThat(connection.getState()).isEqualTo(IntegrationState.UNINSTALLED);
+        verify(teardown, never()).run();
+
+        commit();
+
+        verify(teardown).run();
     }
 
-    /** Suspended, a failing provider call cannot mark the disconnect transaction rollback-only. */
+    /** Suspended, a failing credential read cannot mark the disconnect transaction rollback-only. */
     @Test
-    void disconnect_tearsDownTheProviderWithTheTransactionSuspended() {
+    void disconnect_preparesTheTeardownWithTheTransactionSuspended() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
 
         service.disconnect(connection, disconnectRequest(), Mockito.mock(ConnectionStrategy.class));
@@ -338,19 +359,29 @@ class ConnectionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void disconnect_providerTeardownFails_stillCommitsUninstalled() {
+    void disconnect_teardownCannotBePrepared_stillCommitsUninstalledWithNothingScheduled() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
         connection.setCredentials(new BearerToken("xoxb-secret", null), credentialConverter);
         ConnectionStrategy strategy = Mockito.mock(ConnectionStrategy.class);
-        Mockito.doThrow(new IllegalStateException("provider unavailable"))
-                .when(strategy)
-                .revokeProvider(any());
+        when(strategy.prepareProviderTeardown(any())).thenThrow(new IllegalStateException("token unavailable"));
 
         Connection result = service.disconnect(connection, disconnectRequest(), strategy);
 
         assertThat(result.getState()).isEqualTo(IntegrationState.UNINSTALLED);
         assertThat(result.getCredentialsEncrypted()).isNull();
-        verify(auditRepository).save(any(ConnectionAudit.class));
+        assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
+    }
+
+    @Test
+    void disconnect_teardownFailsAfterCommit_isLoggedRatherThanThrown() {
+        Connection connection = connectionInState(IntegrationState.ACTIVE);
+        ConnectionStrategy strategy = Mockito.mock(ConnectionStrategy.class);
+        when(strategy.prepareProviderTeardown(any())).thenReturn(Optional.of(() -> {
+            throw new IllegalStateException("provider unavailable");
+        }));
+        service.disconnect(connection, disconnectRequest(), strategy);
+
+        assertThatCode(this::commit).doesNotThrowAnyException();
     }
 
     @Test
@@ -365,7 +396,8 @@ class ConnectionServiceTest extends BaseUnitTest {
         assertThatThrownBy(() -> service.disconnect(connection, disconnectRequest(), strategy))
                 .isInstanceOf(QueryTimeoutException.class);
 
-        verify(strategy, never()).revokeProvider(any());
+        verify(strategy, never()).prepareProviderTeardown(any());
+        assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
         assertThat(connection.getState()).isEqualTo(IntegrationState.ACTIVE);
         assertThat(connection.getCredentialsEncrypted()).isNotNull();
         verify(auditRepository, never()).save(any());

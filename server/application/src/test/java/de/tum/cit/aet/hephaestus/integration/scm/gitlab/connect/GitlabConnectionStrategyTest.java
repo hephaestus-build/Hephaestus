@@ -1,15 +1,16 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.doThrow;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.ScmWorkspaceContentEraser;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -39,21 +40,12 @@ class GitlabConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void revokeProvider_onlyDeregistersTheConnectionsWebhook() {
-        strategy.revokeProvider(new IntegrationRef(IntegrationKind.GITLAB, 11L, "group-99", 7L));
+    void prepareProviderTeardown_isTheConnectionsWebhookDeregistration() {
+        Runnable deletion = () -> {};
+        when(webhookService.prepareWebhookDeregistration(11L, 7L)).thenReturn(Optional.of(deletion));
 
-        verify(webhookService).deregisterWebhookForConnectionStrict(11L, 7L);
+        assertThat(strategy.prepareProviderTeardown(new IntegrationRef(IntegrationKind.GITLAB, 11L, "group-99", 7L)))
+                .containsSame(deletion);
         verifyNoInteractions(contentEraser);
-    }
-
-    @Test
-    void revokeProvider_propagatesProviderFailure() {
-        doThrow(new RuntimeException("gitlab unavailable"))
-                .when(webhookService)
-                .deregisterWebhookForConnectionStrict(11L, 7L);
-
-        assertThatThrownBy(
-                        () -> strategy.revokeProvider(new IntegrationRef(IntegrationKind.GITLAB, 11L, "group-99", 7L)))
-                .hasMessage("gitlab unavailable");
     }
 }

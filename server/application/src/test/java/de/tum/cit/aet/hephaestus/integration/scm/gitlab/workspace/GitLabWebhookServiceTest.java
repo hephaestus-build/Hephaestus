@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
@@ -607,6 +608,29 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
             assertThatCode(() -> webhookService.deregisterWebhookForConnection(1L, 7L))
                     .doesNotThrowAnyException();
+
+            verify(webhookClient).deregisterGroupWebhookWithCredentials("https://gitlab.com", "glpat-token", 42L, 99L);
+        }
+
+        @Test
+        void preparedDeregistrationCallsGitLabOnlyWhenRun() {
+            var connection = Mockito.mock(de.tum.cit.aet.hephaestus.integration.core.connection.Connection.class);
+            when(connection.getConfig())
+                    .thenReturn(new ConnectionConfig.GitLabConfig(
+                            "https://gitlab.com",
+                            42L,
+                            99L,
+                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
+                            Set.of()));
+            when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
+            when(connectionService.findBearerToken(1L, 7L))
+                    .thenReturn(Optional.of(new BearerToken("glpat-token", null)));
+            when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
+
+            Runnable deletion =
+                    webhookService.prepareWebhookDeregistration(1L, 7L).orElseThrow();
+            verifyNoInteractions(webhookClient);
+            deletion.run();
 
             verify(webhookClient).deregisterGroupWebhookWithCredentials("https://gitlab.com", "glpat-token", 42L, 99L);
         }

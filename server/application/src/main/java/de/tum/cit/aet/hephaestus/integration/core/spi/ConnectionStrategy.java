@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import java.net.URI;
 import java.util.Map;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -35,12 +36,15 @@ public interface ConnectionStrategy {
     void eraseLocalData(IntegrationRef ref);
 
     /**
-     * Removes what this connection installed at the provider — app installation, token, webhook — and
-     * throws when that cannot be confirmed. {@code ref} carries the connection id. The caller holds the
-     * connection row locked, credentials still stored, until its transition commits, so this reads the
-     * row but never writes it, and calls no provider inside a database transaction.
+     * Reads what removing this connection's provider-side footprint — app installation, token, webhook —
+     * takes, while the connection still holds its credentials and config, and returns that removal. The
+     * returned call only talks to the provider: it holds no entity and opens no transaction, so it can
+     * run once the reading transaction has ended, and it throws when the removal cannot be confirmed.
+     * Empty when there is nothing to remove, including an installation another connection still uses.
+     * {@code ref} carries the connection id. The caller holds the connection row locked, so this reads
+     * the row but never writes it.
      */
-    void revokeProvider(IntegrationRef ref);
+    Optional<Runnable> prepareProviderTeardown(IntegrationRef ref);
 
     record InitiateRequest(
             long workspaceId,

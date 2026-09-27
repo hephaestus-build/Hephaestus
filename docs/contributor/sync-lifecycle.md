@@ -101,7 +101,8 @@ synchronous in-transaction `ScmMirrorErasedEvent`, and `practices` (SCM-artifact
 feedback) and `activity` (`activity_event`) listen.
 
 Disconnect and purge reach the identical end state by construction — the purge contributor
-(order `-200`) and the connection `revoke` callback both call the same eraser.
+(order `-200`) and the GitHub and GitLab strategies' `eraseLocalData`, which the disconnect runs
+inside its transaction, both call the same eraser.
 
 ### Retained on both erase triggers
 

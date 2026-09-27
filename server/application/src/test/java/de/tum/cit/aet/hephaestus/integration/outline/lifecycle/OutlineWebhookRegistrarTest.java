@@ -252,6 +252,22 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
     }
 
     @Test
+    void preparedDeregistration_callsOutlineOnlyWhenRun() {
+        when(connection.getConfig()).thenReturn(config("sub-77", "sec"));
+        when(connectionService.findInWorkspace(WORKSPACE_ID, CONNECTION_ID)).thenReturn(Optional.of(connection));
+        when(connectionService.findBearerToken(WORKSPACE_ID, CONNECTION_ID))
+                .thenReturn(Optional.of(new BearerToken("tok", null)));
+
+        Runnable deletion = registrar(EXTERNAL_URL)
+                .prepareDeregistration(WORKSPACE_ID, CONNECTION_ID)
+                .orElseThrow();
+        verifyNoInteractions(outlineApiClient);
+        deletion.run();
+
+        verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-77");
+    }
+
+    @Test
     void deregisterByConnectionId_onlyLogsWhenCredentialsWerePurged() {
         // UNINSTALLED purged the token: no upstream call is possible; the subscription auto-disables.
         when(connection.getConfig()).thenReturn(config("sub-77", "sec"));

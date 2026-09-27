@@ -15,10 +15,9 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 @ConditionalOnServerRole
 @Component
@@ -94,20 +93,19 @@ public class GithubConnectionStrategy implements ConnectionStrategy {
     }
 
     @Override
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void revokeProvider(IntegrationRef ref) {
+    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref) {
         var connectionOpt = connectionService.findReferenced(ref);
         if (connectionOpt.isEmpty()) {
-            return;
+            return Optional.empty();
         }
         var connection = connectionOpt.get();
         var resolvedRef =
                 new IntegrationRef(ref.kind(), ref.workspaceId(), connection.getInstanceKey(), connection.getId());
-        if (connectionService.hasOtherInstalledConnection(resolvedRef)) {
-            return;
+        if (connectionService.hasOtherInstalledConnection(resolvedRef)
+                || !(connection.getConfig() instanceof ConnectionConfig.GitHubAppConfig config)) {
+            return Optional.empty();
         }
-        if (connection.getConfig() instanceof ConnectionConfig.GitHubAppConfig config) {
-            appTokenService.deleteInstallation(Objects.requireNonNull(config.installationId()));
-        }
+        long installationId = Objects.requireNonNull(config.installationId());
+        return Optional.of(() -> appTokenService.deleteInstallation(installationId));
     }
 }

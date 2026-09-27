@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookService;
 import de.tum.cit.aet.hephaestus.workspace.ScmWorkspaceContentEraser;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 
 /**
@@ -16,9 +17,9 @@ import org.springframework.stereotype.Component;
  * token first, so {@link #initiate} refuses to connect one on its own and {@link #finalizeConnect} is never
  * reached.
  *
- * <p>{@link #revokeProvider} cannot revoke the PAT itself (GitLab PATs are revocable only from the
+ * <p>{@link #prepareProviderTeardown} cannot revoke the PAT itself (GitLab PATs are revocable only from the
  * user's profile page — there is no third-party revoke API), but it DOES tear down the group
- * webhook we registered on connect, using the PAT the connection still holds when it runs.
+ * webhook we registered on connect, using the PAT it reads before the disconnect clears it.
  *
  * <p>Disconnect is GitLab's <b>only</b> erase trigger: unlike a GitHub App there is no vendor-side
  * uninstall signal for a PAT.
@@ -57,10 +58,10 @@ public class GitlabConnectionStrategy implements ConnectionStrategy {
     }
 
     @Override
-    public void revokeProvider(IntegrationRef ref) {
+    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref) {
         if (ref.connectionId() == null) {
             throw new IllegalArgumentException("GitLab provider teardown requires a connection id");
         }
-        webhookService.deregisterWebhookForConnectionStrict(ref.workspaceId(), ref.connectionId());
+        return webhookService.prepareWebhookDeregistration(ref.workspaceId(), ref.connectionId());
     }
 }

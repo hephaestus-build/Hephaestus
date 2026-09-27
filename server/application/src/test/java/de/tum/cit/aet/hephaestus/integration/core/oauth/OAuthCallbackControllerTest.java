@@ -29,6 +29,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.assertj.core.api.Assertions;
 import org.jspecify.annotations.Nullable;
@@ -539,8 +540,9 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         }
 
         @Override
-        public void revokeProvider(IntegrationRef ref) {
-            throw new UnsupportedOperationException("revokeProvider() not exercised by OAuthCallbackController");
+        public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref) {
+            throw new UnsupportedOperationException(
+                    "prepareProviderTeardown() not exercised by OAuthCallbackController");
         }
     }
 }

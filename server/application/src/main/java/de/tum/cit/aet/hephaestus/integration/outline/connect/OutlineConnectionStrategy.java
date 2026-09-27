@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentEvent
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineWebhookRegistrar;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -38,7 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Disconnect is a GDPR erase, not just a state flip: {@link #eraseLocalData} removes the workspace's
  * mirrored documents so no cached bodies outlive the connection (the workspace-purge path erases the
- * same rows for the full teardown), and {@link #revokeProvider} deletes the change-notification
+ * same rows for the full teardown), and {@link #prepareProviderTeardown} deletes the change-notification
  * subscription. The Outline API token itself is revoked from the owner's settings.
  */
 @ConditionalOnServerRole
@@ -129,10 +130,10 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
     }
 
     @Override
-    public void revokeProvider(IntegrationRef ref) {
+    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref) {
         if (ref.connectionId() == null) {
             throw new IllegalArgumentException("Outline provider teardown requires a connection id");
         }
-        webhookRegistrar.deregisterStrict(ref.workspaceId(), ref.connectionId());
+        return webhookRegistrar.prepareDeregistration(ref.workspaceId(), ref.connectionId());
     }
 }

@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -23,6 +24,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -438,8 +441,9 @@ public class ConnectionService {
      * <p>Once the fence and the state-machine check have passed, and while the row lock is still held,
      * the strategy erases the integration's local data in this transaction. An erase failure propagates
      * and rolls everything back, leaving the connection ACTIVE with its credentials so the admin can
-     * retry. Provider teardown follows and is best effort: an unreachable provider must not keep an
-     * erased workspace connected, so its failure is logged and the transition still commits.
+     * retry. Provider teardown is prepared from the stored credentials before they are cleared, but runs
+     * only after the transition commits, so a rolled-back disconnect never touches the provider. It is
+     * best effort: an unreachable provider must not keep an erased workspace connected.
      *
      * @throws ConnectionBusyException 409 — a sync job still holds the connection; its cancellation has
      *                                 been requested, so retrying shortly will succeed
@@ -450,16 +454,27 @@ public class ConnectionService {
             throw new IllegalArgumentException("Disconnect must transition to UNINSTALLED");
         }
         return applyTransition(
-                connection, req, locked -> eraseThenRevokeProvider(locked, strategy), /* fenceOnActiveSyncJob */ true);
+                connection,
+                req,
+                locked -> eraseAndTearDownProviderAfterCommit(locked, strategy),
+                /* fenceOnActiveSyncJob */ true);
     }
 
-    /** Disconnects for mandatory erasure without allowing a sync job to delay credential removal. */
+    /**
+     * Disconnects for mandatory erasure without allowing a sync job to delay credential removal. {@code
+     * revoke} runs with this transaction suspended, so its provider calls hold no transaction open; its
+     * failure still propagates and rolls the transition back.
+     */
     @Transactional
     public Connection disconnectForErasure(Connection connection, TransitionRequest req, Runnable revoke) {
         if (req.next() != IntegrationState.UNINSTALLED) {
             throw new IllegalArgumentException("Disconnect must transition to UNINSTALLED");
         }
-        return applyTransition(connection, req, locked -> revoke.run(), /* fenceOnActiveSyncJob */ false);
+        return applyTransition(
+                connection,
+                req,
+                locked -> providerTeardownTemplate.executeWithoutResult(status -> revoke.run()),
+                /* fenceOnActiveSyncJob */ false);
     }
 
     private Connection applyTransition(
@@ -539,28 +554,44 @@ public class ConnectionService {
     }
 
     /**
-     * The erase is flushed before the provider is called, so a SQL failure rolls back while the
-     * provider installation still exists. The provider call runs with this transaction suspended: it
-     * cannot mark it rollback-only, and its own credential reads use short transactions that see the
-     * committed row, credentials included, since the lifecycle lock blocks writers, not readers.
+     * The teardown is prepared with this transaction suspended, so a failed credential read cannot mark
+     * the disconnect rollback-only; those reads see the committed row, credentials included, since the
+     * lifecycle lock blocks writers, not readers.
      */
-    private void eraseThenRevokeProvider(Connection connection, ConnectionStrategy strategy) {
+    private void eraseAndTearDownProviderAfterCommit(Connection connection, ConnectionStrategy strategy) {
         IntegrationRef ref = new IntegrationRef(
                 connection.getKind(),
                 connection.getWorkspace().getId(),
                 connection.getInstanceKey(),
                 connection.getId());
         strategy.eraseLocalData(ref);
-        connectionRepository.flush();
+        Optional<Runnable> teardown;
         try {
-            providerTeardownTemplate.executeWithoutResult(status -> strategy.revokeProvider(ref));
+            teardown = Objects.requireNonNull(
+                    providerTeardownTemplate.execute(status -> strategy.prepareProviderTeardown(ref)));
         } catch (RuntimeException e) {
             log.warn(
-                    "Provider teardown failed on disconnect of connection={} kind={}: {} — local data erased, disconnecting anyway",
-                    connection.getId(),
-                    connection.getKind(),
+                    "Provider teardown could not be prepared on disconnect of connection={} kind={}: {} — disconnecting without it",
+                    ref.connectionId(),
+                    ref.kind(),
                     e.toString());
+            return;
         }
+        teardown.ifPresent(call ->
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        try {
+                            call.run();
+                        } catch (RuntimeException e) {
+                            log.warn(
+                                    "Provider teardown failed after disconnect of connection={} kind={}: {} — local data already erased",
+                                    ref.connectionId(),
+                                    ref.kind(),
+                                    e.toString());
+                        }
+                    }
+                }));
     }
 
     /**

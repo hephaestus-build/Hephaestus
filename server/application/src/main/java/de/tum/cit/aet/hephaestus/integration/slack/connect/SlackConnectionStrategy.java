@@ -15,14 +15,13 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /** Slack OAuth strategy. A rotating installation is rejected rather than stored: no refresh path exists,
  *  so accepting one would leave a connection that stops working at the first rotation. */
@@ -143,18 +142,17 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
     }
 
     @Override
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void revokeProvider(IntegrationRef ref) {
+    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref) {
         if (connectionService.hasOtherInstalledConnection(ref)) {
-            return;
+            return Optional.empty();
         }
-        BearerToken token = credentialProvider
+        String token = credentialProvider
                 .resolve(ref)
                 .filter(BearerToken.class::isInstance)
-                .map(BearerToken.class::cast)
+                .map(bundle -> ((BearerToken) bundle).token())
                 .orElseThrow(() -> new IllegalStateException("Slack bot token is unavailable"));
-        oauthClient.revokeStrict(token.token());
         // Token revocation does not remove the team-level Slack app installation.
+        return Optional.of(() -> oauthClient.revokeStrict(token));
     }
 
     private String redirectUri() {

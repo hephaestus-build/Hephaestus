@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.connect;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -70,30 +71,30 @@ class GithubConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void revokeProvider_uninstallsTheGitHubAppWithoutErasingLocalData() {
+    void prepareProviderTeardown_uninstallsTheGitHubAppOnlyWhenRun() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242", 9L);
         when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
         when(connection.getConfig()).thenReturn(new ConnectionConfig.GitHubAppConfig(4242L, null, null, Set.of()));
 
-        strategy().revokeProvider(ref);
+        Runnable teardown = strategy().prepareProviderTeardown(ref).orElseThrow();
+        verifyNoInteractions(appTokenService);
+        teardown.run();
 
         verify(appTokenService).deleteInstallation(4242L);
         verifyNoInteractions(contentEraser);
     }
 
     @Test
-    void revokeProvider_patConnectionNeverDeletesAnInstallation() {
+    void prepareProviderTeardown_patConnectionHasNoInstallationToDelete() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242", 9L);
         when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
         when(connection.getConfig()).thenReturn(new ConnectionConfig.GitHubPatConfig("org", null, Set.of()));
 
-        strategy().revokeProvider(ref);
-
-        verifyNoInteractions(appTokenService);
+        assertThat(strategy().prepareProviderTeardown(ref)).isEmpty();
     }
 
     @Test
-    void revokeProvider_doesNotDeleteAnInstallationStillUsedByAnotherConnection() {
+    void prepareProviderTeardown_keepsAnInstallationStillUsedByAnotherConnection() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242");
         IntegrationRef resolvedRef = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242", 9L);
         when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
@@ -101,13 +102,12 @@ class GithubConnectionStrategyTest extends BaseUnitTest {
         when(connection.getInstanceKey()).thenReturn("4242");
         when(connectionService.hasOtherInstalledConnection(resolvedRef)).thenReturn(true);
 
-        strategy().revokeProvider(ref);
-
+        assertThat(strategy().prepareProviderTeardown(ref)).isEmpty();
         verifyNoInteractions(appTokenService, contentEraser);
     }
 
     @Test
-    void revokeProvider_propagatesProviderFailureWithoutErasingLocalData() {
+    void prepareProviderTeardown_runPropagatesProviderFailure() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242", 9L);
         when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
         when(connection.getConfig()).thenReturn(new ConnectionConfig.GitHubAppConfig(4242L, null, null, Set.of()));
@@ -115,8 +115,8 @@ class GithubConnectionStrategyTest extends BaseUnitTest {
                 .when(appTokenService)
                 .deleteInstallation(4242L);
 
-        assertThatThrownBy(() -> strategy().revokeProvider(ref)).hasMessage("github unavailable");
+        Runnable teardown = strategy().prepareProviderTeardown(ref).orElseThrow();
 
-        verifyNoInteractions(contentEraser);
+        assertThatThrownBy(teardown::run).hasMessage("github unavailable");
     }
 }
