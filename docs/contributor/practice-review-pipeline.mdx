@@ -390,8 +390,8 @@ the named thread may be superseded at all.
 ### When composition does not run
 
 A composition failure does not invalidate admitted observations. An empty result is distinct from a turn
-that never ran. In-context feedback may fall back to the admitted observation's summary and grounded
-location, but invents no next step. The evidence rationale remains an audit explanation, not prose to
+that never ran. In-context feedback about a problem may fall back to the admitted observation's summary
+and grounded location, but invents no next step; a strength reaches the work only as a composed unit. The evidence rationale remains an audit explanation, not prose to
 publish to the developer. Longitudinal channels have no content fallback.
 Per-channel preparation marks distinguish a successful empty result from unfinished preparation.
 The sweeper retries preparation from existing review outputs, not model composition; its
@@ -400,9 +400,15 @@ The sweeper retries preparation from existing review outputs, not model composit
 ## Delivery and human approval
 
 Composition creates immutable feedback units before release authority is applied. A composer `WITHHOLD`
-means there was nothing useful to say and creates no feedback row; the negative observations it covers on
-the work are recorded `SUPPRESSED` with `COMPOSER_WITHHELD`, so a withheld practice is a recorded decision
-and never a bare headline rendered without a note. A policy refusal is instead persisted as
+means there was nothing useful to say and creates no feedback row; the observations it covers on the work
+are recorded `SUPPRESSED` with `COMPOSER_WITHHELD`, so a withheld practice is a recorded decision and never
+a bare headline rendered without a note. A composed unit is rendered at an observation it cites by id, and
+one citing anything the delivery does not admit is not used. Feedback is bound only to the observations its
+text was written from, including every observation a unit cites, and only those decide whether it waits for
+approval: a not-applicable result beside it does not. Each line note carries its own; a line note that never
+lands is recorded `FAILED` rather than bound to the delivered comment. The composer's opening sentence names
+no observation, so it appears only on a proposal a person approves, never on automatic delivery. A policy
+refusal is instead persisted as
 `SUPPRESSED` with a server-owned reason. These outcomes must not be conflated with a human rejection.
 
 Autonomy is only the authority step, and the glossary owns it in full — the resolution chain and the three

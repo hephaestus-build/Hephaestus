@@ -370,7 +370,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                         job,
                         feedback.getId(),
                         List.of(new PracticeDetectionResultParser.DiffNote(
-                                "src/Review.java", 12, null, "exact inline", "old-key")));
+                                "src/Review.java", 12, null, "exact inline", "old-key", null)));
     }
 
     @Test
@@ -554,8 +554,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 approved.getState(),
                 approved.getBody(),
                 approved.getPracticeSlugs(),
-                mapper.valueToTree(
-                        new PracticeDetectionResultParser.DeliveryContent(approved.getBody(), List.of(), List.of())),
+                mapper.valueToTree(new PracticeDetectionResultParser.DeliveryContent(
+                        approved.getBody(), List.of(), List.of(), null)),
                 approved.getDeliveredPlacements(),
                 approved.getWriteStarted(),
                 approved.getDeliveredExternalRef(),
@@ -604,8 +604,9 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 mapper.valueToTree(new PracticeDetectionResultParser.DeliveryContent(
                         "approved body",
                         List.of(new PracticeDetectionResultParser.DiffNote(
-                                "src/Review.java", 12, null, "exact inline", "old-key")),
-                        List.of())),
+                                "src/Review.java", 12, null, "exact inline", "old-key", null)),
+                        List.of(),
+                        null)),
                 mapper.valueToTree(List.of()),
                 writeStarted,
                 externalRef,
@@ -658,7 +659,9 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
     private PracticeFeedbackDispatchService.Result dispatchAutomaticReview(
             AgentJob job, String body, Set<String> practiceSlugs) {
         return service.dispatchAutomaticPackage(
-                job, new PracticeDetectionResultParser.DeliveryContent(body, List.of(), List.of()), practiceSlugs);
+                job,
+                new PracticeDetectionResultParser.DeliveryContent(body, List.of(), List.of(), null),
+                practiceSlugs);
     }
 
     private FeedbackDispatch dispatch(FeedbackDispatchState state, boolean writeStarted) {
@@ -687,7 +690,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 state,
                 body,
                 mapper.valueToTree(List.of("practice")),
-                mapper.valueToTree(new PracticeDetectionResultParser.DeliveryContent(body, List.of(), List.of())),
+                mapper.valueToTree(new PracticeDetectionResultParser.DeliveryContent(body, List.of(), List.of(), null)),
                 mapper.valueToTree(List.of()),
                 writeStarted,
                 state == FeedbackDispatchState.SENT ? "provider-42" : null,
