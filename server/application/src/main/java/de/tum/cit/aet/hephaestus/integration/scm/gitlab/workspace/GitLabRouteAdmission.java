@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncServi
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabSubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
@@ -258,6 +259,25 @@ public class GitLabRouteAdmission implements RouteAdmission {
         }
     }
 
+    /**
+     * This workspace's monitor of project {@code nativeId}: the one stored with that id, or else one stored without an
+     * id at {@code knownPath}, the path of the stored row for that very project, inside the connected group. A monitor
+     * without an id anywhere else is not provably this project's and is left unchanged.
+     */
+    private Optional<RepositoryToMonitor> ownMonitor(AdmittedRoute route, long nativeId, @Nullable String knownPath) {
+        List<RepositoryToMonitor> byId =
+                repositoryToMonitorRepository.findByWorkspaceIdAndNativeId(route.workspaceId(), nativeId);
+        if (!byId.isEmpty()) {
+            return Optional.of(byId.getFirst());
+        }
+        if (knownPath == null || !route.contains(knownPath)) {
+            return Optional.empty();
+        }
+        return repositoryToMonitorRepository
+                .findByWorkspaceIdAndNameWithOwner(route.workspaceId(), knownPath)
+                .filter(monitor -> monitor.getNativeId() == null);
+    }
+
     private Workspace workspace(AdmittedRoute route) {
         return connectionRepository
                 .findByIdAndWorkspaceId(route.connectionId(), route.workspaceId())
@@ -386,25 +406,24 @@ public class GitLabRouteAdmission implements RouteAdmission {
             if (!holdActive(route)) {
                 return false;
             }
+            // The shared row may already carry another workspace's view of the move, so this workspace's monitor is
+            // found by the project's id, not by the row's current path.
             String knownPath = repositoryRepository
                     .findByNativeIdAndProviderId(nativeId, route.providerId())
                     .map(Repository::getNameWithOwner)
                     .orElse(null);
+            Optional<RepositoryToMonitor> own = ownMonitor(route, nativeId, knownPath);
             Repository stored = inside && reported != null
                     ? projectSyncService.persistProject(reported).orElse(null)
                     : null;
-            if (knownPath != null && route.contains(knownPath)) {
-                repositoryToMonitorRepository
-                        .findByWorkspaceIdAndNameWithOwner(route.workspaceId(), knownPath)
-                        .ifPresent(monitor -> {
-                            if (stored != null) {
-                                syncTargetProvider.reconcileSyncTargetIdentity(
-                                        monitor.getId(), stored.getNativeId(), stored.getNameWithOwner());
-                            } else if (!inside) {
-                                syncTargetProvider.removeSyncTarget(monitor.getId());
-                            }
-                        });
-            }
+            own.ifPresent(monitor -> {
+                if (stored != null) {
+                    syncTargetProvider.reconcileSyncTargetIdentity(
+                            monitor.getId(), stored.getNativeId(), stored.getNameWithOwner());
+                } else if (!inside) {
+                    syncTargetProvider.removeSyncTarget(monitor.getId());
+                }
+            });
             if (stored == null) {
                 return false;
             }

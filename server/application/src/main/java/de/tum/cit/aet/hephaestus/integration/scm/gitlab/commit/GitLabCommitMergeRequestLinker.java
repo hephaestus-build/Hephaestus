@@ -33,7 +33,6 @@ import java.util.function.IntSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.graphql.client.ClientGraphQlResponse;
@@ -72,7 +71,7 @@ public class GitLabCommitMergeRequestLinker {
     private final GitLabGraphQlResponseHandler responseHandler;
     private final GitLabProperties gitLabProperties;
     private final ApplicationEventPublisher eventPublisher;
-    private final ObjectProvider<GitLabRouteAdmission> routeAdmission;
+    private final GitLabRouteAdmission routeAdmission;
     private final TransactionTemplate transactions;
 
     public GitLabCommitMergeRequestLinker(
@@ -83,7 +82,7 @@ public class GitLabCommitMergeRequestLinker {
             GitLabGraphQlResponseHandler responseHandler,
             GitLabProperties gitLabProperties,
             ApplicationEventPublisher eventPublisher,
-            ObjectProvider<GitLabRouteAdmission> routeAdmission,
+            GitLabRouteAdmission routeAdmission,
             TransactionTemplate transactions) {
         this.commitRepository = commitRepository;
         this.commitContributorRepository = commitContributorRepository;
@@ -105,8 +104,7 @@ public class GitLabCommitMergeRequestLinker {
         if (route.isEmpty()) {
             return write.getAsInt();
         }
-        GitLabRouteAdmission admission = routeAdmission.getObject();
-        Integer written = transactions.execute(status -> admission.holdActive(route.get()) ? write.getAsInt() : 0);
+        Integer written = transactions.execute(status -> routeAdmission.holdActive(route.get()) ? write.getAsInt() : 0);
         return written != null ? written : 0;
     }
 

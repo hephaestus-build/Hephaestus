@@ -332,7 +332,15 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
     @Override
     @Transactional
     public void removeSyncTarget(Long syncTargetId) {
-        repositoryToMonitorRepository.deleteById(syncTargetId);
+        // A workspace holds its monitors eagerly with orphan removal: one deleted while its loaded workspace still
+        // holds it would be persisted again at flush, so it is removed from that set as well.
+        repositoryToMonitorRepository.findById(syncTargetId).ifPresent(monitor -> {
+            Workspace workspace = monitor.getWorkspace();
+            if (workspace != null) {
+                workspace.getRepositoriesToMonitor().remove(monitor);
+            }
+            repositoryToMonitorRepository.delete(monitor);
+        });
     }
 
     @Override

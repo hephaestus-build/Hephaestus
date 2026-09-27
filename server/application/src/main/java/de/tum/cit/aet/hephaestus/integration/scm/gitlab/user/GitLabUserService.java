@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -153,7 +154,7 @@ public class GitLabUserService {
         // On a connection route the body is only as trustworthy as the group owner who could shape it; a user row is
         // shared by every workspace, so it is written only as GitLab reported it to that connection.
         if (GitLabRouteAdmission.current().isPresent()) {
-            return dto == null || dto.id() == null ? null : findOrCreateReportedUser(dto.id(), providerId);
+            return dto == null || dto.id() == null ? null : storeReportedUser(dto.id(), providerId);
         }
         if (dto == null || dto.id() == null || dto.username() == null) {
             return null;
@@ -184,10 +185,16 @@ public class GitLabUserService {
     /**
      * The user {@code nativeId} as GitLab reported it for the delivery being handled on a connection route, stored with
      * that profile; {@code null} when GitLab did not report the user. A stale row that still holds the reported login
-     * gives it up, as in the group member sync.
+     * gives it up, as in the group member sync. Joins the caller's write transaction, which holds the connection's
+     * lifecycle lock, so the login lock, the freed login and the stored profile commit with the handler's writes.
      */
+    @Transactional(propagation = Propagation.MANDATORY)
     @Nullable
     public User findOrCreateReportedUser(long nativeId, Long providerId) {
+        return storeReportedUser(nativeId, providerId);
+    }
+
+    private @Nullable User storeReportedUser(long nativeId, Long providerId) {
         Optional<GitLabUserLookup> reported = GitLabRouteAdmission.reportedUser(nativeId);
         String login = reported.map(GitLabUserLookup::username).orElse(null);
         if (reported.isEmpty() || login == null) {
@@ -197,7 +204,7 @@ public class GitLabUserService {
         if (userRepository.tryAcquireLoginLock(login, providerId)) {
             userRepository.freeLoginConflicts(login, nativeId, providerId);
         }
-        return findOrCreateUser(reported.get(), providerId);
+        return upsertLookup(reported.get(), providerId);
     }
 
     /**
@@ -211,6 +218,10 @@ public class GitLabUserService {
     @Transactional
     @Nullable
     public User findOrCreateUser(GitLabUserLookup lookup, Long providerId) {
+        return upsertLookup(lookup, providerId);
+    }
+
+    private @Nullable User upsertLookup(GitLabUserLookup lookup, Long providerId) {
         if (lookup == null || lookup.globalId() == null || lookup.username() == null) {
             return null;
         }

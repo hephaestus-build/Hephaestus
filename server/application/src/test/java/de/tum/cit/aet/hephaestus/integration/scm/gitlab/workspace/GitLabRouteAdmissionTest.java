@@ -292,6 +292,27 @@ class GitLabRouteAdmissionTest {
         }
 
         @Test
+        void shouldLeaveAMonitorWithoutIdAloneWhenOnlyTheEventNamesItsPath() {
+            // This workspace's monitor predates native ids; the event claims another project used to live there.
+            when(monitors.findByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, GROUP + "/a"))
+                    .thenReturn(Optional.of(monitor(57L)));
+            when(repositoryRepository.findByNativeIdAndProviderId(PROJECT_B, PROVIDER_ID))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.of(repository(PROJECT_B, "other-group/b")));
+            when(projectSync.fetchProjectById(WORKSPACE_ID, PROJECT_B))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.of(reported(PROJECT_B, "other-group/b")));
+            String forged = """
+                    {"event_name":"project_transfer","project_id":%d,"path_with_namespace":"other-group/b",\
+                    "old_path_with_namespace":"%s/a"}""".formatted(PROJECT_B, GROUP);
+
+            assertProjectNotAdmitted(forged);
+            assertProjectNotAdmitted(forged);
+            verify(syncTargets, never()).removeSyncTarget(anyLong());
+            verify(syncTargets, never()).reconcileSyncTargetIdentity(anyLong(), any(), any());
+        }
+
+        @Test
         void shouldWriteNothingWhenTheConnectionLeavesBetweenGitLabsAnswerAndTheWrite() {
             GitLabProjectResponse current = reported(PROJECT_A, GROUP + "/a");
             when(projectSync.fetchProjectById(WORKSPACE_ID, PROJECT_A)).thenReturn(Optional.of(current));

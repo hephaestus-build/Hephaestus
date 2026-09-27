@@ -131,6 +131,8 @@ class GitLabRouteCredentialTest {
         assertRejected(credential, sign(JWSAlgorithm.HS256, keyId, h -> h, claims(b -> b.claim("gid", -42L))));
         assertRejected(credential, sign(JWSAlgorithm.HS256, keyId, h -> h, claims(b -> b.subject("07"))));
         assertRejected(credential, sign(JWSAlgorithm.HS256, keyId, h -> h, claims(b -> b.subject("7.0"))));
+        assertRejected(
+                credential, sign(JWSAlgorithm.HS256, keyId, h -> h, claims(b -> b.subject("9223372036854775808"))));
 
         // The origin exactly as normalized.
         assertRejected(

@@ -50,6 +50,9 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
      */
     List<RepositoryToMonitor> findByNativeId(Long nativeId);
 
+    /** One workspace's monitors of the repository with the given provider-stable id. */
+    List<RepositoryToMonitor> findByWorkspaceIdAndNativeId(Long workspaceId, Long nativeId);
+
     /** How many workspaces monitor a repository — the orphan check before deleting a shared repository row. */
     long countByNameWithOwner(String nameWithOwner);
 

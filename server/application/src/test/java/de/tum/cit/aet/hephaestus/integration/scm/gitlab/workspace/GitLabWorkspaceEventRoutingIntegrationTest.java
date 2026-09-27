@@ -71,6 +71,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabSubjectKey
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActivationService;
@@ -581,6 +583,99 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         assertThat(unchanged.getNativeId()).isEqualTo(555L);
         assertThat(repositoryRepository.findByNameWithOwner(forgedPath)).isEmpty();
         assertThat(issueRepository.findAll()).noneMatch(issue -> NATIVE_ISSUE_ID.equals(issue.getNativeId()));
+    }
+
+    @Test
+    void shouldStopMonitoringAProjectMovedOutAfterItsNewGroupRecordedTheMove() throws Exception {
+        assertMoveOutStopsOnlyThisWorkspacesMonitor(true);
+    }
+
+    @Test
+    void shouldStopMonitoringAProjectMovedOutBeforeItsNewGroupRecordsTheMove() throws Exception {
+        assertMoveOutStopsOnlyThisWorkspacesMonitor(false);
+    }
+
+    /**
+     * The project leaves the connected group for another workspace's group. That workspace handling the move first is
+     * simulated by storing what its admission stores: the shared row at the new path; this workspace's monitor then has
+     * only its native id to be found by. Handled first here, the monitor has no native id, as one created before ids
+     * were recorded, and is found through the stored row of the same project.
+     */
+    private void assertMoveOutStopsOnlyThisWorkspacesMonitor(boolean destinationFirst) throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        Repository project = discoveredRepository();
+        long projectId = project.getNativeId();
+        String moved = "othergroup/demo-repository";
+        Workspace destination = WorkspaceTestFixtures.persistGitLabWorkspace(
+                workspaceRepository,
+                connectionRepository,
+                WorkspaceTestFixtures.gitLabPatWorkspace("othergroup"),
+                SERVER_URL);
+        RepositoryToMonitor destinationMonitor = WorkspaceTestFixtures.repositoryMonitor(destination, moved);
+        destinationMonitor.setNativeId(projectId);
+        repositoryToMonitorRepository.save(destinationMonitor);
+        RepositoryToMonitor own = repositoryToMonitorRepository
+                .findByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY)
+                .orElseThrow();
+        assertThat(own.getNativeId()).isEqualTo(projectId);
+        if (destinationFirst) {
+            project.setNameWithOwner(moved);
+            repositoryRepository.save(project);
+        } else {
+            own.setNativeId(null);
+            repositoryToMonitorRepository.save(own);
+        }
+        doReturn(Optional.of(reported(projectId, moved)))
+                .when(projectSyncService)
+                .fetchProjectById(connected.getId(), projectId);
+        ObjectNode transfer = (ObjectNode) projectCreate(moved, projectId);
+        transfer.put("event_name", "project_transfer");
+
+        deliver(connected, transfer, "moved-out");
+
+        awaitAcknowledged();
+        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY))
+                .isFalse();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceIdAndNativeId(connected.getId(), projectId))
+                .isEmpty();
+        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(destination.getId(), moved))
+                .isTrue();
+        assertThat(repositoryRepository.findById(project.getId()).orElseThrow().getNameWithOwner())
+                .isEqualTo(destinationFirst ? moved : REPOSITORY);
+    }
+
+    @Test
+    void shouldFollowARenameAnotherWorkspaceRecordedFirstWithASelectedMonitor() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        long workspaceId = connected.getId();
+        Workspace selecting = workspaceRepository.findById(workspaceId).orElseThrow();
+        selecting.setRepositorySelection(RepositorySelection.SELECTED);
+        workspaceRepository.save(selecting);
+        Repository project = discoveredRepository();
+        long projectId = project.getNativeId();
+        String renamed = GROUP + "/renamed-repository";
+        project.setNameWithOwner(renamed);
+        repositoryRepository.save(project);
+        doReturn(Optional.of(reported(projectId, renamed)))
+                .when(projectSyncService)
+                .fetchProjectById(workspaceId, projectId);
+        ObjectNode rename = (ObjectNode) projectCreate(renamed, projectId);
+        rename.put("event_name", "project_rename");
+
+        deliver(connected, rename, "renamed-elsewhere-first");
+
+        awaitAcknowledged();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceIdAndNativeId(workspaceId, projectId))
+                .singleElement()
+                .satisfies(monitor -> assertThat(monitor.getNameWithOwner()).isEqualTo(renamed));
+        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(workspaceId, REPOSITORY))
+                .isFalse();
+        assertThat(repositoryRepository.findById(project.getId()).orElseThrow().getNameWithOwner())
+                .isEqualTo(renamed);
     }
 
     @Test
