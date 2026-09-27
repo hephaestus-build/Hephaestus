@@ -271,6 +271,11 @@ export const Withdrawn: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("Withdrawn from the practice page");
 		await expect(canvas.getByRole("button", { name: "Restore feedback" })).toBeEnabled();
+		// The practice-page text exists and is private; it is not reported as never composed.
+		canvas.getByText(
+			/written for the developer's own practice pages and is withheld from operators/u,
+		);
+		await expect(canvas.queryByText(/No feedback text was composed/u)).toBeNull();
 		const history = within(canvas.getByRole("list", { name: "Withdrawals" }));
 		await expect(history.getAllByRole("listitem")).toHaveLength(3);
 		// The erased restorer is named as such, not left blank.

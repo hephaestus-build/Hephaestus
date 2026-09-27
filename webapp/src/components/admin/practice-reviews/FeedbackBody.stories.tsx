@@ -88,12 +88,19 @@ export const FailedToDeliver: Story = {
 	args: { feedback: { body, channel: "IN_CONTEXT", deliveryState: "FAILED" } },
 };
 
-/** `PREPARED` only ever exists on the conversation lane, so the badge can name the lane it waits on. */
+/**
+ * `PREPARED` only ever exists on the conversation lane, so the badge can name the lane it waits on. The
+ * lane's notes are private: absent text is explained as withheld, never as missing, and a body a caller
+ * passes anyway is not shown.
+ */
 export const PreparedForConversation: Story = {
 	args: { feedback: { body, channel: "IN_CHAT", deliveryState: "PREPARED" } },
 	play: async ({ canvas }) => {
 		// The lane, not the exact wording: the `PREPARED` label lives in `delivery-outcome-defs`.
 		canvas.getByText(/for conversation/u);
+		canvas.getByText(/withheld from operators/u);
+		await expect(canvas.queryByText("What worked")).toBeNull();
+		await expect(canvas.queryByText(/No feedback text was composed/u)).toBeNull();
 	},
 };
 

@@ -4,6 +4,7 @@ import {
 	type DeliveryFacts,
 	deliveryOutcome,
 } from "@/components/practice-vocabulary/delivery-outcome-defs";
+import { OPERATOR_WITHHELD_TEXT } from "@/components/practice-vocabulary/delivery-place-defs";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";
@@ -18,6 +19,19 @@ export interface FeedbackBodyProps {
 export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 	const { body } = feedback;
 	const unsent = feedback.deliveryState !== "DELIVERED";
+	const withheld = OPERATOR_WITHHELD_TEXT[feedback.channel];
+
+	// A private place's text is never shown here, even when a caller passes one.
+	if (withheld) {
+		return (
+			<Card flush className={className}>
+				<CardContent className="space-y-2 py-4">
+					{unsent && <StatusBadge def={deliveryOutcome(feedback)} />}
+					<p className="text-muted-foreground">{withheld.detail}</p>
+				</CardContent>
+			</Card>
+		);
+	}
 
 	if (!hasText(body)) {
 		return (

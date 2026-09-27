@@ -42,6 +42,11 @@ export const Default: Story = {
 		canvas.getByText("Found while reviewing past work, which is measured but never sent.");
 		canvas.getByText("Nearly the same as other feedback from the same review.");
 		await expect(canvas.queryAllByText(/Feedback for/u)).toHaveLength(0);
+		// Conversation notes are private: each row says so instead of previewing text the fixture carries.
+		await expect(
+			canvas.getAllByRole("link", { name: "Notes for the conversation are private" }),
+		).toHaveLength(2);
+		await expect(canvas.queryByText(/Before this thread scrolls away/u)).toBeNull();
 	},
 };
 

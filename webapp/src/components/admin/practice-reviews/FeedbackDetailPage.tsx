@@ -157,7 +157,7 @@ export function FeedbackDetailPage({
 											trigger: "Withdraw feedback",
 											title: "Withdraw this feedback",
 											description:
-												"Its words leave the developer's practice page, Heph and later reviews, and the observations behind it keep counting. A developer who already saw it sees that it was withdrawn, not your reason.",
+												"It comes off the developer's practice page and out of the feedback given to later reviews and Heph. The observations behind it are unchanged. A developer who already saw it sees that it was withdrawn, not your reason.",
 											placeholder: "What the feedback got wrong…",
 										}
 							}
@@ -378,10 +378,10 @@ function WithdrawalAlert({ withdrawal }: { withdrawal: FeedbackWithdrawal }) {
 			<AlertDescription>
 				<p>
 					{withdrawal.withdrawnBy ?? "A workspace admin"} withdrew this feedback{" "}
-					<RelativeTime value={withdrawal.withdrawnAt} />: “{withdrawal.reason}”. What it said is
-					off the developer’s practice page, and Heph and later reviews no longer read it. If the
-					developer had already seen it, their page says it was withdrawn. The observations behind
-					it still count.
+					<RelativeTime value={withdrawal.withdrawnAt} />: “{withdrawal.reason}”. It is off the
+					developer’s practice page and out of the feedback given to later reviews and Heph. If the
+					developer had already seen it, their page shows for a while that it was withdrawn. The
+					observations behind it are unchanged.
 				</p>
 			</AlertDescription>
 		</Alert>
