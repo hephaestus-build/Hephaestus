@@ -21,9 +21,8 @@ name: Journey — sign in, consent, restore, sign out
 - tapOn:
     id: instance-address
 - inputText: ${SERVER_URL}
-- hideKeyboard
-- tapOn:
-    id: instance-continue
+# Submitted with the keyboard's Go key, as the dev username is below.
+- pressKey: Enter
 - extendedWaitUntil:
     visible:
       id: dev-username
@@ -31,8 +30,9 @@ name: Journey — sign in, consent, restore, sign out
 - tapOn:
     id: dev-username
 - inputText: ${USERNAME}
-- tapOn:
-    id: sign-in-dev
+# Submitted with the keyboard's return key, as a person does: on a small screen the open keyboard
+# covers the button below the field.
+- pressKey: Enter
 # iOS asks before an app opens a sign-in sheet.
 - runFlow:
     when:
@@ -129,6 +129,10 @@ name: Journey — sign in, consent, restore, sign out
     timeout: 30000
 - assertNotVisible:
     id: instance-default
+# On a small screen, Sign out sits below the fold under Account.
+- scrollUntilVisible:
+    element:
+      text: Sign out
 - tapOn: Sign out
 - extendedWaitUntil:
     visible:

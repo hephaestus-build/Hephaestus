@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Redirect } from "expo-router";
-import { useState } from "react";
-import { StyleSheet, TextInput, View } from "react-native";
+import { useRef, useState } from "react";
+import { Keyboard, StyleSheet, TextInput, View } from "react-native";
 
 import { listIdentityProvidersQueryKey } from "@/api/@tanstack/react-query.gen";
 import { listIdentityProviders } from "@/api/sdk.gen";
@@ -25,6 +25,9 @@ export default function SignIn() {
 	const [pending, setPending] = useState<string | null>(null);
 	const [problem, setProblem] = useState<string | null>(null);
 	const [devUsername, setDevUsername] = useState("");
+	// One sign-in at a time: a second press, or the return key while the browser is opening, starts
+	// nothing. State alone cannot say so until the next render.
+	const inFlight = useRef(false);
 
 	const providers = useQuery({
 		queryKey: listIdentityProvidersQueryKey({ baseUrl: instance?.apiBaseUrl }),
@@ -46,9 +49,17 @@ export default function SignIn() {
 	}
 
 	const start = async (key: string, method: { provider: string } | { devUsername: string }) => {
+		if (inFlight.current) {
+			return;
+		}
+		inFlight.current = true;
+		// The browser sheet opens over this screen; the keyboard goes first rather than waiting behind it.
+		Keyboard.dismiss();
 		setPending(key);
 		setProblem(null);
+		// Resolves with an outcome whatever happens, so the guard is always released.
 		const result = await signIn(instance, method);
+		inFlight.current = false;
 		setPending(null);
 		if (result.kind === "failed") {
 			setProblem(result.message);
@@ -62,6 +73,14 @@ export default function SignIn() {
 	const federated = options.filter((provider) => provider.providerType !== "DEV");
 	const devOffered =
 		IS_DEVELOPMENT_BUILD && options.some((provider) => provider.providerType === "DEV");
+	// The return key and the button submit the same way. On a small screen the keyboard can cover the
+	// button, so the return key is the one a person reaches.
+	const devName = devUsername.trim();
+	const submitDev = () => {
+		if (devName !== "") {
+			void start("dev", { devUsername: devName });
+		}
+	};
 
 	return (
 		<Screen>
@@ -116,6 +135,10 @@ export default function SignIn() {
 									testID="dev-username"
 									value={devUsername}
 									onChangeText={setDevUsername}
+									onSubmitEditing={submitDev}
+									returnKeyType="go"
+									enablesReturnKeyAutomatically
+									editable={pending === null}
 									placeholder="username"
 									placeholderTextColor={palette.tertiaryLabel}
 									autoCapitalize="none"
@@ -127,11 +150,9 @@ export default function SignIn() {
 									testID="sign-in-dev"
 									title="Sign in for development"
 									variant="secondary"
-									onPress={() => {
-										void start("dev", { devUsername: devUsername.trim() });
-									}}
+									onPress={submitDev}
 									pending={pending === "dev"}
-									disabled={devUsername.trim() === "" || (pending !== null && pending !== "dev")}
+									disabled={devName === "" || (pending !== null && pending !== "dev")}
 								/>
 							</View>
 						) : null}
