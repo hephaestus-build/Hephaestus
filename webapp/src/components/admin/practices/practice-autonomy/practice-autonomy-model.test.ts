@@ -131,8 +131,23 @@ describe("reviewableByHephaestus", () => {
 		const [reviewable] = fixture.practices;
 		assert(manual);
 		assert(reviewable);
-		expect(reviewableByHephaestus(manual.automatedReviewPolicy)).toBe(false);
-		expect(reviewableByHephaestus(reviewable.automatedReviewPolicy)).toBe(true);
+		expect(reviewableByHephaestus(manual)).toBe(false);
+		expect(reviewableByHephaestus(reviewable)).toBe(true);
+	});
+
+	it("refuses a copy its catalogue entry withdrew, whatever policy the copy still holds", () => {
+		const [adopted] = fixture.practices;
+		assert(adopted);
+
+		expect(
+			reviewableByHephaestus({
+				...adopted,
+				automatedReviewWithdrawal: {
+					code: "AT_CLOSE_STATE_NOT_CAPTURED",
+					description: "Nothing records the issue at its close.",
+				},
+			}),
+		).toBe(false);
 	});
 });
 

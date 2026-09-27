@@ -69,7 +69,12 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         gate = new PracticeReviewDetectionGate(
-                practiceDetectionReadiness, practiceRepository, workspaceResolver, signalOptions, coverageService);
+                practiceDetectionReadiness,
+                practiceRepository,
+                workspaceResolver,
+                signalOptions,
+                coverageService,
+                new AutomatedReviewFence(java.util.Map.of()));
         when(coverageService.admits(
                         any(Workspace.class),
                         nullable(String.class),
@@ -826,6 +831,46 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
 
             assertThat(((GateDecision.Skip) decision).resolvedSignalReason())
                     .isEqualTo(SignalStateReason.OUT_OF_REVIEW_SCOPE);
+        }
+    }
+
+    @Nested
+    class WithdrawnFromAutomatedReview {
+
+        @Test
+        void shouldOccasionNoReviewFromACopyWhoseCatalogueEntryWithdrewAutomatedReview() {
+            var reason = new de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation(
+                    "AT_CLOSE_STATE_NOT_CAPTURED", "Nothing records the close.");
+            gate = new PracticeReviewDetectionGate(
+                    practiceDetectionReadiness,
+                    practiceRepository,
+                    workspaceResolver,
+                    signalOptions,
+                    coverageService,
+                    new AutomatedReviewFence(java.util.Map.of(
+                            "withdrawn",
+                            new de.tum.cit.aet.hephaestus.practices.PracticeDefinition(
+                                    "Withdrawn",
+                                    PracticeTestEvidence.bindings(SIGNAL),
+                                    "Criteria",
+                                    null,
+                                    PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST)
+                                            .withdrawnFor(reason),
+                                    null,
+                                    null,
+                                    null))));
+            PullRequest pr = createPullRequest();
+            Practice adopted = createPractice(SIGNAL);
+            adopted.setSlug("withdrawn");
+            adopted.setSourceCuratedSlug("withdrawn");
+            Practice authored = createPractice(SIGNAL);
+            authored.setSlug("authored-here");
+            setupThroughPracticeMatching(pr, adopted, authored);
+
+            GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
+
+            assertThat(decision).isInstanceOf(GateDecision.Detect.class);
+            assertThat(((GateDecision.Detect) decision).matchedPractices()).containsExactly(authored);
         }
     }
 }

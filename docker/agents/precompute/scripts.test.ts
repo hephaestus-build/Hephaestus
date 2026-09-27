@@ -281,28 +281,3 @@ void it("issue-reference syntax in templates remains a candidate rather than an 
 		/all establish the link|motivating-issue reference IS present/u,
 	);
 });
-
-void it("current issue rollups do not establish state at closure or a longitudinal habit", async () => {
-	const script = await loadScript("issue-closed-with-unmet-outcome");
-	for (const checked of [false, true]) {
-		const result = await script("unused", new Map(), {
-			source_branch: "unused",
-			target_branch: "main",
-			commit_sha: "a".repeat(40),
-			pr_number: 1,
-			pr_url: "https://example.invalid/issue/1",
-			repository_full_name: "owner/project",
-			state: "CLOSED",
-			body: checked ? "- [x] Expected result" : "- [ ] Expected result",
-		});
-		const directions = result.directions.join("\n");
-		assert.match(directions, /Current captured issue facts/u);
-		assert.match(directions, /dated.*closure|closure.*dated/u);
-		assert.doesNotMatch(
-			directions,
-			/completed at close|outcome appears confirmed|frame as a lifecycle habit/u,
-		);
-		assert.equal(result.metrics.currentSubIssuesOpen, 0);
-		assert.equal("subIssuesOpenAtClose" in result.metrics, false);
-	}
-});

@@ -146,6 +146,14 @@ occasion, so the retrospective at-close review runs for each round of work rathe
 Neither provider guarantees a close timestamp; a mirror row without one falls back to a single close
 occasion, since there is then nothing to tell two closes apart.
 
+The close is the occasion, not the evidence. The issue sources read the mirror when the review runs, after
+the close, so a body, sub-issue rollup or comment text edited since then is what the review sees, and a
+comment's `created_at` does not date its present text. Nothing captured shows the issue as it stood at the
+close, and [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion)
+rules out keeping a copy of it in PostgreSQL or job metadata. That is why the bundled practice asking whether
+an issue's outcome was confirmed at its close ships needing human review: a close-time practice may judge
+the issue as it now is, but never its state at the close.
+
 Two consequences are worth stating because neither is obvious:
 
 - **A return to a previously-seen snapshot occasions nothing.** Adding a label occasions a review, removing

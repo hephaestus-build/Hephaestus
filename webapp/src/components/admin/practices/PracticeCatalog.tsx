@@ -582,10 +582,9 @@ function PracticeRowDetails({
 	supportedModes: readonly Practice["automatedReviewPolicy"]["automatedReview"]["mode"][];
 	inheritedFrom: string | null;
 }) {
-	const unavailableLabel = automatedReviewUnavailableLabel(
-		practice.automatedReviewPolicy,
-		supportedModes,
-	);
+	const unavailableLabel = practice.automatedReviewWithdrawal
+		? "Human review needed"
+		: automatedReviewUnavailableLabel(practice.automatedReviewPolicy, supportedModes);
 	const autonomySource = autonomySourceOf(practice.autonomy, inheritedFrom);
 	return (
 		<ItemContent className="min-w-0">

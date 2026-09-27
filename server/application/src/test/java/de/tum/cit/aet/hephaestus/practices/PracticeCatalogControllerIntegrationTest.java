@@ -108,6 +108,65 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         return practiceGroupRepository.save(group);
     }
 
+    private static final String WITHDRAWN = "issue-closed-with-unmet-outcome";
+
+    /** A copy adopted before the catalogue withdrew it, still holding the automated policy it came with. */
+    private Practice adoptedBeforeTheWithdrawal() {
+        Practice practice = persistPractice(WITHDRAWN, "Confirm the outcome before closing the issue", true);
+        practice.setSourceCuratedSlug(WITHDRAWN);
+        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.ISSUE_CLOSED));
+        practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.ISSUE));
+        return practiceRepository.save(practice);
+    }
+
+    private PracticeDTO practiceAt(String slug) {
+        return java.util.Objects.requireNonNull(webTestClient
+                .get()
+                .uri(BASE_URI + "/{slug}", workspace.getWorkspaceSlug(), slug)
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(PracticeDTO.class)
+                .returnResult()
+                .getResponseBody());
+    }
+
+    /** What the practice editor sends: every authored field as it was shown, with the one change made. */
+    private static UpdatePracticeRequestDTO editorSave(PracticeDTO shown, String criteria) {
+        return new UpdatePracticeRequestDTO(
+                shown.name(),
+                shown.bindings(),
+                criteria,
+                shown.precomputeScript(),
+                shown.automatedReviewPolicy(),
+                shown.whyItMatters(),
+                shown.whatGoodLooksLike(),
+                null,
+                null,
+                null);
+    }
+
+    private WebTestClient.ResponseSpec patch(String slug, UpdatePracticeRequestDTO request) {
+        return webTestClient
+                .patch()
+                .uri(BASE_URI + "/{slug}", workspace.getWorkspaceSlug(), slug)
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange();
+    }
+
+    private WebTestClient.ResponseSpec setAutonomy(String slug, PracticeAutonomy autonomy) {
+        return webTestClient
+                .patch()
+                .uri(BASE_URI + "/{slug}/autonomy", workspace.getWorkspaceSlug(), slug)
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UpdatePracticeAutonomyRequestDTO(autonomy))
+                .exchange();
+    }
+
     private Practice persistPractice(String slug, @Nullable PracticeGroup group, int displayOrder) {
         Practice practice = persistPractice(slug, slug, true);
         practice.setGroup(group);
@@ -1711,6 +1770,71 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .expectStatus()
                     .isBadRequest()
                     .expectBody(Void.class);
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldKeepAnAdoptedCopyWithdrawnThroughTheEditorAndItsAutonomyControls() {
+            ensureAdminMembership(workspace);
+            Practice adopted = adoptedBeforeTheWithdrawal();
+
+            PracticeDTO shown = practiceAt(WITHDRAWN);
+            assertThat(shown.artifactKind()).isEqualTo(ArtifactKinds.ISSUE);
+            assertThat(shown.automatedReviewPolicy()).isEqualTo(adopted.getAutomatedReviewPolicy());
+            assertThat(shown.automatedReviewWithdrawal())
+                    .extracting(reason -> reason == null ? null : reason.code())
+                    .isEqualTo("AT_CLOSE_STATE_NOT_CAPTURED");
+
+            PracticeDTO saved = patch(WITHDRAWN, editorSave(shown, "Edited after the withdrawal"))
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(PracticeDTO.class)
+                    .returnResult()
+                    .getResponseBody();
+            assertThat(saved).isNotNull();
+            assertThat(saved.criteria()).isEqualTo("Edited after the withdrawal");
+            assertThat(saved.automatedReviewPolicy()).isEqualTo(adopted.getAutomatedReviewPolicy());
+            assertThat(saved.autonomy().effective()).isEqualTo(PracticeAutonomy.OFF);
+
+            setAutonomy(WITHDRAWN, PracticeAutonomy.HUMAN_APPROVAL)
+                    .expectStatus()
+                    .isBadRequest()
+                    .expectBody(Void.class);
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldLeaveAPracticeAuthoredUnderTheSameSlugToItsOwnPolicy() {
+            ensureAdminMembership(workspace);
+            persistPractice(WITHDRAWN, "Our own close check", false);
+
+            assertThat(practiceAt(WITHDRAWN).automatedReviewWithdrawal()).isNull();
+            setAutonomy(WITHDRAWN, PracticeAutonomy.HUMAN_APPROVAL)
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldSaveAnEditorChangeToAPracticeThatNeedsHumanReview() {
+            ensureAdminMembership(workspace);
+            Practice practice = persistPractice("mentor-judges-this", "A mentor judges this", false);
+            practice.setAutomatedReviewPolicy(practice.getAutomatedReviewPolicy()
+                    .withdrawnFor(new PracticeEvidenceLimitation("A_MENTOR_DECIDES", "A mentor decides this.")));
+            practiceRepository.save(practice);
+
+            PracticeDTO saved = patch(
+                            "mentor-judges-this",
+                            editorSave(practiceAt("mentor-judges-this"), "Criteria edited in the form"))
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(PracticeDTO.class)
+                    .returnResult()
+                    .getResponseBody();
+            assertThat(saved).isNotNull();
+            assertThat(saved.criteria()).isEqualTo("Criteria edited in the form");
+            assertThat(saved.bindings()).isEqualTo(practice.getBindings());
         }
 
         @Test

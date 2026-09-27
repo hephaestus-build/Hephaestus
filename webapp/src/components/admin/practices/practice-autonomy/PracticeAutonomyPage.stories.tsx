@@ -499,3 +499,25 @@ export const NotReviewable: Story = {
 		);
 	},
 };
+
+/** A copy whose catalog entry withdrew automated review keeps its own policy but still cannot be switched on. */
+export const WithdrawnByTheCatalog: Story = {
+	args: {
+		...from(nothingSetByHand),
+		practices: nothingSetByHand.practices.map((practice) => ({
+			...practice,
+			automatedReviewWithdrawal: {
+				code: "AT_CLOSE_STATE_NOT_CAPTURED",
+				description: "Nothing Hephaestus collects shows the issue as it was at its close.",
+			},
+		})),
+	},
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("button", { name: /Testing/u }));
+		await expect(canvas.getByText("Human review needed")).toBeVisible();
+		await expect(canvas.getByRole("checkbox", { name: /^Select /u })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
+	},
+};

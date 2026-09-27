@@ -87,6 +87,30 @@ public record PracticeDefinition(
                 practice.getDeliveryBehavior());
     }
 
+    /**
+     * This definition as the shipped entry that withdrew it from automated review: a definition that asks for a
+     * review takes the shipped policy and reason and loses what only a review reads. One that already declares
+     * no automated review is never reviewed and stays as written, rather than gaining evidence it never read.
+     */
+    public PracticeDefinition withdrawnAs(PracticeDefinition shipped) {
+        if (automatedReviewPolicy.automatedReview().mode() == PracticeAutomatedReviewMode.NONE) {
+            return this;
+        }
+        return new PracticeDefinition(
+                name,
+                bindings.stream()
+                        .map(binding -> new PracticeBinding(
+                                binding.signals(), binding.needs(), binding.onDrafts(), binding.subject(), null))
+                        .toList(),
+                criteria,
+                null,
+                shipped.automatedReviewPolicy(),
+                whyItMatters,
+                whatGoodLooksLike,
+                groupSlug,
+                deliveryBehavior);
+    }
+
     public ArtifactKind artifactKind() {
         return PracticeBinding.artifactKindOf(bindings);
     }

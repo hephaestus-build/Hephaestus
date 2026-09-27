@@ -5,10 +5,20 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
+import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReview;
+import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewMode;
+import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
+import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceSufficiency;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
+import de.tum.cit.aet.hephaestus.practices.curated.CuratedCatalogService;
+import de.tum.cit.aet.hephaestus.practices.curated.CuratedPracticeOverride;
+import de.tum.cit.aet.hephaestus.practices.curated.CuratedPracticeOverrideRepository;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
@@ -25,6 +35,8 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -53,6 +65,15 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private CuratedCatalogService curatedCatalog;
+
+    @Autowired
+    private CuratedPracticeOverrideRepository practiceOverrides;
+
+    @Autowired
+    private PracticeEvidenceDefaults evidenceDefaults;
 
     private Workspace workspace;
 
@@ -221,6 +242,191 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                         String.class,
                         workspace.getId()))
                 .contains("HUMAN_APPROVAL");
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldAdoptTheCloseOutcomePracticeOffWhenNoAtCloseEvidenceIsCaptured() {
+        ensureAdminMembership(workspace);
+        String slug = "issue-closed-with-unmet-outcome";
+        String etag = required(webTestClient
+                .get()
+                .uri(BASE + "/" + slug, workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.initialAutonomy")
+                .isEqualTo("OFF")
+                .jsonPath("$.definition.automatedReviewPolicy.automatedReview.evidenceSufficiency")
+                .isEqualTo("DECLARED_EVIDENCE_INSUFFICIENT")
+                .jsonPath("$.definition.automatedReviewPolicy.insufficiencyReason.code")
+                .isEqualTo("AT_CLOSE_STATE_NOT_CAPTURED")
+                .returnResult()
+                .getResponseHeaders()
+                .getETag());
+
+        webTestClient
+                .post()
+                .uri(BASE + "/" + slug, workspace.getWorkspaceSlug())
+                .headers(headers -> {
+                    TestAuthUtils.withCurrentUser().accept(headers);
+                    headers.set(HttpHeaders.IF_MATCH, etag);
+                })
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody()
+                .jsonPath("$.autonomy.effective")
+                .isEqualTo("OFF");
+
+        var practice = practiceRepository
+                .findByWorkspaceIdAndSlug(workspace.getId(), slug)
+                .orElseThrow();
+        assertThat(practice.getAutonomy()).isEqualTo(PracticeAutonomy.OFF);
+        assertThat(practice.getPrecomputeScript()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @WithAdminUser
+    void shouldProjectTheWithdrawalOverAnInstanceCustomizationThatWasAlreadyNotAutomated(boolean guidanceOnly) {
+        ensureAdminMembership(workspace);
+        String slug = "issue-closed-with-unmet-outcome";
+        PracticeDefinition shipped =
+                java.util.Objects.requireNonNull(curatedCatalog.practice(slug).shipped());
+        PracticeAutomatedReviewPolicy policy = guidanceOnly
+                ? new PracticeAutomatedReviewPolicy(
+                        shipped.automatedReviewPolicy().sourceContractVersion(),
+                        new PracticeAutomatedReview(PracticeAutomatedReviewMode.NONE, PracticeEvidenceSufficiency.NONE),
+                        shipped.automatedReviewPolicy().whenEvidenceIsInsufficient(),
+                        List.of(),
+                        null)
+                : evidenceDefaults
+                        .policyFor(shipped.artifactKind())
+                        .withdrawnFor(new PracticeEvidenceLimitation("A_MENTOR_DECIDES", "A mentor decides this."));
+        var customized = new PracticeDefinition(
+                shipped.name(),
+                guidanceOnly
+                        ? shipped.bindings().stream()
+                                .map(binding -> new PracticeBinding(
+                                        binding.signals(), List.of(), binding.onDrafts(), binding.subject(), null))
+                                .toList()
+                        : shipped.bindings(),
+                "Judge the closure with a mentor.",
+                null,
+                policy,
+                shipped.whyItMatters(),
+                shipped.whatGoodLooksLike(),
+                shipped.groupSlug(),
+                shipped.deliveryBehavior());
+        var override = new CuratedPracticeOverride(slug, java.time.Instant.now());
+        override.write(customized, null, java.time.Instant.now());
+        practiceOverrides.save(override);
+
+        // A guidance-only customization is never reviewed and stays as written; any other takes the shipped reason.
+        var shown = webTestClient
+                .get()
+                .uri("/admin/practice-catalog/practices/" + slug)
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.definition.criteria")
+                .isEqualTo("Judge the closure with a mentor.")
+                .jsonPath("$.definition.automatedReviewPolicy.automatedReview.mode")
+                .isEqualTo(guidanceOnly ? "NONE" : "LANGUAGE_MODEL")
+                .jsonPath("$.definition.bindings[0].needs.length()")
+                .isEqualTo(customized.bindings().getFirst().needs().size())
+                .jsonPath("$.definition.automatedReviewPolicy.insufficiencyReason.code");
+        if (guidanceOnly) {
+            shown.doesNotExist();
+        } else {
+            shown.isEqualTo("AT_CLOSE_STATE_NOT_CAPTURED");
+        }
+        assertThat(practiceOverrides.findBySlug(slug).orElseThrow().definition())
+                .isEqualTo(customized);
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldOfferTheCloseOutcomePracticeOffWhenTheInstanceKeptAnAutomatedCustomization() {
+        ensureAdminMembership(workspace);
+        String slug = "issue-closed-with-unmet-outcome";
+        PracticeDefinition shipped =
+                java.util.Objects.requireNonNull(curatedCatalog.practice(slug).shipped());
+        // Customized on the instance before the upgrade, still asking the model about the close.
+        PracticeDefinition automated = new PracticeDefinition(
+                shipped.name(),
+                shipped.bindings(),
+                "Judge the closure from the current checklist.",
+                null,
+                evidenceDefaults.policyFor(shipped.artifactKind()),
+                shipped.whyItMatters(),
+                shipped.whatGoodLooksLike(),
+                shipped.groupSlug(),
+                shipped.deliveryBehavior());
+        var override = new CuratedPracticeOverride(slug, java.time.Instant.now());
+        override.write(automated, null, java.time.Instant.now());
+        practiceOverrides.save(override);
+
+        webTestClient
+                .get()
+                .uri("/admin/practice-catalog")
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.practices[?(@.slug == '" + slug + "')].automatedReview.evidenceSufficiency")
+                .isEqualTo("DECLARED_EVIDENCE_INSUFFICIENT");
+        webTestClient
+                .get()
+                .uri(BASE + "/groups/issue-traceability-and-lifecycle", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.practices[?(@.slug == '" + slug + "')].initialAutonomy")
+                .isEqualTo("OFF");
+        String etag = required(webTestClient
+                .get()
+                .uri(BASE + "/" + slug, workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.initialAutonomy")
+                .isEqualTo("OFF")
+                .jsonPath("$.definition.criteria")
+                .value(criteria ->
+                        assertThat((String) criteria).contains("Judge the closure from the current checklist."))
+                .jsonPath("$.definition.automatedReviewPolicy.insufficiencyReason.code")
+                .isEqualTo("AT_CLOSE_STATE_NOT_CAPTURED")
+                .returnResult()
+                .getResponseHeaders()
+                .getETag());
+
+        webTestClient
+                .post()
+                .uri(BASE + "/" + slug, workspace.getWorkspaceSlug())
+                .headers(headers -> {
+                    TestAuthUtils.withCurrentUser().accept(headers);
+                    headers.set(HttpHeaders.IF_MATCH, etag);
+                })
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody()
+                .jsonPath("$.autonomy.effective")
+                .isEqualTo("OFF");
+        // The operator's stored customization is left as they wrote it.
+        assertThat(practiceOverrides.findBySlug(slug).orElseThrow().definition())
+                .isEqualTo(automated);
     }
 
     @Test

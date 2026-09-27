@@ -3018,6 +3018,10 @@ export type Practice = {
   automatedReviewPolicy: PracticeAutomatedReviewPolicy;
   automatedReviewValidation: PracticeAutomatedReviewValidation;
   /**
+   * Why Hephaestus never reviews this practice whatever its own policy says: the catalogue entry it was copied from withdrew automated review. Absent when its own policy decides.
+   */
+  automatedReviewWithdrawal?: PracticeEvidenceLimitation;
+  /**
    * How much autonomy the system has over this practice, whether that was set here or inherited from its group or workspace, and which level decided it
    */
   autonomy: AutonomyAssignment;

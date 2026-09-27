@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeDetectionCompletedEvent;
+import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -70,6 +71,7 @@ public class PracticeDetectionDeliveryService {
     private final JobEvidenceFiles evidenceFiles;
     private final HistoricalGitEvidence historicalGit;
     private final ArtifactSourceCatalogRegistry sourceCatalogs;
+    private final AutomatedReviewFence fence;
 
     public PracticeDetectionDeliveryService(
             PracticeRevisionRepository practiceRevisionRepository,
@@ -82,7 +84,8 @@ public class PracticeDetectionDeliveryService {
             JobEvidenceFiles evidenceFiles,
             ArtifactSourceCatalogRegistry sourceCatalogs,
             HistoricalGitEvidence historicalGit,
-            ReviewMemberAiPolicy memberAiPolicy) {
+            ReviewMemberAiPolicy memberAiPolicy,
+            AutomatedReviewFence fence) {
         this.practiceRevisionRepository = practiceRevisionRepository;
         this.observationRepository = observationRepository;
         this.reviewTargets = reviewTargets;
@@ -94,6 +97,7 @@ public class PracticeDetectionDeliveryService {
         this.sourceCatalogs = sourceCatalogs;
         this.historicalGit = historicalGit;
         this.memberAiPolicy = memberAiPolicy;
+        this.fence = fence;
     }
 
     /** Metadata key for the run's immutable observation origin. */
@@ -180,6 +184,12 @@ public class PracticeDetectionDeliveryService {
                                 + ", jobId="
                                 + job.getId());
             }
+            if (fence.withdrawal(revision.getPractice()).isPresent()) {
+                // A run prepared before its practice was withdrawn from automated review still returns
+                // what the model said about it; the withdrawal, not the run, decides whether that stands.
+                withheldObservations.add(observation.practiceSlug() + ": withdrawn from automated review");
+                continue;
+            }
             enforceAttribution(observation, revision, job);
             try {
                 var verifiedEvidence = enforceEvidenceBoundary(observation, revision, captured, job, codeQuotes);
@@ -220,7 +230,7 @@ public class PracticeDetectionDeliveryService {
             // Per claim, because a model that cannot quote its own evidence is a defect an otherwise
             // successful delivery would hide.
             log.warn(
-                    "Withheld {} of {} observation(s) whose quoted evidence did not verify, delivering the rest: jobId={} withheld={}",
+                    "Withheld {} of {} observation(s), delivering the rest: jobId={} withheld={}",
                     withheldObservations.size(),
                     validObservations.size(),
                     job.getId(),

@@ -7,9 +7,11 @@ import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
+import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -25,10 +27,14 @@ public class CatalogOriginPresenter {
 
     private final CuratedCatalogService catalogService;
     private final WorkspaceReviewDefaultsProvider workspaceDefaults;
+    private final AutomatedReviewFence fence;
 
     public PracticeDTO present(Long workspaceId, Practice practice) {
         return PracticeDTO.from(
-                practice, CatalogOrigin.of(practice, catalogService.catalog()), defaultAutonomy(workspaceId));
+                practice,
+                withdrawal(practice),
+                CatalogOrigin.of(practice, catalogService.catalog()),
+                defaultAutonomy(workspaceId));
     }
 
     public PracticeGroupDTO present(Long workspaceId, PracticeGroup group) {
@@ -40,7 +46,8 @@ public class CatalogOriginPresenter {
         EffectiveCatalog catalog = catalogService.catalog();
         PracticeAutonomy workspaceDefault = defaultAutonomy(workspaceId);
         return practices.stream()
-                .map(practice -> PracticeDTO.from(practice, CatalogOrigin.of(practice, catalog), workspaceDefault))
+                .map(practice -> PracticeDTO.from(
+                        practice, withdrawal(practice), CatalogOrigin.of(practice, catalog), workspaceDefault))
                 .toList();
     }
 
@@ -50,6 +57,12 @@ public class CatalogOriginPresenter {
         return groups.stream()
                 .map(group -> PracticeGroupDTO.from(group, CatalogOrigin.of(group, catalog), workspaceDefault))
                 .toList();
+    }
+
+    private @Nullable PracticeEvidenceLimitation withdrawal(Practice practice) {
+        return fence.withdrawal(practice)
+                .map(shipped -> shipped.automatedReviewPolicy().insufficiencyReason())
+                .orElse(null);
     }
 
     private PracticeAutonomy defaultAutonomy(Long workspaceId) {

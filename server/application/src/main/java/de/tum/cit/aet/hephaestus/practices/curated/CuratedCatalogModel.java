@@ -44,7 +44,7 @@ final class CuratedCatalogModel {
                         positionedSlugs(
                                 groupOverrides, CuratedGroupOverride::getSlug, CuratedGroupOverride::getPosition)),
                 orderPractices(
-                        composeEntries(
+                        withdrawnAsShipped(composeEntries(
                                 bundled.practices(),
                                 practiceOverrides,
                                 CuratedPracticeOverride::getSlug,
@@ -52,13 +52,38 @@ final class CuratedCatalogModel {
                                 CuratedPracticeOverride::getAcceptedBundledDigest,
                                 CuratedPracticeOverride::getRetiredAt,
                                 CuratedPracticeOverride::getPosition,
-                                CuratedPracticeOverride::getUpdatedAt),
+                                CuratedPracticeOverride::getUpdatedAt)),
                         positionedSlugs(
                                 practiceOverrides,
                                 CuratedPracticeOverride::getSlug,
                                 CuratedPracticeOverride::getPosition)),
                 groupOverrides.stream().anyMatch(override -> override.getPosition() != null)
                         || practiceOverrides.stream().anyMatch(override -> override.getPosition() != null));
+    }
+
+    /**
+     * A shipped withdrawal from automated review is not a default an instance customization can keep out:
+     * the entry offers what adoption and review will enforce. The stored customization is left as written.
+     */
+    private static List<CatalogEntry<PracticeDefinition>> withdrawnAsShipped(
+            List<CatalogEntry<PracticeDefinition>> entries) {
+        return entries.stream()
+                .map(entry -> {
+                    PracticeDefinition shipped = entry.shipped();
+                    if (shipped == null || shipped.automatedReviewPolicy().insufficiencyReason() == null) {
+                        return entry;
+                    }
+                    return new CatalogEntry<>(
+                            entry.slug(),
+                            entry.effective().withdrawnAs(shipped),
+                            shipped,
+                            entry.overridden(),
+                            entry.acceptedBundledDigest(),
+                            entry.retired(),
+                            entry.position(),
+                            entry.updatedAt());
+                })
+                .toList();
     }
 
     static List<CatalogEntry<PracticeDefinition>> practicesIn(EffectiveCatalog catalog, @Nullable String groupSlug) {

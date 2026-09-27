@@ -300,6 +300,25 @@ standard as an experiment or a convention as a proven outcome.
    the developer keeps doing when the practice holds, such as *Every reviewer comment gets a visible
    answer*. It is read from the bundled catalog by slug and is not part of the definition a workspace
    copies, customizes or compares, so a better sentence reaches every workspace with the next release.
+   Every bundled practice takes its work type's default review frame. The one exception is
+   `insufficiencyReason`: when no source Hephaestus collects can answer the practice's question, it
+   ships as **Human review needed** with that reason and no precompute script. The shipped reason is a
+   withdrawal, not a default, so no instance customization or recorded workspace copy can override it. The
+   effective catalog gives a customized entry that asks for a review the shipped policy and reason
+   (`PracticeDefinition.withdrawnAs`); a guidance-only customization is never reviewed and stays as
+   written. A workspace copy keeps its authored definition, which the editor saves as it was shown, and
+   its read carries the shipped reason separately as `automatedReviewWithdrawal`, which the autonomy
+   page, catalog list and editor show. A copy descends from the entry only by the source slug it
+   records; a practice authored under the same slug is the workspace's own. For every such copy, whatever policy it stores, the review gate occasions
+   nothing, readiness refuses it with `DECLARED_EVIDENCE_INSUFFICIENT`, and admission withholds any claim
+   from a run prepared before the release; an observation already admitted before it stays. Its autonomy
+   cannot be raised, and the server-role catalog repair switches it `OFF` at startup with an audited
+   `PRACTICE_USAGE` change, reporting itself out of service when any copy stays on. Such an entry carries
+   no `holdsAs`, so the practice page shows no phrase for earlier positives. A copy made and edited
+   before provenance was recorded has no source slug and is left alone; nothing distinguishes it from a
+   practice authored under the same slug. That is the one change a
+   release makes to a workspace copy without its administrator: the definition, revisions and earlier
+   observations stay as they were.
 6. Add or update focused automated-review tests, including required-source skipping and valid-empty evidence.
 7. Review the admin presentation and a representative piece of delivered feedback.
 

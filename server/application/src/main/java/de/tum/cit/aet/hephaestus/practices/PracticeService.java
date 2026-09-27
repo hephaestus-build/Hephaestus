@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
+import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -47,6 +48,7 @@ public class PracticeService {
     private final PracticeDefinitionValidator definitionValidator;
     private final PracticeEvidenceDefaults evidenceDefaults;
     private final WorkspaceReviewDefaultsProvider workspaceDefaults;
+    private final AutomatedReviewFence fence;
 
     /**
      * The workspace catalogue, optionally narrowed to one autonomy.
@@ -237,7 +239,7 @@ public class PracticeService {
         // expressed. Exception: a practice whose policy cannot attempt automated review is written OFF
         // explicitly, since that's a fact about the practice, not a preference to inherit over.
         practice.setAutonomy(
-                definition.automatedReviewPolicy().automatedReview().canAttemptAutomatedReview()
+                fence.effectivePolicy(practice).automatedReview().canAttemptAutomatedReview()
                         ? initialAutonomy
                         : PracticeAutonomy.OFF);
         definitionValidator.validate(definition);
@@ -300,9 +302,11 @@ public class PracticeService {
                         : evidenceDefaults.policyFor(artifactKind);
         boolean removesAutomatedReview = request.automatedReviewPolicy() != null
                 && !automatedReviewPolicy.automatedReview().canAttemptAutomatedReview();
-        if (removesAutomatedReview) {
+        if (request.automatedReviewPolicy() != null
+                && automatedReviewPolicy.automatedReview().mode() == PracticeAutomatedReviewMode.NONE) {
             // A practice nobody automates still says what occasions it — that is where its kind comes
-            // from — but it reads nothing, so the evidence goes with the automation that read it.
+            // from — but it reads nothing, so the evidence goes with the automation that read it. One that
+            // needs human review keeps its evidence: it still names what a review would have to read.
             bindings = bindings.stream().map(PracticeService::withoutEvidence).toList();
         }
         PracticeDefinition afterDefinition = new PracticeDefinition(
@@ -338,7 +342,7 @@ public class PracticeService {
         }
         PracticeAutonomy autonomyBefore = practice.getAutonomy();
         applyDefinition(practice, afterDefinition);
-        if (!afterDefinition.automatedReviewPolicy().automatedReview().canAttemptAutomatedReview()) {
+        if (!fence.effectivePolicy(practice).automatedReview().canAttemptAutomatedReview()) {
             practice.setAutonomy(PracticeAutonomy.OFF);
         }
         validateUpdate(afterDefinition, request.bindings() != null);
@@ -393,7 +397,7 @@ public class PracticeService {
                         workspaceDefaults.forWorkspace(ctx.id()).defaultAutonomy())
                 .autonomy();
         if (effective.admitsReview()
-                && !practice.getAutomatedReviewPolicy().automatedReview().canAttemptAutomatedReview()) {
+                && !fence.effectivePolicy(practice).automatedReview().canAttemptAutomatedReview()) {
             throw new IllegalArgumentException(
                     "This practice cannot be used in automated reviews with its current review settings");
         }

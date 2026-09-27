@@ -30,18 +30,21 @@ public class PracticeReviewDetectionGate {
     private final WorkspaceResolver workspaceResolver;
     private final PracticeSignalOptions signalOptions;
     private final PracticeReviewCoverageService coverageService;
+    private final AutomatedReviewFence fence;
 
     public PracticeReviewDetectionGate(
             PracticeReviewReadiness practiceDetectionReadiness,
             PracticeRepository practiceRepository,
             WorkspaceResolver workspaceResolver,
             PracticeSignalOptions signalOptions,
-            PracticeReviewCoverageService coverageService) {
+            PracticeReviewCoverageService coverageService,
+            AutomatedReviewFence fence) {
         this.practiceDetectionReadiness = practiceDetectionReadiness;
         this.practiceRepository = practiceRepository;
         this.workspaceResolver = workspaceResolver;
         this.signalOptions = signalOptions;
         this.coverageService = coverageService;
+        this.fence = fence;
     }
 
     public GateDecision evaluate(
@@ -241,6 +244,8 @@ public class PracticeReviewDetectionGate {
                         .anyMatch(binding -> requestedByHand
                                 ? binding.appliesTo(signal.artifactKind())
                                 : binding.occasionedBy(signal, draft)))
+                // Withdrawn from automated review whatever its stored policy says: bound, but no occasion.
+                .filter(p -> fence.withdrawal(p).isEmpty())
                 .toList();
         PracticeAutonomy workspaceDefault =
                 WorkspaceReviewDefaults.of(workspace).defaultAutonomy();

@@ -75,7 +75,10 @@
 			"description": "One bundled engineering-practice definition.",
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["slug", "name", "on", "criteria", "holdsAs"],
+			"required": ["slug", "name", "on", "criteria"],
+			"if": { "properties": { "insufficiencyReason": true }, "required": ["insufficiencyReason"] },
+			"then": { "properties": { "holdsAs": false } },
+			"else": { "properties": { "holdsAs": true }, "required": ["holdsAs"] },
 			"properties": {
 				"slug": {
 					"description": "Stable practice identifier used for provenance, findings, and URLs.",
@@ -138,6 +141,23 @@
 				"deliveryBehavior": {
 					"description": "How negative feedback from this practice is placed or deduplicated.",
 					"$ref": "#/$defs/deliveryBehavior"
+				},
+				"insufficiencyReason": {
+					"description": "Present only when the evidence Hephaestus collects cannot support this practice's question: the practice ships as needing human review, Hephaestus never reviews it, and this says why. Such a practice carries no holdsAs: nothing it recorded can support one.",
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["code", "description"],
+					"properties": {
+						"code": {
+							"type": "string",
+							"pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+						},
+						"description": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 500
+						}
+					}
 				}
 			}
 		},

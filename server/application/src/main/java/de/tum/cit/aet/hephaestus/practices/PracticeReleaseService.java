@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.curated.EffectiveCatalog;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeReleaseProposalDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
+import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -37,6 +38,7 @@ public class PracticeReleaseService {
     private final PracticeDefinitionValidator validator;
     private final PracticeRevisionService revisions;
     private final WorkspaceReviewDefaultsProvider workspaceDefaults;
+    private final AutomatedReviewFence fence;
     private final ConfigAuditPort audit;
 
     @Transactional(readOnly = true)
@@ -76,7 +78,7 @@ public class PracticeReleaseService {
             groups.applyBinding(ctx, practice, merged.groupSlug());
         }
         PracticeService.applyDefinition(practice, merged);
-        if (!merged.automatedReviewPolicy().automatedReview().canAttemptAutomatedReview()) {
+        if (!fence.effectivePolicy(practice).automatedReview().canAttemptAutomatedReview()) {
             practice.setAutonomy(PracticeAutonomy.OFF);
         }
         practice.setAdoptedBase(proposal.offered());

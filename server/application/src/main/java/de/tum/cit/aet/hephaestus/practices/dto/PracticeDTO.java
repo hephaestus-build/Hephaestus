@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewValidation;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
@@ -67,14 +68,24 @@ public record PracticeDTO(
         Instant updatedAt,
 
         @Nullable CatalogOriginDTO catalogOrigin,
-        @NonNull PracticeDeliveryBehavior deliveryBehavior) {
+        @NonNull PracticeDeliveryBehavior deliveryBehavior,
+
+        @Nullable
+        @Schema(
+                description = "Why Hephaestus never reviews this practice whatever its own policy says: the catalogue"
+                        + " entry it was copied from withdrew automated review. Absent when its own policy decides.")
+        PracticeEvidenceLimitation automatedReviewWithdrawal) {
     /**
+     * @param automatedReviewWithdrawal why the catalogue withdrew automated review from this copy, or null
      * @param workspaceDefault the workspace's effective default autonomy, the bottom of the inheritance chain.
      *     Passed in rather than looked up here so one response resolves it once, and so this stays a pure
      *     mapping.
      */
     public static PracticeDTO from(
-            Practice practice, @Nullable CatalogOriginDTO catalogOrigin, PracticeAutonomy workspaceDefault) {
+            Practice practice,
+            @Nullable PracticeEvidenceLimitation automatedReviewWithdrawal,
+            @Nullable CatalogOriginDTO catalogOrigin,
+            PracticeAutonomy workspaceDefault) {
         return new PracticeDTO(
                 practice.getId(),
                 practice.getSlug(),
@@ -94,6 +105,7 @@ public record PracticeDTO(
                 practice.getCreatedAt(),
                 practice.getUpdatedAt(),
                 catalogOrigin,
-                practice.getDeliveryBehavior());
+                practice.getDeliveryBehavior(),
+                automatedReviewWithdrawal);
     }
 }

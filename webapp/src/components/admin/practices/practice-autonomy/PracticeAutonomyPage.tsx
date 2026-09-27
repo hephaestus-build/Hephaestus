@@ -128,7 +128,7 @@ export function PracticeAutonomyPage({
 	const selectableSlugs = new Set(
 		groups.flatMap((group) =>
 			group.practices
-				.filter((practice) => reviewableByHephaestus(practice.automatedReviewPolicy))
+				.filter((practice) => reviewableByHephaestus(practice))
 				.map((practice) => practice.slug),
 		),
 	);
@@ -514,7 +514,7 @@ function GroupGroup({
 	const { groupSlug } = group;
 	const groupPending = groupSlug !== null && pending.groupSlugs.has(groupSlug);
 	const selectableSlugs = group.practices
-		.filter((practice) => reviewableByHephaestus(practice.automatedReviewPolicy))
+		.filter((practice) => reviewableByHephaestus(practice))
 		.map((practice) => practice.slug);
 	const allSelected =
 		selectableSlugs.length > 0 && selectableSlugs.every((slug) => selected.has(slug));
@@ -618,8 +618,10 @@ function PracticeAutonomyRow({
 	onSetAutonomy: (practiceSlug: string, autonomy: PracticeAutonomy) => void;
 	onClearAutonomy: (practiceSlug: string) => void;
 }) {
-	const reviewable = reviewableByHephaestus(practice.automatedReviewPolicy);
-	const limitation = automatedReviewLimitationLabel(practice.automatedReviewPolicy.automatedReview);
+	const reviewable = reviewableByHephaestus(practice);
+	const limitation = practice.automatedReviewWithdrawal
+		? "Human review needed"
+		: automatedReviewLimitationLabel(practice.automatedReviewPolicy.automatedReview);
 
 	return (
 		<Item
