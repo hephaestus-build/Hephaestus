@@ -39,6 +39,26 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
             nativeQuery = true)
     Long acquireLifecycleLock(@Param("id") long id, @Param("workspaceId") long workspaceId);
 
+    /**
+     * The configuration of connection {@code id} when it is in {@code state}, read from the database rather than from an
+     * entity loaded earlier in the transaction, so it is current once {@link #acquireLifecycleLock} returns.
+     */
+    @Query("SELECT c.config FROM Connection c WHERE c.id = :id AND c.workspace.id = :workspaceId AND c.state = :state")
+    Optional<ConnectionConfig> findConfigInState(
+            @Param("id") long id, @Param("workspaceId") long workspaceId, @Param("state") IntegrationState state);
+
+    /**
+     * Takes the lifecycle lock of the workspace's active {@code kind} connection for the rest of the caller's
+     * transaction and returns that connection's configuration as it stands once the lock is held; empty when the
+     * connection is no longer active by then. Lifecycle transitions take the same lock first, so a caller that checks
+     * its writes against the returned configuration does not write for a connection that changed while it waited.
+     */
+    default Optional<ConnectionConfig> lockActiveConfig(long workspaceId, IntegrationKind kind) {
+        Optional<Long> connectionId = findActive(workspaceId, kind).map(Connection::getId);
+        connectionId.ifPresent(id -> acquireLifecycleLock(id, workspaceId));
+        return connectionId.flatMap(id -> findConfigInState(id, workspaceId, IntegrationState.ACTIVE));
+    }
+
     Optional<Connection> findByWorkspaceIdAndKindAndInstanceKey(
             long workspaceId, IntegrationKind kind, @Nullable String instanceKey);
 

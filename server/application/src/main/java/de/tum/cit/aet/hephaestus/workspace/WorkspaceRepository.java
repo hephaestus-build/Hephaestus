@@ -5,6 +5,7 @@ import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -98,6 +99,21 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
      */
     @Query("SELECT w.organization.provider.id FROM Workspace w WHERE w.id = :workspaceId")
     Optional<Long> findOrganizationProviderIdByWorkspaceId(@Param("workspaceId") Long workspaceId);
+
+    /**
+     * The workspace's group and repository selection as stored. A scalar projection, so it is read from the database
+     * even when this transaction already manages a Workspace loaded before a lock was taken.
+     */
+    @Query(
+            "SELECT w.accountLogin AS accountLogin, w.repositorySelection AS repositorySelection FROM Workspace w WHERE w.id = :id")
+    Optional<MonitorPolicy> findMonitorPolicy(@Param("id") Long id);
+
+    interface MonitorPolicy {
+        String getAccountLogin();
+
+        @Nullable
+        RepositorySelection getRepositorySelection();
+    }
 
     Optional<Workspace> findByAccountLoginIgnoreCase(String login);
 

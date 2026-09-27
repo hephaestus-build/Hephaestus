@@ -17,10 +17,14 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
+import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewRepositoryTarget;
+import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewRepositoryTargetRepository;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,19 +62,23 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
     // Absent under the webhook runtime role — reconcile then skips the consumer refresh.
     private final ObjectProvider<IntegrationNatsConsumer> natsConsumerService;
 
+    private final PracticeReviewRepositoryTargetRepository practiceReviewRepositoryTargetRepository;
+
     public WorkspaceSyncTargetProvider(
             WorkspaceRepository workspaceRepository,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             WorkspaceScopeFilter workspaceScopeFilter,
             ConnectionService connectionService,
             NatsConnectionProperties natsProperties,
-            ObjectProvider<IntegrationNatsConsumer> natsConsumerService) {
+            ObjectProvider<IntegrationNatsConsumer> natsConsumerService,
+            PracticeReviewRepositoryTargetRepository practiceReviewRepositoryTargetRepository) {
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.connectionService = connectionService;
         this.natsProperties = natsProperties;
         this.natsConsumerService = natsConsumerService;
+        this.practiceReviewRepositoryTargetRepository = practiceReviewRepositoryTargetRepository;
     }
 
     @Override
@@ -332,6 +340,10 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
     @Override
     @Transactional
     public void removeSyncTarget(Long syncTargetId) {
+        removeMonitor(syncTargetId);
+    }
+
+    private void removeMonitor(Long syncTargetId) {
         // A workspace holds its monitors eagerly with orphan removal: one deleted while its loaded workspace still
         // holds it would be persisted again at flush, so it is removed from that set as well.
         repositoryToMonitorRepository.findById(syncTargetId).ifPresent(monitor -> {
@@ -341,6 +353,40 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
             }
             repositoryToMonitorRepository.delete(monitor);
         });
+    }
+
+    @Override
+    @Transactional
+    public void mergeSyncTarget(Long keptSyncTargetId, Long duplicateSyncTargetId) {
+        RepositoryToMonitor kept =
+                repositoryToMonitorRepository.findById(keptSyncTargetId).orElse(null);
+        RepositoryToMonitor duplicate =
+                repositoryToMonitorRepository.findById(duplicateSyncTargetId).orElse(null);
+        Workspace workspace = kept != null ? kept.getWorkspace() : null;
+        Workspace duplicateWorkspace = duplicate != null ? duplicate.getWorkspace() : null;
+        Long workspaceId = workspace != null ? workspace.getId() : null;
+        if (workspaceId == null || duplicateWorkspace == null || !workspaceId.equals(duplicateWorkspace.getId())) {
+            return;
+        }
+        practiceReviewRepositoryTargetRepository
+                .findById(new PracticeReviewRepositoryTarget.Key(workspaceId, duplicateSyncTargetId))
+                .ifPresent(carried -> {
+                    // The kept monitor reviews what either one did: no base branches means every branch.
+                    List<String> branches = practiceReviewRepositoryTargetRepository
+                            .findById(new PracticeReviewRepositoryTarget.Key(workspaceId, keptSyncTargetId))
+                            .map(PracticeReviewRepositoryTarget::getBaseBranches)
+                            .map(own ->
+                                    own.isEmpty() || carried.getBaseBranches().isEmpty()
+                                            ? List.<String>of()
+                                            : List.copyOf(new LinkedHashSet<>(
+                                                    Stream.concat(own.stream(), carried.getBaseBranches().stream())
+                                                            .toList())))
+                            .orElse(carried.getBaseBranches());
+                    practiceReviewRepositoryTargetRepository.delete(carried);
+                    practiceReviewRepositoryTargetRepository.save(
+                            new PracticeReviewRepositoryTarget(workspaceId, keptSyncTargetId, branches));
+                });
+        removeMonitor(duplicateSyncTargetId);
     }
 
     @Override
