@@ -14,6 +14,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -29,6 +31,7 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Deletion reconciliation for GitLab issues and merge requests — the half of "sync" that upserts
@@ -120,18 +123,27 @@ public class GitLabDeletionSweepService {
     private final GitLabGraphQlClientProvider graphQlClientProvider;
     private final GitLabGraphQlResponseHandler responseHandler;
     private final GitLabProperties gitLabProperties;
+    private final WorkspaceActorSelector actorSelector;
+    private final GitLabWorkspaceLinkService workspaceLinkService;
+    private final TransactionTemplate transactionTemplate;
 
     public GitLabDeletionSweepService(
             IssueRepository issueRepository,
             RepositoryRepository repositoryRepository,
             GitLabGraphQlClientProvider graphQlClientProvider,
             GitLabGraphQlResponseHandler responseHandler,
-            GitLabProperties gitLabProperties) {
+            GitLabProperties gitLabProperties,
+            WorkspaceActorSelector actorSelector,
+            GitLabWorkspaceLinkService workspaceLinkService,
+            TransactionTemplate transactionTemplate) {
         this.issueRepository = issueRepository;
         this.repositoryRepository = repositoryRepository;
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
         this.gitLabProperties = gitLabProperties;
+        this.actorSelector = actorSelector;
+        this.workspaceLinkService = workspaceLinkService;
+        this.transactionTemplate = transactionTemplate;
     }
 
     /** Which of the two entity classes a listing/diff pass is operating on. */
@@ -228,7 +240,12 @@ public class GitLabDeletionSweepService {
      * @param handle  live job handle for progress + cancellation; {@code null} outside a recorded job
      */
     public SweepOutcome sweepScope(Long scopeId, @Nullable SyncExecutionHandle handle) {
-        List<Repository> repositories = repositoryRepository.findAllByWorkspaceMonitors(scopeId);
+        // Only the connected instance's rows: another instance can host a project at the same path, and this
+        // scope's credentials list only its own.
+        List<Repository> repositories = actorSelector
+                .connectedProviderId(scopeId)
+                .map(providerId -> repositoryRepository.findAllByWorkspaceMonitorsOnProvider(scopeId, providerId))
+                .orElseGet(List::of);
         if (repositories.isEmpty()) {
             return SweepOutcome.NOTHING;
         }
@@ -369,8 +386,23 @@ public class GitLabDeletionSweepService {
                         scopeId);
                 continue;
             }
-            int tombstoned = tombstoneMissing(
-                    repository.getId(), entity, localBeforeListing, listing.numbers(), safeProjectPath);
+            // The listing can outlast the monitor, the connection or the group link it was started under, so the
+            // authority to write is checked again in the transaction that writes.
+            UpstreamListing complete = listing;
+            Integer tombstoned =
+                    transactionTemplate.execute(status -> workspaceLinkService.mayWriteRepository(scopeId, repository)
+                            ? tombstoneMissing(
+                                    repository.getId(), entity, localBeforeListing, complete.numbers(), safeProjectPath)
+                            : null);
+            if (tombstoned == null) {
+                skipped = true;
+                log.warn(
+                        "Skipped GitLab deletion sweep, deleted nothing: reason=repositoryNotThisScopes, entity={}, projectPath={}, scopeId={}",
+                        entity.plural,
+                        safeProjectPath,
+                        scopeId);
+                continue;
+            }
             if (entity == SweptEntity.ISSUE) {
                 issuesTombstoned = tombstoned;
             } else {

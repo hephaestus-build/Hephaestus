@@ -75,6 +75,55 @@ public void delete(WorkspaceContext ctx, @PathVariable Long id) { ... }
 public void updateSettings(WorkspaceContext ctx, @RequestBody SettingsDTO dto) { ... }
 ```
 
+## Where membership rows come from
+
+A membership is created by workspace administration or by the provider granting access. Leaderboard, profile and
+league-point paths only read memberships: a non-member's points are the default, and updating points never makes
+anyone a member.
+
+What a GitLab group grants is `WorkspaceMembershipService#entitledUserIds`: the group's effective roster
+(`organization_membership`, listed with `relations: [DIRECT, INHERITED, SHARED_FROM_GROUPS]` so a workspace on a
+subgroup keeps the people it inherits from a parent group or gets from an invited group, each at their highest grant)
+and the members of its subgroup teams on the same instance. A subgroup team lists `DIRECT` and `SHARED_FROM_GROUPS`
+members, not `INHERITED` ones, since the team hierarchy carries what it inherits, plus the WRITE/TRIAGE collaborators
+of projects directly in it. `WorkspaceOrganizationMembershipAdapter#reconcileWorkspaceMembers` sets
+`workspace_membership` to that set: the roster's ADMIN or MEMBER, MEMBER for someone only a team lists, and OWNER kept
+for anyone who holds it. It runs after a complete roster listing and, once a roster has been reconciled, after a team
+sync whose graph and every team's members were listed completely.
+
+A member event changes one person only. On a connection route, whose credential authenticates the connection, the
+handler replaces that person's stored grant with what GitLab's lookup reports now, read with the same relations as the
+listing: the connected group's effective access, or a subgroup team's. The workspace member then gets the role the
+stored roster or a subgroup team still grants them, or loses the membership if none does
+(`WorkspaceMembershipService#applyProviderGrant`). A removal off a connection route names one direct grant, which does
+not prove the person lost an inherited or invited-group one, so it changes nothing until the next complete roster
+listing.
+
+Every GitLab listing is read in full before any membership is written from it, and only a complete one is applied,
+in one short transaction: a page with GraphQL errors, a page that is not whole
+(`GitLabGraphQlResponseHandler#isWholePage`, which a `group: null` answer fails), an entry without a readable user or
+access level, or a failed page changes no membership or role from that listing. The group roster upserts its users
+before the role transaction, so a failure between the two can leave user rows, never a grant. Only the scope whose
+reading of the group is authoritative writes it (`GitLabWorkspaceLinkService#mayWriteGroup`): its active connection is
+on the group's instance and the workspace is linked to the group, or not linked yet while no other workspace is. A
+shared project's collaborator rows are replaced only by the workspace that owns its group and monitors that project
+(`GitLabWorkspaceLinkService#mayWriteRepository`), and only from a complete listing, so a failed or narrower reading
+leaves the last complete answer in place.
+
+Hiding a member only takes them off the leaderboard. A hidden member the roster no longer lists is removed like
+anyone else; the preference is parked in `workspace_hidden_former_member` until a membership is created for the same
+actor again, which takes it back, and purge clears it.
+
+Practice-review eligibility is `WorkspaceMembershipService#practiceReviewEligibleUserIds`: human members on the
+instance of the workspace's active connection (`WorkspaceActorSelector#connectedProviderId`), and, once a group is
+linked, whom it still entitles. A workspace without an active connection reviews nobody, and a role kept only for administration,
+such as an owner the roster dropped, grants no review. Coverage counts, person selection, widening and subject
+admission all read it.
+
+The GitLab deletion sweep lists with the scope's own credentials, so it tombstones only repositories on the scope's
+connected instance, and checks again in the transaction that writes that the repository is still monitored, inside
+the connected group this scope owns, and on that instance (`GitLabWorkspaceLinkService#mayWriteRepository`).
+
 ## Account identity resolution
 
 Membership rows are keyed on SCM users, not accounts. The account-keyed schema in

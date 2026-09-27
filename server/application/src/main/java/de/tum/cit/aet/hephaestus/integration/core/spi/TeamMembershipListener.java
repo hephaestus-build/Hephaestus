@@ -13,12 +13,11 @@ package de.tum.cit.aet.hephaestus.integration.core.spi;
  */
 public interface TeamMembershipListener {
     /**
-     * Called when team memberships for a root group/organization have been fully
-     * synced via scheduled sync.
+     * Called after a scheduled sync listed a root group's whole team graph.
      * <p>
-     * Implementations should reconcile downstream state (e.g., workspace memberships)
-     * with the synced team membership graph. Only fired when the team sync
-     * completed normally end-to-end — never on partial data.
+     * Implementations reconcile downstream state (e.g., workspace memberships) with the stored team memberships.
+     * Only when {@link TeamsSyncedEvent#complete()} are all of them current; otherwise a team whose listing was
+     * incomplete kept its old members, which may be kept but prove nobody else's removal.
      *
      * @param event the team sync completed event data
      */
@@ -31,6 +30,8 @@ public interface TeamMembershipListener {
      * @param rootGroupFullPath the root group full path whose descendants were synced
      *                          (stored as {@code Team.organization} for every team
      *                          created under this root)
+     * @param providerId        the instance the teams were synced from; another instance can have the same path
+     * @param complete          whether every team's members were listed completely in this sync
      */
-    record TeamsSyncedEvent(Long scopeId, String rootGroupFullPath) {}
+    record TeamsSyncedEvent(Long scopeId, String rootGroupFullPath, Long providerId, boolean complete) {}
 }

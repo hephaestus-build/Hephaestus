@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -16,7 +15,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener.OrganizationSyncedEvent;
@@ -33,6 +31,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGro
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupMemberResponse.GitLabAccessLevel;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupMemberResponse.GitLabMemberUser;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import java.time.Duration;
@@ -59,6 +58,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
     private static final Long TEST_PROVIDER_ID = 100L;
     private static final Long SCOPE_ID = 1L;
     private static final String GROUP_PATH = "my-org";
+    private static final GitLabPageInfo LAST_PAGE = new GitLabPageInfo(false, null);
 
     @Mock
     private GitLabGraphQlClientProvider graphQlClientProvider;
@@ -73,7 +73,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
     private UserRepository userRepository;
 
     @Mock
-    private IdentityProviderRepository gitProviderRepository;
+    private GitLabWorkspaceLinkService workspaceLinkService;
 
     @Mock
     private OrganizationMembershipListener organizationMembershipListener;
@@ -91,9 +91,6 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         IdentityProvider gitLabProvider = TestEntities.gitProvider(TEST_PROVIDER_ID, IdentityProviderType.GITLAB);
-        lenient()
-                .when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, "https://gitlab.com"))
-                .thenReturn(Optional.of(gitLabProvider));
 
         // TransactionTemplate that executes callbacks directly (no real transactions needed)
         PlatformTransactionManager mockTxManager = mock(PlatformTransactionManager.class);
@@ -109,13 +106,18 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
         lenient()
                 .when(responseHandler.handle(any(), anyString(), any()))
                 .thenReturn(new HandleResult(HandleResult.Action.CONTINUE, null));
+        // Default: every page says what it lists and whether more follows (proven against real GraphQL in
+        // GitLabInheritedMembershipIntegrationTest).
+        lenient().when(responseHandler.isWholePage(any(), anyString())).thenReturn(true);
+        // Default: this scope's reading of the group is authoritative for it.
+        lenient().when(workspaceLinkService.mayWriteGroup(anyLong(), any())).thenReturn(true);
 
         service = new GitLabGroupMemberSyncService(
                 graphQlClientProvider,
                 responseHandler,
                 organizationMembershipRepository,
                 userRepository,
-                gitProviderRepository,
+                workspaceLinkService,
                 gitLabProperties,
                 organizationMembershipListener,
                 txTemplate);
@@ -123,6 +125,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
         testOrg = new Organization();
         testOrg.setId(42L);
         testOrg.setLogin("my-org");
+        testOrg.setProvider(gitLabProvider);
     }
 
     /**
@@ -167,13 +170,12 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
     class ProviderResolution {
 
         @Test
-        void providerNotFound_throwsIllegalState() {
-            when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, "https://gitlab.com"))
-                    .thenReturn(Optional.empty());
+        void groupThisScopeMayNotWrite_syncsNothing() {
+            when(workspaceLinkService.mayWriteGroup(SCOPE_ID, testOrg)).thenReturn(false);
 
-            assertThatThrownBy(() -> service.syncGroupMemberships(SCOPE_ID, GROUP_PATH, testOrg))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("IdentityProvider not found");
+            assertThat(service.syncGroupMemberships(SCOPE_ID, GROUP_PATH, testOrg))
+                    .isEqualTo(-1);
+            verifyNoInteractions(graphQlClientProvider, organizationMembershipRepository);
         }
     }
 
@@ -185,7 +187,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
             var member1 = createMember("gid://gitlab/User/10", "alice", "Alice", 30); // DEVELOPER → MEMBER
             var member2 = createMember("gid://gitlab/User/20", "bob", "Bob", 50); // OWNER → ADMIN
 
-            ClientGraphQlResponse response = mockMembersPage(List.of(member1, member2), null);
+            ClientGraphQlResponse response = mockMembersPage(List.of(member1, member2), LAST_PAGE);
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, response);
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(100);
@@ -242,7 +244,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
             var member1 = createMember("gid://gitlab/User/10", "alice", "Alice", 30);
             var member2 = createMember("gid://gitlab/User/10", "alice", "Alice", 30); // duplicate
 
-            ClientGraphQlResponse response = mockMembersPage(List.of(member1, member2), null);
+            ClientGraphQlResponse response = mockMembersPage(List.of(member1, member2), LAST_PAGE);
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, response);
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(100);
@@ -255,6 +257,41 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
 
             // Returns unique count, not total appearances
             assertThat(result).isEqualTo(1);
+        }
+
+        @Test
+        void userListedThroughTwoGrants_keepsTheHigherRole() {
+            var invitedGroupMaintainer = createMember("gid://gitlab/User/10", "alice", "Alice", 40);
+            var directDeveloper = createMember("gid://gitlab/User/10", "alice", "Alice", 30);
+
+            ClientGraphQlResponse response =
+                    mockMembersPage(List.of(invitedGroupMaintainer, directDeveloper), LAST_PAGE);
+            HttpGraphQlClient client = mockClient();
+            mockSequentialExecute(client, response);
+            when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(100);
+            stubUserLookup(10L, 1010L);
+            when(organizationMembershipRepository.findUserIdsByOrganizationId(42L))
+                    .thenReturn(List.of());
+
+            service.syncGroupMemberships(SCOPE_ID, GROUP_PATH, testOrg);
+
+            verify(organizationMembershipRepository).upsertMembership(42L, 1010L, OrganizationMemberRole.ADMIN);
+            verify(organizationMembershipRepository, never())
+                    .upsertMembership(42L, 1010L, OrganizationMemberRole.MEMBER);
+        }
+
+        @Test
+        void listsTheGroupsDirectInheritedAndInvitedGroupsMembers() {
+            HttpGraphQlClient client = mockClient();
+            HttpGraphQlClient.RequestSpec request = mock(HttpGraphQlClient.RequestSpec.class);
+            when(client.documentName(anyString())).thenReturn(request);
+            when(request.variable(anyString(), any())).thenReturn(request);
+            ClientGraphQlResponse page = mockMembersPage(List.of(), LAST_PAGE);
+            when(request.execute()).thenReturn(Mono.just(page));
+
+            service.syncGroupMemberships(SCOPE_ID, GROUP_PATH, testOrg);
+
+            verify(request).variable("relations", List.of("DIRECT", "INHERITED", "SHARED_FROM_GROUPS"));
         }
     }
 
@@ -297,12 +334,10 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
             mockSequentialExecute(client, response);
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(100);
 
-            stubUserLookup(10L, 1010L);
-
             int result = service.syncGroupMemberships(SCOPE_ID, GROUP_PATH, testOrg);
 
             // Sync incomplete → event NOT fired, stale removal skipped
-            assertThat(result).isEqualTo(1);
+            assertThat(result).isEqualTo(-1);
             verify(organizationMembershipListener, never()).onOrganizationMembershipsSynced(any());
             verify(organizationMembershipRepository, never()).deleteByOrganizationIdAndUserIdIn(anyLong(), any());
         }
@@ -315,7 +350,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
         void removesStaleMembers() {
             var member = createMember("gid://gitlab/User/10", "alice", "Alice", 30);
 
-            ClientGraphQlResponse response = mockMembersPage(List.of(member), null);
+            ClientGraphQlResponse response = mockMembersPage(List.of(member), LAST_PAGE);
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, response);
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(100);
@@ -355,7 +390,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
 
             int result = service.syncGroupMemberships(SCOPE_ID, GROUP_PATH, testOrg);
 
-            assertThat(result).isEqualTo(0);
+            assertThat(result).isEqualTo(-1);
             verify(organizationMembershipRepository, never()).deleteByOrganizationIdAndUserIdIn(anyLong(), any());
             // Event NOT fired on incomplete sync
             verify(organizationMembershipListener, never()).onOrganizationMembershipsSynced(any());
@@ -368,51 +403,50 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
     class ErrorHandling {
 
         @Test
-        void nullMemberUser_skipped() {
+        void nullMemberUser_leavesTheRosterIncomplete() {
             var nullUserMember = new GitLabGroupMemberResponse(null, new GitLabAccessLevel("DEVELOPER", 30));
             var validMember = createMember("gid://gitlab/User/10", "alice", "Alice", 30);
 
-            ClientGraphQlResponse response = mockMembersPage(List.of(nullUserMember, validMember), null);
+            ClientGraphQlResponse response = mockMembersPage(List.of(nullUserMember, validMember), LAST_PAGE);
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, response);
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(100);
 
-            stubUserLookup(10L, 1010L);
-            when(organizationMembershipRepository.findUserIdsByOrganizationId(42L))
-                    .thenReturn(List.of());
-
             int result = service.syncGroupMemberships(SCOPE_ID, GROUP_PATH, testOrg);
 
-            assertThat(result).isEqualTo(1);
+            assertThat(result).isEqualTo(-1);
+            // The listing is incomplete, so nothing it lists is written either.
+            verify(organizationMembershipRepository, never()).upsertMembership(anyLong(), anyLong(), any());
+            verify(organizationMembershipRepository, never()).deleteByOrganizationIdAndUserIdIn(anyLong(), any());
+            verify(organizationMembershipListener, never()).onOrganizationMembershipsSynced(any());
         }
 
         @Test
-        void invalidGid_skippedGracefully() {
+        void invalidGid_leavesTheRosterIncomplete() {
             var badMember = createMember("invalid-gid", "baduser", "Bad User", 30);
             var goodMember = createMember("gid://gitlab/User/10", "alice", "Alice", 30);
 
-            ClientGraphQlResponse response = mockMembersPage(List.of(badMember, goodMember), null);
+            ClientGraphQlResponse response = mockMembersPage(List.of(badMember, goodMember), LAST_PAGE);
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, response);
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(100);
 
-            stubUserLookup(10L, 1010L);
-            when(organizationMembershipRepository.findUserIdsByOrganizationId(42L))
-                    .thenReturn(List.of());
-
             int result = service.syncGroupMemberships(SCOPE_ID, GROUP_PATH, testOrg);
 
-            assertThat(result).isEqualTo(1);
-            // upsertUser called only for the valid member
-            verify(userRepository, times(1))
+            assertThat(result).isEqualTo(-1);
+            verify(organizationMembershipRepository, never()).deleteByOrganizationIdAndUserIdIn(anyLong(), any());
+            verify(organizationMembershipListener, never()).onOrganizationMembershipsSynced(any());
+            // Nothing is written from an incomplete listing, not even the readable member.
+            verify(organizationMembershipRepository, never()).upsertMembership(anyLong(), anyLong(), any());
+            verify(userRepository, never())
                     .upsertUser(
-                            eq(10L),
-                            eq(TEST_PROVIDER_ID),
-                            eq("alice"),
+                            anyLong(),
+                            anyLong(),
+                            anyString(),
                             any(),
                             anyString(),
                             anyString(),
-                            eq("USER"),
+                            anyString(),
                             any(),
                             any(),
                             any());
@@ -432,8 +466,6 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
             when(requestSpec.execute()).thenReturn(Mono.just(page1));
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(100);
 
-            stubUserLookup(10L, 1010L);
-
             // Interrupt the current thread before the sleep
             Thread.currentThread().interrupt();
 
@@ -452,8 +484,8 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
 
             int result = service.syncGroupMemberships(SCOPE_ID, GROUP_PATH, testOrg);
 
-            // Incomplete sync → returns 0 (no members synced), no event
-            assertThat(result).isEqualTo(0);
+            // Incomplete sync → -1, no event
+            assertThat(result).isEqualTo(-1);
             verify(organizationMembershipListener, never()).onOrganizationMembershipsSynced(any());
             // Clear interrupted flag
             Thread.interrupted();
@@ -476,7 +508,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
 
         @Test
         void emptyMemberList_doesNotDeleteAll() {
-            ClientGraphQlResponse response = mockMembersPage(List.of(), null);
+            ClientGraphQlResponse response = mockMembersPage(List.of(), LAST_PAGE);
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, response);
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(100);
@@ -514,13 +546,13 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
                     responseHandler,
                     organizationMembershipRepository,
                     userRepository,
-                    gitProviderRepository,
+                    workspaceLinkService,
                     gitLabProperties,
                     null,
                     txTemplate);
 
             var member = createMember("gid://gitlab/User/10", "alice", "Alice", 30);
-            ClientGraphQlResponse response = mockMembersPage(List.of(member), null);
+            ClientGraphQlResponse response = mockMembersPage(List.of(member), LAST_PAGE);
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, response);
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(100);

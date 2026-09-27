@@ -1,6 +1,6 @@
-query GetGroupMembers($fullPath: ID!, $first: Int!, $after: String) {
+query GetGroupMembers($fullPath: ID!, $relations: [GroupMemberRelation!]!, $first: Int!, $after: String) {
     group(fullPath: $fullPath) {
-        groupMembers(first: $first, after: $after, relations: [DIRECT]) {
+        groupMembers(first: $first, after: $after, relations: $relations) {
             pageInfo {
                 hasNextPage
                 endCursor

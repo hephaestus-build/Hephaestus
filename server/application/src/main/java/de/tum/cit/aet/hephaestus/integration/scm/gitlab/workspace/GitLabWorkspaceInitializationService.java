@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
@@ -21,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncR
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
@@ -97,6 +97,7 @@ public class GitLabWorkspaceInitializationService {
     // Authoritative source for per-workspace integration config (server URL, PAT presence).
     private final ConnectionService connectionService;
     private final GitLabWorkspaceLinkService workspaceLinkService;
+    private final WorkspaceActorSelector actorSelector;
 
     // Infrastructure
     private final AsyncTaskExecutor monitoringExecutor;
@@ -116,6 +117,7 @@ public class GitLabWorkspaceInitializationService {
             ObjectProvider<GitLabWorkspaceDataSyncTrigger> dataSyncTriggerProvider,
             ConnectionService connectionService,
             GitLabWorkspaceLinkService workspaceLinkService,
+            WorkspaceActorSelector actorSelector,
             @Qualifier("monitoringExecutor") AsyncTaskExecutor monitoringExecutor) {
         this.workspaceRepository = workspaceRepository;
         this.organizationRepository = organizationRepository;
@@ -131,6 +133,7 @@ public class GitLabWorkspaceInitializationService {
         this.dataSyncTriggerProvider = dataSyncTriggerProvider;
         this.connectionService = connectionService;
         this.workspaceLinkService = workspaceLinkService;
+        this.actorSelector = actorSelector;
         this.monitoringExecutor = monitoringExecutor;
     }
 
@@ -456,8 +459,10 @@ public class GitLabWorkspaceInitializationService {
 
         var memberSyncService = gitLabServices.getGroupMemberSyncService();
         if (memberSyncService != null) {
-            organizationRepository
-                    .findByLoginIgnoreCaseAndProvider_Type(accountLogin, IdentityProviderType.GITLAB)
+            actorSelector
+                    .connectedProviderId(workspace.getId())
+                    .flatMap(providerId ->
+                            organizationRepository.findByLoginIgnoreCaseAndProviderId(accountLogin, providerId))
                     .ifPresent(org -> {
                         try {
                             int membersSynced =
@@ -542,12 +547,18 @@ public class GitLabWorkspaceInitializationService {
         var teamSyncService = gitLabServices.getTeamSyncService();
         if (teamSyncService != null) {
             try {
-                int teamsCount = teamSyncService.syncTeamsForGroup(workspace.getId(), accountLogin);
+                var teams = teamSyncService.syncTeamsForGroup(workspace.getId(), accountLogin);
                 // Stamp the teams watermark so the cron scheduler's cooldown logic reflects that
                 // initial sync just ran; otherwise cron would re-sync teams redundantly right after
-                // workspace activation.
-                syncTargetProvider.updateTeamsSyncTimestamp(workspace.getId(), Instant.now());
-                log.info("GitLab team sync complete: workspaceId={}, teams={}", workspace.getId(), teamsCount);
+                // workspace activation. An incomplete listing leaves it for cron to retry.
+                if (teams.complete()) {
+                    syncTargetProvider.updateTeamsSyncTimestamp(workspace.getId(), Instant.now());
+                }
+                log.info(
+                        "GitLab team sync finished: workspaceId={}, teams={}, complete={}",
+                        workspace.getId(),
+                        teams.teams(),
+                        teams.complete());
             } catch (Exception e) {
                 log.warn("Failed to sync teams: workspaceId={}", workspace.getId(), e);
             }

@@ -118,6 +118,22 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
         """)
     List<Repository> findAllByWorkspaceMonitors(@Param("workspaceId") Long workspaceId);
 
+    /**
+     * The repositories on {@code providerId} at the workspace's monitored paths. A monitor names a path, and another
+     * instance can host the same path, so a caller that writes on the workspace's behalf passes the provider of its
+     * active connection.
+     */
+    @Query("""
+        SELECT r FROM Repository r JOIN FETCH r.provider p
+        WHERE p.id = :providerId
+        AND r.nameWithOwner IN (
+            SELECT m.nameWithOwner FROM RepositoryToMonitor m WHERE m.workspace.id = :workspaceId
+        )
+        ORDER BY r.nameWithOwner
+        """)
+    List<Repository> findAllByWorkspaceMonitorsOnProvider(
+            @Param("workspaceId") Long workspaceId, @Param("providerId") Long providerId);
+
     @Transactional
     @Modifying
     @Query(value = """

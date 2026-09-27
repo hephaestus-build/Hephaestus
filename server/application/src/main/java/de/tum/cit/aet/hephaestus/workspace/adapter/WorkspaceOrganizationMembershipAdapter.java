@@ -1,10 +1,14 @@
 package de.tum.cit.aet.hephaestus.workspace.adapter;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMemberRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembership;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipService;
@@ -13,9 +17,9 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -37,16 +41,25 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
     private final WorkspaceMembershipRepository workspaceMembershipRepository;
     private final WorkspaceMembershipService workspaceMembershipService;
     private final OrganizationMembershipRepository organizationMembershipRepository;
+    private final OrganizationRepository organizationRepository;
+    private final TeamMembershipRepository teamMembershipRepository;
+    private final WorkspaceActorSelector actorSelector;
 
     public WorkspaceOrganizationMembershipAdapter(
             WorkspaceRepository workspaceRepository,
             WorkspaceMembershipRepository workspaceMembershipRepository,
             WorkspaceMembershipService workspaceMembershipService,
-            OrganizationMembershipRepository organizationMembershipRepository) {
+            OrganizationMembershipRepository organizationMembershipRepository,
+            OrganizationRepository organizationRepository,
+            TeamMembershipRepository teamMembershipRepository,
+            WorkspaceActorSelector actorSelector) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceMembershipService = workspaceMembershipService;
         this.organizationMembershipRepository = organizationMembershipRepository;
+        this.organizationRepository = organizationRepository;
+        this.teamMembershipRepository = teamMembershipRepository;
+        this.actorSelector = actorSelector;
     }
 
     @Override
@@ -64,7 +77,7 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
     @Override
     @Transactional
     public void onOrganizationMembershipsSynced(OrganizationSyncedEvent event) {
-        Optional<Workspace> workspaceOpt = findWorkspaceByOrgLogin(event.organizationLogin());
+        Optional<Workspace> workspaceOpt = findWorkspace(event.organizationId(), event.organizationLogin());
 
         if (workspaceOpt.isEmpty()) {
             log.debug("Skipped member sync: reason=noWorkspaceForOrg, orgLogin={}", event.organizationLogin());
@@ -74,7 +87,7 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
         Workspace workspace = workspaceOpt.get();
 
         try {
-            int synced = syncWorkspaceMembersFromOrganization(workspace, event.organizationId());
+            int synced = reconcileWorkspaceMembers(workspace, event.organizationId(), event.rosterComplete());
             log.info(
                     "Synced workspace members after scheduled org sync: workspaceId={}, orgLogin={}, memberCount={}",
                     workspace.getId(),
@@ -89,10 +102,15 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
         }
     }
 
+    /**
+     * One person's membership changed: only their workspace membership follows, from what the stored roster and
+     * subgroup teams grant them now. Nobody else is re-read, so a one-person event cannot remove anyone else.
+     */
     private void syncWorkspaceFromOrganization(MembershipChangedEvent event, String action) {
-        Optional<Workspace> workspaceOpt = findWorkspaceByOrgLogin(event.organizationLogin());
+        Optional<Workspace> workspaceOpt = findWorkspace(event.organizationId(), event.organizationLogin());
+        Optional<Organization> organization = organizationRepository.findById(event.organizationId());
 
-        if (workspaceOpt.isEmpty()) {
+        if (workspaceOpt.isEmpty() || organization.isEmpty()) {
             log.debug(
                     "Skipped member sync: reason=noWorkspaceForOrg, orgLogin={}, action={}",
                     event.organizationLogin(),
@@ -103,17 +121,18 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
         Workspace workspace = workspaceOpt.get();
 
         try {
-            int synced = syncWorkspaceMembersFromOrganization(workspace, event.organizationId());
+            WorkspaceMembership.@Nullable WorkspaceRole role = currentGrant(organization.get(), event.userId());
+            workspaceMembershipService.applyProviderGrant(workspace, event.userId(), role);
             log.info(
-                    "Synced workspace members after member change: workspaceId={}, orgLogin={}, action={}, userLogin={}, memberCount={}",
+                    "Synced workspace member after member change: workspaceId={}, orgLogin={}, action={}, userLogin={}, role={}",
                     workspace.getId(),
                     event.organizationLogin(),
                     action,
                     event.userLogin(),
-                    synced);
+                    role);
         } catch (Exception e) {
             log.error(
-                    "Failed to sync workspace members after member change: workspaceId={}, orgLogin={}, action={}",
+                    "Failed to sync workspace member after member change: workspaceId={}, orgLogin={}, action={}",
                     workspace.getId(),
                     event.organizationLogin(),
                     action,
@@ -122,41 +141,70 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
         }
     }
 
-    private Optional<Workspace> findWorkspaceByOrgLogin(String organizationLogin) {
-        return workspaceRepository
-                .findByOrganization_Login(organizationLogin)
-                .or(() -> workspaceRepository.findByAccountLoginIgnoreCase(organizationLogin));
+    /** The role the organization's roster or one of its subgroup teams grants {@code userId} now, if any. */
+    private WorkspaceMembership.@Nullable WorkspaceRole currentGrant(Organization organization, Long userId) {
+        Optional<WorkspaceMembership.WorkspaceRole> rosterRole =
+                organizationMembershipRepository.findByOrganizationId(organization.getId()).stream()
+                        .filter(membership -> userId.equals(membership.getUserId()))
+                        .map(membership -> mapOrgRoleToWorkspaceRole(membership.getRole()))
+                        .findFirst();
+        if (rosterRole.isPresent()) {
+            return rosterRole.get();
+        }
+        return teamMembershipRepository
+                        .findDistinctUserIdsOfSubteams(
+                                organization.getLogin(),
+                                Objects.requireNonNull(
+                                        organization.getProvider().getId()))
+                        .contains(userId)
+                ? WorkspaceMembership.WorkspaceRole.MEMBER
+                : null;
     }
 
     /**
-     * Synchronizes workspace members from organization members.
-     * <p>
-     * Maps organization membership roles to workspace membership roles:
-     * <ul>
-     *   <li>ADMIN -> ADMIN</li>
-     *   <li>MEMBER -> MEMBER</li>
-     * </ul>
-     * Existing OWNER roles are preserved and not downgraded.
+     * The workspace this organization's roster is for, while its active connection is on the organization's
+     * instance: the one linked to the row, or else the one unlinked workspace at the same path. A queued event
+     * after a disconnect or a switch of instance reaches none.
+     */
+    private Optional<Workspace> findWorkspace(Long organizationId, String organizationLogin) {
+        Optional<Long> organizationProvider = organizationRepository
+                .findById(organizationId)
+                .map(organization ->
+                        Objects.requireNonNull(organization.getProvider().getId()));
+        if (organizationProvider.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<Workspace> linked = workspaceRepository.findByOrganization_Id(organizationId);
+        if (linked.isPresent()) {
+            return linked.filter(
+                    workspace -> organizationProvider.equals(actorSelector.connectedProviderId(workspace.getId())));
+        }
+        List<Workspace> unlinked = workspaceRepository.findAllByAccountLoginIgnoreCase(organizationLogin).stream()
+                .filter(workspace -> workspace.getOrganization() == null)
+                .filter(workspace -> organizationProvider.equals(actorSelector.connectedProviderId(workspace.getId())))
+                .toList();
+        return unlinked.size() == 1 ? Optional.of(unlinked.getFirst()) : Optional.empty();
+    }
+
+    /**
+     * Sets the workspace's members to what the provider currently grants: the organization roster's roles, and
+     * MEMBER for anyone only a subgroup team of the organization lists, since a team grants no administration.
+     * No role is carried over from the workspace itself except OWNER, which is kept for anyone who holds it.
      *
      * @param workspace      the workspace to sync
      * @param organizationId the organization ID to sync members from
+     * @param rosterComplete whether an empty roster is a real answer; otherwise it is taken as a shortfall and
+     *                       nobody is removed
      * @return the number of members synced
      */
-    private int syncWorkspaceMembersFromOrganization(Workspace workspace, Long organizationId) {
+    int reconcileWorkspaceMembers(Workspace workspace, Long organizationId, boolean rosterComplete) {
         Long workspaceId = workspace.getId();
-
-        // Get current owners to preserve their role
-        Set<Long> currentOwnerIds = workspaceMembershipRepository.findByWorkspace_Id(workspaceId).stream()
-                .filter(m -> m.getRole() == WorkspaceMembership.WorkspaceRole.OWNER)
-                .filter(m -> m.getUser() != null)
-                .map(m -> m.getUser().getId())
-                .collect(Collectors.toSet());
 
         // Get organization memberships and map to workspace roles
         List<OrganizationMembership> orgMemberships =
                 organizationMembershipRepository.findByOrganizationId(organizationId);
 
-        if (orgMemberships.isEmpty()) {
+        if (orgMemberships.isEmpty() && !rosterComplete) {
             log.debug(
                     "Skipped workspace member sync: reason=noOrgMembersFound, workspaceId={}, organizationId={}",
                     workspaceId,
@@ -164,24 +212,22 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
             return 0;
         }
 
-        // Build desired workspace memberships map, preserving existing owners
         Map<Long, WorkspaceMembership.WorkspaceRole> desiredRoles = new HashMap<>();
         for (OrganizationMembership orgMembership : orgMemberships) {
-            Long userId = orgMembership.getUserId();
-
-            // Preserve existing OWNER role - don't downgrade them
-            if (currentOwnerIds.contains(userId)) {
-                desiredRoles.put(userId, WorkspaceMembership.WorkspaceRole.OWNER);
-            } else {
-                // Map organization role to workspace role
-                WorkspaceMembership.WorkspaceRole workspaceRole = mapOrgRoleToWorkspaceRole(orgMembership.getRole());
-                desiredRoles.put(userId, workspaceRole);
-            }
+            desiredRoles.put(orgMembership.getUserId(), mapOrgRoleToWorkspaceRole(orgMembership.getRole()));
         }
-
-        // Ensure we don't remove existing owners even if they're not in the org anymore
-        for (Long ownerId : currentOwnerIds) {
-            desiredRoles.putIfAbsent(ownerId, WorkspaceMembership.WorkspaceRole.OWNER);
+        organizationRepository.findById(organizationId).ifPresent(organization -> {
+            for (Long userId : teamMembershipRepository.findDistinctUserIdsOfSubteams(
+                    organization.getLogin(),
+                    Objects.requireNonNull(organization.getProvider().getId()))) {
+                desiredRoles.putIfAbsent(userId, WorkspaceMembership.WorkspaceRole.MEMBER);
+            }
+        });
+        // An owner stays owner whether or not the provider still lists them.
+        for (WorkspaceMembership membership : workspaceMembershipRepository.findByWorkspace_Id(workspaceId)) {
+            if (membership.getUser() != null && membership.getRole() == WorkspaceMembership.WorkspaceRole.OWNER) {
+                desiredRoles.put(membership.getUser().getId(), WorkspaceMembership.WorkspaceRole.OWNER);
+            }
         }
 
         // Sync workspace members

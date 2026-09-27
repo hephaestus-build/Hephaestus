@@ -6,9 +6,6 @@ import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSync
 import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants.adaptPageSize;
 import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants.extractNumericId;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener.OrganizationSyncedEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
@@ -25,8 +22,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGro
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupMemberResponse.GitLabMemberUser;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserClassifier;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -72,9 +72,10 @@ public class GitLabGroupMemberSyncService {
     private final GitLabGraphQlResponseHandler responseHandler;
     private final OrganizationMembershipRepository organizationMembershipRepository;
     private final UserRepository userRepository;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final GitLabWorkspaceLinkService workspaceLinkService;
     private final GitLabProperties gitLabProperties;
     private final @Nullable OrganizationMembershipListener organizationMembershipListener;
+    private final TransactionTemplate transactionTemplate;
     private final TransactionTemplate requiresNewTransaction;
 
     public GitLabGroupMemberSyncService(
@@ -82,7 +83,7 @@ public class GitLabGroupMemberSyncService {
             GitLabGraphQlResponseHandler responseHandler,
             OrganizationMembershipRepository organizationMembershipRepository,
             UserRepository userRepository,
-            IdentityProviderRepository gitProviderRepository,
+            GitLabWorkspaceLinkService workspaceLinkService,
             GitLabProperties gitLabProperties,
             @Nullable OrganizationMembershipListener organizationMembershipListener,
             TransactionTemplate transactionTemplate) {
@@ -90,9 +91,10 @@ public class GitLabGroupMemberSyncService {
         this.responseHandler = responseHandler;
         this.organizationMembershipRepository = organizationMembershipRepository;
         this.userRepository = userRepository;
-        this.gitProviderRepository = gitProviderRepository;
+        this.workspaceLinkService = workspaceLinkService;
         this.gitLabProperties = gitLabProperties;
         this.organizationMembershipListener = organizationMembershipListener;
+        this.transactionTemplate = transactionTemplate;
         // Isolated transaction for each user upsert — matches GitHubUserProcessor pattern.
         this.requiresNewTransaction =
                 new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
@@ -102,9 +104,15 @@ public class GitLabGroupMemberSyncService {
     /**
      * Syncs all memberships for a GitLab group.
      * <p>
-     * Paginates through the {@code GetGroupMembers} GraphQL query, upserts each
-     * member as a User + OrganizationMembership, removes stale memberships,
-     * and fires the organization-synced event.
+     * Paginates through the {@code GetGroupMembers} GraphQL query for the group's effective members
+     * ({@link GitLabGroupMemberResponse#EFFECTIVE_RELATIONS}),
+     * reading every page before anything is written. Only a complete listing, whose pages are whole and
+     * error-free and whose entries all name a user and an access level, is applied: its users are upserted, then
+     * each user's highest grant and the removal of stale memberships land in one short transaction, followed by
+     * the organization-synced event. An incomplete listing writes nothing; a user that cannot be resolved, or
+     * ownership lost before the role transaction, can leave already upserted users but no membership change. Only
+     * the scope whose reading of the group is authoritative, per {@link GitLabWorkspaceLinkService#mayWriteGroup},
+     * writes.
      * <p>
      * Circuit breaker permission and rate limit checks are performed per page,
      * matching the canonical pattern in {@code GitLabGroupSyncService.reconcileDirectProjects}.
@@ -112,7 +120,8 @@ public class GitLabGroupMemberSyncService {
      * @param scopeId       the workspace/scope ID for authentication
      * @param groupFullPath the full path of the group (e.g., "org/team")
      * @param organization  the Organization entity for this group
-     * @return the number of unique members synced, or -1 on failure
+     * @return the number of unique members synced, or -1 when the roster was not listed completely or this scope
+     *     may not write it
      */
     public int syncGroupMemberships(Long scopeId, @Nullable String groupFullPath, @Nullable Organization organization) {
         if (organization == null || groupFullPath == null || groupFullPath.isBlank()) {
@@ -124,14 +133,23 @@ public class GitLabGroupMemberSyncService {
         }
 
         String safeGroupPath = sanitizeForLog(groupFullPath);
-        IdentityProvider provider = resolveProvider();
-        Long providerId = Objects.requireNonNull(provider.getId());
+        if (!workspaceLinkService.mayWriteGroup(scopeId, organization)) {
+            log.warn(
+                    "Skipped group membership sync: reason=groupNotThisScopes, scopeId={}, groupPath={}",
+                    scopeId,
+                    safeGroupPath);
+            return -1;
+        }
+        Long providerId = Objects.requireNonNull(organization.getProvider().getId());
 
-        Set<Long> syncedUserIds = new HashSet<>();
+        // The whole roster is read before any membership is written: a later page that fails or cannot be read must
+        // leave every stored role as it was, including one an earlier page lists at a lower level.
+        Map<Long, ListedMember> listedByNativeId = new HashMap<>();
         String cursor = null;
         String previousCursor = null;
         int pageCount = 0;
         boolean syncCompletedNormally = false;
+        boolean everyMemberIdentified = true;
 
         try {
             do {
@@ -152,6 +170,7 @@ public class GitLabGroupMemberSyncService {
 
                 ClientGraphQlResponse response = client.documentName(GET_GROUP_MEMBERS_DOCUMENT)
                         .variable("fullPath", groupFullPath)
+                        .variable("relations", GitLabGroupMemberResponse.EFFECTIVE_RELATIONS)
                         .variable("first", pageSize)
                         .variable("after", cursor)
                         .execute()
@@ -168,31 +187,35 @@ public class GitLabGroupMemberSyncService {
 
                 graphQlClientProvider.recordSuccess();
 
-                List<GitLabGroupMemberResponse> members = Objects.requireNonNull(response)
-                        .field("group.groupMembers.nodes")
-                        .toEntityList(GitLabGroupMemberResponse.class);
+                // GitLab answers a field it could not resolve with an error beside the data it could, such as a
+                // member whose access level is missing: that page does not say who holds which role.
+                if (!Objects.requireNonNull(response).getErrors().isEmpty()) {
+                    log.warn("Stopped group membership sync: reason=fieldErrors, groupPath={}", safeGroupPath);
+                    break;
+                }
+                if (!responseHandler.isWholePage(response, "group.groupMembers")) {
+                    log.warn("Stopped group membership sync: reason=pageNotWhole, groupPath={}", safeGroupPath);
+                    break;
+                }
+
+                List<GitLabGroupMemberResponse> members =
+                        response.field("group.groupMembers.nodes").toEntityList(GitLabGroupMemberResponse.class);
 
                 for (GitLabGroupMemberResponse member : members) {
-                    if (member == null || member.user() == null) {
+                    // A listed member this sync cannot identify, or whose access level is missing, may be one already
+                    // stored, so the listing no longer proves who is gone or what role they hold.
+                    ListedMember listed = ListedMember.of(member);
+                    if (listed == null) {
+                        everyMemberIdentified = false;
                         continue;
                     }
-
-                    Long userId = upsertUser(member.user(), providerId);
-                    if (userId == null) {
-                        continue;
-                    }
-
-                    OrganizationMemberRole role = mapAccessLevel(member.accessLevel());
-                    organizationMembershipRepository.upsertMembership(organization.getId(), userId, role);
-                    syncedUserIds.add(userId);
+                    listedByNativeId.merge(listed.nativeId(), listed, ListedMember::higher);
                 }
 
                 // Check pagination
-                GitLabPageInfo pageInfo = Objects.requireNonNull(response)
-                        .field("group.groupMembers.pageInfo")
-                        .toEntity(GitLabPageInfo.class);
-
-                if (pageInfo == null || !pageInfo.hasNextPage()) {
+                GitLabPageInfo pageInfo = Objects.requireNonNull(
+                        response.field("group.groupMembers.pageInfo").toEntity(GitLabPageInfo.class));
+                if (!pageInfo.hasNextPage()) {
                     syncCompletedNormally = true;
                     break;
                 }
@@ -215,32 +238,56 @@ public class GitLabGroupMemberSyncService {
                 Thread.sleep(gitLabProperties.paginationThrottle().toMillis());
             } while (pageCount < MAX_PAGINATION_PAGES);
 
-            // Remove stale memberships only if sync completed fully
-            if (syncCompletedNormally) {
-                removeStaleMemberships(organization, syncedUserIds);
-            } else {
+            Map<Long, OrganizationMemberRole> syncedRoles = new HashMap<>();
+            boolean complete = syncCompletedNormally && everyMemberIdentified;
+            if (complete) {
+                for (ListedMember listed : listedByNativeId.values()) {
+                    Long userId = upsertUser(listed.user(), providerId);
+                    if (userId == null) {
+                        complete = false;
+                        break;
+                    }
+                    syncedRoles.put(userId, mapAccessLevel(listed.accessLevel()));
+                }
+            }
+            if (complete) {
+                // One short transaction: the roster's roles and removals land together or not at all, and only while
+                // this scope still owns the group on the instance it was read from.
+                complete = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+                    if (!workspaceLinkService.mayWriteGroup(scopeId, organization)) {
+                        return false;
+                    }
+                    syncedRoles.forEach((userId, role) ->
+                            organizationMembershipRepository.upsertMembership(organization.getId(), userId, role));
+                    removeStaleMemberships(organization, syncedRoles.keySet());
+                    return true;
+                }));
+            }
+            if (!complete) {
                 log.warn(
-                        "Skipped stale membership removal: reason=incompleteSync, groupPath={}, pagesProcessed={}",
+                        "Skipped group membership changes: reason=incompleteSync, groupPath={}, pagesProcessed={}, pagesComplete={}, membersIdentified={}",
                         safeGroupPath,
-                        pageCount + 1);
+                        pageCount + 1,
+                        syncCompletedNormally,
+                        everyMemberIdentified);
             }
 
             // Fire sync event only on complete sync — downstream reconciliation
             // should not run on partial data to avoid incorrect member removal.
-            if (syncCompletedNormally && organizationMembershipListener != null) {
+            if (complete && organizationMembershipListener != null) {
                 organizationMembershipListener.onOrganizationMembershipsSynced(
-                        new OrganizationSyncedEvent(organization.getId(), organization.getLogin()));
+                        new OrganizationSyncedEvent(organization.getId(), organization.getLogin(), true));
             }
 
             log.info(
                     "Synced group memberships: scopeId={}, groupPath={}, memberCount={}, pages={}, complete={}",
                     scopeId,
                     safeGroupPath,
-                    syncedUserIds.size(),
+                    syncedRoles.size(),
                     pageCount + 1,
-                    syncCompletedNormally);
+                    complete);
 
-            return syncedUserIds.size();
+            return complete ? syncedRoles.size() : -1;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Interrupted during group membership sync: groupPath={}", safeGroupPath);
@@ -323,6 +370,42 @@ public class GitLabGroupMemberSyncService {
         return OrganizationMemberRole.MEMBER;
     }
 
+    /**
+     * One member entry GitLab listed with a readable user id, username and access level.
+     *
+     * @param nativeId    the user's numeric GitLab id
+     * @param user        the listed user
+     * @param accessLevel the listed access level
+     */
+    private record ListedMember(long nativeId, GitLabMemberUser user, GitLabAccessLevel accessLevel) {
+
+        /** The entry, or null when it does not say who the member is or what access they hold. */
+        static @Nullable ListedMember of(@Nullable GitLabGroupMemberResponse member) {
+            GitLabMemberUser user = member == null ? null : member.user();
+            GitLabAccessLevel accessLevel = member == null ? null : member.accessLevel();
+            if (user == null
+                    || user.id() == null
+                    || user.username() == null
+                    || accessLevel == null
+                    || accessLevel.integerValue() == null) {
+                return null;
+            }
+            try {
+                return new ListedMember(extractNumericId(user.id()), user, accessLevel);
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        }
+
+        /** A user listed through more than one relation holds the highest grant. */
+        ListedMember higher(ListedMember other) {
+            return Objects.requireNonNull(other.accessLevel.integerValue())
+                            > Objects.requireNonNull(accessLevel.integerValue())
+                    ? other
+                    : this;
+        }
+    }
+
     private void removeStaleMemberships(Organization organization, Set<Long> syncedUserIds) {
         List<Long> existingUserIds = organizationMembershipRepository.findUserIdsByOrganizationId(organization.getId());
 
@@ -337,18 +420,5 @@ public class GitLabGroupMemberSyncService {
                     sanitizeForLog(organization.getLogin()),
                     staleUserIds.size());
         }
-    }
-
-    /**
-     * Resolves the GitLab provider entity from the database.
-     *
-     * @return the GitLab provider
-     * @throws IllegalStateException if no GitLab provider is found
-     */
-    private IdentityProvider resolveProvider() {
-        return gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
-                .orElseThrow(() -> new IllegalStateException("IdentityProvider not found for type=GITLAB, serverUrl="
-                        + gitLabProperties.defaultServerUrl()));
     }
 }

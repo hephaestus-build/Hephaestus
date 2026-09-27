@@ -712,7 +712,7 @@ public class GithubDataSyncService {
                 log.debug("Synced organization: scopeId={}, orgLogin={}", scopeId, safeOrgLogin);
 
                 organizationMembershipListener.onOrganizationMembershipsSynced(
-                        new OrganizationSyncedEvent(organization.getId(), organizationLogin));
+                        new OrganizationSyncedEvent(organization.getId(), organizationLogin, false));
                 syncTargetProvider.updateUsersSyncTimestamp(scopeId, Instant.now());
             }
         } catch (InstallationNotFoundException e) {

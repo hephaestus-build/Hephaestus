@@ -26,9 +26,11 @@ public interface RepositoryCollaboratorRepository
             SELECT DISTINCT c FROM RepositoryCollaborator c
             JOIN FETCH c.user
             WHERE c.repository.organization.login = :orgLogin
+            AND c.repository.provider.id = :providerId
             AND c.permission IN :permissions
         """)
     List<RepositoryCollaborator> findByOrgLoginAndPermissions(
             @Param("orgLogin") String orgLogin,
+            @Param("providerId") Long providerId,
             @Param("permissions") List<RepositoryCollaborator.Permission> permissions);
 }

@@ -1563,6 +1563,11 @@ erDiagram
         VARCHAR(24) data_handling_tier UK "NOT NULL"
     }
 
+    WorkspaceHiddenFormerMember {
+        BIGINT user_id PK,FK
+        BIGINT workspace_id PK,FK
+    }
+
     WorkspaceLlmConnection {
         BIGINT id PK,UK
         BIGINT workspace_id FK,UK "NOT NULL"
@@ -1869,6 +1874,8 @@ erDiagram
     Team }o--o{ TeamMembership : belongs_to
     Team }o--o{ TeamRepositoryPermission : has
     Repository }o--o{ TeamRepositoryPermission : has
+    User }o--o{ WorkspaceHiddenFormerMember : belongs_to
+    Workspace }o--o{ WorkspaceHiddenFormerMember : belongs_to
     Label }o--o{ WorkspaceTeamLabelFilter : labeled
     Team }o--o{ WorkspaceTeamLabelFilter : labeled
     Workspace }o--o{ WorkspaceTeamLabelFilter : labeled

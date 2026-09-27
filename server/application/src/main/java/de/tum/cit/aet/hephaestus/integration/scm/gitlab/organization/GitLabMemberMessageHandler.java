@@ -116,22 +116,22 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
                 safeUsername,
                 event.groupAccess());
 
-        Long providerId = Objects.requireNonNull(gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
-                .orElseThrow(() -> new IllegalStateException(
-                        "IdentityProvider not found for type=GITLAB, serverUrl=" + gitLabProperties.defaultServerUrl()))
-                .getId());
-
         // On a connection route the event only says that a membership changed: the membership stored is the one GitLab
         // reports now, so a forged or stale event can neither grant, change nor remove access.
         Optional<GitLabRouteAdmission.AdmittedRoute> route = GitLabRouteAdmission.current();
         if (route.isPresent()) {
             Optional<GitLabRouteAdmission.ReportedMembership> reported = GitLabRouteAdmission.reportedMembership();
             if (reported.isPresent() && routeAdmission.holdActive(route.get())) {
-                applyReportedMembership(event.userId(), route.get(), reported.get(), providerId);
+                applyReportedMembership(event.userId(), route.get(), reported.get());
             }
             return;
         }
+
+        Long providerId = Objects.requireNonNull(gitProviderRepository
+                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
+                .orElseThrow(() -> new IllegalStateException(
+                        "IdentityProvider not found for type=GITLAB, serverUrl=" + gitLabProperties.defaultServerUrl()))
+                .getId());
 
         // Look up the organization by the group's native ID
         Organization org = organizationRepository
@@ -149,7 +149,7 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
         if (event.isAddition() || event.isUpdate()) {
             handleMemberAddOrUpdate(event, org, providerId);
         } else if (event.isRemoval()) {
-            handleMemberRemoval(event, org, providerId);
+            handleMemberRemoval(event, org);
         } else {
             log.debug("Unhandled member event action: eventName={}, groupPath={}", event.eventName(), safeGroupPath);
         }
@@ -157,14 +157,13 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
 
     /**
      * Stores the membership GitLab reported for {@code userId}: in the connected group as an organization membership
-     * at the highest access GitLab grants, direct or inherited; in a subgroup as a team membership at the direct access
-     * the team sync also reads. No reported access removes the membership.
+     * at the highest effective access; in a subgroup as a team membership at the highest access the team sync also
+     * reads (see {@link GitLabGroupMemberResponse}). No reported access removes the membership. Either way the person's workspace
+     * membership then follows what the connected group's roster and teams still grant them.
      */
-    private void applyReportedMembership(
-            long userId,
-            GitLabRouteAdmission.AdmittedRoute route,
-            GitLabRouteAdmission.ReportedMembership membership,
-            Long providerId) {
+    void applyReportedMembership(
+            long userId, GitLabRouteAdmission.AdmittedRoute route, GitLabRouteAdmission.ReportedMembership membership) {
+        long providerId = route.providerId();
         GitLabGroupMemberResponse highest = membership.members().stream()
                 .max(Comparator.comparingInt(GitLabMemberMessageHandler::accessLevel))
                 .orElse(null);
@@ -191,7 +190,11 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
             log.info("Added/updated group member: orgId={}, userId={}, role={}", org.getId(), user.getId(), role);
             if (membershipListener != null) {
                 membershipListener.onMemberAdded(new MembershipChangedEvent(
-                        org.getId(), org.getLogin(), user.getId(), user.getLogin(), accessName(highest)));
+                        org.getId(),
+                        org.getLogin(),
+                        user.getId(),
+                        user.getLogin(),
+                        accessName(Objects.requireNonNull(highest))));
             }
             return;
         }
@@ -203,10 +206,18 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
             return;
         }
         TeamMembership.Role role = highest == null ? null : GitLabTeamSyncService.mapAccessLevel(accessName(highest));
+        Optional<Organization> connectedGroup =
+                organizationRepository.findByNativeIdAndProviderId(route.groupId(), providerId);
         if (role == null) {
-            userRepository
-                    .findByNativeIdAndProviderId(userId, providerId)
-                    .ifPresent(user -> teamMembershipRepository.deleteByTeam_IdAndUser_Id(team.getId(), user.getId()));
+            userRepository.findByNativeIdAndProviderId(userId, providerId).ifPresent(user -> {
+                teamMembershipRepository.deleteByTeam_IdAndUser_Id(team.getId(), user.getId());
+                connectedGroup.ifPresent(org -> {
+                    if (membershipListener != null) {
+                        membershipListener.onMemberRemoved(new MembershipChangedEvent(
+                                org.getId(), org.getLogin(), user.getId(), user.getLogin(), null));
+                    }
+                });
+            });
             return;
         }
         User user = gitLabUserService.findOrCreateReportedUser(userId, providerId);
@@ -219,6 +230,16 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
         teamMembership.setRole(role);
         teamMembershipRepository.save(teamMembership);
         log.info("Added/updated team member: teamId={}, role={}", team.getId(), role);
+        connectedGroup.ifPresent(org -> {
+            if (membershipListener != null) {
+                membershipListener.onMemberAdded(new MembershipChangedEvent(
+                        org.getId(),
+                        org.getLogin(),
+                        user.getId(),
+                        user.getLogin(),
+                        accessName(Objects.requireNonNull(highest))));
+            }
+        });
     }
 
     private void removeMember(Organization org, User user) {
@@ -274,7 +295,14 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
             return;
         }
 
+        // The event names one direct grant; an inherited one may be higher, so it never lowers the stored role.
         OrganizationMemberRole role = mapGroupAccess(event.groupAccess());
+        boolean storedAdmin = membershipRepository.findByOrganizationId(org.getId()).stream()
+                .anyMatch(membership -> user.getId().equals(membership.getUserId())
+                        && membership.getRole() == OrganizationMemberRole.ADMIN);
+        if (storedAdmin) {
+            role = OrganizationMemberRole.ADMIN;
+        }
         membershipRepository.upsertMembership(org.getId(), user.getId(), role);
 
         log.info(
@@ -290,30 +318,16 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
         }
     }
 
-    private void handleMemberRemoval(GitLabMemberEventDTO event, Organization org, Long providerId) {
-        User user = userRepository
-                .findByNativeIdAndProviderId(event.userId(), providerId)
-                .orElse(null);
-        if (user == null) {
-            log.debug(
-                    "User not found for member removal: userId={}, login={}",
-                    event.userId(),
-                    sanitizeForLog(event.userUsername()));
-            return;
-        }
-
-        membershipRepository.deleteByOrganizationIdAndUserIdIn(org.getId(), List.of(user.getId()));
-
+    /**
+     * A removal off a connection route names one direct grant. The person may still hold the group through a parent
+     * or an invited group, so it removes nothing; the next complete roster listing does, if GitLab no longer lists
+     * them.
+     */
+    private void handleMemberRemoval(GitLabMemberEventDTO event, Organization org) {
         log.info(
-                "Removed group member: orgId={}, orgLogin={}, userLogin={}",
+                "Deferred group member removal to the next roster listing: reason=directGrantOnly, orgId={}, userLogin={}",
                 org.getId(),
-                sanitizeForLog(org.getLogin()),
                 sanitizeForLog(event.userUsername()));
-
-        if (membershipListener != null) {
-            membershipListener.onMemberRemoved(
-                    new MembershipChangedEvent(org.getId(), org.getLogin(), user.getId(), event.userUsername(), null));
-        }
     }
 
     /**

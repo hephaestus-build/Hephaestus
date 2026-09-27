@@ -120,14 +120,15 @@ public interface WorkspaceMembershipRepository extends JpaRepository<WorkspaceMe
     @Transactional
     @Query(value = """
         INSERT INTO workspace_membership (workspace_id, user_id, role, league_points, hidden, created_at)
-        VALUES (:workspaceId, :userId, :role, :leaguePoints, false, CURRENT_TIMESTAMP)
+        VALUES (:workspaceId, :userId, :role, :leaguePoints, :hidden, CURRENT_TIMESTAMP)
         ON CONFLICT (workspace_id, user_id) DO NOTHING
         """, nativeQuery = true)
     int insertIfAbsent(
             @Param("workspaceId") Long workspaceId,
             @Param("userId") Long userId,
             @Param("role") String role,
-            @Param("leaguePoints") int leaguePoints);
+            @Param("leaguePoints") int leaguePoints,
+            @Param("hidden") boolean hidden);
 
     @Modifying
     @Transactional

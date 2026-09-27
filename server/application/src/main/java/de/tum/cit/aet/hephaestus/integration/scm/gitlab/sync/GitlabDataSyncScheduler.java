@@ -4,7 +4,6 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -43,6 +42,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.subissue.GitLabSubIssueS
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
@@ -113,6 +113,7 @@ public class GitlabDataSyncScheduler {
     private final GitLabWorkspaceInitializationService initializationService;
     private final GitLabRepositoryMonitors repositoryMonitors;
     private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceActorSelector actorSelector;
 
     public GitlabDataSyncScheduler(
             SyncTargetProvider syncTargetProvider,
@@ -128,7 +129,8 @@ public class GitlabDataSyncScheduler {
             GitLabDeletionSweepService deletionSweepService,
             GitLabWorkspaceInitializationService initializationService,
             GitLabRepositoryMonitors repositoryMonitors,
-            WorkspaceRepository workspaceRepository) {
+            WorkspaceRepository workspaceRepository,
+            WorkspaceActorSelector actorSelector) {
         this.syncTargetProvider = syncTargetProvider;
         this.syncContextProvider = syncContextProvider;
         this.organizationRepository = organizationRepository;
@@ -143,6 +145,7 @@ public class GitlabDataSyncScheduler {
         this.initializationService = initializationService;
         this.repositoryMonitors = repositoryMonitors;
         this.workspaceRepository = workspaceRepository;
+        this.actorSelector = actorSelector;
     }
 
     @PostConstruct
@@ -417,7 +420,7 @@ public class GitlabDataSyncScheduler {
      * when the sync completed fully (all pages fetched).
      */
     private void removeStaleRepositories(SyncSession session, GitLabSyncResult result) {
-        Long providerId = getGitLabProviderId(session.accountLogin());
+        Long providerId = getGitLabProviderId(session.scopeId());
         if (providerId == null) return;
 
         Set<Long> syncedNativeIds =
@@ -458,7 +461,7 @@ public class GitlabDataSyncScheduler {
      * Best-effort: a per-target failure never aborts the sync.
      */
     private void reconcileMonitorIdentities(SyncSession session) {
-        Long providerId = getGitLabProviderId(session.accountLogin());
+        Long providerId = getGitLabProviderId(session.scopeId());
         if (providerId == null) {
             return;
         }
@@ -492,11 +495,16 @@ public class GitlabDataSyncScheduler {
         if (memberSync == null) return;
 
         try {
-            organizationRepository
-                    .findByLoginIgnoreCaseAndProvider_Type(session.accountLogin(), IdentityProviderType.GITLAB)
+            actorSelector
+                    .connectedProviderId(session.scopeId())
+                    .flatMap(providerId -> organizationRepository.findByLoginIgnoreCaseAndProviderId(
+                            session.accountLogin(), providerId))
                     .ifPresent(org -> {
                         int count = memberSync.syncGroupMemberships(session.scopeId(), session.accountLogin(), org);
                         log.info("GitLab membership sync: scopeId={}, membersSynced={}", session.scopeId(), count);
+                        if (count < 0) {
+                            reportWarning(handle);
+                        }
                     });
         } catch (Exception e) {
             log.error("Failed GitLab membership sync: scopeId={}", session.scopeId(), e);
@@ -983,9 +991,18 @@ public class GitlabDataSyncScheduler {
         if (teamSync == null) return;
 
         try {
-            int count = teamSync.syncTeamsForGroup(session.scopeId(), session.accountLogin());
-            syncTargetProvider.updateTeamsSyncTimestamp(session.scopeId(), Instant.now());
-            log.info("GitLab team sync: scopeId={}, teams={}", session.scopeId(), count);
+            GitLabTeamSyncService.Result result = teamSync.syncTeamsForGroup(session.scopeId(), session.accountLogin());
+            log.info(
+                    "GitLab team sync: scopeId={}, teams={}, complete={}",
+                    session.scopeId(),
+                    result.teams(),
+                    result.complete());
+            // An incomplete listing keeps the stored graph and leaves the watermark behind, so the next run retries.
+            if (result.complete()) {
+                syncTargetProvider.updateTeamsSyncTimestamp(session.scopeId(), Instant.now());
+            } else {
+                reportWarning(handle);
+            }
         } catch (Exception e) {
             log.error("Failed GitLab team sync: scopeId={}", session.scopeId(), e);
             reportWarning(handle);
@@ -998,13 +1015,8 @@ public class GitlabDataSyncScheduler {
         }
     }
 
-    /**
-     * Resolves the GitLab provider ID by looking up the organization.
-     */
-    private @Nullable Long getGitLabProviderId(String accountLogin) {
-        return organizationRepository
-                .findByLoginIgnoreCaseAndProvider_Type(accountLogin, IdentityProviderType.GITLAB)
-                .map(org -> org.getProvider() != null ? org.getProvider().getId() : null)
-                .orElse(null);
+    /** The instance the scope's active connection is on; the same group path can exist on another one. */
+    private @Nullable Long getGitLabProviderId(Long scopeId) {
+        return actorSelector.connectedProviderId(scopeId).orElse(null);
     }
 }

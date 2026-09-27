@@ -17,7 +17,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncExcepti
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,7 +31,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Synchronizes GitLab project members as repository collaborators.
@@ -52,6 +54,8 @@ public class GitLabCollaboratorSyncService {
     private final GitLabGraphQlResponseHandler responseHandler;
     private final GitLabUserService userService;
     private final GitLabProperties gitLabProperties;
+    private final TransactionTemplate transactionTemplate;
+    private final GitLabWorkspaceLinkService workspaceLinkService;
 
     public GitLabCollaboratorSyncService(
             RepositoryRepository repositoryRepository,
@@ -59,38 +63,55 @@ public class GitLabCollaboratorSyncService {
             GitLabGraphQlClientProvider graphQlClientProvider,
             GitLabGraphQlResponseHandler responseHandler,
             GitLabUserService userService,
-            GitLabProperties gitLabProperties) {
+            GitLabProperties gitLabProperties,
+            TransactionTemplate transactionTemplate,
+            GitLabWorkspaceLinkService workspaceLinkService) {
         this.repositoryRepository = repositoryRepository;
         this.collaboratorRepository = collaboratorRepository;
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
         this.userService = userService;
         this.gitLabProperties = gitLabProperties;
+        this.transactionTemplate = transactionTemplate;
+        this.workspaceLinkService = workspaceLinkService;
     }
 
     /**
      * Syncs all collaborators for a repository from GitLab.
+     * <p>
+     * Only the scope that owns the project per {@link GitLabWorkspaceLinkService#mayWriteRepository} syncs it.
+     * Every page is read before anything is written, outside a transaction. Only a complete listing, whose pages
+     * are whole and error-free and whose entries all name a user and an access level, is applied, in one short
+     * transaction that also removes the collaborators it no longer lists. Anything less changes nothing: a
+     * collaborator is a team member through {@code GitLabTeamSyncService}, so a false removal here would revoke a
+     * student's workspace access.
      *
      * @param scopeId      the workspace scope ID
      * @param repository   the repository to sync collaborators for
      * @return sync result
      */
-    @Transactional
     public SyncResult syncCollaboratorsForRepository(Long scopeId, Repository repository) {
         String projectPath = repository.getNameWithOwner();
         String safeProjectPath = Objects.requireNonNullElse(sanitizeForLog(projectPath), "<unknown>");
+        // The scope's client reads its own instance, so its answer belongs only on a repository row of that instance.
+        Long providerId = repository.getProvider() == null
+                ? null
+                : repository.getProvider().getId();
+        // Collaborator rows are shared by every workspace monitoring the project and decide project-only team
+        // membership, so only the scope whose reading of the project is authoritative replaces them.
+        if (providerId == null || !workspaceLinkService.mayWriteRepository(scopeId, repository)) {
+            log.warn("Skipped collaborator sync: reason=repositoryNotThisScopes, projectPath={}", safeProjectPath);
+            return SyncResult.abortedError(0);
+        }
 
-        int totalSynced = 0;
-        Set<Long> syncedUserIds = new HashSet<>();
+        Map<String, ListedCollaborator> listedByGlobalId = new LinkedHashMap<>();
         String cursor = null;
         String previousCursor = null;
         int page = 0;
-        boolean errorAborted = false;
+        boolean complete = false;
 
         try {
-            do {
-                if (page >= MAX_PAGINATION_PAGES) break;
-
+            while (page < MAX_PAGINATION_PAGES) {
                 graphQlClientProvider.acquirePermission();
                 graphQlClientProvider.waitIfRateLimitLow(scopeId);
 
@@ -112,105 +133,129 @@ public class GitLabCollaboratorSyncService {
                 if (handleResult.action() == GitLabGraphQlResponseHandler.HandleResult.Action.ABORT) {
                     graphQlClientProvider.recordFailure(
                             new GitLabSyncException("Invalid response for project members"));
-                    errorAborted = true;
                     break;
                 }
                 graphQlClientProvider.recordSuccess();
-
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> nodes = (List<Map<String, Object>>) (List<?>) Objects.requireNonNull(response)
-                        .field("project.projectMembers.nodes")
-                        .toEntityList(Map.class);
-
-                if (nodes == null || nodes.isEmpty()) break;
-
-                Long providerId = Objects.requireNonNull(
-                        repository.getProvider() != null
-                                ? Objects.requireNonNull(
-                                        repository.getProvider().getId())
-                                : null);
-
-                for (Map<String, Object> node : nodes) {
-                    processCollaboratorNode(node, repository, providerId, syncedUserIds);
-                    totalSynced++;
+                if (!Objects.requireNonNull(response).getErrors().isEmpty()) {
+                    log.warn("Stopped collaborator sync: reason=fieldErrors, projectPath={}", safeProjectPath);
+                    break;
+                }
+                if (!responseHandler.isWholePage(response, "project.projectMembers")) {
+                    log.warn("Stopped collaborator sync: reason=pageNotWhole, projectPath={}", safeProjectPath);
+                    break;
                 }
 
-                GitLabPageInfo pageInfo = Objects.requireNonNull(response)
-                        .field("project.projectMembers.pageInfo")
-                        .toEntity(GitLabPageInfo.class);
-                cursor = pageInfo != null ? pageInfo.endCursor() : null;
-                if (responseHandler.isPaginationLoop(
-                        cursor, previousCursor, "collaborators for " + safeProjectPath, log)) {
-                    errorAborted = true;
+                boolean everyEntryReadable = true;
+                for (Object node :
+                        response.field("project.projectMembers.nodes").toEntityList(Map.class)) {
+                    ListedCollaborator listed = ListedCollaborator.of(node);
+                    if (listed == null) {
+                        everyEntryReadable = false;
+                        break;
+                    }
+                    listedByGlobalId.merge(listed.globalId(), listed, ListedCollaborator::higher);
+                }
+                if (!everyEntryReadable) {
+                    log.warn("Stopped collaborator sync: reason=unreadableMember, projectPath={}", safeProjectPath);
+                    break;
+                }
+
+                GitLabPageInfo pageInfo = Objects.requireNonNull(
+                        response.field("project.projectMembers.pageInfo").toEntity(GitLabPageInfo.class));
+                if (!pageInfo.hasNextPage()) {
+                    complete = true;
+                    break;
+                }
+                cursor = pageInfo.endCursor();
+                if (cursor == null
+                        || responseHandler.isPaginationLoop(
+                                cursor, previousCursor, "collaborators for " + safeProjectPath, log)) {
                     break;
                 }
                 previousCursor = cursor;
                 page++;
-                if (pageInfo == null || !pageInfo.hasNextPage()) break;
-            } while (true);
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.info("Collaborator sync interrupted: projectPath={}", safeProjectPath);
-            return SyncResult.abortedRateLimit(totalSynced);
+            return SyncResult.abortedRateLimit(0);
         } catch (Exception e) {
             log.warn("Collaborator sync failed: projectPath={}", safeProjectPath, e);
-            errorAborted = true;
         }
 
-        boolean syncComplete = !errorAborted && page < MAX_PAGINATION_PAGES;
-
-        // Stale removal only when sync completed normally
-        if (syncComplete) {
+        if (!complete) {
+            log.warn("Skipped collaborator changes: reason=incompleteListing, projectPath={}", safeProjectPath);
+            return SyncResult.abortedError(0);
+        }
+        Integer synced = transactionTemplate.execute(status -> {
+            // The monitor, the connection or the group link may have changed while GitLab was being read.
+            if (!workspaceLinkService.mayWriteRepository(scopeId, repository)) {
+                return null;
+            }
+            Set<Long> syncedUserIds = new HashSet<>();
+            for (ListedCollaborator listed : listedByGlobalId.values()) {
+                User user = userService.findOrCreateUser(listed.lookup(), providerId);
+                if (user == null) {
+                    status.setRollbackOnly();
+                    return null;
+                }
+                syncedUserIds.add(user.getId());
+                RepositoryCollaborator collaborator = collaboratorRepository
+                        .findByRepositoryIdAndUserId(repository.getId(), user.getId())
+                        .orElse(null);
+                if (collaborator == null) {
+                    collaborator = new RepositoryCollaborator(repository, user, listed.permission());
+                } else {
+                    collaborator.updatePermission(listed.permission());
+                }
+                collaboratorRepository.save(collaborator);
+            }
             removeStaleCollaborators(repository.getId(), syncedUserIds);
+            return syncedUserIds.size();
+        });
+        if (synced == null) {
+            log.warn(
+                    "Skipped collaborator changes: reason=userNotResolvedOrRepositoryNotThisScopes, projectPath={}",
+                    safeProjectPath);
+            return SyncResult.abortedError(0);
         }
-
-        if (errorAborted) return SyncResult.abortedError(totalSynced);
-        return SyncResult.completed(totalSynced);
+        return SyncResult.completed(synced);
     }
 
-    @SuppressWarnings("unchecked")
-    private void processCollaboratorNode(
-            Map<String, Object> node, Repository repository, @Nullable Long providerId, Set<Long> syncedUserIds) {
-        Map<String, Object> userMap = (Map<String, Object>) node.get("user");
-        Map<String, Object> accessLevel = (Map<String, Object>) node.get("accessLevel");
+    /**
+     * One project member GitLab listed with a readable user and access level; a user listed through a direct and an
+     * inherited grant holds the higher one.
+     */
+    private record ListedCollaborator(String globalId, GitLabUserLookup lookup, int accessLevel) {
 
-        if (userMap == null) return;
-
-        String globalId = (String) userMap.get("id");
-        String username = (String) userMap.get("username");
-        String name = (String) userMap.get("name");
-        String avatarUrl = (String) userMap.get("avatarUrl");
-        String webUrl = (String) userMap.get("webUrl");
-
-        if (globalId == null || username == null) return;
-
-        User user = userService.findOrCreateUser(
-                GitLabUserLookup.of(globalId, username, name, avatarUrl, webUrl), Objects.requireNonNull(providerId));
-        if (user == null) return;
-
-        syncedUserIds.add(user.getId());
-
-        // Map access level
-        RepositoryCollaborator.Permission permission = RepositoryCollaborator.Permission.UNKNOWN;
-        if (accessLevel != null) {
-            Object intValue = accessLevel.get("integerValue");
-            if (intValue instanceof Number num) {
-                permission = mapGitLabAccessLevel(num.intValue());
+        /** The entry, or null when it does not say who the member is or what access they hold. */
+        static @Nullable ListedCollaborator of(@Nullable Object node) {
+            if (!(node instanceof Map<?, ?> member)
+                    || !(member.get("user") instanceof Map<?, ?> user)
+                    || !(user.get("id") instanceof String globalId)
+                    || !(user.get("username") instanceof String username)
+                    || !(member.get("accessLevel") instanceof Map<?, ?> access)
+                    || !(access.get("integerValue") instanceof Number level)) {
+                return null;
             }
+            return new ListedCollaborator(
+                    globalId,
+                    GitLabUserLookup.of(
+                            globalId,
+                            username,
+                            user.get("name") instanceof String name ? name : null,
+                            user.get("avatarUrl") instanceof String avatarUrl ? avatarUrl : null,
+                            user.get("webUrl") instanceof String webUrl ? webUrl : null),
+                    level.intValue());
         }
 
-        // Upsert collaborator
-        RepositoryCollaborator collab = collaboratorRepository
-                .findByRepositoryIdAndUserId(repository.getId(), user.getId())
-                .orElse(null);
-
-        if (collab == null) {
-            collab = new RepositoryCollaborator(repository, user, permission);
-        } else {
-            collab.updatePermission(permission);
+        RepositoryCollaborator.Permission permission() {
+            return mapGitLabAccessLevel(accessLevel);
         }
 
-        collaboratorRepository.save(collab);
+        ListedCollaborator higher(ListedCollaborator other) {
+            return other.accessLevel > accessLevel ? other : this;
+        }
     }
 
     private void removeStaleCollaborators(Long repositoryId, Set<Long> syncedUserIds) {

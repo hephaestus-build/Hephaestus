@@ -1,0 +1,5 @@
+---
+"hephaestus": patch
+---
+
+A GitLab workspace on a subgroup now includes people who are members only through a parent group or a group invited to it, as well as tutors listed in a team subgroup and students who are members of a project only, so their merge requests are reviewed when marked ready. People keep the highest role GitLab lists for them, and someone only a team lists is a member but not an administrator. When GitLab reports that someone has lost access to the group and every team subgroup, they are removed right away; removing a direct membership someone also holds through a parent or invited group keeps them. Otherwise access is removed once complete listings no longer include someone; a group, team or project whose member list GitLab cannot return in full keeps its members and roles until a later sync reads it. A member hidden from the leaderboard who loses access is hidden again if they return, opening the leaderboard or a profile no longer adds a removed person back, and a workspace whose GitLab connection is disconnected reviews nobody.
