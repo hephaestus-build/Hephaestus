@@ -136,6 +136,8 @@ public record GitLabIssueEventDTO(
             @JsonProperty("created_at") @Nullable String createdAt,
             @JsonProperty("updated_at") @Nullable String updatedAt,
             @JsonProperty("closed_at") @Nullable String closedAt,
+            @JsonProperty("duplicated_to_id") @Nullable Long duplicatedToId,
+            @Nullable String type,
             @Nullable String url) {}
 
     public boolean isConfidential() {
