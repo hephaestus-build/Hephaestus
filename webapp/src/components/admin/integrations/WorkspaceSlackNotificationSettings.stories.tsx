@@ -202,6 +202,8 @@ export const ConnectedWithDisconnect: Story = {
 		const dialog = await screen.findByRole("alertdialog", { name: /disconnect slack\?/iu });
 		await expectSettledVisible(dialog);
 		within(dialog).getByText(/the slack connection for this workspace is removed/iu);
+		within(dialog).getByText(/every ingested slack message/iu);
+		within(dialog).getByText(/the app stays installed in slack/iu);
 		await expect(within(dialog).queryByText(/bot is uninstalled/iu)).not.toBeInTheDocument();
 		within(dialog).getByRole("button", { name: /^disconnect$/iu });
 	},
@@ -217,8 +219,9 @@ export const CredentialUnreadable: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Token unreadable")).toBeVisible();
-		await expect(canvas.getByText(/restore the server key it was written with/iu)).toBeVisible();
-		await expect(canvas.getByText(/disconnecting erases the slack messages/iu)).toBeVisible();
+		await expect(
+			canvas.getByText(/restore the original server key or reconnect slack/iu),
+		).toBeVisible();
 		await expect(canvas.queryByText("Connected")).not.toBeInTheDocument();
 		await expect(canvas.queryByText(/can post as the app/iu)).not.toBeInTheDocument();
 		await expect(canvas.getByRole("switch", { name: /send weekly digest/iu })).toBeChecked();

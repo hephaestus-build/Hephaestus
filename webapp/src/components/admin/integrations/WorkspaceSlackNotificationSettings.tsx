@@ -251,7 +251,7 @@ export function WorkspaceSlackNotificationSettings({
 								<ItemTitle>Slack workspace</ItemTitle>
 								<ItemDescription>
 									{credentialUnreadable
-										? "Hephaestus can't post because its stored token can't be read. Restore the server key it was written with, or disconnect and connect Slack again — disconnecting erases the Slack messages and channel consents stored here."
+										? "Can't post with this token. Restore the original server key or reconnect Slack."
 										: "Hephaestus is installed and can post as the app."}
 								</ItemDescription>
 							</ItemContent>

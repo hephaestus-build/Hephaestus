@@ -228,7 +228,7 @@ describe("Slack credential recovery", () => {
 		await screen.findByText("Token unreadable", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.queryByText("Connected")).toBeNull();
 		expect(screen.queryByText(/can post as the app/u)).toBeNull();
-		screen.getByText(/restore the server key it was written with/iu);
+		screen.getByText(/restore the original server key or reconnect slack/iu);
 		expect(
 			screen.getByRole<HTMLButtonElement>("switch", { name: /send weekly digest/iu }).ariaChecked,
 		).toBe("true");
