@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>This contributor deletes, in dependency order:
  * <ul>
- *   <li>Feedback (CASCADE cleans feedback_observation/placement/reaction)</li>
+ *   <li>Feedback (CASCADE cleans feedback_observation/placement/reaction/withdrawal)</li>
  *   <li>Observations (via native query through practice.workspace_id)</li>
  *   <li>Practice definitions for the workspace</li>
  *   <li>Practice groups (unreferenced once practices are gone)</li>
@@ -53,7 +53,7 @@ public class PracticesWorkspacePurgeAdapter implements WorkspacePurgeContributor
     public void deleteWorkspaceData(Long workspaceId) {
         evaluationRepository.deleteAllByWorkspaceId(workspaceId);
         dispatchRepository.deleteAllByWorkspaceId(workspaceId);
-        // Delete feedback first (CASCADE cleans feedback_observation/placement/reaction). The purge is a
+        // Delete feedback first (CASCADE cleans feedback_observation/placement/reaction/withdrawal). The purge is a
         // soft-delete, so the RESTRICT FK on feedback never fires — these rows must be removed explicitly.
         feedbackRepository.deleteAllByWorkspaceId(workspaceId);
         // Delete observations explicitly (defense-in-depth; CASCADE would also handle this).

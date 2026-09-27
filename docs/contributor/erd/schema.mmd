@@ -496,6 +496,18 @@ erDiagram
         UUID chat_message_id FK
     }
 
+    FeedbackWithdrawal {
+        UUID id PK
+        UUID feedback_id FK "NOT NULL"
+        VARCHAR(500) reason "NOT NULL"
+        VARCHAR(500) restoration_reason
+        TIMESTAMPTZ restored_at
+        BIGINT restored_by_account_id FK
+        TIMESTAMPTZ withdrawn_at "NOT NULL"
+        BIGINT withdrawn_by_account_id FK "NOT NULL"
+        BIGINT workspace_id FK "NOT NULL"
+    }
+
     FxRate {
         BIGINT id PK
         DATE rate_date UK "NOT NULL"
@@ -1739,6 +1751,9 @@ erDiagram
     Workspace ||--o{ FeedbackDispatch : has
     Feedback ||--o{ FeedbackPlacement : has
     ChatMessage ||--o{ FeedbackPlacement : has
+    Feedback ||--o{ FeedbackWithdrawal : references
+    Account ||--o{ FeedbackWithdrawal : restored_by_account_id
+    Account ||--o{ FeedbackWithdrawal : withdrawn_by_account_id
     User ||--o{ GitCommit : authored_by
     User ||--o{ GitCommit : references
     Repository ||--o{ GitCommit : has

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.inapp.FeedbackClosure;
 import de.tum.cit.aet.hephaestus.practices.feedback.inapp.InAppFeedbackEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -72,6 +73,7 @@ public class PracticeProfileOverviewService {
     private final PracticeGroupService practiceGroupService;
     private final ObservationRepository observationRepository;
     private final FeedbackRepository feedbackRepository;
+    private final FeedbackWithdrawalRepository withdrawalRepository;
     private final InAppFeedbackEvidence feedbackEvidence;
     private final ReactionRepository reactionRepository;
     private final ReviewRunTargetLookup reviewRunTargetLookup;
@@ -208,7 +210,13 @@ public class PracticeProfileOverviewService {
             StandingSnapshot before,
             StandingSnapshot after) {
         Instant lookback = now.minus(OverviewWindow.LOOKBACK);
-        List<Feedback> recent = feedbackRepository.findReadableInAppPreparedSince(workspaceId, developerId, lookback);
+        List<Feedback> readable = feedbackRepository.findReadableInAppPreparedSince(workspaceId, developerId, lookback);
+        // Withdrawn guidance is neither news nor resolved: what it said was wrong, whatever the work did since.
+        Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(
+                workspaceId, readable.stream().map(Feedback::getId).toList());
+        List<Feedback> recent = readable.stream()
+                .filter(feedback -> !withdrawn.contains(feedback.getId()))
+                .toList();
         Set<UUID> recentIds = recent.stream().map(Feedback::getId).collect(Collectors.toSet());
         // Responses from the feedback's start, not from the window's edge: feedback the developer marked
         // addressed before the window opened and whose work then resolved it inside the window resolved before

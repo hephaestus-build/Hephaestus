@@ -6,8 +6,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.DeliveredFeedbackContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackLedgerRecorder;
+import de.tum.cit.aet.hephaestus.agent.handler.FeedbackSupersession;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeFeedbackDeliveryPolicy;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppCompositionListener;
@@ -20,6 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.feedback.PreviousInAppFeedback;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -33,14 +37,20 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -72,6 +82,18 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private FeedbackWithdrawalService withdrawalService;
+
+    @Autowired
+    private DeliveredFeedbackContentSource deliveredFeedback;
+
+    @Autowired
+    private FeedbackSupersession supersession;
+
+    @Autowired
+    private FeedbackWithdrawalRepository withdrawalRepository;
 
     @Autowired
     private Clock clock;
@@ -269,6 +291,184 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
 
         assertThat(state(open)).isEqualTo(FeedbackDeliveryState.DELIVERED);
         assertThat(state(pushedPast)).isEqualTo(FeedbackDeliveryState.PREPARED);
+    }
+
+    /**
+     * The words were wrong while the observation behind them is valid. The card becomes a notice, the mentor keeps
+     * the record without the words, the observation still counts, and the newer card neither replaces the
+     * withdrawn one nor cites the work before it.
+     */
+    @Test
+    @WithUser
+    @DisplayName("a withdrawn delivered card is a notice without its words, and the next card still starts after it")
+    void shouldShowAWithdrawnDeliveredCardAsANoticeAndKeepItsContinuity() {
+        Feedback first = firstCard(FIRST_PREPARED_AT);
+        UUID beforeTheCard = slip(9, FIRST_PREPARED_AT.minus(Duration.ofDays(1)));
+        long admin = withdrawingAdmin();
+
+        withdrawalService.setWithdrawn(workspace.getId(), first.getId(), admin, true, "About older issues");
+
+        readInAppPage(workspace)
+                .jsonPath("$[*].id")
+                .isEqualTo(List.of(first.getId().toString()))
+                .jsonPath("$[0].withdrawnAt")
+                .exists()
+                .jsonPath("$[0].body")
+                .doesNotExist()
+                .jsonPath("$[0].nextStep")
+                .doesNotExist()
+                .jsonPath("$[0].evidence.length()")
+                .isEqualTo(0)
+                .jsonPath("$[0].closedBy")
+                .doesNotExist();
+        JsonNode mentor = OBJECT_MAPPER.readTree(mentorContext());
+        // The developer has no other feedback, so no words at all reach the mentor.
+        assertThat(mentor.path("deliveredFeedback").size()).isZero();
+        JsonNode state = mentor.path("feedbackStates").get(0);
+        assertThat(state.path("feedbackId").asString()).isEqualTo(first.getId().toString());
+        assertThat(state.path("withdrawn").asBoolean()).isTrue();
+        assertThat(state.path("evidenceCurrentness").asString()).isEqualTo("CURRENT");
+        assertThat(cited(first)).isNotEmpty();
+        assertThat(state(first)).isEqualTo(FeedbackDeliveryState.DELIVERED);
+
+        Feedback second = secondReview();
+
+        assertThat(state(first)).isEqualTo(FeedbackDeliveryState.DELIVERED);
+        assertThat(second.getReplacesId()).isNull();
+        assertThat(cited(second)).isNotEmpty().doesNotContain(beforeTheCard);
+    }
+
+    /**
+     * A card nobody saw is withdrawn before it is read: it never reaches the page and is never marked delivered.
+     * Restoring it puts it through the ordinary read, which shows and delivers it then.
+     */
+    @Test
+    @WithUser
+    @DisplayName("a withdrawn prepared card is neither shown nor delivered until it is restored")
+    void shouldNeitherShowNorDeliverAWithdrawnPreparedCardUntilRestored() {
+        Feedback waiting = card(NOW.minus(Duration.ofDays(2)), 10, FeedbackDeliveryState.PREPARED);
+        Feedback other = card(NOW.minus(Duration.ofDays(1)), 11, FeedbackDeliveryState.PREPARED);
+        long admin = withdrawingAdmin();
+
+        withdrawalService.setWithdrawn(workspace.getId(), waiting.getId(), admin, true, "Wrong words");
+
+        readInAppPage(workspace)
+                .jsonPath("$[*].id")
+                .isEqualTo(List.of(other.getId().toString()));
+        assertThat(state(waiting)).isEqualTo(FeedbackDeliveryState.PREPARED);
+        assertThat(state(other)).isEqualTo(FeedbackDeliveryState.DELIVERED);
+
+        withdrawalService.setWithdrawn(workspace.getId(), waiting.getId(), admin, false, "It was right");
+
+        readInAppPage(workspace)
+                .jsonPath("$[?(@.id == '%s')].body".formatted(waiting.getId()))
+                .isNotEmpty()
+                .jsonPath("$[?(@.id == '%s')].withdrawnAt".formatted(waiting.getId()))
+                .isEmpty();
+        assertThat(state(waiting)).isEqualTo(FeedbackDeliveryState.DELIVERED);
+    }
+
+    /**
+     * The boundary a composing run crosses: it reads the previous card as open, and only later, in its own
+     * transaction, retires it. A withdrawal committed in between must win, or the card would end superseded, off
+     * the page, and past any restore.
+     */
+    @Test
+    @WithUser
+    @DisplayName("a card withdrawn after a run read it as open is not retired, and a restore brings it back")
+    void shouldNotRetireACardWithdrawnAfterARunReadItAsOpen() {
+        Feedback first = firstCard(FIRST_PREPARED_AT);
+        PreviousInAppFeedback.Previous stale = previousInAppFeedback
+                .find(workspace.getId(), developer.getId(), practice.getSlug(), NOW)
+                .orElseThrow();
+        assertThat(stale.isOpen()).isTrue();
+        long admin = withdrawingAdmin();
+        withdrawalService.setWithdrawn(workspace.getId(), first.getId(), admin, true, "About older issues");
+
+        FeedbackSupersession.Outcome outcome =
+                transactionTemplate.execute(status -> supersession.replaceOpen(workspace.getId(), stale.id()));
+
+        assertThat(outcome.retiredSomething()).isFalse();
+        assertThat(outcome.replacesId()).isNull();
+        assertThat(state(first)).isEqualTo(FeedbackDeliveryState.DELIVERED);
+        assertThat(withdrawalRepository.findActive(workspace.getId(), first.getId()))
+                .isPresent();
+
+        withdrawalService.setWithdrawn(workspace.getId(), first.getId(), admin, false, "It was right");
+
+        readInAppPage(workspace)
+                .jsonPath("$[?(@.id == '%s')].body".formatted(first.getId()))
+                .isNotEmpty()
+                .jsonPath("$[?(@.id == '%s')].withdrawnAt".formatted(first.getId()))
+                .isEmpty();
+    }
+
+    /** The other order: a card a newer one already retired is no longer on the page, so there is nothing to take off. */
+    @Test
+    @WithUser
+    @DisplayName("a card a newer run already retired cannot be withdrawn")
+    void shouldRefuseToWithdrawACardANewerRunAlreadyRetired() {
+        Feedback first = firstCard(FIRST_PREPARED_AT);
+        assertThat(transactionTemplate
+                        .execute(status -> supersession.replaceOpen(workspace.getId(), first.getId()))
+                        .retiredSomething())
+                .isTrue();
+        long admin = withdrawingAdmin();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> withdrawalService.setWithdrawn(workspace.getId(), first.getId(), admin, true, "Too late"))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+        assertThat(state(first)).isEqualTo(FeedbackDeliveryState.SUPERSEDED);
+        assertThat(withdrawalRepository.findHistory(workspace.getId(), first.getId()))
+                .isEmpty();
+    }
+
+    /**
+     * The notice is news as of the withdrawal: an older card withdrawn today ranks by today, not behind every card
+     * written since, while the other cards keep their newest-first order and the page keeps its limit.
+     */
+    @Test
+    @WithUser
+    @DisplayName("an older card withdrawn today is on a full page, first, as a notice")
+    void shouldListAnOlderCardWithdrawnTodayAheadOfAFullPageOfNewerCards() {
+        Feedback older = firstCard(NOW.minus(Duration.ofDays(25)));
+        List<String> newer = new java.util.ArrayList<>();
+        for (int i = 0; i < InAppFeedbackService.MAX_CARDS; i++) {
+            newer.add(card(NOW.minus(Duration.ofDays(10)).plusSeconds(i), 100 + i)
+                    .getId()
+                    .toString());
+        }
+        long admin = withdrawingAdmin();
+        withdrawalService.setWithdrawn(workspace.getId(), older.getId(), admin, true, "About older issues");
+
+        readInAppPage(workspace)
+                .jsonPath("$.length()")
+                .isEqualTo(InAppFeedbackService.MAX_CARDS)
+                .jsonPath("$[0].id")
+                .isEqualTo(older.getId().toString())
+                .jsonPath("$[0].withdrawnAt")
+                .exists()
+                .jsonPath("$[0].body")
+                .doesNotExist()
+                .jsonPath("$[0].nextStep")
+                .doesNotExist()
+                // The rest newest first; the oldest of the newer cards is the one the limit leaves out.
+                .jsonPath("$[1:].id")
+                .isEqualTo(new java.util.ArrayList<>(newer.reversed().subList(0, InAppFeedbackService.MAX_CARDS - 1)));
+    }
+
+    private long withdrawingAdmin() {
+        return Objects.requireNonNull(persistInstanceAdmin("Withdrawing admin").getId());
+    }
+
+    /** The mentor's delivered-feedback context for the developer, as a conversation turn stages it. */
+    private byte[] mentorContext() {
+        Map<String, byte[]> files = new HashMap<>();
+        deliveredFeedback.contribute(
+                new ContextRequest.MentorChatRequest(workspace.getId(), developer.getId(), UUID.randomUUID()), files);
+        return Objects.requireNonNull(files.get(DeliveredFeedbackContentSource.OUTPUT_KEY));
     }
 
     /** The first card about the practice, delivered, written from a slip on #10 an hour before it was prepared. */

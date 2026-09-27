@@ -1197,6 +1197,7 @@ export function feedbackDetail(feedbackId: string): ReviewFeedbackDetail {
 		subject: run.developer,
 		suppressionReason: item.withheldFor,
 		deliveryPolicy: [],
+		withdrawals: [],
 	};
 }
 

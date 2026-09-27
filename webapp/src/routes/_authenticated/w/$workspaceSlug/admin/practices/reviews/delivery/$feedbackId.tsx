@@ -7,6 +7,7 @@ import {
 	getPracticeReviewFeedbackQueryKey,
 	listPracticeReviewFeedbackQueryKey,
 	listPracticesOptions,
+	updatePracticeReviewFeedbackWithdrawalMutation,
 } from "@/api/@tanstack/react-query.gen";
 import {
 	FeedbackDetailPage,
@@ -16,8 +17,10 @@ import {
 	type ProposalRejectionReason,
 	ProposalReviewPage,
 } from "@/components/admin/practice-reviews/ProposalReviewPage";
+import { isRecord } from "@/lib/is-record";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
+import { queryOperationId } from "@/lib/query-operation-id";
 
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/admin/practices/reviews/delivery/$feedbackId",
@@ -25,6 +28,13 @@ export const Route = createFileRoute(
 	head: workspaceAdminHead("Feedback details"),
 	component: FeedbackDetailRoute,
 });
+
+/** Every read in this workspace that shows a practice-page card or quotes it, so none keeps a withdrawn one. */
+const READS_OF_FEEDBACK_WITHDRAWAL: ReadonlySet<string> = new Set([
+	"listPracticeReviewFeedback",
+	"getPracticeProfileOverview",
+	"getInAppFeedback",
+]);
 
 function FeedbackDetailRoute() {
 	const { workspaceSlug, feedbackId } = Route.useParams();
@@ -60,6 +70,31 @@ function FeedbackDetailRoute() {
 		},
 		onError: (error) => {
 			toast.error("Couldn't decide this review", { description: problemDetailOf(error) });
+		},
+	});
+
+	const withdrawal = useMutation({
+		...updatePracticeReviewFeedbackWithdrawalMutation(),
+		onSuccess: (updated, variables) => {
+			queryClient.setQueryData(detailKey, updated);
+			void queryClient.invalidateQueries({
+				predicate: ({ queryKey }) => {
+					const id = queryOperationId(queryKey);
+					const [key] = queryKey;
+					return (
+						id !== undefined &&
+						READS_OF_FEEDBACK_WITHDRAWAL.has(id) &&
+						isRecord(key) &&
+						isRecord(key.path) &&
+						key.path.workspaceSlug === workspaceSlug
+					);
+				},
+			});
+			toast.success(variables.body.withdrawn ? "Feedback withdrawn" : "Feedback restored");
+		},
+		onError: (error) => {
+			void feedbackQueryResult.refetch();
+			toast.error("Couldn't change this feedback", { description: problemDetailOf(error) });
 		},
 	});
 
@@ -108,6 +143,10 @@ function FeedbackDetailRoute() {
 			search={search}
 			state={state}
 			practices={practicesQuery.data}
+			isChangingWithdrawal={withdrawal.isPending}
+			onChangeWithdrawal={async (withdrawn, reason) =>
+				withdrawal.mutateAsync({ path: { workspaceSlug, feedbackId }, body: { withdrawn, reason } })
+			}
 		/>
 	);
 }

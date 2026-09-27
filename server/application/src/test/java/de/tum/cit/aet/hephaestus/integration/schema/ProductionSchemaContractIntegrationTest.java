@@ -512,6 +512,78 @@ class ProductionSchemaContractIntegrationTest {
                 .isTrue();
     }
 
+    static Stream<org.junit.jupiter.params.provider.Arguments> invalidWithdrawalRestores() {
+        return Stream.of(
+                // A CHECK passes on UNKNOWN: a missing reason must fail on its own, not through btrim(NULL).
+                org.junit.jupiter.params.provider.Arguments.of("restored_at = now(), restored_by_account_id = %d"),
+                org.junit.jupiter.params.provider.Arguments.of(
+                        "restored_at = now(), restored_by_account_id = %d, restoration_reason = '  '"),
+                org.junit.jupiter.params.provider.Arguments.of(
+                        "restored_at = now(), restoration_reason = 'Right after all'"),
+                org.junit.jupiter.params.provider.Arguments.of(
+                        "restored_by_account_id = %d, restoration_reason = 'Right after all'"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidWithdrawalRestores")
+    void feedbackWithdrawalRejectsAnIncompleteRestore(String assignment) {
+        long account = Objects.requireNonNull(
+                accountRepository.save(new Account("Withdrawal actor")).getId());
+        DispatchOwner owner = insertDispatchOwner("withdrawal-restore-" + UUID.randomUUID());
+        UUID withdrawal =
+                insertWithdrawal(owner, insertFeedback(owner, "withdrawal-restore-" + UUID.randomUUID()), account);
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                        "UPDATE feedback_withdrawal SET " + assignment.formatted(account) + " WHERE id = ?",
+                        withdrawal))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_feedback_withdrawal_restoration");
+    }
+
+    @Test
+    void feedbackWithdrawalKeepsOneOpenRowPerFeedbackWithinItsWorkspace() {
+        long account = Objects.requireNonNull(
+                accountRepository.save(new Account("Withdrawal actor")).getId());
+        DispatchOwner owner = insertDispatchOwner("withdrawal-" + UUID.randomUUID());
+        DispatchOwner other = insertDispatchOwner("withdrawal-other-" + UUID.randomUUID());
+        UUID feedbackId = insertFeedback(owner, "withdrawal-" + UUID.randomUUID());
+
+        assertThatThrownBy(() -> insertWithdrawal(other, feedbackId, account))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("sfk_feedback_withdrawal_feedback");
+        UUID first = insertWithdrawal(owner, feedbackId, account);
+        assertThatThrownBy(() -> insertWithdrawal(owner, feedbackId, account))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uk_feedback_withdrawal_active");
+        assertThatThrownBy(
+                        () -> jdbcTemplate.update("UPDATE feedback_withdrawal SET reason = '   ' WHERE id = ?", first))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_feedback_withdrawal_reason");
+
+        jdbcTemplate.update(
+                "UPDATE feedback_withdrawal SET restored_at = now(), restored_by_account_id = ?, "
+                        + "restoration_reason = 'Right after all' WHERE id = ?",
+                account,
+                first);
+        UUID second = insertWithdrawal(owner, feedbackId, account);
+
+        jdbcTemplate.update("DELETE FROM feedback WHERE id = ?", feedbackId);
+        assertThat(rowExists("feedback_withdrawal", first)).isFalse();
+        assertThat(rowExists("feedback_withdrawal", second)).isFalse();
+    }
+
+    private UUID insertWithdrawal(DispatchOwner owner, UUID feedbackId, long accountId) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO feedback_withdrawal (id, workspace_id, feedback_id, reason, withdrawn_by_account_id, "
+                        + "withdrawn_at) VALUES (?, ?, ?, 'Wrong words', ?, now())",
+                id,
+                owner.workspaceId(),
+                feedbackId,
+                accountId);
+        return id;
+    }
+
     private UUID insertDispatch(String key) {
         DispatchOwner owner = insertDispatchOwner(key);
         return insertDispatch(owner, key, "AUTOMATIC_REVIEW_PACKAGE", null);

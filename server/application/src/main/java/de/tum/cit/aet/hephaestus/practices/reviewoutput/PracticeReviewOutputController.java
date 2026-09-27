@@ -5,11 +5,13 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalService;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.DecideFeedbackProposalRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.FeedbackApprovalDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.inapp.FeedbackWithdrawalService;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationService;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewObservationDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewObservationDetailDTO;
+import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.UpdateFeedbackWithdrawalRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.UpdateObservationValidityRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -51,6 +53,7 @@ public class PracticeReviewOutputController {
     private final ReviewFeedbackQueryService feedbackQueryService;
     private final FeedbackApprovalService feedbackApprovalService;
     private final ObservationInvalidationService invalidationService;
+    private final FeedbackWithdrawalService withdrawalService;
 
     @GetMapping("/observations")
     @Operation(
@@ -175,6 +178,42 @@ public class PracticeReviewOutputController {
                             schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<ReviewFeedbackDetailDTO> getFeedback(
             WorkspaceContext workspaceContext, @PathVariable UUID feedbackId) {
+        return ResponseEntity.ok(feedbackQueryService.get(workspaceContext.id(), feedbackId));
+    }
+
+    @PatchMapping("/feedback/{feedbackId}/withdrawal")
+    @AuditExempt(reason = "The feedback_withdrawal row is the domain audit trail")
+    @Operation(
+            summary = "Withdraw a card from a developer's practice page, or restore it",
+            description = "Only practice-page feedback that is waiting to be read or already shown can be withdrawn."
+                    + " The developer sees that it was withdrawn, not what it said; its record and evidence stay."
+                    + " Restoring puts it back through the page's ordinary checks and sends nothing.",
+            operationId = "updatePracticeReviewFeedbackWithdrawal")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Feedback detail after the change",
+            content = @Content(schema = @Schema(implementation = ReviewFeedbackDetailDTO.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Feedback not found in this workspace",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The feedback is not on a practice page, or is not waiting to be read or shown there",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    public ResponseEntity<ReviewFeedbackDetailDTO> updateFeedbackWithdrawal(
+            WorkspaceContext workspaceContext,
+            @PathVariable UUID feedbackId,
+            @Valid @org.springframework.web.bind.annotation.RequestBody UpdateFeedbackWithdrawalRequestDTO request) {
+        long actorAccountId = SecurityUtils.getCurrentAccountId().orElseThrow();
+        withdrawalService.setWithdrawn(
+                workspaceContext.id(), feedbackId, actorAccountId, request.withdrawn(), request.reason());
         return ResponseEntity.ok(feedbackQueryService.get(workspaceContext.id(), feedbackId));
     }
 

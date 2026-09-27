@@ -149,6 +149,28 @@ describe("toFeedbackCard", () => {
 		]);
 	});
 
+	it("reads a withdrawn card as withdrawn on that day, with none of its words", () => {
+		const withdrawn = toFeedbackCard(
+			{
+				...feedback,
+				headline: feedback.practiceName,
+				body: undefined,
+				nextStep: undefined,
+				evidence: [],
+				cleanWork: [],
+				readAt: new Date("2026-08-21"),
+				withdrawnAt: new Date("2026-09-03"),
+			},
+			[group],
+		);
+		expect(withdrawn).toMatchObject({
+			state: "withdrawn",
+			timestamp: new Date("2026-09-03"),
+			body: "",
+			nextStep: "",
+		});
+	});
+
 	it("shows a card written without a next step with an empty band", () => {
 		expect(toFeedbackCard({ ...feedback, nextStep: undefined }, [group]).nextStep).toBe("");
 	});

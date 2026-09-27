@@ -255,6 +255,63 @@ export function PracticeFeedbackCard({
 	// gave way to a newer piece.
 	const knownWork = [...evidenceRefs, ...cleanWork.map((clean) => clean.ref)];
 	const WorkIcon = reviewedWorkIcon(stripLabel.kind, stripLabel.provider);
+	const header = (
+		<div className="flex flex-wrap items-center justify-between gap-4">
+			<div className="flex flex-wrap items-center gap-3 text-sm">
+				<PracticePill
+					name={practiceName}
+					onOpen={onOpenPractice && (() => onOpenPractice(practiceSlug))}
+				/>
+				<span className="text-muted-foreground">in</span>
+				<GroupName
+					name={group?.name ?? "Unassigned"}
+					icon={GroupIcon}
+					pill={groupPill}
+					onOpen={group && onOpenGroup && (() => onOpenGroup(group.slug))}
+				/>
+			</div>
+			<StatusBadge
+				def={FEEDBACK_STATE_DEFS[state]}
+				className={FEEDBACK_STATE_DEFS[state].className}
+			/>
+		</div>
+	);
+
+	if (state === "withdrawn") {
+		// What it said was taken back as wrong, so none of it is shown: not its words, its evidence, a
+		// next step, a meter that could read as progress, or buttons to answer it.
+		return (
+			<article
+				ref={ref}
+				aria-labelledby={headingId}
+				tabIndex={-1}
+				className={cn(
+					FOCUS_RING,
+					"flex flex-col overflow-hidden rounded-xl border bg-background",
+					className,
+				)}
+			>
+				<div className="flex flex-col gap-4 p-4">
+					{header}
+					<div className="flex flex-col gap-2.5">
+						<h3 id={headingId} className="max-w-3xl text-lg font-semibold">
+							This feedback was withdrawn
+						</h3>
+						<p className="max-w-3xl text-sm text-muted-foreground">
+							A workspace admin took it back because what it said was wrong. It says nothing about
+							how your work stands on this practice.
+						</p>
+					</div>
+				</div>
+				<div className="flex flex-wrap items-center gap-3 border-t p-4">
+					<span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+						<ClockIcon className="size-4 shrink-0" aria-hidden />
+						<time dateTime={timestamp.toISOString()}>{formatTimestamp(timestamp, state)}</time>
+					</span>
+				</div>
+			</article>
+		);
+	}
 
 	return (
 		<article
@@ -272,25 +329,7 @@ export function PracticeFeedbackCard({
 			)}
 		>
 			<div className="flex flex-col gap-4 p-4">
-				<div className="flex flex-wrap items-center justify-between gap-4">
-					<div className="flex flex-wrap items-center gap-3 text-sm">
-						<PracticePill
-							name={practiceName}
-							onOpen={onOpenPractice && (() => onOpenPractice(practiceSlug))}
-						/>
-						<span className="text-muted-foreground">in</span>
-						<GroupName
-							name={group?.name ?? "Unassigned"}
-							icon={GroupIcon}
-							pill={groupPill}
-							onOpen={group && onOpenGroup && (() => onOpenGroup(group.slug))}
-						/>
-					</div>
-					<StatusBadge
-						def={FEEDBACK_STATE_DEFS[state]}
-						className={FEEDBACK_STATE_DEFS[state].className}
-					/>
-				</div>
+				{header}
 
 				<div className="flex flex-col gap-2.5">
 					<h3 id={headingId} className="max-w-3xl text-lg font-semibold">

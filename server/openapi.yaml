@@ -5819,6 +5819,8 @@ paths:
           description: Invalid response
         "404":
           description: Delivered feedback not found for the current recipient
+        "409":
+          description: A workspace admin withdrew this feedback
       summary: Replace the response to delivered feedback
       tags:
       - Feedback Response
@@ -6662,6 +6664,56 @@ paths:
                 $ref: "#/components/schemas/FeedbackApproval"
           description: OK
       summary: Approve or reject an immutable feedback proposal
+      tags:
+      - Practice reviews
+  /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/withdrawal:
+    patch:
+      description: "Only practice-page feedback that is waiting to be read or already\
+        \ shown can be withdrawn. The developer sees that it was withdrawn, not what\
+        \ it said; its record and evidence stay. Restoring puts it back through the\
+        \ page's ordinary checks and sends nothing."
+      operationId: updatePracticeReviewFeedbackWithdrawal
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: feedbackId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFeedbackWithdrawalRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewFeedbackDetail"
+          description: Feedback detail after the change
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Feedback not found in this workspace
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "The feedback is not on a practice page, or is not waiting\
+            \ to be read or shown there"
+      summary: "Withdraw a card from a developer's practice page, or restore it"
       tags:
       - Practice reviews
   /workspaces/{workspaceSlug}/practices/reviews/observations:
@@ -11445,6 +11497,36 @@ components:
           type: boolean
       required:
       - resolved
+    FeedbackWithdrawal:
+      type: object
+      description: "One withdrawal of a card from a developer's practice page, and\
+        \ its restoration if any"
+      properties:
+        id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        restorationReason:
+          type: string
+          description: Why it was restored; null while the withdrawal is in force
+        restoredAt:
+          type: string
+          format: date-time
+        restoredBy:
+          type: string
+          description: Who restored it; null while in force or once that account is
+            erased
+        withdrawnAt:
+          type: string
+          format: date-time
+        withdrawnBy:
+          type: string
+          description: Who withdrew it; null once that account is erased
+      required:
+      - id
+      - reason
+      - withdrawnAt
     FeedbackWorkspaceRef:
       type: object
       description: The workspace a record was submitted from; absent for instance-level
@@ -11761,7 +11843,7 @@ components:
         body:
           type: string
           description: "The message, as Markdown, without the headline and the next\
-            \ step"
+            \ step; null once a workspace admin withdrew it"
         cleanNeeded:
           type: integer
           format: int32
@@ -11835,8 +11917,13 @@ components:
         whyItMatters:
           type: string
           description: "Why this practice matters, in the developer's framing"
+        withdrawnAt:
+          type: string
+          format: date-time
+          description: "When a workspace admin withdrew it because what it said was\
+            \ wrong; the card then carries only its practice, whose name is the headline,\
+            \ and no message, next step, evidence, progress or closure"
       required:
-      - body
       - cleanNeeded
       - cleanWork
       - evidence
@@ -15859,6 +15946,12 @@ components:
         threadKey:
           type: string
           description: Cross-run continuity key tying successive deliveries together
+        withdrawals:
+          type: array
+          description: "Every withdrawal of this card from the developer's practice\
+            \ page, newest first; empty when none"
+          items:
+            $ref: "#/components/schemas/FeedbackWithdrawal"
       required:
       - agentJobId
       - channel
@@ -15869,6 +15962,7 @@ components:
       - observations
       - placements
       - proposedPlacements
+      - withdrawals
     ReviewFeedbackDisposition:
       type: object
       description: Counts of feedback by delivery state
@@ -17441,6 +17535,21 @@ components:
           - RETIRED
       required:
       - status
+    UpdateFeedbackWithdrawalRequest:
+      type: object
+      description: "Withdraw a card from a developer's practice page, or restore it"
+      properties:
+        reason:
+          type: string
+          description: "Why, kept with the withdrawal for the workspace's administrators"
+          maxLength: 500
+          minLength: 0
+        withdrawn:
+          type: boolean
+          description: true withdraws the card; false restores it
+      required:
+      - reason
+      - withdrawn
     UpdateInstanceLlmSettingsRequest:
       type: object
       description: Update instance-wide LLM governance settings (all fields optional)

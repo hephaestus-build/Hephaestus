@@ -134,7 +134,8 @@ public class InAppFeedbackPreparer {
                     FeedbackThreadKey.forPractice(message.practiceSlug(), recipientUserId, FeedbackChannel.IN_APP);
             // The claim and the write below are one swap, and this method's REQUIRES_NEW transaction is
             // what makes them one: a retired card with no replacement leaves the recipient with less than
-            // they had before the run.
+            // they had before the run. It also holds the old card's row lock, taken by replaceOpen, until the
+            // replacement commits, so a withdrawal waiting on that lock finds the card already retired.
             UUID replaces = routedMessage.replaces();
             FeedbackSupersession.Outcome outcome = replaces == null
                     ? FeedbackSupersession.Outcome.standalone()

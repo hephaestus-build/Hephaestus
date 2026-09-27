@@ -402,6 +402,33 @@ invalidation stopped stays stopped.
 Say **invalidated** or **marked incorrect**, never *deleted*, *retracted* or *superseded*: superseded is
 the word for [feedback replaced on its thread](#thread-key-and-supersession).
 
+### Withdrawn feedback
+
+A workspace admin **withdraws** an `IN_APP` card, `PREPARED` or `DELIVERED`, whose words were wrong while its
+observations are valid; the reverse is **restore**, each with a reason. The feedback row is `@Immutable` and
+does not change: each withdrawal is a `feedback_withdrawal` row keeping both actors, reasons and times, and at
+most one is open per feedback (`uk_feedback_withdrawal_active`). The feedback row lock serializes the two
+actions with each other, with a recipient's answer, and with a newer card replacing it; the replacement
+re-checks for a withdrawal after taking that lock and, finding one, is written without retiring the card. A
+repeat of either action changes nothing.
+
+While one is open:
+
+- The Practice profile shows a `DELIVERED` card as a notice carrying only its practice, with no body, next
+  step or evidence, for 30 days after the withdrawal, ranked by that time among the page's cards and within its
+  card limit. It omits a `PREPARED` one, which is never marked delivered.
+- Composition history and Heph's context stage the row with `withdrawn: true` and without its body.
+- It is not an open card and not a replacement target, but it still marks where the next card's evidence
+  starts, and the in-app cooldown still counts it.
+- It takes no new answer (`409`); the developer's earlier answer stays readable and can still be removed.
+- Observations, standings and review history are unchanged, and nothing else — notes on the work,
+  `IN_CHAT` feedback — is touched.
+
+A read already in flight when the withdrawal commits may still show and deliver the card. Restoring reopens
+the ordinary read, subject to observation visibility and consent, and never re-sends.
+Say **withdrawn**, never *deleted*, *retracted* or *invalidated*: invalidated is the word for an
+[observation that was wrong](#invalidated-observations).
+
 ### How feedback resolves
 
 A piece of [feedback](./practice-feedback-language.md) on the Practice profile resolves in one of two

@@ -44,6 +44,9 @@ class FeedbackResponseServiceTest extends BaseUnitTest {
     @Mock
     private CurrentDeveloperLookup currentDeveloperLookup;
 
+    @Mock
+    private FeedbackWithdrawalRepository withdrawalRepository;
+
     @Captor
     private ArgumentCaptor<Reaction> reactionCaptor;
 
@@ -52,7 +55,8 @@ class FeedbackResponseServiceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        service = new FeedbackResponseService(reactionRepository, feedbackRepository, currentDeveloperLookup);
+        service = new FeedbackResponseService(
+                reactionRepository, feedbackRepository, currentDeveloperLookup, withdrawalRepository);
         workspaceContext = new WorkspaceContext(WORKSPACE_ID, "test-ws", "Test WS", null, null, false, false, Set.of());
         org.mockito.Mockito.lenient()
                 .when(currentDeveloperLookup.currentDeveloperIdElseThrow())

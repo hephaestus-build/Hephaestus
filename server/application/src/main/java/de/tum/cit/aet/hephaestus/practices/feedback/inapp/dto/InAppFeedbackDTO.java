@@ -37,7 +37,10 @@ public record InAppFeedbackDTO(
         @NonNull @Schema(description = "Short headline naming the way of working, never the person")
         String headline,
 
-        @NonNull @Schema(description = "The message, as Markdown, without the headline and the next step")
+        @Schema(
+                description = "The message, as Markdown, without the headline and the next step; null once a"
+                        + " workspace admin withdrew it")
+        @Nullable
         String body,
 
         @Schema(description = "The way of working to try next, on its own; null for feedback prepared without one")
@@ -95,4 +98,11 @@ public record InAppFeedbackDTO(
         ClosedBy closedBy,
 
         @Nullable @Schema(description = "The developer's current response to this feedback; null while they have none")
-        FeedbackResponseDTO response) {}
+        FeedbackResponseDTO response,
+
+        @Nullable
+        @Schema(
+                description = "When a workspace admin withdrew it because what it said was wrong; the card then"
+                        + " carries only its practice, whose name is the headline, and no message, next step,"
+                        + " evidence, progress or closure")
+        Instant withdrawnAt) {}

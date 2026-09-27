@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, within } from "storybook/test";
+import { expect, fn, screen, waitFor, within } from "storybook/test";
+import { expectSettledVisible } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { daysBefore, hoursBefore } from "@/stories/story-clock";
 import { FeedbackDetailPage } from "./FeedbackDetailPage";
 import {
 	feedbackDetail,
@@ -45,6 +47,15 @@ const rejectedFeedback = {
 	},
 };
 
+/** A card shown on the developer's practice page; its words are private to them, so the body is absent. */
+const practicePageFeedback = {
+	...feedbackDetail("99999999-6666-6666-6666-666666666666"),
+	channel: "IN_APP" as const,
+	deliveryState: "DELIVERED" as const,
+	body: undefined,
+	placements: [],
+};
+
 const meta = {
 	component: FeedbackDetailPage,
 	parameters: {
@@ -63,6 +74,8 @@ const meta = {
 		},
 		state: { status: "ready", feedback: reviewFeedbackDetail },
 		practices: workspacePractices,
+		onChangeWithdrawal: fn(async () => undefined),
+		isChangingWithdrawal: false,
 	},
 } satisfies Meta<typeof FeedbackDetailPage>;
 
@@ -89,6 +102,8 @@ export const Delivered: Story = {
 		await expect(await canvas.findAllByText("Delivered")).toHaveLength(1);
 		canvas.getByText(/As an inline note on the work/u);
 		canvas.getByText("server/application/src/main/resources/application.yml:118–120");
+		// Only a practice-page card can be withdrawn; a note on the work offers no such action.
+		await expect(canvas.queryByRole("button", { name: "Withdraw feedback" })).toBeNull();
 	},
 };
 
@@ -177,6 +192,90 @@ export const PracticeSaysWhatItIs: Story = {
 		}
 		await userEvent.hover(await canvas.findByRole("link", { name: /Product language/u }));
 		await screen.findByText(productLanguage.whyItMatters ?? "");
+	},
+};
+
+/** The reason is required: a withdrawal nobody can explain later is not an audit. */
+export const WithdrawFeedback: Story = {
+	args: { state: { status: "ready", feedback: practicePageFeedback } },
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async ({ args, canvas, userEvent }) => {
+		await userEvent.click(await canvas.findByRole("button", { name: "Withdraw feedback" }));
+		const reason = await screen.findByRole("textbox", { name: "Reason" });
+		await expectSettledVisible(reason);
+		const submit = screen.getAllByRole("button", { name: "Withdraw feedback" }).at(-1);
+		await expect(submit).toBeDisabled();
+		await userEvent.type(reason, "  It describes issues from before this pull request.  ");
+		if (submit) {
+			await userEvent.click(submit);
+		}
+		await expect(args.onChangeWithdrawal).toHaveBeenCalledWith(
+			true,
+			"It describes issues from before this pull request.",
+		);
+		await waitFor(async () => expect(screen.queryByRole("textbox", { name: "Reason" })).toBeNull());
+	},
+};
+
+/** A refused withdrawal keeps the form open with the reason the admin wrote, ready for another try. */
+export const WithdrawFeedbackFails: Story = {
+	args: {
+		state: { status: "ready", feedback: practicePageFeedback },
+		onChangeWithdrawal: fn(async () => {
+			throw new Error("409");
+		}),
+	},
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async ({ args, canvas, userEvent }) => {
+		await userEvent.click(await canvas.findByRole("button", { name: "Withdraw feedback" }));
+		const reason = await screen.findByRole("textbox", { name: "Reason" });
+		await expectSettledVisible(reason);
+		await userEvent.type(reason, "It describes older issues.");
+		const submit = screen.getAllByRole("button", { name: "Withdraw feedback" }).at(-1);
+		if (submit) {
+			await userEvent.click(submit);
+		}
+		await expect(args.onChangeWithdrawal).toHaveBeenCalledOnce();
+		await expect(screen.getByRole("textbox", { name: "Reason" })).toHaveValue(
+			"It describes older issues.",
+		);
+	},
+};
+
+/** Withdrawn again after a restore: the page offers the restore, and the earlier round stays in the history. */
+export const Withdrawn: Story = {
+	args: {
+		state: {
+			status: "ready",
+			feedback: {
+				...practicePageFeedback,
+				withdrawals: [
+					{
+						id: "wd-2",
+						reason: "It describes issues from before this pull request.",
+						withdrawnAt: hoursBefore(2),
+						withdrawnBy: "Ada Admin",
+					},
+					{
+						id: "wd-1",
+						reason: "Looked wrong at first.",
+						withdrawnAt: daysBefore(3),
+						withdrawnBy: "Ada Admin",
+						restorationReason: "It was about this pull request after all.",
+						restoredAt: daysBefore(2),
+					},
+				],
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		await canvas.findByText("Withdrawn from the practice page");
+		await expect(canvas.getByRole("button", { name: "Restore feedback" })).toBeEnabled();
+		const history = within(canvas.getByRole("list", { name: "Withdrawals" }));
+		await expect(history.getAllByRole("listitem")).toHaveLength(3);
+		// The erased restorer is named as such, not left blank.
+		await expect(history.getByText(/an account that no longer exists/u)).toBeVisible();
+		await expectNoPageOverflow();
 	},
 };
 

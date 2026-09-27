@@ -1674,6 +1674,28 @@ export type FeedbackTriage = {
 };
 
 /**
+ * One withdrawal of a card from a developer's practice page, and its restoration if any
+ */
+export type FeedbackWithdrawal = {
+  id: string;
+  reason: string;
+  /**
+   * Why it was restored; null while the withdrawal is in force
+   */
+  restorationReason?: string;
+  restoredAt?: Date;
+  /**
+   * Who restored it; null while in force or once that account is erased
+   */
+  restoredBy?: string;
+  withdrawnAt: Date;
+  /**
+   * Who withdrew it; null once that account is erased
+   */
+  withdrawnBy?: string;
+};
+
+/**
  * The workspace a record was submitted from; absent for instance-level submissions.
  */
 export type FeedbackWorkspaceRef = {
@@ -1933,9 +1955,9 @@ export type InAppEvidence = {
  */
 export type InAppFeedback = {
   /**
-   * The message, as Markdown, without the headline and the next step
+   * The message, as Markdown, without the headline and the next step; null once a workspace admin withdrew it
    */
-  body: string;
+  body?: string;
   /**
    * Clean pieces of work in a row on the practice that resolve this feedback
    */
@@ -1998,6 +2020,10 @@ export type InAppFeedback = {
    * Why this practice matters, in the developer's framing
    */
   whyItMatters?: string;
+  /**
+   * When a workspace admin withdrew it because what it said was wrong; the card then carries only its practice, whose name is the headline, and no message, next step, evidence, progress or closure
+   */
+  withdrawnAt?: Date;
 };
 
 /**
@@ -4633,6 +4659,10 @@ export type ReviewFeedbackDetail = {
    * Cross-run continuity key tying successive deliveries together
    */
   threadKey?: string;
+  /**
+   * Every withdrawal of this card from the developer's practice page, newest first; empty when none
+   */
+  withdrawals: Array<FeedbackWithdrawal>;
 };
 
 /**
@@ -5649,6 +5679,20 @@ export type UpdateConnectionStatusRequest = {
  */
 export type UpdateCuratedStatusRequest = {
   status: 'AVAILABLE' | 'RETIRED';
+};
+
+/**
+ * Withdraw a card from a developer's practice page, or restore it
+ */
+export type UpdateFeedbackWithdrawalRequest = {
+  /**
+   * Why, kept with the withdrawal for the workspace's administrators
+   */
+  reason: string;
+  /**
+   * true withdraws the card; false restores it
+   */
+  withdrawn: boolean;
 };
 
 /**
@@ -7329,6 +7373,10 @@ export type ReviewFeedbackDetailWritable = {
    * Cross-run continuity key tying successive deliveries together
    */
   threadKey?: string;
+  /**
+   * Every withdrawal of this card from the developer's practice page, newest first; empty when none
+   */
+  withdrawals: Array<FeedbackWithdrawal>;
 };
 
 /**
@@ -12217,6 +12265,10 @@ export type ReplaceFeedbackResponseErrors = {
    * Delivered feedback not found for the current recipient
    */
   404: unknown;
+  /**
+   * A workspace admin withdrew this feedback
+   */
+  409: unknown;
 };
 
 export type ReplaceFeedbackResponseResponses = {
@@ -12802,6 +12854,41 @@ export type DecideFeedbackProposalResponses = {
 };
 
 export type DecideFeedbackProposalResponse = DecideFeedbackProposalResponses[keyof DecideFeedbackProposalResponses];
+
+export type UpdatePracticeReviewFeedbackWithdrawalData = {
+  body: UpdateFeedbackWithdrawalRequest;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    feedbackId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/withdrawal';
+};
+
+export type UpdatePracticeReviewFeedbackWithdrawalErrors = {
+  /**
+   * Feedback not found in this workspace
+   */
+  404: ProblemDetail;
+  /**
+   * The feedback is not on a practice page, or is not waiting to be read or shown there
+   */
+  409: ProblemDetail;
+};
+
+export type UpdatePracticeReviewFeedbackWithdrawalError = UpdatePracticeReviewFeedbackWithdrawalErrors[keyof UpdatePracticeReviewFeedbackWithdrawalErrors];
+
+export type UpdatePracticeReviewFeedbackWithdrawalResponses = {
+  /**
+   * Feedback detail after the change
+   */
+  200: ReviewFeedbackDetail;
+};
+
+export type UpdatePracticeReviewFeedbackWithdrawalResponse = UpdatePracticeReviewFeedbackWithdrawalResponses[keyof UpdatePracticeReviewFeedbackWithdrawalResponses];
 
 export type ListPracticeReviewObservationsData = {
   body?: never;

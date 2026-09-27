@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -31,9 +32,11 @@ public class FeedbackSupersession {
     private static final int MAX_ATTEMPTS = 3;
 
     private final FeedbackRepository feedbackRepository;
+    private final FeedbackWithdrawalRepository withdrawalRepository;
 
-    FeedbackSupersession(FeedbackRepository feedbackRepository) {
+    FeedbackSupersession(FeedbackRepository feedbackRepository, FeedbackWithdrawalRepository withdrawalRepository) {
         this.feedbackRepository = feedbackRepository;
+        this.withdrawalRepository = withdrawalRepository;
     }
 
     /** @param replacesId prior feedback to link, or {@code null} for a standalone piece of feedback */
@@ -103,9 +106,22 @@ public class FeedbackSupersession {
      * the new card is written on its own. Never throws for the same reason {@link #supersede} does not:
      * losing the claim is ordinary, and the composed words are still owed.
      *
+     * <p>A card withdrawn since the caller read it is not retired: it would become an invisible superseded card that
+     * no restore brings back. The caller's read happens before this transaction, so the check is made again under
+     * the card's row lock, the one a withdrawal takes, and in a statement after the lock is held: an UPDATE that
+     * only waits for the lock may still judge the withdrawal by a snapshot taken before it committed. The caller
+     * must hold the lock through writing the replacement.
+     *
      * @param openId the open card, found by the caller on the thread this card is about to be written on
      */
     public Outcome replaceOpen(long workspaceId, UUID openId) {
+        if (feedbackRepository.lockByIdAndWorkspaceId(openId, workspaceId).isEmpty()) {
+            return Outcome.standalone();
+        }
+        if (withdrawalRepository.findActive(workspaceId, openId).isPresent()) {
+            log.info("Open in-app card was withdrawn since it was read; written as new: target={}", openId);
+            return Outcome.standalone();
+        }
         if (feedbackRepository.markSuperseded(workspaceId, openId) == 1
                 || feedbackRepository.supersedeDelivered(workspaceId, openId) == 1) {
             return new Outcome(Disposition.SUPERSEDED, openId);

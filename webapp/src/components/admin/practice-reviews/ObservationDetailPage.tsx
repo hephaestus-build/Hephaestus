@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
 import { CircleSlashIcon, MessageSquareTextIcon, Undo2Icon } from "lucide-react";
-import { useId, useState } from "react";
 
 import type {
 	GetPracticeReviewObservationResponse,
@@ -24,7 +23,6 @@ import {
 } from "@/components/practice-vocabulary/observation-invalidation-defs";
 import { withholdingReasonSentence } from "@/components/practice-vocabulary/withholding-defs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import {
 	Empty,
 	EmptyDescription,
@@ -32,19 +30,10 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import {
-	Popover,
-	PopoverContent,
-	PopoverDescription,
-	PopoverHeader,
-	PopoverTitle,
-	PopoverTrigger,
-} from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
-import { Textarea } from "@/components/ui/textarea";
 import { hasText } from "@/lib/text";
 
+import { CorrectionEntry, CorrectionReasonPopover } from "./CorrectionReason";
 import { ObservationEvidence } from "./ObservationEvidence";
 import { type ObservationsSearch, reviewScopeSearch } from "./review-search";
 import { ReviewArtifactLink, reviewArtifactTypeSlug } from "./ReviewArtifact";
@@ -329,31 +318,6 @@ function InvalidationAlert({ invalidation }: { invalidation: ObservationInvalida
 	);
 }
 
-function CorrectionEntry({
-	action,
-	actor,
-	at,
-	reason,
-	note,
-}: {
-	action: string;
-	actor: string | undefined;
-	at: Date;
-	reason: string | undefined;
-	note?: string;
-}) {
-	return (
-		<li className="space-y-1 rounded-lg border p-3">
-			<p className="text-muted-foreground">
-				<span className="font-medium text-foreground">{action}</span> by{" "}
-				{actor ?? "an account that no longer exists"} <RelativeTime value={at} />
-			</p>
-			{hasText(reason) && <p className="break-words whitespace-pre-wrap">{reason}</p>}
-			{hasText(note) && <p className="text-muted-foreground">{note}</p>}
-		</li>
-	);
-}
-
 function ValidityPopover({
 	invalidated,
 	disabled,
@@ -363,75 +327,30 @@ function ValidityPopover({
 	disabled: boolean;
 	onSubmit: (reason: string) => Promise<unknown>;
 }) {
-	const [open, setOpen] = useState(false);
-	const [reason, setReason] = useState("");
-	const reasonId = useId();
-	const submit = async () => {
-		try {
-			await onSubmit(reason.trim());
-			setReason("");
-			setOpen(false);
-		} catch {
-			// The route reports the failure; the reason stays for another try.
-		}
-	};
-	const copy = invalidated
-		? {
-				trigger: "Restore observation",
-				title: "Restore this observation",
-				description:
-					"It counts again from now on. Feedback that was stopped stays stopped, and nothing is re-sent.",
-				placeholder: "Why the observation was right after all…",
-			}
-		: {
-				trigger: "Mark as incorrect",
-				title: "Mark this observation as incorrect",
-				description:
-					"The review record stays as it was. The developer sees your reason next to the observation.",
-				placeholder: "What the observation got wrong…",
-			};
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger render={<Button variant="outline" disabled={disabled} />}>
-				{disabled && <Spinner />}
-				{!disabled && (invalidated ? <Undo2Icon /> : <CircleSlashIcon />)}
-				{copy.trigger}
-			</PopoverTrigger>
-			<PopoverContent align="end" className="w-[min(24rem,calc(100vw-2rem))] gap-4 p-4">
-				<PopoverHeader>
-					<PopoverTitle>{copy.title}</PopoverTitle>
-					<PopoverDescription>{copy.description}</PopoverDescription>
-				</PopoverHeader>
-				<Field>
-					<FieldLabel htmlFor={reasonId}>Reason</FieldLabel>
-					<Textarea
-						id={reasonId}
-						name="observation-validity-reason"
-						autoComplete="off"
-						value={reason}
-						onChange={(event) => setReason(event.target.value)}
-						maxLength={500}
-						placeholder={copy.placeholder}
-					/>
-					<FieldDescription>Required · {reason.length}/500</FieldDescription>
-				</Field>
-				<div className="flex justify-end gap-2 border-t pt-3">
-					<Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
-						Cancel
-					</Button>
-					<Button
-						variant={invalidated ? "default" : "destructive"}
-						size="sm"
-						disabled={disabled || !hasText(reason.trim())}
-						onClick={() => {
-							void submit();
-						}}
-					>
-						{disabled && <Spinner />}
-						{copy.trigger}
-					</Button>
-				</div>
-			</PopoverContent>
-		</Popover>
+		<CorrectionReasonPopover
+			copy={
+				invalidated
+					? {
+							trigger: "Restore observation",
+							title: "Restore this observation",
+							description:
+								"It counts again from now on. Feedback that was stopped stays stopped, and nothing is re-sent.",
+							placeholder: "Why the observation was right after all…",
+						}
+					: {
+							trigger: "Mark as incorrect",
+							title: "Mark this observation as incorrect",
+							description:
+								"The review record stays as it was. The developer sees your reason next to the observation.",
+							placeholder: "What the observation got wrong…",
+						}
+			}
+			icon={invalidated ? Undo2Icon : CircleSlashIcon}
+			destructive={!invalidated}
+			name="observation-validity-reason"
+			disabled={disabled}
+			onSubmit={onSubmit}
+		/>
 	);
 }

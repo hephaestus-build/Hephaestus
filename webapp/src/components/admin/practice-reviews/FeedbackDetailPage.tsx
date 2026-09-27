@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { ScanSearchIcon } from "lucide-react";
+import { EyeOffIcon, ScanSearchIcon, Undo2Icon } from "lucide-react";
 import type {
 	FeedbackApproval,
+	FeedbackWithdrawal,
 	GetPracticeReviewFeedbackResponse,
 	Practice,
 	ReviewPlacement,
@@ -15,6 +16,7 @@ import { DeliveryTrace } from "@/components/practice-vocabulary/DeliveryTrace";
 import { codeCitationLocator } from "@/components/practice-vocabulary/evidence-source-defs";
 import { observationResult } from "@/components/practice-vocabulary/observation-result";
 import { PLACEMENT_DEFS } from "@/components/practice-vocabulary/placement-defs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
 	Empty,
 	EmptyDescription,
@@ -25,6 +27,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { hasText } from "@/lib/text";
 import { APPROVAL_DECISION_DEFS } from "./approval-decision-defs";
+import { CorrectionEntry, CorrectionReasonPopover } from "./CorrectionReason";
 import { FeedbackBody } from "./FeedbackBody";
 import { proposalRejectionReasonLabel } from "./proposal-rejection-vocabulary";
 import { subjectLabel } from "./review-format";
@@ -51,6 +54,12 @@ export interface FeedbackDetailPageProps {
 		| { status: "error"; error: unknown; onRetry: () => void }
 		| { status: "ready"; feedback: GetPracticeReviewFeedbackResponse };
 	practices: Practice[] | undefined;
+	/**
+	 * Withdraws (`true`) or restores (`false`) a card on the developer's practice page, with the admin's reason.
+	 * Settles when the server has answered; the form keeps the reason until it succeeded.
+	 */
+	onChangeWithdrawal: (withdrawn: boolean, reason: string) => Promise<unknown>;
+	isChangingWithdrawal: boolean;
 }
 
 export function FeedbackDetailPage({
@@ -58,6 +67,8 @@ export function FeedbackDetailPage({
 	search,
 	state,
 	practices,
+	onChangeWithdrawal,
+	isChangingWithdrawal,
 }: FeedbackDetailPageProps) {
 	const breadcrumbs = (
 		<ReviewBreadcrumbs
@@ -113,12 +124,51 @@ export function FeedbackDetailPage({
 		feedback.deliveryState === "PREPARED" ||
 		(feedback.deliveryState === "PARTIALLY_DELIVERED" && !feedback.suppressionReason);
 	const { approval } = feedback;
+	const latestWithdrawal = feedback.withdrawals.at(0);
+	const withdrawal =
+		latestWithdrawal !== undefined && latestWithdrawal.restoredAt === undefined
+			? latestWithdrawal
+			: undefined;
+	// Only a practice-page card that is waiting or shown can be taken back; a withdrawn one can always be restored.
+	const canWithdraw =
+		feedback.channel === "IN_APP" &&
+		(withdrawal !== undefined ||
+			feedback.deliveryState === "PREPARED" ||
+			feedback.deliveryState === "DELIVERED");
 
 	return (
 		<article className="max-w-4xl min-w-0 space-y-8">
 			{breadcrumbs}
 			<ReviewDetailHeader
 				title={`Feedback for ${subjectLabel(feedback.recipient)}`}
+				actions={
+					canWithdraw ? (
+						<CorrectionReasonPopover
+							copy={
+								withdrawal
+									? {
+											trigger: "Restore feedback",
+											title: "Restore this feedback",
+											description:
+												"It returns to the developer's practice page if its observations can still be shown there. Nothing is sent again.",
+											placeholder: "Why the feedback was right after all…",
+										}
+									: {
+											trigger: "Withdraw feedback",
+											title: "Withdraw this feedback",
+											description:
+												"Its words leave the developer's practice page, Heph and later reviews, and the observations behind it keep counting. A developer who already saw it sees that it was withdrawn, not your reason.",
+											placeholder: "What the feedback got wrong…",
+										}
+							}
+							icon={withdrawal ? Undo2Icon : EyeOffIcon}
+							destructive={withdrawal === undefined}
+							name="feedback-withdrawal-reason"
+							disabled={isChangingWithdrawal}
+							onSubmit={async (reason) => onChangeWithdrawal(withdrawal === undefined, reason)}
+						/>
+					) : undefined
+				}
 				provenance={
 					<ReviewProvenanceLine
 						workspaceSlug={workspaceSlug}
@@ -128,6 +178,8 @@ export function FeedbackDetailPage({
 					/>
 				}
 			/>
+
+			{withdrawal && <WithdrawalAlert withdrawal={withdrawal} />}
 
 			<ReviewFactGrid>
 				<ReviewFact label={subjectDiffers === true ? "Addressed to" : "Developer"}>
@@ -286,7 +338,53 @@ export function FeedbackDetailPage({
 					</ReviewRowList>
 				)}
 			</section>
+
+			{feedback.withdrawals.length > 0 && (
+				<section aria-labelledby="withdrawals-heading" className="space-y-3">
+					<h3 id="withdrawals-heading" className="text-lg font-semibold">
+						Withdrawals
+					</h3>
+					<ol aria-labelledby="withdrawals-heading" className="space-y-3 text-sm">
+						{feedback.withdrawals.flatMap((entry) => [
+							entry.restoredAt !== undefined && (
+								<CorrectionEntry
+									key={`${entry.id}-restored`}
+									action="Restored"
+									actor={entry.restoredBy}
+									at={entry.restoredAt}
+									reason={entry.restorationReason}
+								/>
+							),
+							<CorrectionEntry
+								key={entry.id}
+								action="Withdrawn"
+								actor={entry.withdrawnBy}
+								at={entry.withdrawnAt}
+								reason={entry.reason}
+							/>,
+						])}
+					</ol>
+				</section>
+			)}
 		</article>
+	);
+}
+
+function WithdrawalAlert({ withdrawal }: { withdrawal: FeedbackWithdrawal }) {
+	return (
+		<Alert variant="destructive">
+			<EyeOffIcon />
+			<AlertTitle>Withdrawn from the practice page</AlertTitle>
+			<AlertDescription>
+				<p>
+					{withdrawal.withdrawnBy ?? "A workspace admin"} withdrew this feedback{" "}
+					<RelativeTime value={withdrawal.withdrawnAt} />: “{withdrawal.reason}”. What it said is
+					off the developer’s practice page, and Heph and later reviews no longer read it. If the
+					developer had already seen it, their page says it was withdrawn. The observations behind
+					it still count.
+				</p>
+			</AlertDescription>
+		</Alert>
 	);
 }
 

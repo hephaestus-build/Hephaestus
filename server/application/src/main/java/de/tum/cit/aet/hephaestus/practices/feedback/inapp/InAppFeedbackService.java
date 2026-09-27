@@ -6,6 +6,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawal;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.inapp.dto.InAppCleanWorkDTO;
@@ -24,6 +26,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -68,6 +71,7 @@ public class InAppFeedbackService {
     private final UserRepository userRepository;
     private final ReviewRunTargetLookup reviewRunTargetLookup;
     private final ReactionRepository reactionRepository;
+    private final FeedbackWithdrawalRepository withdrawalRepository;
     private final Clock clock;
 
     /**
@@ -91,9 +95,21 @@ public class InAppFeedbackService {
         Long recipientUserId = currentUser.get().getId();
         Instant now = clock.instant();
         // Every readable row, not a page of them: a run of closed cards must not crowd an older open one off it.
-        List<Feedback> rows = feedbackRepository.findReadableInAppForRecipient(workspaceId, recipientUserId);
-        List<InAppFeedbackDTO> onThePage = readCards(workspaceId, recipientUserId, rows, now).stream()
-                .filter(card -> stillOnThePage(card.closedAt(), now))
+        // A withdrawn card nobody was shown is not on the page at all; one already shown says it was withdrawn.
+        List<Feedback> readable = feedbackRepository.findReadableInAppForRecipient(workspaceId, recipientUserId);
+        Map<UUID, Instant> withdrawnAt = withdrawnAt(workspaceId, readable);
+        List<Feedback> rows = readable.stream()
+                .filter(feedback -> !withdrawnAt.containsKey(feedback.getId())
+                        || feedback.getDeliveryState() == FeedbackDeliveryState.DELIVERED)
+                .toList();
+        List<InAppFeedbackDTO> onThePage = readCards(workspaceId, recipientUserId, rows, withdrawnAt, now).stream()
+                .filter(card -> {
+                    Instant withdrawn = card.withdrawnAt();
+                    return stillOnThePage(withdrawn != null ? withdrawn : card.closedAt(), now);
+                })
+                // A withdrawal is news as of when it happened, so it ranks by that rather than behind every card
+                // written since. Stable, so every other card keeps the rows' newest-first order.
+                .sorted(Comparator.comparing(InAppFeedbackService::pageTime).reversed())
                 .limit(MAX_CARDS)
                 .toList();
         Set<UUID> prepared = rows.stream()
@@ -111,8 +127,28 @@ public class InAppFeedbackService {
         return onThePage;
     }
 
-    /** The rows as cards, in the rows' order; a row with no evidence left to show is no card. */
-    private List<InAppFeedbackDTO> readCards(Long workspaceId, Long recipientUserId, List<Feedback> rows, Instant now) {
+    private static Instant pageTime(InAppFeedbackDTO card) {
+        Instant withdrawn = card.withdrawnAt();
+        return withdrawn != null ? withdrawn : card.preparedAt();
+    }
+
+    /** When each of {@code rows} with an open withdrawal was withdrawn. */
+    private Map<UUID, Instant> withdrawnAt(Long workspaceId, List<Feedback> rows) {
+        if (rows.isEmpty()) {
+            return Map.of();
+        }
+        return withdrawalRepository
+                .findActiveFor(workspaceId, rows.stream().map(Feedback::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(FeedbackWithdrawal::getFeedbackId, FeedbackWithdrawal::getWithdrawnAt));
+    }
+
+    /**
+     * The rows as cards, in the rows' order; a row with no evidence left to show is no card. A withdrawn row still
+     * needs its evidence to be shown, and is then only the notice that it was withdrawn.
+     */
+    private List<InAppFeedbackDTO> readCards(
+            Long workspaceId, Long recipientUserId, List<Feedback> rows, Map<UUID, Instant> withdrawnAt, Instant now) {
         if (rows.isEmpty()) {
             return List.of();
         }
@@ -141,6 +177,7 @@ public class InAppFeedbackService {
         // A card the developer or its practice closed long enough ago is off the page whatever the work says,
         // since the work can only close it earlier; leaving it out keeps the work read to the cards that remain.
         List<Feedback> candidates = shown.stream()
+                .filter(feedback -> !withdrawnAt.containsKey(feedback.getId()))
                 .filter(feedback -> {
                     FeedbackClosure closedWithoutTheWork = FeedbackClosure.of(
                             null,
@@ -162,15 +199,48 @@ public class InAppFeedbackService {
                                         .flatMap(resolution -> resolution.cleanWork().stream())
                                         .map(Work::jobId))
                         .collect(Collectors.toSet()));
-        return candidates.stream()
-                .map(feedback -> toCard(
-                        feedback,
-                        Objects.requireNonNull(evidenceByFeedback.get(feedback.getId())),
-                        resolutionByFeedback.getOrDefault(feedback.getId(), WorkResolution.NONE),
-                        responseByFeedback.get(feedback.getId()),
-                        practiceChangedAt.get(feedback.getId()),
-                        targets))
+        Set<UUID> live = candidates.stream().map(Feedback::getId).collect(Collectors.toSet());
+        return shown.stream()
+                .filter(feedback -> live.contains(feedback.getId()) || withdrawnAt.containsKey(feedback.getId()))
+                .map(feedback -> withdrawnAt.containsKey(feedback.getId())
+                        ? withdrawnCard(
+                                feedback,
+                                Objects.requireNonNull(evidenceByFeedback.get(feedback.getId())),
+                                Objects.requireNonNull(withdrawnAt.get(feedback.getId())))
+                        : toCard(
+                                feedback,
+                                Objects.requireNonNull(evidenceByFeedback.get(feedback.getId())),
+                                resolutionByFeedback.getOrDefault(feedback.getId(), WorkResolution.NONE),
+                                responseByFeedback.get(feedback.getId()),
+                                practiceChangedAt.get(feedback.getId()),
+                                targets))
                 .toList();
+    }
+
+    /** The notice left in a withdrawn card's place: its practice, and when it was withdrawn. */
+    private static InAppFeedbackDTO withdrawnCard(Feedback feedback, List<Observation> evidence, Instant withdrawnAt) {
+        Practice practice = evidence.getFirst().getPractice();
+        PracticeGroup group = practice.getGroup();
+        return new InAppFeedbackDTO(
+                feedback.getId(),
+                practice.getName(),
+                null,
+                null,
+                practice.getSlug(),
+                practice.getName(),
+                group == null ? null : group.getSlug(),
+                group == null ? null : group.getName(),
+                practice.getWhyItMatters(),
+                practice.getWhatGoodLooksLike(),
+                List.of(),
+                feedback.getCreatedAt(),
+                feedback.getDeliveredAt(),
+                WorkResolution.CLEAN_NEEDED,
+                List.of(),
+                null,
+                null,
+                null,
+                withdrawnAt);
     }
 
     /** Open, or closed for less than {@link #CLOSED_CARD_STAYS}. */
@@ -214,6 +284,7 @@ public class InAppFeedbackService {
                         .toList(),
                 closure == null ? null : closure.at(),
                 closure == null ? null : closure.by(),
-                response);
+                response,
+                null);
     }
 }

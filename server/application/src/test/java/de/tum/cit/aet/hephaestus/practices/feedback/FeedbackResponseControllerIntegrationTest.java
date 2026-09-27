@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -12,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResolutionCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.inapp.FeedbackWithdrawalService;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
@@ -71,8 +74,15 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
     @Autowired
     private AgentJobRepository agentJobRepository;
 
+    @Autowired
+    private AccountRepository accountRepository;
+
+    @Autowired
+    private FeedbackWithdrawalService withdrawalService;
+
     private Workspace workspace;
     private User adminUser;
+    private AgentJob agentJob;
     private Feedback feedbackUnit;
     private UUID observationId;
 
@@ -92,7 +102,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
         practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
         practice = practiceRepository.save(practice);
 
-        AgentJob agentJob = new AgentJob();
+        agentJob = new AgentJob();
         agentJob.setWorkspace(workspace);
         agentJob.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         agentJob.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
@@ -384,6 +394,71 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .expectStatus()
                     .isNotFound()
                     .expectBody(Void.class);
+        }
+
+        /**
+         * A page loaded before the withdrawal still offers the answer buttons. The server takes no new answer, and
+         * the one given before stays readable and can still be taken back.
+         */
+        @Test
+        @WithAdminUser
+        void shouldRefuseANewAnswerToWithdrawnFeedbackAndKeepTheEarlierOne() {
+            Feedback card = feedbackRepository.save(Feedback.builder()
+                    .agentJobId(agentJob.getId())
+                    .workspaceId(workspace.getId())
+                    .recipientUserId(adminUser.getId())
+                    .aboutUserId(adminUser.getId())
+                    .channel(FeedbackChannel.IN_APP)
+                    .position(1000)
+                    .deliveryState(FeedbackDeliveryState.DELIVERED)
+                    .body("Wrong words")
+                    .source(FeedbackSource.AGENT)
+                    .createdAt(Instant.now())
+                    .deliveredAt(Instant.now())
+                    .build());
+            put(card, new FeedbackResponseRequestDTO(FeedbackUsefulness.HELPFUL, null, null))
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+            long admin = java.util.Objects.requireNonNull(
+                    accountRepository.save(new Account("Withdrawing admin")).getId());
+            withdrawalService.setWithdrawn(workspace.getId(), card.getId(), admin, true, "About older issues");
+
+            put(card, new FeedbackResponseRequestDTO(null, FeedbackResolution.ADDRESSED, null))
+                    .expectStatus()
+                    .isEqualTo(409)
+                    .expectBody(Void.class);
+
+            webTestClient
+                    .get()
+                    .uri(FEEDBACK_URI, workspace.getWorkspaceSlug(), card.getId())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.usefulness")
+                    .isEqualTo("HELPFUL")
+                    .jsonPath("$.resolution")
+                    .doesNotExist();
+            webTestClient
+                    .delete()
+                    .uri(FEEDBACK_URI, workspace.getWorkspaceSlug(), card.getId())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isNoContent()
+                    .expectBody(Void.class);
+        }
+
+        private WebTestClient.ResponseSpec put(Feedback feedback, FeedbackResponseRequestDTO request) {
+            return webTestClient
+                    .put()
+                    .uri(FEEDBACK_URI, workspace.getWorkspaceSlug(), feedback.getId())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(request)
+                    .exchange();
         }
 
         @Test
