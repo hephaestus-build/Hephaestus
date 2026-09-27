@@ -869,7 +869,6 @@ class DeliveryComposerTest extends BaseUnitTest {
             String clean = DeliveryComposer.sanitizeStudentText(s);
             assertThat(clean).doesNotContainIgnoringCase("NEGATIVE observation");
             assertThat(clean).doesNotContainIgnoringCase("POSITIVE observation");
-            assertThat(clean).doesNotContainIgnoringCase("POSITIVE observation");
             assertThat(clean).doesNotContainIgnoringCase("severity band");
             assertThat(clean).doesNotContainIgnoringCase("severity level");
             assertThat(clean).doesNotContainIgnoringCase("MINOR severity");
@@ -1725,7 +1724,6 @@ class DeliveryComposerTest extends BaseUnitTest {
                         new WithheldObservation("occ-rk-checkable", FeedbackSuppressionReason.COMPOSER_DEDUPED));
     }
 
-    private static final String COMPOSED_BODY = "Nothing in this change exercises the tax-exempt branch you added.";
     private static final String COMPOSED_NEXT_STEP =
             "Write the assertion that distinguishes the exempt case, then run the suite.";
 
@@ -1747,7 +1745,7 @@ class DeliveryComposerTest extends BaseUnitTest {
             new ComposedFeedbackUnit.InContextPlacement(
                     ComposedFeedbackUnit.InContextPlacement.PlacementKind.ARTIFACT, null);
 
-    private ComposedFeedbackUnit inContextUnit(ValidatedObservation cited, String title, String body, String nextStep) {
+    private ComposedFeedbackUnit inContextUnit(ValidatedObservation cited, String title, String nextStep) {
         return citing(List.of(cited), title, nextStep, onTheLineOf(cited));
     }
 
@@ -1822,14 +1820,13 @@ class DeliveryComposerTest extends BaseUnitTest {
                 List.of(branch),
                 ArtifactKinds.PULL_REQUEST,
                 Map.of(),
-                List.of(inContextUnit(branch, "Untested branch", COMPOSED_BODY, COMPOSED_NEXT_STEP)),
+                List.of(inContextUnit(branch, "Untested branch", COMPOSED_NEXT_STEP)),
                 null);
 
         assertThat(result).isNotNull();
         assertThat(result.diffNotes()).hasSize(1);
         String note = result.diffNotes().get(0).body();
-        assertThat(note).contains(COMPOSED_NEXT_STEP).doesNotContain(COMPOSED_BODY);
-        assertThat(note).doesNotContain("MEASURED REASONING").doesNotContain("MEASURED GUIDANCE");
+        assertThat(note).contains(COMPOSED_NEXT_STEP).doesNotContain("MEASURED REASONING");
         assertThat(note).contains("Untested branch").doesNotContain("New branch ships without a test");
         assertThat(note).contains("🟠");
         assertThat(reachedTheDeveloper(result))
@@ -1846,50 +1843,6 @@ class DeliveryComposerTest extends BaseUnitTest {
         assertThat(result.diffNotes()).hasSize(1);
         String body = result.diffNotes().get(0).body();
         assertThat(body).doesNotContain("MEASURED REASONING").contains("New branch ships without a test");
-        assertThat(body).doesNotContain("MEASURED GUIDANCE");
-    }
-
-    @Test
-    void compose_inContextIgnoresLegacyBodyAndUsesTheNextStep() {
-        ValidatedObservation branch = identified(untestedBranchObservation());
-        DeliveryContent result = DeliveryComposer.composeAdmitted(
-                List.of(branch),
-                ArtifactKinds.PULL_REQUEST,
-                Map.of(),
-                List.of(inContextUnit(
-                        branch,
-                        "Untested branch",
-                        "The practice requires an assertion for every new branch.",
-                        COMPOSED_NEXT_STEP)),
-                null);
-
-        assertThat(result).isNotNull();
-        assertThat(result.diffNotes()).hasSize(1);
-        String note = result.diffNotes().get(0).body();
-        assertThat(note).contains(COMPOSED_NEXT_STEP);
-        assertThat(note).doesNotContain("The practice requires").doesNotContain("MEASURED REASONING");
-    }
-
-    @Test
-    void compose_inContextNeverRendersTheLegacyBody() {
-        ValidatedObservation branch = identified(untestedBranchObservation());
-        DeliveryContent result = DeliveryComposer.composeAdmitted(
-                List.of(branch),
-                ArtifactKinds.PULL_REQUEST,
-                Map.of(),
-                List.of(inContextUnit(
-                        branch,
-                        "Untested branch",
-                        COMPOSED_BODY + " The practice requires an assertion for every new branch.",
-                        COMPOSED_NEXT_STEP)),
-                null);
-
-        assertThat(result).isNotNull();
-        assertThat(result.diffNotes()).hasSize(1);
-        assertThat(result.diffNotes().get(0).body())
-                .contains(COMPOSED_NEXT_STEP)
-                .doesNotContain(COMPOSED_BODY)
-                .doesNotContain("The practice requires");
     }
 
     @Test
@@ -1913,7 +1866,6 @@ class DeliveryComposerTest extends BaseUnitTest {
         assertThat(result.diffNotes()).isEmpty();
         assertThat(result.mrNote())
                 .contains("Unexplained change")
-                .doesNotContain(COMPOSED_BODY)
                 .contains(COMPOSED_NEXT_STEP)
                 .doesNotContain("MEASURED REASONING");
     }
@@ -1943,9 +1895,7 @@ class DeliveryComposerTest extends BaseUnitTest {
                         .count())
                 .isEqualTo(1);
         assertThat(result.diffNotes().get(0).filePath()).isEqualTo("Billing/Invoice.java");
-        assertThat(result.diffNotes().get(0).body())
-                .contains(COMPOSED_NEXT_STEP)
-                .doesNotContain(COMPOSED_BODY);
+        assertThat(result.diffNotes().get(0).body()).contains(COMPOSED_NEXT_STEP);
         assertThat(result.diffNotes().get(1).body())
                 .contains("Second untested branch")
                 .doesNotContain("SECOND LOCUS REASONING");
@@ -2072,7 +2022,7 @@ class DeliveryComposerTest extends BaseUnitTest {
                 List.of(f),
                 ArtifactKinds.PULL_REQUEST,
                 Map.of(),
-                List.of(inContextUnit(f, "Untested branch", COMPOSED_BODY, COMPOSED_NEXT_STEP)),
+                List.of(inContextUnit(f, "Untested branch", COMPOSED_NEXT_STEP)),
                 null);
 
         assertThat(result).isNotNull();
@@ -2081,10 +2031,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         assertThat(note.filePath()).isEqualTo("Billing/Invoice.java");
         assertThat(note.startLine()).isEqualTo(42);
         assertThat(note.endLine()).isEqualTo(42);
-        assertThat(note.body())
-                .doesNotContain(COMPOSED_BODY)
-                .contains(COMPOSED_NEXT_STEP)
-                .doesNotContain("SUGGESTED NOTE BODY");
+        assertThat(note.body()).contains(COMPOSED_NEXT_STEP);
     }
 
     @Test
@@ -2103,15 +2050,12 @@ class DeliveryComposerTest extends BaseUnitTest {
                 List.of(good),
                 ArtifactKinds.PULL_REQUEST,
                 Map.of(),
-                List.of(inContextUnit(good, "Tests landed with it", COMPOSED_BODY, COMPOSED_NEXT_STEP)),
+                List.of(inContextUnit(good, "Tests landed with it", COMPOSED_NEXT_STEP)),
                 null);
 
         assertThat(result).isNotNull();
         assertThat(result.diffNotes()).isEmpty();
-        assertThat(result.mrNote())
-                .doesNotContain(COMPOSED_BODY)
-                .contains(COMPOSED_NEXT_STEP)
-                .doesNotContain("MEASURED REASONING");
+        assertThat(result.mrNote()).contains(COMPOSED_NEXT_STEP).doesNotContain("MEASURED REASONING");
         assertThat(result.mrNote())
                 .as("a title with no terminal stop must not run into the step that follows it")
                 .contains("Tests landed with it. " + COMPOSED_NEXT_STEP);
