@@ -248,9 +248,10 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 new MockHttpServletRequest("GET", "/workspaces/example/user-view/users/1"),
                 new MockHttpServletResponse(),
                 mock(FilterChain.class));
-        MockHttpServletRequest profile = new MockHttpServletRequest("GET", "/workspaces/example/profile/alex");
-        profile.addHeader("X-User-View-User", "1");
-        f.doFilter(profile, new MockHttpServletResponse(), mock(FilterChain.class));
+        MockHttpServletRequest activity =
+                new MockHttpServletRequest("GET", "/workspaces/example/activity/members/alex/open-work");
+        activity.addHeader("X-User-View-User", "1");
+        f.doFilter(activity, new MockHttpServletResponse(), mock(FilterChain.class));
         MockHttpServletRequest conversation = new MockHttpServletRequest("GET", "/workspaces/other/mentor/threads/abc");
         conversation.addHeader("X-User-View-User", "2");
         f.doFilter(conversation, new MockHttpServletResponse(), mock(FilterChain.class));
@@ -388,7 +389,8 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
             throw new RuntimeException("bucket store down");
         };
         AuthRateLimitFilter filter = new AuthRateLimitFilter(props(), throwing, objectMapper, metrics);
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/workspaces/demo/profile/alex");
+        MockHttpServletRequest request =
+                new MockHttpServletRequest("GET", "/workspaces/demo/activity/members/alex/open-work");
         request.addHeader("X-User-View-User", "7");
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);

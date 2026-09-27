@@ -1,10 +1,10 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.MemberActivityDTO;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
@@ -17,8 +17,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembership;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserInfoDTO;
-import de.tum.cit.aet.hephaestus.leaderboard.LeaderboardEntryDTO;
 import de.tum.cit.aet.hephaestus.mentor.ChatThread;
 import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -516,8 +514,8 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Nested
-    @DisplayName("Leaderboard member roster")
-    class Leaderboard {
+    @DisplayName("Workspace activity roster")
+    class WorkspaceActivity {
 
         @Test
         @WithMentorUser
@@ -525,47 +523,48 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
             Team sharedTeam = seedTeam("shared-team", 900_100L, SHARED_LOGIN, ensureGitHubProvider());
             teamMembershipRepository.save(new TeamMembership(sharedTeam, bobOnlyB, TeamMembership.Role.MEMBER));
 
-            List<String> logins = leaderboardLogins(workspaceA);
+            List<String> logins = memberActivity(workspaceA).stream()
+                    .map(member -> member.user().login())
+                    .toList();
 
             assertThat(logins).contains("alice-only-a").doesNotContain("bob-only-b");
         }
 
         @Test
         @WithMentorUser
-        void xpCountsOnlyOwnWorkspaceActivity() {
-            seedActivity(workspaceA, overlapUser, 10);
-            seedActivity(workspaceB, overlapUser, 99);
+        void countsOnlyOwnWorkspaceActivity() {
+            seedActivity(workspaceA, overlapUser, 1);
+            seedActivity(workspaceB, overlapUser, 3);
 
-            Integer score = leaderboardEntries(workspaceA).stream()
-                    .filter(e -> userOf(e).login().equals("mentor"))
+            MemberActivityDTO mentor = memberActivity(workspaceA).stream()
+                    .filter(member -> member.user().login().equals("mentor"))
                     .findFirst()
-                    .orElseThrow()
-                    .score();
+                    .orElseThrow();
 
-            assertThat(score).isEqualTo(10);
+            assertThat(mentor.summary().commentReviews()).isEqualTo(1);
         }
     }
 
     @Nested
-    @DisplayName("Contributor profiles and activity")
-    class Profiles {
+    @DisplayName("Member activity")
+    class MemberActivity {
 
         @Test
         @WithMentorUser
-        void shouldReturnNotFoundWhenProfileUserOnlyBelongsToAnotherWorkspace() {
-            expectDetailStatus("/profile/{key}", "mentor").isOk().expectBody(Void.class);
-            expectDetailStatus("/profile/{key}", bobOnlyB.getLogin())
+        void shouldReturnNotFoundWhenOpenWorkMemberOnlyBelongsToAnotherWorkspace() {
+            expectDetailStatus("/activity/members/{key}/open-work", "mentor")
+                    .isOk()
+                    .expectBody(Void.class);
+            expectDetailStatus("/activity/members/{key}/open-work", bobOnlyB.getLogin())
                     .isNotFound()
                     .expectBody(Void.class);
         }
 
         @Test
         @WithMentorUser
-        void shouldReturnNotFoundWhenActivityUserOnlyBelongsToAnotherWorkspace() {
-            expectDetailStatus("/profile/{key}/activity-monitor", "mentor")
-                    .isOk()
-                    .expectBody(Void.class);
-            expectDetailStatus("/profile/{key}/activity-monitor", bobOnlyB.getLogin())
+        void shouldReturnNotFoundWhenWorkMemberOnlyBelongsToAnotherWorkspace() {
+            expectDetailStatus("/activity/work?login={key}", "mentor").isOk().expectBody(Void.class);
+            expectDetailStatus("/activity/work?login={key}", bobOnlyB.getLogin())
                     .isNotFound()
                     .expectBody(Void.class);
         }
@@ -683,51 +682,34 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .expectStatus();
     }
 
-    private void seedActivity(Workspace ws, User actor, double xp) {
-        UUID id = UUID.randomUUID();
-        activityEventRepository.insertIfAbsent(
-                id,
-                "evt-" + id,
-                ActivityEventType.REVIEW_COMMENTED.name(),
-                Instant.now(),
-                actor.getId(),
-                ws.getId(),
-                null,
-                "pull_request",
-                1L,
-                xp);
+    private void seedActivity(Workspace ws, User actor, int count) {
+        for (int i = 0; i < count; i++) {
+            UUID id = UUID.randomUUID();
+            activityEventRepository.insertIfAbsent(
+                    id,
+                    "evt-" + id,
+                    ActivityEventType.REVIEW_COMMENTED.name(),
+                    Instant.now().minusSeconds(60),
+                    actor.getId(),
+                    ws.getId(),
+                    null,
+                    "pull_request",
+                    1L);
+        }
     }
 
-    private List<String> leaderboardLogins(Workspace workspace) {
-        return leaderboardEntries(workspace).stream()
-                .map(e -> userOf(e).login())
-                .toList();
-    }
-
-    private static UserInfoDTO userOf(LeaderboardEntryDTO entry) {
-        UserInfoDTO user = entry.user();
-        assertNotNull(user);
-        return user;
-    }
-
-    private List<LeaderboardEntryDTO> leaderboardEntries(Workspace workspace) {
-        List<LeaderboardEntryDTO> entries = webTestClient
+    private List<MemberActivityDTO> memberActivity(Workspace workspace) {
+        List<MemberActivityDTO> members = webTestClient
                 .get()
-                .uri(uri -> uri.path("/workspaces/{slug}/leaderboard")
-                        .queryParam("after", "2020-01-01T00:00:00Z")
-                        .queryParam("before", "2100-01-01T00:00:00Z")
-                        .queryParam("team", "all")
-                        .queryParam("sort", "SCORE")
-                        .queryParam("mode", "INDIVIDUAL")
-                        .build(workspace.getWorkspaceSlug()))
+                .uri("/workspaces/{slug}/activity/members", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
                 .isOk()
-                .expectBodyList(LeaderboardEntryDTO.class)
+                .expectBodyList(MemberActivityDTO.class)
                 .returnResult()
                 .getResponseBody();
-        assertThat(entries).isNotNull();
-        return entries;
+        assertThat(members).isNotNull();
+        return members;
     }
 }

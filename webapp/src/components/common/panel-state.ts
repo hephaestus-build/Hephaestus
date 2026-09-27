@@ -13,7 +13,7 @@ export type PanelState<TReady> =
 
 /** One query's state, with `settled` shaping its data into the ready branch. */
 export function panelState<TData, TSettled>(
-	query: UseQueryResult<TData>,
+	query: UseQueryResult<TData, unknown>,
 	settled: (data: TData) => TSettled,
 ): PanelState<never> | TSettled {
 	return query.isError || query.isPending ? unsettled(query) : settled(query.data);

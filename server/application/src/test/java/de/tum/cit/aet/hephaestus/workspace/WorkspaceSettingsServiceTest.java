@@ -30,7 +30,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -47,9 +46,6 @@ class WorkspaceSettingsServiceTest extends BaseUnitTest {
     @Mock
     private ConnectionService connectionService;
 
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
-
     /** Re-entering a token is the way out for one the server cannot read, so it must not read it. */
     @Test
     void shouldRotateATokenWithoutReadingTheOldOne() {
@@ -57,7 +53,6 @@ class WorkspaceSettingsServiceTest extends BaseUnitTest {
                 workspaceRepository,
                 configAudit,
                 connectionService,
-                eventPublisher,
                 Clock.fixed(Instant.parse("2026-09-05T08:00:00Z"), ZoneOffset.UTC));
         Workspace workspace = TestEntities.workspace(7L);
         Connection connection = new Connection(

@@ -31,7 +31,7 @@ public record TeamSummaryDTO(
         @Schema(description = "URL to the team's page on the git provider")
         String htmlUrl,
 
-        @NonNull @Schema(description = "Whether the team is hidden from leaderboard display")
+        @NonNull @Schema(description = "Whether the team is hidden from workspace activity")
         Boolean hidden) {
     /**
      * Creates a TeamSummaryDTO from a Team entity using scope-specific settings.

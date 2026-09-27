@@ -22,11 +22,7 @@ const workspace = {
 	createdAt: new Date("2026-01-01T00:00:00Z"),
 	providerType: "GITHUB",
 	status: "ACTIVE",
-	leaderboardEnabled: false,
 	practicesEnabled: false,
-	mentorEnabled: false,
-	progressionEnabled: false,
-	leaguesEnabled: false,
 } as const;
 
 function renderMobileSidebar() {
@@ -35,7 +31,6 @@ function renderMobileSidebar() {
 			<SidebarProvider>
 				<SidebarTrigger aria-label="Open navigation" />
 				<AppSidebar
-					username="ada"
 					isAdmin={false}
 					isAppAdmin={false}
 					isMember
@@ -47,14 +42,14 @@ function renderMobileSidebar() {
 			</SidebarProvider>
 		),
 	});
-	const profileRoute = createRoute({
+	const activityRoute = createRoute({
 		getParentRoute: () => rootRoute,
-		path: "w/$workspaceSlug/user/$username",
+		path: "w/$workspaceSlug/activity",
 		component: () => null,
 	});
 	const router = createRouter({
-		routeTree: rootRoute.addChildren([profileRoute]),
-		history: createMemoryHistory({ initialEntries: ["/w/acme/user/ada"] }),
+		routeTree: rootRoute.addChildren([activityRoute]),
+		history: createMemoryHistory({ initialEntries: ["/w/acme/activity"] }),
 	});
 
 	render(<RouterProvider router={router} />);
@@ -65,8 +60,8 @@ describe("AppSidebar on mobile", () => {
 		renderMobileSidebar();
 		fireEvent.click(await screen.findByRole("button", { name: "Open navigation" }));
 
-		const profile = await screen.findByRole("link", { name: "Profile" });
-		fireEvent.click(profile);
+		const activity = await screen.findByRole("link", { name: "Activity" });
+		fireEvent.click(activity);
 
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 	});

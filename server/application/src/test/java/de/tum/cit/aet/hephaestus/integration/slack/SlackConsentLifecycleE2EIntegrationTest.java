@@ -188,8 +188,8 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
 
         slackMessageService = mock(SlackMessageService.class);
         ConnectionService connectionService = mock(ConnectionService.class);
-        when(connectionService.findSlackNotificationConfig(workspaceId))
-                .thenReturn(Optional.of(new ConnectionConfig.SlackConfig(TEAM, null, null, null, null, Set.of())));
+        when(connectionService.findSlackConfig(workspaceId))
+                .thenReturn(Optional.of(new ConnectionConfig.SlackConfig(TEAM, null, null, Set.of())));
 
         ingestService = new SlackIngestService(
                 workspaceResolver,

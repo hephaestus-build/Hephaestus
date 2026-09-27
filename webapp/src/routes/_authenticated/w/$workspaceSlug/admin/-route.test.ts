@@ -9,7 +9,7 @@ import type { WorkspaceRole } from "@/lib/workspace-roles";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 
-const WORKSPACE_HOME = "/w/acme";
+const WORKSPACE_HOME = "/w/acme/activity";
 
 // `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
 vi.setConfig({ testTimeout: 15_000 });

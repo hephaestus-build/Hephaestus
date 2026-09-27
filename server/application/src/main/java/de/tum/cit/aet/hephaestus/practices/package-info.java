@@ -17,8 +17,8 @@
  * its historical name; {@code DetectionReactionFirewallTest} pins it outside the detection context
  * (ADR 0021 F-9). Internal types (controllers, adapters, request DTOs) remain module-private.
  *
- * <p>Distinct bounded context from {@link de.tum.cit.aet.hephaestus.activity} (which
- * gamifies developer actions rather than analyzing code quality).
+ * <p>Distinct bounded context from {@link de.tum.cit.aet.hephaestus.activity} (which records what developers
+ * did rather than reviewing how they did it).
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Practices (Code Health)")
 @org.jspecify.annotations.NullMarked

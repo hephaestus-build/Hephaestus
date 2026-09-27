@@ -59,7 +59,7 @@ class SlackMentorServiceTest extends BaseUnitTest {
     private MentorReadinessQuery mentorReadinessQuery;
 
     private SlackMentorService service() {
-        when(mentorReadinessQuery.isEnabled(WORKSPACE)).thenReturn(true);
+        when(mentorReadinessQuery.isReady(WORKSPACE)).thenReturn(true);
         return new SlackMentorService(
                 workspaceResolver,
                 threadLinker,
@@ -87,10 +87,10 @@ class SlackMentorServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void disabledWorkspace_ignoresDmWithoutAnyMentorSideEffect() {
+    void shouldIgnoreTheDmWithoutAnySideEffectWhenHephIsNotReady() {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
         SlackMentorService service = service();
-        when(mentorReadinessQuery.isEnabled(WORKSPACE)).thenReturn(false);
+        when(mentorReadinessQuery.isReady(WORKSPACE)).thenReturn(false);
 
         service.handleDm(TEAM, CHANNEL, USER, "Can you review my work?", "100.1", "100.1");
 
@@ -98,17 +98,16 @@ class SlackMentorServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void enabledWorkspace_acceptsDmWithoutConsultingOperationalReadiness() {
+    void shouldStartATurnForAnAdmittedMemberWhenHephIsReady() {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
         when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.of(314L));
         UUID threadId = UUID.randomUUID();
         when(threadLinker.findOrCreateThread(WORKSPACE, TEAM, CHANNEL, "100.1", USER, 314L))
                 .thenReturn(threadId);
-        SlackMentorService service = service();
-        service.handleDm(TEAM, CHANNEL, USER, "Can you review my work?", "100.1", "100.1");
+
+        service().handleDm(TEAM, CHANNEL, USER, "Can you review my work?", "100.1", "100.1");
 
         verify(mentorTurnRunner).run(any(), any(), eq(314L));
-        verify(mentorReadinessQuery, never()).isReady(WORKSPACE);
     }
 
     @Test

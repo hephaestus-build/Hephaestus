@@ -13,8 +13,8 @@ import { routeTree } from "@/routeTree.gen";
 vi.setConfig({ testTimeout: 15_000 });
 
 const DEEP_LINK = "/w/foreign/mentor/thread-1?message=stale";
-// The workspace home writes its own schema defaults into the URL it lands on.
-const WORKSPACE_HOME = "/w/acme?team=all&sort=SCORE&mode=INDIVIDUAL";
+// The workspace home is your Activity.
+const WORKSPACE_HOME = "/w/acme/activity";
 
 function listWorkspaces(...slugs: string[]) {
 	server.use(
@@ -80,12 +80,12 @@ describe("workspace route gate", () => {
 			"/w/acme",
 			new QueryClient({ defaultOptions: { queries: { retry: false } } }),
 		);
-		expect(location.pathname).toBe("/w/acme");
+		expect(location.pathname).toBe(WORKSPACE_HOME);
 	});
 	it("opens a workspace the account can reach", async () => {
 		listWorkspaces("acme");
 		const location = await land("/w/acme");
-		expect(location.href).toBe("/w/acme");
+		expect(location.href).toBe(WORKSPACE_HOME);
 	});
 
 	it("returns an inaccessible workspace's deep link to an accessible workspace home", async () => {
@@ -117,6 +117,6 @@ describe("workspace route gate", () => {
 		]);
 
 		const location = await land("/w/brand-new", queryClient);
-		expect(location.href).toBe("/w/brand-new");
+		expect(location.href).toBe("/w/brand-new/activity");
 	});
 });

@@ -64,14 +64,13 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
     @Transactional(readOnly = true)
     public List<Option> options(long workspaceId) {
         var workspace = workspaces.findById(workspaceId).orElseThrow();
-        // A purpose whose feature is off has no rows worth loading; each enabled purpose is loaded once
-        // and shared by both choices.
+        // Reviews that are off have no rows worth loading; each purpose is loaded once and shared by both
+        // choices.
         var reviewRows = rowsIfEnabled(
                 workspaceId,
                 AgentPurpose.PRACTICE_REVIEW,
                 workspace.getFeatures().getPracticesEnabled());
-        var mentorRows = rowsIfEnabled(
-                workspaceId, AgentPurpose.MENTOR, workspace.getFeatures().getMentorEnabled());
+        var mentorRows = bindings.findByWorkspaceIdAndPurpose(workspaceId, AgentPurpose.MENTOR);
         var choices = List.of(MemberAiChoice.IN_HOUSE_ONLY, MemberAiChoice.CLOUD);
         var options = new ArrayList<Option>();
         for (var choice : choices) {

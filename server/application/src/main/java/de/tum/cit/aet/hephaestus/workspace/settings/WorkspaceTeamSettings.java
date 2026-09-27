@@ -36,7 +36,7 @@ import lombok.ToString;
  *
  * <h2>Settings</h2>
  * <ul>
- *   <li><b>hidden:</b> Controls whether the team is hidden in the overview/leaderboard for this workspace</li>
+ *   <li><b>hidden:</b> Controls whether the team is hidden from workspace activity</li>
  * </ul>
  *
  * @see Workspace
@@ -73,12 +73,7 @@ public class WorkspaceTeamSettings {
     @ToString.Exclude
     private Team team;
 
-    /**
-     * Controls whether the team is hidden in the overview/leaderboard for this workspace.
-     *
-     * <p>When {@code true}, the team will be excluded from public-facing displays
-     * like leaderboards and team overviews within this workspace.
-     */
+    /** Whether the team is hidden: a hidden team is not offered as a Workspace activity filter. */
     @Column(name = "hidden", nullable = false)
     private boolean hidden = false;
 

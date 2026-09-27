@@ -54,7 +54,7 @@ class PracticeReviewSettingsServiceTest extends BaseUnitTest {
         workspace = new Workspace();
         workspace.setId(1L);
         workspace.setWorkspaceSlug("ws");
-        context = new WorkspaceContext(1L, "ws", "Ws", AccountType.ORG, null, false, false, Set.of());
+        context = new WorkspaceContext(1L, "ws", "Ws", AccountType.ORG, null, false, Set.of());
         lenient().when(coverageService.scope(workspace)).thenReturn(WorkspaceReviewScope.ALL);
         lenient()
                 .when(coverageService.summary(workspace, 0))

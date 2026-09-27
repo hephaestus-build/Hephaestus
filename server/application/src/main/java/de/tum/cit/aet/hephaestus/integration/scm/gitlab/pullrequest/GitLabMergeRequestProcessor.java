@@ -646,7 +646,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
         Instant now = Instant.now();
         // GitLab returns closedAt=null for merged MRs; fall back to mergedAt so closed_at
-        // reflects the true terminal timestamp (needed for leaderboard issue-state windows).
+        // reflects the true terminal timestamp (needed for activity time windows).
         Instant closedAtTimestamp = parseGitLabTimestamp(data.closedAt());
         Instant mergedAtTimestamp = parseGitLabTimestamp(data.mergedAt());
         if (closedAtTimestamp == null && isMerged) {
@@ -917,8 +917,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
      *
      * <p>GitLab's {@code approved} field is binary and cannot express CHANGES_REQUESTED. The
      * {@code detailed_merge_status == "requested_changes"} signal (Premium, GA 17.3) surfaces
-     * active change requests on the MR, so we lift it into the three-state model that the
-     * leaderboard/profile UI expects.
+     * active change requests on the MR, so we lift it into the three-state {@code ReviewDecision}.
      */
     private static String deriveReviewDecision(boolean approved, @Nullable String detailedStatus) {
         if (approved) {

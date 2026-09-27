@@ -9,9 +9,9 @@ import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
 
 /**
- * Workspace-scoped feature flags, exposed by the admin UI. Top-level flags default to
- * {@code false} (new workspaces opt in); sub-feature trigger flags default to {@code true}
- * (enabling the parent activates all triggers). Every {@code @ColumnDefault} mirrors the
+ * Whether practice reviews run in a workspace, and which triggers start them. Practice reviews default
+ * to {@code false} (a new workspace opts in once its practices and model are ready); the triggers default
+ * to {@code true}, so turning reviews on activates both. Every {@code @ColumnDefault} mirrors the
  * Liquibase default so Hibernate's hbm2ddl validation does not drift from the migration.
  *
  * @see UpdateWorkspaceFeaturesRequestDTO
@@ -27,26 +27,6 @@ public class WorkspaceFeatures {
     private Boolean practicesEnabled = false;
 
     @NotNull
-    @ColumnDefault("false")
-    @Column(name = "mentor_enabled", nullable = false)
-    private Boolean mentorEnabled = false;
-
-    @NotNull
-    @ColumnDefault("false")
-    @Column(name = "leaderboard_enabled", nullable = false)
-    private Boolean leaderboardEnabled = false;
-
-    @NotNull
-    @ColumnDefault("false")
-    @Column(name = "progression_enabled", nullable = false)
-    private Boolean progressionEnabled = false;
-
-    @NotNull
-    @ColumnDefault("false")
-    @Column(name = "leagues_enabled", nullable = false)
-    private Boolean leaguesEnabled = false;
-
-    @NotNull
     @ColumnDefault("true")
     @Column(name = "practice_review_auto_trigger_enabled", nullable = false)
     private Boolean practiceReviewAutoTriggerEnabled = true;
@@ -59,10 +39,6 @@ public class WorkspaceFeatures {
     /** PATCH semantics: null fields are ignored, non-null fields overwrite. */
     public void applyPatch(UpdateWorkspaceFeaturesRequestDTO request) {
         if (request.practicesEnabled() != null) this.practicesEnabled = request.practicesEnabled();
-        if (request.mentorEnabled() != null) this.mentorEnabled = request.mentorEnabled();
-        if (request.leaderboardEnabled() != null) this.leaderboardEnabled = request.leaderboardEnabled();
-        if (request.progressionEnabled() != null) this.progressionEnabled = request.progressionEnabled();
-        if (request.leaguesEnabled() != null) this.leaguesEnabled = request.leaguesEnabled();
         if (request.practiceReviewAutoTriggerEnabled() != null) {
             this.practiceReviewAutoTriggerEnabled = request.practiceReviewAutoTriggerEnabled();
         }

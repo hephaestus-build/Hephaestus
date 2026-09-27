@@ -33,7 +33,7 @@ public record TeamInfoDTO(
         @Schema(description = "URL to the team's page on the git provider")
         String htmlUrl,
 
-        @NonNull @Schema(description = "Whether the team is hidden from leaderboard display")
+        @NonNull @Schema(description = "Whether the team is hidden from workspace activity")
         Boolean hidden,
 
         @NonNull @Schema(description = "Repositories the team has access to")
@@ -60,7 +60,7 @@ public record TeamInfoDTO(
      * @param isHidden whether the team is hidden in this scope
      * @param scopeLabels labels configured as filters for this team in this scope
      * @param hiddenRepoIds repository IDs hidden from contributions in this scope
-     * @param hiddenMemberIds user IDs hidden from leaderboard/team views in this workspace
+     * @param hiddenMemberIds user IDs hidden from workspace activity and team views in this workspace
      * @return the DTO with scope-specific settings applied
      */
     public static TeamInfoDTO fromTeamWithScopeSettings(

@@ -69,12 +69,10 @@ public sealed interface ConnectionConfig
         }
     }
 
-    /** Slack bot identity, notification channel, enabled streams, and message-retention configuration. */
+    /** Slack bot identity, enabled streams, and message-retention configuration. */
     record SlackConfig(
             @Nullable String teamId,
             @Nullable String teamName,
-            @Nullable String notificationChannelId,
-            @Nullable String teamLabel,
             @Nullable Integer retentionDays,
             Set<String> enabledStreams)
             implements ConnectionConfig {

@@ -102,10 +102,6 @@ public class User extends BaseGitServiceEntity {
     @ToString.Exclude
     private Set<IssueComment> issueComments = new HashSet<>();
 
-    @OneToMany(mappedBy = "mergedBy")
-    @ToString.Exclude
-    private Set<PullRequest> mergedPullRequests = new HashSet<>();
-
     @ManyToMany(mappedBy = "requestedReviewers")
     @ToString.Exclude
     private Set<PullRequest> requestedPullRequestReviews = new HashSet<>();

@@ -95,7 +95,7 @@ describe("GitLab workspace wizard", () => {
 
 		await screen.findByText('Workspace "Hephaestus" created');
 		await waitFor(() => {
-			expect(router.state.location.pathname).toBe("/w/hephaestus");
+			expect(router.state.location.pathname).toBe("/w/hephaestus/activity");
 		});
 		expect(
 			[...requests.preflight, ...requests.groups, ...requests.create].map((r) => r.serverUrl),

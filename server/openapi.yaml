@@ -50,8 +50,6 @@ tags:
   name: Outline collections
 - description: The starting catalog copied into new workspaces
   name: Admin Practice Catalog
-- description: User profile and activity data
-  name: Profile
 - description: Instance-wide operator settings
   name: Instance Settings
 - description: Current instance definitions visible to workspace administrators
@@ -93,6 +91,8 @@ tags:
   name: Admin
 - description: Per-workspace Slack channel consent + activation
   name: Slack channel activation
+- description: What members did and what is open for them
+  name: Activity
 - description: |-
     Workspace registry endpoints under /workspaces that operate outside of a specific workspace slug;
      slugged routes live in {@link WorkspaceController WorkspaceController} via <code>@WorkspaceScopedController</code>.
@@ -122,8 +122,6 @@ tags:
 - description: "Workspace-scoped \"bring your own\" AI provider connections, models\
     \ and settings"
   name: Workspace LLM
-- description: Contributor rankings and league statistics
-  name: Leaderboard
 - description: Why each practice did or did not run on one piece of work; readable
     by any workspace member
   name: Practice review trace
@@ -2747,6 +2745,298 @@ paths:
       summary: Fetch a workspace by slug
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/activity/members:
+    get:
+      description: "Members shown in workspace activity, or one team's, ordered by\
+        \ name."
+      operationId: listMemberActivity
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - description: "A team, with its visible sub-teams; omit for everyone"
+        in: query
+        name: teamId
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - description: Inclusive lower bound; defaults to seven days before to. A range
+          spans at most 400 days.
+        in: query
+        name: from
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - description: Exclusive upper bound; defaults to now
+        in: query
+        name: to
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MemberActivity"
+          description: Members listed
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Invalid range
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller is not a member of the workspace
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Team not found
+      summary: List members with their activity in a time range
+      tags:
+      - Activity
+  /workspaces/{workspaceSlug}/activity/members/{login}/open-work:
+    get:
+      description: "Review requests, open pull requests and assigned issues, most\
+        \ recently updated first. Pull requests carry their reviewers."
+      operationId: getOpenWork
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - description: The member's login
+        in: path
+        name: login
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenWork"
+          description: Open work listed
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller is not a member of the workspace
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Member not found
+      summary: List what is open for a member
+      tags:
+      - Activity
+  /workspaces/{workspaceSlug}/activity/summary:
+    get:
+      description: "One member's activity when login is given, otherwise everyone's\
+        \ in the workspace or the team. With both, the member's activity within the\
+        \ team's scope. The range is split into days, weeks or months, by its length,\
+        \ in the given time zone."
+      operationId: getActivitySummary
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - description: The member; omit for everyone
+        in: query
+        name: login
+        required: false
+        schema:
+          type: string
+      - description: "A team, with its visible sub-teams; omit for the workspace"
+        in: query
+        name: teamId
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - description: Inclusive lower bound; defaults to seven days before to. A range
+          spans at most 400 days.
+        in: query
+        name: from
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - description: Exclusive upper bound; defaults to now
+        in: query
+        name: to
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - description: "The IANA time zone whose midnights start the buckets, such as\
+          \ Europe/Berlin"
+        in: query
+        name: zone
+        required: false
+        schema:
+          type: string
+          default: UTC
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityOverview"
+          description: Activity counted
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Invalid range or time zone
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller is not a member of the workspace
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Member or team not found
+      summary: "Count activity in a time range, in total and over time"
+      tags:
+      - Activity
+  /workspaces/{workspaceSlug}/activity/work:
+    get:
+      description: "One member's activity when login is given, otherwise everyone's\
+        \ in the workspace or the team. With both, the member's activity within the\
+        \ team's scope. Each pull request or issue is listed once, by its latest activity\
+        \ in the range, newest first."
+      operationId: getActivityWork
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - description: The member; omit for everyone
+        in: query
+        name: login
+        required: false
+        schema:
+          type: string
+      - description: "A team, with its visible sub-teams; omit for the workspace"
+        in: query
+        name: teamId
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - description: Inclusive lower bound; defaults to seven days before to. A range
+          spans at most 400 days.
+        in: query
+        name: from
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - description: Exclusive upper bound; defaults to now
+        in: query
+        name: to
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - description: Kinds of activity to list (repeatable); omit for every kind
+        in: query
+        name: kinds
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - PULL_REQUEST_OPENED
+            - PULL_REQUEST_MERGED
+            - PULL_REQUEST_CLOSED
+            - REVIEW_APPROVED
+            - REVIEW_CHANGES_REQUESTED
+            - REVIEW_COMMENTED
+            - COMMENTED
+            - CODE_COMMENTED
+            - ISSUE_OPENED
+            - ISSUE_CLOSED
+          uniqueItems: true
+      - description: The previous page's nextCursor; omit for the first page
+        in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - description: Page size from 1 to 100; defaults to 30
+        in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 100
+          minimum: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityWorkPage"
+          description: One page of work
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Invalid range, kind, cursor or size"
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller is not a member of the workspace
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Member or team not found
+      summary: "List activity by the pull request or issue it happened on, one page\
+        \ at a time"
+      tags:
+      - Activity
   /workspaces/{workspaceSlug}/agents:
     get:
       operationId: listAgents
@@ -3196,40 +3486,6 @@ paths:
       summary: Live state of the API token behind this workspace's Outline connection
       tags:
       - Connections
-  /workspaces/{workspaceSlug}/connections/slack/test-message:
-    post:
-      description: |-
-        Probe the Slack connection by posting a test message. This is a <em>probe</em>: every outcome
-         — success, a Slack-side rejection (e.g. <code>not_in_channel</code>), or a missing channel — is a
-         200 result carrying <code>ok</code>/<code>slackError</code>, never an HTTP error. That lets the admin UI
-         test a typed-but-not-yet-saved channel and render the Slack error inline without conflating it
-         with a transport failure.
-      operationId: sendSlackTestMessage
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SlackTestMessageRequest"
-        description: "optional channel override; when blank, the persisted notification\
-          \ channel is used."
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SlackTestMessageResponse"
-          description: OK
-      summary: Post a test message to verify the Slack connection
-      tags:
-      - Connections
   /workspaces/{workspaceSlug}/connections/{connectionId}/sync:
     get:
       operationId: getConnectionSyncStatus
@@ -3571,161 +3827,6 @@ paths:
                 $ref: "#/components/schemas/Workspace"
           description: Workspace updated
       summary: Update workspace feature flags
-      tags:
-      - workspace
-  /workspaces/{workspaceSlug}/leaderboard:
-    get:
-      description: Creates a ranked contributor list for the specified time range
-      operationId: getLeaderboard
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: start of the time range (inclusive)
-        in: query
-        name: after
-        required: true
-        schema:
-          type: string
-          format: date-time
-      - description: end of the time range (exclusive)
-        in: query
-        name: before
-        required: true
-        schema:
-          type: string
-          format: date-time
-      - description: Team filter to apply in INDIVIDUAL mode; ignored when mode is
-          TEAM.
-        in: query
-        name: team
-        required: true
-        schema:
-          type: string
-          minLength: 1
-      - description: Determines the ranking metric. In TEAM mode SCORE uses summed
-          contribution scores; LEAGUE_POINTS uses total league points.
-        in: query
-        name: sort
-        required: true
-        schema:
-          type: string
-          enum:
-          - SCORE
-          - LEAGUE_POINTS
-      - description: aggregation mode (INDIVIDUAL or TEAM)
-        in: query
-        name: mode
-        required: true
-        schema:
-          type: string
-          enum:
-          - INDIVIDUAL
-          - TEAM
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/LeaderboardEntry"
-          description: ranked list of leaderboard entries
-      security: []
-      summary: Generate leaderboard
-      tags:
-      - Leaderboard
-  /workspaces/{workspaceSlug}/leaderboard-digest:
-    patch:
-      operationId: updateLeaderboardDigest
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateLeaderboardDigestRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Workspace"
-          description: Workspace updated
-      summary: Update the whole weekly leaderboard digest config (schedule + notifications)
-        atomically
-      tags:
-      - workspace
-  /workspaces/{workspaceSlug}/leaderboard/users/{login}/league-stats:
-    get:
-      description: Computes projected league point changes for a specific user using
-        the global leaderboard
-      operationId: computeUserLeagueStats
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: the user's GitHub login
-        in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      - description: start of the time range (inclusive)
-        in: query
-        name: after
-        required: true
-        schema:
-          type: string
-          format: date-time
-      - description: end of the time range (exclusive)
-        in: query
-        name: before
-        required: true
-        schema:
-          type: string
-          format: date-time
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LeagueChange"
-          description: league change statistics including projected point delta
-      security: []
-      summary: Calculate user league stats
-      tags:
-      - Leaderboard
-  /workspaces/{workspaceSlug}/league/reset:
-    put:
-      operationId: resetAndRecalculateLeagues
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      responses:
-        "200":
-          description: OK
-      summary: Reset and recalculate workspace leagues
       tags:
       - workspace
   /workspaces/{workspaceSlug}/llm/available-models:
@@ -4300,7 +4401,7 @@ paths:
         schema:
           type: integer
           format: int64
-      - description: Whether to exclude the member from leaderboard rankings
+      - description: Whether to leave the member out of workspace activity
         in: query
         name: hidden
         required: true
@@ -4462,33 +4563,6 @@ paths:
       summary: Upsert a vote on an assistant message
       tags:
       - Mentor Votes
-  /workspaces/{workspaceSlug}/notifications:
-    patch:
-      operationId: updateNotifications
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateWorkspaceNotificationsRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Workspace"
-          description: Workspace updated
-      summary: Update leaderboard notification preferences
-      tags:
-      - workspace
   /workspaces/{workspaceSlug}/onboarding/me:
     get:
       operationId: getMemberOnboarding
@@ -7552,107 +7626,6 @@ paths:
       summary: Submit a survey response once
       tags:
       - feedback
-  /workspaces/{workspaceSlug}/profile/{login}:
-    get:
-      description: "Returns user profile with workspace-scoped activity data including\
-        \ open PRs, review activity, and league points"
-      operationId: getUserProfile
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      - in: query
-        name: after
-        required: false
-        schema:
-          type: string
-          format: date-time
-      - in: query
-        name: before
-        required: false
-        schema:
-          type: string
-          format: date-time
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Profile"
-          description: OK
-      security: []
-      summary: Get user profile
-      tags:
-      - Profile
-  /workspaces/{workspaceSlug}/profile/{login}/activity-monitor:
-    get:
-      description: Returns workspace-scoped activity monitor data for a contributor
-        with optional repository and limit filters
-      operationId: getActivityMonitor
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: login
-        required: true
-        schema:
-          type: string
-      - in: query
-        name: after
-        required: false
-        schema:
-          type: string
-          format: date-time
-      - in: query
-        name: before
-        required: false
-        schema:
-          type: string
-          format: date-time
-      - in: query
-        name: repositoryIds
-        required: false
-        schema:
-          type: array
-          items:
-            type: integer
-            format: int64
-          maxItems: 100
-          minItems: 0
-          uniqueItems: true
-      - in: query
-        name: limit
-        required: false
-        schema:
-          type: integer
-          format: int32
-          maximum: 100
-          minimum: 1
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProfileActivityMonitor"
-          description: OK
-      security: []
-      summary: Get contributor activity monitor
-      tags:
-      - Profile
   /workspaces/{workspaceSlug}/public-visibility:
     patch:
       operationId: updatePublicVisibility
@@ -7744,33 +7717,6 @@ paths:
         "200":
           description: OK
       summary: Add a repository to a workspace monitor list
-      tags:
-      - workspace
-  /workspaces/{workspaceSlug}/schedule:
-    patch:
-      operationId: updateSchedule
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateWorkspaceScheduleRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Workspace"
-          description: Workspace updated
-      summary: Update leaderboard schedule configuration
       tags:
       - workspace
   /workspaces/{workspaceSlug}/slack/channels:
@@ -8016,7 +7962,7 @@ paths:
       - Teams
   /workspaces/{workspaceSlug}/team/{id}/visibility:
     post:
-      description: Show or hide a team in leaderboard calculations
+      description: Show or hide a team in workspace activity
       operationId: updateTeamVisibility
       parameters:
       - description: Workspace slug
@@ -8593,6 +8539,190 @@ components:
           format: int64
       required:
       - id
+    ActivityAction:
+      type: object
+      description: How often one kind of activity happened on a piece of work
+      properties:
+        count:
+          type: integer
+          format: int32
+          description: How often it was done
+          example: 3
+        kind:
+          type: string
+          description: What was done
+          enum:
+          - PULL_REQUEST_OPENED
+          - PULL_REQUEST_MERGED
+          - PULL_REQUEST_CLOSED
+          - REVIEW_APPROVED
+          - REVIEW_CHANGES_REQUESTED
+          - REVIEW_COMMENTED
+          - COMMENTED
+          - CODE_COMMENTED
+          - ISSUE_OPENED
+          - ISSUE_CLOSED
+      required:
+      - count
+      - kind
+    ActivityBucket:
+      type: object
+      description: Activity in one time bucket of a range
+      properties:
+        start:
+          type: string
+          format: date-time
+          description: "When the bucket starts: midnight of its day, of its week's\
+            \ Monday or of its month's first day, in the requested time zone. The\
+            \ first bucket may start before the range."
+        summary:
+          $ref: "#/components/schemas/ActivitySummary"
+          description: The activity in the bucket that falls within the range
+      required:
+      - start
+      - summary
+    ActivityOverview:
+      type: object
+      description: "Activity in a time range, in total and over time"
+      properties:
+        bucket:
+          type: string
+          description: "How long each bucket is: a day for ranges up to 31 days, a\
+            \ week for ranges up to 184 days, a month for longer ones"
+          enum:
+          - DAY
+          - WEEK
+          - MONTH
+        buckets:
+          type: array
+          description: "Every bucket the range touches, oldest first, including those\
+            \ without activity"
+          items:
+            $ref: "#/components/schemas/ActivityBucket"
+        summary:
+          $ref: "#/components/schemas/ActivitySummary"
+          description: The activity in the range; the buckets' summaries add up to
+            it
+      required:
+      - bucket
+      - buckets
+      - summary
+    ActivitySummary:
+      type: object
+      description: Counts of activity in a time range. Each count is the sum of that
+        kind's counts in the work list for the same scope and range.
+      properties:
+        approvals:
+          type: integer
+          format: int32
+          description: Reviews that approved
+          example: 4
+        changeRequests:
+          type: integer
+          format: int32
+          description: Reviews that requested changes
+          example: 1
+        codeComments:
+          type: integer
+          format: int32
+          description: Comments on lines of code
+          example: 12
+        commentReviews:
+          type: integer
+          format: int32
+          description: Reviews that only commented
+          example: 2
+        comments:
+          type: integer
+          format: int32
+          description: Comments in pull request and issue conversations
+          example: 9
+        issuesClosed:
+          type: integer
+          format: int32
+          description: Issues closed; a closed issue counts for its author
+          example: 1
+        issuesOpened:
+          type: integer
+          format: int32
+          description: Issues opened
+          example: 2
+        pullRequestsClosed:
+          type: integer
+          format: int32
+          description: Pull requests closed without merging
+          example: 1
+        pullRequestsMerged:
+          type: integer
+          format: int32
+          description: Pull requests merged; a merge counts for the pull request's
+            author
+          example: 3
+        pullRequestsOpened:
+          type: integer
+          format: int32
+          description: Pull requests opened
+          example: 4
+      required:
+      - approvals
+      - changeRequests
+      - codeComments
+      - commentReviews
+      - comments
+      - issuesClosed
+      - issuesOpened
+      - pullRequestsClosed
+      - pullRequestsMerged
+      - pullRequestsOpened
+    ActivityWork:
+      type: object
+      description: The activity on one pull request or issue in a time range
+      properties:
+        actions:
+          type: array
+          description: "Each kind of activity that happened on it, in a fixed order\
+            \ of kinds"
+          items:
+            $ref: "#/components/schemas/ActivityAction"
+        id:
+          type: string
+          description: "Identifier of the group: work:<id of the pull request or issue>,\
+            \ or event:<id of the activity> for activity whose pull request or issue\
+            \ is not known"
+        lastOccurredAt:
+          type: string
+          format: date-time
+          description: When the latest of this activity happened
+        people:
+          type: array
+          description: "Everyone this activity counts for, by name"
+          items:
+            $ref: "#/components/schemas/UserInfo"
+        work:
+          $ref: "#/components/schemas/WorkItem"
+          description: "The pull request or issue; null when it, or the review or\
+            \ comment the activity was, is no longer known or was deleted upstream"
+      required:
+      - actions
+      - id
+      - lastOccurredAt
+      - people
+    ActivityWorkPage:
+      type: object
+      description: "One page of activity grouped by the pull request or issue it happened\
+        \ on, latest first"
+      properties:
+        content:
+          type: array
+          description: "The work on this page, by its latest activity, newest first"
+          items:
+            $ref: "#/components/schemas/ActivityWork"
+        nextCursor:
+          type: string
+          description: Opaque cursor that fetches the next page when passed back as
+            cursor; absent on the last page
+      required:
+      - content
     AdminAccountView:
       type: object
       properties:
@@ -12010,122 +12140,6 @@ components:
       - notesUrl
       - publishedAt
       - version
-    LeaderboardEntry:
-      type: object
-      description: A ranked entry in the leaderboard (individual or team)
-      properties:
-        numberOfApprovals:
-          type: integer
-          format: int32
-          description: Count of review approvals
-          example: 3
-        numberOfChangeRequests:
-          type: integer
-          format: int32
-          description: Count of change requests submitted
-          example: 1
-        numberOfClosedIssues:
-          type: integer
-          format: int32
-          description: Count of issues closed in the timeframe
-          example: 2
-        numberOfClosedPullRequests:
-          type: integer
-          format: int32
-          description: Count of authored pull requests closed without merge in the
-            timeframe
-          example: 1
-        numberOfCodeComments:
-          type: integer
-          format: int32
-          description: Count of scored inline feedback comments on pull requests authored
-            by someone else
-          example: 7
-        numberOfComments:
-          type: integer
-          format: int32
-          description: Count of comment-only review submissions
-          example: 10
-        numberOfMergedPullRequests:
-          type: integer
-          format: int32
-          description: Count of authored pull requests merged in the timeframe
-          example: 6
-        numberOfOpenPullRequests:
-          type: integer
-          format: int32
-          description: Count of authored pull requests opened in the timeframe that
-            are still open
-          example: 2
-        numberOfOpenedIssues:
-          type: integer
-          format: int32
-          description: Count of issues opened in the timeframe
-          example: 3
-        numberOfOwnReplies:
-          type: integer
-          format: int32
-          description: Count of visible-only discussion replies and inline thread
-            replies on the contributor's own pull requests
-          example: 4
-        numberOfReviewedPRs:
-          type: integer
-          format: int32
-          description: Count of distinct PRs reviewed
-          example: 5
-        numberOfUnknowns:
-          type: integer
-          format: int32
-          description: Count of reviews with unknown/unrecognized state
-          example: 0
-        rank:
-          type: integer
-          format: int32
-          description: Position in the leaderboard (1-based)
-          example: 1
-        reviewedPullRequests:
-          type: array
-          description: Sample of reviewed PRs for display
-          items:
-            $ref: "#/components/schemas/PullRequestInfo"
-        score:
-          type: integer
-          format: int32
-          description: Total XP score for the timeframe
-          example: 150
-        team:
-          $ref: "#/components/schemas/TeamInfo"
-          description: "Team info (populated in TEAM mode, null in INDIVIDUAL mode)"
-        user:
-          $ref: "#/components/schemas/UserInfo"
-          description: "User info (populated in INDIVIDUAL mode, null in TEAM mode)"
-      required:
-      - numberOfApprovals
-      - numberOfChangeRequests
-      - numberOfClosedIssues
-      - numberOfClosedPullRequests
-      - numberOfCodeComments
-      - numberOfComments
-      - numberOfMergedPullRequests
-      - numberOfOpenPullRequests
-      - numberOfOpenedIssues
-      - numberOfOwnReplies
-      - numberOfReviewedPRs
-      - numberOfUnknowns
-      - rank
-      - reviewedPullRequests
-      - score
-    LeagueChange:
-      type: object
-      properties:
-        leaguePointsChange:
-          type: integer
-          format: int32
-        login:
-          type: string
-      required:
-      - leaguePointsChange
-      - login
     LinkedProvider:
       type: object
       description: "A provider instance the current user is linked to: its type +\
@@ -12526,6 +12540,19 @@ components:
       - scopes
       - type
       - updatedAt
+    MemberActivity:
+      type: object
+      description: One member and their activity in a time range
+      properties:
+        summary:
+          $ref: "#/components/schemas/ActivitySummary"
+          description: The member's activity
+        user:
+          $ref: "#/components/schemas/UserInfo"
+          description: The member
+      required:
+      - summary
+      - user
     MemberAiChoiceRequest:
       type: object
       properties:
@@ -12849,6 +12876,24 @@ components:
       - practiceName
       - practiceSlug
       - summary
+    OpenWork:
+      type: object
+      description: What is open for one member right now
+      properties:
+        issues:
+          $ref: "#/components/schemas/WorkItemList"
+          description: Open issues assigned to this member
+        pullRequests:
+          $ref: "#/components/schemas/WorkItemList"
+          description: "Open pull requests this member authored, drafts included"
+        reviewRequests:
+          $ref: "#/components/schemas/WorkItemList"
+          description: Open pull requests by other people that ask this member for
+            a review; drafts are excluded
+      required:
+      - issues
+      - pullRequests
+      - reviewRequests
     OptionCount:
       type: object
       properties:
@@ -14611,157 +14656,6 @@ components:
         type:
           type: string
           format: uri
-    Profile:
-      type: object
-      description: "User profile header: identity, league standing, contribution surface,\
-        \ XP"
-      properties:
-        contributedRepositories:
-          type: array
-          description: Repositories the user has contributed to
-          items:
-            $ref: "#/components/schemas/RepositoryInfo"
-        firstContribution:
-          type: string
-          format: date-time
-          description: Timestamp of the user's first contribution
-        userInfo:
-          $ref: "#/components/schemas/UserInfo"
-          description: Basic information about the user
-        xpRecord:
-          $ref: "#/components/schemas/ProfileXpRecord"
-          description: XP progress information for the users' profile
-      required:
-      - contributedRepositories
-      - userInfo
-      - xpRecord
-    ProfileActivityMonitor:
-      type: object
-      description: Configurable activity monitor data for a contributor profile
-      properties:
-        activityStats:
-          $ref: "#/components/schemas/ProfileActivityStats"
-          description: Aggregated activity stats after applying monitor filters
-        authoredPullRequests:
-          type: array
-          description: "Open pull requests authored in the selected timeframe, after\
-            \ repository filters and limit"
-          items:
-            $ref: "#/components/schemas/PullRequestInfo"
-        repositories:
-          type: array
-          description: Repositories with monitor-relevant activity in the selected
-            timeframe
-          items:
-            $ref: "#/components/schemas/RepositoryInfo"
-        reviewActivity:
-          type: array
-          description: Review activity entries after applying monitor filters and
-            limit
-          items:
-            $ref: "#/components/schemas/ProfileReviewActivity"
-        totalAuthoredPullRequestCount:
-          type: integer
-          format: int32
-          description: "Total open authored pull requests after filters, before limit"
-        totalReviewActivityCount:
-          type: integer
-          format: int32
-          description: "Total review activity entries after filters, before limit"
-      required:
-      - activityStats
-      - authoredPullRequests
-      - repositories
-      - reviewActivity
-      - totalAuthoredPullRequestCount
-      - totalReviewActivityCount
-    ProfileActivityStats:
-      type: object
-      description: Aggregated activity statistics with XP scores for a user profile
-      properties:
-        numberOfApprovals:
-          type: integer
-          format: int32
-          description: Number of approvals given
-          example: 15
-        numberOfChangeRequests:
-          type: integer
-          format: int32
-          description: Number of change requests submitted
-          example: 8
-        numberOfClosedIssues:
-          type: integer
-          format: int32
-          description: Number of issues closed in the timeframe
-          example: 2
-        numberOfClosedPullRequests:
-          type: integer
-          format: int32
-          description: Number of authored pull requests closed without merge in the
-            timeframe
-          example: 1
-        numberOfCodeComments:
-          type: integer
-          format: int32
-          description: Number of scored inline feedback comments on pull requests
-            authored by someone else
-          example: 30
-        numberOfComments:
-          type: integer
-          format: int32
-          description: Number of comment-only review submissions
-          example: 12
-        numberOfMergedPullRequests:
-          type: integer
-          format: int32
-          description: Number of authored pull requests merged in the timeframe
-          example: 6
-        numberOfOpenPullRequests:
-          type: integer
-          format: int32
-          description: Number of authored pull requests opened in the timeframe that
-            are still open
-          example: 2
-        numberOfOpenedIssues:
-          type: integer
-          format: int32
-          description: Number of issues opened in the timeframe
-          example: 3
-        numberOfOwnReplies:
-          type: integer
-          format: int32
-          description: Number of visible-only discussion replies and inline thread
-            replies on the user's own pull requests
-          example: 4
-        numberOfReviewedPRs:
-          type: integer
-          format: int32
-          description: Number of distinct pull requests reviewed
-          example: 42
-        numberOfUnknowns:
-          type: integer
-          format: int32
-          description: Number of reviews with unknown state
-          example: 0
-        score:
-          type: integer
-          format: int32
-          description: Total XP score
-          example: 1250
-      required:
-      - numberOfApprovals
-      - numberOfChangeRequests
-      - numberOfClosedIssues
-      - numberOfClosedPullRequests
-      - numberOfCodeComments
-      - numberOfComments
-      - numberOfMergedPullRequests
-      - numberOfOpenPullRequests
-      - numberOfOpenedIssues
-      - numberOfOwnReplies
-      - numberOfReviewedPRs
-      - numberOfUnknowns
-      - score
     ProfileChange:
       type: object
       description: One change on the developer's practice profile since the previous
@@ -14835,219 +14729,6 @@ components:
       - at
       - evidence
       - type
-    ProfileReviewActivity:
-      type: object
-      description: A scored review activity entry with XP score for profile display
-      properties:
-        author:
-          $ref: "#/components/schemas/UserInfo"
-          description: Author of the review
-        codeComments:
-          type: integer
-          format: int32
-          description: Number of inline code comments in the review
-          example: 3
-        htmlUrl:
-          type: string
-          description: URL to the review on the git provider
-        id:
-          type: integer
-          format: int64
-          description: Unique identifier of the review
-        isDismissed:
-          type: boolean
-          description: Whether the review was dismissed
-        pullRequest:
-          $ref: "#/components/schemas/PullRequestBaseInfo"
-          description: Pull request that was reviewed
-        score:
-          type: integer
-          format: int32
-          description: XP score earned for this review
-          example: 25
-        state:
-          type: string
-          description: "State of the review (APPROVED, CHANGES_REQUESTED, COMMENTED,\
-            \ etc.)"
-          enum:
-          - COMMENTED
-          - APPROVED
-          - CHANGES_REQUESTED
-          - PENDING
-          - DISMISSED
-          - UNKNOWN
-        submittedAt:
-          type: string
-          format: date-time
-          description: Timestamp when the review was submitted
-      required:
-      - codeComments
-      - htmlUrl
-      - id
-      - isDismissed
-      - score
-      - state
-      - submittedAt
-    ProfileXpRecord:
-      type: object
-      description: User's XP and Level progress details
-      properties:
-        currentLevel:
-          type: integer
-          format: int32
-          description: Current calculated level
-          example: 5
-        currentLevelXP:
-          type: integer
-          format: int64
-          description: XP accumulated in the current level
-          example: 450
-        totalXP:
-          type: integer
-          format: int64
-          description: Overall total XP accumulated
-          example: 5450
-        xpNeeded:
-          type: integer
-          format: int64
-          description: XP needed to reach the next level
-          example: 1000
-      required:
-      - currentLevel
-      - currentLevelXP
-      - totalXP
-      - xpNeeded
-    PullRequestBaseInfo:
-      type: object
-      description: Basic information about a pull request
-      properties:
-        htmlUrl:
-          type: string
-          description: URL to the pull request on the git provider
-        id:
-          type: integer
-          format: int64
-          description: Unique identifier of the pull request
-        isDraft:
-          type: boolean
-          description: Whether the pull request is in draft mode
-        isMerged:
-          type: boolean
-          description: Whether the pull request has been merged
-        number:
-          type: integer
-          format: int32
-          description: Pull request number within the repository
-          example: 42
-        repository:
-          $ref: "#/components/schemas/RepositoryInfo"
-          description: Repository the pull request belongs to
-        state:
-          type: string
-          description: "Current state of the pull request (OPEN, CLOSED, MERGED)"
-          enum:
-          - OPEN
-          - CLOSED
-          - MERGED
-        title:
-          type: string
-          description: Title of the pull request
-      required:
-      - id
-      - isDraft
-      - isMerged
-      - number
-      - state
-      - title
-    PullRequestInfo:
-      type: object
-      description: Detailed information about a pull request
-      properties:
-        additions:
-          type: integer
-          format: int32
-          description: Number of lines added
-          example: 150
-        assignees:
-          type: array
-          description: Users assigned to the pull request
-          items:
-            $ref: "#/components/schemas/UserInfo"
-        author:
-          $ref: "#/components/schemas/UserInfo"
-          description: Author of the pull request
-        closedAt:
-          type: string
-          format: date-time
-          description: Timestamp when the pull request was closed
-        commentsCount:
-          type: integer
-          format: int32
-          description: Number of comments on the pull request
-          example: 5
-        createdAt:
-          type: string
-          format: date-time
-          description: Timestamp when the pull request was created
-        deletions:
-          type: integer
-          format: int32
-          description: Number of lines deleted
-          example: 50
-        htmlUrl:
-          type: string
-          description: URL to the pull request on the git provider
-        id:
-          type: integer
-          format: int64
-          description: Unique identifier of the pull request
-        isDraft:
-          type: boolean
-          description: Whether the pull request is in draft mode
-        isMerged:
-          type: boolean
-          description: Whether the pull request has been merged
-        labels:
-          type: array
-          description: Labels applied to the pull request
-          items:
-            $ref: "#/components/schemas/LabelInfo"
-        mergedAt:
-          type: string
-          format: date-time
-          description: Timestamp when the pull request was merged
-        number:
-          type: integer
-          format: int32
-          description: Pull request number within the repository
-          example: 42
-        repository:
-          $ref: "#/components/schemas/RepositoryInfo"
-          description: Repository the pull request belongs to
-        state:
-          type: string
-          description: "Current state of the pull request (OPEN, CLOSED, MERGED)"
-          enum:
-          - OPEN
-          - CLOSED
-          - MERGED
-        title:
-          type: string
-          description: Title of the pull request
-        updatedAt:
-          type: string
-          format: date-time
-          description: Timestamp when the pull request was last updated
-      required:
-      - additions
-      - commentsCount
-      - deletions
-      - id
-      - isDraft
-      - isMerged
-      - number
-      - state
-      - title
     Question:
       type: object
       properties:
@@ -15291,8 +14972,8 @@ components:
           description: Description of the repository
         hiddenFromContributions:
           type: boolean
-          description: Whether contributions from this repository are hidden from
-            leaderboard calculations
+          description: Whether activity in this repository is left out of a team's
+            activity
         htmlUrl:
           type: string
           description: URL to the repository on the git provider
@@ -16486,6 +16167,25 @@ components:
       - id
       - kind
       - label
+    Reviewer:
+      type: object
+      description: "Someone reviewing a pull request, and where their review stands"
+      properties:
+        state:
+          type: string
+          description: "REQUESTED while a review is asked of them, otherwise the verdict\
+            \ of their latest review that was not dismissed"
+          enum:
+          - CHANGES_REQUESTED
+          - APPROVED
+          - COMMENTED
+          - REQUESTED
+        user:
+          $ref: "#/components/schemas/UserInfo"
+          description: The reviewer
+      required:
+      - state
+      - user
     RevokeSessionsResult:
       type: object
       properties:
@@ -16666,26 +16366,6 @@ components:
       - optedOutMemberCount
       - slackChannelId
       - slackTeamId
-    SlackTestMessageRequest:
-      type: object
-      description: |-
-        Optional body for the Slack test-message probe. When <code>channelId</code> is present and non-blank,
-         the probe targets that channel (so an admin can validate a typed-but-unsaved channel); otherwise
-         it falls back to the persisted notification channel.
-      properties:
-        channelId:
-          type: string
-    SlackTestMessageResponse:
-      type: object
-      description: Result of the Slack test-message probe; carries the Slack error
-        code on failure.
-      properties:
-        channelId:
-          type: string
-        ok:
-          type: boolean
-        slackError:
-          type: string
     SlackUserPreferences:
       type: object
       properties:
@@ -17101,7 +16781,7 @@ components:
           description: Description of the team
         hidden:
           type: boolean
-          description: Whether the team is hidden from leaderboard display
+          description: Whether the team is hidden from workspace activity
         htmlUrl:
           type: string
           description: URL to the team's page on the git provider
@@ -17166,7 +16846,7 @@ components:
           description: Description of the team
         hidden:
           type: boolean
-          description: Whether the team is hidden from leaderboard display
+          description: Whether the team is hidden from workspace activity
         htmlUrl:
           type: string
           description: URL to the team's page on the git provider
@@ -17452,37 +17132,6 @@ components:
           type: string
           description: Comma/newline-delimited egress host allowlist; blank clears
             it
-    UpdateLeaderboardDigestRequest:
-      type: object
-      description: Request to update the entire weekly leaderboard digest configuration
-        atomically
-      properties:
-        channelId:
-          type: string
-          description: Slack channel ID for notifications
-          example: C01234567AB
-          pattern: "^[CG][A-Z0-9]{8,}$"
-        day:
-          type: integer
-          format: int32
-          description: "Day of week (1=Monday, 7=Sunday)"
-          example: 1
-          maximum: 7
-          minimum: 1
-        enabled:
-          type: boolean
-          description: Whether leaderboard notifications are enabled
-        team:
-          type: string
-          description: Team name for filtering leaderboard notifications
-        time:
-          type: string
-          description: Time in 24-hour format (HH:mm)
-          example: 09:00
-          pattern: "^([01]\\d|2[0-3]):[0-5]\\d$"
-      required:
-      - day
-      - time
     UpdateLlmBudgetRequest:
       type: object
       description: Set or clear a monthly LLM budget cap
@@ -17905,8 +17554,8 @@ components:
       properties:
         hiddenFromContributions:
           type: boolean
-          description: Whether contributions from this repository should be hidden
-            from leaderboard calculations
+          description: Whether activity in this repository should be left out of the
+            team's activity
       required:
       - hiddenFromContributions
     UpdateReviewBackfillRunStatusRequest:
@@ -18009,23 +17658,14 @@ components:
       properties:
         hidden:
           type: boolean
-          description: Whether the team should be hidden from the leaderboard
+          description: Whether the team should be hidden from workspace activity
       required:
       - hidden
     UpdateWorkspaceFeaturesRequest:
       type: object
-      description: Request to update workspace feature flags. Null fields are left
-        unchanged.
+      description: Request to turn practice reviews and their triggers on or off.
+        Null fields are left unchanged.
       properties:
-        leaderboardEnabled:
-          type: boolean
-          description: Enable the leaderboard ranking page
-        leaguesEnabled:
-          type: boolean
-          description: Enable league tiers and rankings
-        mentorEnabled:
-          type: boolean
-          description: Enable the Pi mentor chat feature
         practiceReviewAutoTriggerEnabled:
           type: boolean
           description: Enable automatic practice reviews triggered by PR events
@@ -18035,9 +17675,6 @@ components:
         practicesEnabled:
           type: boolean
           description: Enable the practice review feature
-        progressionEnabled:
-          type: boolean
-          description: Enable the league/progression system
     UpdateWorkspaceLlmConnectionRequest:
       type: object
       description: Update your AI provider connection (all fields optional)
@@ -18179,21 +17816,6 @@ components:
           - HIGH
           - XHIGH
           - MAX
-    UpdateWorkspaceNotificationsRequest:
-      type: object
-      description: Request to update leaderboard notification settings
-      properties:
-        channelId:
-          type: string
-          description: Slack channel ID for notifications
-          example: C01234567AB
-          pattern: "^[CG][A-Z0-9]{8,}$"
-        enabled:
-          type: boolean
-          description: Whether leaderboard notifications are enabled
-        team:
-          type: string
-          description: Team name for filtering leaderboard notifications
     UpdateWorkspacePublicVisibilityRequest:
       type: object
       description: Request to update workspace public visibility setting
@@ -18203,25 +17825,6 @@ components:
           description: Whether the workspace should be publicly viewable without authentication
       required:
       - isPubliclyViewable
-    UpdateWorkspaceScheduleRequest:
-      type: object
-      description: Request to update the leaderboard notification schedule
-      properties:
-        day:
-          type: integer
-          format: int32
-          description: "Day of week (1=Monday, 7=Sunday)"
-          example: 1
-          maximum: 7
-          minimum: 1
-        time:
-          type: string
-          description: Time in 24-hour format (HH:mm)
-          example: 09:00
-          pattern: "^([01]\\d|2[0-3]):[0-5]\\d$"
-      required:
-      - day
-      - time
     UpdateWorkspaceStatusRequest:
       type: object
       description: Request to update the workspace lifecycle status
@@ -18262,11 +17865,6 @@ components:
           type: integer
           format: int64
           description: Unique identifier of the user
-        leaguePoints:
-          type: integer
-          format: int32
-          description: League points earned by the user in the current scope
-          example: 150
         login:
           type: string
           description: Login/username of the user
@@ -18335,6 +17933,102 @@ components:
       required:
       - login
       - userId
+    WorkItem:
+      type: object
+      description: A pull request or issue
+      properties:
+        author:
+          $ref: "#/components/schemas/UserInfo"
+          description: The author
+        checks:
+          type: string
+          description: "What the checks said about the pull request's current head,\
+            \ when known"
+          enum:
+          - SUCCESS
+          - FAILURE
+          - PENDING
+          - CANCELLED
+          - NONE
+        createdAt:
+          type: string
+          format: date-time
+          description: When it was created
+        htmlUrl:
+          type: string
+          description: Link to the pull request or issue on the provider
+        id:
+          type: integer
+          format: int64
+          description: Identifier of the pull request or issue
+        isDraft:
+          type: boolean
+          description: Whether the pull request is a draft; false for issues
+        number:
+          type: integer
+          format: int32
+          description: Number within the repository
+          example: 42
+        repository:
+          $ref: "#/components/schemas/RepositoryInfo"
+          description: The repository
+        reviewDecision:
+          type: string
+          description: "The pull request's review decision, when the provider reported\
+            \ one"
+          enum:
+          - APPROVED
+          - CHANGES_REQUESTED
+          - REVIEW_REQUIRED
+        reviewers:
+          type: array
+          description: "The pull request's reviewers besides its author, where each\
+            \ review stands; only open work lists them"
+          items:
+            $ref: "#/components/schemas/Reviewer"
+        state:
+          type: string
+          description: Current state
+          enum:
+          - OPEN
+          - CLOSED
+          - MERGED
+        title:
+          type: string
+          description: Title
+        type:
+          type: string
+          description: Whether this is a pull request or an issue
+          enum:
+          - PULL_REQUEST
+          - ISSUE
+        updatedAt:
+          type: string
+          format: date-time
+          description: When it was last updated
+      required:
+      - id
+      - isDraft
+      - number
+      - state
+      - title
+      - type
+    WorkItemList:
+      type: object
+      description: "Pull requests or issues, most recently updated first, up to a\
+        \ limit"
+      properties:
+        content:
+          type: array
+          description: "The work, most recently updated first"
+          items:
+            $ref: "#/components/schemas/WorkItem"
+        hasMore:
+          type: boolean
+          description: Whether more work exists than the list holds
+      required:
+      - content
+      - hasMore
     Workspace:
       type: object
       description: Complete workspace information including configuration and settings
@@ -18377,33 +18071,6 @@ components:
         kind:
           type: string
           description: Integration kind backing this workspace (GITHUB or GITLAB)
-        leaderboardEnabled:
-          type: boolean
-          description: Whether the leaderboard is enabled
-        leaderboardNotificationChannelId:
-          type: string
-          description: Slack channel ID for leaderboard notifications
-        leaderboardNotificationEnabled:
-          type: boolean
-          description: Whether leaderboard notifications are enabled
-        leaderboardNotificationTeam:
-          type: string
-          description: Team name for leaderboard notifications
-        leaderboardScheduleDay:
-          type: integer
-          format: int32
-          description: "Day of week for leaderboard notifications (1=Monday, 7=Sunday)"
-          example: 1
-        leaderboardScheduleTime:
-          type: string
-          description: Time for leaderboard notifications in HH:mm format
-          example: 09:00
-        leaguesEnabled:
-          type: boolean
-          description: Whether league tiers and rankings are enabled
-        mentorEnabled:
-          type: boolean
-          description: Whether the Pi mentor chat feature is enabled
         practiceReviewAutoTriggerEnabled:
           type: boolean
           description: Whether automatic practice reviews triggered by PR events are
@@ -18414,10 +18081,7 @@ components:
             enabled
         practicesEnabled:
           type: boolean
-          description: Whether the practice review feature is enabled
-        progressionEnabled:
-          type: boolean
-          description: Whether the league/progression system is enabled
+          description: Whether practice reviews are on
         providerType:
           type: string
           description: High-level git provider type for the workspace's SCM connection
@@ -18457,13 +18121,9 @@ components:
       - hasSlackToken
       - id
       - isPubliclyViewable
-      - leaderboardEnabled
-      - leaguesEnabled
-      - mentorEnabled
       - practiceReviewAutoTriggerEnabled
       - practiceReviewManualTriggerEnabled
       - practicesEnabled
-      - progressionEnabled
       - status
       - updatedAt
       - workspaceSlug
@@ -18557,21 +18217,9 @@ components:
           type: integer
           format: int64
           description: Unique identifier of the workspace
-        leaderboardEnabled:
-          type: boolean
-          description: Whether the leaderboard is enabled
-        leaguesEnabled:
-          type: boolean
-          description: Whether league tiers and rankings are enabled
-        mentorEnabled:
-          type: boolean
-          description: Whether the Pi mentor chat feature is enabled
         practicesEnabled:
           type: boolean
-          description: Whether the practice review feature is enabled
-        progressionEnabled:
-          type: boolean
-          description: Whether the league/progression system is enabled
+          description: Whether practice reviews are on
         providerType:
           type: string
           description: "High-level git provider type (GITHUB or GITLAB), or null if\
@@ -18594,11 +18242,7 @@ components:
       - createdAt
       - displayName
       - id
-      - leaderboardEnabled
-      - leaguesEnabled
-      - mentorEnabled
       - practicesEnabled
-      - progressionEnabled
       - status
       - workspaceSlug
     WorkspaceLlmConnection:
@@ -18936,12 +18580,7 @@ components:
             coverage
         hidden:
           type: boolean
-          description: Whether the member is hidden from the leaderboard
-        leaguePoints:
-          type: integer
-          format: int32
-          description: League points earned by the user in this workspace
-          example: 150
+          description: Whether the member is left out of workspace activity
         role:
           type: string
           description: "Role of the user in this workspace (OWNER, ADMIN, MEMBER)"
@@ -19101,8 +18740,8 @@ components:
       properties:
         hiddenFromContributions:
           type: boolean
-          description: Whether contributions from this repository are hidden from
-            leaderboard calculations
+          description: Whether activity in this repository is left out of the team's
+            activity
         repositoryId:
           type: integer
           format: int64
@@ -19126,7 +18765,7 @@ components:
       properties:
         hidden:
           type: boolean
-          description: Whether the team is hidden in the leaderboard for this workspace
+          description: Whether the team is hidden from workspace activity
         teamId:
           type: integer
           format: int64

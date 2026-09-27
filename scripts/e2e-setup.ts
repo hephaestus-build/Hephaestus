@@ -672,12 +672,11 @@ async function main(): Promise<void> {
 			personalAccessToken: config.pat,
 		});
 		await database.query(
-			"INSERT INTO workspace_membership (workspace_id, user_id, role, league_points, hidden, created_at) VALUES ($1,$2,'ADMIN',0,false,now()) ON CONFLICT DO NOTHING",
+			"INSERT INTO workspace_membership (workspace_id, user_id, role, hidden, created_at) VALUES ($1,$2,'ADMIN',false,now()) ON CONFLICT DO NOTHING",
 			[workspaceId, userId],
 		);
 		await api("PATCH", `/workspaces/${config.workspaceSlug}/features`, {
 			practicesEnabled: true,
-			mentorEnabled: true,
 			practiceReviewAutoTriggerEnabled: true,
 			practiceReviewManualTriggerEnabled: true,
 		});

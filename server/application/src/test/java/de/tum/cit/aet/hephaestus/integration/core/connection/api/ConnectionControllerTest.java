@@ -413,7 +413,6 @@ class ConnectionControllerTest extends BaseUnitTest {
                 AccountType.ORG,
                 null,
                 false,
-                false,
                 Set.of(WorkspaceRole.ADMIN));
     }
 
@@ -431,7 +430,7 @@ class ConnectionControllerTest extends BaseUnitTest {
                                 null,
                                 ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
                                 Set.of());
-                    case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, null, null, Set.of());
+                    case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, Set.of());
                     case OUTLINE ->
                         new ConnectionConfig.OutlineConfig("https://app.getoutline.com", null, null, Set.of());
                 };

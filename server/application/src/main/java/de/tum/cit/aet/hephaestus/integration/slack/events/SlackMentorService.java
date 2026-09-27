@@ -63,8 +63,8 @@ public class SlackMentorService {
             return;
         }
         long workspaceId = workspaceOpt.get();
-        if (!mentorReadinessQuery.isEnabled(workspaceId)) {
-            log.debug("Slack mentor disabled for workspace={}, ignoring DM", workspaceId);
+        if (!mentorReadinessQuery.isReady(workspaceId)) {
+            log.debug("Heph is not ready for workspace={}, ignoring DM", workspaceId);
             return;
         }
         SlackMentorInputGuard.Verdict verdict = inputGuard.decide(text);

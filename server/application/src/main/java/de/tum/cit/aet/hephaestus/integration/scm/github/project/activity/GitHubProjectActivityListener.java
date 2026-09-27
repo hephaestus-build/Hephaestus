@@ -34,7 +34,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * {@link ActivityRecorder} SPI — the activity module owns the sole implementation
  * ({@code ActivityEventService}). No direct dependency on activity internals.
  *
- * <p>All handlers record events with {@code 0.0} XP — project lifecycle is audit-only.
+ * <p>Project lifecycle is recorded for the audit trail only.
  * The actor uses webhook {@code actorId} when available, falling back to {@code creatorId}
  * for sync-replay events that lack a webhook sender.
  *
@@ -79,8 +79,7 @@ public class GitHubProjectActivityListener {
                         getActorOrNull(projectData.creatorId()),
                         getRepositoryForProject(projectData),
                         ActivityTargetType.PROJECT,
-                        projectData.id(),
-                        0.0));
+                        projectData.id()));
     }
 
     @Async
@@ -104,8 +103,7 @@ public class GitHubProjectActivityListener {
                         getActorOrNull(actorId),
                         getRepositoryForProject(projectData),
                         ActivityTargetType.PROJECT,
-                        projectData.id(),
-                        0.0));
+                        projectData.id()));
     }
 
     @Async
@@ -130,8 +128,7 @@ public class GitHubProjectActivityListener {
                         getActorOrNull(actorId),
                         getRepositoryForProject(projectData),
                         ActivityTargetType.PROJECT,
-                        projectData.id(),
-                        0.0));
+                        projectData.id()));
     }
 
     @Async
@@ -155,8 +152,7 @@ public class GitHubProjectActivityListener {
                         getActorOrNull(actorId),
                         getRepositoryForProject(projectData),
                         ActivityTargetType.PROJECT,
-                        projectData.id(),
-                        0.0));
+                        projectData.id()));
     }
 
     @Async
@@ -205,8 +201,7 @@ public class GitHubProjectActivityListener {
                         actor,
                         resolveRepositoryForProjectItem(itemData, event.projectId()),
                         ActivityTargetType.PROJECT_ITEM,
-                        itemData.id(),
-                        0.0));
+                        itemData.id()));
     }
 
     @Async
@@ -229,8 +224,7 @@ public class GitHubProjectActivityListener {
                         getActorOrNull(itemData.actorId()),
                         resolveRepositoryForProjectItem(itemData, event.projectId()),
                         ActivityTargetType.PROJECT_ITEM,
-                        itemData.id(),
-                        0.0));
+                        itemData.id()));
     }
 
     @Async
@@ -253,8 +247,7 @@ public class GitHubProjectActivityListener {
                         getActorOrNull(itemData.actorId()),
                         resolveRepositoryForProjectItem(itemData, event.projectId()),
                         ActivityTargetType.PROJECT_ITEM,
-                        itemData.id(),
-                        0.0));
+                        itemData.id()));
     }
 
     @Async
@@ -277,8 +270,7 @@ public class GitHubProjectActivityListener {
                         getActorOrNull(itemData.actorId()),
                         resolveRepositoryForProjectItem(itemData, event.projectId()),
                         ActivityTargetType.PROJECT_ITEM,
-                        itemData.id(),
-                        0.0));
+                        itemData.id()));
     }
 
     @Async
@@ -300,8 +292,7 @@ public class GitHubProjectActivityListener {
                         null,
                         resolveRepositoryForProjectId(event.projectId()),
                         ActivityTargetType.PROJECT_ITEM,
-                        itemId,
-                        0.0));
+                        itemId));
     }
 
     @Async
@@ -324,8 +315,7 @@ public class GitHubProjectActivityListener {
                         getActorOrNull(itemData.actorId()),
                         resolveRepositoryForProjectItem(itemData, event.projectId()),
                         ActivityTargetType.PROJECT_ITEM,
-                        itemData.id(),
-                        0.0));
+                        itemData.id()));
     }
 
     @Async
@@ -348,8 +338,7 @@ public class GitHubProjectActivityListener {
                         getActorOrNull(itemData.actorId()),
                         resolveRepositoryForProjectItem(itemData, event.projectId()),
                         ActivityTargetType.PROJECT_ITEM,
-                        itemData.id(),
-                        0.0));
+                        itemData.id()));
     }
 
     // Project Status Update Events
@@ -376,8 +365,7 @@ public class GitHubProjectActivityListener {
                         getActorOrNull(data.creatorId()),
                         resolveRepositoryForProjectId(event.projectId()),
                         ActivityTargetType.PROJECT_STATUS_UPDATE,
-                        data.id(),
-                        0.0));
+                        data.id()));
     }
 
     @Async
@@ -400,8 +388,7 @@ public class GitHubProjectActivityListener {
                         getActorOrNull(data.creatorId()),
                         resolveRepositoryForProjectId(event.projectId()),
                         ActivityTargetType.PROJECT_STATUS_UPDATE,
-                        data.id(),
-                        0.0));
+                        data.id()));
     }
 
     @Async
@@ -423,8 +410,7 @@ public class GitHubProjectActivityListener {
                         null,
                         resolveRepositoryForProjectId(event.projectId()),
                         ActivityTargetType.PROJECT_STATUS_UPDATE,
-                        id,
-                        0.0));
+                        id));
     }
 
     // Helpers (mirrored from ActivityEventListener — see class javadoc)

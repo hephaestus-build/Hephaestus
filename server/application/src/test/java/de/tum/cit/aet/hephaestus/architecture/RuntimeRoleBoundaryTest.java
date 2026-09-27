@@ -215,13 +215,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     "de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient",
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry(
-                    "de.tum.cit.aet.hephaestus.integration.slack.connect.SlackConnectionAdminController",
-                    RuntimeRole.SERVER_PROPERTY),
-            Map.entry(
                     "de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelAdminController",
-                    RuntimeRole.SERVER_PROPERTY),
-            Map.entry(
-                    "de.tum.cit.aet.hephaestus.integration.slack.leaderboard.SlackLeaderboardDigestPublisher",
                     RuntimeRole.SERVER_PROPERTY),
             // Outline admin/connect surface — server-only, mirroring the Slack entries above.
             Map.entry(
@@ -235,9 +229,9 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     RuntimeRole.SERVER_PROPERTY));
 
     /**
-     * Beans that must wire <em>unconditionally</em> (no {@code @ConditionalOnProperty}): mentoring
-     * is always-on; per-workspace enablement lives in the DB ({@code WorkspaceFeatures.mentor_enabled}),
-     * not in a capability flag.
+     * Beans that must wire <em>unconditionally</em> (no {@code @ConditionalOnProperty}): Heph is
+     * offered to every member of an active workspace, and whether it can answer is the workspace's
+     * mentor model binding in the DB, not a capability flag.
      */
     private static final List<String> UNCONDITIONAL_MENTOR_BEANS = List.of(
             "de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChatService",
@@ -303,10 +297,10 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                 .dependOnClassesThat()
                 .resideInAnyPackage(
                         "de.tum.cit.aet.hephaestus.workspace..",
-                        "de.tum.cit.aet.hephaestus.leaderboard..",
+                        "de.tum.cit.aet.hephaestus.activity..",
                         "de.tum.cit.aet.hephaestus.agent..")
                 .because(
-                        "webhook receiver is a pure publish-only role; depending on workspace/leaderboard/agent would re-introduce "
+                        "webhook receiver is a pure publish-only role; depending on workspace/activity/agent would re-introduce "
                                 + "the wiring leaks runtime testing already exposed (ObjectProvider cascade, etc.) and break role isolation")
                 .check(classes);
     }
@@ -405,8 +399,8 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                 .collect(Collectors.toList());
 
         assertThat(stillGated)
-                .as("Mentor beans must wire unconditionally — mentoring is always-on (per-workspace enable "
-                        + "lives in WorkspaceFeatures.mentor_enabled), not behind a capability flag.")
+                .as("Mentor beans must wire unconditionally — Heph is always offered (per-workspace readiness "
+                        + "is the mentor model binding), not behind a capability flag.")
                 .isEmpty();
     }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { asDate, type Wire } from "./dates";
+import { asDate, formatDayRange, formatWeekdayDay, type Wire } from "./dates";
 
 describe("asDate", () => {
 	// The instant, not merely the type: `toBeInstanceOf(Date)` is satisfied by `new Date(0)`.
@@ -66,5 +66,30 @@ describe("Wire", () => {
 		const id: Wire<View>["id"] = "a";
 
 		expect(id).toBe("a");
+	});
+});
+
+describe("formatWeekdayDay", () => {
+	const today = new Date(2026, 8, 27, 15, 0);
+
+	it("names the weekday and leaves out the current year", () => {
+		expect(formatWeekdayDay(new Date(2026, 8, 21, 9, 30), today)).toBe("Monday, 21 September");
+	});
+
+	it("writes the year of a day in another one", () => {
+		expect(formatWeekdayDay(new Date(2025, 11, 31, 9, 30), today)).toBe(
+			"Wednesday, 31 December 2025",
+		);
+	});
+});
+
+describe("formatDayRange", () => {
+	it.each([
+		[new Date(2026, 8, 27), new Date(2026, 8, 27), "27 September 2026"],
+		[new Date(2026, 8, 21), new Date(2026, 8, 27), "21–27 September 2026"],
+		[new Date(2026, 7, 29), new Date(2026, 8, 27), "29 August – 27 September 2026"],
+		[new Date(2025, 8, 28), new Date(2026, 8, 27), "28 September 2025 – 27 September 2026"],
+	])("writes %s to %s once per shared month and year", (from, to, expected) => {
+		expect(formatDayRange(from, to)).toBe(expected);
 	});
 });

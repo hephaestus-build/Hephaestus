@@ -106,7 +106,7 @@ class CodeQualityTest extends HephaestusArchitectureTest {
         @Test
         void methodsHaveLimitedParameters() {
             Set<String> allowedMethods = Set.of(
-                    // Activity writes carry the event identity, context and XP through the SPI.
+                    // Activity writes carry the event identity and its context through the SPI.
                     "ActivityEventService.record",
                     "ActivityRecorder.record",
                     // @Bean factory wiring Spring dependencies — not business logic complexity

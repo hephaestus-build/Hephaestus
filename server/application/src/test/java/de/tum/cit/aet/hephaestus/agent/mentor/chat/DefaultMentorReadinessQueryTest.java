@@ -33,7 +33,6 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
     void setUp() {
         Workspace workspace = new Workspace();
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
-        workspace.getFeatures().setMentorEnabled(true);
         when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
         query = new DefaultMentorReadinessQuery(agentBindingRepository, llmModelResolver, workspaceRepository);
     }
@@ -48,11 +47,6 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
         when(llmModelResolver.isAvailable(binding)).thenReturn(true);
 
         assertThat(query.isReady(1L)).isTrue();
-    }
-
-    @Test
-    void shouldReportEnabledForActiveWorkspaceWithMentorFeature() {
-        assertThat(query.isEnabled(1L)).isTrue();
     }
 
     @Test
@@ -85,38 +79,26 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNotReportEnabledOrReadyWhenWorkspaceMentorIsDisabled() {
+    void shouldNotReportReadyWithoutLookingAtBindingsWhenWorkspaceIsSuspended() {
         Workspace workspace = new Workspace();
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
-        workspace.getFeatures().setMentorEnabled(false);
+        workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
         when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
 
-        assertThat(query.isEnabled(1L)).isFalse();
         assertThat(query.isReady(1L)).isFalse();
         verifyNoInteractions(agentBindingRepository, llmModelResolver);
     }
 
     @Test
-    void shouldNotReportEnabledWhenWorkspaceIsSuspended() {
-        Workspace workspace = new Workspace();
-        workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
-        workspace.getFeatures().setMentorEnabled(true);
-        when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
-
-        assertThat(query.isEnabled(1L)).isFalse();
-    }
-
-    @Test
-    void shouldNotReportEnabledWhenWorkspaceIsMissing() {
+    void shouldNotReportReadyWhenWorkspaceIsMissing() {
         when(workspaceRepository.findById(1L)).thenReturn(Optional.empty());
 
-        assertThat(query.isEnabled(1L)).isFalse();
+        assertThat(query.isReady(1L)).isFalse();
     }
 
     @Test
-    void shouldFailClosedWhenWorkspacePolicyCannotBeRead() {
+    void shouldFailClosedWhenWorkspaceCannotBeRead() {
         when(workspaceRepository.findById(1L)).thenThrow(new IllegalStateException("database unavailable"));
 
-        assertThat(query.isEnabled(1L)).isFalse();
+        assertThat(query.isReady(1L)).isFalse();
     }
 }

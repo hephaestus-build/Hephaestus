@@ -16,9 +16,7 @@ it("keeps an existing conversation readable under No AI and restores its compose
 	const threadId = "65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed";
 	const preference = { ...workspaceOnboarding(), aiChoice: "NO_AI" as const };
 	server.use(
-		http.get("*/workspaces", () =>
-			HttpResponse.json([workspaceListItem("acme", { mentorEnabled: true })]),
-		),
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
 		http.get("*/workspaces/acme/members/me", () =>
 			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),
@@ -70,9 +68,7 @@ it("keeps an existing conversation readable under No AI and restores its compose
 
 it("names the saved choice when no Heph model is within it", async () => {
 	server.use(
-		http.get("*/workspaces", () =>
-			HttpResponse.json([workspaceListItem("acme", { mentorEnabled: true })]),
-		),
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
 		http.get("*/workspaces/acme/members/me", () =>
 			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),
@@ -83,6 +79,7 @@ it("names the saved choice when no Heph model is within it", async () => {
 				aiChoice: "CLOUD",
 				aiOptions: [
 					{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true, models: [] },
+					{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
 				],
 			}),
 		),
@@ -102,11 +99,38 @@ it("names the saved choice when no Heph model is within it", async () => {
 	);
 });
 
+it("says Heph is not set up, and offers no choice to change, where no model is ready for any choice", async () => {
+	server.use(
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/workspaces/acme/members/me", () =>
+			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),
+		),
+		http.get("*/workspaces/acme/onboarding/me", () =>
+			HttpResponse.json({
+				...workspaceOnboarding(),
+				aiChoice: "CLOUD",
+				aiOptions: [
+					{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true, models: [] },
+					{ choice: "IN_HOUSE_ONLY", mentorReady: false, practiceReviewsReady: false, models: [] },
+				],
+			}),
+		),
+		http.get("*/workspaces/acme/mentor/threads", () => HttpResponse.json([])),
+	);
+	renderRouteAtWithRouter("/w/acme/mentor");
+	await screen.findByRole(
+		"heading",
+		{ name: "Heph isn't set up in this workspace yet" },
+		ROUTE_RENDER_WAIT,
+	);
+	expect(screen.queryByRole("link", { name: /^(?:Change|Make) your AI choice$/u })).toBeNull();
+	expect(screen.queryByRole("textbox")).toBeNull();
+});
+
 it("opens Heph for a member whose account carries no feature flags", async () => {
 	server.use(
-		http.get("*/workspaces", () =>
-			HttpResponse.json([workspaceListItem("acme", { mentorEnabled: true })]),
-		),
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		// Heph follows the workspace and the member's AI choice, not an account flag.
 		http.get("*/user/features", () => HttpResponse.json({})),
 		http.get("*/workspaces/acme/members/me", () =>
@@ -129,31 +153,10 @@ it("opens Heph for a member whose account carries no feature flags", async () =>
 	expect(router.state.location.pathname.startsWith("/w/acme/mentor")).toBe(true);
 });
 
-it("says Heph is off when a link opens it in a workspace that has it off", async () => {
-	server.use(
-		http.get("*/workspaces", () =>
-			HttpResponse.json([workspaceListItem("acme", { mentorEnabled: false })]),
-		),
-		http.get("*/user/features", () => HttpResponse.json({})),
-		http.get("*/workspaces/acme/members/me", () =>
-			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),
-		),
-		http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(workspaceOnboarding())),
-	);
-	renderRouteAtWithRouter("/w/acme/mentor");
-	await screen.findByRole("heading", { name: "Heph is off in this workspace" }, ROUTE_RENDER_WAIT);
-	expect(screen.getByRole("link", { name: "Go to workspace home" }).getAttribute("href")).toBe(
-		"/w/acme",
-	);
-	expect(screen.queryByRole("textbox")).toBeNull();
-});
-
 it("keeps Heph out of the navigation for a reader who is not a member", async () => {
 	let membershipAnswered = false;
 	server.use(
-		http.get("*/workspaces", () =>
-			HttpResponse.json([workspaceListItem("acme", { mentorEnabled: true })]),
-		),
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
 		// The server answers `members/me` only for a member of the workspace.
 		http.get("*/workspaces/acme/members/me", () => {
@@ -170,11 +173,9 @@ it("keeps Heph out of the navigation for a reader who is not a member", async ()
 	expect(screen.queryByRole("link", { name: /AI mentor/u })).toBeNull();
 });
 
-it("offers Heph in the navigation to a member of a workspace that has it on", async () => {
+it("offers Heph in the navigation to every member of the workspace", async () => {
 	server.use(
-		http.get("*/workspaces", () =>
-			HttpResponse.json([workspaceListItem("acme", { mentorEnabled: true })]),
-		),
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
 		http.get("*/workspaces/acme/members/me", () =>
 			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),

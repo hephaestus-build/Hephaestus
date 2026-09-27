@@ -53,21 +53,6 @@ public record WorkspaceDTO(
         @Schema(description = "Timestamp when the GitHub App installation was linked") @Nullable
         Instant installationLinkedAt,
 
-        @Schema(description = "Day of week for leaderboard notifications (1=Monday, 7=Sunday)", example = "1") @Nullable
-        Integer leaderboardScheduleDay,
-
-        @Schema(description = "Time for leaderboard notifications in HH:mm format", example = "09:00") @Nullable
-        String leaderboardScheduleTime,
-
-        @Schema(description = "Whether leaderboard notifications are enabled")
-        Boolean leaderboardNotificationEnabled,
-
-        @Schema(description = "Team name for leaderboard notifications") @Nullable
-        String leaderboardNotificationTeam,
-
-        @Schema(description = "Slack channel ID for leaderboard notifications") @Nullable
-        String leaderboardNotificationChannelId,
-
         @NonNull @Schema(description = "Whether a Personal Access Token is configured")
         Boolean hasPersonalAccessToken,
 
@@ -81,20 +66,8 @@ public record WorkspaceDTO(
         @NonNull @Schema(description = "Whether a GitLab webhook has been auto-registered for this workspace")
         Boolean gitlabWebhookRegistered,
 
-        @NonNull @Schema(description = "Whether the practice review feature is enabled")
+        @NonNull @Schema(description = "Whether practice reviews are on")
         Boolean practicesEnabled,
-
-        @NonNull @Schema(description = "Whether the Pi mentor chat feature is enabled")
-        Boolean mentorEnabled,
-
-        @NonNull @Schema(description = "Whether the leaderboard is enabled")
-        Boolean leaderboardEnabled,
-
-        @NonNull @Schema(description = "Whether the league/progression system is enabled")
-        Boolean progressionEnabled,
-
-        @NonNull @Schema(description = "Whether league tiers and rankings are enabled")
-        Boolean leaguesEnabled,
 
         @NonNull @Schema(description = "Whether automatic practice reviews triggered by PR events are enabled")
         Boolean practiceReviewAutoTriggerEnabled,
@@ -109,7 +82,6 @@ public record WorkspaceDTO(
         var gitHubApp = connectionService.findActiveGitHubAppConfig(workspaceId);
         var gitHubPat = connectionService.findActiveGitHubPatConfig(workspaceId);
         var gitLab = connectionService.findActiveGitLabConfig(workspaceId);
-        var slackCfg = connectionService.findSlackNotificationConfig(workspaceId);
 
         String serverUrl = gitLab.map(ConnectionConfig.GitLabConfig::serverUrl)
                 .or(() -> gitHubApp.map(ConnectionConfig.GitHubAppConfig::serverUrl))
@@ -138,11 +110,6 @@ public record WorkspaceDTO(
                 .map(c -> c.getId())
                 .orElse(null);
 
-        String leaderboardTeam = slackCfg.map(s -> s.teamLabel() != null ? s.teamLabel() : s.teamName())
-                .orElse(null);
-        String leaderboardChannelId = slackCfg.map(ConnectionConfig.SlackConfig::notificationChannelId)
-                .orElse(null);
-
         boolean gitlabWebhookRegistered =
                 gitLab.map(c -> c.gitlabWebhookId() != null).orElse(false);
 
@@ -160,20 +127,11 @@ public record WorkspaceDTO(
                 workspace.getCreatedAt(),
                 workspace.getUpdatedAt(),
                 installationLinkedAt,
-                workspace.getLeaderboardScheduleDay(),
-                workspace.getLeaderboardScheduleTime(),
-                workspace.getLeaderboardNotificationEnabled(),
-                leaderboardTeam,
-                leaderboardChannelId,
                 hasPat,
                 hasSlackToken,
                 slackConnectionId,
                 gitlabWebhookRegistered,
                 workspace.getFeatures().getPracticesEnabled(),
-                workspace.getFeatures().getMentorEnabled(),
-                workspace.getFeatures().getLeaderboardEnabled(),
-                workspace.getFeatures().getProgressionEnabled(),
-                workspace.getFeatures().getLeaguesEnabled(),
                 workspace.getFeatures().getPracticeReviewAutoTriggerEnabled(),
                 workspace.getFeatures().getPracticeReviewManualTriggerEnabled());
     }

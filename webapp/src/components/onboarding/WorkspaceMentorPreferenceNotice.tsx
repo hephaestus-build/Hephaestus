@@ -12,6 +12,7 @@ import {
 	EmptyMedia,
 } from "@/components/ui/empty";
 import { MENTOR_PREFERENCE_COPY, type MentorNotice } from "@/lib/mentor-preference";
+import { hasText } from "@/lib/text";
 
 export interface WorkspaceMentorPreferenceNoticeProps {
 	workspaceSlug: string;
@@ -21,8 +22,12 @@ export interface WorkspaceMentorPreferenceNoticeProps {
 	notice: MentorNotice;
 }
 
-/** The three sentences for one notice, with the `unavailable` choice named by its card title. */
-function noticeCopy(notice: MentorNotice): { title: string; description: ReactNode; cta: string } {
+/** The sentences for one notice, with the `unavailable` choice named by its card title. */
+function noticeCopy(notice: MentorNotice): {
+	title: string;
+	description: ReactNode;
+	cta?: string;
+} {
 	if (notice.reason === "unavailable") {
 		const { description, ...copy } = MENTOR_PREFERENCE_COPY.unavailable;
 		return {
@@ -58,18 +63,20 @@ export function WorkspaceMentorPreferenceNotice({
 				<h1 className="text-sm font-medium tracking-tight">{copy.title}</h1>
 				<EmptyDescription>{copy.description}</EmptyDescription>
 			</EmptyHeader>
-			<EmptyContent>
-				{/* A styled Link rather than a Button slot: Base UI's non-native button announces as a
-				    button, and this one only navigates. */}
-				<Link
-					to="/w/$workspaceSlug/onboarding"
-					params={{ workspaceSlug }}
-					search={{ returnTo }}
-					className={buttonVariants()}
-				>
-					{copy.cta}
-				</Link>
-			</EmptyContent>
+			{hasText(copy.cta) && (
+				<EmptyContent>
+					{/* A styled Link rather than a Button slot: Base UI's non-native button announces as a
+					    button, and this one only navigates. */}
+					<Link
+						to="/w/$workspaceSlug/onboarding"
+						params={{ workspaceSlug }}
+						search={{ returnTo }}
+						className={buttonVariants()}
+					>
+						{copy.cta}
+					</Link>
+				</EmptyContent>
+			)}
 		</Empty>
 	);
 }

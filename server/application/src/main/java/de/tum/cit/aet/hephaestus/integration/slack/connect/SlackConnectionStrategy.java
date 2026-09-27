@@ -122,13 +122,8 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
         if (r.accessToken() == null || r.accessToken().isBlank()) {
             return new ConnectFinalization.Failed("oauth response missing access_token");
         }
-        ConnectionConfig.SlackConfig config = new ConnectionConfig.SlackConfig(
-                r.team().id(),
-                r.team().name(),
-                /* notificationChannelId */ null,
-                /* teamLabel */ null,
-                /* retentionDays */ null,
-                Set.of());
+        ConnectionConfig.SlackConfig config =
+                new ConnectionConfig.SlackConfig(r.team().id(), r.team().name(), /* retentionDays */ null, Set.of());
         return new ConnectFinalization.Completed(
                 r.team().id(), new BearerToken(r.accessToken(), null), r.team().name(), config);
     }

@@ -1,6 +1,6 @@
 /**
  * Per-team settings — visibility, repository scope filters, label filters. Consumed
- * primarily by {@code leaderboard} when computing team-scoped rankings.
+ * primarily by {@code activity} when counting a team's activity.
  */
 @org.springframework.modulith.NamedInterface("settings")
 @org.jspecify.annotations.NullMarked

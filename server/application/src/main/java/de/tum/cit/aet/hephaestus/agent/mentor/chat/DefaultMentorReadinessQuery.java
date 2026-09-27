@@ -31,33 +31,17 @@ class DefaultMentorReadinessQuery implements MentorReadinessQuery {
     }
 
     @Override
-    public boolean isEnabled(long workspaceId) {
+    public boolean isReady(long workspaceId) {
         try {
-            return workspaceRepository
+            boolean active = workspaceRepository
                     .findById(workspaceId)
                     .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
-                    .map(workspace ->
-                            Boolean.TRUE.equals(workspace.getFeatures().getMentorEnabled()))
-                    .orElse(false);
-        } catch (RuntimeException exception) {
-            log.debug(
-                    "Could not resolve mentor feature policy: workspaceId={}, error={}",
-                    workspaceId,
-                    exception.toString());
-            return false;
-        }
-    }
-
-    @Override
-    public boolean isReady(long workspaceId) {
-        if (!isEnabled(workspaceId)) {
-            return false;
-        }
-        try {
-            return agentBindingRepository.findByWorkspaceIdWithModels(workspaceId).stream()
-                    .filter(binding -> binding.getPurpose() == AgentPurpose.MENTOR)
-                    .filter(WorkspaceAgentBinding::isEnabled)
-                    .anyMatch(llmModelResolver::isAvailable);
+                    .isPresent();
+            return active
+                    && agentBindingRepository.findByWorkspaceIdWithModels(workspaceId).stream()
+                            .filter(binding -> binding.getPurpose() == AgentPurpose.MENTOR)
+                            .filter(WorkspaceAgentBinding::isEnabled)
+                            .anyMatch(llmModelResolver::isAvailable);
         } catch (RuntimeException exception) {
             log.debug(
                     "Could not resolve mentor readiness: workspaceId={}, error={}", workspaceId, exception.toString());

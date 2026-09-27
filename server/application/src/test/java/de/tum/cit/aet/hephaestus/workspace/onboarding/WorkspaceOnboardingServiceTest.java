@@ -60,7 +60,7 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
     private static final WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO UNAVAILABLE_SLACK =
             new WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO(9L, "Slack", "SLACK", null, null, true, false, false);
     private final WorkspaceContext context =
-            new WorkspaceContext(1L, "engineering", "Engineering", null, null, true, true, Set.of());
+            new WorkspaceContext(1L, "engineering", "Engineering", null, null, true, Set.of());
     private WorkspaceOnboardingService service;
 
     @BeforeEach

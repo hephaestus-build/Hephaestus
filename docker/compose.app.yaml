@@ -220,10 +220,6 @@ services:
       MONITORING_BACKFILL_BATCH_SIZE: ${MONITORING_BACKFILL_BATCH_SIZE:-50}
       MONITORING_BACKFILL_RATE_LIMIT_THRESHOLD: ${MONITORING_BACKFILL_RATE_LIMIT_THRESHOLD:-500}
       MONITORING_BACKFILL_INTERVAL_SECONDS: ${MONITORING_BACKFILL_INTERVAL_SECONDS:-60}
-      # Per-workspace channel/team now live on the Slack Connection config; this is the global kill-switch.
-      LEADERBOARD_NOTIFICATION_ENABLED: ${LEADERBOARD_NOTIFICATION_ENABLED:-true}
-      LEADERBOARD_SCHEDULE_DAY: ${LEADERBOARD_SCHEDULE_DAY:-2}
-      LEADERBOARD_SCHEDULE_TIME: ${LEADERBOARD_SCHEDULE_TIME:-9}
       SENTRY_DSN: ${SENTRY_DSN}
       # Email: off until SPRING_MAIL_HOST is set. Server role only — notifications are sent here.
       # Boot's own property names, forwarded as-is (docs/admin/production-setup.mdx § Email).

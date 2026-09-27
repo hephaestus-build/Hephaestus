@@ -28,7 +28,7 @@ class CatalogOriginPresentationTest extends BaseUnitTest {
     private static final long WORKSPACE_ID = 1L;
 
     private static final WorkspaceContext CTX =
-            new WorkspaceContext(WORKSPACE_ID, "acme", "Acme", AccountType.ORG, null, false, false, Set.of());
+            new WorkspaceContext(WORKSPACE_ID, "acme", "Acme", AccountType.ORG, null, false, Set.of());
 
     @Test
     void practiceBatchReadsTheCatalogOnce() {

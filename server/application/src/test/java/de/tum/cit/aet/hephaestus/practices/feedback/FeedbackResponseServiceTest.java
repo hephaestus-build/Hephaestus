@@ -53,7 +53,7 @@ class FeedbackResponseServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         service = new FeedbackResponseService(reactionRepository, feedbackRepository, currentDeveloperLookup);
-        workspaceContext = new WorkspaceContext(WORKSPACE_ID, "test-ws", "Test WS", null, null, false, false, Set.of());
+        workspaceContext = new WorkspaceContext(WORKSPACE_ID, "test-ws", "Test WS", null, null, false, Set.of());
         org.mockito.Mockito.lenient()
                 .when(currentDeveloperLookup.currentDeveloperIdElseThrow())
                 .thenReturn(CONTRIBUTOR_ID);

@@ -39,7 +39,6 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li><b>Workspace creation:</b> Creates workspaces with owner membership</li>
  *   <li><b>Slug management:</b> Renames with redirect history via {@link WorkspaceSlugService}</li>
  *   <li><b>Settings delegation:</b> Forwards to {@link WorkspaceSettingsService}</li>
- *   <li><b>League points:</b> Triggers recalculation via {@link LeaguePointsRecalculator}</li>
  * </ul>
  *
  * <h2>Related Services</h2>
@@ -80,7 +79,6 @@ public class WorkspaceService {
     // Services
     private final WorkspaceSlugService workspaceSlugService;
     private final WorkspaceSettingsService workspaceSettingsService;
-    private final LeaguePointsRecalculator leaguePointsRecalculator;
     private final WorkspaceMembershipService workspaceMembershipService;
     private final ConnectionService connectionService;
 
@@ -95,7 +93,6 @@ public class WorkspaceService {
             GitLabWorkspaceInstance gitLabWorkspaceInstance,
             WorkspaceSlugService workspaceSlugService,
             WorkspaceSettingsService workspaceSettingsService,
-            LeaguePointsRecalculator leaguePointsRecalculator,
             WorkspaceMembershipService workspaceMembershipService,
             ConnectionService connectionService,
             ApplicationEventPublisher eventPublisher,
@@ -107,7 +104,6 @@ public class WorkspaceService {
         this.gitLabWorkspaceInstance = gitLabWorkspaceInstance;
         this.workspaceSlugService = workspaceSlugService;
         this.workspaceSettingsService = workspaceSettingsService;
-        this.leaguePointsRecalculator = leaguePointsRecalculator;
         this.workspaceMembershipService = workspaceMembershipService;
         this.connectionService = connectionService;
         this.eventPublisher = eventPublisher;
@@ -288,80 +284,7 @@ public class WorkspaceService {
         return workspace;
     }
 
-    // League Points Recalculation
-
-    /**
-     * Reset and recalculate league points for all users by replaying their
-     * contributions from the first recorded activity until now.
-     */
-    @Transactional
-    public void resetAndRecalculateLeagues(String slug) {
-        Workspace workspace = requireWorkspace(slug);
-        log.info(
-                "Reset league points: workspaceId={}, workspaceSlug={}",
-                workspace.getId(),
-                workspace.getWorkspaceSlug());
-        resetAndRecalculateLeaguesInternal(workspace.getId());
-    }
-
-    public void resetAndRecalculateLeagues(WorkspaceContext workspaceContext) {
-        Workspace workspace = requireWorkspace(requireSlug(workspaceContext));
-        resetAndRecalculateLeaguesInternal(workspace.getId());
-    }
-
-    private void resetAndRecalculateLeaguesInternal(Long workspaceId) {
-        log.debug("Recalculating league points: workspaceId={}", workspaceId);
-
-        if (workspaceId == null) {
-            log.warn("Skipped league recalculation: reason=workspaceIdIsNull");
-            return;
-        }
-
-        Workspace workspace = workspaceRepository.findById(workspaceId).orElse(null);
-        if (workspace == null) {
-            log.warn("Skipped league recalculation: reason=workspaceNotFound, workspaceId={}", workspaceId);
-            return;
-        }
-
-        leaguePointsRecalculator.recalculate(workspace);
-    }
-
     // Settings Delegation
-
-    public Workspace updateSchedule(WorkspaceContext workspaceContext, Integer day, String time) {
-        Workspace workspace = requireWorkspace(requireSlug(workspaceContext));
-        return workspaceSettingsService.updateSchedule(workspace.getId(), day, time);
-    }
-
-    public Workspace updateNotifications(
-            String slug, @Nullable Boolean enabled, @Nullable String team, @Nullable String channelId) {
-        Workspace workspace = requireWorkspace(slug);
-        return workspaceSettingsService.updateNotifications(workspace.getId(), enabled, team, channelId);
-    }
-
-    public Workspace updateNotifications(
-            WorkspaceContext workspaceContext,
-            @Nullable Boolean enabled,
-            @Nullable String team,
-            @Nullable String channelId) {
-        return updateNotifications(requireSlug(workspaceContext), enabled, team, channelId);
-    }
-
-    public Workspace updateLeaderboardDigest(
-            String slug, Integer day, String time, Boolean enabled, @Nullable String team, @Nullable String channelId) {
-        Workspace workspace = requireWorkspace(slug);
-        return workspaceSettingsService.updateLeaderboardDigest(workspace.getId(), day, time, enabled, team, channelId);
-    }
-
-    public Workspace updateLeaderboardDigest(
-            WorkspaceContext workspaceContext,
-            Integer day,
-            String time,
-            Boolean enabled,
-            @Nullable String team,
-            @Nullable String channelId) {
-        return updateLeaderboardDigest(requireSlug(workspaceContext), day, time, enabled, team, channelId);
-    }
 
     public Workspace updateToken(String slug, String personalAccessToken) {
         Workspace workspace = requireWorkspace(slug);

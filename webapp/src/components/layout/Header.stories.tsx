@@ -137,7 +137,7 @@ export const ReadOnly: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Account" }));
 		const menu = within(await screen.findByRole("menu"));
 		await expectSettledVisible(menu.getByRole("menuitem", { name: "Sign Out" }));
-		await expect(menu.queryByRole("menuitem", { name: "My Profile" })).not.toBeInTheDocument();
+		await expect(menu.queryByRole("menuitem", { name: "Activity" })).not.toBeInTheDocument();
 		await expect(menu.queryByRole("menuitem", { name: "Settings" })).not.toBeInTheDocument();
 	},
 };

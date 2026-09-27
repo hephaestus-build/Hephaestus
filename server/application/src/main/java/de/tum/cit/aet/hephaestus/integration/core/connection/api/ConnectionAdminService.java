@@ -186,12 +186,7 @@ public class ConnectionAdminService {
             case GITHUB, GITLAB -> throw new IllegalStateException(kind + " is never connected inline");
             case SLACK ->
                 new ConnectionConfig.SlackConfig(
-                        instanceKey,
-                        /* teamName */ null,
-                        /* notificationChannelId */ null,
-                        /* teamLabel */ null,
-                        /* retentionDays */ null,
-                        enabledStreams);
+                        instanceKey, /* teamName */ null, /* retentionDays */ null, enabledStreams);
             case OUTLINE ->
                 new ConnectionConfig.OutlineConfig(
                         userInput.getOrDefault("server_url", null),
