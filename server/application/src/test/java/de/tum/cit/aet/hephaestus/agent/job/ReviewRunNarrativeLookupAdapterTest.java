@@ -33,7 +33,8 @@ class ReviewRunNarrativeLookupAdapterTest extends BaseUnitTest {
     private final FeedbackCompositionResultParser composition = new FeedbackCompositionResultParser();
 
     @Test
-    @DisplayName("takes the next step from the feedback written about the work, not from the one about the habit")
+    @DisplayName(
+            "takes the next step from the feedback written about the work, not from the one about the way of working")
     void shouldIgnoreInAppNextStepsWhenAddressingAnObservation() {
         UUID observationId = UUID.randomUUID();
         ReviewRunNarrative narrative =
@@ -44,7 +45,7 @@ class ReviewRunNarrativeLookupAdapterTest extends BaseUnitTest {
                  "placement":{"kind":"ARTIFACT"}},
                 {"channel":"IN_APP","action":"NEW","practiceSlug":"pr-description-quality",
                  "basedOn":["%s"],"title":"Testing notes keep going missing",
-                 "nextStep":"Make a habit of writing down what you ran."}
+                 "nextStep":"Write down what you ran, every time."}
                 """.formatted(observationId, observationId)));
 
         assertThat(narrative.nextStepByObservationId())

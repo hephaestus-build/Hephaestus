@@ -108,9 +108,9 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
     }
 
     /**
-     * The second review, after the cooldown, finds the habit again on two newer pieces of work. The card the
+     * The second review, after the cooldown, finds the same lapse again on two newer pieces of work. The card the
      * developer already read is retired for the newer one, which cites only the work since it: the page is a
-     * list of habits to work on, and one habit gets one open card.
+     * list of practices to work on, and one practice gets one open card.
      */
     @Test
     @WithUser
@@ -299,7 +299,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
     }
 
     /**
-     * The second review, after the cooldown: the habit on #11 and #12, and the review of #12 composed a card
+     * The second review, after the cooldown: the lapse on #11 and #12, and the review of #12 composed a card
      * about it, which the in-app lane prepares. Returns the newest readable card about the practice.
      */
     private Feedback secondReview() {
@@ -333,7 +333,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
                 .getFirst();
     }
 
-    /** The habit again on {@code #number}, reviewed at {@code at}, as evidence a new card may cite. */
+    /** The lapse again on {@code #number}, reviewed at {@code at}, as evidence a new card may cite. */
     private UUID slip(int number, Instant at) {
         AgentJob run = persistPullRequestReview(workspace, number, at);
         return observe(practice, run, number, developer, OMISSION_GAP, Severity.MAJOR, at, admittedEvidence(run));

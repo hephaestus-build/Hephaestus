@@ -789,7 +789,7 @@ public class FeedbackLedgerRecorder {
         }
         // Signalled here, above the note check and above silent mode, because the lanes this wakes are
         // internal and neither condition bears on them. A review that composed nothing to post on the work
-        // can still have composed a message about the habit behind it, so gating this on `mrNote` made the
+        // can still have composed a message about the way of working behind it, so gating this on `mrNote` made the
         // developer's private page a passenger of the public comment — the same mistake as gating it on
         // silence, one level up. An in-context note is one lane's output, not a precondition for the others.
         publishFeedbackLaneTrigger(job);

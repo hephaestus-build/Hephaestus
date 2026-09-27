@@ -61,7 +61,7 @@ public record PracticeStandingDTO(
     public enum Standing {
         /** Recent evidence was mostly problems — the focus of attention. */
         DEVELOPING,
-        /** Recent evidence was almost entirely positive — a confirmed good habit. */
+        /** Recent evidence was almost entirely positive — a confirmed strength. */
         STRENGTH,
         /** Recent evidence carries both sides in comparable measure. */
         MIXED,

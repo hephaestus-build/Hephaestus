@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
 @Component
 class RecurringLapses {
 
-    /** Distinct earlier pieces of work a practice was negative on before it counts as a habit. */
+    /** Distinct earlier pieces of work a practice was negative on before it counts as recurring. */
     static final int RECURRING_MIN_ARTIFACTS = 3;
 
     private static final int WINDOW_DAYS = InAppFeedbackRouter.PATTERN_WINDOW_DAYS;
@@ -55,7 +55,7 @@ class RecurringLapses {
             }
             Long artifact = observation.getArtifactId();
             // Each piece of work counts by its latest review, newest first: a lapse a draft review found
-            // and the next review found fixed is not part of a habit.
+            // and the next review found fixed is not part of a recurring lapse.
             Map<Long, Outcome> latestByArtifact = new HashMap<>();
             observationRepository
                     .findRecentForSubjectAndPractice(

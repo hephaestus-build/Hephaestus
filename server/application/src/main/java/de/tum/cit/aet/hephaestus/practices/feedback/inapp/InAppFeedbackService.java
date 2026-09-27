@@ -49,7 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class InAppFeedbackService {
 
     /**
-     * How many cards one read returns. The practice surface is a short list of habits to work on, not a log;
+     * How many cards one read returns. The practice surface is a short list of practices to work on, not a log;
      * a developer who has to scroll it has been handed more than they can act on. The limit bounds the answer,
      * not the read: whether a card is still on the page is known only once it is read, so each read loads every
      * readable card the developer keeps and its cost grows with them.

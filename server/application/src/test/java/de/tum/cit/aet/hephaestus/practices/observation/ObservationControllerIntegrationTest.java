@@ -1220,7 +1220,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     now.minus(1, ChronoUnit.HOURS),
                     0,
                     FeedbackChannel.IN_CONTEXT);
-            // Newer, delivered and bound to the same observation, but about a habit across several pieces of
+            // Newer, delivered and bound to the same observation, but about a way of working across several pieces of
             // work: its words are never the ones this page shows, so its id must never be the one it rates.
             deliverFeedbackFor(
                     observationId,

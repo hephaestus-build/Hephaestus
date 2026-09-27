@@ -329,7 +329,7 @@ class DeliveryComposerTest extends BaseUnitTest {
 
     @Test
     void shouldNameARecurringLapseInOneLineAndExplainTheRestInFull() {
-        ValidatedObservation habit = negativeObservation(
+        ValidatedObservation recurring = negativeObservation(
                 "describe-what-and-why",
                 "The description says what changed but not why.",
                 Severity.MINOR,
@@ -344,7 +344,7 @@ class DeliveryComposerTest extends BaseUnitTest {
                 null,
                 "No test file in the change.");
         String note = note(DeliveryComposer.composeAdmitted(
-                List.of(habit, fresh),
+                List.of(recurring, fresh),
                 ArtifactKinds.PULL_REQUEST,
                 Map.of(),
                 List.of(),
@@ -1988,7 +1988,7 @@ class DeliveryComposerTest extends BaseUnitTest {
                 ComposedFeedbackUnit.Action.NEW,
                 null,
                 null,
-                "A habit across three changes",
+                "A lapse across three changes",
                 "IN_APP BODY: this keeps happening.",
                 "IN_APP NEXT STEP: write the test first next time.",
                 null,

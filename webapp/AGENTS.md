@@ -402,7 +402,7 @@ reaches both edges of the panel; only `DrawerBody` scrolls.
   inside the body instead inherits that body's padding — it floats short of both edges and leaves a
   strip of dead space beneath it at the end of the scroll. Negative margins to cancel the padding are
   the same bug with a longer fuse.
-- **The panel is the measure.** A `max-w-*` on the controls is a page-era habit; inside a panel sized
+- **The panel is the measure.** A `max-w-*` on the controls is a page-era convention; inside a panel sized
   for the form it only strands the footer's buttons to the right of the fields. Cap *prose* instead,
   which is what `PracticeDefinitionPreview` does.
 - **The header content row is two columns at most**, and the second is the title block. A drawer is

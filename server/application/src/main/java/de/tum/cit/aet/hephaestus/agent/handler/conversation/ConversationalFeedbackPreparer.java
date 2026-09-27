@@ -41,7 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Prepares bounded {@code IN_CHAT} units for each observation subject. Only complete composed briefs are
  * queued: observations are evidence for a mentor move, not a substitute for one.
  *
- * <p>A practice-scoped thread key keeps one unread unit per habit. Supersession and replacement run in the
+ * <p>A practice-scoped thread key keeps one unread unit per practice. Supersession and replacement run in the
  * same transaction, while deterministic job positions make retries idempotent.
  */
 @Component
@@ -181,15 +181,15 @@ public class ConversationalFeedbackPreparer {
                 // would retire is the one this very unit replaced on the first pass.
                 continue;
             }
-            // The habit this row continues. Scoped to the practice rather than to the locus, because the
-            // mentor raises a habit and not a line; a capped row gets none, because it is never raised and
+            // The practice this row continues. Scoped to the practice rather than to the locus, because the
+            // mentor raises a way of working and not a line; a capped row gets none, because it is never raised and
             // putting it at the head of the thread would leave the queued move behind it unreplaceable.
             String threadKey = overCap || practiceSlug == null
                     ? null
                     : FeedbackThreadKey.forPractice(practiceSlug, recipient, FeedbackChannel.IN_CHAT);
             // The claim and the write below are one swap, and this method's REQUIRES_NEW transaction is what
             // makes them one: a retired move with no replacement leaves the mentor with nothing to raise
-            // about a habit it was about to raise.
+            // about a practice it was about to raise.
             FeedbackSupersession.Outcome outcome = threadKey != null && supersedes(move, threadKey)
                     ? supersession.supersede(workspaceId, recipient, FeedbackChannel.IN_CHAT, threadKey)
                     : FeedbackSupersession.Outcome.standalone();
@@ -287,9 +287,9 @@ public class ConversationalFeedbackPreparer {
     /**
      * Whether this move may retire the one queued on the thread it named.
      *
-     * <p>A move is only ever allowed to replace a move <em>about the same habit</em>. The runner already
+     * <p>A move is only ever allowed to replace a move <em>about the same practice</em>. The runner already
      * refuses a key that was never staged, so the composer cannot invent one; what it can still do is name a
-     * real key belonging to another of this person's habits, and acting on that would retire a message about
+     * real key belonging to another of this person's practices, and acting on that would retire a message about
      * something else and leave it unsaid forever. The check is an equality because the key is derived from
      * the practice: the only key this move could legitimately name is its own thread's.
      */
@@ -301,7 +301,7 @@ public class ConversationalFeedbackPreparer {
             return true;
         }
         log.warn(
-                "Conversational move named a supersession target on another habit's thread; written as new: practice={}",
+                "Conversational move named a supersession target on another practice's thread; written as new: practice={}",
                 move.practiceSlug());
         return false;
     }
@@ -309,7 +309,7 @@ public class ConversationalFeedbackPreparer {
     /**
      * The practice each locus is about, in the composer's spelling. The composer names a practice and nothing
      * else about the evidence, so this is the whole of the join between what it wrote and what was measured —
-     * and, because a habit thread is scoped to the practice, the same spelling is what the continuity key is
+     * and, because a practice thread is scoped to the practice, the same spelling is what the continuity key is
      * derived from, on this lane and on the in-app lane alike.
      */
     private Map<UUID, String> practiceSlugsOf(List<Observation> observations, Long workspaceId) {

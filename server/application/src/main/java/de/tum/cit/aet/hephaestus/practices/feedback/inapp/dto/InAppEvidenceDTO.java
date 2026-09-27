@@ -11,7 +11,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * One piece of work that carries the habit an in-app message is about.
+ * One piece of work that carries the way of working an in-app message is about.
  *
  * <p>The unit of proof at the process level is recurrence, so evidence here is a <em>set of
  * artifacts</em>, never a quoted line. A quoted line is task-level proof and it already appeared on the

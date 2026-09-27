@@ -187,7 +187,7 @@ class ConversationalFeedbackPreparerTest extends BaseUnitTest {
     }
 
     @Test
-    void raisedRowsCarryTheHabitThread() {
+    void raisedRowsCarryThePracticeThread() {
         List<Observation> admitted = List.of(
                 problem(ALICE, "p-one", Severity.CRITICAL),
                 problem(ALICE, "p-two", Severity.MAJOR),
@@ -262,14 +262,14 @@ class ConversationalFeedbackPreparerTest extends BaseUnitTest {
     }
 
     @Test
-    void refusesACrossHabitSupersession() {
-        String someoneElsesHabit = threadKeyFor(SIZE, ALICE);
+    void refusesACrossPracticeSupersession() {
+        String someoneElsesPractice = threadKeyFor(SIZE, ALICE);
 
         int prepared = preparer.prepare(
                 UUID.randomUUID(),
                 WS,
                 List.of(problem(ALICE, TESTS, Severity.MAJOR)),
-                List.of(supersede(TESTS, someoneElsesHabit)));
+                List.of(supersede(TESTS, someoneElsesPractice)));
 
         assertThat(prepared).isEqualTo(1);
         verify(supersession, never()).supersede(anyLong(), anyLong(), any(), any());
