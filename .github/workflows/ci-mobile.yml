@@ -117,13 +117,19 @@ jobs:
           java-version-file: .java-version
           cache-jdk: false
       - uses: ./.github/actions/setup-maestro
+      # Expo's generated gradle.properties gives the Gradle daemon 2 GB of heap and 512 MB of
+      # metaspace, which Android lint's class loaders per module exhaust on a hosted runner. A
+      # Gradle property passed with -D outranks the project's file, so the build is sized here
+      # without editing generated files: two workers bound what runs at once, and a daemon out of
+      # memory exits and fails the step instead of hanging it.
       - name: Build the development app
         env:
           APP_VARIANT: development
         run: |
           vp -C mobile exec expo prebuild --platform android --clean
           cd mobile/android
-          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64
+          ./gradlew assembleRelease --no-daemon --max-workers=2 -PreactNativeArchitectures=x86_64 \
+            "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+ExitOnOutOfMemoryError"
       - name: Download the packaged server
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:

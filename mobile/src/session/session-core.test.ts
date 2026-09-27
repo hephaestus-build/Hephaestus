@@ -8,6 +8,7 @@ import {
 	REVOCATIONS_KEY,
 	type RefreshOutcome,
 	SESSION_KEY,
+	SessionError,
 	type SessionStorage,
 } from "./session-core";
 
@@ -335,6 +336,36 @@ describe("sign-out racing a refresh", () => {
 		});
 		expect(storage.queued()).toStrictEqual(expect.arrayContaining(["old-1", "old-2"]));
 		expect(storage.queued()).not.toContain("new-1");
+	});
+
+	it("ends an old account's refresh as signed out when the new account's refresh finished first", async () => {
+		const { core, refreshes } = harness();
+		await core.begin(INSTANCE, issued("old-1"));
+		const oldRenewal = core.renew();
+		await settle();
+		void core.signOut();
+		await settle();
+		await core.begin(OTHER, issued("new-1", "access-new-1", OTHER_SIGN_IN));
+		const newRenewal = core.renew();
+		await settle();
+
+		// The new account's rotation settles first and gives up the in-flight slot; the old one answers
+		// after it, and must still end as its own session's refresh did.
+		refreshes[1]?.answer.open({
+			kind: "rotated",
+			tokens: issued("new-2", "access-new-2", OTHER_SIGN_IN),
+		});
+		await newRenewal;
+		refreshes[0]?.answer.open({ kind: "failed" });
+
+		const failure: unknown = await oldRenewal.catch((error: unknown) => error);
+		assert.ok(failure instanceof SessionError);
+		expect(failure.reason).toBe("ended");
+		expect(core.getState()).toMatchObject({
+			status: "signedIn",
+			instance: OTHER,
+			nativeSessionId: OTHER_SIGN_IN,
+		});
 	});
 });
 

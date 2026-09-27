@@ -298,7 +298,11 @@ export function createSessionCore(deps: SessionDependencies) {
 			try {
 				return await promise;
 			} finally {
-				if (rotation.promise === promise) {
+				// Only this rotation's own slot is cleared: a newer epoch's may have replaced it, and may
+				// already have settled and emptied it. TypeScript keeps the narrowing from the assignment
+				// above across the await, so it cannot see that emptied slot.
+				// oxlint-disable-next-line typescript/no-unnecessary-condition -- emptied by a newer epoch meanwhile
+				if (rotation?.promise === promise) {
 					rotation = undefined;
 				}
 			}

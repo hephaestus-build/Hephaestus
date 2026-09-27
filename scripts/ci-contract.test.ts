@@ -7,6 +7,7 @@ import path from "node:path";
 import { describe, test } from "node:test";
 
 import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
+import { parse as parseJsonc } from "jsonc-parser";
 import { type Document, isMap, isScalar, isSeq, parseDocument, visit, type YAMLMap } from "yaml";
 
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
@@ -388,6 +389,15 @@ void describe("CI contract", () => {
 		const rootInputs = [
 			...config.matchAll(/new URL\("\.\.\/(?<file>[^"/]+)", import\.meta\.url\)/gu),
 		].map(({ groups }) => groups?.file);
+		const lintConfig = asRecord(
+			parseJsonc(await readFile("webapp/.oxlintrc.json", "utf8")),
+			"webapp lint configuration",
+		);
+		for (const base of asArray(lintConfig.extends, "webapp lint bases")) {
+			const file = path.posix.normalize(path.posix.join("webapp", asString(base, "lint base")));
+			assert.equal(path.posix.dirname(file), ".", "Shared lint bases live at the repo root");
+			rootInputs.push(file);
+		}
 		assert.ok(rootInputs.length > 0, "Expected root configuration dependencies");
 		const copied =
 			/^COPY (?<files>.+) \/repo\/$/mu.exec(dockerfile)?.groups?.files?.split(/\s+/u) ?? [];
