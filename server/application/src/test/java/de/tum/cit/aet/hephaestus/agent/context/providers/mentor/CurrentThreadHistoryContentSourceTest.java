@@ -73,6 +73,38 @@ class CurrentThreadHistoryContentSourceTest extends BaseUnitTest {
         assertThat(messages.get(0).get("text").asString()).isEqualTo("I see two recent Slack threads in the data.");
     }
 
+    @Test
+    void remembersTheFeedbackAReplyShowedAndNothingForAnObservationItOnlyNamed() throws Exception {
+        UUID threadId = UUID.randomUUID();
+        ChatMessage assistant =
+                message(ChatMessage.Role.ASSISTANT, "Let me look.", Instant.parse("2026-01-01T00:00:00Z"));
+        var parts = (tools.jackson.databind.node.ArrayNode) assistant.getParts();
+        parts.addObject()
+                .put("type", "data-observation")
+                .put("id", "named")
+                .putObject("data")
+                .put("observationId", UUID.randomUUID().toString());
+        parts.addObject()
+                .put("type", "data-observation")
+                .put("id", "shown")
+                .putObject("data")
+                .put("observationId", UUID.randomUUID().toString())
+                .put("text", "Name the trade-off in the description.");
+        parts.addObject().put("type", "text").put("text", "What made you choose it?");
+        when(chatMessageRepository.findContextMessages(1L, 2L, threadId, null)).thenReturn(List.of(assistant));
+
+        CurrentThreadHistoryContentSource source =
+                new CurrentThreadHistoryContentSource(chatMessageRepository, objectMapper);
+        Map<String, byte[]> files = new HashMap<>();
+        source.contribute(new ContextRequest.MentorChatRequest(1L, 2L, threadId), files);
+
+        assertThat(objectMapper
+                        .readTree(files.get(CurrentThreadHistoryContentSource.OUTPUT_KEY))
+                        .at("/messages/0/text")
+                        .asString())
+                .isEqualTo("Let me look.\nName the trade-off in the description.\nWhat made you choose it?");
+    }
+
     private ChatMessage message(ChatMessage.Role role, String text, Instant createdAt) {
         return message(role, List.of(text), createdAt);
     }

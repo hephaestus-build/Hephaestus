@@ -63,7 +63,8 @@ class ReviewRunSummaryQueryService {
                                 feedbackCounts.getDelivered(),
                                 feedbackCounts.getSuperseded(),
                                 feedbackCounts.getSuppressed(),
-                                feedbackCounts.getFailed()));
+                                feedbackCounts.getFailed(),
+                                feedbackCounts.getUnconfirmed()));
     }
 
     private ReviewRunSummaryDTO withoutCounts(ReviewRunSummaryRow review) {

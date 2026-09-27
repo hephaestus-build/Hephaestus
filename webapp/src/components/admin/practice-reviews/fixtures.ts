@@ -919,7 +919,13 @@ function feedbackFor(observationId: string) {
 		.sort((a, b) => b.item.composedAt.localeCompare(a.item.composedAt));
 }
 
-type Disposition = "delivered" | "failed" | "prepared" | "superseded" | "suppressed";
+type Disposition =
+	| "delivered"
+	| "failed"
+	| "prepared"
+	| "superseded"
+	| "suppressed"
+	| "unconfirmed";
 
 const DISPOSITION_OF: Record<ReviewFeedback["deliveryState"], Disposition> = {
 	AWAITING_APPROVAL: "prepared",
@@ -931,6 +937,7 @@ const DISPOSITION_OF: Record<ReviewFeedback["deliveryState"], Disposition> = {
 	PREPARED: "prepared",
 	SUPERSEDED: "superseded",
 	SUPPRESSED: "suppressed",
+	UNCONFIRMED: "unconfirmed",
 };
 
 function disposition(observationId: string): Record<Disposition, number> {
@@ -940,6 +947,7 @@ function disposition(observationId: string): Record<Disposition, number> {
 		prepared: 0,
 		superseded: 0,
 		suppressed: 0,
+		unconfirmed: 0,
 	};
 	for (const { item } of feedbackFor(observationId)) {
 		counts[DISPOSITION_OF[item.outcome]] += 1;
@@ -1032,6 +1040,7 @@ export const reviewRuns: ReviewRunSummary[] = allRuns
 			prepared: run.feedback.filter((f) => f.outcome === "PREPARED").length,
 			superseded: run.feedback.filter((f) => f.outcome === "SUPERSEDED").length,
 			suppressed: run.feedback.filter((f) => f.outcome === "SUPPRESSED").length,
+			unconfirmed: run.feedback.filter((f) => f.outcome === "UNCONFIRMED").length,
 		},
 	}))
 	.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());

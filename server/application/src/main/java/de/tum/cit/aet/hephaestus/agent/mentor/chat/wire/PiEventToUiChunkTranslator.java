@@ -418,20 +418,22 @@ public class PiEventToUiChunkTranslator {
     // link_observation → DataObservation
 
     private List<UIMessageChunk> handleLinkObservation(JsonNode event, TranslatorState state) {
-        // Runner emits camelCase `observationId` (pi-mentor-runner.ts defineLinkObservationTool).
-        // A link that cannot be read is feedback evidence this turn would silently lose, so it fails the turn.
+        // Runner emits camelCase `observationId` and `text` (pi-mentor-runner.ts defineLinkObservationTool).
+        // A link that cannot be read is feedback this turn would silently lose or show empty, so it fails the turn.
         String observationIdStr = optionalString(event, "observationId");
+        String text = optionalString(event, "text");
         @Nullable UUID observationId = null;
         try {
             observationId = observationIdStr == null ? null : UUID.fromString(observationIdStr);
         } catch (IllegalArgumentException e) {
             // Falls through to the failure below.
         }
-        if (observationId == null) {
-            return failTurn(state, "a link_observation without a readable observationId");
+        if (observationId == null || text == null || text.isBlank()) {
+            return failTurn(state, "a link_observation without a readable observationId and text");
         }
-        state.recordDataObservation(observationId);
-        return List.of(UIMessageChunk.DataObservation.of(observationId));
+        UIMessageChunk.DataObservation observation = UIMessageChunk.DataObservation.of(observationId, text);
+        state.recordDataObservation(observation);
+        return List.of(observation);
     }
 
     // pi_error / turn_watchdog_fired → Error

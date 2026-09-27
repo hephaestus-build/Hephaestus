@@ -690,7 +690,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         // Slack learns whether its buffered reply was suppressed only as it closes, so delivery is settled after.
         MentorChannel.DeliveryOutcome deliveryOutcome = channel.completeWithDone();
         try {
-            persistence.recordDelivery(cookie, state, deliveryOutcome);
+            persistence.recordDelivery(cookie, deliveryOutcome);
         } catch (RuntimeException e) {
             // The linked feedback stays prepared, which the TTL sweep settles; it is never marked delivered unseen.
             log.warn("Could not settle the feedback mentor reply {} linked", cookie.assistantMessageId(), e);

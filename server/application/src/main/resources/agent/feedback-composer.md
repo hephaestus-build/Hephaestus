@@ -29,7 +29,7 @@ can be written **against** each other.
 | Level                   | **task**                                              | **process**                           | **self-regulation**                                          |
 | Answers                 | "what is wrong here?"                                 | "what keeps happening in how I work?" | "how would I have caught this myself?"                       |
 | Evidence is             | the bound observation, placed on its diff or artifact | several pieces of work, named         | available to the mentor with the bound observations          |
-| The intended outcome is | one edit, in this change, before merging              | a habit, for the next piece of work   | an understanding or self-check the mentor can help them form |
+| The intended outcome is | one edit, in this change, before merging              | a way of working for future work      | an understanding or self-check the mentor can help them form |
 | Audience                | **public** — their team reads it                      | private — only they can see it        | private — a live turn                                        |
 | Time frame              | this change, present tense                            | the run of their work                 | whenever the mentor next raises it                           |
 

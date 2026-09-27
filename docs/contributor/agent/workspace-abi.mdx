@@ -346,8 +346,8 @@ marker, a `[L<n>]` prefix, a non-breaking space read as a space, or a JSON strin
 its escapes is recorded as the artifact's own bytes, because admission verifies those bytes; a quote
 whose lines were miscounted is recorded at the lines where the text is, when it occurs once; a refused
 citation is answered with what the cited lines really hold. The
-mentor runner exposes no native tool at all: its context arrives through `fetch_context`, and it links
-evidence with `link_observation`.
+mentor runner exposes no native tool at all: its context arrives through `fetch_context`, and it gives
+feedback about an observation with `link_observation`, whose `text` the reply shows the developer.
 
 The image provides Bash, Git, ripgrep, fd-find, and standard shell utilities. `PI_OFFLINE=1`
 disables tool downloads. Use `work/` or `$TMPDIR` for scratch files; scratch files are not

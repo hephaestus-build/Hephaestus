@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorVisibleTextSanitizer;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
 import de.tum.cit.aet.hephaestus.mentor.ChatMessage;
 import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
 import java.util.List;
@@ -76,11 +77,20 @@ public class CurrentThreadHistoryContentSource implements ContentSource {
         }
         StringBuilder out = new StringBuilder();
         for (JsonNode part : parts) {
-            if (!"text".equals(part.path("type").asString())) {
-                continue;
-            }
-            String text = part.path("text").asString();
-            if (MentorVisibleTextSanitizer.isLeakedInternalAnalysis(text)) {
+            String type = part.path("type").asString("");
+            String text;
+            if ("text".equals(type)) {
+                text = part.path("text").asString();
+                if (MentorVisibleTextSanitizer.isLeakedInternalAnalysis(text)) {
+                    continue;
+                }
+            } else if (UIMessageChunk.DataObservation.PART_TYPE.equals(type)) {
+                // Feedback the reply showed; a link stored before links carried text showed nothing.
+                text = part.path("data").path("text").asString("");
+                if (text.isBlank()) {
+                    continue;
+                }
+            } else {
                 continue;
             }
             if (!out.isEmpty()) {

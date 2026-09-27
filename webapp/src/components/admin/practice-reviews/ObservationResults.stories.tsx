@@ -96,6 +96,35 @@ export const Undetermined: Story = {
 };
 
 /**
+ * Feedback a conversation linked without a record that it was shown still counts as composed feedback,
+ * so the row names it rather than claiming none was composed.
+ */
+export const UnconfirmedConversationFeedback: Story = {
+	args: {
+		state: {
+			status: "ready",
+			observations: [
+				{
+					...firstObservation,
+					feedbackDisposition: {
+						prepared: 0,
+						delivered: 0,
+						superseded: 0,
+						suppressed: 0,
+						failed: 0,
+						unconfirmed: 1,
+					},
+				},
+			],
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Feedback: 1 unconfirmed")).toBeVisible();
+		await expect(canvas.queryByText("No feedback composed")).toBeNull();
+	},
+};
+
+/**
  * The practice on a row does two things: it opens the practice, and it says what the practice is
  * without leaving the list. Both are checked, because the card is the half that goes quiet on its
  * own — a row that stops being handed its practice record still renders a perfectly good link.

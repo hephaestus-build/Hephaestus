@@ -2,6 +2,7 @@ import {
 	BotMessageSquareIcon,
 	CircleAlertIcon,
 	CircleCheckIcon,
+	CircleHelpIcon,
 	ClipboardCheckIcon,
 	ClockIcon,
 	EyeOffIcon,
@@ -87,6 +88,13 @@ export const DELIVERY_STATE_DEFS: StatusDefs<DeliveryState> = {
 		badgeVariant: "outline",
 		description: "An authorized reviewer decided this proposal should not be sent.",
 	},
+	UNCONFIRMED: {
+		label: "Unconfirmed",
+		icon: CircleHelpIcon,
+		badgeVariant: "outline",
+		description:
+			"Hephaestus recorded a conversation link but cannot confirm that feedback was shown.",
+	},
 };
 
 /**
@@ -107,7 +115,7 @@ const IN_CHAT_OVERRIDES = {
 		label: "Delivered in conversation",
 		icon: BotMessageSquareIcon,
 		badgeVariant: "success",
-		description: "The mentor raised it the next time the developer was talking to it.",
+		description: "The mentor showed it to the developer in a reply to their next chat.",
 	},
 	EXPIRED: {
 		label: "Withheld, never raised",

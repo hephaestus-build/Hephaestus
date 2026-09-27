@@ -81,6 +81,7 @@ export function feedbackCountSlots(counts: FeedbackCounts): ReviewCountSlot[] {
 			["PREPARED", counts.prepared],
 			["SUPPRESSED", counts.suppressed],
 			["FAILED", counts.failed],
+			["UNCONFIRMED", counts.unconfirmed],
 		] as const
 	).map(([state, count]) => ({
 		key: state,

@@ -95,6 +95,10 @@ class SlackStreamingMentorChannelTest extends BaseUnitTest {
         return new UIMessageChunk.TextDelta("m1", s);
     }
 
+    private static UIMessageChunk.DataObservation feedback(String text) {
+        return UIMessageChunk.DataObservation.of(java.util.UUID.randomUUID(), text);
+    }
+
     @Test
     @DisplayName("streams incrementally (>1 write) and delivers the full text once, in order")
     void streamsIncrementallyAndPreservesContent() throws InterruptedException {
@@ -341,6 +345,55 @@ class SlackStreamingMentorChannelTest extends BaseUnitTest {
 
         channel.completeWithDone(); // terminal must not fire the hook again
         assertThat(disconnects.get()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldSendFeedbackAsWrittenInOrderEvenWhenProseSaidTheSame() {
+        SlackMessageService slack = slackThatStreamsOk();
+        var channel = new SlackStreamingMentorChannel(slack, WS, CH, THREAD);
+
+        channel.send(delta("Your description names the decision but not why it beat the alternative. Also"));
+        channel.send(feedback("Your description names the decision but not why it beat the alternative."));
+        channel.send(delta("What made you pick it?"));
+
+        assertThat(channel.completeWithDone()).isEqualTo(MentorChannel.DeliveryOutcome.DELIVERED);
+        assertThat(String.join("", delivered))
+                .isEqualTo("Your description names the decision but not why it beat the alternative. Also"
+                        + "\n\nYour description names the decision but not why it beat the alternative.\n\n"
+                        + "What made you pick it?");
+    }
+
+    @Test
+    void shouldNotDeliverAReplyWhoseFeedbackNeverReachedSlack() {
+        SlackMessageService slack = mock(SlackMessageService.class);
+        when(slack.startStream(anyLong(), anyString(), anyString(), anyString()))
+                .thenReturn("ts");
+        doThrow(new SlackSendException(WS, CH, "internal_error"))
+                .when(slack)
+                .appendStream(anyLong(), anyString(), anyString(), anyString());
+        var channel = new SlackStreamingMentorChannel(slack, WS, CH, THREAD);
+
+        channel.send(delta("first "));
+        verify(slack, timeout(4000)).startStream(WS, CH, THREAD, "first ");
+        channel.send(feedback("Name the trade-off."));
+
+        assertThat(channel.completeWithDone()).isEqualTo(MentorChannel.DeliveryOutcome.NOT_DELIVERED);
+    }
+
+    @Test
+    void shouldNotDeliverFeedbackWhenTheStreamCannotBeStopped() {
+        SlackMessageService slack = mock(SlackMessageService.class);
+        when(slack.startStream(anyLong(), anyString(), anyString(), anyString()))
+                .thenReturn("ts");
+        doThrow(new SlackSendException(WS, CH, "internal_error"))
+                .when(slack)
+                .stopStream(anyLong(), anyString(), anyString(), any());
+        var channel = new SlackStreamingMentorChannel(slack, WS, CH, THREAD);
+
+        channel.send(feedback("Name the trade-off."));
+
+        assertThat(channel.completeWithDone()).isEqualTo(MentorChannel.DeliveryOutcome.NOT_DELIVERED);
+        verify(slack).startStream(WS, CH, THREAD, "Name the trade-off.\n\n");
     }
 
     @Test
