@@ -1,8 +1,9 @@
-import { readFileSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { readJsonc } from "../../jsonc.ts";
 import { ruleTester } from "../rule-tester.ts";
 import { ASSERT_FUNCTION_NAMES, asRegExp, playMustAssert } from "./play-must-assert.ts";
 
@@ -75,22 +76,12 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isUnknownArray = (value: unknown): value is readonly unknown[] => Array.isArray(value);
 
-/**
- * The `assertFunctionNames` `oxlint.app.jsonc` hands `vitest/expect-expect`.
- *
- * The file is JSONC, and every comment in it stands on a line of its own. A trailing one would fail
- * `JSON.parse` here — loudly — rather than silently drop the entry it trails.
- */
+/** The `assertFunctionNames` `oxlint.app.jsonc` hands `vitest/expect-expect`. */
 function configuredAssertFunctionNames(): readonly string[] {
 	// Resolved as a path rather than through `new URL(…, import.meta.url)`: these tests run in jsdom,
 	// whose `URL` resolves a relative reference against the document's origin, not the module's.
 	const here = import.meta.dirname;
-	const source = readFileSync(path.join(here, "../../../../oxlint.app.jsonc"), "utf8");
-	const json = source
-		.split("\n")
-		.filter((line) => !line.trimStart().startsWith("//"))
-		.join("\n");
-	const config: unknown = JSON.parse(json);
+	const config = readJsonc(pathToFileURL(path.join(here, "../../../../oxlint.app.jsonc")));
 	const rules = isRecord(config) ? config.rules : undefined;
 	const entry = isRecord(rules) ? rules["vitest/expect-expect"] : undefined;
 	const [, options] = isUnknownArray(entry) ? entry : [];

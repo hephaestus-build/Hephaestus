@@ -84,16 +84,19 @@ class ArtifactTraceQueryService {
         if (recorded.isEmpty()) {
             throw new EntityNotFoundException("Traced artifact", artifactKind.value() + "/" + artifactId);
         }
-        Map<SignalName, String> labels = signalLabels(artifactKind);
-        List<TracedSignalDTO> tracedSignals = recorded.stream()
-                .map(signal -> TracedSignalDTO.from(signal, labels.get(SignalName.of(signal.getSignalName()))))
-                .toList();
-
         Set<UUID> reviewIds = recorded.stream()
                 .map(ArtifactSignal::getJobId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<UUID, ReviewOutcome> outcomes = reviews.findByIds(workspaceId, reviewIds);
+
+        Map<SignalName, String> labels = signalLabels(artifactKind);
+        List<TracedSignalDTO> tracedSignals = recorded.stream()
+                .map(signal -> TracedSignalDTO.from(
+                        signal,
+                        labels.get(SignalName.of(signal.getSignalName())),
+                        signal.getJobId() == null ? null : outcomes.get(signal.getJobId())))
+                .toList();
 
         List<PracticeTraceEntryDTO> entries = PracticeTraceDeriver.derive(
                 tracedPractices(workspaceId, artifactKind),

@@ -214,6 +214,49 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
                                                     "No connected integration raises scm.pull_request.merged; connect GITHUB or GITLAB"))));
         }
 
+        /**
+         * A practice's standing is its results, so a newer review of the same work cannot change it; the
+         * occurrence that started that review is where the trace says the review is still under way.
+         */
+        @Test
+        @WithMentorUser
+        void shouldReportAQueuedReviewWhenItsPracticeAlreadyHasResults() {
+            Practice reviewed = persistPractice("reviewed", "Reviewed practice", PracticeAutonomy.AUTOMATIC);
+            AgentJob earlier = persistJob();
+            AgentJob queued = persistJob(workspace, AgentJobStatus.QUEUED);
+            recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.TRIGGERED, null, earlier.getId());
+            recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.TRIGGERED, null, queued.getId());
+            insertObservation(reviewed, earlier);
+
+            get(TRACE, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID)
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.practices[?(@.practiceSlug=='reviewed')].outcome")
+                    .isEqualTo("REVIEWED")
+                    .jsonPath("$.signals[?(@.reviewId=='%s')].reviewState".formatted(earlier.getId()))
+                    .isEqualTo("COMPLETED")
+                    .jsonPath("$.signals[?(@.reviewId=='%s')].reviewState".formatted(queued.getId()))
+                    .isEqualTo("IN_PROGRESS");
+        }
+
+        /** A review this workspace does not own has no state here, even when a signal names it. */
+        @Test
+        @WithMentorUser
+        void shouldNotReportAnotherWorkspacesReviewWhenASignalNamesIt() {
+            AgentJob foreign = persistJob(otherWorkspace, AgentJobStatus.RUNNING);
+            recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.TRIGGERED, null, foreign.getId());
+
+            get(TRACE, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID)
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.signals[0].reviewId")
+                    .isEqualTo(foreign.getId().toString())
+                    .jsonPath("$.signals[0].reviewState")
+                    .doesNotExist();
+        }
+
         @Test
         @WithMentorUser
         void explainsARefusedSignalWithTheActionThatWouldLiftIt() {
@@ -317,14 +360,20 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     private AgentJob persistJob() {
+        // A finished run: an unfinished one is reported as still running, which is a different answer.
+        return persistJob(workspace, AgentJobStatus.COMPLETED);
+    }
+
+    private AgentJob persistJob(Workspace ws, AgentJobStatus status) {
         AgentJob job = new AgentJob();
-        job.setWorkspace(workspace);
+        job.setWorkspace(ws);
         job.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
-        // A finished run: an unfinished one is reported as still running, which is a different answer.
-        job.setStatus(AgentJobStatus.COMPLETED);
-        job.setCompletedAt(READY_AT);
+        job.setStatus(status);
+        if (status == AgentJobStatus.COMPLETED) {
+            job.setCompletedAt(READY_AT);
+        }
         return agentJobRepository.save(job);
     }
 
@@ -340,7 +389,7 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
         row.setArtifactKind(ArtifactKinds.PULL_REQUEST.value());
         row.setArtifactId(ARTIFACT_ID);
         row.setSignalName(signal.value());
-        row.setRevision("sha~deadbeef");
+        row.setRevision("revision-" + row.getId());
         row.setOccurredAt(READY_AT);
         row.setDiscoveredVia(DiscoveredVia.EVENT);
         row.setState(state);

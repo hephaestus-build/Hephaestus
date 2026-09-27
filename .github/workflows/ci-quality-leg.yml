@@ -146,7 +146,9 @@ jobs:
       - name: Summarize application tests
         if: (inputs.leg == 'webapp' || inputs.leg == 'extension') && !cancelled()
         continue-on-error: true
-        run: vp run report:test-results "${{ inputs.leg }} tests" ${{ inputs.leg }}/test-results ci-metrics/${{ inputs.leg }}-unit.json
+        env:
+          APPLICATION_LEG: ${{ inputs.leg }}
+        run: vp run report:test-results "$APPLICATION_LEG tests" "$APPLICATION_LEG/test-results" "ci-metrics/$APPLICATION_LEG-unit.json"
 
       - name: Upload application test metrics
         if: (inputs.leg == 'webapp' || inputs.leg == 'extension') && !cancelled()
@@ -164,6 +166,7 @@ jobs:
         with:
           name: extension-chrome-${{ github.run_attempt }}
           path: extension/.output/*-production-chrome.zip
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
 

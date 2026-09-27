@@ -17575,6 +17575,15 @@ components:
           type: string
           format: uuid
           description: "The review this occurrence started, when it started one"
+        reviewState:
+          type: string
+          description: "Where that review's run stands now, which a practice's own\
+            \ outcome does not say once an earlier review of this work has results;\
+            \ null when no linked run is available"
+          enum:
+          - IN_PROGRESS
+          - COMPLETED
+          - FAILED
         revision:
           type: string
           description: Which version of the artifact this occurrence is about; the

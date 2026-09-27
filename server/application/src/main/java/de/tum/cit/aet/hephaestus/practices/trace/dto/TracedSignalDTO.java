@@ -5,6 +5,8 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.ReviewOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.ReviewRunState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
@@ -41,8 +43,15 @@ public record TracedSignalDTO(
         SignalStateReason stateReason,
 
         @Schema(description = "The review this occurrence started, when it started one") @Nullable
-        UUID reviewId) {
-    public static TracedSignalDTO from(ArtifactSignal signal, @Nullable String displayName) {
+        UUID reviewId,
+
+        @Schema(
+                description = "Where that review's run stands now, which a practice's own outcome does not "
+                        + "say once an earlier review of this work has results; null when no linked run is available")
+        @Nullable
+        ReviewRunState reviewState) {
+    public static TracedSignalDTO from(
+            ArtifactSignal signal, @Nullable String displayName, @Nullable ReviewOutcome review) {
         SignalName name = SignalName.of(signal.getSignalName());
         return new TracedSignalDTO(
                 signal.getId(),
@@ -53,6 +62,7 @@ public record TracedSignalDTO(
                 signal.getDiscoveredVia(),
                 signal.getState(),
                 signal.getStateReason(),
-                signal.getJobId());
+                signal.getJobId(),
+                review == null ? null : review.state());
     }
 }

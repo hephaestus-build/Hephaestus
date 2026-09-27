@@ -4,8 +4,8 @@
 --   !5 "Add the settings page", the second page of the same-tab navigation test;
 --   !6 "Tidy the README", by ext-developer, the linked developer who is not an admin;
 --   two reviews of !4 that never run: one QUEUED with a far `available_at`, and one COMPLETED whose
---   result processing FAILED. Their inline rows link to the exact web-app run pages; this suite
---   neither cancels nor retries them. Neither has output, and the fixture origin does not resolve.
+--   result processing FAILED. This suite neither cancels nor retries them. Neither has output, and the
+--   fixture origin does not resolve.
 -- Run after dev-login has created the `e2e` and `e2e-dev` accounts and after `webapp/e2e/seed.sql`,
 -- which creates the `e2e` developer (user 900001). Re-running resets both reviews.
 BEGIN;

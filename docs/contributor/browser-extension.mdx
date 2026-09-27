@@ -154,6 +154,9 @@ the flow is in `docs/auth-architecture.md`.
   by the exact `artifactKind` and `artifactId`, asked for when the report opens. The worker checks
   every returned record is about the resolved work, and refuses a list that is not. The extension
   reads no feedback body, no other developer's records and no run: those are the web app's.
+  Each trace occurrence carries its linked review's current coarse `reviewState`, from the existing
+  workspace-scoped lookup. This drives activity and polling even when an earlier review's observations
+  still determine the practice's outcome; timestamps never stand in for a running review.
 - Requesting a review uses the existing endpoint, only from the confirmation window; it is the only
   change the extension makes. Links point to the work's review activity and, for a workspace admin,
   its reviewed-work output, where runs are cancelled or retried.

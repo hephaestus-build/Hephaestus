@@ -7,6 +7,7 @@ import path from "node:path";
 import { describe, test } from "node:test";
 
 import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
+import { parse as parseJsonc } from "jsonc-parser";
 import { type Document, isMap, isScalar, isSeq, parseDocument, visit, type YAMLMap } from "yaml";
 
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
@@ -391,18 +392,60 @@ function taskClosure(tasks: Record<string, unknown>, roots: Iterable<string>): S
 	return closure;
 }
 
+/**
+ * Every repository file a config reads: each `new URL("…", import.meta.url)` it names and, for a
+ * lint config, every file its `extends` names in turn — the closure `loadLintConfig` walks.
+ */
+async function filesReadByConfig(config: string): Promise<Set<string>> {
+	const files = new Set<string>();
+	const collect = async (file: string): Promise<void> => {
+		if (files.has(file)) {
+			return;
+		}
+		files.add(file);
+		const source = await readFile(file, "utf8");
+		const references = file.endsWith(".ts")
+			? [...source.matchAll(/new URL\("(?<path>[^"]+)", import\.meta\.url\)/gu)].map(({ groups }) =>
+					asString(groups?.path, "config URL"),
+				)
+			: asArray(asRecord(parseJsonc(source), file).extends ?? [], `${file} extends`).map((entry) =>
+					asString(entry, `${file} extends path`),
+				);
+		for (const reference of references) {
+			await collect(path.posix.join(path.posix.dirname(file), reference));
+		}
+	};
+	await collect(config);
+	files.delete(config);
+	return files;
+}
+
+/** The repository paths the first stage of a Dockerfile copies, as written: files and `dir/` trees. */
+function buildStageCopySources(dockerfile: string): string[] {
+	const buildStage = dockerfile.split(/^FROM /mu)[1] ?? "";
+	return [...buildStage.matchAll(/^COPY (?<arguments>.+)$/gmu)].flatMap(({ groups }) =>
+		(groups?.arguments ?? "")
+			.split(/\s+/u)
+			.filter((word) => !word.startsWith("--"))
+			.slice(0, -1),
+	);
+}
+
 void describe("CI contract", () => {
-	void test("the webapp image includes root configuration read by Vite", async () => {
-		const config = await readFile("webapp/vite.config.ts", "utf8");
-		const dockerfile = await readFile("webapp/Dockerfile", "utf8");
-		const rootInputs = [
-			...config.matchAll(/new URL\("\.\.\/(?<file>[^"/]+)", import\.meta\.url\)/gu),
-		].map(({ groups }) => groups?.file);
-		assert.ok(rootInputs.length > 0, "Expected root configuration dependencies");
-		const copied =
-			/^COPY (?<files>.+) \/repo\/$/mu.exec(dockerfile)?.groups?.files?.split(/\s+/u) ?? [];
-		for (const file of rootInputs) {
-			assert.ok(copied.includes(file ?? ""), `Webapp image is missing ${file}`);
+	void test("the webapp image copies every file its Vite config reads", async () => {
+		const reads = await filesReadByConfig("webapp/vite.config.ts");
+		assert.ok(
+			[...reads].some((file) => !file.startsWith("webapp/")),
+			"Expected the Vite config to read configuration from outside webapp/",
+		);
+		const sources = buildStageCopySources(await readFile("webapp/Dockerfile", "utf8"));
+		for (const file of reads) {
+			assert.ok(
+				sources.some((source) =>
+					source.endsWith("/") ? file.startsWith(source) : file === source,
+				),
+				`webapp/Dockerfile's build stage does not copy ${file}, which webapp/vite.config.ts reads`,
+			);
 		}
 	});
 
@@ -637,6 +680,11 @@ void describe("CI contract", () => {
 		const upload = namedStep(leg, ["jobs", "quality"], "Upload the extension package");
 		assert.equal(upload.get("if"), "inputs.leg == 'extension'");
 		assert.equal(stepInputs(upload).get("path"), "extension/.output/*-production-chrome.zip");
+		assert.equal(
+			stepInputs(upload).get("include-hidden-files"),
+			true,
+			"the production archive lives under WXT's hidden .output directory",
+		);
 	});
 
 	void test("extension checks and CI enforce the shared composition and story gates", async () => {

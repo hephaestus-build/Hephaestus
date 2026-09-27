@@ -110,14 +110,13 @@ export type ReviewContextStatus = ReviewContext["status"];
 /** How often a visible view asks again while something is moving, and otherwise. */
 export const SETTLING_REFRESH_MS = 10_000;
 export const VISIBLE_REFRESH_MS = 60_000;
-// A review started this recently may still be running even when the trace cannot say so.
-const RECENT_TRIGGER_MS = 15 * 60_000;
 
 /**
  * What the server says is happening to a review of this work right now, from the trace's
- * authoritative states only: a practice it reports queued or running (the trace folds the two
- * together), or an occurrence it is holding back to see whether the work keeps changing. Anything
- * else — a trigger a moment ago — says nothing, and neither does this.
+ * authoritative states only: a review an occurrence started whose run is still in progress (the
+ * server folds queued and running together), or an occurrence it is holding back to see whether the
+ * work keeps changing. The run state is read from the occurrence, not the practice: a practice with
+ * results keeps reading Reviewed while a newer review of the same work runs.
  */
 export type ReviewActivity = "queued-or-running" | "deferred" | "pending";
 
@@ -125,11 +124,11 @@ export function reviewActivity(context: ReviewContext): ReviewActivity | undefin
 	if (context.status !== "ready") {
 		return undefined;
 	}
-	const practices = context.trace?.practices ?? [];
-	if (practices.some((entry) => entry.outcome === "RUNNING")) {
+	const signals = context.trace?.signals ?? [];
+	if (signals.some((signal) => signal.reviewState === "IN_PROGRESS")) {
 		return "queued-or-running";
 	}
-	const signals = context.trace?.signals ?? [];
+	const practices = context.trace?.practices ?? [];
 	if (signals.some((signal) => signal.state === "PENDING")) {
 		return "pending";
 	}
@@ -142,29 +141,11 @@ export function reviewActivity(context: ReviewContext): ReviewActivity | undefin
 	return undefined;
 }
 
-/**
- * Whether anything about this work may still be moving, which only sets how often a view asks again.
- * It is a polling heuristic, never a statement: a recent trigger counts, so it must not be shown as a
- * running review or used to refuse a request. Practice outcomes alone cannot say: a trace prefers
- * historical observations, so a practice already "Reviewed" stays "Reviewed" while a newer review of
- * the same work runs. A recent occasion fills that gap.
- */
-export function isSettling(context: ReviewContext, now: number): boolean {
-	if (context.status !== "ready" || context.trace === null) {
-		return false;
-	}
-	const { trace } = context;
-	if (trace.practices.some((entry) => entry.outcome === "RUNNING" || entry.outcome === "PENDING")) {
-		return true;
-	}
-	return trace.signals.some(
-		(signal) =>
-			signal.state === "PENDING" ||
-			signal.state === "DEFERRED" ||
-			(signal.state === "TRIGGERED" && now - Date.parse(signal.occurredAt) <= RECENT_TRIGGER_MS),
-	);
+/** Whether the server reports anything about this work still moving, which sets how often a view asks again. */
+export function isSettling(context: ReviewContext): boolean {
+	return reviewActivity(context) !== undefined;
 }
 
-export function refreshInterval(context: ReviewContext, now: number): number {
-	return isSettling(context, now) ? SETTLING_REFRESH_MS : VISIBLE_REFRESH_MS;
+export function refreshInterval(context: ReviewContext): number {
+	return isSettling(context) ? SETTLING_REFRESH_MS : VISIBLE_REFRESH_MS;
 }

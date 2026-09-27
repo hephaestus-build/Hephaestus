@@ -66,42 +66,45 @@ function ready(
 
 describe("isSettling", () => {
 	it("is quiet for settled work", () => {
-		const context = ready([signal({ occurredAt: "2026-09-01T00:00:00Z", reviewId: "old" })]);
-		expect(isSettling(context, NOW)).toBe(false);
-		expect(refreshInterval(context, NOW)).toBe(VISIBLE_REFRESH_MS);
+		const context = ready([
+			signal({ occurredAt: "2026-09-01T00:00:00Z", reviewId: "old", reviewState: "COMPLETED" }),
+		]);
+		expect(isSettling(context)).toBe(false);
+		expect(refreshInterval(context)).toBe(VISIBLE_REFRESH_MS);
 	});
 
-	it("watches a rerun of work whose practices already read Reviewed", () => {
-		const context = ready([signal({ reviewId: "new" })]);
-		expect(isSettling(context, NOW)).toBe(true);
-		expect(refreshInterval(context, NOW)).toBe(SETTLING_REFRESH_MS);
-	});
-
-	it("watches a practice the trace reports queued or running", () => {
-		const context = ready([], [{ ...reviewed, outcome: "RUNNING", reviewId: "new" }]);
-		expect(isSettling(context, NOW)).toBe(true);
+	it("watches a review in progress on work whose practices already read Reviewed", () => {
+		const context = ready([signal({ reviewId: "new", reviewState: "IN_PROGRESS" })]);
+		expect(isSettling(context)).toBe(true);
+		expect(refreshInterval(context)).toBe(SETTLING_REFRESH_MS);
 	});
 
 	it("watches an occurrence that is queued or deferred", () => {
-		expect(isSettling(ready([signal({ state: "PENDING" })]), NOW)).toBe(true);
-		expect(isSettling(ready([signal({ state: "DEFERRED" })]), NOW)).toBe(true);
+		expect(isSettling(ready([signal({ state: "PENDING" })]))).toBe(true);
+		expect(isSettling(ready([signal({ state: "DEFERRED" })]))).toBe(true);
 	});
 
 	it("never polls fast for a state that is not about work", () => {
-		expect(isSettling({ status: "signed-out", instanceHost: "h" }, NOW)).toBe(false);
+		expect(isSettling({ status: "signed-out", instanceHost: "h" })).toBe(false);
 	});
 });
 
 describe("reviewActivity", () => {
-	it("does not turn a recent trigger polling hint into execution", () => {
-		const context = ready([signal({ reviewId: "new" })]);
-		expect(isSettling(context, NOW)).toBe(true);
-		expect(reviewActivity(context)).toBeUndefined();
+	it("reports a queued or running review while its practice keeps its earlier results", () => {
+		const context = ready([
+			signal({ id: "earlier", reviewId: "old", reviewState: "COMPLETED" }),
+			signal({ id: "requested", reviewId: "new", reviewState: "IN_PROGRESS" }),
+		]);
+		expect(reviewActivity(context)).toBe("queued-or-running");
 	});
 
-	it("keeps a trace's combined queued/running state imprecise", () => {
-		const context = ready([], [{ ...reviewed, outcome: "RUNNING", reviewId: "new" }]);
-		expect(reviewActivity(context)).toBe("queued-or-running");
+	it("reads nothing into a trigger whose review has ended", () => {
+		expect(
+			reviewActivity(ready([signal({ reviewId: "new", reviewState: "COMPLETED" })])),
+		).toBeUndefined();
+		expect(
+			reviewActivity(ready([signal({ reviewId: "new", reviewState: "FAILED" })])),
+		).toBeUndefined();
 	});
 
 	it("does not turn gate waiting or a deferred occasion into a queued review", () => {

@@ -5624,6 +5624,10 @@ export type TracedSignal = {
    */
   reviewId?: string;
   /**
+   * Where that review's run stands now, which a practice's own outcome does not say once an earlier review of this work has results; null when no linked run is available
+   */
+  reviewState?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  /**
    * Which version of the artifact this occurrence is about; the reason editing a description can be re-measured while the commits stay put
    */
   revision: string;

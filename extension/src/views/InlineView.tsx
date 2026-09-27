@@ -189,9 +189,7 @@ function useWorkReview(subject: WorkSubject, workspaceSlug: string | undefined, 
 		enabled,
 		queryFn: async () => ask({ type: "get-context", workspaceSlug, subject }),
 		refetchInterval: (query) =>
-			query.state.data === undefined || !onScreen
-				? false
-				: refreshInterval(query.state.data, Date.now()),
+			query.state.data === undefined || !onScreen ? false : refreshInterval(query.state.data),
 	});
 	useEffect(() => {
 		latestContext.current = context.data;
@@ -205,7 +203,7 @@ function useWorkReview(subject: WorkSubject, workspaceSlug: string | undefined, 
 		refetchInterval: () =>
 			latestContext.current === undefined || !onScreen
 				? false
-				: refreshInterval(latestContext.current, Date.now()),
+				: refreshInterval(latestContext.current),
 	});
 	let state: ReportState = { status: "loading" };
 	// A failed refresh keeps the last answer on screen, marked as not current; only a first load that
