@@ -40,8 +40,8 @@ public class ObservationVisibilityPolicy {
     /**
      * The ids of the observations that may still be shown to the developer they are about: evidence
      * measured by review rules the practice has since changed stays, since a card closed by that change is
-     * something the developer may see, and only a claim whose rules cannot be verified at all is dropped.
-     * The rest are authorized in one batch, as {@link #permitsAll} does.
+     * something the developer may see; a claim whose rules cannot be verified at all, or that an admin
+     * invalidated, is dropped. The rest are authorized in one batch, as {@link #permitsAll} does.
      */
     public Set<UUID> permitsShown(long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose) {
         List<Observation> verifiable = new ArrayList<>(observations.size());
@@ -51,6 +51,7 @@ public class ObservationVisibilityPolicy {
                 verifiable.add(observation);
             }
         }
+        withoutInvalidated(workspaceId, verifiable);
         if (verifiable.isEmpty()) {
             return Set.of();
         }
@@ -72,16 +73,21 @@ public class ObservationVisibilityPolicy {
                 current.add(observation);
             }
         }
-        if (!current.isEmpty()) {
-            Set<UUID> invalidated = invalidations.findActiveObservationIds(
-                    workspaceId, current.stream().map(Observation::getId).toList());
-            current.removeIf(observation -> invalidated.contains(observation.getId()));
-        }
+        withoutInvalidated(workspaceId, current);
         if (current.isEmpty()) {
             return Set.of();
         }
         return newDelivery
                 ? evidenceAuthorization.permitsForNewDelivery(workspaceId, current, purpose)
                 : evidenceAuthorization.permitsAll(workspaceId, current, purpose);
+    }
+
+    private void withoutInvalidated(long workspaceId, List<Observation> observations) {
+        if (observations.isEmpty()) {
+            return;
+        }
+        Set<UUID> invalidated = invalidations.findActiveObservationIds(
+                workspaceId, observations.stream().map(Observation::getId).toList());
+        observations.removeIf(observation -> invalidated.contains(observation.getId()));
     }
 }

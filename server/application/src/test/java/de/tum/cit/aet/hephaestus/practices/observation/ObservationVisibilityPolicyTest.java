@@ -71,8 +71,11 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
         when(authorization.permitsAll(7L, List.of(current), SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(Set.of(current.getId()));
 
-        assertThat(new ObservationVisibilityPolicy(authorization, invalidations)
-                        .permitsAll(7L, List.of(current, invalidated), SourceUsePurpose.CONVERSATIONAL_MENTORING))
+        ObservationVisibilityPolicy policy = new ObservationVisibilityPolicy(authorization, invalidations);
+
+        assertThat(policy.permitsAll(7L, List.of(current, invalidated), SourceUsePurpose.CONVERSATIONAL_MENTORING))
+                .containsExactly(current.getId());
+        assertThat(policy.permitsShown(7L, List.of(current, invalidated), SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .containsExactly(current.getId());
     }
 
