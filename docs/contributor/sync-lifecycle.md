@@ -101,7 +101,8 @@ synchronous in-transaction `ScmMirrorErasedEvent`, and `practices` (SCM-artifact
 feedback) and `activity` (`activity_event`) listen.
 
 Disconnect and purge reach the identical end state by construction — the purge contributor
-(order `-200`) and the connection `revoke` callback both call the same eraser.
+(order `-200`) and the GitHub and GitLab strategies' `eraseLocalData`, which the disconnect runs
+inside its transaction, both call the same eraser.
 
 ### Retained on both erase triggers
 
@@ -139,6 +140,6 @@ connection by the sync-job pruner. Global identity rows (`user`, `organization`,
 | Per-integration job bodies | `…{github,gitlab,slack,outline}…IntegrationSyncRunner` |
 | Deletion sweeps | `GitHubDeletionSweepService`, `GitLabDeletionSweepService`, `OutlineMirrorRetentionService#tombstoneVanished` |
 | SCM erasure | `workspace.ScmWorkspaceContentEraser`, `workspace.adapter.ScmWorkspacePurgeAdapter` |
-| Slack / Outline erasure | `SlackWorkspaceContentEraser`, `OutlineConnectionStrategy#revoke`, `OutlineWorkspacePurgeAdapter` |
+| Slack / Outline erasure | `SlackWorkspaceContentEraser`, `OutlineConnectionStrategy#eraseLocalData`, `OutlineWorkspacePurgeAdapter` |
 | Monitor identity healing | `BackfillStateProvider#reconcileSyncTargetIdentity` / `#reconcileSyncTargetsForRepository` |
 | Subject grammar | `…webhook.*SubjectKeyDeriver`, `integration.core.consumer.ConsumerSubjectMath` |

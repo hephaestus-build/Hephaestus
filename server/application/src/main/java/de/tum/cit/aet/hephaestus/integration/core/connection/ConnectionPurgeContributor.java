@@ -69,11 +69,12 @@ public class ConnectionPurgeContributor implements WorkspacePurgeContributor {
             return;
         }
         try {
-            strategy.revokeProvider(new IntegrationRef(
-                    connection.getKind(),
-                    connection.getWorkspace().getId(),
-                    connection.getInstanceKey(),
-                    connection.getId()));
+            strategy.prepareProviderTeardown(new IntegrationRef(
+                            connection.getKind(),
+                            connection.getWorkspace().getId(),
+                            connection.getInstanceKey(),
+                            connection.getId()))
+                    .ifPresent(Runnable::run);
         } catch (RuntimeException e) {
             log.warn(
                     "Provider teardown failed during workspace purge: kind={}, connectionId={}, error={}",

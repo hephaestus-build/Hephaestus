@@ -145,9 +145,10 @@ public class ConnectionController {
 
     /**
      * Resource-oriented lifecycle transition: {@code ACTIVE} (reactivate), {@code SUSPENDED}
-     * (suspend), or {@code UNINSTALLED} (disconnect — also best-effort revokes the vendor token).
-     * {@code PENDING} is internal to the OAuth handshake and rejected as a bad request; illegal
-     * transitions surface as 400 via the state machine.
+     * (suspend), or {@code UNINSTALLED} (disconnect). Disconnecting erases the integration's mirrored
+     * data and then, best effort, removes what it installed at the provider; if the erase fails, the
+     * connection is left unchanged. {@code PENDING} is internal to the OAuth handshake and rejected as
+     * a bad request; illegal transitions surface as 409 via the state machine.
      */
     @PatchMapping("/{id}/status")
     @Operation(operationId = "updateConnectionStatus")
@@ -172,33 +173,19 @@ public class ConnectionController {
         TransitionRequest request = new TransitionRequest(
                 target, eventType, "ADMIN", actorRef(authentication), correlationId, body.reason());
         Connection updated = target == IntegrationState.UNINSTALLED
-                ? connectionService.disconnect(connection, request, () -> revokeBestEffort(connection))
+                ? connectionService.disconnect(connection, request, strategyForDisconnect(connection))
                 : connectionService.transition(connection, request);
         return ResponseEntity.ok(ConnectionSummaryDTO.from(updated, admin.manifests()));
     }
 
-    /**
-     * Vendor-side revoke callback handed to {@link ConnectionService#disconnect}, which invokes it
-     * before the UNINSTALLED transition. A missing strategy (the kind was de-registered after the row
-     * was written) is a local no-op — there is nothing to call.
-     *
-     * <p>A failing {@code revoke} is deliberately NOT caught here. The revoke reaches
-     * {@code @Transactional} erasers, so a swallowed {@code DataAccessException} would leave the
-     * surrounding transaction rollback-only and the "proceed locally" promise would be a lie that
-     * surfaces as a 500 at commit. {@code ConnectionService} instead runs this callback in its own
-     * transaction and absorbs the failure there, which is the only place the absorption actually
-     * works. Letting it propagate from here is what hands it the failure to absorb.
-     */
-    private void revokeBestEffort(Connection connection) {
+    /** Without its strategy nothing can erase the integration's data, so the connection stays as it is. */
+    private ConnectionStrategy strategyForDisconnect(Connection connection) {
         ConnectionStrategy strategy = strategies.get(connection.getKind());
         if (strategy == null) {
-            log.warn(
-                    "No ConnectionStrategy registered for kind={} on disconnect of connection={} — local transition only",
-                    connection.getKind(),
-                    connection.getId());
-            return;
+            throw new IllegalStateException("Cannot disconnect " + connection.getKind()
+                    + ": the integration is disabled on this instance, so its data cannot be erased");
         }
-        strategy.revoke(connection.toRef());
+        return strategy;
     }
 
     @GetMapping("/{id}/audit")

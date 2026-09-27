@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionLifecycleEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -24,6 +26,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
@@ -39,8 +42,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * State-machine contract for {@link ConnectionService#transition}. Exercises the legal
@@ -74,10 +78,12 @@ class ConnectionServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        // Stands in for the transaction a proxied call runs in, so after-commit work can be registered.
+        TransactionSynchronizationManager.initSynchronization();
         // Real converter so the credential-purge case operates on a genuine AES-GCM blob,
         // not a mock stand-in.
         credentialConverter = new CredentialBundleConverter("a".repeat(32), false);
-        // The revoke callback runs through a TransactionTemplate over this manager; a stub status is
+        // Provider teardown runs through a TransactionTemplate over this manager; a stub status is
         // enough to let the template execute, and it lets us assert the propagation it asked for.
         Mockito.lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         service = new ConnectionService(
@@ -101,6 +107,15 @@ class ConnectionServiceTest extends BaseUnitTest {
         workspace.setId(7L);
         // transition() returns the saved entity; echo it back so callers see the mutated row.
         Mockito.lenient().when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    @AfterEach
+    void clearSynchronization() {
+        TransactionSynchronizationManager.clearSynchronization();
+    }
+
+    private void commit() {
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
     }
 
     @Test
@@ -305,103 +320,102 @@ class ConnectionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void disconnect_checksLifecycleFenceBeforeRevokingVendorAccess() {
+    void disconnect_erasesAndPreparesTeardownUnderTheFenceButTearsDownOnlyAfterCommit() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
-        Runnable revoke = Mockito.mock(Runnable.class);
-        InOrder order = Mockito.inOrder(connectionRepository, syncJobService, revoke);
+        ConnectionStrategy strategy = Mockito.mock(ConnectionStrategy.class);
+        Runnable teardown = Mockito.mock(Runnable.class);
+        IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, workspace.getId(), "100", connection.getId());
+        when(strategy.prepareProviderTeardown(ref)).thenReturn(Optional.of(teardown));
+        InOrder order = Mockito.inOrder(connectionRepository, syncJobService, strategy, auditRepository);
 
-        service.disconnect(
-                connection,
-                new TransitionRequest(
-                        IntegrationState.UNINSTALLED, "DISCONNECT", "ADMIN", "actor-1", "corr-disconnect", "removed"),
-                revoke);
+        service.disconnect(connection, disconnectRequest(), strategy);
 
         // The fence must read the job state under the row lock, or a job could start in the window
         // between the check and the state write.
         order.verify(connectionRepository).acquireLifecycleLock(connection.getId(), workspace.getId());
         order.verify(syncJobService).requestCancelForTeardown(connection.getId());
-        order.verify(revoke).run();
+        order.verify(strategy).eraseLocalData(ref);
+        order.verify(strategy).prepareProviderTeardown(ref);
+        order.verify(auditRepository).save(any(ConnectionAudit.class));
         assertThat(connection.getState()).isEqualTo(IntegrationState.UNINSTALLED);
+        verify(teardown, never()).run();
+
+        commit();
+
+        verify(teardown).run();
     }
 
-    /**
-     * The revoke callback must run on its OWN (REQUIRES_NEW) transaction. On the lifecycle transaction
-     * the erasers join with REQUIRED propagation, so a DataAccessException marks the shared transaction
-     * rollback-only and the commit fails with UnexpectedRollbackException — defeating the "best effort,
-     * proceed locally" contract.
-     */
+    /** Suspended, a failing credential read cannot mark the disconnect transaction rollback-only. */
     @Test
-    void disconnect_runsRevokeOnItsOwnRequiresNewTransaction() {
+    void disconnect_preparesTheTeardownWithTheTransactionSuspended() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
 
-        service.disconnect(connection, disconnectRequest(), Mockito.mock(Runnable.class));
+        service.disconnect(connection, disconnectRequest(), Mockito.mock(ConnectionStrategy.class));
 
         ArgumentCaptor<TransactionDefinition> definition = ArgumentCaptor.forClass(TransactionDefinition.class);
         verify(transactionManager).getTransaction(definition.capture());
         assertThat(definition.getValue().getPropagationBehavior())
-                .isEqualTo(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                .isEqualTo(TransactionDefinition.PROPAGATION_NOT_SUPPORTED);
     }
 
     @Test
-    void disconnect_revokeThrowsDataAccessException_isAbsorbedAndUninstalledStillCommits() {
+    void disconnect_teardownCannotBePrepared_stillCommitsUninstalledWithNothingScheduled() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
         connection.setCredentials(new BearerToken("xoxb-secret", null), credentialConverter);
-        // Stands in for a statement timeout on a large mirror delete inside ScmWorkspaceContentEraser.
-        Runnable revoke = () -> {
-            throw new QueryTimeoutException("statement timeout erasing workspace mirror");
-        };
+        ConnectionStrategy strategy = Mockito.mock(ConnectionStrategy.class);
+        when(strategy.prepareProviderTeardown(any())).thenThrow(new IllegalStateException("token unavailable"));
 
-        Connection result = service.disconnect(connection, disconnectRequest(), revoke);
+        Connection result = service.disconnect(connection, disconnectRequest(), strategy);
 
         assertThat(result.getState()).isEqualTo(IntegrationState.UNINSTALLED);
-        assertThat(result.getCredentialsEncrypted())
-                .as("credentials are still purged")
-                .isNull();
-        verify(auditRepository).save(any(ConnectionAudit.class));
-        verify(connectionRepository).save(any(Connection.class));
+        assertThat(result.getCredentialsEncrypted()).isNull();
+        assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
     }
 
-    /**
-     * If a caller swallows the erase failure inside the callback, the nested transaction is already
-     * rollback-only and its commit raises UnexpectedRollbackException. That must be absorbed too, or it
-     * reaches the admin as a 500.
-     */
     @Test
-    void disconnect_revokeSwallowsFailureAndNestedCommitRollsBack_isStillAbsorbed() {
+    void disconnect_teardownFailsAfterCommit_isLoggedRatherThanThrown() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
-        Mockito.doThrow(new UnexpectedRollbackException("Transaction silently rolled back"))
-                .when(transactionManager)
-                .commit(any());
+        ConnectionStrategy strategy = Mockito.mock(ConnectionStrategy.class);
+        when(strategy.prepareProviderTeardown(any())).thenReturn(Optional.of(() -> {
+            throw new IllegalStateException("provider unavailable");
+        }));
+        service.disconnect(connection, disconnectRequest(), strategy);
 
-        Connection result = service.disconnect(connection, disconnectRequest(), () -> {
-            /* callback catches its own failure */
-        });
-
-        assertThat(result.getState()).isEqualTo(IntegrationState.UNINSTALLED);
+        assertThatCode(this::commit).doesNotThrowAnyException();
     }
 
     @Test
-    void disconnect_withActiveSyncRejectsBeforeRevokingVendorAccess() {
+    void disconnect_eraseFails_propagatesBeforeTouchingTheProviderOrTheConnection() {
+        Connection connection = connectionInState(IntegrationState.ACTIVE);
+        connection.setCredentials(new BearerToken("xoxb-secret", null), credentialConverter);
+        ConnectionStrategy strategy = Mockito.mock(ConnectionStrategy.class);
+        Mockito.doThrow(new QueryTimeoutException("statement timeout erasing workspace mirror"))
+                .when(strategy)
+                .eraseLocalData(any());
+
+        assertThatThrownBy(() -> service.disconnect(connection, disconnectRequest(), strategy))
+                .isInstanceOf(QueryTimeoutException.class);
+
+        verify(strategy, never()).prepareProviderTeardown(any());
+        assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
+        assertThat(connection.getState()).isEqualTo(IntegrationState.ACTIVE);
+        assertThat(connection.getCredentialsEncrypted()).isNotNull();
+        verify(auditRepository, never()).save(any());
+    }
+
+    @Test
+    void disconnect_withActiveSyncRejectsBeforeErasing() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
         when(syncJobService.requestCancelForTeardown(connection.getId())).thenReturn(java.util.Optional.of(99L));
-        Runnable revoke = Mockito.mock(Runnable.class);
+        ConnectionStrategy strategy = Mockito.mock(ConnectionStrategy.class);
 
-        assertThatThrownBy(() -> service.disconnect(
-                        connection,
-                        new TransitionRequest(
-                                IntegrationState.UNINSTALLED,
-                                "DISCONNECT",
-                                "ADMIN",
-                                "actor-1",
-                                "corr-disconnect",
-                                "removed"),
-                        revoke))
+        assertThatThrownBy(() -> service.disconnect(connection, disconnectRequest(), strategy))
                 .isInstanceOf(ConnectionBusyException.class)
                 // The 409 names the job and promises a retry, because the fence already asked it to stop.
                 .hasMessageContaining("active sync job 99")
                 .hasMessageContaining("retry");
 
-        verify(revoke, never()).run();
+        Mockito.verifyNoInteractions(strategy);
         assertThat(connection.getState()).isEqualTo(IntegrationState.ACTIVE);
         verify(auditRepository, never()).save(any());
         verify(connectionRepository, never()).save(any());

@@ -2533,12 +2533,13 @@ export const auditOptions = (options: Options<AuditData>) => queryOptions<AuditR
 
 /**
  * Resource-oriented lifecycle transition: <code>ACTIVE</code> (reactivate), <code>SUSPENDED</code>
- *  (suspend), or <code>UNINSTALLED</code> (disconnect — also best-effort revokes the vendor token).
+ *  (suspend), or <code>UNINSTALLED</code> (disconnect).
  *
  * Resource-oriented lifecycle transition: <code>ACTIVE</code> (reactivate), <code>SUSPENDED</code>
- *  (suspend), or <code>UNINSTALLED</code> (disconnect — also best-effort revokes the vendor token).
- *  <code>PENDING</code> is internal to the OAuth handshake and rejected as a bad request; illegal
- *  transitions surface as 400 via the state machine.
+ *  (suspend), or <code>UNINSTALLED</code> (disconnect). Disconnecting erases the integration's mirrored
+ *  data and then, best effort, removes what it installed at the provider; if the erase fails, the
+ *  connection is left unchanged. <code>PENDING</code> is internal to the OAuth handshake and rejected as
+ *  a bad request; illegal transitions surface as 409 via the state machine.
  */
 export const updateConnectionStatusMutation = (options?: Partial<Options<UpdateConnectionStatusData>>): UseMutationOptions<UpdateConnectionStatusResponse, DefaultError, Options<UpdateConnectionStatusData>> => {
   const mutationOptions: UseMutationOptions<UpdateConnectionStatusResponse, DefaultError, Options<UpdateConnectionStatusData>> = {

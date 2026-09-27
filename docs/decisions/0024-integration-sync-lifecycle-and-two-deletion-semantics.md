@@ -86,9 +86,13 @@ Slack needs no gate because it never infers deletion from absence at all.
 Two triggers, one choke point per integration, identical row set from either:
 
 - Admin disconnect (`PATCH /workspaces/{slug}/connections/{id}/status` → `UNINSTALLED`), whose
-  `revoke` callback runs inside the fenced `ConnectionService#disconnect` transaction — stale sync
-  leases reaped, running jobs cancelled or refused with a retryable 409, so sync is provably
-  stopped before erasure runs.
+  erase runs inside the fenced `ConnectionService#disconnect` transaction — stale sync leases
+  reaped, running jobs cancelled or refused with a retryable 409, so sync is provably stopped
+  before erasure runs. A failed erase rolls the whole disconnect back and leaves the connection
+  `ACTIVE` with its credentials, so it can be retried. Provider teardown is read from the stored
+  credentials inside the transaction but runs only once the disconnect has committed, so a
+  rolled-back disconnect never touches the provider; it is best effort, so an unreachable provider
+  does not keep an erased workspace connected.
 - Workspace purge (`WorkspaceStatus.PURGED`), via a `WorkspacePurgeContributor` at order `-200`.
   `PURGED` is a soft delete, so `ON DELETE CASCADE` on `workspace_id` never fires and every module
   must delete its own rows.
