@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
@@ -33,7 +34,13 @@ class IssueUpdateCoalescerTest extends BaseUnitTest {
     private final IssueSignalResubmitter submitter = mock(IssueSignalResubmitter.class);
     private final WorkspaceResolver workspaceResolver = mock(WorkspaceResolver.class);
     private final IssueUpdateCoalescer coalescer = new IssueUpdateCoalescer(
-            signals, issues, recorder, submitter, workspaceResolver, mock(TransactionTemplate.class));
+            signals,
+            issues,
+            recorder,
+            submitter,
+            workspaceResolver,
+            new PracticeReviewProperties(false, 15, 5, false, null),
+            mock(TransactionTemplate.class));
 
     @Test
     void shouldSubmitOnlyTheCurrentSnapshotWhenABurstSettles() {

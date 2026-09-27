@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
@@ -55,6 +56,7 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -91,6 +93,12 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private Fixture fixture;
+
+    @Autowired
+    private PracticeReviewProperties reviewProperties;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Autowired
     private AgentJobRepository jobs;
@@ -175,7 +183,13 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
                     current, UUID.randomUUID(), NOW.minusSeconds(30), NOW.minusSeconds(30), finalActorId);
         });
         coalescer = new IssueUpdateCoalescer(
-                signals, fixture.issues(), recorder, submitter, fixture.workspaceResolver(), transactions);
+                signals,
+                fixture.issues(),
+                recorder,
+                submitter,
+                fixture.workspaceResolver(),
+                reviewProperties,
+                transactions);
     }
 
     private User createUser(IdentityProvider provider, String login, long nativeId) {
@@ -222,6 +236,72 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
                         assertThat(signal.getStateReason()).isEqualTo(SignalStateReason.COALESCED);
                     }
                 });
+    }
+
+    @Test
+    void shouldReviewTheNewestRepairOnceTheCooldownAfterTheLastReviewElapses() {
+        workspace.getReviewSettings().applyPatch(null, 60);
+        workspace = workspaces.save(workspace);
+        transactions.executeWithoutResult(
+                status -> coalescer.drain(workspace.getId(), current.artifactId(), Instant.now()));
+        assertThat(jobs.findListRows(workspace.getId(), null, Pageable.unpaged()))
+                .hasSize(1);
+
+        // Two edits answer that review inside the window; only the second is the issue as it now stands.
+        SignalKey halfRepaired = new SignalKey(
+                workspace.getId(), issue.getId(), ScmSignals.ISSUE_UPDATED, new SignalRevision("half-repaired"));
+        issue.setTitle("Repaired title");
+        SignalKey repaired = ScmSignals.issueKey(
+                        workspace.getId(), ScmSignals.ISSUE_UPDATED, ScmEventPayload.IssueData.from(issue))
+                .orElseThrow();
+        Instant edited = Instant.now().minusSeconds(60);
+        transactions.executeWithoutResult(status -> {
+            signals.insertDeferred(halfRepaired, UUID.randomUUID(), edited, edited, finalActorId);
+            signals.insertDeferred(repaired, UUID.randomUUID(), edited, edited, finalActorId);
+        });
+
+        transactions.executeWithoutResult(
+                status -> coalescer.drain(workspace.getId(), current.artifactId(), Instant.now()));
+        assertThat(stateOf(halfRepaired)).isEqualTo(SignalState.DEFERRED);
+        assertThat(stateOf(repaired)).isEqualTo(SignalState.DEFERRED);
+
+        // The window passes: the last review is now older than the workspace's cooldown.
+        jdbc.update(
+                "UPDATE agent_job SET created_at = created_at - INTERVAL '61 minutes' WHERE workspace_id = ?",
+                workspace.getId());
+        jdbc.update(
+                "UPDATE artifact_signal SET state_changed_at = state_changed_at - INTERVAL '61 minutes'"
+                        + " WHERE workspace_id = ? AND state = 'TRIGGERED'",
+                workspace.getId());
+        transactions.executeWithoutResult(
+                status -> coalescer.drain(workspace.getId(), current.artifactId(), Instant.now()));
+        transactions.executeWithoutResult(
+                status -> coalescer.drain(workspace.getId(), current.artifactId(), Instant.now()));
+
+        assertThat(stateOf(halfRepaired)).isEqualTo(SignalState.SUPPRESSED);
+        var repairedSignal =
+                signals.findForArtifact(workspace.getId(), ScmSignals.ISSUE.value(), issue.getId()).stream()
+                        .filter(signal -> signal.key().equals(repaired))
+                        .findFirst()
+                        .orElseThrow();
+        assertThat(repairedSignal.getState()).isEqualTo(SignalState.TRIGGERED);
+        assertThat(jobs.findListRows(workspace.getId(), null, Pageable.unpaged()))
+                .hasSize(2);
+        AgentJob review = jobs.findByIdAndWorkspaceId(
+                        Objects.requireNonNull(repairedSignal.getJobId()), workspace.getId())
+                .orElseThrow();
+        assertThat(Objects.requireNonNull(review.getMetadata())
+                        .get(AgentJob.SIGNAL_REVISION_METADATA_KEY)
+                        .asString())
+                .isEqualTo(repaired.revision().value());
+    }
+
+    private SignalState stateOf(SignalKey key) {
+        return signals.findForArtifact(workspace.getId(), ScmSignals.ISSUE.value(), key.artifactId()).stream()
+                .filter(signal -> signal.key().equals(key))
+                .findFirst()
+                .orElseThrow()
+                .getState();
     }
 
     @Test

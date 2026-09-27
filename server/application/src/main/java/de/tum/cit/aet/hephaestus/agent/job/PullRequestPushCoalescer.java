@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
-import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -22,7 +21,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -115,11 +113,14 @@ public class PullRequestPushCoalescer {
             pending.forEach(signal -> recorder.markRefused(signal.key(), SignalStateReason.COALESCED));
             return;
         }
-        int cooldown = owner.getReviewSettings().resolveCooldownMinutes(reviewProperties.cooldownMinutes());
-        Instant lastReview = lastPushReview(workspaceId, pullRequestId);
-        if (cooldown > 0
-                && lastReview != null
-                && lastReview.plus(Duration.ofMinutes(cooldown)).isAfter(now)) {
+        if (IssueUpdateCoalescer.coolingDown(
+                signals,
+                owner,
+                reviewProperties,
+                ScmSignals.PULL_REQUEST,
+                pullRequestId,
+                ScmSignals.PULL_REQUEST_SYNCHRONIZED,
+                now)) {
             return;
         }
         SignalKey current = ScmSignals.pullRequestKey(
@@ -150,13 +151,5 @@ public class PullRequestPushCoalescer {
                 recorder.markRefused(signal.key(), SignalStateReason.COALESCED);
             }
         }
-    }
-
-    private @Nullable Instant lastPushReview(long workspaceId, long pullRequestId) {
-        return signals.findForArtifact(workspaceId, ScmSignals.PULL_REQUEST.value(), pullRequestId).stream()
-                .filter(signal -> SIGNAL.equals(signal.getSignalName()) && signal.getState() == SignalState.TRIGGERED)
-                .map(ArtifactSignal::getStateChangedAt)
-                .max(Comparator.naturalOrder())
-                .orElse(null);
     }
 }
