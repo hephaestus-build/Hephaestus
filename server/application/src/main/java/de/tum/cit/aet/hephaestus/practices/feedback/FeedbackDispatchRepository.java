@@ -55,22 +55,28 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
             @Param("maxAttempts") int maxAttempts);
 
     /**
-     * Share-locks the observations a dispatch cites: an automatic package its whole run, an approved one the
+     * Share-locks the observations a dispatch may cite: an automatic package its whole run, an approved one the
      * observations bound to its feedback. A correction holds its observation {@code FOR UPDATE} while it checks
      * for a delivery in progress, so an attempt admitted here either sees that correction or is seen by it.
      */
     @Query(value = """
-        SELECT o.id FROM observation o
+        SELECT o.id AS "id", o.occurrence_key AS "occurrenceKey" FROM observation o
         WHERE o.workspace_id = :workspaceId
           AND ((CAST(:feedbackId AS uuid) IS NULL AND o.agent_job_id = :jobId)
                OR o.id IN (SELECT fo.observation_id FROM feedback_observation fo
                            WHERE fo.feedback_id = CAST(:feedbackId AS uuid)))
         FOR SHARE OF o
         """, nativeQuery = true)
-    List<UUID> lockCitedObservations(
+    List<CitedObservation> lockCitedObservations(
             @Param("workspaceId") Long workspaceId,
             @Param("jobId") UUID jobId,
             @Param("feedbackId") @Nullable UUID feedbackId);
+
+    interface CitedObservation {
+        UUID getId();
+
+        String getOccurrenceKey();
+    }
 
     /** Whether a delivery citing this observation holds a live claim, so it may be talking to the provider now. */
     @Query(value = """

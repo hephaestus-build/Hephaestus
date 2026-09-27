@@ -238,6 +238,22 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
     }
 
     @Test
+    void shouldDeliverAnAutomaticPackageWrittenOnlyFromAnotherObservationOfTheRun() {
+        UUID other = observe(practice, job, 7L, developer, ObservationKind.OMISSION_GAP, Severity.MAJOR, Instant.now());
+        DiffNote otherNote = noteAbout(other, 9, "Closes #2 already.");
+        invalidate();
+
+        PracticeFeedbackDispatchService.Result result = dispatchService.dispatchAutomaticPackage(
+                job,
+                new DeliveryContent("Closes #2 already.", List.of(otherNote), List.of(), otherNote.contributors()),
+                Set.of(practice.getSlug()));
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
+        assertThat(provider.comments).hasSize(1);
+        assertThat(provider.notes).containsKey(String.valueOf(otherNote.deliveryKey()));
+    }
+
+    @Test
     void shouldRefuseACorrectionWhileAnAutomaticDeliveryCitingItIsWriting() {
         provider.duringWrite = this::expectCorrectionRefused;
 

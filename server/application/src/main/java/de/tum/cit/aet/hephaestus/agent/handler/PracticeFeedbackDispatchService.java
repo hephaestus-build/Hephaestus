@@ -316,10 +316,18 @@ class PracticeFeedbackDispatchService {
     /**
      * Admits this claimed attempt only while no cited observation is invalidated. The live claim is what a
      * correction checks for, so once admitted the attempt runs to its end without a correction landing mid-write.
+     * An automatic package cites the observations it was written from, or its whole run if it predates recording
+     * them.
      */
     private boolean citesInvalidated(FeedbackDispatch dispatch) {
-        List<UUID> cited = repository.lockCitedObservations(
-                dispatch.getWorkspaceId(), dispatch.getAgentJobId(), dispatch.getFeedbackId());
+        @Nullable List<String> contributors =
+                dispatch.getFeedbackId() == null ? packageContent(dispatch).contributors() : null;
+        List<UUID> cited = repository
+                .lockCitedObservations(dispatch.getWorkspaceId(), dispatch.getAgentJobId(), dispatch.getFeedbackId())
+                .stream()
+                .filter(observation -> contributors == null || contributors.contains(observation.getOccurrenceKey()))
+                .map(FeedbackDispatchRepository.CitedObservation::getId)
+                .toList();
         return !cited.isEmpty()
                 && !invalidations
                         .findActiveObservationIds(dispatch.getWorkspaceId(), cited)
