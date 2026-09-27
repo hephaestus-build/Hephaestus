@@ -7,12 +7,12 @@ import {
 	listPracticesOptions,
 } from "@/api/@tanstack/react-query.gen";
 import type { PageMetadata } from "@/api/types.gen";
-import { reviewArtifactTypeFromSlug } from "@/components/admin/practice-reviews/ReviewArtifact";
 import {
 	REVIEW_PREVIEW_SIZE,
 	type ReviewSectionState,
 } from "@/components/admin/practice-reviews/ReviewOutputSections";
 import { ReviewTargetPage } from "@/components/admin/practice-reviews/ReviewTargetPage";
+import { reviewArtifactTypeFromSlug } from "@/lib/artifact-kind-slugs";
 import { workspaceAdminHead } from "@/lib/page-title";
 
 export const Route = createFileRoute(

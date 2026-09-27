@@ -68,10 +68,18 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
 
     private static AuthRateLimitProperties props(AuthRateLimitProperties.Limit... overrides) {
         // Defaults from the spec; tests override the oauth-authz limit via the first vararg.
+        return props(
+                overrides.length > 0 ? overrides[0] : new AuthRateLimitProperties.Limit(20, Duration.ofMinutes(1)),
+                new AuthRateLimitProperties.Limit(30, Duration.ofMinutes(1)));
+    }
+
+    private static AuthRateLimitProperties props(
+            AuthRateLimitProperties.Limit oauthAuthorization, AuthRateLimitProperties.Limit clientSession) {
         return new AuthRateLimitProperties(
                 true,
-                overrides.length > 0 ? overrides[0] : new AuthRateLimitProperties.Limit(20, Duration.ofMinutes(1)),
+                oauthAuthorization,
                 new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)),
+                clientSession,
                 new AuthRateLimitProperties.Limit(10, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(3, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(10, Duration.ofHours(1)),
@@ -115,6 +123,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
+                new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
@@ -129,6 +138,32 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
 
         verify(chain, times(2)).doFilter(request, response);
         assertThat(store).isEmpty();
+    }
+
+    @Test
+    void shouldCapInstalledClientSessionPostsPerIpWhenTheBudgetIsSpent() throws Exception {
+        AuthRateLimitFilter filter = filter(props(
+                new AuthRateLimitProperties.Limit(20, Duration.ofMinutes(1)),
+                new AuthRateLimitProperties.Limit(2, Duration.ofMinutes(1))));
+        FilterChain chain = mock(FilterChain.class);
+        for (String path : List.of("/auth/client/token", "/auth/client/refresh")) {
+            MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
+            request.setRemoteAddr("198.51.100.7");
+            filter.doFilter(request, new MockHttpServletResponse(), chain);
+        }
+        MockHttpServletRequest third = new MockHttpServletRequest("POST", "/auth/client/logout");
+        third.setRemoteAddr("198.51.100.7");
+        MockHttpServletResponse blocked = new MockHttpServletResponse();
+        filter.doFilter(third, blocked, chain);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+        assertThat(store).containsKey("client-session:ip:198.51.100.7");
+
+        MockHttpServletRequest discovery = new MockHttpServletRequest("GET", "/auth/client/configuration");
+        discovery.setRemoteAddr("198.51.100.7");
+        MockHttpServletResponse passed = new MockHttpServletResponse();
+        filter.doFilter(discovery, passed, chain);
+        assertThat(passed.getStatus()).isEqualTo(200);
     }
 
     @Test

@@ -33,10 +33,19 @@ class ConsentGateInterceptor implements HandlerInterceptor {
     }
 
     static boolean isAllowedBeforeConsent(String method, String path) {
+        // Public sign-in bootstrap must also work when another account's browser cookie is
+        // present. Consent still gates the account's application data after it signs in.
         return path.equals("/error")
-                || (method.equals("GET") && (path.equals("/user") || path.equals("/user/consent")))
+                || (method.equals("GET")
+                        && (path.equals("/user")
+                                || path.equals("/user/consent")
+                                || path.equals("/auth/client/configuration")
+                                || path.equals("/auth/dev-login/client")))
                 || (method.equals("PUT") && path.equals("/user/consent"))
                 || (method.equals("DELETE") && path.equals("/user"))
-                || (method.equals("POST") && (path.equals("/auth/logout") || path.equals("/auth/refresh")));
+                || (method.equals("POST")
+                        && (path.equals("/auth/logout")
+                                || path.equals("/auth/refresh")
+                                || path.equals("/auth/dev-login")));
     }
 }

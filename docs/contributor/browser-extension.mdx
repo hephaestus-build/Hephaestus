@@ -1,0 +1,559 @@
+---
+title: Chrome extension
+description: How the Chrome extension is built, where its trust boundaries are, how to run and test it, and the path to the Chrome Web Store.
+---
+
+# Chrome extension
+
+`extension/` is a Chrome Manifest V3 extension built with [WXT](https://wxt.dev/) and React 19. It
+puts a practice review report into the provider's own page: what Hephaestus recorded about the pull
+request, merge request or issue open in this tab, the evidence behind it, and what became of the
+feedback. It is desktop Chrome only; Chrome on Android and
+iOS does not run desktop extensions.
+
+The extension is a place to read context, not a feedback channel. It never delivers feedback and never
+calls `GET /practices/feedback/in-app`, which marks the caller's own feedback delivered as a side
+effect. [The user guide](/user/browser-extension) is the product description and
+[the admin guide](/admin/browser-extension) the operator's; this page is how it is built.
+
+## Architecture
+
+| Surface                             | Runs as                                         | Holds                                                   | May                                                                                 |
+| ----------------------------------- | ----------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Service worker                      | extension origin                                | instance URL, credentials, generated client, one intent | call the API, refresh, reconcile content scripts, open the confirmation window      |
+| Content script                      | isolated world on a granted provider origin     | nothing                                                 | recognise a supported route, insert one generic report host with the report frame   |
+| Report frame (`inline.html`)        | extension origin, framed by the provider page   | the current view                                        | read about its own tab's work; ask for the confirmation window; link to the web app |
+| Confirmation window (`action.html`) | extension origin, top-level, not web-accessible | one pending action's preview                            | confirm or discard the one intent bound to its tab                                  |
+| Options page                        | extension origin, unframeable                   | settings view                                           | instance URL, sign-in, per-origin grants, sign-out                                  |
+| Hephaestus web app                  | configured web origin, new top-level tab        | its own web session                                     | approve or reject feedback; everything else about a review                          |
+
+### The worker owns every credential
+
+Tokens live in `chrome.storage.session` with its access level set to `TRUSTED_CONTEXTS`, so content
+scripts cannot read them and Chrome drops them when it closes. Only the worker uses the generated
+client, with `credentials: "omit"` and a bearer token; it single-flights refresh so that two views
+never present the same refresh secret, and it bumps a persisted session generation on sign-out,
+instance change and site revocation so a late response is dropped rather than rendered.
+
+Views talk to the worker through one narrow RPC union validated on arrival. The worker checks
+`sender.id`, and for view messages that `sender.url` is one of its own pages; it derives the work's
+identity from the current top-level URL returned by `chrome.tabs.get` for the Chrome-attested sender
+tab, never from a URL in the message. It rechecks the canonical work after asynchronous reads and
+rejects results if navigation changed the work. There is no generic
+fetch-this-path message, no `externally_connectable`, no `cookies` permission.
+
+### What the provider page can and cannot see
+
+Anything written into the provider's DOM is readable by the provider's scripts: the isolated world
+separates JavaScript heaps, not the document, and a shadow root isolates styles, not confidentiality.
+So the boundary is drawn around data and actions, not around the extension's presence:
+
+- **Authenticated data stays out of the provider DOM.** The content script inserts one generic
+  report host, with no state, count, name or workspace in it, and its collapsed height is the same in
+  every state. The report renders inside the extension-origin frame, whose document the page cannot
+  read.
+- **Review changes are confirmed in the extension's own window.** The provider could overlay the
+  frame and misdirect a real click even though it cannot read it, so the frame sends no mutation: it
+  asks the worker to open `action.html`. The worker records one pending intent bound to the session
+  generation, the source tab and exact work, and the tab it creates
+  for the window — created blank, bound, then sent to its actionable address. The window re-reads the
+  intent through the worker, which re-resolves everything with the server; confirming consumes the
+  intent in one serialized storage step before the one request leaves, so a double click, a reload, a
+  lost reply or a restarted worker never sends it twice. A request with no answer is shown as unknown
+  and never retried; a `200 REFUSED` is the server's answer, shown verbatim. Approving or rejecting
+  feedback stays in the web app, which owns the complete decision package.
+- **Everything the page passes is untrusted.** The frame URL carries an opaque per-mounting token, the
+  provider and a validated theme enum, and for a list row's preview the row's work address; nothing
+  in it can open the report or select a workspace. The reader's choices (opened or not, which
+  workspace) are kept by the worker per tab, work and session generation, and only the frame can set
+  them. A preview opens closed, whatever the page did to create it.
+- **A list row is a selector, not an authority.** The page can frame the preview itself and name any
+  row, so the worker accepts the row's address only as a canonical work address of the repository and
+  kind of the list the tab actually shows (read with `tabs.get`), re-reads the tab after every await,
+  and treats another list, filter or page as stale. A row reaches only the line and the reader's own
+  comments (`get-context`, `get-work-feedback`); observations, admin records and review changes are
+  the work page's own.
+- **The page can still observe the extension.** It can see that the report exists and its frame's
+  size; the page and the frame exchange only readiness, height and theme messages. Nothing here hides
+  that the user runs the extension or when they open the report.
+
+### Where the report goes
+
+The report is a section of the work's own content column, never a sticky header, a grid track or a
+fake timeline item, and never a floating substitute: a page without a known slot gets no report.
+`src/content/anchors.ts` owns the selectors; each was probed read-only on a real signed-in page, and
+the GitHub files view also signed out:
+
+| Page                              | Slot                                                                                                  |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| GitHub pull request, conversation | inside `.js-discussion`, after the `pullRequestsConversationsRoute.Body` partial, before the timeline |
+| GitHub pull request, changes      | before `[data-testid=progressive-diffs-list]` in `[data-testid=diff-content]`                         |
+| GitHub pull request, files view   | before `#files > .js-diff-progressive-container` (served e.g. to signed-out visitors for `/files`)    |
+| GitHub issue                      | after `[data-testid=issue-viewer-issue-container]`, before the activity                               |
+| GitLab merge request, overview    | after `.issuable-discussion > #widget-state`, before its activity (never the global `#notes`)         |
+| GitLab merge request, changes     | before `.rd-app-diffs-list` in the Rapid Diffs `section.rd-app-content`                               |
+| GitLab work item                  | first inside `[data-testid=detail-layout-activity]`, adding no grid child                             |
+
+Providers keep hidden tab panes in the page, so only a visible slot counts, including panes hidden
+with `content-visibility` as GitLab uses for inactive views. Commits, checks, pipelines and
+repository pages have none. `e2e/provider-pages.ts` mirrors these shapes.
+
+On a repository's list, rows are found by the provider's own title hook, never by any link in a list
+item: a row can carry other links (GitLab's work items put a full-row overlay link first), and a page
+can hold other lists.
+
+| List                                                     | Row and title                                                                                        | Preview                          |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------- |
+| GitHub `/pulls`                                          | `ul[data-listview-component=items-list] > li`, `h3 > a[data-testid=listitem-title-link]`             | last in the row, across its grid |
+| GitHub `/issues`                                         | `ul[data-listview-component=items-list] li` (virtualized), `h3 > a[data-testid=issue-pr-title-link]` | last in the row, across its grid |
+| GitLab `/-/merge_requests`, `/-/issues`, `/-/work_items` | `li[data-testid=issuable-container]`, `a[data-testid=issuable-title-link]` in `.issuable-main-info`  | last in `.issuable-main-info`    |
+
+The inspect control goes right after the title's heading, never inside it, so the heading's name
+stays the provider's; it sits above a row's overlay link, and stops the row's own click, pointer and
+key handlers, which would otherwise see it as a click on the row. Providers reuse rows for other work,
+so every sync — including one for a changed link address — leaves exactly one control per row, for
+the work the row names now, and closes a preview whose work no row names any longer.
+
+Content scripts are registered at runtime, only for the provider origins the user granted, and
+re-registered when grants change. GitHub and GitLab are single-page apps, so the script re-checks the
+slot on WXT's `wxt:locationchange` and on content changes, remounts when the provider replaced or
+moved it, and clears the previous work's frame before the next one loads. Removing and reinserting
+the same host also renews the mounting: Chrome recreates the iframe document, so the old readiness
+cannot authorize a theme message to it. Every new document must complete the origin-checked
+readiness handshake.
+
+### Why not the web app's cookie
+
+The web session is a `__Host-` cookie scoped to the instance origin. Reading it would need the
+`cookies` permission and would hand the extension a credential whose revocation, CSRF and rotation
+rules were designed for one browser tab family. The extension signs in as an installed client
+instead: its own session, listed and revocable like any other, with its own refresh lineage. It reads
+no cookies and its API calls omit them. The sign-in itself runs in `identity.launchWebAuthFlow`, which
+uses the normal browser profile, so an existing provider or Hephaestus sign-in may be reused there.
+
+An extension id is not an attestation. Ids and the public keys they derive from are public; the
+server's allowlist turns an id into one callback and one CORS origin, which restricts where a sign-in
+may return, not which package is running. The controls are PKCE with no client secret, the exact
+redirect, and the one-minute single-use handoff. Which packages users may run is managed distribution,
+outside this design. The
+sign-in handoff is [ADR 0045](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0045-installed-clients-sign-in-with-a-pkce-handoff.md);
+the flow is in `docs/auth-architecture.md`.
+
+### Server surface
+
+- `GET /workspaces/{slug}/practices/review-context?url=` resolves the viewed page to a reviewed work
+  inside one workspace, from data the workspace already synchronised, and returns what the caller may
+  do with it. Unknown, unmonitored and inaccessible work answer the same `404`.
+- `GET /workspaces/{slug}/practices/feedback/on-work?url=` (`getOwnDeliveredWorkFeedback`) lists the
+  comments Hephaestus recorded posting on the work for the caller, whatever their role: each piece of
+  feedback's practices, delivery time and recorded provider placements, with the provider's comment
+  handle and a permalink when one was recorded, and never a body. The worker counts one comment per
+  handle, keeps the handles to itself, and links only a permalink that is an anchor on the work's own
+  pages. This is what the report shows first.
+- Other reads reuse existing endpoints: the artifact trace, and the reader's own observations filtered
+  by the exact `artifactKind` and `artifactId`, asked for when the report opens. The worker checks
+  every returned record is about the resolved work, and refuses a list that is not. The extension
+  reads no feedback body, no other developer's records and no run: those are the web app's.
+- Requesting a review uses the existing endpoint, only from the confirmation window; it is the only
+  change the extension makes. Links point to the work's review activity and, for a workspace admin,
+  its reviewed-work output, where runs are cancelled or retried.
+
+### Shared vocabulary
+
+Labels and icons come from the webapp's registries under
+`webapp/src/components/practice-vocabulary/*-defs.ts`, imported by path. `@/api/*` resolves to the
+extension's own generated client, which is generated from the same spec, so the registries type-check
+in both trees. There is no second copy of a label.
+
+## Develop locally
+
+### Two origins locally, one in production
+
+In production the web app and the API share one origin: the reverse proxy serves the API under
+`/api` and strips the prefix before the server sees it (`hephaestus.auth.api-base-path`), and the
+address a user enters in the extension is that origin. Locally they are two origins. The Spring server
+listens on `http://localhost:<SERVER_PORT>` and serves the API at its root, with no `/api` prefix; the
+web app runs on `http://localhost:<WEBAPP_PORT>`, which `APPLICATION_HOST_URL` names and the server
+uses for every link back into the web app. Read both ports from `server/.env`.
+
+The worker resolves what you enter on the options page (`extension/src/background/instance.ts`). It
+first tries the API under `<address>/api`; if that answers, the address is a deployed instance and
+also the web app's address. Only a development build, and only for a loopback address, then tries
+the address itself as a bare API server. That case needs the web app's address as a separate fact,
+because every link out of the extension — **Open in app**, the consent step, review and practice
+pages — goes to the web app and never to the API server, where it would be a Spring `404`. So a
+development build's setup form shows a second field, **Web app address (local server only)**.
+
+For a local stack, enter:
+
+- **Hephaestus address**: the server origin, `http://localhost:<SERVER_PORT>`;
+- **Web app address**: `http://localhost:<WEBAPP_PORT>`, the same origin as `APPLICATION_HOST_URL`.
+
+For those links to work, the web app has to be running and configured for the same server
+([Local development](./local-development.mdx) covers the web app's ports and runtime configuration).
+
+### Run it
+
+1. Start the local server as described in [Local development](./local-development.mdx). The `local`
+   profile accepts the development extension id. For the isolated browser suite, use the server
+   setup under [Run the end-to-end suite locally](#run-the-end-to-end-suite-locally); it also enables
+   dev sign-in and does not need a review-runtime image.
+2. Run `vp run dev:extension` and leave it running. Load
+   `extension/.output/chrome-mv3-dev` **once** from `chrome://extensions` with **Developer mode** and
+   **Load unpacked**, in a profile you keep for development. The browser is started manually
+   (`webExt.disabled` in WXT); the extension connects to WXT's development server after it loads.
+   Subsequent edits update automatically:
+
+   - React and CSS edits update extension pages through Vite's hot module replacement.
+   - Provider script and style edits rebuild the script and refresh tabs on its currently registered sites.
+   - Background edits reload the extension; its worker restores the report on allowed provider tabs.
+
+   No repeated visit to **Reload** is needed while the development server is connected. WXT also
+   supplies **Alt+R** for an explicit development reload. Use a dedicated profile because provider
+   tab refreshes replace the current document, including any unsaved edits.
+
+   `vp run --filter extension build:dev` makes a **static** development bundle for testing with the
+   server stopped; it has no hot-reload connection. After switching from that static build back to
+   `dev:extension`, reload the unpacked extension once to load WXT's development client. Keep the
+   watcher running rather than overwriting its output with `build:dev` during development.
+
+   Editing `wxt.config.ts` or restarting the development server closes the worker's development
+   connection. With this manually managed browser, reload the extension once after the server has
+   rebuilt; ordinary source edits then update automatically again. WXT's default browser runner
+   handles configuration changes by restarting its own browser instead.
+
+   A manual extension reload invalidates already-open extension frames. Refresh any provider tab
+   that was left open under a static build. Chrome retains its earlier Errors entries across reloads;
+   record the details before clearing them when checking whether an error recurs. A stale frame's
+   `Extension context invalidated` entry is not evidence that the refreshed page failed.
+
+   To opt into automatic browser startup, follow
+   [WXT browser startup](https://wxt.dev/guide/essentials/config/browser-startup) and use a dedicated
+   development profile. Keep local startup settings ignored; no personal profile path belongs in
+   the repository.
+
+3. On the options page, enter both addresses as above and choose **Connect**. Development builds
+   accept loopback HTTP; production builds accept HTTPS only and never show the second field. Sign
+   in with a configured provider, or with the dev client login (`GET /auth/dev-login/client`), which
+   exists only while the server enables dev login.
+
+A fresh clone needs no `wxt prepare` before `vp run check`: `extension/tsconfig.json` is
+self-contained and auto-imports are off, so linting and type checking never read WXT's generated
+`.wxt/` directory.
+
+WXT builds three modes from one source. `production` is what ships: HTTPS only, no manifest `key`, no
+host permission until the user grants one. `development` adds the public key in
+`extension/dev-key.txt`, which pins the id `ijkajblcbajjpjbknfgdiiiljipafiko` so the server's allowlist
+and the Chrome identity redirect stay stable, and accepts loopback HTTP. `e2e` is `development` plus
+pre-granted fixture origins, because Playwright cannot answer Chrome's permission prompt; its
+output is `extension/.output/chrome-mv3-e2e`. The development id is shared by every contributor's
+local build, so it is never allowed on a production instance. The manifest `version` is the root
+`package.json` release version in every mode; `version_name` marks development and e2e builds.
+
+### Runtime-script reloads
+
+WXT owns the reload connection and browser lifecycle. Its pinned 0.21.4 release updates runtime
+registrations but chooses tabs using the entrypoint's declared `matches`, which is deliberately
+empty here: optional site access is registered only after the user grants it. The package-manager
+patch `patches/wxt@0.21.4.patch` corrects that framework function to use the actual registered
+origins. It does not add host permissions, an application reload service or production code.
+
+This also covers a background reload: WXT asks the new worker to refresh the registered content
+scripts when it reconnects. Unrelated tabs and the instance's own web app are not provider matches.
+When updating WXT, check its
+[runtime reload implementation](https://github.com/wxt-dev/wxt/blob/main/packages/wxt/src/virtual/utils/reload-content-scripts.ts)
+and remove the patch when the upstream implementation uses those registrations. Follow
+[WXT's development guidance](https://wxt.dev/guide/essentials/config/browser-startup) for browser
+startup; do not add a second reload mechanism.
+
+## Commands
+
+| Command                                    | Does                                                                                                                                                           |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vp run dev:extension`                     | WXT dev mode: load `extension/.output/chrome-mv3-dev` once; UI updates and provider/background reloads follow edits                                            |
+| `vp run check:extension` / `fix:extension` | The tree's gates — type-aware lint and types, format, presentational components, story prose — or, with `fix`, safe fixes                                      |
+| `vp run gate:extension`                    | Lint and type check, cached — part of `vp run check`                                                                                                           |
+| `vp run gate:extension-format`             | Format check, cached — part of `vp run check`                                                                                                                  |
+| `vp run format:extension`                  | Format the tree                                                                                                                                                |
+| `vp run test:extension`                    | Vitest unit project                                                                                                                                            |
+| `vp run test:extension:stories`            | Storybook stories as Vitest browser tests, in Chromium                                                                                                         |
+| `vp run test:extension:e2e`                | Builds the `e2e` bundle (`build:e2e`), then runs Playwright against the real server; needs the `e2e` profile running                                           |
+| `vp run build:extension`                   | Production build and the zip the Chrome Web Store takes, `extension/.output/hephaestus-<version>-production-chrome.zip`                                        |
+| `vp run check:extension-package`           | Opens that zip and holds its manifest to the release: version, no `key`, the justified permissions, HTTPS-only optional hosts, default content security policy |
+| `vp run ci:extension`                      | What the **Quality → Extension** CI leg runs: gates, unit and story tests, then the production build and its package check                                     |
+
+`vp run check:affected` selects `affected:extension` for a change under `extension/`, and also for
+the webapp files the extension imports by path and what those import — the brand mark, the
+vocabulary registries, status definitions, artifact kinds and their slugs, sign-in providers — and the
+web app's entry stylesheet. A change to the
+shared palette, `webapp/src/styles/theme-tokens.css`, selects the webapp, extension and docs scopes,
+because all three depend on it. A change to the webapp lint plugin, `extension/src/api` or
+`server/openapi.yaml` runs the whole gate.
+
+### Styles
+
+The extension paints with the web app's palette and theme scale by importing
+`webapp/src/styles/theme-tokens.css`, Tailwind's
+[documented way to share a theme](https://tailwindcss.com/docs/theme#sharing-across-projects). Its own
+entry stylesheet, `extension/src/ui/styles.css`, adds base rules, a focus ring in the mentor blue,
+and one deliberate exception: the inline frame takes the look of the provider page it sits in, and
+it cannot read that page's styles, so `styles.css` carries snapshots of GitHub's Primer and GitLab's
+Pajamas neutrals, links, focus rings and radii for its reviewed palettes (light, dark, dimmed, high
+contrast), with their source releases named beside them. `extension/src/content/report.css` reads
+the provider's live design tokens for the report's box and keeps published values only as
+fallbacks for a provider without them. Outcome and delivery colours always stay the shared
+palette's. When a provider changes its palette, update the snapshot from the named release rather
+than from its page. The extension renders no feedback text, so it bundles no Markdown renderer.
+
+The inline report follows [Pajamas' merge request report hierarchy](https://design.gitlab.com/patterns/merge-request-reports/)
+and [Primer's progressive disclosure](https://primer.style/product/ui-patterns/progressive-disclosure/):
+one attributed summary line — "Only level 1 can be expanded and collapsed" — that opens into flat
+second-level rows: the reader's comments, each one link to that comment on the provider; then the
+reader's observations, practice, outcome and one sentence each; then the precise review time and the
+links into the web app. Nothing inside opens further, and nothing repeats what the line already says.
+A list row gets no report at all: one unboxed line in the row (`RowPreview`), filled at once, with the
+same sentence and links to the first comments. Each action has one visible placement; successfully
+empty groups are omitted without hiding loading or failure states.
+Keep Hephaestus visibly identified even when the report has a warning or error. Provider styling
+must not make a Hephaestus observation look like a provider's merge check.
+
+The report participates in the page's normal scrolling. Do not contain overscroll or forward wheel
+events through the frame bridge: native scroll chaining carries scrolling back to the provider,
+including at the boundary of a report that reaches the frame's height limit. Provider E2E tests
+exercise both boundaries.
+
+Author extension code, configuration and test tooling in TypeScript or TSX. WXT emits the JavaScript
+Chrome executes; generated bundles are not a reason to maintain a second handwritten JavaScript
+implementation. Provider visual differences belong in the scoped token and style adapter, not a
+second component tree or framework.
+
+## Tests
+
+- **Unit** (`test:extension`): the provider URL grammar, RPC validation and sender checks, the
+  session state machine including single-flight refresh and generation drops, sign-in, context
+  resolution, list-row placement and alignment, and which provider origins a set of grants should
+  register, against a fake `browser` API. Lint holds tests to the web app's Vitest policy, so a test
+  narrows with `src/testing/required.ts` rather than branching.
+- **Stories** (`test:extension:stories`): the designed states of each surface — the report's one
+  height in every state, the list row's one line in every state, the flat opened report, long lists,
+  narrow windows and provider themes; the confirmation window's ready, sending, done, refused, unknown and invalid
+  states; settings — rendered from props with no network, with the accessibility check at `error`.
+- Both write a JUnit report through Vitest's own reporter, `junit-unit.xml` and `junit-stories.xml`,
+  into the tree's test results. The **Quality → Extension** leg publishes them as its test report,
+  keeps the folder as the `extension-unit-reports-*` artifact for 14 days, and records their counts
+  in the run's test metrics.
+- **Production package** (`check:extension-package`): the browser suites never run the production
+  build, so its manifest is checked directly on the zip. The **Quality → Extension** leg keeps the
+  zip as the `extension-chrome-*` artifact.
+- **End to end** (`test:extension:e2e`): Playwright launches Chromium with the `e2e` build. Provider
+  pages are fixtures Playwright serves in place of GitHub and GitLab; the Hephaestus server is real
+  and none of its responses are stubbed. One project exercises the fixture pages alone; the other
+  signs in through the dev client login and needs the server, and fails when it does not answer.
+
+### What the suites prove, and what they do not
+
+They prove that the built extension puts one report in each fixture slot, follows navigation and
+tab switches, opens in the page's flow, keeps what it shows out of the page, opens the confirmation
+window without sending anything, and — against a real server on the `e2e` profile — signs in,
+resolves seeded work to the right workspace and signs out. They do **not** prove:
+
+- **Provider ingestion.** The pages are fixtures and the work is seeded: no webhook is received, no
+  sync runs, no review runs and no feedback is placed on a provider.
+- **Real OAuth.** The suite signs in through the dev client login. A production sign-in through
+  GitHub or GitLab, and the Chrome sign-in window, are verified by hand.
+- **The shipping permission prompts.** The `e2e` build pre-grants its fixture origins, so Chrome's
+  optional-permission prompt is never shown.
+- **The production zip in a browser.** That zip is checked statically (`check:extension-package`),
+  not driven.
+- **The real provider pages.** Slots are fixtures of shapes probed on real pages; a provider redesign
+  shows up only on the real site.
+- **A fresh build in a reused browser profile.** A persistent profile can keep an old service worker
+  after the bundle changes; prove a build in a fresh, disposable profile.
+
+Report each of these separately from a green suite.
+
+### Run the end-to-end suite locally
+
+The sequence CI's **Build → Extension: E2E** job runs, against your checkout instead of the packaged
+JAR. Read `SERVER_PORT` and `WEBAPP_PORT` from `server/.env`; the defaults are `8080` and `4200`.
+
+1. Start local services, then the server with the same profile combination as CI:
+
+   ```bash
+   vp run dev:compose:e2e
+   HEPHAESTUS_INTEGRATION_GITLAB_ENABLED=true node scripts/run-gradlew.ts \
+     :application:bootRun -Pprofiles=e2e,playwright
+   ```
+
+   `e2e` enables dev sign-in and accepts the development extension id. `playwright` disables the
+   worker, webhook receiver and NATS consumers: this suite exercises API behavior without pulling
+   a review-runtime image or running review containers. The environment override keeps the GitLab
+   adapter available for the seeded connection. Wait until
+   `http://localhost:<SERVER_PORT>/actuator/health/readiness` answers; set `MANAGEMENT_PORT` to
+   `SERVER_PORT` in `server/.env` if you changed the server port.
+
+2. Create the `e2e` admin and `e2e-dev` developer accounts, then load the web app's seed and the extension's, in that order — the
+   extension's workspace belongs to the developer the web app's seed creates:
+
+   ```bash
+   curl --fail -X POST http://localhost:<SERVER_PORT>/auth/dev-login \
+     -H 'content-type: application/json' -d '{"username":"e2e","admin":true}'
+   curl --fail -X POST http://localhost:<SERVER_PORT>/auth/dev-login \
+     -H 'content-type: application/json' -d '{"username":"e2e-dev","admin":false}'
+   docker compose -f server/compose.yaml exec -T postgres \
+     psql -v ON_ERROR_STOP=1 -U root -d hephaestus < webapp/e2e/seed.sql
+   docker compose -f server/compose.yaml exec -T postgres \
+     psql -v ON_ERROR_STOP=1 -U root -d hephaestus < extension/e2e/seed.sql
+   ```
+
+3. Install Chromium for Playwright once (`vp -C extension exec playwright install chromium`), then
+   build the `e2e` bundle and run both projects, telling the suite where the server and web app are:
+
+   ```bash
+   E2E_SERVER_URL=http://127.0.0.1:<SERVER_PORT> E2E_WEB_APP_URL=http://localhost:<WEBAPP_PORT> \
+     vp run test:extension:e2e
+   ```
+
+The extension's seed skips rows that already exist, so it can run again; `vp run dev:reset` starts
+from an empty database.
+
+## Generated client
+
+`extension/src/api/**` is generated from `server/openapi.yaml` by the extension's `generate:api`
+script. `vp run generate:api:client` regenerates it together with the webapp's client, and CI's
+generated-artifact check and the `autocommit-openapi` label cover both. Commit it with the API change
+that produced it. It is never formatted or linted, and never edited by hand.
+
+## Releasing to the Chrome Web Store
+
+The extension is **not yet published**. Operators run a build they distribute themselves until it is.
+Publishing needs, once:
+
+1. A Chrome Web Store developer account for the publishing organisation, with its contact verified
+   and [2-Step Verification](https://developer.chrome.com/docs/webstore/program-policies/two-step-verification)
+   enabled on the publishing account; Chrome requires it for publication and updates.
+2. A listing: name, description, icons, screenshots of the in-page report, the confirmation window
+   and settings, and the support address.
+3. A privacy policy URL, and the privacy practices form: the single purpose (show, in the page, the
+   practice review a self-chosen Hephaestus instance recorded about the work in the current tab), a justification for each
+   permission (`storage`, `identity`, `scripting` and the optional host permissions),
+   no remote code, and the limited-use disclosure — once a site is allowed, supported work addresses
+   are sent automatically to the user's own instance, and a list row's work address only when the
+   user presses its Hephaestus button; no page content is collected, nothing is sold or used for
+   anything else.
+
+**Release is blocked** until the public help and privacy pages the extension links to
+(`docs.hephaestus.build` user guide and extension privacy page) are deployed and answer, installed-
+client sign-in is deployed on `https://hephaestus.build` with the exact store ID allowed and proven
+with the production package, and the listing text below matches that release. Today those pages do
+not answer yet.
+
+Then, per release:
+
+1. Build the zip with `vp run build:extension` and check it with `vp run check:extension-package`,
+   or take `extension-chrome-*` from the **Quality → Extension** run of the release commit, which did
+   both. Its version is the release version; it carries no `key` field.
+2. For the first release, upload the zip as a **draft** in the developer dashboard. Publication is
+   not needed to obtain the Item ID and public key. Follow Chrome's
+   [consistent extension ID instructions](https://developer.chrome.com/docs/extensions/reference/manifest/key):
+   put that public key in the manifest of a separate unpacked test copy and verify its installed ID
+   equals the draft Item ID. Keep the store zip unchanged. An unpacked production build without a
+   key has an installation-dependent ID; do not assume contributors share one.
+3. Allow the draft's ID on a review instance with `HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS`, then
+   verify provider sign-in, session revocation, optional site grants and the contextual UI with the
+   test copy. Supply reviewers a working test account and clear instructions for reaching the
+   extension's functionality. Publish the store ID in the admin guide when it is assigned, so
+   operators can configure it before rollout. Before public rollout, deploy installed-client support
+   and allow that exact store ID on `https://hephaestus.build`, then verify the advertised default
+   connection with the production package and real provider sign-in.
+4. Complete the listing, privacy and distribution fields, and submit the unchanged zip for review.
+   Review duration varies; Chrome supports deferred publication after approval. Follow the
+   [Chrome Web Store publication process](https://developer.chrome.com/docs/webstore/publish).
+   Subsequent releases update the existing item, retaining its ID.
+
+The repository produces a store zip, not a signed `.crx` or a self-hosted update service. Managed
+self-hosting needs its own signing and distribution process as described in the admin guide.
+
+### Listing and privacy fields
+
+Keep the submitted text, in-product disclosure and published notice consistent with the same
+release. The extension's single purpose is **See Hephaestus practice reviews for the
+GitHub and GitLab work you are viewing.** The default service is `https://hephaestus.build`; custom
+instances are a secondary choice. A connected account, workspace access and an instance that
+supports the store extension ID are required. Do not advertise GitHub Enterprise, Slack, Outline or
+mobile support for this client.
+
+Suggested listing description:
+
+> See the Hephaestus practice review of the pull request, merge request or issue you are reading,
+> right in the page on GitHub or GitLab. One line says how many comments Hephaestus posted there for
+> you and when the work was reviewed; open it to jump to each comment and to see what the review
+> concluded about your work. Everything else is one link away in Hephaestus. On a repository's list,
+> press a row's Hephaestus button for a one-line preview without leaving the list.
+>
+> Ask for a review from the page: a small Hephaestus window shows exactly what will happen, and
+> nothing changes until you confirm there.
+>
+> Connect to hephaestus.build or your organisation's Hephaestus instance, sign in, and allow each site
+> where Hephaestus may run. On an allowed site, the extension sends the address of each pull request,
+> merge request or issue you open to that instance, as soon as it opens, to look up its review, and
+> a list row's address only when you press its Hephaestus button. It does not upload the page's
+> text, look up any other page, or collect a browsing history. Feedback
+> meant for a developer's private practice page or for Heph is never shown. A Hephaestus account and
+> access to a connected workspace are required.
+
+Use [Chrome extension privacy](/user/browser-extension-privacy) as the extension-specific public
+disclosure and the default instance's [Privacy notice](https://hephaestus.build/privacy) for its
+controller, legal bases, recipients and rights contact. Publish and verify both before submission;
+a source file or a private preview is not a publicly accessible policy. Link the disclosure from
+the listing and the extension. A self-hosted operator must publish its own instance notice.
+
+The dashboard's data-use declarations include authentication information, personally identifiable
+account information, the supported work URLs under web history, and website content represented by
+the review records received from the instance. Locally handled data also counts. Do not tick
+unrelated categories or claim **no user data collected** merely because credentials stay in memory.
+Review these fields against the actual release and
+[Chrome's data-disclosure definitions](https://developer.chrome.com/docs/webstore/program-policies/user-data-faq).
+Certify Limited Use only when the deployed data handling matches the published commitment.
+
+| Permission             | Justification                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `identity`             | Complete sign-in through the selected instance and its identity providers.                                                |
+| `storage`              | Keep the chosen instance locally and credentials in session memory.                                                       |
+| `scripting`            | Add the practice review report to supported pages on individually allowed sites.                                          |
+| Optional `https://*/*` | Reach user-selected self-hosted Hephaestus and GitLab instances; actual requests grant exact origins, never the wildcard. |
+
+No remote executable code is used. JavaScript and images ship in the package, fonts use the system stack, and server APIs
+return data. A requested practice review can invoke the server's configured AI provider, which is
+covered in the instance notice. Do not describe self-hosting as a guarantee of local AI processing.
+
+### Store artwork and reviewer walkthrough
+
+[Chrome's image requirements](https://developer.chrome.com/docs/webstore/images) call for a 128px
+PNG icon, a **440×280** small promotional tile and one to five screenshots at **1280×800** or
+**640×400**. A 1400×560 marquee is optional. The
+[brand exporter](./brand-assets.mdx) owns the icon and promotional tile. Screenshots must show the
+final working extension at a legible scale; use non-sensitive test data and actual provider pages.
+Capture the in-page report (collapsed and opened), the confirmation window and the connection/site
+controls. Do not show unreleased features
+or use private review content as marketing material.
+
+Supply the reviewer with a reachable test instance that allows the store ID, an account with a
+connected demonstration workspace, and exact GitHub and GitLab work links. Include these steps in
+the dashboard's private test-instructions field, keeping credentials out of the repository:
+
+1. Connect, sign in, finish the app's account setup if needed, and allow each demonstration site.
+2. Open the supplied issue and pull/merge-request links, and their changes. The practice review sits
+   after the description and above the changed files; open it and compare its comments and
+   observations with the app. On a list, press a row's Hephaestus button and check the one line.
+3. Choose **Request review…** on a disposable work item: the confirmation window names the work and
+   workspace; cancel once, then confirm once and check the outcome shown. Nothing in the page itself
+   sends a change.
+4. Remove and restore site access while the page is open, then sign out in settings with the report
+   open. Review content must disappear and must not return from an older pending response.
+
+Run this walkthrough on the production package with the draft store ID, not just the fixture E2E
+build. Check hosted-default connection, self-hosted switching, OAuth cancellation, expired/revoked
+sessions, keyboard navigation, narrow provider layouts, light/dark modes and browser zoom. Record the tested
+commit, zip checksum, instance release and outcomes in the release evidence. Store submission and
+approval are separate from passing the repository gates.

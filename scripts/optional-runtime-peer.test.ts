@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { maskOptionalRuntimePeerMetadata } from "./lib/optional-runtime-peer.ts";
+import { maskDependencyRuntimeMetadata } from "./lib/optional-runtime-peer.ts";
 
 const runtime = ["b", "un"].join("");
 const peer = `${runtime}-types-no-globals`;
@@ -19,8 +19,7 @@ snapshots:
       - ${peer}
 `;
 
-const mask = (text: string) =>
-	maskOptionalRuntimePeerMetadata(text, (name) => forbidden.test(name));
+const mask = (text: string) => maskDependencyRuntimeMetadata(text, (name) => forbidden.test(name));
 
 const rejects = (text: string) => assert.match(mask(text), forbidden);
 
@@ -78,4 +77,17 @@ void test("does not carry optional-peer permissions across lockfile documents", 
 	rejects(
 		`${metadata}---\npackages: {}\nsnapshots:\n  x@1:\n    transitivePeerDependencies:\n      - ${peer}\n`,
 	);
+});
+
+void test("allows another runtime a dependency's engines declare, and nothing else in the entry", () => {
+	const engines = `packages:\n  wxt@0.21.4:\n    engines: {${runtime}: '>=1.2.0', node: '>=22'}\n    hasBin: true\n`;
+	assert.doesNotMatch(mask(engines), forbidden);
+	assert.match(mask(engines), /node: '>=22'/u);
+	const block = `packages:\n  wxt@0.21.4:\n    engines:\n      ${runtime}: '>=1.2.0'\n      node: '>=22'\n`;
+	assert.doesNotMatch(mask(block), forbidden);
+	// The value, a sibling field, and the same key outside a dependency's engines stay visible.
+	rejects(engines.replace("node: '>=22'", `node: '${runtime} >=1'`));
+	rejects(`${engines}    bin: {x: ${runtime}}\n`);
+	rejects(`importers:\n  .:\n    engines: {${runtime}: '1'}\n`);
+	rejects(`packages:\n  app@1.0.0:\n    dependencies:\n      ${runtime}: 1.0.0\n`);
 });

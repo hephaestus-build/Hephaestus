@@ -39,6 +39,17 @@ function pathFilter(source: string, name: string): string {
 	return match[0];
 }
 
+function assertNeeds(source: string, name: string, ...required: string[]): void {
+	const dependencies = parseDocument(source).getIn(["jobs", name, "needs"]);
+	assert.ok(isSeq(dependencies), `${name} must declare its dependencies`);
+	for (const dependency of required) {
+		assert.ok(
+			dependencies.items.some((item) => isScalar(item) && item.value === dependency),
+			`${name} must require ${dependency}`,
+		);
+	}
+}
+
 /** Repository-relative `/`-separated paths, whatever separator `fs.glob` yields on this platform. */
 async function posixGlob(pattern: string): Promise<string[]> {
 	const files = await Array.fromAsync(glob(pattern));
@@ -532,8 +543,129 @@ void describe("CI contract", () => {
 		assert.doesNotMatch(job(String(api), "generate"), /actions\/setup-java@/u);
 		assert.doesNotMatch(job(String(api), "commit"), /setup-caches|gradlew|vp run/u);
 		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
-		assert.match(job(build, "webapp-e2e"), /actions\/setup-java@/u);
-		assert.doesNotMatch(job(build, "webapp-e2e"), /setup-caches|gradlew/u);
+		for (const name of ["webapp-e2e", "extension-e2e"]) {
+			assert.match(job(build, name), /actions\/setup-java@/u);
+			assert.doesNotMatch(job(build, name), /setup-caches|gradlew/u);
+		}
+	});
+
+	void test("the extension's generated client is regenerated, checked and committed with the webapp's", async () => {
+		const tasks = await loadTasks();
+		const [generate] = commandsOf(tasks["generate:api:client"]);
+		assert.ok(isSet(generate));
+		assert.match(generate, /^node scripts\/rm\.ts webapp\/src\/api extension\/src\/api && /u);
+		for (const client of ["webapp", "extension"]) {
+			assert.ok(generate.includes(`vp run --filter ${client} generate:api`), client);
+		}
+		const build = parseDocument(await readFile(".github/workflows/ci-build.yml", "utf8"));
+		const openapi = runScript(build, ["jobs", "server-api"], "OpenAPI specification and client");
+		assert.match(
+			openapi,
+			/assert-generated-clean\.ts server\/openapi\.yaml webapp\/src\/api extension\/src\/api/u,
+		);
+		const api = await readFile(".github/workflows/openapi-autocommit.yml", "utf8");
+		assert.match(job(api, "generate"), /^ {12}extension\/src\/api$/mu);
+		assert.match(job(api, "commit"), /rm -rf webapp\/src\/api extension\/src\/api/u);
+		assert.match(
+			job(api, "commit"),
+			/-- server\/openapi\.yaml webapp\/src\/api extension\/src\/api/u,
+		);
+		// A client edited without a server change still meets the drift check, which needs the JAR.
+		const orchestrator = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const filter = step(orchestrator, ["jobs", "detect-changes"], "dorny/paths-filter");
+		const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
+		const clients = asArray(filters["api-clients"], "api-clients paths");
+		for (const client of ["webapp", "extension"]) {
+			assert.ok(clients.includes(`${client}/src/api/**`), client);
+			assert.ok(clients.includes(`${client}/openapi-ts.config.ts`), client);
+		}
+		for (const [name, location] of [
+			["server-package", ["jobs", "server-package", "if"]],
+			["contracts_changed", ["jobs", "Build", "with", "contracts_changed"]],
+		] as const) {
+			assert.match(
+				String(orchestrator.getIn(location)),
+				/needs\.detect-changes\.outputs\.api-clients == 'true'/u,
+				name,
+			);
+		}
+	});
+
+	void test("the production extension zip is judged, not only the builds the browser suite runs", async () => {
+		const tasks = await loadTasks();
+		assert.deepEqual(commandsOf(tasks["verification:extension-build"]), [
+			"vp run build:extension",
+			"vp run check:extension-package",
+		]);
+		assert.deepEqual(commandsOf(tasks["check:extension-package"]), [
+			"node scripts/check-extension-package.ts",
+		]);
+		assert.ok(taskClosure(tasks, ["ci:extension"]).has("check:extension-package"));
+		// The browser suite runs the build it names, built first, wherever it is started.
+		assert.deepEqual(commandsOf(tasks["test:extension:e2e"]), [
+			"vp run --filter extension build:e2e",
+			"vp run --filter extension test:e2e",
+		]);
+		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
+		const e2e = job(build, "extension-e2e");
+		assert.match(e2e, /vp run test:extension:e2e/u);
+		// Every Playwright project runs: neither the task nor the job narrows the suite.
+		assert.doesNotMatch(e2e, /--filter extension test:e2e|--project/u);
+		for (const command of commandsOf(tasks["test:extension:e2e"])) {
+			assert.doesNotMatch(command, /--project|--grep/u);
+		}
+		// The server the suite signs in to: GitLab integration on, both seeds in order, its address
+		// handed to Playwright rather than assumed.
+		assert.match(e2e, /--spring\.profiles\.active=e2e,playwright/u);
+		assert.match(e2e, /--hephaestus\.integration\.gitlab\.enabled=true/u);
+		const webappSeed = e2e.indexOf("< webapp/e2e/seed.sql");
+		const extensionSeed = e2e.indexOf("< extension/e2e/seed.sql");
+		assert.ok(
+			webappSeed !== -1 && webappSeed < extensionSeed,
+			"webapp seed runs before extension seed",
+		);
+		assert.ok(extensionSeed < e2e.indexOf("vp run test:extension:e2e"));
+		const buildWorkflow = parseDocument(build);
+		const e2eStep = namedStep(
+			buildWorkflow,
+			["jobs", "extension-e2e"],
+			"Run extension end-to-end tests against the built server",
+		);
+		assert.equal(e2eStep.getIn(["env", "E2E_SERVER_URL"]), "http://127.0.0.1:8080");
+		assert.match(String(e2eStep.get("run")), /SERVER_PORT=8080 /u);
+		const leg = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
+		const upload = namedStep(leg, ["jobs", "quality"], "Upload the extension package");
+		assert.equal(upload.get("if"), "inputs.leg == 'extension'");
+		assert.equal(stepInputs(upload).get("path"), "extension/.output/*-production-chrome.zip");
+	});
+
+	void test("extension checks and CI enforce the shared composition and story gates", async () => {
+		const tasks = await loadTasks();
+		for (const command of ["check:extension", "affected:extension", "ci:extension"]) {
+			const closure = taskClosure(tasks, [command]);
+			for (const gate of [
+				"gate:extension",
+				"gate:extension-format",
+				"gate:components",
+				"gate:stories",
+			]) {
+				assert.ok(closure.has(gate), `${command} must run ${gate}`);
+			}
+		}
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const filter = step(workflow, ["jobs", "detect-changes"], "dorny/paths-filter");
+		const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
+		for (const scope of ["webapp", "extension"]) {
+			const inputs = asArray(filters[scope], `${scope} filter`);
+			for (const input of [
+				"oxlint.app.jsonc",
+				"scripts/check-presentational-components.ts",
+				"scripts/check-presentational-components.test.ts",
+				"scripts/check-story-prose.ts",
+			]) {
+				assert.ok(inputs.includes(input), `${input} must select ${scope}`);
+			}
+		}
 	});
 
 	void test("GHCR-only rescans share login while the image builder keeps its registry input", async () => {
@@ -608,7 +740,7 @@ void describe("CI contract", () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const filter = step(workflow, ["jobs", "detect-changes"], "dorny/paths-filter");
 		const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
-		for (const gate of ["application-server-image", "e2e", "pmd-canary"]) {
+		for (const gate of ["application-server-image", "e2e", "extension-e2e", "pmd-canary"]) {
 			const paths = asArray(filters[gate], gate);
 			for (const input of [
 				"server/application/gradle.lockfile",
@@ -617,7 +749,9 @@ void describe("CI contract", () => {
 				assert.ok(paths.includes(input), `${gate} must include ${input}`);
 			}
 		}
-		assert.ok(asArray(filters.e2e, "browser test paths").includes(".java-version"));
+		for (const gate of ["e2e", "extension-e2e"]) {
+			assert.ok(asArray(filters[gate], `${gate} paths`).includes(".java-version"));
+		}
 	});
 
 	void test("test-report inputs use permitted expressions and annotate every failed test leg", async () => {
@@ -787,13 +921,22 @@ void describe("CI contract", () => {
 		}
 		assert.match(job(build, "server-database"), /:application:databaseTest -PpackagedServer=true/u);
 		assert.match(job(build, "server-api"), /HEPHAESTUS_APPLICATION_JAR/u);
-		const e2e = job(build, "webapp-e2e");
-		assert.doesNotMatch(e2e, /needs:/u);
-		assert.equal((e2e.match(/actions\/download-artifact@/gu) ?? []).length, 1);
-		assert.match(e2e, /name: Upload diagnostics\s+if: always\(\)/u);
-		assert.match(e2e, /e2e-server\.log/u);
-		assert.match(e2e, /http:\/\/localhost:8080\/actuator\/health\/readiness/u);
-		assert.doesNotMatch(e2e, /actuator\/health\/liveness/u);
+		for (const name of ["webapp-e2e", "extension-e2e"]) {
+			const e2e = job(build, name);
+			assert.doesNotMatch(e2e, /needs:/u);
+			assert.equal((e2e.match(/actions\/download-artifact@/gu) ?? []).length, 1);
+			assert.match(e2e, /name: Upload diagnostics\s+if: always\(\)/u);
+			assert.match(e2e, /e2e-server\.log/u);
+			assert.match(e2e, /http:\/\/localhost:8080\/actuator\/health\/readiness/u);
+			assert.doesNotMatch(e2e, /actuator\/health\/liveness/u);
+		}
+		// The browser suites need the JAR, so either one's paths must start the package job.
+		for (const filter of ["e2e", "extension-e2e"]) {
+			assert.match(
+				job(orchestrator, "server-package"),
+				new RegExp(`needs\\.detect-changes\\.outputs\\.${escapeRegExp(filter)} == 'true'`, "u"),
+			);
+		}
 		const image = job(orchestrator, "application-server-image");
 		assert.match(image, /needs: \[detect-changes, server-package, vulnerability-database\]/u);
 		assert.match(image, /use-buildpacks: true/u);
@@ -931,6 +1074,20 @@ void describe("CI contract", () => {
 		assert.match(pathFilter(detection, "webapp-image"), /- 'patches\/\*\*'/u);
 	});
 
+	void test("provides dependency patches before image installs and validates extension patch changes", async () => {
+		const dockerfile = await readFile("webapp/Dockerfile", "utf8");
+		const patchCopy = dockerfile.indexOf("COPY patches/ /repo/patches/");
+		assert.ok(patchCopy !== -1, "The filtered install still reads every configured patch");
+		for (const command of ["pnpm fetch --filter webapp", "pnpm install --offline"]) {
+			assert.ok(dockerfile.indexOf(command) > patchCopy, `${command} requires the patches first`);
+		}
+		const source = await readFile(".github/workflows/cicd.yml", "utf8");
+		const detection = job(source, "detect-changes");
+		for (const filter of ["extension", "extension-e2e"]) {
+			assert.match(pathFilter(detection, filter), /- 'patches\/\*\*'/u);
+		}
+	});
+
 	void test("invalidates CI legs through their owned workflow dependencies", async () => {
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 		const detection = job(source, "detect-changes");
@@ -975,10 +1132,10 @@ void describe("CI contract", () => {
 		assert.doesNotMatch(job(source, "Docker"), /version-bump/u);
 		const build = job(source, "Build");
 		assert.doesNotMatch(build.slice(0, build.indexOf("with:")), /version-bump/u);
-		for (const gate of ["contracts_changed", "e2e_changed"]) {
+		for (const gate of ["contracts_changed", "e2e_changed", "extension_e2e_changed"]) {
 			assert.match(build, new RegExp(`^\\s+${gate}:.*version-bump == 'true'`, "mu"));
 		}
-		assert.match(job(source, "all-ci-passed"), /needs: \[[^\]]*Compose[^\]]*Docker[^\]]*\]/u);
+		assertNeeds(source, "all-ci-passed", "Compose", "Docker");
 
 		const compose = await readFile(".github/workflows/ci-compose-validate.yml", "utf8");
 		assert.match(compose, /on:\n {2}workflow_call:\n/u);
@@ -1346,7 +1503,7 @@ void describe("CI contract", () => {
 		// The paths that trigger the smoke also have to rebuild the images it boots.
 		assert.match(job(source, "application-server-image"), /if:.*supported-host-smoke/u);
 		assert.match(source, /application_server_changed:.*supported-host-smoke/u);
-		assert.match(job(source, "all-ci-passed"), /needs: \[[^\]]*Supported-host-smoke[^\]]*\]/u);
+		assertNeeds(source, "all-ci-passed", "Supported-host-smoke");
 	});
 
 	void test("the supported-host boot smoke runs on every source it can be broken by", async () => {
@@ -1669,7 +1826,7 @@ void describe("CI contract", () => {
 		assert.match(preflight, /max-age-hours: "24"/u);
 		assert.match(preflight, /if: .*needs\.detect-changes\.outputs\.release-preflight == 'true'/u);
 		assert.match(cicd, /^ {6}release-preflight:$/mu);
-		assert.match(job(cicd, "all-ci-passed"), /needs: \[[^\]]*Release-preflight\]/u);
+		assertNeeds(cicd, "all-ci-passed", "Release-preflight");
 
 		// What "everything except signatures" rests on: the verifier's checks are unconditional, and
 		// the only thing any mode decides is whether the two signature checks run and whether a
@@ -2257,13 +2414,19 @@ void describe("CI contract", () => {
 				},
 			});
 		}
-		for (const file of [
-			".github/workflows/ci-build.yml",
-			".github/workflows/ci-quality-gates.yml",
-		]) {
+		// One setup per job that runs a browser: the two E2E suites, Storybook, and the extension leg.
+		for (const [file, browserJobs] of [
+			[".github/workflows/ci-build.yml", 2],
+			[".github/workflows/ci-quality-gates.yml", 1],
+			[".github/workflows/ci-quality-leg.yml", 1],
+		] as const) {
 			const source = sources.get(file);
 			assert.ok(isSet(source));
-			assert.equal((source.match(/uses: \.\/\.github\/actions\/setup-browsers/gu) ?? []).length, 1);
+			assert.equal(
+				(source.match(/uses: \.\/\.github\/actions\/setup-browsers/gu) ?? []).length,
+				browserJobs,
+				file,
+			);
 			assert.doesNotMatch(source, /playwright install chromium/u);
 		}
 	});
@@ -2743,7 +2906,7 @@ void test(
 		const workflow = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
 		const script = runScript(workflow, ["jobs", "quality"], "Quality gates");
 		const probe = `vp() { printf 'command=%s\\n' "$*" >> "$GITHUB_OUTPUT"; }\n${script}`;
-		for (const leg of ["server", "tooling", "webapp", "windows"]) {
+		for (const leg of ["server", "tooling", "webapp", "extension", "windows"]) {
 			const result = await runStep(probe, { LEG: leg });
 			assert.equal(result.failed, false, result.diagnosis);
 			assert.equal(
@@ -2765,6 +2928,7 @@ void test("unchanged quality legs are skipped before runner allocation", async (
 		["server", "application_server"],
 		["tooling", "tooling"],
 		["webapp", "webapp"],
+		["extension", "extension"],
 		["windows", "tooling"],
 	]) {
 		assert.equal(
@@ -3008,4 +3172,32 @@ void test("CI does not run CodeQL analysis or retain extraction-only compiler ex
 	const build = await readFile("server/application/build.gradle.kts", "utf8");
 	assert.match(build, /error\("NullAway", "RequireExplicitNullMarking"\)/u);
 	assert.match(build, /"-Werror"/u);
+});
+
+await test("extension unit and browser stories retain separate reports through the shared CI leg", async () => {
+	const manifest = asRecord(
+		JSON.parse(await readFile("extension/package.json", "utf8")),
+		"extension package",
+	);
+	const scripts = asRecord(manifest.scripts, "extension scripts");
+	for (const [script, report] of [
+		["test", "junit-unit.xml"],
+		["test:storybook", "junit-stories.xml"],
+	] as const) {
+		const command = asString(scripts[script], script);
+		assert.ok(command.includes("--reporter=junit"));
+		assert.ok(command.includes(`--outputFile.junit=test-results/${report}`));
+	}
+	const workflow = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
+	for (const name of [
+		"Upload application test results",
+		"Retain application test reports",
+		"Summarize application tests",
+		"Upload application test metrics",
+	]) {
+		const report = namedStep(workflow, ["jobs", "quality"], name);
+		const condition = asString(report.get("if"), name);
+		assert.ok(condition.includes("inputs.leg == 'extension'"));
+		assert.ok(condition.includes("!cancelled()"));
+	}
 });

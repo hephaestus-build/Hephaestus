@@ -117,7 +117,7 @@ class PracticeFeedbackDispatchRecovery {
                 .orElse(null);
         if (feedback == null) return;
         feedbackLedgerRecorder.recordApprovedPlacements(
-                feedback, result.externalRef(), dispatchService.deliveredSignals(dispatch));
+                feedback, result.externalRef(), result.externalUrl(), dispatchService.deliveredSignals(dispatch));
         if (result.status() == PracticeFeedbackDispatchService.Result.Status.SENT) {
             feedbackRepository.markApprovedDelivered(dispatch.getWorkspaceId(), dispatch.approvedFeedbackId());
         } else if (result.status() == PracticeFeedbackDispatchService.Result.Status.SUPPRESSED) {

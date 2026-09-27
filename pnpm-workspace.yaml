@@ -2,6 +2,7 @@ packages:
   - .
   - webapp
   - docs
+  - extension
 
 linkWorkspacePackages: true
 nodeLinker: isolated
@@ -18,10 +19,10 @@ minimumReleaseAgeExclude:
   - "@shadcn/lint@0.1.0"
 
 allowBuilds:
-  '@google/genai': false
-  '@nestjs/core': false
-  '@openapitools/openapi-generator-cli': false
-  '@sentry/cli': true
+  "@google/genai": false
+  "@nestjs/core": false
+  "@openapitools/openapi-generator-cli": false
+  "@sentry/cli": true
   "@swc/core": true
   core-js: false
   esbuild: true
@@ -56,3 +57,5 @@ overrides:
   serialize-javascript: 7.1.1
   "shell-quote@<=1.8.4": 1.10.0
   "uuid@<11.1.1": 11.1.1
+patchedDependencies:
+  wxt@0.21.4: patches/wxt@0.21.4.patch

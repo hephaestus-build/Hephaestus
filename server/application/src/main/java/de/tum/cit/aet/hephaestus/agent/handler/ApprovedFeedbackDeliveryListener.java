@@ -103,7 +103,7 @@ class ApprovedFeedbackDeliveryListener {
             FeedbackSuppressionReason reason = result.refusal();
             dispatchService.projectApproved(feedback, () -> {
                 feedbackLedgerRecorder.recordApprovedPlacements(
-                        feedback, result.externalRef(), result.deliveredSignals());
+                        feedback, result.externalRef(), result.externalUrl(), result.deliveredSignals());
                 if (result.externalRef() == null) {
                     stop(feedback, event.workspaceId(), reason);
                 } else {
@@ -116,7 +116,7 @@ class ApprovedFeedbackDeliveryListener {
         if (result.status() == PracticeFeedbackDispatchService.Result.Status.SENT) {
             dispatchService.projectApproved(feedback, () -> {
                 feedbackLedgerRecorder.recordApprovedPlacements(
-                        feedback, result.externalRef(), result.deliveredSignals());
+                        feedback, result.externalRef(), result.externalUrl(), result.deliveredSignals());
                 feedbackRepository.markApprovedDelivered(event.workspaceId(), feedback.getId());
             });
             return;
@@ -124,7 +124,7 @@ class ApprovedFeedbackDeliveryListener {
         if (result.status() == PracticeFeedbackDispatchService.Result.Status.FAILED) {
             dispatchService.projectApproved(feedback, () -> {
                 feedbackLedgerRecorder.recordApprovedPlacements(
-                        feedback, result.externalRef(), result.deliveredSignals());
+                        feedback, result.externalRef(), result.externalUrl(), result.deliveredSignals());
                 if (result.externalRef() == null) {
                     feedbackRepository.markApprovedFailed(event.workspaceId(), feedback.getId());
                 } else {

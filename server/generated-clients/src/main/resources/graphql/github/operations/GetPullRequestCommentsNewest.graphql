@@ -1,6 +1,6 @@
 # Newest-end scan of a PR's conversation comments, for the summary-dedup lookup.
 # `last`/`before` walks the connection backwards from the newest comment; GetPullRequestComments
-# walks it forwards from the oldest for sync. Selects only what a marker match needs (id + body),
+# walks it forwards from the oldest for sync. Selects only what a marker match needs (id, body and permalink),
 # so this is a cheap scan and not a second sync path.
 
 query GetPullRequestCommentsNewest($owner: String!, $name: String!, $number: Int!, $last: Int!, $before: String) {
@@ -19,6 +19,7 @@ query GetPullRequestCommentsNewest($owner: String!, $name: String!, $number: Int
                 }
                 nodes {
                     id
+                    url
                     body
                 }
             }

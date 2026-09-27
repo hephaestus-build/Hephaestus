@@ -5,7 +5,6 @@ import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
-import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.Test;
@@ -13,7 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Regression guard for the ADR 0017 account-status gate: every JWT-issue path (login success
- * handler, refresh) funnels through {@link JwtPrincipalFactory#forAccount} which is
+ * handler, refresh) funnels through {@link JwtPrincipalFactory#forAuthority} which is
  * the last line that must refuse a non-ACTIVE account. Without it, a SUSPENDED account could log in
  * and a DELETING account (post "delete my account") could resurrect itself by re-authenticating.
  * These tests fail if the status check is removed — the status check short-circuits before any
@@ -21,8 +20,8 @@ import org.springframework.web.server.ResponseStatusException;
  */
 class JwtPrincipalFactoryStatusGateTest extends BaseUnitTest {
 
-    private final JwtPrincipalFactory factory = new JwtPrincipalFactory(
-            mock(AccountRepository.class), mock(IdentityLinkRepository.class), mock(AccountFeatureRepository.class));
+    private final JwtPrincipalFactory factory =
+            new JwtPrincipalFactory(mock(IdentityLinkRepository.class), mock(AccountFeatureRepository.class));
 
     @Test
     void rejectsSuspendedAccount() {
@@ -41,9 +40,15 @@ class JwtPrincipalFactoryStatusGateTest extends BaseUnitTest {
 
     private void assertRejected(Account.Status status) {
         Account account = new Account("Test Account");
+        account.setId(1L);
         account.setStatus(status);
-        assertThatThrownBy(() -> factory.forAccount(account))
+        assertThatThrownBy(() -> principal(account))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("not active");
+    }
+
+    private JwtPrincipal principal(Account account) {
+        return factory.forAuthority(
+                java.util.Objects.requireNonNull(account.getId()), IssuanceAuthorityFixture.of(account));
     }
 }

@@ -2,10 +2,11 @@ package de.tum.cit.aet.hephaestus.core.auth.dev;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionService;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClient;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,6 +15,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,8 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Passwordless dev/test sign-in. Resolves (or just-in-time creates) a local {@link Account} and mints
- * the <em>same</em> cookie-JWT the OAuth success path does ({@link JwtPrincipalFactory#forAccountId} →
- * {@link HephaestusJwtIssuer#issue}, so the token is {@code issued_jwt}-backed and revocable like any
+ * the <em>same</em> cookie-JWT the OAuth success path does ({@link HephaestusJwtIssuer#issue}, so the token is {@code issued_jwt}-backed and revocable like any
  * real session), letting local dev and live E2E authenticate without an OAuth IdP. The account has no
  * SCM identity; workspace access for a dev {@code APP_ADMIN} comes from the super-admin elevation in
  * {@code WorkspaceContextFilter}.
@@ -49,22 +50,22 @@ public class DevLoginService {
 
     private final boolean enabled;
     private final AccountRepository accountRepository;
-    private final JwtPrincipalFactory principalFactory;
     private final HephaestusJwtIssuer jwtIssuer;
+    private final ClientSessionService clientSessionService;
     private final Clock clock;
     private final Duration sessionMaxLifetime;
 
     public DevLoginService(
             AuthProperties authProperties,
             AccountRepository accountRepository,
-            JwtPrincipalFactory principalFactory,
             HephaestusJwtIssuer jwtIssuer,
+            ClientSessionService clientSessionService,
             Clock clock,
             Environment environment) {
         this.enabled = authProperties.devLoginEnabled();
         this.accountRepository = accountRepository;
-        this.principalFactory = principalFactory;
         this.jwtIssuer = jwtIssuer;
+        this.clientSessionService = clientSessionService;
         this.clock = clock;
         this.sessionMaxLifetime = authProperties.sessionMaxLifetime();
 
@@ -101,6 +102,33 @@ public class DevLoginService {
     @Transactional
     public HephaestusJwtIssuer.Token devLogin(
             String username, @Nullable String displayName, boolean admin, @Nullable HttpServletRequest request) {
+        Account account = resolveAccount(username, displayName, admin);
+        // Parity with the OAuth success path: stamp the same absolute session ceiling so a dev session
+        // can't be silently kept alive past sessionMaxLifetime by the rolling refresh (OWASP absolute
+        // timeout). Reuses the identical issuer seam, so the token stays issued_jwt-backed and revocable.
+        Instant now = clock.instant();
+        return jwtIssuer.issue(
+                Objects.requireNonNull(account.getId()),
+                TokenConstraints.session(now.plus(sessionMaxLifetime), now),
+                request);
+    }
+
+    /**
+     * An installed client's dev sign-in: the same account resolution, ending in the same PKCE-bound
+     * handoff a federated client sign-in ends in, so local and E2E runs exercise the real exchange.
+     *
+     * @return the single-use handoff code for the client's callback; empty when the account may not sign in
+     */
+    @Transactional
+    public Optional<String> devClientHandoff(
+            String username, boolean admin, InstalledClient client, String codeChallenge) {
+        Account account = resolveAccount(username, null, admin);
+        Instant now = clock.instant();
+        return clientSessionService.createHandoff(
+                Objects.requireNonNull(account.getId()), client, codeChallenge, now.plus(sessionMaxLifetime), now);
+    }
+
+    private Account resolveAccount(String username, @Nullable String displayName, boolean admin) {
         if (!enabled) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
@@ -116,13 +144,6 @@ public class DevLoginService {
             account = accountRepository.save(account);
         }
         log.info("auth.dev-login: signed in dev account id={} login={} admin={}", account.getId(), username, admin);
-        // Parity with the OAuth success path: stamp the same absolute session ceiling so a dev session
-        // can't be silently kept alive past sessionMaxLifetime by the rolling refresh (OWASP absolute
-        // timeout). Reuses the identical issuer seam, so the token stays issued_jwt-backed and revocable.
-        Instant now = clock.instant();
-        return jwtIssuer.issue(
-                principalFactory.forAccountId(Objects.requireNonNull(account.getId())),
-                TokenConstraints.session(now.plus(sessionMaxLifetime), now),
-                request);
+        return account;
     }
 }

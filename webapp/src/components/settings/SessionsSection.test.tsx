@@ -43,6 +43,15 @@ describe("SessionsSection", () => {
 		expect(currentButton.disabled).toBe(true);
 	});
 
+	it("names a browser extension's session after the extension, not only its browser", async () => {
+		renderWithClient(<SessionsSection />);
+
+		const row = await screen.findByRole("listitem", {
+			name: "Browser extension in Chrome on macOS",
+		});
+		within(row).getByRole("button", { name: "Revoke this session" });
+	});
+
 	it("revokes a non-current session and refetches the list (the row disappears)", async () => {
 		server.use(
 			http.get("*/user/sessions", () => HttpResponse.json(sessions), { once: true }),

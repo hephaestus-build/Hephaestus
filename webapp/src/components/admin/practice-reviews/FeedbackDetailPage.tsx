@@ -23,13 +23,15 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
+import { reviewArtifactTypeSlug } from "@/lib/artifact-kind-slugs";
 import { hasText } from "@/lib/text";
 import { APPROVAL_DECISION_DEFS } from "./approval-decision-defs";
 import { FeedbackBody } from "./FeedbackBody";
 import { proposalRejectionReasonLabel } from "./proposal-rejection-vocabulary";
 import { subjectLabel } from "./review-format";
 import { type FeedbackSearch, reviewScopeSearch } from "./review-search";
-import { ReviewArtifactLink, reviewArtifactTypeSlug } from "./ReviewArtifact";
+
+import { ReviewArtifactLink } from "./ReviewArtifact";
 import { ObservationResultBadge } from "./ReviewBadges";
 import { ReviewBreadcrumbs } from "./ReviewBreadcrumbs";
 import {

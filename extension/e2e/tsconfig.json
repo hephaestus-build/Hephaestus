@@ -1,0 +1,11 @@
+{
+	"extends": "../tsconfig.json",
+	"include": ["**/*.ts", "../playwright.config.ts"],
+	// Inherited as-is, the extension's exclusion of this tree would leave the project with no inputs.
+	"exclude": [],
+	"compilerOptions": {
+		// Playwright runs on Node; pages are reached through locators, never through DOM globals.
+		"lib": ["ES2024", "DOM"],
+		"types": ["node"]
+	}
+}

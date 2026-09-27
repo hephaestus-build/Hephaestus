@@ -4,6 +4,7 @@ import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.InetAddress;
@@ -12,8 +13,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -23,6 +26,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Mints Hephaestus's cookie-bound access JWTs.
@@ -40,12 +44,17 @@ import org.springframework.transaction.annotation.Transactional;
  * given_name         — first name; only when known
  * session_exp        — absolute session ceiling (epoch seconds); see {@link TokenConstraints}
  * auth_time          — last interactive sign-in (epoch seconds, standard OIDC claim); see {@link TokenConstraints}
+ * sid                — installed-client session id (standard OIDC claim); only on tokens a client session holds
  * </pre>
  *
  * <h2>Issuance contract</h2>
  * Every successful {@link #issue} call is paired with an {@code issued_jwt} INSERT in the
  * same transaction. The {@code jti} is committed before the cookie is set on the response —
  * if the DB write fails, no JWT escapes.
+ *
+ * <p>Every issuance first share-locks the account row and re-checks that the account is ACTIVE.
+ * Account-wide revocation write-locks the same row before it revokes, so the two serialize: either the
+ * revocation sees the new row and revokes it, or the issuance sees the revocation's outcome.
  */
 @ConditionalOnServerRole
 @Service
@@ -54,16 +63,22 @@ public class HephaestusJwtIssuer {
     private final JwtEncoder encoder;
     private final JwtSigningKeyService keyService;
     private final IssuedJwtRepository issuedJwtRepository;
+    private final AccountRepository accountRepository;
+    private final JwtPrincipalFactory principalFactory;
     private final AuthProperties properties;
     private final Clock clock;
 
     public HephaestusJwtIssuer(
             JwtSigningKeyService keyService,
             IssuedJwtRepository issuedJwtRepository,
+            AccountRepository accountRepository,
+            JwtPrincipalFactory principalFactory,
             AuthProperties properties,
             Clock clock) {
         this.keyService = keyService;
         this.issuedJwtRepository = issuedJwtRepository;
+        this.accountRepository = accountRepository;
+        this.principalFactory = principalFactory;
         this.properties = properties;
         this.clock = clock;
         this.encoder = buildEncoder(keyService);
@@ -74,7 +89,7 @@ public class HephaestusJwtIssuer {
     }
 
     /**
-     * Mint a new access JWT for {@code principal}, recording the {@code jti} in {@code issued_jwt} in the
+     * Mint a new access JWT for {@code accountId}, recording the {@code jti} in {@code issued_jwt} in the
      * same transaction. Claim shape: see the class Javadoc.
      *
      * <p>The token's {@code exp} is capped at the earliest of {@code now + accessTtl} and the ceilings in
@@ -82,12 +97,46 @@ public class HephaestusJwtIssuer {
      * .refresh} re-caps the rotated token at the same instants — a rolling silent refresh cannot
      * extend a session (OWASP absolute timeout).
      *
-     * @param principal   account id + login + roles to bake in.
+     * <p>The login, roles and status baked in are read after the account row is share-locked, never
+     * from a principal a caller assembled earlier: a demotion or suspension that commits while this
+     * issuance waits for the lock is what the token carries.
+     *
+     * @param accountId   the account to mint for; must be ACTIVE, otherwise 403.
      * @param constraints the authority and deadlines carried across rotations.
      * @param request     used to capture {@code user_agent} + remote IP into the revocation row.
      */
     @Transactional
-    public Token issue(JwtPrincipal principal, TokenConstraints constraints, @Nullable HttpServletRequest request) {
+    public Token issue(Long accountId, TokenConstraints constraints, @Nullable HttpServletRequest request) {
+        if (constraints.sessionId() != null) {
+            throw new IllegalArgumentException("installed-client tokens are issued with their refresh secret");
+        }
+        return mint(accountId, constraints, null, request);
+    }
+
+    /**
+     * Mint an installed-client session's access token, recording its {@code sid} and the hash of the
+     * refresh secret issued with it on the same {@code issued_jwt} row.
+     */
+    @Transactional
+    public Token issueForClientSession(
+            Long accountId,
+            TokenConstraints constraints,
+            String refreshTokenHash,
+            @Nullable HttpServletRequest request) {
+        Objects.requireNonNull(constraints.sessionId(), "a client-session token carries its sid");
+        return mint(accountId, constraints, refreshTokenHash, request);
+    }
+
+    private Token mint(
+            Long accountId,
+            TokenConstraints constraints,
+            @Nullable String refreshTokenHash,
+            @Nullable HttpServletRequest request) {
+        JwtPrincipal principal = principalFactory.forAuthority(
+                accountId,
+                accountRepository
+                        .lockAuthorityForShare(accountId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "account is not active")));
         Instant sessionExpiresAt = constraints.sessionExpiresAt();
         Instant now = clock.instant();
         Instant expiresAt = now.plus(properties.accessTtl());
@@ -121,12 +170,17 @@ public class HephaestusJwtIssuer {
             // rotation: a silent refresh must not make a session look freshly signed in.
             claims.claim("auth_time", constraints.authTime().getEpochSecond());
         }
+        if (constraints.sessionId() != null) {
+            claims.claim("sid", constraints.sessionId().toString());
+        }
         JwsHeader header = JwsHeader.with(SignatureAlgorithm.ES256)
                 .keyId(signingKey.getKeyID())
                 .build();
         Jwt jwt = encoder.encode(JwtEncoderParameters.from(header, claims.build()));
 
         IssuedJwt row = new IssuedJwt(jti, principal.accountId(), expiresAt);
+        row.setSessionId(constraints.sessionId());
+        row.setRefreshTokenHash(refreshTokenHash);
         if (request != null) {
             String ua = request.getHeader("User-Agent");
             if (ua != null && ua.length() > 512) {

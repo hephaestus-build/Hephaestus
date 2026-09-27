@@ -1,0 +1,271 @@
+@import "tailwindcss";
+
+/* The palette and theme scale the web app uses; this tree keeps only its own base rules below. */
+@import "../../../webapp/src/styles/theme-tokens.css";
+
+/* The focus ring takes the mentor blue rather than the web app's neutral ring, so a focused control
+   inside a provider's page keeps at least 3:1 against its surface. The frame's
+   `color-scheme` must stay the one its iframe element declares for the same palette
+   (`content/report.css` § `.frame`), or the browser paints the frame opaque. */
+:root {
+	--ring: var(--mentor);
+	--link: var(--mentor);
+	color-scheme: light;
+}
+
+.dark {
+	--ring: var(--mentor);
+	--link: var(--mentor);
+	color-scheme: dark;
+}
+
+@theme inline {
+	--color-link: var(--link);
+}
+
+body {
+	margin: 0;
+	background: var(--background);
+	color: var(--foreground);
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+html[data-surface="inline"] body {
+	background: transparent;
+}
+
+/*
+ * The inline frame takes the look of the page it sits in. The frame cannot read the page's styles,
+ * so these are the providers' published values, copied once: Primer primitives 11.10
+ * (`functional/themes/{light,dark}.css`) and GitLab UI 137 design tokens
+ * (`tokens.css`, `tokens.dark.css`). Only neutrals, links, focus and radius change; outcome and
+ * delivery colours stay the shared vocabulary's.
+ */
+html[data-surface="inline"][data-provider="github"] {
+	--background: #ffffff;
+	--foreground: #1f2328;
+	--card: #ffffff;
+	--card-foreground: #1f2328;
+	--muted: #f6f8fa;
+	--muted-foreground: #59636e;
+	--secondary: #eff2f5;
+	--secondary-foreground: #1f2328;
+	--accent: #eff2f5;
+	--accent-foreground: #1f2328;
+	--border: #d1d9e0;
+	--input: #d1d9e0;
+	--link: #0969da;
+	--ring: #0969da;
+	--radius: 0.375rem;
+}
+
+html[data-surface="inline"][data-provider="github"].dark {
+	--background: #0d1117;
+	--foreground: #f0f6fc;
+	--card: #0d1117;
+	--card-foreground: #f0f6fc;
+	--muted: #151b23;
+	--muted-foreground: #9198a1;
+	--secondary: #262c36;
+	--secondary-foreground: #f0f6fc;
+	--accent: #262c36;
+	--accent-foreground: #f0f6fc;
+	--border: #3d444d;
+	--input: #3d444d;
+	--link: #4493f8;
+	--ring: #1f6feb;
+}
+
+/* GitHub's selected dimmed and high-contrast themes (`dark-dimmed.css`, `light-high-contrast.css`,
+   `dark-high-contrast.css`, `dark-dimmed-high-contrast.css` in the same Primer release). High contrast
+   is a reader's accessibility choice, so the frame keeps its stronger borders and text. */
+html[data-surface="inline"][data-provider="github"][data-palette="dark_dimmed"] {
+	--background: #212830;
+	--foreground: #d1d7e0;
+	--card: #212830;
+	--card-foreground: #d1d7e0;
+	--muted: #262c36;
+	--muted-foreground: #9198a1;
+	--secondary: #2f3742;
+	--secondary-foreground: #d1d7e0;
+	--accent: #2f3742;
+	--accent-foreground: #d1d7e0;
+	--border: #3d444d;
+	--input: #3d444d;
+	--link: #478be6;
+	--ring: #316dca;
+}
+
+/* Dimmed's lighter ground: its own accent (#478be6) and the shared outcome colours fall just under
+   4.5:1 for 12px text there, so both dimmed palettes raise them: Primer's earlier dimmed accent, and
+   the same hues a step lighter. */
+html[data-surface="inline"][data-provider="github"][data-palette="dark_dimmed"] {
+	--link: #539bf5;
+}
+
+html[data-surface="inline"][data-provider="github"][data-palette="dark_dimmed"],
+html[data-surface="inline"][data-provider="github"][data-palette="dark_dimmed_high_contrast"] {
+	--success: oklch(0.78 0.152 163.225);
+	--warning: oklch(0.81 0.153 70.08);
+	--destructive: oklch(0.8 0.14 22.216);
+}
+
+html[data-surface="inline"][data-provider="github"][data-palette="light_high_contrast"] {
+	--background: #ffffff;
+	--foreground: #010409;
+	--card: #ffffff;
+	--card-foreground: #010409;
+	--muted: #e6eaef;
+	--muted-foreground: #454c54;
+	--secondary: #dae0e7;
+	--secondary-foreground: #010409;
+	--accent: #dae0e7;
+	--accent-foreground: #010409;
+	--border: #454c54;
+	--input: #454c54;
+	--link: #023b95;
+	--ring: #0349b4;
+}
+
+html[data-surface="inline"][data-provider="github"][data-palette="dark_high_contrast"] {
+	--background: #010409;
+	--foreground: #ffffff;
+	--card: #010409;
+	--card-foreground: #ffffff;
+	--muted: #151b23;
+	--muted-foreground: #b7bdc8;
+	--secondary: #2a313c;
+	--secondary-foreground: #ffffff;
+	--accent: #2a313c;
+	--accent-foreground: #ffffff;
+	--border: #b7bdc8;
+	--input: #b7bdc8;
+	--link: #74b9ff;
+	--ring: #409eff;
+}
+
+html[data-surface="inline"][data-provider="github"][data-palette="dark_dimmed_high_contrast"] {
+	--background: #212830;
+	--foreground: #f0f6fc;
+	--card: #212830;
+	--card-foreground: #f0f6fc;
+	--muted: #262c36;
+	--muted-foreground: #b7bdc8;
+	--secondary: #2a313c;
+	--secondary-foreground: #f0f6fc;
+	--accent: #2a313c;
+	--accent-foreground: #f0f6fc;
+	--border: #b7bdc8;
+	--input: #b7bdc8;
+	--link: #96d0ff;
+	--ring: #6cb6ff;
+}
+
+html[data-surface="inline"][data-provider="gitlab"] {
+	--background: #ffffff;
+	--foreground: #3a383d;
+	--card: #ffffff;
+	--card-foreground: #3a383d;
+	--muted: #f7f7f5;
+	--muted-foreground: #646163;
+	--secondary: #ecebea;
+	--secondary-foreground: #3a383d;
+	--accent: #ecebea;
+	--accent-foreground: #3a383d;
+	--border: #dcdbd9;
+	--input: #dcdbd9;
+	--link: #2f5ca0;
+	--ring: #1f75cb;
+	--radius: 0.5rem;
+}
+
+html[data-surface="inline"][data-provider="gitlab"].dark {
+	--background: #18171d;
+	--foreground: #ecebea;
+	--card: #18171d;
+	--card-foreground: #ecebea;
+	--muted: #28272d;
+	--muted-foreground: #c1bfbe;
+	--secondary: #333238;
+	--secondary-foreground: #ecebea;
+	--accent: #333238;
+	--accent-foreground: #ecebea;
+	--border: #4d4b4e;
+	--input: #4d4b4e;
+	--link: #9dc7f1;
+	--ring: #428fdc;
+}
+
+/*
+ * The report's type and controls as each provider draws its own, from the same published sources as
+ * the palettes above: Primer's system font stack and default button (small: 28px, 6px radius, muted
+ * fill, medium weight) and GitLab UI's font stack and default button (medium: 32px, 4px radius, white
+ * fill). Scoped to the inline surface, so settings and the confirmation window keep the web app's
+ * look. `data-variant` is the one hook `Button` and `ExternalLink` expose for this.
+ */
+html[data-surface="inline"][data-provider="github"] body {
+	font-family:
+		-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif,
+		"Apple Color Emoji", "Segoe UI Emoji";
+}
+
+html[data-surface="inline"][data-provider="gitlab"] body {
+	font-family:
+		"GitLab Sans",
+		-apple-system,
+		BlinkMacSystemFont,
+		"Segoe UI",
+		Roboto,
+		"Noto Sans",
+		Ubuntu,
+		Cantarell,
+		"Helvetica Neue",
+		sans-serif;
+}
+
+html[data-surface="inline"][data-provider="github"] [data-variant="outline"] {
+	height: 28px;
+	padding-inline: 8px;
+	border-color: var(--border);
+	border-radius: 6px;
+	background: var(--muted);
+	box-shadow: 0 1px 0 0 #1f23280a;
+	color: var(--foreground);
+	font-size: 12px;
+	font-weight: 500;
+}
+
+html[data-surface="inline"][data-provider="github"] [data-variant="outline"]:hover:not(:disabled) {
+	background: var(--secondary);
+}
+
+html[data-surface="inline"][data-provider="github"].dark [data-variant="outline"] {
+	box-shadow: none;
+}
+
+html[data-surface="inline"][data-provider="gitlab"] [data-variant="outline"] {
+	height: 32px;
+	padding-inline: 12px;
+	border-color: #bfbfc3;
+	border-radius: 0.25rem;
+	background: var(--card);
+	box-shadow: none;
+	color: var(--foreground);
+	font-size: 14px;
+	font-weight: 400;
+}
+
+html[data-surface="inline"][data-provider="gitlab"] [data-variant="outline"]:hover:not(:disabled) {
+	background: #ececef;
+}
+
+html[data-surface="inline"][data-provider="gitlab"].dark [data-variant="outline"] {
+	border-color: #626168;
+}
+
+html[data-surface="inline"][data-provider="gitlab"].dark
+	[data-variant="outline"]:hover:not(:disabled) {
+	background: var(--secondary);
+}

@@ -18,6 +18,7 @@ const TYPES = [
 
 const SCOPES = [
 	"webapp",
+	"extension",
 	"server",
 	"docs",
 

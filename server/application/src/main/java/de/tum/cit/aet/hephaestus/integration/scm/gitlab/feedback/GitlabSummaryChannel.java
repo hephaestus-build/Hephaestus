@@ -132,7 +132,7 @@ public class GitlabSummaryChannel implements SummaryChannel {
             throw new FeedbackDeliveryException("No note ID in createNote response");
         }
         log.info("Posted GitLab note: workspaceId={}, noteableGid={}, noteId={}", scopeId, noteableGid, noteId);
-        return new SummaryHandle(noteId);
+        return new SummaryHandle(noteId, response.field("createNote.note.url").getValue());
     }
 
     /**
@@ -218,7 +218,8 @@ public class GitlabSummaryChannel implements SummaryChannel {
             return UpdateOutcome.transientFailure("No note id in updateNote response");
         }
         log.info("Edited GitLab note in place: workspaceId={}, noteId={}", scopeId, noteId);
-        return UpdateOutcome.edited(new SummaryHandle(noteId));
+        return UpdateOutcome.edited(
+                new SummaryHandle(noteId, response.field("updateNote.note.url").getValue()));
     }
 
     /** GitLab caps a connection page at 100. */
@@ -285,7 +286,7 @@ public class GitlabSummaryChannel implements SummaryChannel {
                     String noteId = (String) note.get("id");
                     String body = (String) note.get("body");
                     if (noteId != null && body != null && body.contains(marker)) {
-                        return ExistingSummaryLookup.found(new SummaryHandle(noteId));
+                        return ExistingSummaryLookup.found(new SummaryHandle(noteId, (String) note.get("url")));
                     }
                 }
 

@@ -16,3 +16,6 @@
 *.html text eol=lf
 *.sh text eol=lf
 *.sql text eol=lf
+
+# Unified diff context adds a space before the upstream source's indentation.
+patches/*.patch whitespace=-space-before-tab

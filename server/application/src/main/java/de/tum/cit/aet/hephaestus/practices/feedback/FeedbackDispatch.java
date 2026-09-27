@@ -97,6 +97,9 @@ public class FeedbackDispatch {
     @Column(name = "delivered_external_ref", length = 255)
     private @Nullable String deliveredExternalRef;
 
+    @Column(name = "delivered_external_url", columnDefinition = "TEXT")
+    private @Nullable String deliveredExternalUrl;
+
     @Column(name = "lease_owner", length = 64)
     private @Nullable String leaseOwner;
 

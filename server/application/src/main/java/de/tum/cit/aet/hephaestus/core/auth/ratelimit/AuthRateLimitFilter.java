@@ -62,6 +62,8 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
     private enum Endpoint {
         OAUTH_AUTHORIZATION("oauth-authz", false, true),
         REFRESH("refresh", true, true),
+        // Installed-client token, refresh and logout: body-authenticated by design, so keyed by IP.
+        CLIENT_SESSION("client-session", false, true),
         USER_VIEW("user-view", true, false),
         DELETE_USER("delete-user", true, true),
         // GDPR Art. 20 export: cap POST /user/exports (the async assembly). Account-scoped (JWT sub)
@@ -146,6 +148,12 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && path.equals("/auth/refresh")) {
             return Endpoint.REFRESH;
         }
+        if ("POST".equals(method)
+                && (path.equals("/auth/client/token")
+                        || path.equals("/auth/client/refresh")
+                        || path.equals("/auth/client/logout"))) {
+            return Endpoint.CLIENT_SESSION;
+        }
         // Keyed on the administrator, not the viewed user, so switching users does not reset the budget.
         if (("GET".equals(method) && path.matches("/workspaces/[^/]+/user-view/users(?:/.*)?"))
                 || UserViewContextHolder.USER_VIEW_REQUEST.matches(request)) {
@@ -176,6 +184,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         return switch (endpoint) {
             case OAUTH_AUTHORIZATION -> properties.oauthAuthorization();
             case REFRESH -> properties.refresh();
+            case CLIENT_SESSION -> properties.clientSession();
             case USER_VIEW -> properties.userView();
             case DELETE_USER -> properties.deleteUser();
             case EXPORT -> properties.export();

@@ -42,6 +42,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Disposition;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -540,7 +541,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                     admitted, ArtifactKinds.PULL_REQUEST, Map.of(), List.of(unit), null));
             String landingKey = "observation:" + landing.getOccurrenceKey();
             String failingKey = "observation:" + failing.getOccurrenceKey();
-            when(commentPoster.post(any())).thenReturn("summary-ref");
+            when(commentPoster.post(any())).thenReturn(new SummaryHandle("summary-ref"));
             when(diffNotePoster.reconcileInlineNotes(eq(agentJob), any()))
                     .thenReturn(
                             new DiffNotePoster.DiffNoteResult(
@@ -693,7 +694,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
             Long firstPr = pullRequest(8000L, 49, "firstsha");
             AgentJob first = reviewOf(firstPr, 49, "firstsha", null, BOTH_HOLD);
             compose(first, LEAD, strengthUnit("The issue link names the outcome", "Keep closing issues this way"));
-            when(commentPoster.post(any())).thenReturn("comment-first");
+            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-first"));
             handler.deliver(first);
             verify(commentPoster).post(argThat(write -> write.job().equals(first)));
             assertThat(deliveredBody(first)).contains("The issue link names the outcome");
@@ -735,7 +736,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                     review,
                     LEAD,
                     strengthUnit("The retry path returns the upstream error", "Add the same to the export call"));
-            when(commentPoster.post(any())).thenReturn("comment-distinct");
+            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-distinct"));
 
             handler.deliver(review);
 
@@ -898,7 +899,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                     .noneMatch(feedback -> feedback.getDeliveryState() == FeedbackDeliveryState.PREPARED);
 
             AgentJob newEvent = newJobWithOutput(validAgentOutput());
-            when(commentPoster.post(any())).thenReturn("comment-after-release");
+            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-after-release"));
             handler.deliver(newEvent);
 
             verify(commentPoster).post(argThat(write -> write.job().equals(newEvent)));
@@ -912,7 +913,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         @Test
         void fullPipelineFromParseToDelivery() {
             setJobOutput(validAgentOutput());
-            when(commentPoster.post(any())).thenReturn("comment-123");
+            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-123"));
             when(diffNotePoster.reconcileInlineNotes(any(), any()))
                     .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));
 
@@ -965,7 +966,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         @Test
         void aPartialReviewStillReportsTheProblemItFound() {
             agentJob = admitAndSetOutput(agentJob, validAgentOutput(), false);
-            when(commentPoster.post(any())).thenReturn("comment-partial");
+            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-partial"));
             when(diffNotePoster.reconcileInlineNotes(any(), any()))
                     .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));
 
@@ -1085,7 +1086,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         @DisplayName("re-delivering same job creates no duplicate observations")
         void redeliveryNoDuplicates() {
             setJobOutput(validAgentOutput());
-            when(commentPoster.post(any())).thenReturn("comment-789");
+            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-789"));
             when(diffNotePoster.reconcileInlineNotes(any(), any()))
                     .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));
 

@@ -20,12 +20,12 @@ public interface FeedbackPlacementRepository extends JpaRepository<FeedbackPlace
     @Query(value = """
         INSERT INTO feedback_placement (
             id, feedback_id, placement_type, anchor_kind, anchor_path, anchor_start_line,
-            anchor_end_line, anchor_side, posted_comment_ref, created_at
+            anchor_end_line, anchor_side, posted_comment_ref, posted_comment_url, created_at
         ) VALUES (
             :#{#placement.id()}, :#{#placement.feedbackId()}, :#{#placement.placementType()},
             :#{#placement.anchorKind()}, :#{#placement.anchorPath()}, :#{#placement.anchorStartLine()},
             :#{#placement.anchorEndLine()}, :#{#placement.anchorSide()},
-            :#{#placement.postedCommentRef()}, CURRENT_TIMESTAMP
+            :#{#placement.postedCommentRef()}, :#{#placement.postedCommentUrl()}, CURRENT_TIMESTAMP
         ) ON CONFLICT (feedback_id, posted_comment_ref) DO NOTHING
         """, nativeQuery = true)
     int insertProviderPlacementIfAbsent(@Param("placement") ProviderPlacement placement);
@@ -39,7 +39,8 @@ public interface FeedbackPlacementRepository extends JpaRepository<FeedbackPlace
             @Nullable Integer anchorStartLine,
             @Nullable Integer anchorEndLine,
             @Nullable String anchorSide,
-            String postedCommentRef) {}
+            String postedCommentRef,
+            @Nullable String postedCommentUrl) {}
 
     @Query("""
         SELECT p FROM FeedbackPlacement p

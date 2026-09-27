@@ -48,6 +48,13 @@ const ERROR_COPY: Record<string, { title: string; description: string }> = {
 		description:
 			"Linking an identity needs a recent sign-in. Sign in again with an identity already linked to your account, then link from Settings.",
 	},
+	client_not_registered: {
+		// Reached inside the browser extension's sign-in window: the instance does not list that
+		// extension, so the server refuses to hand it a sign-in rather than redirect to it.
+		title: "This extension can't sign in here",
+		description:
+			"This Hephaestus instance doesn't allow that browser extension to sign in. Ask an admin to add its extension ID, then try again from the extension.",
+	},
 	unknown_provider: {
 		title: "Provider is not configured",
 		description:

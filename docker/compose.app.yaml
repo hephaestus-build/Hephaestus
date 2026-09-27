@@ -197,6 +197,8 @@ services:
       # <provider>:<subject>. Optional break-glass token enables POST /auth/bootstrap-admin.
       HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS: ${HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS:-}
       HEPHAESTUS_AUTH_BOOTSTRAP_TOKEN: ${HEPHAESTUS_AUTH_BOOTSTRAP_TOKEN:-}
+      # Chrome extension ids allowed to sign in (docs/admin/browser-extension.mdx); empty allows none.
+      HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS: ${HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS:-}
       # Sourced from GH_OAUTH_* — GitHub Actions reserves the GITHUB_ prefix for secret/variable
       # names, so the deploy can't provide GITHUB_OAUTH_*; the container still presents it to Spring.
       GITHUB_OAUTH_CLIENT_ID: ${GH_OAUTH_CLIENT_ID:-}

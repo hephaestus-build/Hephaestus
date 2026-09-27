@@ -9,14 +9,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventData;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionService;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClient;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipal;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.servlet.http.Cookie;
@@ -26,6 +28,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,10 +57,14 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
 
     private static final Instant NOW = Instant.parse("2026-06-01T00:00:00Z");
     private static final String COOKIE_NAME = "__Host-HEPHAESTUS_AT";
+    private static final String EXTENSION_ID = "ijkajblcbajjpjbknfgdiiiljipafiko";
+    private static final String CALLBACK = "https://" + EXTENSION_ID + ".chromiumapp.org/callback";
+    private static final String CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
     private AccountProvisioningService provisioningService;
     private HephaestusJwtIssuer jwtIssuer;
-    private JwtPrincipalFactory principalFactory;
+    private ClientSessionService clientSessionService;
+    private AuthProperties authProperties;
     private AuthIntentCookie authIntentCookie;
     private AuthEventWriter authEventWriter;
     private IdentityLinkAuthentication identityLinkAuthentication;
@@ -67,25 +74,99 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
     void setUp() {
         provisioningService = mock(AccountProvisioningService.class);
         jwtIssuer = mock(HephaestusJwtIssuer.class);
-        principalFactory = mock(JwtPrincipalFactory.class);
+        clientSessionService = mock(ClientSessionService.class);
         authIntentCookie = mock(AuthIntentCookie.class);
         authEventWriter = mock(AuthEventWriter.class);
         identityLinkAuthentication = mock(IdentityLinkAuthentication.class);
-        AuthProperties authProperties = mock(AuthProperties.class);
+        authProperties = mock(AuthProperties.class);
         lenient().when(authProperties.cookieName()).thenReturn(COOKIE_NAME);
         lenient().when(authProperties.sessionMaxLifetime()).thenReturn(Duration.ofHours(12));
         lenient().when(authIntentCookie.read(any())).thenReturn(null);
 
-        handler = new HephaestusAuthSuccessHandler(
+        handler = handler(List.of(EXTENSION_ID));
+    }
+
+    private HephaestusAuthSuccessHandler handler(List<String> registeredExtensionIds) {
+        return new HephaestusAuthSuccessHandler(
                 provisioningService,
                 jwtIssuer,
-                principalFactory,
                 authIntentCookie,
                 authProperties,
                 new AuthEventLogger(authEventWriter),
                 identityLinkAuthentication,
+                clientSessionService,
+                new InstalledClientRegistry(AuthPropertiesFixture.withBrowserExtensionIds(registeredExtensionIds)),
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 /* webappBaseUrl */ "");
+    }
+
+    private static AuthIntentCookie.Intent clientIntent() {
+        return AuthIntentCookie.Intent.client(
+                new AuthIntentCookie.Intent.ClientRequest(EXTENSION_ID, CALLBACK, CHALLENGE, "state-1"));
+    }
+
+    @Test
+    void shouldRedirectAHandoffCodeToTheCallbackAndSetNoCookieWhenAClientSignsIn() throws Exception {
+        Account account = account(Account.Status.ACTIVE);
+        when(provisioningService.resolveOrProvision(any(), any(), any(), any())).thenReturn(provision(account, false));
+        when(authIntentCookie.read(any())).thenReturn(clientIntent());
+        when(clientSessionService.createHandoff(
+                        org.mockito.ArgumentMatchers.eq(42L),
+                        any(InstalledClient.class),
+                        org.mockito.ArgumentMatchers.eq(CHALLENGE),
+                        any(),
+                        any()))
+                .thenReturn(Optional.of("code-1"));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        handler.onAuthenticationSuccess(githubRequest(), response, oauthToken("sub-1"));
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(CALLBACK + "?code=code-1&state=state-1");
+        assertThat(response.getCookie(COOKIE_NAME)).isNull();
+        verify(jwtIssuer, never()).issue(any(), any(), any());
+        verify(authIntentCookie).clear(any());
+    }
+
+    @Test
+    void shouldEndAtTheCallbackWithAnErrorWhenTheClientAccountIsInactive() throws Exception {
+        when(provisioningService.resolveOrProvision(any(), any(), any(), any()))
+                .thenReturn(provision(account(Account.Status.SUSPENDED), false));
+        when(authIntentCookie.read(any())).thenReturn(clientIntent());
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        handler.onAuthenticationSuccess(githubRequest(), response, oauthToken("sub-1"));
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(CALLBACK + "?error=account_inactive&state=state-1");
+        verify(clientSessionService, never()).createHandoff(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldEndAtTheCallbackWithAnErrorWhenTheHandoffIsRefusedUnderTheAccountLock() throws Exception {
+        when(provisioningService.resolveOrProvision(any(), any(), any(), any()))
+                .thenReturn(provision(account(Account.Status.ACTIVE), false));
+        when(authIntentCookie.read(any())).thenReturn(clientIntent());
+        when(clientSessionService.createHandoff(any(), any(), any(), any(), any()))
+                .thenReturn(Optional.empty());
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        handler.onAuthenticationSuccess(githubRequest(), response, oauthToken("sub-1"));
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(CALLBACK + "?error=account_inactive&state=state-1");
+        assertThat(response.getCookie(COOKIE_NAME)).isNull();
+    }
+
+    @Test
+    void shouldNeverRedirectToTheCallbackWhenItsRegistrationWasRemovedMidFlow() throws Exception {
+        when(authIntentCookie.read(any())).thenReturn(clientIntent());
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        handler(List.of()).onAuthenticationSuccess(githubRequest(), response, oauthToken("sub-1"));
+
+        assertThat(response.getRedirectedUrl()).isEqualTo("/auth/error?code=client_not_registered");
+        assertThat(response.getCookie(COOKIE_NAME)).isNull();
+        verify(provisioningService, never()).resolveOrProvision(any(), any(), any(), any());
+        verify(clientSessionService, never()).createHandoff(any(), any(), any(), any(), any());
+        verify(jwtIssuer, never()).issue(any(), any(), any());
     }
 
     @Test
@@ -122,8 +203,6 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
         Account account = account(Account.Status.ACTIVE);
         when(provisioningService.resolveOrProvision(any(), any(), any(), any())).thenReturn(provision(account, false));
         when(authIntentCookie.read(any())).thenReturn(AuthIntentCookie.Intent.login(null, "/teams"));
-        JwtPrincipal principal = mock(JwtPrincipal.class);
-        when(principalFactory.forAccount(account)).thenReturn(principal);
         when(jwtIssuer.issue(any(), any(), any()))
                 .thenReturn(new HephaestusJwtIssuer.Token("minted-jwt", UUID.randomUUID(), NOW.plusSeconds(900)));
 
@@ -152,7 +231,6 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
         // a LINK-mode re-affirm would report false and audit LOGIN instead (no phantom IDENTITY_LINKED).
         Account account = account(Account.Status.ACTIVE);
         when(provisioningService.resolveOrProvision(any(), any(), any(), any())).thenReturn(provision(account, true));
-        when(principalFactory.forAccount(account)).thenReturn(mock(JwtPrincipal.class));
         when(jwtIssuer.issue(any(), any(), any()))
                 .thenReturn(new HephaestusJwtIssuer.Token("minted-jwt", UUID.randomUUID(), NOW.plusSeconds(900)));
 

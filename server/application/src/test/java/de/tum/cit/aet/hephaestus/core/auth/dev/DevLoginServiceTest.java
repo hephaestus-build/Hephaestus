@@ -3,18 +3,16 @@ package de.tum.cit.aet.hephaestus.core.auth.dev;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipal;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
@@ -22,7 +20,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -38,7 +35,7 @@ import org.springframework.web.server.ResponseStatusException;
 class DevLoginServiceTest extends BaseUnitTest {
 
     private final AccountRepository accountRepository = mock(AccountRepository.class);
-    private final JwtPrincipalFactory principalFactory = mock(JwtPrincipalFactory.class);
+    private final ClientSessionService clientSessionService = mock(ClientSessionService.class);
     private final HephaestusJwtIssuer jwtIssuer = mock(HephaestusJwtIssuer.class);
 
     private static final Instant FIXED_NOW = Instant.parse("2026-01-01T00:00:00Z");
@@ -56,14 +53,13 @@ class DevLoginServiceTest extends BaseUnitTest {
         return new DevLoginService(
                 props,
                 accountRepository,
-                principalFactory,
                 jwtIssuer,
+                clientSessionService,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
                 environment);
     }
 
     private void stubIssuer() {
-        when(principalFactory.forAccountId(anyLong())).thenReturn(new JwtPrincipal(7L, "dev", "dev", Set.of()));
         when(jwtIssuer.issue(any(), any(), any())).thenReturn(token);
     }
 

@@ -3,36 +3,8 @@ import { ExternalLinkIcon } from "lucide-react";
 import { cn } from "cn";
 import type { ReviewedWorkRef } from "@/api/types.gen";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
-import {
-	ARTIFACT_KIND,
-	ARTIFACT_KIND_VALUES,
-	artifactKindLabel,
-	artifactKindPluralLabel,
-	isKnownArtifactKind,
-	type KnownArtifactKind,
-} from "@/lib/artifact-kinds";
+import { artifactKindLabel, artifactKindPluralLabel } from "@/lib/artifact-kinds";
 import { hasText } from "@/lib/text";
-
-/**
- * URL-facing spelling of a kind: the wire id carries a dot, which reads badly in a path segment, so
- * the routes keep their own short slug and this map is where the two meet.
- */
-const ARTIFACT_KIND_SLUGS = {
-	[ARTIFACT_KIND.pullRequest]: "pull-request",
-	[ARTIFACT_KIND.issue]: "issue",
-	[ARTIFACT_KIND.conversationThread]: "conversation",
-	[ARTIFACT_KIND.document]: "document",
-} as const satisfies Record<KnownArtifactKind, string>;
-
-export type ReviewArtifactTypeSlug = (typeof ARTIFACT_KIND_SLUGS)[keyof typeof ARTIFACT_KIND_SLUGS];
-
-export function reviewArtifactTypeSlug(kind: string): ReviewArtifactTypeSlug | undefined {
-	return isKnownArtifactKind(kind) ? ARTIFACT_KIND_SLUGS[kind] : undefined;
-}
-
-export function reviewArtifactTypeFromSlug(slug: string): KnownArtifactKind | undefined {
-	return ARTIFACT_KIND_VALUES.find((kind) => ARTIFACT_KIND_SLUGS[kind] === slug);
-}
 
 /** The repository and the item, when a repository is recorded: `ls1intum/Hephaestus · #1423`. */
 function qualifiedLabel(reviewedWork: ReviewedWorkRef): string {

@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -51,9 +50,6 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private HephaestusJwtIssuer jwtIssuer;
-
-    @Autowired
-    private JwtPrincipalFactory principalFactory;
 
     @Test
     void getUserSettingsProvisionsGitLabUserWhenMissing() {
@@ -204,7 +200,7 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
         link = identityLinkRepository.save(link);
 
         HephaestusJwtIssuer.Token token = jwtIssuer.issue(
-                principalFactory.forAccount(account), TokenConstraints.session(null, Instant.now()), null);
+                java.util.Objects.requireNonNull(account.getId()), TokenConstraints.session(null, Instant.now()), null);
         return new SeededIdentity(
                 token.value(),
                 Objects.requireNonNull(link.getId(), "Persisted identity link must have an ID"),

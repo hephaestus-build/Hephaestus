@@ -84,7 +84,8 @@ else. Before calling a change done, walk this list and say which entries applied
   tolerate its absence (`server/AGENTS.md` § Things that bite); production runs the webhook role in
   its own container.
 - **Wire contract.** Anything crossing HTTP is a DTO in `server/openapi.yaml` and the generated
-  client in `webapp/src/api/**`; change the controller, regenerate both, commit both.
+  clients in `webapp/src/api/**` and `extension/src/api/**`; change the controller, regenerate, commit
+  all three.
 - **Schema.** An entity change is a changelog and an ERD (`vp run db:draft-changelog`), and a
   new workspace-owned table is workspace-scoped from its first migration.
 - **Channels.** Feedback appears on the reviewed work, on the developer's practice page and in
@@ -210,12 +211,13 @@ only `format` and `lint`, and the Java leg of `check` is `gate:server`.
 Oxlint lints; oxfmt formats, sorts imports and sorts Tailwind classes. One rule set, layered:
 the root `.oxlintrc.json` is the base for every TypeScript file and the config for the Node trees
 (agent runner, precompute, `scripts/**`, `load-tests/**`, the task graph); `oxlint.react.jsonc` is
-the React layer; `webapp/.oxlintrc.json` and `docs/.oxlintrc.json` `extends` those two and hold
-only what their tree adds or decides differently, each with its reason. A rule is written once.
+the React layer. `oxlint.app.jsonc` adds the application compiler, Vitest and Storybook policy for
+`webapp/.oxlintrc.json` and `extension/.oxlintrc.json`; docs extend the base and React layer. Each
+tree holds only what it adds or decides differently, each with its reason. A rule is written once.
 `gate:docs-lint` type-checks the docs tree and runs `markdownlint-cli2` (`docs/.markdownlint-cli2.jsonc`);
 `docs:lint` is its alias.
 
-- **Run oxlint through `vp` from the repo root** — `vp -C webapp lint .`, `vp -C docs lint .`,
+- **Run oxlint through `vp` from the repo root** — `vp -C webapp lint .`, `vp -C extension lint .`, `vp -C docs lint .`,
   `vp run gate:agents-lint` — which is what CI runs; the `options` block (`typeAware`, `typeCheck`,
   `reportUnusedDisableDirectives`) travels through `extends`, so a bare `oxlint` started inside a
   tree sees the same rules, but resolves `tsconfig.json` from where it started.
@@ -227,7 +229,7 @@ only what their tree adds or decides differently, each with its reason. A rule i
 - **Type-aware rules need a file named exactly `tsconfig.json`.** The root stub exists so the Node
   trees, configured by `tsconfig.agents.json`, have one; `load-tests/tsconfig.json` types the k6
   scripts the same way.
-- **The house rules are one oxlint plugin under `webapp/tools/oxlint/`.** All three configs load it
+- **The house rules are one oxlint plugin under `webapp/tools/oxlint/`.** All tree configs load it
   and each chooses which rules to turn on, so adding a rule there enables it nowhere.
   `webapp/AGENTS.md` § Linting has the rest.
 - **`vp run` does not give a command a POSIX shell on every platform.** So a command never contains
@@ -296,14 +298,14 @@ change that ships, never a measurement or a verdict alone.
 | Artefact | Command |
 |---|---|
 | `server/openapi.yaml` | `vp run generate:api:specs` |
-| `webapp/src/api/**` | `vp run generate:api:client` |
+| `webapp/src/api/**`, `extension/src/api/**` | `vp run generate:api:client` |
 | `docs/contributor/erd/schema.mmd` | `vp run db:generate-erd-docs` |
 | `webapp/src/routeTree.gen.ts` | TanStack Router Vite plugin |
 | `server/generated-clients/build/generated/sources/**` | GraphQL and Outline codegen, owned by the generated-clients Gradle module |
 
-Never hand-edit these. `generate:api:client` empties `webapp/src/api/` first;
+Never hand-edit these. `generate:api:client` empties both `src/api/` directories first;
 Gradle-generated sources live under `build/` and are never committed. Commit `server/openapi.yaml`
-and `webapp/src/api/**` with the API change that produced them.
+and both generated clients with the API change that produced them.
 
 ## Database changes
 

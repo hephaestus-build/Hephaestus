@@ -7,5 +7,5 @@
 		"version": true,
 		"tag": false
 	},
-	"ignore": ["webapp", "docs"]
+	"ignore": ["webapp", "docs", "extension"]
 }

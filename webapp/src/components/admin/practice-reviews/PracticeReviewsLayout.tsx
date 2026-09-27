@@ -7,8 +7,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { tabsListVariants } from "@/components/ui/tabs";
 
+import { reviewArtifactTypeFromSlug } from "@/lib/artifact-kind-slugs";
 import type { ReviewScopeSearch } from "./review-search";
-import { reviewArtifactTypeFromSlug } from "./ReviewArtifact";
 
 export interface PracticeReviewsLayoutProps {
 	workspaceSlug: string;

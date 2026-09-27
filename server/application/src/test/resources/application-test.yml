@@ -67,6 +67,8 @@ hephaestus:
     auth:
         rate-limit:
             enabled: false
+        # The development extension key's id: installed-client sign-in and its CORS origin under test.
+        browser-extension-ids: ijkajblcbajjpjbknfgdiiiljipafiko
     # Worker role off in tests: the worker capability is the Docker sandbox
     # (DockerSandboxConfiguration + AgentImagePullBootstrapper), which has no Docker daemon in
     # CI. Disabling the role keeps those beans out of the context — mentor beans still wire

@@ -28,6 +28,11 @@ public final class AuthPropertiesFixture {
         return build("", Map.of(), stepUpMaxAge);
     }
 
+    /** Defaults with the given installed Chrome extension ids. */
+    public static AuthProperties withBrowserExtensionIds(List<String> ids) {
+        return build("", Map.of(), Duration.ofMinutes(5), ids);
+    }
+
     /** Defaults with the given seeded login providers. */
     public static AuthProperties withLoginProviders(Map<String, AuthProperties.LoginProviderSeed> loginProviders) {
         return build("", loginProviders, Duration.ofMinutes(5));
@@ -35,6 +40,14 @@ public final class AuthPropertiesFixture {
 
     private static AuthProperties build(
             String apiBasePath, Map<String, AuthProperties.LoginProviderSeed> providers, Duration stepUpMaxAge) {
+        return build(apiBasePath, providers, stepUpMaxAge, List.of());
+    }
+
+    private static AuthProperties build(
+            String apiBasePath,
+            Map<String, AuthProperties.LoginProviderSeed> providers,
+            Duration stepUpMaxAge,
+            List<String> browserExtensionIds) {
         return new AuthProperties(
                 URI.create("http://localhost:8080"),
                 apiBasePath,
@@ -49,6 +62,7 @@ public final class AuthPropertiesFixture {
                 Duration.ofDays(7),
                 stepUpMaxAge,
                 false,
-                true);
+                true,
+                browserExtensionIds);
     }
 }

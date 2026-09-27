@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
-import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
@@ -21,11 +20,9 @@ import org.junit.jupiter.api.Test;
  */
 class JwtPrincipalFactoryRolesTest extends BaseUnitTest {
 
-    private final AccountRepository accountRepository = mock(AccountRepository.class);
     private final IdentityLinkRepository identityLinkRepository = mock(IdentityLinkRepository.class);
     private final AccountFeatureRepository featureRepository = mock(AccountFeatureRepository.class);
-    private final JwtPrincipalFactory factory =
-            new JwtPrincipalFactory(accountRepository, identityLinkRepository, featureRepository);
+    private final JwtPrincipalFactory factory = new JwtPrincipalFactory(identityLinkRepository, featureRepository);
 
     private Account active(long id, Account.AppRole role) {
         when(featureRepository.findFlagsByAccountId(any())).thenReturn(List.of());
@@ -38,14 +35,14 @@ class JwtPrincipalFactoryRolesTest extends BaseUnitTest {
 
     @Test
     void appAdminGetsNamespacedAppAdminAuthorityNotLegacyAdmin() {
-        assertThat(factory.forAccount(active(1L, Account.AppRole.APP_ADMIN)).roles())
+        assertThat(principal(active(1L, Account.AppRole.APP_ADMIN)).roles())
                 .contains("app_admin")
                 .doesNotContain("admin");
     }
 
     @Test
     void regularUserHasNeitherAdminAuthority() {
-        assertThat(factory.forAccount(active(2L, Account.AppRole.USER)).roles()).doesNotContain("app_admin", "admin");
+        assertThat(principal(active(2L, Account.AppRole.USER)).roles()).doesNotContain("app_admin", "admin");
     }
 
     @Test
@@ -56,7 +53,7 @@ class JwtPrincipalFactoryRolesTest extends BaseUnitTest {
         Account account = active(7L, Account.AppRole.USER);
         account.setDisplayName("octocat"); // an existing git login, were it ever used as preferred_username
 
-        assertThat(factory.forAccount(account).login()).isEqualTo("account:7").isNotEqualTo("octocat");
+        assertThat(principal(account).login()).isEqualTo("account:7").isNotEqualTo("octocat");
     }
 
     @Test
@@ -70,8 +67,11 @@ class JwtPrincipalFactoryRolesTest extends BaseUnitTest {
         user.setId(3L);
         user.setAppRole(Account.AppRole.USER);
 
-        assertThat(factory.forAccount(user).roles())
-                .contains("notification_access")
-                .doesNotContain("app_admin", "admin");
+        assertThat(principal(user).roles()).contains("notification_access").doesNotContain("app_admin", "admin");
+    }
+
+    private JwtPrincipal principal(Account account) {
+        return factory.forAuthority(
+                java.util.Objects.requireNonNull(account.getId()), IssuanceAuthorityFixture.of(account));
     }
 }

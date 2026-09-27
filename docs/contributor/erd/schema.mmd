@@ -184,6 +184,32 @@ erDiagram
         VARCHAR(16) surface "NOT NULL"
     }
 
+    ClientSession {
+        UUID id PK
+        BIGINT account_id FK "NOT NULL"
+        TIMESTAMPTZ auth_time "NOT NULL"
+        VARCHAR(64) client_id "NOT NULL"
+        VARCHAR(32) client_kind "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ revoked_at
+        VARCHAR(32) revoked_reason
+        TIMESTAMPTZ session_expires_at "NOT NULL"
+    }
+
+    ClientSignInHandoff {
+        VARCHAR(64) code_hash PK
+        BIGINT account_id FK "NOT NULL"
+        TIMESTAMPTZ auth_time "NOT NULL"
+        VARCHAR(64) client_id "NOT NULL"
+        VARCHAR(32) client_kind "NOT NULL"
+        VARCHAR(64) code_challenge "NOT NULL"
+        TIMESTAMPTZ consumed_at
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ expires_at "NOT NULL"
+        VARCHAR(255) redirect_uri "NOT NULL"
+        TIMESTAMPTZ session_expires_at "NOT NULL"
+    }
+
     CommitContributor {
         BIGINT id PK
         BIGINT commit_id FK,UK "NOT NULL"
@@ -471,6 +497,7 @@ erDiagram
         TIMESTAMPTZ projection_expires_at
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at "NOT NULL"
+        TEXT delivered_external_url
     }
 
     FeedbackObservation {
@@ -492,6 +519,7 @@ erDiagram
         TEXT posted_comment_ref UK
         TIMESTAMPTZ created_at "NOT NULL"
         UUID chat_message_id FK
+        TEXT posted_comment_url
     }
 
     FxRate {
@@ -670,6 +698,8 @@ erDiagram
         VARCHAR(32) revoked_reason
         VARCHAR(512) user_agent
         INET ip_inet
+        VARCHAR(64) refresh_token_hash UK
+        UUID session_id FK
     }
 
     JwtSigningKey {
@@ -1690,6 +1720,8 @@ erDiagram
     ChatMessage ||--o{ ChatMessage : references
     User ||--o{ ChatThread : has
     Workspace ||--o{ ChatThread : has
+    Account ||--o{ ClientSession : has
+    Account ||--o{ ClientSignInHandoff : has
     GitCommit ||--o{ CommitContributor : has
     User ||--o{ CommitContributor : has
     GitCommit ||--o{ CommitFileChange : has
@@ -1740,6 +1772,7 @@ erDiagram
     User ||--o{ IssueComment : commented_on
     Organization ||--o{ IssueType : has
     Account ||--o{ IssuedJwt : has
+    ClientSession ||--o{ IssuedJwt : has
     Repository ||--o{ Label : labeled
     IdentityProvider ||--o{ Label : labeled
     LlmConnection ||--o{ LlmModel : has

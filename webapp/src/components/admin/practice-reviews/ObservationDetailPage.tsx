@@ -22,9 +22,11 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { hasText } from "@/lib/text";
 
+import { reviewArtifactTypeSlug } from "@/lib/artifact-kind-slugs";
 import { ObservationEvidence } from "./ObservationEvidence";
 import { type ObservationsSearch, reviewScopeSearch } from "./review-search";
-import { ReviewArtifactLink, reviewArtifactTypeSlug } from "./ReviewArtifact";
+
+import { ReviewArtifactLink } from "./ReviewArtifact";
 import { ObservationResultBadge } from "./ReviewBadges";
 import { ReviewBreadcrumbs } from "./ReviewBreadcrumbs";
 import {

@@ -17,4 +17,9 @@ public class EntityNotFoundException extends RuntimeException {
     public EntityNotFoundException(String entityName, String entityIdentifier) {
         super(entityName + " with identifier: \"" + entityIdentifier + "\" does not exist");
     }
+
+    /** For a lookup whose input must not be echoed back, such as a caller-supplied address. */
+    public EntityNotFoundException(String message) {
+        super(message);
+    }
 }

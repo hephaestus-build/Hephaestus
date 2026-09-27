@@ -122,8 +122,8 @@ public class ManualReviewRequests {
                 workspace,
                 pullRequest,
                 new Asker(requester, identityIds(requesters)),
-                signal -> gate.evaluate(pullRequest, signal, TriggerMode.MANUAL),
-                signal -> gate.evaluateAdministrative(pullRequest, signal),
+                signal -> gate.evaluatePullRequest(pullRequest, workspace, signal, TriggerMode.MANUAL),
+                signal -> gate.evaluatePullRequestAdministrative(pullRequest, workspace, signal),
                 AgentJobType.PULL_REQUEST_REVIEW,
                 () -> new PullRequestReviewSubmissionRequest(
                         ScmEventPayload.PullRequestData.from(pullRequest),

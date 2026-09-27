@@ -1,6 +1,6 @@
 # ADR 0017: Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs)
 
-**Status:** Accepted (amended — Stage B-2 login model; read-only user views; data model corrected against the schema)
+**Status:** Accepted (amended — Stage B-2 login model; read-only user views; data model corrected against the schema; installed clients by [ADR 0045](0045-installed-clients-sign-in-with-a-pkce-handoff.md))
 **Date:** 2026-05-28
 **Authors:** Felix T.J. Dietrich
 **Supersedes (Stage A):** [ADR 0016](0016-unified-identity-keycloak-as-truth.md)
@@ -167,3 +167,18 @@ the only state. Read-only is therefore enforced rather than true by construction
 admits only an instance administrator's `GET` during a view. The rejection of `SwitchUserFilter`
 stands.
 Mechanics: [read-only user views](../contributor/instance-admin.md#read-only-user-views).
+
+## Update — 2026-09-26
+
+Amends § Decision drivers "No new external service" and § Decision "Stateless multi-pod" and
+"Revocation" for clients that cannot hold the cookie. Installed clients — the Chrome extension now, a
+mobile app later — sign in through the same `GET /auth/login` door with `mode=client`, receive a
+60-second single-use PKCE handoff at an exact registered redirect, and exchange it for a server-side
+`client_session` whose tokens carry `sid` and whose whole refresh lineage stays on `issued_jwt`.
+Refresh rotation is strict: presenting an earlier secret revokes the session. Account-wide revocation
+takes the account row first, then client sessions, then issued JWTs, so every existing revocation path
+ends installed-client sessions too. The cookie session, its CSRF rules and the single revocation
+lookup in `RevocationAwareJwtDecoder` are unchanged. The rejection of Spring Authorization Server
+stands for first-party installed clients; the escape hatch for third-party clients above is unchanged.
+Decision and rejected alternatives:
+[ADR 0045](0045-installed-clients-sign-in-with-a-pkce-handoff.md).

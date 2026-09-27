@@ -10,7 +10,7 @@ import { isMap, isSeq, parseDocument } from "yaml";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 
 const checker = path.join(import.meta.dirname, "assert-generated-clean.ts");
-const apiPaths = ["server/openapi.yaml", "webapp/src/api"];
+const apiPaths = ["server/openapi.yaml", "webapp/src/api", "extension/src/api"];
 const erdPath = "docs/contributor/erd/schema.mmd";
 
 function fixture() {
@@ -29,6 +29,7 @@ function fixture() {
 	for (const file of [
 		"server/openapi.yaml",
 		"webapp/src/api/client.ts",
+		"extension/src/api/client.ts",
 		erdPath,
 		"unrelated.txt",
 	]) {
@@ -50,7 +51,12 @@ function fixture() {
 	};
 }
 
-for (const file of ["server/openapi.yaml", "webapp/src/api/client.ts", erdPath]) {
+for (const file of [
+	"server/openapi.yaml",
+	"webapp/src/api/client.ts",
+	"extension/src/api/client.ts",
+	erdPath,
+]) {
 	for (const change of ["modified", "deleted", "staged"]) {
 		void test(`rejects ${change} ${file} without changing the index`, (t) => {
 			const { repo, git, check, index } = fixture();

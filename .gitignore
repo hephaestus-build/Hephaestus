@@ -230,3 +230,6 @@ wheels/
 /server/**/build/
 /server/**/.gradle/
 !server/gradle/wrapper/gradle-wrapper.jar
+
+# Personal extension development browser configuration.
+/extension/web-ext.config.ts

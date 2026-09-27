@@ -73,20 +73,39 @@ public class AuthIntentCookie {
             @Nullable String returnTo,
             Mode mode,
             @Nullable Long linkingAccountId,
-            long issuedAt) {
+            long issuedAt,
+            @Nullable ClientRequest clientRequest) {
         public enum Mode {
             /** Fresh login — JIT-create Account on first IdP subject we've never seen. */
             LOGIN,
             /** Already authenticated; attach a new IdentityLink to the current Account. */
             LINK,
+            /** Fresh login for an installed client: ends in a PKCE-bound handoff, never in a cookie. */
+            CLIENT,
         }
 
+        /**
+         * What an installed-client sign-in brings with it: the registered client and callback it returns
+         * to, the S256 challenge the handoff code will be bound to, and the client's own {@code state}.
+         * Sealed here, the pair is still re-checked against the registry before anything is sent to it.
+         */
+        public record ClientRequest(String clientId, String redirectUri, String codeChallenge, String state) {}
+
         public static Intent login(@Nullable String workspaceSlug, @Nullable String returnTo) {
-            return new Intent(workspaceSlug, returnTo, Mode.LOGIN, null, System.currentTimeMillis());
+            return new Intent(workspaceSlug, returnTo, Mode.LOGIN, null, System.currentTimeMillis(), null);
         }
 
         public static Intent link(@Nullable Long currentAccountId, @Nullable String returnTo) {
-            return new Intent(null, returnTo, Mode.LINK, currentAccountId, System.currentTimeMillis());
+            return new Intent(null, returnTo, Mode.LINK, currentAccountId, System.currentTimeMillis(), null);
+        }
+
+        public static Intent client(ClientRequest clientRequest) {
+            return new Intent(null, null, Mode.CLIENT, null, System.currentTimeMillis(), clientRequest);
+        }
+
+        /** The installed-client request, only when this intent is one. */
+        public @Nullable ClientRequest clientRequestOrNull() {
+            return mode == Mode.CLIENT ? clientRequest : null;
         }
     }
 

@@ -134,6 +134,7 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
         DeliveredSignal foo = signalForKey(result, "ck-foo");
         assertThat(foo.disposition()).isEqualTo(Disposition.POSTED);
         assertThat(foo.externalRef()).isEqualTo("RC_foo");
+        assertThat(foo.externalUrl()).isEqualTo("https://github.com/owner/repo/pull/42#discussion_r123");
         assertThat(foo.threadExternalRef()).isEqualTo("REVIEW_1");
         DeliveredSignal bar = signalForKey(result, "ck-bar");
         assertThat(bar.externalRef()).isEqualTo("RC_bar");
@@ -170,11 +171,11 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
         when(prNodeIdResolver.resolve(1L, "owner", "repo", 42)).thenReturn("PR_node123");
         stubReviewThreads(List.of());
         // Both comments anchor at src/Foo.java:10 but carry distinct correlation tags in their bodies.
-        stubAddReview(
-                "REVIEW_1",
-                List.of(
-                        commentWithCk("RC_a", "src/Foo.java", 10, "ck-a"),
-                        commentWithCk("RC_b", "src/Foo.java", 10, "ck-b")));
+        var commentA = commentWithCk("RC_a", "src/Foo.java", 10, "ck-a");
+        commentA.put("url", "https://github.com/owner/repo/pull/42#discussion_r111");
+        var commentB = commentWithCk("RC_b", "src/Foo.java", 10, "ck-b");
+        commentB.put("url", "https://github.com/owner/repo/pull/42#discussion_r222");
+        stubAddReview("REVIEW_1", List.of(commentB, commentA));
 
         InlineResult result = channel.postInlineFeedback(
                 target,
@@ -187,6 +188,8 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
         // Each finding gets its OWN comment id — no collision.
         assertThat(a.externalRef()).isEqualTo("RC_a");
         assertThat(b.externalRef()).isEqualTo("RC_b");
+        assertThat(a.externalUrl()).isEqualTo("https://github.com/owner/repo/pull/42#discussion_r111");
+        assertThat(b.externalUrl()).isEqualTo("https://github.com/owner/repo/pull/42#discussion_r222");
     }
 
     @Test
@@ -231,6 +234,7 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
         DeliveredSignal foo = signalForKey(result, "ck-foo");
         assertThat(foo.disposition()).isEqualTo(Disposition.PRESERVED_EXISTING);
         assertThat(foo.externalRef()).isEqualTo("RC_old_foo");
+        assertThat(foo.externalUrl()).isEqualTo("https://github.com/owner/repo/pull/42#discussion_r456");
         assertThat(foo.threadExternalRef()).isEqualTo("THREAD_foo");
         DeliveredSignal bar = signalForKey(result, "ck-bar");
         assertThat(bar.disposition()).isEqualTo(Disposition.POSTED);
@@ -561,6 +565,7 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
     private static Map<String, Object> comment(String id, String path, int line) {
         Map<String, Object> c = new HashMap<>();
         c.put("id", id);
+        c.put("url", "https://github.com/owner/repo/pull/42#discussion_r123");
         c.put("path", path);
         c.put("line", line);
         return c;
@@ -578,6 +583,7 @@ class GithubInlineFeedbackChannelTest extends BaseUnitTest {
             String threadId, String firstCommentId, String firstCommentBody, boolean outdated, boolean resolved) {
         Map<String, Object> firstComment = new HashMap<>();
         firstComment.put("id", firstCommentId);
+        firstComment.put("url", "https://github.com/owner/repo/pull/42#discussion_r456");
         firstComment.put("body", firstCommentBody);
         firstComment.put("author", Map.of("login", "hephaestus[bot]"));
 

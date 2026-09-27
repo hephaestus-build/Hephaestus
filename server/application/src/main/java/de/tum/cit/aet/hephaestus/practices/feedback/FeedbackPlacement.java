@@ -133,6 +133,10 @@ public class FeedbackPlacement {
     @Column(name = "posted_comment_ref", columnDefinition = "TEXT")
     private @Nullable String postedCommentRef;
 
+    /** Provider-returned permalink; absent for deliveries recorded before URL capture. */
+    @Column(name = "posted_comment_url", columnDefinition = "TEXT")
+    private @Nullable String postedCommentUrl;
+
     /**
      * Link to the mentor assistant {@code chat_message} that delivered this placement — set only for a
      * {@code CONVERSATION_TURN} placement, NULL otherwise. Kept as a raw scalar (not a {@code @ManyToOne})

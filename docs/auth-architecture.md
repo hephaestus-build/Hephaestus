@@ -48,6 +48,8 @@ this association rather than comparing login names.
   shape combines standard JWT/OIDC claims with Hephaestus claims, defined in
   [the auth glossary](./auth-glossary.md#jwt-claim-shape) and emitted by `HephaestusJwtIssuer`. The public signing keys are published at `/.well-known/jwks.json`; there is
   no full OIDC discovery document.
+- **Two kinds of session, one revocation store.** The web app holds a cookie session; installed
+  clients hold a bearer [client session](#installed-clients). Both are rows in `issued_jwt`.
 - **Database-backed revocation.** Every issued JWT has a `jti` row in `issued_jwt`. Logout /
   refresh / sign-out-everywhere / account-delete set `revoked_at`; `RevocationAwareJwtDecoder`
   re-checks `issued_jwt(jti)` on every request, so revocation takes effect on every pod within
@@ -71,6 +73,68 @@ this association rather than comparing login names.
   audit log. Account deletion is a 48-hour soft-delete cooldown → hard cascade +
   pseudonymization of the git-provider mirror (Art. 17(3) — preserves activity-graph integrity on
   other users' work).
+
+## Installed clients
+
+An *installed client* — the Chrome extension, later a mobile app — cannot hold the web app's cookie,
+so it signs in to a session of its own. [ADR 0045](decisions/0045-installed-clients-sign-in-with-a-pkce-handoff.md)
+records the decision and the options it rejected; `core.auth.clientsession` implements it.
+
+```mermaid
+sequenceDiagram
+    accTitle: Installed-client sign-in and refresh
+    accDescr: The extension starts the normal login with a PKCE challenge, the server completes the provider sign-in, hands a one-minute single-use code to the registered redirect, and exchanges it for a client session whose refresh secret rotates on every use.
+    participant Extension as Extension worker
+    participant Chrome as Chrome sign-in window
+    participant Server as Hephaestus server
+    participant Provider as GitHub or GitLab
+    participant Database as PostgreSQL
+    Extension->>Chrome: launchWebAuthFlow(/auth/login?mode=client, client_id, redirect_uri, S256 challenge, state)
+    Chrome->>Server: GET /auth/login
+    Server->>Server: Check client id and exact redirect in InstalledClientRegistry
+    Server-->>Chrome: Seal client intent in the login-intent cookie, redirect to provider
+    Chrome->>Provider: Authorize
+    Provider-->>Chrome: Redirect to the server's own OAuth callback
+    Chrome->>Server: OAuth callback
+    Server->>Database: Resolve account, store hashed handoff (60 s, single use)
+    Server-->>Chrome: Redirect to https://<id>.chromiumapp.org/callback?code&state
+    Chrome-->>Extension: Callback URL
+    Extension->>Server: POST /auth/client/token {clientId, redirectUri, code, codeVerifier}
+    Server->>Database: Consume handoff, then verify PKCE
+    Server->>Database: Create client_session, record issued JWT with refresh hash
+    Server-->>Extension: Access token, refresh secret, session deadline (no-store)
+    Extension->>Server: POST /auth/client/refresh {refreshToken}
+    Server->>Database: Lock account, then session, then rotate or revoke on reuse
+    Server-->>Extension: New tokens, or 401
+```
+
+- **One door.** `GET /auth/login` with `mode=client` is the web login with extra, sealed parameters,
+  so the provider callback and login providers are shared. An unknown client id or redirect ends on a
+  server error page, never a redirect. `GET /auth/dev-login/client` exists only with dev login.
+- **Exact redirects from one list.** `InstalledClientRegistry` reads
+  `hephaestus.auth.browser-extension-ids`; each id yields one redirect,
+  `https://<id>.chromiumapp.org/callback`, and one CORS origin, `chrome-extension://<id>`. An id is a
+  routing restriction, not an attestation: ids and their public keys are public.
+- **Handoff.** `client_sign_in_handoff` stores only the code's hash, expires after 60 seconds and is
+  consumed atomically before the PKCE check, so a wrong verifier burns it. The exchange must present the
+  same client id and redirect URI.
+- **Session and lineage.** `client_session.id` is the JWT's `sid`. `issued_jwt` rows carry
+  `session_id` and a unique `refresh_token_hash` for as long as the session exists, so any refresh
+  secret, JTI or logout secret the session ever issued resolves the family.
+- **Strict rotation.** Only the current refresh secret renews. Presenting an earlier one revokes the
+  session (`REFRESH_REUSE`) and records an auth event; there is no grace window. Copying a secret is
+  detected only when a stale one is presented.
+- **Lock order account → session → issued_jwt.** Every issuance takes `account FOR SHARE` and
+  re-checks the account is active; refresh, logout and single-session revoke then lock the session.
+  `SessionRevocation` takes `account FOR UPDATE` before ending client sessions and bulk-revoking issued
+  JWTs, so an account-wide revocation cannot race a refresh into a surviving token.
+- **Boundaries.** The client endpoints are exact `POST` matchers, CSRF-exempt only without the auth
+  cookie, refuse requests that carry it, bound their bodies by pattern and answer `no-store`. The cookie
+  `/auth/refresh` refuses `sid` tokens; `/auth/logout` with a `sid` bearer ends the client session.
+  User view mints nothing for installed clients.
+- **Visible and revocable.** The session list shows a client session once, as its client kind, with its
+  latest JTI; revoking any JTI of the family ends the session. Cleanup removes expired handoffs and
+  sessions past their deadline or revoked for a day, with their token rows.
 
 ## Browser session coordination
 

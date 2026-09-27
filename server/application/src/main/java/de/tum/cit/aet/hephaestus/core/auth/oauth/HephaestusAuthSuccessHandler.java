@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.core.auth.oauth;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionService;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInRedirect;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -15,6 +17,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Objects;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,11 +43,12 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
 
     private final AccountProvisioningService provisioningService;
     private final HephaestusJwtIssuer jwtIssuer;
-    private final JwtPrincipalFactory principalFactory;
     private final AuthIntentCookie authIntentCookie;
     private final AuthProperties authProperties;
     private final AuthEventLogger authEventLogger;
     private final IdentityLinkAuthentication identityLinkAuthentication;
+    private final ClientSessionService clientSessionService;
+    private final InstalledClientRegistry installedClients;
     private final Clock clock;
 
     /**
@@ -56,20 +61,22 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
     public HephaestusAuthSuccessHandler(
             AccountProvisioningService provisioningService,
             HephaestusJwtIssuer jwtIssuer,
-            JwtPrincipalFactory principalFactory,
             AuthIntentCookie authIntentCookie,
             AuthProperties authProperties,
             AuthEventLogger authEventLogger,
             IdentityLinkAuthentication identityLinkAuthentication,
+            ClientSessionService clientSessionService,
+            InstalledClientRegistry installedClients,
             Clock clock,
             @Value("${hephaestus.webapp.url:}") String webappBaseUrl) {
         this.provisioningService = provisioningService;
         this.jwtIssuer = jwtIssuer;
-        this.principalFactory = principalFactory;
         this.authIntentCookie = authIntentCookie;
         this.authProperties = authProperties;
         this.authEventLogger = authEventLogger;
         this.identityLinkAuthentication = identityLinkAuthentication;
+        this.clientSessionService = clientSessionService;
+        this.installedClients = installedClients;
         this.clock = clock;
         this.appBaseUrl = stripTrailingSlash(webappBaseUrl);
     }
@@ -86,9 +93,13 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
     public void onAuthenticationSuccess(
             HttpServletRequest request, HttpServletResponse response, Authentication authentication)
             throws IOException {
+        AuthIntentCookie.Intent intent = authIntentCookie.read(request);
+        authIntentCookie.clear(response);
+        ClientCallback client = ClientCallback.of(intent, installedClients);
+
         if (!(authentication instanceof OAuth2AuthenticationToken token)) {
             log.error("auth.success: unexpected authentication type {}", authentication.getClass());
-            redirectToApp(request, response, "/auth/error?code=unexpected_auth_type");
+            refuse(request, response, client, "unexpected_auth_type");
             return;
         }
         OAuth2User principal = token.getPrincipal();
@@ -96,12 +107,15 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
         String subject = principal.getName();
         if (subject == null || subject.isBlank()) {
             log.error("auth.success: principal has no subject (registrationId={})", registrationId);
-            redirectToApp(request, response, "/auth/error?code=no_subject");
+            refuse(request, response, client, "no_subject");
             return;
         }
-
-        AuthIntentCookie.Intent intent = authIntentCookie.read(request);
-        authIntentCookie.clear(response);
+        if (client instanceof ClientCallback.Unregistered) {
+            // The sealed pair is no longer registered: nothing is minted and nothing goes to that callback.
+            log.warn("auth.success: installed-client sign-in whose client is no longer registered");
+            redirectToApp(request, response, "/auth/error?code=client_not_registered");
+            return;
+        }
 
         // The IdP round-trip can outlive — or be replaced by — the session that authorized the linking,
         // so the authority to attach an identity is re-checked here rather than trusted from the cookie
@@ -131,11 +145,11 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
             provisioned = provisioningService.resolveOrProvision(registrationId, subject, principal, intent);
         } catch (LinkOnlyProviderLoginException e) {
             log.warn("auth.success: refused link-only provider login: {}", e.getMessage());
-            redirectToApp(request, response, "/auth/error?code=link_requires_auth");
+            refuse(request, response, client, "link_requires_auth");
             return;
         } catch (AccountLinkConflictException e) {
             log.warn("auth.success: refused link because the identity is already linked to another account");
-            redirectToApp(request, response, "/auth/error?code=identity_already_linked");
+            refuse(request, response, client, "identity_already_linked");
             return;
         }
         Account account = provisioned.account();
@@ -150,7 +164,41 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
                     "auth.success: rejecting login for non-ACTIVE accountId={} status={}",
                     account.getId(),
                     account.getStatus());
-            redirectToApp(request, response, "/auth/error?code=account_inactive");
+            refuse(request, response, client, "account_inactive");
+            return;
+        }
+
+        // An installed-client sign-in ends in a single-use code bound to the client's PKCE challenge,
+        // redeemed by the client itself. No cookie is set: the window that ran the sign-in never holds a
+        // Hephaestus session.
+        if (client instanceof ClientCallback.Registered registered) {
+            Instant now = clock.instant();
+            Optional<String> code = clientSessionService.createHandoff(
+                    Objects.requireNonNull(account.getId()),
+                    registered.client(),
+                    registered.request().codeChallenge(),
+                    now.plus(authProperties.sessionMaxLifetime()),
+                    now);
+            if (code.isEmpty()) {
+                refuse(request, response, client, "account_inactive");
+                return;
+            }
+            authEventLogger
+                    .event(
+                            provisioned.identityLinked()
+                                    ? AuthEvent.EventType.IDENTITY_LINKED
+                                    : AuthEvent.EventType.LOGIN,
+                            AuthEvent.Result.SUCCESS)
+                    .account(account.getId())
+                    .record();
+            getRedirectStrategy()
+                    .sendRedirect(
+                            request,
+                            response,
+                            ClientSignInRedirect.success(
+                                    registered.client().redirectUri(),
+                                    code.get(),
+                                    registered.request().state()));
             return;
         }
 
@@ -160,7 +208,7 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
         if (intent == null || intent.mode() != AuthIntentCookie.Intent.Mode.LINK) {
             Instant now = clock.instant();
             HephaestusJwtIssuer.Token issued = jwtIssuer.issue(
-                    principalFactory.forAccount(account),
+                    Objects.requireNonNull(account.getId()),
                     // Absolute session ceiling, stamped once at login and carried through every refresh,
                     // alongside the auth_time this login establishes.
                     TokenConstraints.session(now.plus(authProperties.sessionMaxLifetime()), now),
@@ -183,6 +231,26 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
 
         String redirectTo = (intent != null) ? ReturnToValidator.safeOrFallback(intent.returnTo()) : "/";
         redirectToApp(request, response, redirectTo);
+    }
+
+    /**
+     * Ends the sign-in with {@code code}: at the installed client's registered callback when the sign-in
+     * started there, on the SPA error page otherwise.
+     */
+    private void refuse(HttpServletRequest request, HttpServletResponse response, ClientCallback client, String code)
+            throws IOException {
+        if (client instanceof ClientCallback.Registered registered) {
+            getRedirectStrategy()
+                    .sendRedirect(
+                            request,
+                            response,
+                            ClientSignInRedirect.error(
+                                    registered.client().redirectUri(),
+                                    code,
+                                    registered.request().state()));
+            return;
+        }
+        redirectToApp(request, response, "/auth/error?code=" + code);
     }
 
     /**

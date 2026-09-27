@@ -24,8 +24,14 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Default: three sessions from the shared fixture (one is the current device). */
-export const Default: Story = {};
+/** Default: the shared fixture's sessions — the current device, two other browsers and a browser extension. */
+export const Default: Story = {
+	play: async ({ canvas }) => {
+		await expect(
+			await canvas.findByRole("listitem", { name: "Browser extension in Chrome on macOS" }),
+		).toBeVisible();
+	},
+};
 
 /** No active sessions — empty-state copy. */
 export const Empty: Story = {

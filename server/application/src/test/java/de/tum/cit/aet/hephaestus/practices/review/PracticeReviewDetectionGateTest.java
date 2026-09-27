@@ -236,6 +236,54 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
      * would put the draft-specific criteria of a practice like {@code ready-and-traceable-handoff} out of
      * reach of the only artifact they apply to.
      */
+    /**
+     * A request is judged in the workspace that asked. The repository's name can resolve to another
+     * workspace — several monitor one repository, and the same name exists on other provider servers — and
+     * that workspace's settings must not decide whether this one reviews.
+     */
+    @Nested
+    class RequestingWorkspaceTests {
+
+        private static final SignalName REQUEST = ScmSignals.PULL_REQUEST_MANUAL_REVIEW;
+
+        @BeforeEach
+        void treatTheRequestSignalAsARequest() {
+            when(signalOptions.isManualRequest(REQUEST)).thenReturn(true);
+        }
+
+        @Test
+        void admitsARequestFromAWorkspaceThatTakesRequestsWithoutAskingWhichWorkspaceTheNameResolvesTo() {
+            PullRequest pr = createPullRequest();
+            Workspace asking = createWorkspace();
+            when(coverageService.admits(asking, "ls1intum/Hephaestus", pr.getBaseRefName(), pr.reviewSubject()))
+                    .thenReturn(true);
+            when(practiceDetectionReadiness.hasRunnableAgent(WORKSPACE_ID)).thenReturn(true);
+            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID))
+                    .thenReturn(List.of(createPractice(ScmSignals.PULL_REQUEST_OPENED)));
+
+            GateDecision decision = gate.evaluatePullRequest(pr, asking, REQUEST, TriggerMode.MANUAL);
+
+            assertThat(decision).isInstanceOf(GateDecision.Detect.class);
+            assertThat(((GateDecision.Detect) decision).workspace()).isSameAs(asking);
+            verifyNoInteractions(workspaceResolver);
+        }
+
+        @Test
+        void refusesARequestFromAWorkspaceThatDoesNotTakeRequests() {
+            PullRequest pr = createPullRequest();
+            Workspace asking = createWorkspace();
+            asking.getFeatures().setPracticeReviewManualTriggerEnabled(false);
+            when(coverageService.admits(asking, "ls1intum/Hephaestus", pr.getBaseRefName(), pr.reviewSubject()))
+                    .thenReturn(true);
+
+            GateDecision decision = gate.evaluatePullRequest(pr, asking, REQUEST, TriggerMode.MANUAL);
+
+            assertThat(decision).isInstanceOf(GateDecision.Skip.class);
+            assertThat(((GateDecision.Skip) decision).reason()).contains("manual trigger disabled");
+            verifyNoInteractions(workspaceResolver);
+        }
+    }
+
     @Nested
     class DraftGateTests {
 
@@ -641,11 +689,14 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
         void anAdministrativeEvaluationMayRunOutsideCoverage() {
             PullRequest pr = createPullRequest();
             pr.setBaseRefName("develop");
-            Workspace workspace = setupThroughPracticeMatching(pr, createPractice(SIGNAL));
+            Workspace workspace = createWorkspace();
+            when(practiceDetectionReadiness.hasRunnableAgent(WORKSPACE_ID)).thenReturn(true);
+            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(createPractice(SIGNAL)));
             when(coverageService.admits(workspace, "ls1intum/Hephaestus", "develop", pr.reviewSubject()))
                     .thenReturn(false);
 
-            assertThat(gate.evaluateAdministrative(pr, SIGNAL)).isInstanceOf(GateDecision.Detect.class);
+            assertThat(gate.evaluatePullRequestAdministrative(pr, workspace, SIGNAL))
+                    .isInstanceOf(GateDecision.Detect.class);
         }
 
         /** Cheap enough to sit ahead of every query — no catalogue read happens for out-of-scope work. */

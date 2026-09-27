@@ -14,13 +14,11 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventData;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
-import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipal;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -30,8 +28,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,14 +48,14 @@ class AuthSessionServiceTest extends BaseUnitTest {
     private IssuedJwtRepository issuedJwtRepository;
     private AccountRepository accountRepository;
     private HephaestusJwtIssuer jwtIssuer;
-    private JwtPrincipalFactory principalFactory;
     private AuthEventWriter authEventWriter;
+    private ClientSessionService clientSessionService;
+    private SessionRevocation sessionRevocation;
     private SimpleMeterRegistry meterRegistry;
     private AuthSessionService service;
 
     @BeforeEach
     void setUp() {
-        principalFactory = mock(JwtPrincipalFactory.class);
         issuedJwtRepository = mock(IssuedJwtRepository.class);
         accountRepository = mock(AccountRepository.class);
         jwtIssuer = mock(HephaestusJwtIssuer.class);
@@ -70,16 +66,16 @@ class AuthSessionServiceTest extends BaseUnitTest {
         meterRegistry = new SimpleMeterRegistry();
 
         lenient().when(properties.cookieName()).thenReturn("__Host-HEPHAESTUS_AT");
-        lenient()
-                .when(principalFactory.forAccountId(ACCOUNT_ID))
-                .thenReturn(new JwtPrincipal(ACCOUNT_ID, "alice", null, Set.of()));
 
+        clientSessionService = mock(ClientSessionService.class);
+        sessionRevocation = mock(SessionRevocation.class);
         service = new AuthSessionService(
-                principalFactory,
                 issuedJwtRepository,
                 accountRepository,
                 jwtIssuer,
                 eventLogger,
+                clientSessionService,
+                sessionRevocation,
                 properties,
                 clock,
                 new AuthMetrics(meterRegistry));
@@ -102,21 +98,6 @@ class AuthSessionServiceTest extends BaseUnitTest {
         assertThat(cookie.getValue()).isEmpty();
     }
 
-    private Account activeAccount() {
-        Account account = new Account("Alice");
-        account.setId(ACCOUNT_ID);
-        account.setStatus(Account.Status.ACTIVE);
-        return account;
-    }
-
-    private static Account activeAdmin(long id) {
-        Account operator = new Account("Operator");
-        operator.setId(id);
-        operator.setStatus(Account.Status.ACTIVE);
-        operator.setAppRole(Account.AppRole.APP_ADMIN);
-        return operator;
-    }
-
     private AuthEventData capturedEvent() {
         ArgumentCaptor<AuthEventData> captor = ArgumentCaptor.forClass(AuthEventData.class);
         verify(authEventWriter).write(captor.capture());
@@ -132,7 +113,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
         UUID jti = UUID.randomUUID();
 
         MockHttpServletResponse response = new MockHttpServletResponse();
-        service.logout(ACCOUNT_ID, jti, response);
+        service.logout(ACCOUNT_ID, jti, null, response);
 
         verify(issuedJwtRepository).revoke(eq(jti), any(), eq(IssuedJwt.RevokedReason.LOGOUT));
         assertCookieCleared(response);
@@ -143,11 +124,48 @@ class AuthSessionServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldEndTheWholeClientSessionAndSetNoCookieWhenTheTokenCarriesASid() {
+        UUID jti = UUID.randomUUID();
+        UUID sid = UUID.randomUUID();
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        service.logout(ACCOUNT_ID, jti, sid, response);
+
+        verify(clientSessionService).endSession(ACCOUNT_ID, sid, IssuedJwt.RevokedReason.LOGOUT);
+        verify(issuedJwtRepository, never()).revoke(any(), any(), any());
+        assertThat(response.getCookies()).isEmpty();
+    }
+
+    @Test
+    void shouldEndTheFamilyWhenARevokedJtiBelongsToAClientSession() {
+        UUID oldJti = UUID.randomUUID();
+        UUID sid = UUID.randomUUID();
+        when(issuedJwtRepository.findSessionIdOwnedBy(oldJti, ACCOUNT_ID)).thenReturn(java.util.Optional.of(sid));
+
+        service.revokeSession(ACCOUNT_ID, oldJti);
+
+        verify(clientSessionService).endSession(ACCOUNT_ID, sid, IssuedJwt.RevokedReason.SELF_REVOKE);
+        verify(issuedJwtRepository, never()).revokeOwned(any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldKeepTheCallersWholeClientSessionWhenSigningOutEverywhereElse() {
+        UUID jti = UUID.randomUUID();
+        UUID sid = UUID.randomUUID();
+
+        service.revokeAllExcept(ACCOUNT_ID, jti, sid);
+        service.revokeAllExcept(ACCOUNT_ID, jti, null);
+
+        verify(sessionRevocation).revokeAccount(ACCOUNT_ID, IssuedJwt.RevokedReason.SIGN_OUT_EVERYWHERE, null, sid);
+        verify(sessionRevocation).revokeAccount(ACCOUNT_ID, IssuedJwt.RevokedReason.SIGN_OUT_EVERYWHERE, jti, null);
+    }
+
+    @Test
     void refresh_whenTheSessionCeilingHasPassed_endsTheSession() {
         UUID jti = UUID.randomUUID();
         when(issuedJwtRepository.revoke(eq(jti), any(), eq(IssuedJwt.RevokedReason.ROTATE)))
                 .thenReturn(1);
-        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(activeAccount()));
+        when(accountRepository.lockForIssuance(ACCOUNT_ID)).thenReturn(true);
 
         MockHttpServletResponse response = new MockHttpServletResponse();
         assertThat(service.refresh(
@@ -166,6 +184,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
     @Test
     void refresh_whenConditionalRevokeAffectsZeroRows_recordsNoopAndDoesNotReMint() {
         UUID jti = UUID.randomUUID();
+        when(accountRepository.lockForIssuance(ACCOUNT_ID)).thenReturn(true);
         when(issuedJwtRepository.revoke(eq(jti), any(), eq(IssuedJwt.RevokedReason.ROTATE)))
                 .thenReturn(0);
 
@@ -184,9 +203,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
         UUID jti = UUID.randomUUID();
         when(issuedJwtRepository.revoke(eq(jti), any(), eq(IssuedJwt.RevokedReason.ROTATE)))
                 .thenReturn(1);
-        Account suspended = activeAccount();
-        suspended.setStatus(Account.Status.SUSPENDED);
-        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(suspended));
+        when(accountRepository.lockForIssuance(ACCOUNT_ID)).thenReturn(false);
 
         MockHttpServletResponse response = new MockHttpServletResponse();
         assertThat(service.refresh(ACCOUNT_ID, jti, ctx(SESSION_CEILING), mock(HttpServletRequest.class), response))
@@ -202,7 +219,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
         UUID jti = UUID.randomUUID();
         when(issuedJwtRepository.revoke(eq(jti), any(), eq(IssuedJwt.RevokedReason.ROTATE)))
                 .thenReturn(1);
-        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(accountRepository.lockForIssuance(ACCOUNT_ID)).thenReturn(false);
 
         assertThat(service.refresh(
                         ACCOUNT_ID,
@@ -220,7 +237,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
         UUID jti = UUID.randomUUID();
         when(issuedJwtRepository.revoke(eq(jti), any(), eq(IssuedJwt.RevokedReason.ROTATE)))
                 .thenReturn(1);
-        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(activeAccount()));
+        when(accountRepository.lockForIssuance(ACCOUNT_ID)).thenReturn(true);
         HephaestusJwtIssuer.Token token =
                 new HephaestusJwtIssuer.Token("fresh-token", UUID.randomUUID(), NOW.plus(Duration.ofMinutes(15)));
         when(jwtIssuer.issue(any(), any(), any())).thenReturn(token);
@@ -244,7 +261,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
         Instant ceiling = NOW.plus(Duration.ofHours(6));
         when(issuedJwtRepository.revoke(eq(jti), any(), eq(IssuedJwt.RevokedReason.ROTATE)))
                 .thenReturn(1);
-        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(activeAccount()));
+        when(accountRepository.lockForIssuance(ACCOUNT_ID)).thenReturn(true);
         when(jwtIssuer.issue(any(), any(), any()))
                 .thenReturn(
                         new HephaestusJwtIssuer.Token("fresh", UUID.randomUUID(), NOW.plus(Duration.ofMinutes(15))));
@@ -259,7 +276,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
         UUID jti = UUID.randomUUID();
         when(issuedJwtRepository.revoke(eq(jti), any(), eq(IssuedJwt.RevokedReason.ROTATE)))
                 .thenReturn(1);
-        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(activeAccount()));
+        when(accountRepository.lockForIssuance(ACCOUNT_ID)).thenReturn(true);
         when(jwtIssuer.issue(any(), any(), any())).thenThrow(new IllegalStateException("signing key unavailable"));
 
         assertThatThrownBy(() -> service.refresh(

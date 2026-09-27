@@ -1,6 +1,6 @@
 Privacy Statement for Hephaestus in accordance with Art. 13 and 14 GDPR.
 
-_Last updated: 2026-09-03._
+_Last updated: 2026-09-27._
 
 The Technical University of Munich (TUM), through the Research Group for Applied Education Technologies (AET), operates Hephaestus at https://hephaestus.build, which is also reachable at https://hephaestus.aet.cit.tum.de. This statement explains what personal data the platform processes, why, on what legal basis, who receives it, how long it is kept, and the rights you have. Personal data is processed under the GDPR, the Bavarian Data Protection Act (BayDSG), the Bavarian Higher Education Innovation Act (BayHIG), and the German Telecommunications Digital Services Data Protection Act (TDDDG).
 
@@ -81,6 +81,45 @@ copies outside this instance.
 ## 4. Cookies and browser-side storage
 
 Hephaestus uses technically necessary browser-side storage: the session cookie (`__Host-HEPHAESTUS_AT`) and the CSRF and OAuth-state cookies that maintain your login, and a `theme` entry in local storage that remembers your light/dark mode (no personal data). Legal basis: § 25 Abs. 2 Nr. 2 TDDDG i.V.m. Art. 6(1)(e) GDPR. Beyond these, a deployment may activate optional Sentry error monitoring. Where activated, it uses cookies or browser-side storage **only after you opt in** through the cookie-consent banner (legal basis: § 25 Abs. 1 TDDDG i.V.m. Art. 6(1)(a) GDPR); you can change or withdraw that choice at any time via the "Cookie preferences" link. Where the integration is not activated — the default, and the state of the TUM-operated deployment unless announced otherwise — no consent banner is shown and only the technically necessary storage above is used. Product feedback and survey submissions create no browser-side storage. No advertising or cross-site tracking cookies are used in any configuration.
+
+### Chrome extension
+
+The optional Hephaestus Chrome extension shows the practice review of the GitHub or GitLab work you
+open, inside that work's page. Its default destination is this instance, `hephaestus.build`; a
+user-selected self-hosted instance has its own operator and privacy notice. After you connect and
+allow a provider site, the extension automatically sends the canonical address of each supported
+pull request, merge request or issue you open there to the selected instance, when the page opens and
+while it stays open, to show its review. On supported repository issue and pull/merge-request lists,
+choosing a row's Hephaestus preview sends only that work's canonical address; it does not look up
+every row or send the list's search terms and filters. Query strings and fragments are excluded from
+work addresses. It does not upload page text, source code, form inputs or screenshots, and does not
+record a browsing history. It shows metadata about comments recorded as posted for you on that work:
+practice names, comment locations, links and recorded delivery times. Your own observations on that
+work (practice, outcome and a one-sentence summary) load when you open the report. The extension
+shows every user, administrators included, only their own records and no feedback text; other
+developers' records stay in the web app under its own access rules. A review request is confirmed in
+the extension's own window and uses the existing practice-review processing and recipients described
+in this statement.
+
+The extension handles your account identity, its own sign-in credentials, instance preference,
+supported work addresses, and the review records returned by the instance. The instance preference
+remains locally in Chrome; credentials remain in session memory and are cleared on sign-out or when
+Chrome closes. The server records the installed-client session and authentication events for secure
+sign-in under the legal basis for identity at sign-in in section 3. The session follows the instance's
+absolute sign-in deadline and can be revoked in account settings. Client sessions and their token records become eligible for cleanup at their absolute expiry or
+one day after revocation, whichever comes first. An hourly job removes eligible rows when they are
+not in use; failures or active transactions can delay removal. Retained authentication events follow
+section 3. Removing the extension does not erase server records. The extension's local storage is
+necessary for the function you request (§ 25 Abs. 2 Nr. 2 TDDDG).
+
+The extension's use of information adheres to the
+[Chrome Web Store User Data Policy, including its Limited Use requirements](https://developer.chrome.com/docs/webstore/program-policies/limited-use).
+Extension data is used only to provide and secure its disclosed review-context functionality, not
+for advertising, sale, creditworthiness or lending decisions, or unrelated profiling or research.
+Academic-research participation does not authorise reuse of extension browsing activity for research.
+The extension includes no analytics or third-party error-reporting service. Its full data flow and
+controls are described in [Chrome extension privacy](https://docs.hephaestus.build/user/browser-extension-privacy).
+The controller, recipients and rights contacts in this statement apply when you use this instance.
 
 ## 5. Recipients
 

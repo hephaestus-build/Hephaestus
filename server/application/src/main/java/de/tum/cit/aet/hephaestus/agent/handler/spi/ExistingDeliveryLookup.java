@@ -7,7 +7,8 @@ import org.jspecify.annotations.Nullable;
  * {@code Optional}: collapsing "confirmed absent" and "could not determine" makes every failed lookup
  * fall through to posting again.
  */
-public record ExistingDeliveryLookup(Kind kind, @Nullable String commentId) {
+public record ExistingDeliveryLookup(
+        Kind kind, @Nullable String commentId, @Nullable String commentUrl) {
     public enum Kind {
         /** A delivery for this exact job was found already posted at the provider. */
         FOUND,
@@ -18,17 +19,21 @@ public record ExistingDeliveryLookup(Kind kind, @Nullable String commentId) {
     }
 
     public static ExistingDeliveryLookup found(String commentId) {
+        return found(commentId, null);
+    }
+
+    public static ExistingDeliveryLookup found(String commentId, @Nullable String commentUrl) {
         if (commentId == null || commentId.isBlank()) {
             throw new IllegalArgumentException("FOUND outcome requires a non-blank commentId");
         }
-        return new ExistingDeliveryLookup(Kind.FOUND, commentId);
+        return new ExistingDeliveryLookup(Kind.FOUND, commentId, commentUrl);
     }
 
     public static ExistingDeliveryLookup absent() {
-        return new ExistingDeliveryLookup(Kind.ABSENT, null);
+        return new ExistingDeliveryLookup(Kind.ABSENT, null, null);
     }
 
     public static ExistingDeliveryLookup unknown() {
-        return new ExistingDeliveryLookup(Kind.UNKNOWN, null);
+        return new ExistingDeliveryLookup(Kind.UNKNOWN, null, null);
     }
 }

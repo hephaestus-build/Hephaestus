@@ -274,6 +274,9 @@ hephaestus:
         step-up-max-age: ${HEPHAESTUS_AUTH_STEP_UP_MAX_AGE:5m}
         cookie-name: ${HEPHAESTUS_AUTH_COOKIE_NAME:__Host-HEPHAESTUS_AT}
         state-cookie-key: ${HEPHAESTUS_AUTH_STATE_COOKIE_KEY:}
+        # Chrome extension ids allowed to sign in (comma-separated). Each id allows exactly the callback
+        # https://<id>.chromiumapp.org/callback and the CORS origin chrome-extension://<id>. Empty: none.
+        browser-extension-ids: ${HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS:}
         # Instance login providers seeded into the login_provider store on first boot, keyed by a stable
         # registrationId (the OAuth callback segment + identity key). A blank client-id skips that entry
         # (no crash). Seeding is seed-if-absent, so admin edits survive reboots. Multiple providers per
@@ -326,6 +329,10 @@ hephaestus:
             refresh:
                 capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_REFRESH_CAPACITY:60}
                 period: ${HEPHAESTUS_AUTH_RATE_LIMIT_REFRESH_PERIOD:1m}
+            # POST /auth/client/token|refresh|logout (installed clients) — keyed by client IP
+            client-session:
+                capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_CLIENT_SESSION_CAPACITY:30}
+                period: ${HEPHAESTUS_AUTH_RATE_LIMIT_CLIENT_SESSION_PERIOD:1m}
             # Read-only user view — keyed by admin account, IP fallback
             user-view:
                 capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY:120}
@@ -911,3 +918,7 @@ spring:
 hephaestus:
     email:
         from: hephaestus@localhost
+    auth:
+        # The development extension key's id, so an unpacked dev build of extension/ can sign in locally.
+        # A literal on purpose: the variable's fallback is the empty list everywhere it is forwarded.
+        browser-extension-ids: ijkajblcbajjpjbknfgdiiiljipafiko

@@ -68,8 +68,8 @@ derives URL segments from the filenames there and the router owns that naming.
 ## Linting
 
 **oxlint lints, oxfmt formats.** The rule set is layered as the root `AGENTS.md` § Lint and format
-says; `.oxlintrc.json` here holds only what this tree adds — the design-system checks, the test and
-story rules, the house plugin's story rules — or decides differently, each with the reason beside
+says; `oxlint.app.jsonc` owns the application compiler, Vitest and Storybook rules shared with the
+extension; `.oxlintrc.json` here holds the design-system checks and what this tree decides differently, each with the reason beside
 it, and every restriction states itself at the call site when it fires. None of that is repeated
 here. What follows is what no diagnostic will ever tell you.
 
@@ -295,7 +295,8 @@ Never re-invent `role === "ADMIN"`; use the shared pieces:
 
 Compose Tailwind utilities with `import { cn } from "cn"` directly; do not add a local wrapper.
 `components.json` sets `aliases.utils` to `cn` so registry installs use the same package import.
-Prefer a semantic token from the `--color-*` block in `src/styles.css` over a hard-coded value;
+Prefer a semantic token from the `--color-*` block in `src/styles/theme-tokens.css` (shared with the
+Chrome extension; provider colours stay in `src/styles.css`) over a hard-coded value;
 `text-muted-foreground`, `text-foreground`, `bg-background` and `border-border` carry most of the tree.
 Read that block rather than guessing a name.
 

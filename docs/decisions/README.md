@@ -55,7 +55,7 @@ do, its home is the Admin Guide (`docs/admin/`) and the runbook links to it.
 | [0014](0014-per-row-aes-gcm-aad-binding.md) | Per-row AES-GCM AAD binds ciphertext to record identity | Accepted (amended 2026-09-17 — key rotation realised with a per-row key version) |
 | [0015](0015-unified-integration-framework.md) | Unified integration framework — package layout and SPI surface | Accepted (amended 2026-05-27 for Phase 1-4 restructure; 2026-09-17 — names and paths corrected) |
 | [0016](0016-unified-identity-keycloak-as-truth.md) | Unified identity — SCM `User` is the authoritative person row, Keycloak `sub` is the persisted join key | Superseded by [0017](0017-replace-keycloak-with-spring-native-auth.md) |
-| [0017](0017-replace-keycloak-with-spring-native-auth.md) | Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs) | Accepted (amended post-merge — Stage B-2 login model; 2026-09-17 — data model corrected against the schema) |
+| [0017](0017-replace-keycloak-with-spring-native-auth.md) | Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs) | Accepted (amended post-merge — Stage B-2 login model; 2026-09-17 — data model corrected against the schema; 2026-09-26 — installed clients per [0045](0045-installed-clients-sign-in-with-a-pkce-handoff.md)) |
 | [0018](0018-pg-partman-for-auth-event-partitioning.md) | pg_partman for `auth_event` partitioning (supersedes ADR 0017's self-managed partitions) | Accepted (PostgreSQL version superseded by [0038](0038-postgresql-18-release-baseline.md); amended 2026-09-17 — image name and changeset location) |
 | [0019](0019-workspace-membership-keyed-on-account.md) | Workspace membership is keyed on `Account`, not the SCM `User` | Proposed |
 | [0020](0020-context-fabric-everything-is-an-integration.md) | Context Fabric — everything is an integration, only practice review and mentor are native | Accepted (amended 2026-08-04 #1430 — artifact-source contract shipped; 2026-08-30 #1636 — filesystem evidence store superseded by [0039](0039-git-and-postgresql-own-evidence.md); 2026-09-03 #1719 — filesystem layout superseded by [0041](0041-compose-1x-kubernetes-2.md); 2026-09-17 — shipped slice corrected against the code) |
@@ -83,5 +83,7 @@ do, its home is the Admin Guide (`docs/admin/`) and the runbook links to it.
 | [0042](0042-hosts-pull-their-own-releases.md) | Hosts pull their own releases | Accepted. Replaces the CI-driven SSH push deployment, which no ADR had recorded; the release evidence and image-lock decisions it builds on ([0034](0034-signed-release-image-lock.md)) are unchanged. |
 | [0043](0043-gradle-java-build.md) | Gradle owns the Java build | Accepted |
 | [0044](0044-email-is-a-notification-transport.md) | Email is a notification transport, delivered through the event publication registry | Accepted |
+| [0045](0045-installed-clients-sign-in-with-a-pkce-handoff.md) | Installed clients sign in with a PKCE handoff to their own revocable session | Accepted. Amends [0017](0017-replace-keycloak-with-spring-native-auth.md) for clients that cannot hold the cookie. |
+| [0046](0046-browser-extension-report-in-the-page.md) | The browser extension shows its report in the page and confirms changes in its own window | Accepted |
 
 Template: [0000-template.md](0000-template.md).

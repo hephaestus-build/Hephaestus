@@ -64,6 +64,9 @@ public class WorkspaceScopedTables {
             "auth_event",
             "issued_jwt",
             "jwt_signing_key",
+            // Installed-client sessions and their single-use sign-in handoffs; account-scoped like issued_jwt
+            "client_session",
+            "client_sign_in_handoff",
             // GDPR Art. 20 self-service export — account-scoped, spans a principal's data across workspaces.
             "account_export",
             // Account-scoped consent evidence; spans workspaces

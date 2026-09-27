@@ -28,6 +28,8 @@ security:
 tags:
 - description: The current developer's practice profile
   name: Practice Profile
+- description: The authenticated developer's feedback
+  name: Practice feedback
 - description: Per-workspace LLM spend rollup and budget status
   name: LLM Usage
 - description: Practice group trends and review runs for the current developer
@@ -93,6 +95,8 @@ tags:
   name: Admin
 - description: Per-workspace Slack channel consent + activation
   name: Slack channel activation
+- description: "Sign-in, refresh and sign-out for installed clients"
+  name: Client session
 - description: |-
     Workspace registry endpoints under /workspaces that operate outside of a specific workspace slug;
      slugged routes live in {@link WorkspaceController WorkspaceController} via <code>@WorkspaceScopedController</code>.
@@ -2065,8 +2069,154 @@ paths:
       summary: Set or clear a workspace's monthly cap on host-funded LLM spend
       tags:
       - Admin
+  /auth/client/configuration:
+    get:
+      description: Public. A client that finds no such endpoint is talking to a server
+        without installed-client sign-in.
+      operationId: getClientSignInConfiguration
+      parameters:
+      - in: query
+        name: clientId
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-p]{32}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientSignInConfiguration"
+          description: Whether the client is registered
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The client id is not a Chrome extension id
+      summary: Whether this instance lets the given installed client sign in
+      tags:
+      - Client session
+  /auth/client/logout:
+    post:
+      operationId: logoutClientSession
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientRefreshRequest"
+        required: true
+      responses:
+        "204":
+          description: "Signed out, or the secret was already unknown"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "The body is malformed, or a request with a valid CSRF token\
+            \ also carries the browser session cookie"
+        "403":
+          content:
+            application/json: {}
+          description: The request carries the browser session cookie without a valid
+            CSRF token; refused before the endpoint runs
+        "429":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Too many installed-client requests from this address; retry
+            after the Retry-After seconds
+      summary: End the session its refresh secret belongs to
+      tags:
+      - Client session
+  /auth/client/refresh:
+    post:
+      operationId: refreshClientSession
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientRefreshRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientSessionTokens"
+          description: Rotated
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "The body is malformed, or a request with a valid CSRF token\
+            \ also carries the browser session cookie"
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The session has ended; sign in again
+        "403":
+          content:
+            application/json: {}
+          description: The request carries the browser session cookie without a valid
+            CSRF token; refused before the endpoint runs
+        "429":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Too many installed-client requests from this address; retry
+            after the Retry-After seconds
+      summary: Rotate the session's access token and refresh secret
+      tags:
+      - Client session
+  /auth/client/token:
+    post:
+      operationId: exchangeClientSignIn
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientTokenRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientSessionTokens"
+          description: Signed in
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "The body is malformed, the code is unknown, expired, used,\
+            \ or does not match the verifier, client or callback, or a request with\
+            \ a valid CSRF token also carries the browser session cookie"
+        "403":
+          content:
+            application/json: {}
+          description: The request carries the browser session cookie without a valid
+            CSRF token; refused before the endpoint runs
+        "429":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Too many installed-client requests from this address; retry
+            after the Retry-After seconds
+      summary: Redeem a sign-in handoff code with its PKCE verifier
+      tags:
+      - Client session
   /auth/logout:
     post:
+      description: An installed-client access token ends its whole session.
       operationId: logout
       responses:
         "200":
@@ -2080,6 +2230,8 @@ paths:
       responses:
         "204":
           description: Session renewal completed
+        "400":
+          description: The token belongs to an installed-client session
         "401":
           description: Session has ended
       summary: "Rotate the access token (new jti, old revoked)"
@@ -2562,6 +2714,8 @@ paths:
       - Account
   /user/sessions/{jti}:
     delete:
+      description: "Any token of an installed-client session, even one it rotated\
+        \ away, ends that session."
       operationId: revokeSession
       parameters:
       - in: path
@@ -5708,6 +5862,41 @@ paths:
       summary: The current developer's in-app feedback
       tags:
       - In-App Feedback
+  /workspaces/{workspaceSlug}/practices/feedback/on-work:
+    get:
+      description: "Read-only metadata for up to 50 in-context pieces of feedback\
+        \ addressed to the caller with recorded provider comments, newest delivery\
+        \ first. Uses the exact connected-provider work lookup. Only recorded successful\
+        \ placements are included, even when the remaining delivery failed. Incomplete\
+        \ units omit draft practice metadata. No bodies, private channels or replaced\
+        \ feedback; admin status does not broaden the recipient. Permalinks are recorded\
+        \ provider links, not live existence checks."
+      operationId: getOwnDeliveredWorkFeedback
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: query
+        name: url
+        required: true
+        schema:
+          type: string
+          maxLength: 2048
+          minLength: 0
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveredWorkFeedback"
+          description: OK
+      summary: The caller's recorded feedback comments on this work
+      tags:
+      - Practice feedback
   /workspaces/{workspaceSlug}/practices/feedback/resolution-counts:
     get:
       operationId: getFeedbackResolutionCounts
@@ -5874,6 +6063,21 @@ paths:
           type: array
           items:
             type: string
+      - description: "Exact reviewed-work kind; requires artifactId, e.g. scm.pull_request\
+          \ or scm.issue"
+        in: query
+        name: artifactKind
+        required: false
+        schema:
+          type: string
+      - description: Exact reviewed-work ID; requires artifactKind
+        in: query
+        name: artifactId
+        required: false
+        schema:
+          type: integer
+          format: int64
+          exclusiveMinimum: 0
       - description: Only observations with these severities (repeatable); omit for
           all
         in: query
@@ -6174,6 +6378,58 @@ paths:
       summary: Reorder the practices within a group
       tags:
       - Practice Catalog
+  /workspaces/{workspaceSlug}/practices/review-context:
+    get:
+      description: "Reads the address only: nothing is fetched from it. The address\
+        \ must be on the server this workspace is connected to. Every way of not finding\
+        \ the work — not mirrored, not monitored here, another server, deleted or\
+        \ confidential — is the same 404."
+      operationId: resolveReviewContext
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - description: "The provider page's address, as the browser shows it"
+        in: query
+        name: url
+        required: true
+        schema:
+          type: string
+          maxLength: 2048
+          minLength: 0
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewContext"
+          description: "The work, and what the caller may do about it"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Not an HTTPS address, or not the page of a pull request, merge\
+            \ request or issue"
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller is not a member of this workspace
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: This workspace has no reviewed work at this address
+      summary: Find the reviewed work a provider page shows
+      tags:
+      - Practice review requests
   /workspaces/{workspaceSlug}/practices/review-requests:
     post:
       description: "Answers 200 both when a review starts and when one deliberately\
@@ -9459,6 +9715,60 @@ components:
           format: uuid
         title:
           type: string
+    ClientRefreshRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{43}$"
+      required:
+      - refreshToken
+    ClientSessionTokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        accessTokenExpiresAt:
+          type: string
+          format: date-time
+        refreshToken:
+          type: string
+        sessionExpiresAt:
+          type: string
+          format: date-time
+      required:
+      - accessToken
+      - accessTokenExpiresAt
+      - refreshToken
+      - sessionExpiresAt
+    ClientSignInConfiguration:
+      type: object
+      properties:
+        registered:
+          type: boolean
+      required:
+      - registered
+    ClientTokenRequest:
+      type: object
+      properties:
+        clientId:
+          type: string
+          pattern: "^[a-p]{32}$"
+        code:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{43}$"
+        codeVerifier:
+          type: string
+          pattern: "^[A-Za-z0-9._~-]{43,128}$"
+        redirectUri:
+          type: string
+          maxLength: 200
+          minLength: 0
+      required:
+      - clientId
+      - code
+      - codeVerifier
+      - redirectUri
     ConfigAuditActorRef:
       type: object
       description: |-
@@ -10862,6 +11172,95 @@ components:
           - OTHER
       required:
       - decision
+    DeliveredFeedbackPractice:
+      type: object
+      description: The practice's authoritative display name and stable workspace
+        slug.
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+      required:
+      - name
+      - slug
+    DeliveredWorkFeedback:
+      type: object
+      description: The caller's in-context feedback with recorded provider comments
+        on one authorized piece of work; no feedback bodies
+      properties:
+        feedback:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeliveredWorkFeedbackItem"
+        hasMore:
+          type: boolean
+          description: Older delivered feedback exists beyond this bounded view
+        work:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+      required:
+      - feedback
+      - hasMore
+      - work
+    DeliveredWorkFeedbackItem:
+      type: object
+      properties:
+        deliveredAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        placements:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeliveredWorkFeedbackPlacement"
+        practices:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeliveredFeedbackPractice"
+      required:
+      - id
+      - placements
+      - practices
+    DeliveredWorkFeedbackPlacement:
+      type: object
+      properties:
+        commentRef:
+          type: string
+          description: "Opaque recorded provider comment identity, for deduplication\
+            \ within this work only; never a URL"
+        endLine:
+          type: integer
+          format: int32
+        id:
+          type: string
+          format: uuid
+        path:
+          type: string
+        permalink:
+          type: string
+          description: "Provider-returned link on this exact work, or a matching mirrored\
+            \ comment; absent when unavailable. A recorded placement is not a live\
+            \ existence check."
+        side:
+          type: string
+          enum:
+          - OLD
+          - NEW
+        startLine:
+          type: integer
+          format: int32
+        type:
+          type: string
+          enum:
+          - SUMMARY
+          - INLINE
+          - CONVERSATION_TURN
+      required:
+      - commentRef
+      - id
+      - type
     DeliveryPolicyFactsSnapshot:
       type: object
       properties:
@@ -15510,6 +15909,30 @@ components:
       - practiceSlug
       - role
       - summary
+    ReviewContext:
+      type: object
+      description: "The piece of reviewed work a provider page shows, and what the\
+        \ caller may do about it"
+      properties:
+        canInspectReviewDetails:
+          type: boolean
+          description: "Whether the caller may read the review details behind this\
+            \ work — the runs, observations and the delivery of each piece of feedback\
+            \ — which is a workspace admin's view"
+        canRequestReview:
+          type: boolean
+          description: "Whether the caller may ask for a review of this work: they\
+            \ are its author or an assignee, or a workspace admin, through one of\
+            \ their own linked accounts. It does not promise a review starts; the\
+            \ answer to the ask says whether one did, and why not"
+        work:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: "The work as this workspace mirrored it; its id and kind address\
+            \ the trace, observations and feedback about it"
+      required:
+      - canInspectReviewDetails
+      - canRequestReview
+      - work
     ReviewFeedback:
       type: object
       properties:
@@ -16406,11 +16829,19 @@ components:
     SessionView:
       type: object
       properties:
+        client:
+          type: string
+          description: what signed in
+          enum:
+          - WEB
+          - BROWSER_EXTENSION
         current:
           type: boolean
         expiresAt:
           type: string
           format: date-time
+          description: "when the token expires; for an installed client, the session's\
+            \ own deadline"
         ip:
           type: string
         issuedAt:
@@ -16421,6 +16852,8 @@ components:
           format: uuid
         userAgent:
           type: string
+      required:
+      - client
     SlackChannelCandidate:
       type: object
       description: A Slack channel the app can offer in the workspace channel picker

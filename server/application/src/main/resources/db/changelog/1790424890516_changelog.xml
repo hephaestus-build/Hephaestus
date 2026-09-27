@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790424890516-1" author="hephaestus">
+        <createTable tableName="client_session">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="client_sessionPK"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="auth_time" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_id" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_kind" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revoked_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="revoked_reason" type="VARCHAR(32)"/>
+            <column name="session_expires_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790424890516-2" author="hephaestus">
+        <createTable tableName="client_sign_in_handoff">
+            <column name="code_hash" type="VARCHAR(64)">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="client_sign_in_handoffPK"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="auth_time" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_id" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="client_kind" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="code_challenge" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="consumed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="redirect_uri" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="session_expires_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790424890516-3" author="hephaestus">
+        <addColumn tableName="issued_jwt">
+            <column name="refresh_token_hash" type="VARCHAR(64)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790424890516-4" author="hephaestus">
+        <addColumn tableName="issued_jwt">
+            <column name="session_id" type="UUID"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790424890516-5" author="hephaestus">
+        <addUniqueConstraint columnNames="refresh_token_hash" constraintName="uq_issued_jwt_refresh_token_hash" tableName="issued_jwt"/>
+    </changeSet>
+    <changeSet id="1790424890516-6" author="hephaestus">
+        <createIndex indexName="ix_client_session_account_id" tableName="client_session">
+            <column name="account_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790424890516-7" author="hephaestus">
+        <createIndex indexName="ix_client_session_session_expires_at" tableName="client_session">
+            <column name="session_expires_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790424890516-8" author="hephaestus">
+        <createIndex indexName="ix_client_sign_in_handoff_account_id" tableName="client_sign_in_handoff">
+            <column name="account_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790424890516-9" author="hephaestus">
+        <createIndex indexName="ix_client_sign_in_handoff_expires_at" tableName="client_sign_in_handoff">
+            <column name="expires_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790424890516-10" author="hephaestus">
+        <createIndex indexName="ix_issued_jwt_session_id" tableName="issued_jwt">
+            <column name="session_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790424890516-11" author="hephaestus">
+        <addForeignKeyConstraint baseTableName="client_session" baseColumnNames="account_id" constraintName="sfk_client_session_account" referencedTableName="account" referencedColumnNames="id" onDelete="CASCADE"/>
+    </changeSet>
+    <changeSet id="1790424890516-12" author="hephaestus">
+        <addForeignKeyConstraint baseTableName="client_sign_in_handoff" baseColumnNames="account_id" constraintName="sfk_client_sign_in_handoff_account" referencedTableName="account" referencedColumnNames="id" onDelete="CASCADE"/>
+    </changeSet>
+    <changeSet id="1790424890516-13" author="hephaestus">
+        <addForeignKeyConstraint baseTableName="issued_jwt" baseColumnNames="session_id" constraintName="sfk_issued_jwt_session" referencedTableName="client_session" referencedColumnNames="id" onDelete="CASCADE"/>
+    </changeSet>
+    <changeSet id="1790424890516-14" author="hephaestus">
+        <addColumn tableName="feedback_dispatch">
+            <column name="delivered_external_url" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790424890516-15" author="hephaestus">
+        <addColumn tableName="feedback_placement">
+            <column name="posted_comment_url" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

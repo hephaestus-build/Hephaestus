@@ -59,7 +59,17 @@ public interface InlineFeedbackChannel {
             FeedbackAnchor anchor,
             Disposition disposition,
             @Nullable String externalRef,
-            @Nullable String threadExternalRef) {}
+            @Nullable String threadExternalRef,
+            @Nullable String externalUrl) {
+        public DeliveredSignal(
+                @Nullable String deliveryKey,
+                FeedbackAnchor anchor,
+                Disposition disposition,
+                @Nullable String externalRef,
+                @Nullable String threadExternalRef) {
+            this(deliveryKey, anchor, disposition, externalRef, threadExternalRef, null);
+        }
+    }
 
     /**
      * Aggregate delivery result. {@code signals} carries the per-unit {@link DeliveredSignal}s the placement

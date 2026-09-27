@@ -91,9 +91,11 @@ for (const [name, envelope] of Object.entries({
 				{
 					env: { ...process.env, PI_RUNNER_CWD: root },
 					encoding: "utf8",
-					timeout: 10_000,
+					// Boot the full runner and its SDK; this asserts the exit contract, not startup speed.
+					timeout: 30_000,
 				},
 			);
+			assert.equal(child.error, undefined, "The runner must finish before its exit is checked");
 			assert.equal(child.status, 42, child.stderr);
 		} finally {
 			rmSync(root, { recursive: true, force: true });

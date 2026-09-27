@@ -1,5 +1,5 @@
 /**
- * Components under `webapp/src/components/**` are presentational: they take data as props and never
+ * Components under the webapp and extension `src/components/**` are presentational: they take data as props and never
  * fetch. Fetching lives in the route file (or a `src/hooks/use-*.ts` it calls), which passes plain
  * props down. Their stories carry the second half of the rule: no MSW.
  *
@@ -13,8 +13,8 @@ import { isSet } from "./lib/env.ts";
 
 /** Resolved from this file, so the script runs identically from the repo root and from `webapp/`. */
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
-const COMPONENTS = "webapp/src/components";
-const WEBAPP_SRC = "webapp/src";
+const SOURCE_TREES = ["webapp/src", "extension/src"];
+const COMPONENT_TREES = SOURCE_TREES.map((tree) => `${tree}/components`);
 
 /** Modules that reach the network. `@/api/types.gen` is pure types and stays allowed everywhere. */
 const FETCHING_MODULES = [
@@ -22,6 +22,13 @@ const FETCHING_MODULES = [
 	"@/api/sdk.gen",
 	"@/api/client",
 	"@/api/client.gen",
+	"~/api",
+	"~/background",
+	"~/views",
+	"~/ui/rpc-client",
+	"~/ui/worker-state",
+	"wxt/browser",
+	"@wxt-dev/browser",
 ];
 const QUERY_HOOKS = [
 	"useQuery",
@@ -127,6 +134,15 @@ const importsAny = (source: string, modules: readonly string[]): string[] =>
 		modules.some((candidate) => module === candidate || module.startsWith(`${candidate}/`)),
 	);
 
+const importedQueryHooks = (source: string): string[] =>
+	[...source.matchAll(IMPORT)].flatMap(({ groups }) =>
+		groups?.module === "@tanstack/react-query" &&
+		groups.clause !== undefined &&
+		!isTypeOnly(groups.typeKeyword, groups.clause)
+			? QUERY_HOOKS.filter((hook) => new RegExp(`\\b${hook}\\b`, "u").test(groups.clause ?? ""))
+			: [],
+	);
+
 const calledQueryHooks = (source: string): string[] => {
 	const called = new Set<string>();
 	for (const line of source.split("\n")) {
@@ -147,12 +163,17 @@ const docsFailures: string[] = [];
 const stale: string[] = [];
 
 /** R1 — components take data as props. */
-const componentTree = await listFiles(COMPONENTS, [".ts", ".tsx"]);
+const componentTreeGroups = await Promise.all(
+	COMPONENT_TREES.map(async (tree) => listFiles(tree, [".ts", ".tsx"])),
+);
+const componentTree = componentTreeGroups.flat();
 const componentFiles = componentTree.filter(
 	(file) => !file.endsWith(".stories.tsx") && !/\.test\.tsx?$/u.test(file),
 );
 if (componentFiles.length === 0) {
-	console.error(`No component files found under ${COMPONENTS} — this check would pass unchecked.`);
+	console.error(
+		`No component files found under ${COMPONENT_TREES.join(", ")} — this check would pass unchecked.`,
+	);
 	process.exit(1);
 }
 for (const file of componentFiles) {
@@ -160,6 +181,7 @@ for (const file of componentFiles) {
 	const reasons = [
 		...importsAny(source, FETCHING_MODULES).map((module) => `imports ${module}`),
 		...calledQueryHooks(source).map((hook) => `calls ${hook}()`),
+		...importedQueryHooks(source).map((hook) => `imports ${hook}`),
 	];
 	const allowed = ALLOWLIST.fetching.includes(file);
 	if (reasons.length > 0 && !allowed) {
@@ -171,10 +193,14 @@ for (const file of componentFiles) {
 }
 
 /** R2 — a story of a presentational component needs no network, so it needs no mock. */
-const componentStories =
-	componentFiles.length > 0 ? await listFiles(COMPONENTS, [".stories.tsx"]) : [];
+const componentStoriesGroups = await Promise.all(
+	COMPONENT_TREES.map(async (tree) => listFiles(tree, [".stories.tsx"])),
+);
+const componentStories = componentStoriesGroups.flat();
 if (componentStories.length === 0) {
-	console.error(`No story files found under ${COMPONENTS} — this check would pass unchecked.`);
+	console.error(
+		`No story files found under ${COMPONENT_TREES.join(", ")} — this check would pass unchecked.`,
+	);
 	process.exit(1);
 }
 for (const file of componentStories) {
@@ -194,9 +220,14 @@ for (const file of componentStories) {
  * R3 — one global MSW worker serves a Docs page, so inlined stories answer each other's requests.
  * An iframe per story restores the isolation; opting out of autodocs avoids the page entirely.
  */
-const allStories = await listFiles(WEBAPP_SRC, [".stories.tsx"]);
+const allStoriesGroups = await Promise.all(
+	SOURCE_TREES.map(async (tree) => listFiles(tree, [".stories.tsx"])),
+);
+const allStories = allStoriesGroups.flat();
 if (allStories.length === 0) {
-	console.error(`No story files found under ${WEBAPP_SRC} — this check would pass unchecked.`);
+	console.error(
+		`No story files found under ${SOURCE_TREES.join(", ")} — this check would pass unchecked.`,
+	);
 	process.exit(1);
 }
 for (const file of allStories) {
@@ -215,7 +246,7 @@ for (const file of allStories) {
 
 const reports: readonly (readonly [string, readonly string[]])[] = [
 	[
-		"Components take their data as props; fetching belongs in the route file or a src/hooks module.",
+		"Components take their data as props; fetching belongs in webapp routes/hooks or extension views/background.",
 		fetchingFailures,
 	],
 	[

@@ -199,6 +199,7 @@ class PracticeFeedbackDispatchRecoveryTest extends BaseUnitTest {
                 externalRef,
                 null,
                 null,
+                null,
                 Instant.now(),
                 1,
                 null,

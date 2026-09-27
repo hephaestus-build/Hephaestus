@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus;
 
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
 import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
@@ -47,6 +48,7 @@ import org.springframework.security.web.authentication.session.NullAuthenticated
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -57,6 +59,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     private final CorsProperties corsProperties;
+    private final ObjectProvider<InstalledClientRegistry> installedClients;
     private final boolean devTriggerEnabled;
     private final boolean devLoginEnabled;
     private final boolean cookieSecure;
@@ -64,6 +67,7 @@ public class SecurityConfig {
 
     public SecurityConfig(
             CorsProperties corsProperties,
+            ObjectProvider<InstalledClientRegistry> installedClients,
             Environment environment,
             @Value("${hephaestus.dev.trigger-enabled:false}") boolean devTriggerEnabled,
             @Value("${hephaestus.auth.dev-login-enabled:false}") boolean devLoginEnabled,
@@ -76,6 +80,7 @@ public class SecurityConfig {
                     "hephaestus.auth.cookie-secure must NOT be false under the 'prod' profile (fail-closed).");
         }
         this.corsProperties = corsProperties;
+        this.installedClients = installedClients;
         this.devTriggerEnabled = devTriggerEnabled;
         this.devLoginEnabled = devLoginEnabled;
         this.cookieSecure = cookieSecure;
@@ -294,6 +299,7 @@ public class SecurityConfig {
             // the CSRF carve-out below so they cannot drift.
             if (devLoginEnabled) {
                 requests.requestMatchers(DEV_LOGIN_MATCHER).permitAll();
+                requests.requestMatchers(DEV_CLIENT_LOGIN_MATCHER).permitAll();
             }
             // OpenAPI documentation endpoints (public for spec generation and dev access)
             requests.requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui/**", "/swagger-ui.html")
@@ -304,6 +310,11 @@ public class SecurityConfig {
             // by AuthSecurityConfig's higher-precedence chain and never reach this one.
             requests.requestMatchers(HttpMethod.GET, "/identity-providers").permitAll();
             requests.requestMatchers(HttpMethod.GET, "/.well-known/**").permitAll();
+            // Installed-client sessions authenticate with a secret in the body (a handoff code with its
+            // PKCE verifier, or a refresh secret), never with a cookie; see ClientSessionController.
+            // Exact matchers, so a later endpoint under /auth/client never inherits public access.
+            requests.requestMatchers(CLIENT_CONFIGURATION_MATCHER).permitAll();
+            requests.requestMatchers(CLIENT_SESSION_MATCHER).permitAll();
             // Public workspace provider discovery (workspace creation UI)
             requests.requestMatchers(HttpMethod.GET, "/workspaces/providers").permitAll();
             // Heph is never public, even in a publicly viewable workspace, so this MUST precede the generic
@@ -360,11 +371,32 @@ public class SecurityConfig {
     static final RequestMatcher DEV_LOGIN_MATCHER =
             PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/dev-login");
 
+    /** Installed-client discovery; public so a client can tell whether this instance lets it sign in. */
+    static final RequestMatcher CLIENT_CONFIGURATION_MATCHER =
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/auth/client/configuration");
+
+    /**
+     * The installed-client session endpoints, shared by the authorize rule and the CSRF predicate. CSRF
+     * defends ambient cookie credentials; these endpoints act only on the secret the request body carries
+     * and refuse the session cookie, so there is nothing for a forged request to ride.
+     */
+    static final RequestMatcher CLIENT_SESSION_MATCHER = new OrRequestMatcher(
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/client/token"),
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/client/refresh"),
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/client/logout"));
+
+    /** An installed client's dev sign-in (a safe GET ending in a handoff redirect); absent in production. */
+    static final RequestMatcher DEV_CLIENT_LOGIN_MATCHER =
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/auth/dev-login/client");
+
     // This capability only disables one subscription; RFC 8058 receivers have no session or CSRF token.
     static final RequestMatcher EMAIL_UNSUBSCRIBE_MATCHER =
             PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/notifications/unsubscribe/{token}");
 
-    /** Unsafe requests require CSRF unless they use only bearer auth or an enabled dev endpoint. */
+    /**
+     * Unsafe requests require CSRF unless they use only bearer auth, only an installed-client session
+     * secret, or an enabled dev endpoint.
+     */
     private boolean requiresCsrf(jakarta.servlet.http.HttpServletRequest request) {
         if (EMAIL_UNSUBSCRIBE_MATCHER.matches(request) || SAFE_METHODS.contains(request.getMethod())) {
             return false;
@@ -372,6 +404,9 @@ public class SecurityConfig {
         // The resolver prefers cookies, so adding a bearer header must not bypass their CSRF check.
         String authorization = request.getHeader("Authorization");
         if (authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7) && !hasAuthCookie(request)) {
+            return false;
+        }
+        if (CLIENT_SESSION_MATCHER.matches(request) && !hasAuthCookie(request)) {
             return false;
         }
         if (devTriggerEnabled && DEV_TRIGGER_MATCHER.matches(request)) {
@@ -401,7 +436,14 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(corsProperties.allowedOrigins());
+        // Installed clients' origins come from the same registry entry as their callback, so the two
+        // allowlists cannot drift apart. The registry exists in the server role only.
+        List<String> clientOrigins = installedClients.stream()
+                .flatMap(registry -> registry.origins().stream())
+                .toList();
+        configuration.setAllowedOrigins(Stream.concat(corsProperties.allowedOrigins().stream(), clientOrigins.stream())
+                .distinct()
+                .toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
         configuration.setAllowedHeaders(List.of(
                 "Authorization",

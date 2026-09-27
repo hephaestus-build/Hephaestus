@@ -42,6 +42,28 @@ Signed-in contributors can send product feedback and answer or decline surveys a
 These workspace-level configuration choices are made by the workspace administrator and TUM/AET as joint controllers under Art. 26 GDPR (the choices are enumerated in "Legal basis" below). Hephaestus is built around the contributor's own development: observations serve the contributor and give the workspace administrator a way to deliver targeted feedback during the project. Observations are advisory and contestable; the platform makes no automated decisions within the meaning of Art. 22 GDPR and feeds no grading, assessment, HR, or access-control pipeline. Signed-in contributors can stop new practice-feedback comments and related Slack reminders through the in-app **Comments and Slack reminders** setting and respond to individual pieces of feedback by recording whether they were helpful and how they were handled. This delivery setting does not stop review processing; objections to processing under Art. 21 GDPR use the contact process in privacy §7.
 ```
 
+### Optional browser extension
+
+The desktop Chrome extension is another client for the same review-context purpose. On exact sites
+the user allows, it sends the canonical GitHub/GitLab work address of each supported page the user
+opens to the selected Hephaestus instance, automatically when the page opens and while it stays open,
+to show the existing practice review in the page. On supported repository issue and pull/merge-request
+lists, choosing a row's Hephaestus preview sends only that work's canonical address; the extension
+does not look up every row or send the list's search terms and filters. Review requests and run changes are confirmed in
+the extension's own window and use the same server endpoints and authorisation as the web app. It
+does not collect page bodies or browsing history. It handles account identity, installed-client
+credentials, the local instance preference, a per-tab session-memory record of the reader's report
+choices, and returned review records, only the reader's own, administrators included: metadata about
+comments recorded as posted for the reader on that work (practice names, comment locations, links and
+recorded delivery times), and the reader's own observations on it (practice, outcome, severity and a
+one-sentence summary) when the report is opened. It reads and shows no feedback text and no other
+developer's records; those remain in the web app under its own access rules. The default destination is `hephaestus.build`;
+custom instances have their own operator. The published notice's **Chrome extension** section and
+[extension privacy guide](/user/browser-extension-privacy) own the disclosure and controls.
+The [personal-data map](./personal-data-map.md) owns installed-client session cleanup. Canonical
+work-URL lookups are not a research dataset; platform research consent does not authorise unrelated
+reuse of extension browsing activity. There is no extension analytics or error-reporting recipient.
+
 ## Data subjects (Art. 30(1)(c))
 
 Tick in DSMS:

@@ -71,6 +71,7 @@ export const linkedIdentities: Wire<IdentityView>[] = [
 export const sessions: Wire<SessionView>[] = [
 	{
 		jti: "sess-current-001",
+		client: "WEB",
 		current: true,
 		userAgent: "Chrome 124 on macOS",
 		ip: "192.0.2.10",
@@ -79,6 +80,7 @@ export const sessions: Wire<SessionView>[] = [
 	},
 	{
 		jti: "sess-other-002",
+		client: "WEB",
 		current: false,
 		userAgent: "Firefox 126 on Ubuntu",
 		ip: "198.51.100.23",
@@ -87,11 +89,22 @@ export const sessions: Wire<SessionView>[] = [
 	},
 	{
 		jti: "sess-other-003",
+		client: "WEB",
 		current: false,
 		userAgent: "Mobile Safari on iOS 18",
 		ip: "203.0.113.77",
 		issuedAt: "2026-05-21T07:45:00Z",
 		expiresAt: "2026-06-21T07:45:00Z",
+	},
+	{
+		jti: "sess-extension-004",
+		client: "BROWSER_EXTENSION",
+		current: false,
+		userAgent:
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+		ip: "192.0.2.10",
+		issuedAt: "2026-05-29T09:05:00Z",
+		expiresAt: "2026-06-05T09:05:00Z",
 	},
 ];
 

@@ -37,10 +37,13 @@ jobs:
     outputs:
       webapp: ${{ steps.filter.outputs.webapp }}
       webapp-image: ${{ steps.filter.outputs.webapp-image }}
+      extension: ${{ steps.filter.outputs.extension }}
       application-server: ${{ steps.filter.outputs.application-server }}
       tooling: ${{ steps.filter.outputs.tooling }}
       application-server-image: ${{ steps.filter.outputs.application-server-image == 'true' || steps.filter.outputs.docker-config == 'true' || steps.filter.outputs.build-config == 'true' }}
       e2e: ${{ steps.filter.outputs.e2e }}
+      extension-e2e: ${{ steps.filter.outputs.extension-e2e }}
+      api-clients: ${{ steps.filter.outputs.api-clients }}
       agent-images: ${{ steps.filter.outputs.agent-images }}
       postgres-image: ${{ steps.filter.outputs.postgres-image }}
       supported-host-smoke: ${{ steps.filter.outputs.supported-host-smoke }}
@@ -57,7 +60,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       release-candidate: ${{ steps.release_candidate.outputs.release-candidate }}
       release-preflight: ${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || steps.release_candidate.outputs.release-candidate == 'true' }}
-      any-code: ${{ steps.filter.outputs.webapp == 'true' || steps.filter.outputs.application-server == 'true' || steps.filter.outputs.tooling == 'true' || steps.filter.outputs.agent-images == 'true' || steps.filter.outputs.postgres-image == 'true' }}
+      any-code: ${{ steps.filter.outputs.webapp == 'true' || steps.filter.outputs.extension == 'true' || steps.filter.outputs.application-server == 'true' || steps.filter.outputs.tooling == 'true' || steps.filter.outputs.agent-images == 'true' || steps.filter.outputs.postgres-image == 'true' }}
       # The vulnerability policy's match key includes the platform, so an arm64-only finding has to
       # be found before the release rather than by it, and only a manifest that exists can carry it.
       single-arch: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.release_candidate.outputs.release-candidate != 'true' }}
@@ -149,18 +152,51 @@ jobs:
             webapp:
               - 'webapp/**'
               - 'docs/images/readme/**'
-              # gate:docs-tokens compares this stylesheet with webapp/src/styles.css, so both
+              # The shared brand exporter also owns the extension's generated icons.
+              - 'extension/public/icon/**'
+              - 'docs/static/img/brand/chrome-extension-promo-440x280.png'
+              # gate:docs-tokens compares this stylesheet with webapp/src/styles/theme-tokens.css, so both
               # halves of that pair have to reach the leg that runs it.
               - 'docs/src/css/custom.css'
               - '.oxlintrc.json'
               - 'oxlint.react.jsonc'
+              - 'oxlint.app.jsonc'
               - '.oxfmtrc.json'
               - 'scripts/check-docs-tokens.ts'
               - 'scripts/check-docs-tokens.test.ts'
               - 'scripts/check-presentational-components.ts'
+              - 'scripts/check-presentational-components.test.ts'
               - 'scripts/check-story-prose.ts'
               - 'scripts/check-story-sort.ts'
               - 'scripts/install-browser-deps.ts'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+            # Webapp files the extension imports by path, the files those import, the stylesheet its
+            # Tailwind classes are sorted by and the lint plugin it loads; check-affected.test.ts
+            # holds this list and the scripts/check-affected.ts scope in step.
+            extension:
+              - 'extension/**'
+              - 'patches/**'
+              - 'webapp/brand/hephaestus-mark.svg'
+              - 'webapp/src/components/common/status-def.ts'
+              - 'webapp/src/components/common/FacetMultiSelect.tsx'
+              - 'webapp/src/components/icons/brand.tsx'
+              - 'webapp/src/components/practice-vocabulary/**'
+              - 'webapp/src/lib/artifact-kind-slugs.ts'
+              - 'webapp/src/lib/artifact-kinds.ts'
+              - 'webapp/src/lib/sign-in-providers.ts'
+              - 'webapp/src/styles.css'
+              - 'webapp/src/styles/theme-tokens.css'
+              - 'webapp/tools/oxlint/**'
+              - '.oxlintrc.json'
+              - 'oxlint.react.jsonc'
+              - 'oxlint.app.jsonc'
+              - '.oxfmtrc.json'
+              - 'scripts/install-browser-deps.ts'
+              - 'scripts/check-presentational-components.ts'
+              - 'scripts/check-presentational-components.test.ts'
+              - 'scripts/check-story-prose.ts'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
@@ -208,6 +244,7 @@ jobs:
               - 'tsconfig.json'
               - '.oxlintrc.json'
               - 'oxlint.react.jsonc'
+              - 'oxlint.app.jsonc'
               - '.oxfmtrc.json'
               - 'vite.config.ts'
               - 'package.json'
@@ -271,6 +308,48 @@ jobs:
               - '.github/actions/setup-caches/**'
               - '.github/actions/setup-toolchain/**'
               - '.github/actions/setup-browsers/**'
+            extension-e2e:
+              - 'scripts/install-browser-deps.ts'
+              - '.java-version'
+              - 'extension/**'
+              - 'patches/**'
+              - 'webapp/brand/hephaestus-mark.svg'
+              - 'webapp/src/components/common/status-def.ts'
+              - 'webapp/src/components/common/FacetMultiSelect.tsx'
+              - 'webapp/src/components/icons/brand.tsx'
+              - 'webapp/src/components/practice-vocabulary/**'
+              - 'webapp/src/lib/artifact-kind-slugs.ts'
+              - 'webapp/src/lib/artifact-kinds.ts'
+              - 'webapp/src/lib/sign-in-providers.ts'
+              - 'webapp/src/styles.css'
+              - 'webapp/src/styles/theme-tokens.css'
+              - 'webapp/e2e/seed.sql'
+              - 'server/application/src/main/**'
+              - 'server/application/build.gradle.kts'
+              - 'server/application/gradle.lockfile'
+              - 'server/generated-clients/**'
+              - 'server/build.gradle.kts'
+              - 'server/settings.gradle.kts'
+              - 'server/settings-gradle.lockfile'
+              - 'server/gradle.properties'
+              - 'server/gradle/**'
+              - 'server/gradlew*'
+              - 'server/compose.yaml'
+              - 'docker/postgres/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.github/workflows/cicd.yml'
+              - '.github/workflows/ci-build.yml'
+              - '.github/actions/setup-toolchain/**'
+              - '.github/actions/setup-browsers/**'
+            # The generated clients and their generator configuration: a hand edit or a generator bump
+            # must meet the same drift check a server change does.
+            api-clients:
+              - 'webapp/src/api/**'
+              - 'webapp/openapi-ts.config.ts'
+              - 'extension/src/api/**'
+              - 'extension/openapi-ts.config.ts'
             agent-images:
               - 'docker/agents/**'
             postgres-image:
@@ -459,6 +538,7 @@ jobs:
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       webapp_changed: ${{ (needs.detect-changes.outputs.webapp == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      extension_changed: ${{ (needs.detect-changes.outputs.extension == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       tooling_changed: ${{ (needs.detect-changes.outputs.tooling == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       pmd_canary: ${{ (needs.detect-changes.outputs.pmd-canary == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
@@ -474,7 +554,7 @@ jobs:
         needs.detect-changes.outputs.any-code == 'true' ||
         needs.detect-changes.outputs.build-config == 'true'
       ) && (
-        needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'
+        needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true' || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'
       )
     env:
       SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
@@ -621,8 +701,9 @@ jobs:
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       postgres_base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
-      contracts_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      contracts_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      extension_e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.extension-e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
 
   Security:
@@ -839,7 +920,25 @@ jobs:
     permissions:
       actions: read
       statuses: write
-    needs: [detect-changes, vulnerability-database, gradle-wrapper, workflow-lint, zizmor, Quality, server-package, application-server-image, Build, Security, Test, Changesets, Compose, Docker, Supported-host-smoke, Release-preflight]
+    needs:
+      [
+        detect-changes,
+        vulnerability-database,
+        gradle-wrapper,
+        workflow-lint,
+        zizmor,
+        Quality,
+        server-package,
+        application-server-image,
+        Build,
+        Security,
+        Test,
+        Changesets,
+        Compose,
+        Docker,
+        Supported-host-smoke,
+        Release-preflight,
+      ]
     if: always()
     steps:
       - name: Generate workflow timeline

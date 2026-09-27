@@ -76,6 +76,7 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
         UPDATE feedback_dispatch SET state = :#{#completion.state()}, delivered_external_ref = :#{#completion.externalRef()},
+                delivered_external_url = :#{#completion.externalUrl()},
                lease_owner = NULL, lease_expires_at = NULL, next_attempt_at = :#{#completion.nextAttemptAt()},
                last_error = :#{#completion.error()}, suppression_reason = :#{#completion.suppressionReason()},
                delivered_placements = CAST(:#{#completion.deliveredPlacements()} AS jsonb),

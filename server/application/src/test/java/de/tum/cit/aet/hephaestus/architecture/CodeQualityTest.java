@@ -443,6 +443,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     // @ConditionalOnProperty(hephaestus.agent.enabled); the mirror
                     // records every document signal on every runtime role and only skips
                     // the review offer where nothing could run one
+                    "SecurityConfig", // InstalledClientRegistry is server-role only; the CORS configuration
+                    // it contributes origins to is built on every runtime role
                     "InstanceLlmSettingsService" // LlmSettingsAudit's sole impl is @ConditionalOnServerRole, but this
                     // service is also consumed by the ungated Workspace{Llm}Service pair
                     // (BYO gate check) which load on every runtime role

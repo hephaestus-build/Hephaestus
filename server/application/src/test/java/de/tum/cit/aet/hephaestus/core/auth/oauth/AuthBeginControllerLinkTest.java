@@ -29,6 +29,8 @@ import org.springframework.web.servlet.view.RedirectView;
  */
 class AuthBeginControllerLinkTest extends BaseUnitTest {
 
+    private static final String EXTENSION_ID = "ijkajblcbajjpjbknfgdiiiljipafiko";
+
     private LoginProviderService loginProviderService;
     private IdentityLinkAuthentication identityLinkAuthentication;
     private AuthIntentCookie authIntentCookie;
@@ -37,7 +39,8 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         loginProviderService = mock(LoginProviderService.class);
-        when(loginProviderService.findEnabled(any()))
+        org.mockito.Mockito.lenient()
+                .when(loginProviderService.findEnabled(any()))
                 .thenReturn(Optional.of(providerRow("github", LoginProvider.ProviderType.GITHUB)));
         identityLinkAuthentication = mock(IdentityLinkAuthentication.class);
         byte[] key = new byte[32];
@@ -51,6 +54,8 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
                 loginProviderService,
                 authIntentCookie,
                 identityLinkAuthentication,
+                new de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry(
+                        AuthPropertiesFixture.withBrowserExtensionIds(java.util.List.of(EXTENSION_ID))),
                 AuthPropertiesFixture.withApiBasePath(apiBasePath));
     }
 
@@ -186,5 +191,90 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
                 .begin("github", "ws", "/", "login", new MockHttpServletRequest(), new MockHttpServletResponse());
 
         assertThat(view.getUrl()).isEqualTo("/api/oauth2/authorization/github");
+    }
+
+    private static final String CALLBACK = "https://" + EXTENSION_ID + ".chromiumapp.org/callback";
+    private static final String CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
+    private RedirectView beginClient(
+            String provider,
+            @Nullable String clientId,
+            @Nullable String redirectUri,
+            @Nullable String challenge,
+            @Nullable String method,
+            @Nullable String state,
+            MockHttpServletResponse res) {
+        return controller.beginClient(
+                provider,
+                new de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInParameters(
+                        clientId, redirectUri, challenge, method, state),
+                res);
+    }
+
+    @Test
+    void shouldSealTheClientRequestAndStartTheProviderDanceWhenARegisteredClientBegins() {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        RedirectView view = beginClient("github", EXTENSION_ID, CALLBACK, CHALLENGE, "S256", "st.ate-1_~", res);
+
+        assertThat(view.getUrl()).isEqualTo("/oauth2/authorization/github");
+        AuthIntentCookie.Intent intent = readIntent(res);
+        assertThat(intent).isNotNull();
+        assertThat(intent.mode()).isEqualTo(AuthIntentCookie.Intent.Mode.CLIENT);
+        assertThat(intent.clientRequestOrNull())
+                .isEqualTo(new AuthIntentCookie.Intent.ClientRequest(EXTENSION_ID, CALLBACK, CHALLENGE, "st.ate-1_~"));
+    }
+
+    @Test
+    void shouldRenderTheServerErrorPageAndNeverRedirectWhenTheClientOrCallbackIsNotRegistered() {
+        String otherId = "abcdefghijklmnopabcdefghijklmnop";
+        for (String[] pair : new String[][] {
+            {otherId, "https://" + otherId + ".chromiumapp.org/callback"},
+            {EXTENSION_ID, "https://" + EXTENSION_ID + ".chromiumapp.org/other"},
+            {EXTENSION_ID, "https://evil.example/callback"},
+        }) {
+            MockHttpServletResponse res = new MockHttpServletResponse();
+            RedirectView view = beginClient("github", pair[0], pair[1], CHALLENGE, "S256", "state", res);
+            assertThat(view.getUrl()).isEqualTo("/auth/error?code=client_not_registered");
+            assertThat(res.getCookie(AuthIntentCookie.COOKIE_NAME)).isNull();
+        }
+        MockHttpServletResponse missing = new MockHttpServletResponse();
+        assertThat(beginClient("github", null, null, CHALLENGE, "S256", "state", missing)
+                        .getUrl())
+                .isEqualTo("/auth/error?code=client_not_registered");
+    }
+
+    @Test
+    void shouldRefuseAtTheCallbackWhenPkceOrStateIsMalformed() {
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        assertThat(beginClient("github", EXTENSION_ID, CALLBACK, CHALLENGE, "plain", "s1", res)
+                        .getUrl())
+                .isEqualTo(CALLBACK + "?error=invalid_request&state=s1");
+        assertThat(beginClient("github", EXTENSION_ID, CALLBACK, "short", "S256", "s1", res)
+                        .getUrl())
+                .isEqualTo(CALLBACK + "?error=invalid_request&state=s1");
+        assertThat(beginClient("github", EXTENSION_ID, CALLBACK, CHALLENGE, "S256", "bad state&x=1", res)
+                        .getUrl())
+                .isEqualTo(CALLBACK + "?error=invalid_request");
+        assertThat(beginClient("github", EXTENSION_ID, CALLBACK, CHALLENGE, "S256", "x".repeat(257), res)
+                        .getUrl())
+                .isEqualTo(CALLBACK + "?error=invalid_request");
+        assertThat(res.getCookie(AuthIntentCookie.COOKIE_NAME)).isNull();
+    }
+
+    @Test
+    void shouldRefuseLinkOnlyAndUnknownProvidersAtTheCallback() {
+        when(loginProviderService.findEnabled("slack"))
+                .thenReturn(Optional.of(providerRow("slack", LoginProvider.ProviderType.SLACK)));
+        when(loginProviderService.findEnabled("nope")).thenReturn(Optional.empty());
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        assertThat(beginClient("slack", EXTENSION_ID, CALLBACK, CHALLENGE, "S256", "s1", res)
+                        .getUrl())
+                .isEqualTo(CALLBACK + "?error=link_requires_auth&state=s1");
+        assertThat(beginClient("nope", EXTENSION_ID, CALLBACK, CHALLENGE, "S256", "s1", res)
+                        .getUrl())
+                .isEqualTo(CALLBACK + "?error=unknown_provider&state=s1");
+        assertThat(res.getCookie(AuthIntentCookie.COOKIE_NAME)).isNull();
     }
 }

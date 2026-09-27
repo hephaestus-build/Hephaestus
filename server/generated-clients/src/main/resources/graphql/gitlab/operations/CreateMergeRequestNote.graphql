@@ -5,6 +5,7 @@ mutation CreateMergeRequestNote($noteableId: NoteableID!, $body: String!) {
     createNote(input: {noteableId: $noteableId, body: $body}) {
         note {
             id
+            url
         }
         errors
     }

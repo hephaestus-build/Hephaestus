@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -53,9 +52,6 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private HephaestusJwtIssuer jwtIssuer;
-
-    @Autowired
-    private JwtPrincipalFactory principalFactory;
 
     @Test
     void unlinkSecondaryIdentityDeletesItAndKeepsTheRest() {
@@ -232,7 +228,10 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
 
     private String tokenFor(Account account) {
         return jwtIssuer
-                .issue(principalFactory.forAccount(account), TokenConstraints.session(null, Instant.now()), null)
+                .issue(
+                        java.util.Objects.requireNonNull(account.getId()),
+                        TokenConstraints.session(null, Instant.now()),
+                        null)
                 .value();
     }
 

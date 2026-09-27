@@ -72,6 +72,24 @@ public final class CurrentAccount {
         }
     }
 
+    /**
+     * The installed-client session the current token belongs to ({@code sid}), or null for a browser
+     * token. A token with a malformed {@code sid} is refused rather than treated as a browser token.
+     */
+    @Nullable
+    public static UUID sessionIdOrNull() {
+        Jwt jwt = jwtOrNull();
+        String sid = jwt == null ? null : jwt.getClaimAsString("sid");
+        if (sid == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(sid);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "token sid is malformed", e);
+        }
+    }
+
     /** The {@code preferred_username} claim (the account's login), or null if absent. */
     @Nullable
     public static String preferredUsernameOrNull() {

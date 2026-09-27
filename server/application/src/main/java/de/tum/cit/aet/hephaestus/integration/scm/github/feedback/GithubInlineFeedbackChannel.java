@@ -158,7 +158,7 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
             if (prior != null && !prior.outdated()) {
                 // The finding still holds and already has a live thread — leave it, don't duplicate.
                 preservedSignals.add(new DeliveredSignal(
-                        key, diff, Disposition.PRESERVED_EXISTING, prior.commentId(), prior.threadId()));
+                        key, diff, Disposition.PRESERVED_EXISTING, prior.commentId(), prior.threadId(), prior.url()));
                 continue;
             }
             toPost.add(finding);
@@ -307,7 +307,7 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
             @Nullable String reviewId,
             List<FeedbackAnchor.DiffAnchor> anchors,
             List<String> keys) {
-        Map<String, String> commentIdByCk = new HashMap<>();
+        Map<String, SummaryChannel.SummaryHandle> commentByCk = new HashMap<>();
         List<Map<String, Object>> comments = response.field("addPullRequestReview.pullRequestReview.comments.nodes")
                 .getValue();
         if (comments != null) {
@@ -319,7 +319,7 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
                 String body = (String) comment.get("body");
                 String ck = body == null ? null : parseDeliveryKey(body);
                 if (ck != null) {
-                    commentIdByCk.putIfAbsent(ck, id);
+                    commentByCk.putIfAbsent(ck, new SummaryChannel.SummaryHandle(id, (String) comment.get("url")));
                 }
             }
         }
@@ -328,8 +328,14 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
         for (int i = 0; i < anchors.size(); i++) {
             FeedbackAnchor.DiffAnchor diff = anchors.get(i);
             String key = keys.get(i);
-            String commentId = key == null ? null : commentIdByCk.get(key);
-            signals.add(new DeliveredSignal(key, diff, Disposition.POSTED, commentId, reviewId));
+            SummaryChannel.SummaryHandle comment = key == null ? null : commentByCk.get(key);
+            signals.add(new DeliveredSignal(
+                    key,
+                    diff,
+                    Disposition.POSTED,
+                    comment == null ? null : comment.externalId(),
+                    reviewId,
+                    comment == null ? null : comment.url()));
         }
         return signals;
     }
@@ -425,7 +431,7 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
         }
         boolean outdated =
                 Boolean.TRUE.equals(thread.get("isOutdated")) || Boolean.TRUE.equals(thread.get("isResolved"));
-        byKey.put(key, new PriorThread(key, threadId, commentId, outdated));
+        byKey.put(key, new PriorThread(key, threadId, commentId, outdated, (String) firstComment.get("url")));
     }
 
     private int minimizeVanishedThreads(long scopeId, Iterable<PriorThread> priorThreads, Set<String> seenKeys) {
@@ -483,7 +489,12 @@ public class GithubInlineFeedbackChannel implements InlineFeedbackChannel {
     }
 
     /** A prior review thread we posted, matched by the correlation key in its first comment. */
-    private record PriorThread(String key, String threadId, String commentId, boolean outdated) {}
+    private record PriorThread(
+            String key,
+            String threadId,
+            String commentId,
+            boolean outdated,
+            @Nullable String url) {}
 
     /** Builds a GitHub review-thread payload from a {@link FeedbackAnchor.DiffAnchor}. */
     private static Map<String, Object> buildThread(FeedbackAnchor.DiffAnchor diff, String body) {

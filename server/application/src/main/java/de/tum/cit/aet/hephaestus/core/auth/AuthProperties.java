@@ -34,6 +34,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *                        on an internet-exposed deployment
  * @param cookieSecure whether auth and CSRF cookies use Secure and the {@code __Host-} prefix;
  *                     disabling is restricted to non-production HTTP development
+ * @param browserExtensionIds Chrome extension ids allowed to sign in as installed clients; each id
+ *                            yields exactly one callback and one CORS origin
+ *                            ({@code core.auth.clientsession.InstalledClientRegistry})
  */
 @ConfigurationProperties(prefix = "hephaestus.auth")
 public record AuthProperties(
@@ -50,9 +53,16 @@ public record AuthProperties(
         @DefaultValue("7d") Duration sessionMaxLifetime,
         @DefaultValue("5m") Duration stepUpMaxAge,
         @DefaultValue("false") boolean devLoginEnabled,
-        @DefaultValue("true") boolean cookieSecure) {
+        @DefaultValue("true") boolean cookieSecure,
+        @DefaultValue List<String> browserExtensionIds) {
     public AuthProperties {
         loginProviders = loginProviders == null ? Map.of() : loginProviders;
+        browserExtensionIds = browserExtensionIds == null
+                ? List.of()
+                : browserExtensionIds.stream()
+                        .map(String::trim)
+                        .filter(id -> !id.isEmpty())
+                        .toList();
         apiBasePath = normalizeApiBasePath(apiBasePath);
     }
 

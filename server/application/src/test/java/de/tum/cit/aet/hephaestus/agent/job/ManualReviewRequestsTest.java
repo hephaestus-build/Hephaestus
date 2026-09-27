@@ -123,8 +123,9 @@ class ManualReviewRequestsTest extends BaseUnitTest {
 
         requests.requestPullRequestReview(workspace, pullRequest(), requesters());
 
-        verify(gate).evaluate(any(), eq(ScmSignals.PULL_REQUEST_MANUAL_REVIEW), eq(TriggerMode.MANUAL));
-        verify(gate, never()).evaluate(any(), eq(ScmSignals.PULL_REQUEST_OPENED), any());
+        verify(gate)
+                .evaluatePullRequest(any(), any(), eq(ScmSignals.PULL_REQUEST_MANUAL_REVIEW), eq(TriggerMode.MANUAL));
+        verify(gate, never()).evaluatePullRequest(any(), any(), eq(ScmSignals.PULL_REQUEST_OPENED), any());
     }
 
     /**
@@ -189,7 +190,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
     /** A refusal is settled against the ledger row and handed back as a sentence, not as a failure. */
     @Test
     void aGateRefusalIsRecordedAndExplained() {
-        when(gate.evaluate(any(), any(), any()))
+        when(gate.evaluatePullRequest(any(), any(), any(), any()))
                 .thenReturn(new GateDecision.Skip(
                         "every practice bound to this signal is off", SignalStateReason.PRACTICE_AUTONOMY_OFF));
 
@@ -209,10 +210,10 @@ class ManualReviewRequestsTest extends BaseUnitTest {
                 List.of(new Practice()),
                 workspace.getReviewSettings().getRolloutRevision(),
                 TriggerMode.MANUAL);
-        when(gate.evaluate(any(), any(), any()))
+        when(gate.evaluatePullRequest(any(), any(), any(), any()))
                 .thenReturn(new GateDecision.Skip("outside coverage", SignalStateReason.OUT_OF_REVIEW_SCOPE));
         when(authority.isWorkspaceAdmin(WORKSPACE_ID, REQUESTER_ID)).thenReturn(true);
-        when(gate.evaluateAdministrative(any(), eq(ScmSignals.PULL_REQUEST_MANUAL_REVIEW)))
+        when(gate.evaluatePullRequestAdministrative(any(), any(), eq(ScmSignals.PULL_REQUEST_MANUAL_REVIEW)))
                 .thenReturn(detection);
         givenSubmissionSucceeds();
 
@@ -224,13 +225,13 @@ class ManualReviewRequestsTest extends BaseUnitTest {
 
     @Test
     void anArtifactParticipantCannotBypassCoverage() {
-        when(gate.evaluate(any(), any(), any()))
+        when(gate.evaluatePullRequest(any(), any(), any(), any()))
                 .thenReturn(new GateDecision.Skip("outside coverage", SignalStateReason.OUT_OF_REVIEW_SCOPE));
 
         ManualReviewOutcome outcome = requests.requestPullRequestReview(workspace, pullRequest(), requesters());
 
         assertThat(outcome.status()).isEqualTo(ManualReviewOutcome.Status.REFUSED);
-        verify(gate, never()).evaluateAdministrative(any(), any());
+        verify(gate, never()).evaluatePullRequestAdministrative(any(), any(), any());
     }
 
     /** A submission refusal — an exhausted budget, a cooldown — travels out with its own reason too. */
@@ -322,7 +323,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
     // Fixtures
 
     private void givenGateDetects() {
-        when(gate.evaluate(any(), any(), any()))
+        when(gate.evaluatePullRequest(any(), any(), any(), any()))
                 .thenReturn(new GateDecision.Detect(
                         workspace,
                         List.of(new Practice()),

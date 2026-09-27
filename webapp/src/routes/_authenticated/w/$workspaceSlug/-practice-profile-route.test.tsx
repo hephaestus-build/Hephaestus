@@ -19,7 +19,7 @@ import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harnes
 import { storeUserView } from "@/test/user-view";
 
 // Mounting the real route pulls in the whole app shell and its lazy modules.
-vi.setConfig({ testTimeout: 15_000 });
+vi.setConfig({ testTimeout: ROUTE_RENDER_WAIT.timeout });
 
 const PAGE = "/w/acme/practice-profile";
 

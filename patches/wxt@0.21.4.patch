@@ -1,0 +1,16 @@
+diff --git a/dist/virtual/background-entrypoint.mjs b/dist/virtual/background-entrypoint.mjs
+index 90c0301bb543f53f218d4ddba461aadaad8cb586..c28a48a26263a9572562ec5c1679a185b6d3f3be 100644
+--- a/dist/virtual/background-entrypoint.mjs
++++ b/dist/virtual/background-entrypoint.mjs
+@@ -106,7 +106,10 @@ async function reloadRuntimeContentScriptMv3(contentScript) {
+ 		return;
+ 	}
+ 	await browser.scripting.updateContentScripts(matches);
+-	await reloadTabsForContentScript(contentScript);
++	await reloadTabsForContentScript({
++		...contentScript,
++		matches: [...new Set(matches.flatMap((script) => script.matches ?? []))]
++	});
+ }
+ async function reloadTabsForContentScript(contentScript) {
+ 	const allTabs = await browser.tabs.query({});

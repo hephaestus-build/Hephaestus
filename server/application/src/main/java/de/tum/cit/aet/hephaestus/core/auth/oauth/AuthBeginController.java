@@ -1,6 +1,10 @@
 package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInParameters;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInRedirect;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInStart;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
@@ -41,6 +45,7 @@ public class AuthBeginController {
     private final LoginProviderService loginProviderService;
     private final AuthIntentCookie authIntentCookie;
     private final IdentityLinkAuthentication identityLinkAuthentication;
+    private final InstalledClientRegistry installedClients;
 
     /** Proxy-stripped API prefix re-added to the init redirect — see {@code AuthProperties#apiBasePath}. */
     private final String apiBasePath;
@@ -49,10 +54,12 @@ public class AuthBeginController {
             LoginProviderService loginProviderService,
             AuthIntentCookie authIntentCookie,
             IdentityLinkAuthentication identityLinkAuthentication,
+            InstalledClientRegistry installedClients,
             AuthProperties authProperties) {
         this.loginProviderService = loginProviderService;
         this.authIntentCookie = authIntentCookie;
         this.identityLinkAuthentication = identityLinkAuthentication;
+        this.installedClients = installedClients;
         this.apiBasePath = authProperties.apiBasePath();
     }
 
@@ -113,5 +120,46 @@ public class AuthBeginController {
         // not the SPA. (The /auth/error targets above are SPA routes at the origin root, so they keep none.)
         String urlEncodedRegistration = URLEncoder.encode(registrationId, StandardCharsets.UTF_8);
         return new RedirectView(apiBasePath + OAUTH_INIT_PATH + urlEncodedRegistration, false);
+    }
+
+    /**
+     * An installed client's sign-in, opened in the client's own auth window. The client and its callback
+     * are checked first and exactly: until the pair is known to be registered, nothing, not even an
+     * error, is sent to the callback. After that every refusal returns there with the client's
+     * {@code state}. The browser never receives a Hephaestus session on this path.
+     */
+    @GetMapping(value = "/login", params = "mode=client")
+    @PreAuthorize("permitAll()")
+    @Hidden
+    public RedirectView beginClient(
+            @RequestParam("provider") String registrationId,
+            ClientSignInParameters parameters,
+            HttpServletResponse response) {
+        ClientSignInStart start = ClientSignInStart.decide(installedClients, parameters);
+        return switch (start) {
+            case ClientSignInStart.Unregistered ignored -> {
+                log.warn("auth.begin: installed-client sign-in with an unregistered client or callback");
+                yield new RedirectView("/auth/error?code=client_not_registered", false);
+            }
+            case ClientSignInStart.Refused refused -> new RedirectView(refused.redirect(), false);
+            case ClientSignInStart.Accepted accepted -> {
+                String callback = accepted.client().redirectUri();
+                Optional<LoginProvider> provider = loginProviderService.findEnabled(registrationId);
+                if (provider.isEmpty()) {
+                    yield new RedirectView(
+                            ClientSignInRedirect.error(callback, "unknown_provider", accepted.state()), false);
+                }
+                if (provider.get().getType().isLinkOnly()) {
+                    yield new RedirectView(
+                            ClientSignInRedirect.error(callback, "link_requires_auth", accepted.state()), false);
+                }
+                authIntentCookie.write(
+                        response,
+                        AuthIntentCookie.Intent.client(new AuthIntentCookie.Intent.ClientRequest(
+                                accepted.client().clientId(), callback, accepted.codeChallenge(), accepted.state())));
+                String urlEncodedRegistration = URLEncoder.encode(registrationId, StandardCharsets.UTF_8);
+                yield new RedirectView(apiBasePath + OAUTH_INIT_PATH + urlEncodedRegistration, false);
+            }
+        };
     }
 }

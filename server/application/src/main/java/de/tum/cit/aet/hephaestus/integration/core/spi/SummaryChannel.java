@@ -71,8 +71,12 @@ public interface SummaryChannel {
         }
     }
 
-    /** Vendor-side post identifier recorded on {@code FeedbackPlacement.external_ref} for edit-in-place (ADR 0021). */
-    record SummaryHandle(String externalId) {}
+    /** Vendor-side post identifier recorded on {@code FeedbackPlacement.postedCommentRef} for edit-in-place (ADR 0021). */
+    record SummaryHandle(String externalId, @Nullable String url) {
+        public SummaryHandle(String externalId) {
+            this(externalId, null);
+        }
+    }
 
     record ExistingSummaryLookup(Kind kind, @Nullable SummaryHandle handle) {
         public enum Kind {

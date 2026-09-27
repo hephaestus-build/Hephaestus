@@ -48,4 +48,6 @@ SELECT setval(pg_get_serial_sequence('llm_model', 'id'), 10, true);
 SELECT setval(pg_get_serial_sequence('workspace_agent_binding', 'id'), 10, true);
 SELECT setval(pg_get_serial_sequence('workspace', 'id'), 10, true);
 
+SELECT setval(pg_get_serial_sequence('identity_link', 'id'), (SELECT max(id) FROM identity_link), true);
+
 COMMIT;

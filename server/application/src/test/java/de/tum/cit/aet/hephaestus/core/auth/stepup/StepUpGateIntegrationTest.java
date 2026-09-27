@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -42,9 +41,6 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private HephaestusJwtIssuer jwtIssuer;
-
-    @Autowired
-    private JwtPrincipalFactory principalFactory;
 
     @Autowired
     private AuthEventRepository authEventRepository;
@@ -206,7 +202,10 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
 
     private String tokenFor(Account account, @Nullable Instant authTime) {
         return jwtIssuer
-                .issue(principalFactory.forAccount(account), TokenConstraints.session(null, authTime), null)
+                .issue(
+                        java.util.Objects.requireNonNull(account.getId()),
+                        TokenConstraints.session(null, authTime),
+                        null)
                 .value();
     }
 

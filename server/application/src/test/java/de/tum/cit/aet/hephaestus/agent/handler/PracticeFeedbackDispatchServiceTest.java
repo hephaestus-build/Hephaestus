@@ -139,12 +139,15 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         dispatch = dispatch(FeedbackDispatchState.UNCERTAIN, true, 1);
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
                 .thenReturn(Optional.of(dispatch));
-        when(channel.findExistingSummary(any(), eq(summaryMarker(job)))).thenReturn(found("provider-42"));
+        when(channel.findExistingSummary(any(), eq(summaryMarker(job))))
+                .thenReturn(ExistingSummaryLookup.found(
+                        new SummaryHandle("provider-42", "https://github.com/owner/repo/pull/42#issuecomment-987654")));
 
         PracticeFeedbackDispatchService.Result result = dispatchAutomaticReview(job, "body", Set.of("practice"));
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
         assertThat(result.externalRef()).isEqualTo("provider-42");
+        assertThat(result.externalUrl()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
         verify(channel, never()).postSummary(any(), any());
         verify(repository)
                 .finish(argThat(completion -> completion.state().equals("SENT")
@@ -241,7 +244,10 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(dispatch))
                 .thenReturn(Optional.of(recovering));
         when(channel.findExistingSummary(any(), any()))
-                .thenReturn(ExistingSummaryLookup.absent(), found("provider-42"));
+                .thenReturn(
+                        ExistingSummaryLookup.absent(),
+                        ExistingSummaryLookup.found(new SummaryHandle(
+                                "provider-42", "https://github.com/owner/repo/pull/42#issuecomment-987654")));
         when(channel.postSummary(any(), any())).thenReturn(new SummaryHandle("provider-42"));
         when(repository.finish(any())).thenReturn(0, 1);
 
@@ -251,6 +257,10 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         assertThat(interrupted.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.IN_PROGRESS);
         assertThat(recovered.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
         assertThat(recovered.externalRef()).isEqualTo("provider-42");
+        assertThat(recovered.externalUrl()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
+        verify(repository)
+                .finish(argThat(completion ->
+                        "https://github.com/owner/repo/pull/42#issuecomment-987654".equals(completion.externalUrl())));
         verify(channel, times(1)).postSummary(any(), any());
     }
 
@@ -559,6 +569,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 approved.getDeliveredPlacements(),
                 approved.getWriteStarted(),
                 approved.getDeliveredExternalRef(),
+                approved.getDeliveredExternalUrl(),
                 approved.getLeaseOwner(),
                 approved.getLeaseExpiresAt(),
                 approved.getNextAttemptAt(),
@@ -612,6 +623,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 externalRef,
                 null,
                 null,
+                null,
                 base.getNextAttemptAt(),
                 attemptCount,
                 null,
@@ -639,6 +651,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 base.getDeliveredPlacements(),
                 base.getWriteStarted(),
                 base.getDeliveredExternalRef(),
+                null,
                 base.getLeaseOwner(),
                 base.getLeaseExpiresAt(),
                 base.getNextAttemptAt(),
@@ -694,6 +707,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 mapper.valueToTree(List.of()),
                 writeStarted,
                 state == FeedbackDispatchState.SENT ? "provider-42" : null,
+                null,
                 null,
                 null,
                 Instant.now(),

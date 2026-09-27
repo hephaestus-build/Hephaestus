@@ -63,7 +63,10 @@ public class FeedbackLedgerRecorder {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordApprovedPlacements(
-            Feedback feedback, @Nullable String summaryRef, List<DeliveredSignal> inlineSignals) {
+            Feedback feedback,
+            @Nullable String summaryRef,
+            @Nullable String summaryUrl,
+            List<DeliveredSignal> inlineSignals) {
         if (summaryRef != null) {
             feedbackPlacementRepository.insertProviderPlacementIfAbsent(new ProviderPlacement(
                     UUID.randomUUID(),
@@ -74,7 +77,8 @@ public class FeedbackLedgerRecorder {
                     null,
                     null,
                     null,
-                    summaryRef));
+                    summaryRef,
+                    summaryUrl));
         }
         for (DeliveredSignal signal : inlineSignals) {
             if (signal.disposition() == Disposition.FAILED || signal.externalRef() == null) continue;
@@ -88,7 +92,8 @@ public class FeedbackLedgerRecorder {
                     anchor.startLine() != null ? anchor.startLine() : anchor.newLineNumber(),
                     anchor.newLineNumber(),
                     PlacementAnchorSide.NEW.name(),
-                    signal.externalRef()));
+                    signal.externalRef(),
+                    signal.externalUrl()));
         }
     }
 
@@ -164,8 +169,8 @@ public class FeedbackLedgerRecorder {
             ArtifactKind artifact,
             List<DeliveredSignal> inlineSignals,
             @Nullable String summaryExternalRef,
-            boolean inlineDelivered) {
-        record(job, delivery, artifact, inlineSignals, summaryExternalRef, inlineDelivered, true);
+            @Nullable String summaryExternalUrl) {
+        record(job, delivery, artifact, inlineSignals, summaryExternalRef, summaryExternalUrl, true);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -175,8 +180,8 @@ public class FeedbackLedgerRecorder {
             ArtifactKind artifact,
             List<DeliveredSignal> inlineSignals,
             @Nullable String summaryExternalRef,
-            boolean inlineDelivered) {
-        record(job, delivery, artifact, inlineSignals, summaryExternalRef, inlineDelivered, false);
+            @Nullable String summaryExternalUrl) {
+        record(job, delivery, artifact, inlineSignals, summaryExternalRef, summaryExternalUrl, false);
     }
 
     private void record(
@@ -185,9 +190,10 @@ public class FeedbackLedgerRecorder {
             ArtifactKind artifact,
             List<DeliveredSignal> inlineSignals,
             @Nullable String summaryExternalRef,
-            boolean inlineDelivered,
+            @Nullable String summaryExternalUrl,
             boolean conversationalDeliveryEligible) {
         boolean summaryDelivered = summaryExternalRef != null;
+        boolean inlineDelivered = inlineSignals.stream().anyMatch(signal -> signal.disposition() != Disposition.FAILED);
         if (conversationalDeliveryEligible) {
             publishFeedbackLaneTrigger(job);
         }
@@ -296,6 +302,7 @@ public class FeedbackLedgerRecorder {
                     .feedback(feedback)
                     .placementType(PlacementType.SUMMARY)
                     .postedCommentRef(summaryExternalRef)
+                    .postedCommentUrl(summaryExternalUrl)
                     .createdAt(now)
                     .build());
         }
@@ -316,6 +323,7 @@ public class FeedbackLedgerRecorder {
                         .anchorEndLine(note.endLine())
                         .anchorSide(PlacementAnchorSide.NEW)
                         .postedCommentRef(signal.externalRef())
+                        .postedCommentUrl(signal.externalUrl())
                         .createdAt(now)
                         .build());
                 inlinePlacementCount++;

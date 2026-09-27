@@ -81,6 +81,7 @@ class GithubSummaryChannelTest extends BaseUnitTest {
 
         assertNotNull(handle);
         assertThat(handle.externalId()).isEqualTo("IC_comment456");
+        assertThat(handle.url()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
         verify(spec).variable("body", "body\n\nmarker");
     }
 
@@ -190,6 +191,7 @@ class GithubSummaryChannelTest extends BaseUnitTest {
         assertThat(outcome.kind()).isEqualTo(SummaryChannel.UpdateOutcome.Kind.EDITED);
         assertNotNull(outcome.handle());
         assertThat(outcome.handle().externalId()).isEqualTo("IC_edited");
+        assertThat(outcome.handle().url()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
         verify(spec).variable("id", "IC_prior");
         verify(spec).variable("body", "new body\n\nmarker");
     }
@@ -300,6 +302,9 @@ class GithubSummaryChannelTest extends BaseUnitTest {
         ClientResponseField field = mock(ClientResponseField.class);
         when(response.field(fieldPath)).thenReturn(field);
         when(field.getValue()).thenReturn(value);
+        ClientResponseField urlField = mock(ClientResponseField.class);
+        lenient().when(response.field(fieldPath.replace(".id", ".url"))).thenReturn(urlField);
+        lenient().when(urlField.getValue()).thenReturn("https://github.com/owner/repo/pull/42#issuecomment-987654");
         lenient().when(response.getErrors()).thenReturn(List.of());
         return response;
     }
@@ -386,7 +391,11 @@ class GithubSummaryChannelTest extends BaseUnitTest {
     }
 
     private static GHIssueComment comment(String id, String body) {
-        return GHIssueComment.builder().setId(id).setBody(body).build();
+        return GHIssueComment.builder()
+                .setId(id)
+                .setBody(body)
+                .setUrl(java.net.URI.create("https://github.com/owner/repo/pull/42#issuecomment-987654"))
+                .build();
     }
 
     @Test
@@ -440,6 +449,7 @@ class GithubSummaryChannelTest extends BaseUnitTest {
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.FOUND);
         assertNotNull(result.handle());
         assertThat(result.handle().externalId()).isEqualTo("IC_2");
+        assertThat(result.handle().url()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
         verify(spec, times(1)).execute();
     }
 

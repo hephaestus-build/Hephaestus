@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       leg:
-        description: "Quality task: server, tooling, webapp, or windows"
+        description: "Quality task: server, tooling, webapp, extension, or windows"
         required: true
         type: string
       pmd_canary:
@@ -55,6 +55,11 @@ jobs:
         if: inputs.leg == 'server'
         uses: ./.github/actions/setup-caches
 
+      # The extension's story tests run in Chromium.
+      - name: Setup Playwright browsers
+        if: inputs.leg == 'extension'
+        uses: ./.github/actions/setup-browsers
+
       - name: Quality gates
         env:
           LEG: ${{ inputs.leg }}
@@ -63,6 +68,7 @@ jobs:
             server) vp run ci:server ;;
             tooling) vp run ci:tooling ;;
             webapp) vp run ci:webapp ;;
+            extension) vp run ci:extension ;;
             windows) vp run --no-cache ci:windows ;;
             *) echo "::error::Unknown quality leg: $LEG"; exit 1 ;;
           esac
@@ -115,12 +121,12 @@ jobs:
           git push --dry-run --quiet "$remote" HEAD:refs/heads/pre-push-probe
           test "$(cat "$probe")" = ran
 
-      - name: Upload webapp unit-test results
-        if: inputs.leg == 'webapp' && !cancelled()
+      - name: Upload application test results
+        if: (inputs.leg == 'webapp' || inputs.leg == 'extension') && !cancelled()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
-          name: "Test Results - Webapp Unit"
-          path: "webapp/test-results/junit-*.xml"
+          name: "Test Results - ${{ inputs.leg }}"
+          path: "${{ inputs.leg }}/test-results/junit-*.xml"
           reporter: java-junit
           list-suites: failed
           list-tests: failed
@@ -128,27 +134,37 @@ jobs:
           max-annotations: ${{ job.status == 'failure' && 50 || 0 }}
           fail-on-error: false
 
-      - name: Retain full webapp unit-test reports
-        if: inputs.leg == 'webapp' && !cancelled()
+      - name: Retain application test reports
+        if: (inputs.leg == 'webapp' || inputs.leg == 'extension') && !cancelled()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: webapp-unit-reports-${{ github.run_attempt }}
-          path: webapp/test-results
+          name: ${{ inputs.leg }}-unit-reports-${{ github.run_attempt }}
+          path: ${{ inputs.leg }}/test-results
           retention-days: 14
           if-no-files-found: warn
 
-      - name: Summarize webapp unit tests
-        if: inputs.leg == 'webapp' && !cancelled()
+      - name: Summarize application tests
+        if: (inputs.leg == 'webapp' || inputs.leg == 'extension') && !cancelled()
         continue-on-error: true
-        run: vp run report:test-results "Webapp Unit" webapp/test-results ci-metrics/webapp-unit.json
+        run: vp run report:test-results "${{ inputs.leg }} tests" ${{ inputs.leg }}/test-results ci-metrics/${{ inputs.leg }}-unit.json
 
-      - name: Upload webapp test metrics
-        if: inputs.leg == 'webapp' && !cancelled()
+      - name: Upload application test metrics
+        if: (inputs.leg == 'webapp' || inputs.leg == 'extension') && !cancelled()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: test-metrics-webapp-unit
-          path: ci-metrics/webapp-unit.json
+          name: test-metrics-${{ inputs.leg }}-unit
+          path: ci-metrics/${{ inputs.leg }}-unit.json
           if-no-files-found: ignore
+          retention-days: 14
+
+      # The zip a Chrome Web Store submission uploads, from the same build the gates just judged.
+      - name: Upload the extension package
+        if: inputs.leg == 'extension'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: extension-chrome-${{ github.run_attempt }}
+          path: extension/.output/*-production-chrome.zip
+          if-no-files-found: error
           retention-days: 14
 
       - name: Save Vite task cache

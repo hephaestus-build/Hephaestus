@@ -14,6 +14,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @ConditionalOnServerRole
 @RestController
@@ -29,9 +30,13 @@ public class AuthLifecycleController {
 
     @PostMapping("/logout")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Log out — revoke the current token + clear the cookie", operationId = "logout")
+    @Operation(
+            summary = "Log out — revoke the current token + clear the cookie",
+            description = "An installed-client access token ends its whole session.",
+            operationId = "logout")
     public ResponseEntity<Void> logout(HttpServletResponse response) {
-        sessionService.logout(CurrentAccount.requireId(), CurrentAccount.requireJti(), response);
+        sessionService.logout(
+                CurrentAccount.requireId(), CurrentAccount.requireJti(), CurrentAccount.sessionIdOrNull(), response);
         return ResponseEntity.noContent().build();
     }
 
@@ -39,8 +44,15 @@ public class AuthLifecycleController {
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Rotate the access token (new jti, old revoked)", operationId = "refresh")
     @ApiResponse(responseCode = "204", description = "Session renewal completed")
+    @ApiResponse(responseCode = "400", description = "The token belongs to an installed-client session")
     @ApiResponse(responseCode = "401", description = "Session has ended")
     public ResponseEntity<Void> refresh(HttpServletRequest request, HttpServletResponse response) {
+        if (CurrentAccount.sessionIdOrNull() != null) {
+            // An installed-client session rotates through its refresh secret, which keeps its family and
+            // deadline in step; a cookie rotation here would mint a token outside that family.
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Installed-client sessions refresh at /auth/client/refresh");
+        }
         boolean sessionContinues = sessionService.refresh(
                 CurrentAccount.requireId(),
                 CurrentAccount.requireJti(),

@@ -1,0 +1,191 @@
+/* The practice review report's host: a section of the work's own content column, drawn with the
+   provider's live tokens (Primer primitives, GitLab design tokens) and published fallbacks, around the
+   extension-origin frame that holds everything it says. WXT's own reset pins the host to `inline`,
+   so the reset is stated here with the display a block section needs. */
+
+:host {
+	all: initial !important;
+	display: block !important;
+	margin-block: 16px !important;
+	--hephaestus-bg: var(--bgColor-default, #fff);
+	--hephaestus-border: var(--borderColor-default, #d1d9e0);
+	--hephaestus-radius: var(--borderRadius-medium, 6px);
+	--hephaestus-fg: var(--fgColor-default, #1f2328);
+	--hephaestus-muted: var(--fgColor-muted, #59636e);
+	--hephaestus-font: var(
+		--fontStack-system,
+		-apple-system,
+		BlinkMacSystemFont,
+		"Segoe UI",
+		"Noto Sans",
+		Helvetica,
+		Arial,
+		sans-serif
+	);
+}
+
+/* A GitHub issue's description and activity sit in one column without the timeline's gutter. */
+:host([data-layout="github-issue"]) {
+	margin-block: 8px 16px !important;
+}
+
+:host([data-provider="gitlab"]) {
+	margin-block: 12px !important;
+	--hephaestus-bg: var(--gl-background-color-default, #fff);
+	--hephaestus-border: var(--gl-border-color-default, #dcdbd9);
+	--hephaestus-radius: var(--gl-border-radius-lg, 0.5rem);
+	--hephaestus-fg: var(--gl-text-color-default, #3a383d);
+	--hephaestus-muted: var(--gl-text-color-subtle, #646163);
+	--hephaestus-font: var(
+		--gl-font-family-regular,
+		-apple-system,
+		BlinkMacSystemFont,
+		"Segoe UI",
+		Roboto,
+		"Noto Sans",
+		Ubuntu,
+		sans-serif
+	);
+}
+
+/* The activity area already spaces its first child from the description above it. */
+:host([data-layout="gitlab-work-item"]) {
+	margin-block: 0 16px !important;
+}
+
+/* Above a list of file diffs, the report keeps the diff's own spacing between files. */
+:host([data-layout="github-diff"]),
+:host([data-layout="gitlab-diff"]) {
+	margin-block: 0 16px !important;
+}
+
+/* Inside the row: across all of GitHub's row grid, or GitLab's main info column, after the row's own
+   content. */
+/* A list row's preview is a line of the row, not a card: no border, no background, directly under
+   its meta line and lined up with its title — in the title's grid column where the row is a grid,
+   otherwise moved to the title's left edge (`content/align.ts` sets both properties). */
+:host([data-layout="list-preview"]) {
+	grid-column: var(--hephaestus-column, 1) / -1 !important;
+	margin: 0 !important;
+	margin-inline-start: var(--hephaestus-inset, 0px) !important;
+}
+
+/* GitLab's work-item row has a full-row link at z-index 1. The preview's links must sit above it. */
+:host([data-provider="gitlab"][data-layout="list-preview"]) {
+	position: relative !important;
+	z-index: 2 !important;
+}
+
+:host([data-layout="list-preview"]) .report {
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+}
+
+:host([data-layout="list-preview"]) .bar {
+	min-block-size: 32px;
+	padding: 0;
+	font-size: 12px;
+}
+
+:host([data-layout="list-preview"]) .bar .name {
+	display: none;
+}
+
+:host([data-layout="list-preview"]) .mark {
+	inline-size: 14px;
+	block-size: 14px;
+}
+
+/* The preview's one line, until the frame reports the height the reader's font size gives it. */
+:host([data-layout="list-preview"]) .frame {
+	block-size: 32px;
+}
+
+/* Dark fallbacks, for a provider without tokens. */
+:host([data-theme="dark"]) {
+	--hephaestus-bg: var(--bgColor-default, #0d1117);
+	--hephaestus-border: var(--borderColor-default, #3d444d);
+	--hephaestus-fg: var(--fgColor-default, #f0f6fc);
+	--hephaestus-muted: var(--fgColor-muted, #9198a1);
+}
+
+:host([data-provider="gitlab"][data-theme="dark"]) {
+	--hephaestus-bg: var(--gl-background-color-default, #18171d);
+	--hephaestus-border: var(--gl-border-color-default, #4d4b4e);
+	--hephaestus-fg: var(--gl-text-color-default, #ecebea);
+	--hephaestus-muted: var(--gl-text-color-subtle, #c1bfbe);
+}
+
+.report {
+	box-sizing: border-box;
+	overflow: hidden;
+	border: 1px solid var(--hephaestus-border);
+	border-radius: var(--hephaestus-radius);
+	background: var(--hephaestus-bg);
+	color: var(--hephaestus-fg);
+}
+
+/* The generic line the frame replaces: its height is the report's collapsed row, so nothing moves
+   when the frame is ready, and it says nothing about the work or the account. */
+.bar {
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-block-size: 48px;
+	padding: 0 16px;
+	font: 400 14px/1.5 var(--hephaestus-font);
+}
+
+.bar .name {
+	font-weight: 600;
+}
+
+.bar p {
+	margin: 0;
+	overflow: hidden;
+	color: var(--hephaestus-muted);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mark {
+	display: inline-flex;
+	flex: none;
+	inline-size: 16px;
+	block-size: 16px;
+}
+
+.mark svg {
+	inline-size: 100%;
+	block-size: 100%;
+}
+
+/* The frame takes the height its document reports: the collapsed row, or what the reader opened.
+   Its `color-scheme` is the one its document declares for the same palette (`ui/styles.css`): where
+   the two differ — `normal` against an explicit `light` included — the browser paints the frame an
+   opaque canvas (CSS Color Adjustment, "color-scheme effect"), a box where the page should show
+   through. `data-theme` is set from the palette the page sends the frame. */
+.frame {
+	display: block;
+	box-sizing: border-box;
+	inline-size: 100%;
+	block-size: 48px;
+	border: 0;
+	color-scheme: light;
+}
+
+:host([data-theme="dark"]) .frame {
+	color-scheme: dark;
+}
+
+.frame[hidden] {
+	display: none;
+}
+
+@media (forced-colors: active) {
+	.report {
+		border-color: CanvasText;
+	}
+}

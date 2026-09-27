@@ -438,7 +438,7 @@ For Slack app setup, use the scope/event checklist in
 
 ### UI foundations
 
-- We ship Tailwind CSS 4 in JIT mode. Keep utility classes in JSX and rely on design tokens defined in `src/styles.css`.
+- We ship Tailwind CSS 4 in JIT mode. Keep utility classes in JSX and rely on design tokens defined in `src/styles/theme-tokens.css`.
 - Ensure Tailwind IntelliSense is enabled in your IDE – typeahead prevents typos and invalid compositions.
 - Avoid premature abstractions with `@apply`; duplication is fine when it keeps components readable.
 
@@ -465,8 +465,9 @@ the server. After an API change, from the repository root:
 vp run generate:api   # regenerates server/openapi.yaml from the packaged JAR, then the client
 ```
 
-`vp run generate:api:client` regenerates the client alone from the committed
-spec. Commit both with the change.
+`vp run generate:api:client` regenerates the clients alone from the committed
+spec: this one and the Chrome extension's `extension/src/api/**`. Commit the spec and both clients
+with the change.
 
 - Schema names carry no `DTO` suffix; the server strips it when it publishes the spec.
 - Pair every new endpoint with its generated TanStack Query options; never hand-roll `fetch` — the

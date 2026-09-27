@@ -1,0 +1,6 @@
+.output
+.wxt
+*storybook.log
+storybook-static
+test-results/
+playwright-report/

@@ -5,7 +5,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -27,9 +29,18 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Expired rows are pruned daily by {@code IssuedJwtCleanupJob}; the {@code expires_at} index
  * makes that range delete cheap.
+ *
+ * <p>A token an installed-client session issued carries its {@code session_id} and the hash of the
+ * refresh secret issued with it. Those rows outlive their access-token expiry for as long as the session
+ * row exists, so any refresh secret or JTI the session ever handed out still resolves its family: a
+ * replayed old secret revokes the live session, and revoking a stale session-list entry ends it.
  */
 @Entity
-@Table(name = "issued_jwt")
+@Table(
+        name = "issued_jwt",
+        indexes = @Index(name = "ix_issued_jwt_session_id", columnList = "session_id"),
+        uniqueConstraints =
+                @UniqueConstraint(name = "uq_issued_jwt_refresh_token_hash", columnNames = "refresh_token_hash"))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -70,6 +81,16 @@ public class IssuedJwt {
     @Nullable
     private String ipInet;
 
+    /** The installed-client session ({@code client_session.id}, the token's {@code sid}); null for browser tokens. */
+    @Column(name = "session_id", columnDefinition = "uuid")
+    @Nullable
+    private UUID sessionId;
+
+    /** SHA-256 (hex) of the refresh secret issued with this token; null for browser tokens. */
+    @Column(name = "refresh_token_hash", length = 64)
+    @Nullable
+    private String refreshTokenHash;
+
     public IssuedJwt(UUID jti, Long accountId, Instant expiresAt) {
         this.jti = jti;
         this.accountId = accountId;
@@ -85,5 +106,7 @@ public class IssuedJwt {
         ADMIN_REVOKE,
         IMPERSONATION_EXIT,
         ACCOUNT_DELETED,
+        /** A rotated-away refresh secret of a live installed-client session was presented again. */
+        REFRESH_REUSE,
     }
 }

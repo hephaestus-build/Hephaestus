@@ -291,13 +291,13 @@ const fixtures: Fixture[] = [
 	})),
 ];
 
-function effectiveLintOptions(scope: string) {
+function effectiveLintConfig(scope: string) {
 	const result = spawnSync("vp", ["-C", path.join(REPO_ROOT, scope), "lint", "--print-config"], {
 		encoding: "utf8",
 		maxBuffer: CAPTURE_LIMIT_BYTES,
 	});
 	assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
-	return asRecord(JSON.parse(result.stdout), `${scope} effective lint config`).options;
+	return asRecord(JSON.parse(result.stdout), `${scope} effective lint config`);
 }
 
 function writeScratchProject(project: string) {
@@ -305,7 +305,7 @@ function writeScratchProject(project: string) {
 	// same object Vite+ hands oxlint, under the options Vite+ actually resolves for that tree.
 	const lint: Record<string, unknown> = {
 		...loadLintConfig(pathToFileURL(path.join(WEBAPP, ".oxlintrc.json"))),
-		options: effectiveLintOptions("webapp"),
+		options: effectiveLintConfig("webapp").options,
 	};
 	// Resolved from the webapp, since the scratch project cannot reach `./tools` or the webapp's
 	// dependencies by name; the list stays the config's so a plugin added there is exercised here.
@@ -408,8 +408,46 @@ void test("vp lint preserves house rules, design-system checks and type-aware di
 	}
 });
 
-void test("webapp and docs use the same lint engine options", () => {
-	assert.deepEqual(effectiveLintOptions("docs"), effectiveLintOptions("webapp"));
+void test("webapp, docs and extension use the same lint engine options", () => {
+	const webapp = effectiveLintConfig("webapp").options;
+	for (const scope of ["docs", "extension"]) {
+		assert.deepEqual(effectiveLintConfig(scope).options, webapp, scope);
+	}
+});
+
+void test("extension inherits the complete application test and compiler policy", () => {
+	const webapp = asRecord(effectiveLintConfig("webapp").rules, "webapp rules");
+	const extension = asRecord(effectiveLintConfig("extension").rules, "extension rules");
+	for (const [rule, value] of Object.entries(webapp)) {
+		if (
+			rule.startsWith("vitest/") ||
+			[
+				"no-console",
+				"no-restricted-imports",
+				"react/jsx-no-constructed-context-values",
+				"hephaestus/no-nondeterministic-render",
+				"hephaestus/svg-needs-accessible-name",
+			].includes(rule)
+		) {
+			assert.deepEqual(extension[rule], value, rule);
+		}
+	}
+});
+
+void test("formatting agrees at the repository, webapp and extension entry points", () => {
+	const source =
+		'export const example = <div className="text-2xs tracking-display ease-drawer text-foreground p-4 flex bg-background" />;\n';
+	const outputs = [
+		["fmt", "--stdin-filepath", "extension/src/toolchain.tsx"],
+		["-C", "extension", "fmt", "--stdin-filepath", "src/toolchain.tsx"],
+		["-C", "webapp", "fmt", "--stdin-filepath", "src/toolchain.tsx"],
+	].map((args) => {
+		const result = spawnSync("vp", args, { cwd: REPO_ROOT, input: source, encoding: "utf8" });
+		assert.equal(result.status, 0, result.stderr);
+		return result.stdout;
+	});
+	assert.ok(outputs.every((output) => output === outputs[0]));
+	assert.match(outputs[0] ?? "", /className="flex bg-background p-4 text-2xs/u);
 });
 
 /**

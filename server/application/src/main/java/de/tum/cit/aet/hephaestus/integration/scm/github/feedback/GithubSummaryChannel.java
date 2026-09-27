@@ -97,13 +97,13 @@ public class GithubSummaryChannel implements SummaryChannel {
         } catch (RuntimeException e) {
             throw new FeedbackNotSentException("GitHub comment not sent: " + e.getMessage(), e);
         }
-        String commentNodeId = createComment(scopeId, subjectNodeId, content.externalBody());
+        SummaryHandle handle = createComment(scopeId, subjectNodeId, content.externalBody());
         log.info(
                 "Posted GitHub comment: workspaceId={}, subjectNodeId={}, commentId={}",
                 scopeId,
                 subjectNodeId,
-                commentNodeId);
-        return new SummaryHandle(commentNodeId);
+                handle.externalId());
+        return handle;
     }
 
     private String resolveSubject(long scopeId, String subject) {
@@ -178,7 +178,9 @@ public class GithubSummaryChannel implements SummaryChannel {
             return UpdateOutcome.transientFailure("No comment id in updateIssueComment response");
         }
         log.info("Edited GitHub comment in place: workspaceId={}, commentId={}", scopeId, commentNodeId);
-        return UpdateOutcome.edited(new SummaryHandle(commentNodeId));
+        return UpdateOutcome.edited(new SummaryHandle(
+                commentNodeId,
+                response.field("updateIssueComment.issueComment.url").getValue()));
     }
 
     /**
@@ -244,7 +246,9 @@ public class GithubSummaryChannel implements SummaryChannel {
                 if (connection.getNodes() != null) {
                     for (GHIssueComment node : connection.getNodes()) {
                         if (node.getBody() != null && node.getBody().contains(marker) && node.getId() != null) {
-                            return ExistingSummaryLookup.found(new SummaryHandle(node.getId()));
+                            return ExistingSummaryLookup.found(new SummaryHandle(
+                                    node.getId(),
+                                    node.getUrl() == null ? null : node.getUrl().toString()));
                         }
                     }
                 }
@@ -305,7 +309,7 @@ public class GithubSummaryChannel implements SummaryChannel {
 
     record IssueCoordinates(String owner, String name, int number) {}
 
-    private String createComment(long scopeId, String subjectId, String body) {
+    private SummaryHandle createComment(long scopeId, String subjectId, String body) {
         egressGuard.requireDeliveryAllowed("github.post-summary");
         ClientGraphQlResponse response = gitHubProvider
                 .forScope(scopeId)
@@ -328,7 +332,8 @@ public class GithubSummaryChannel implements SummaryChannel {
         if (commentNodeId == null) {
             throw new FeedbackDeliveryException("No comment ID in AddPullRequestComment response");
         }
-        return commentNodeId;
+        return new SummaryHandle(
+                commentNodeId, response.field("addComment.commentEdge.node.url").getValue());
     }
 
     /**

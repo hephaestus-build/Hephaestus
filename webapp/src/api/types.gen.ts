@@ -607,6 +607,28 @@ export type ChatThreadSummary = {
   title?: string;
 };
 
+export type ClientRefreshRequest = {
+  refreshToken: string;
+};
+
+export type ClientSessionTokens = {
+  accessToken: string;
+  accessTokenExpiresAt: Date;
+  refreshToken: string;
+  sessionExpiresAt: Date;
+};
+
+export type ClientSignInConfiguration = {
+  registered: boolean;
+};
+
+export type ClientTokenRequest = {
+  clientId: string;
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+};
+
 /**
  * A human-readable actor identity on an audit row. Resolved at read time, so an erased account
  *  degrades here without the trail being rewritten: <code>AccountPurger</code> clears the email, replaces
@@ -1387,6 +1409,50 @@ export type DecideFeedbackProposalRequest = {
   decision: 'APPROVED' | 'REJECTED';
   rejectionNote?: string;
   rejectionReason?: 'INCORRECT' | 'MISSING_CONTEXT' | 'UNHELPFUL' | 'DUPLICATE' | 'INAPPROPRIATE_PLACEMENT' | 'OTHER';
+};
+
+/**
+ * The practice's authoritative display name and stable workspace slug.
+ */
+export type DeliveredFeedbackPractice = {
+  name: string;
+  slug: string;
+};
+
+/**
+ * The caller's in-context feedback with recorded provider comments on one authorized piece of work; no feedback bodies
+ */
+export type DeliveredWorkFeedback = {
+  feedback: Array<DeliveredWorkFeedbackItem>;
+  /**
+   * Older delivered feedback exists beyond this bounded view
+   */
+  hasMore: boolean;
+  work: ReviewedWorkRef;
+};
+
+export type DeliveredWorkFeedbackItem = {
+  deliveredAt?: Date;
+  id: string;
+  placements: Array<DeliveredWorkFeedbackPlacement>;
+  practices: Array<DeliveredFeedbackPractice>;
+};
+
+export type DeliveredWorkFeedbackPlacement = {
+  /**
+   * Opaque recorded provider comment identity, for deduplication within this work only; never a URL
+   */
+  commentRef: string;
+  endLine?: number;
+  id: string;
+  path?: string;
+  /**
+   * Provider-returned link on this exact work, or a matching mirrored comment; absent when unavailable. A recorded placement is not a live existence check.
+   */
+  permalink?: string;
+  side?: 'OLD' | 'NEW';
+  startLine?: number;
+  type: 'SUMMARY' | 'INLINE' | 'CONVERSATION_TURN';
 };
 
 export type DeliveryPolicyFactsSnapshot = {
@@ -4481,6 +4547,24 @@ export type ReviewBoundObservation = {
   summary: string;
 };
 
+/**
+ * The piece of reviewed work a provider page shows, and what the caller may do about it
+ */
+export type ReviewContext = {
+  /**
+   * Whether the caller may read the review details behind this work — the runs, observations and the delivery of each piece of feedback — which is a workspace admin's view
+   */
+  canInspectReviewDetails: boolean;
+  /**
+   * Whether the caller may ask for a review of this work: they are its author or an assignee, or a workspace admin, through one of their own linked accounts. It does not promise a review starts; the answer to the ask says whether one did, and why not
+   */
+  canRequestReview: boolean;
+  /**
+   * The work as this workspace mirrored it; its id and kind address the trace, observations and feedback about it
+   */
+  work: ReviewedWorkRef;
+};
+
 export type ReviewFeedback = {
   agentJobId: string;
   /**
@@ -5028,7 +5112,14 @@ export type RunningRelease = {
 };
 
 export type SessionView = {
+  /**
+   * what signed in
+   */
+  client: 'WEB' | 'BROWSER_EXTENSION';
   current?: boolean;
+  /**
+   * when the token expires; for an installed client, the session's own deadline
+   */
   expiresAt?: Date;
   ip?: string;
   issuedAt?: Date;
@@ -8908,6 +8999,136 @@ export type AdminUpdateWorkspaceLlmBudgetResponses = {
 
 export type AdminUpdateWorkspaceLlmBudgetResponse = AdminUpdateWorkspaceLlmBudgetResponses[keyof AdminUpdateWorkspaceLlmBudgetResponses];
 
+export type GetClientSignInConfigurationData = {
+  body?: never;
+  path?: never;
+  query: {
+    clientId: string;
+  };
+  url: '/auth/client/configuration';
+};
+
+export type GetClientSignInConfigurationErrors = {
+  /**
+   * The client id is not a Chrome extension id
+   */
+  400: ProblemDetail;
+};
+
+export type GetClientSignInConfigurationError = GetClientSignInConfigurationErrors[keyof GetClientSignInConfigurationErrors];
+
+export type GetClientSignInConfigurationResponses = {
+  /**
+   * Whether the client is registered
+   */
+  200: ClientSignInConfiguration;
+};
+
+export type GetClientSignInConfigurationResponse = GetClientSignInConfigurationResponses[keyof GetClientSignInConfigurationResponses];
+
+export type LogoutClientSessionData = {
+  body: ClientRefreshRequest;
+  path?: never;
+  query?: never;
+  url: '/auth/client/logout';
+};
+
+export type LogoutClientSessionErrors = {
+  /**
+   * The body is malformed, or a request with a valid CSRF token also carries the browser session cookie
+   */
+  400: ProblemDetail;
+  /**
+   * The request carries the browser session cookie without a valid CSRF token; refused before the endpoint runs
+   */
+  403: unknown;
+  /**
+   * Too many installed-client requests from this address; retry after the Retry-After seconds
+   */
+  429: ProblemDetail;
+};
+
+export type LogoutClientSessionError = LogoutClientSessionErrors[keyof LogoutClientSessionErrors];
+
+export type LogoutClientSessionResponses = {
+  /**
+   * Signed out, or the secret was already unknown
+   */
+  204: void;
+};
+
+export type LogoutClientSessionResponse = LogoutClientSessionResponses[keyof LogoutClientSessionResponses];
+
+export type RefreshClientSessionData = {
+  body: ClientRefreshRequest;
+  path?: never;
+  query?: never;
+  url: '/auth/client/refresh';
+};
+
+export type RefreshClientSessionErrors = {
+  /**
+   * The body is malformed, or a request with a valid CSRF token also carries the browser session cookie
+   */
+  400: ProblemDetail;
+  /**
+   * The session has ended; sign in again
+   */
+  401: ProblemDetail;
+  /**
+   * The request carries the browser session cookie without a valid CSRF token; refused before the endpoint runs
+   */
+  403: unknown;
+  /**
+   * Too many installed-client requests from this address; retry after the Retry-After seconds
+   */
+  429: ProblemDetail;
+};
+
+export type RefreshClientSessionError = RefreshClientSessionErrors[keyof RefreshClientSessionErrors];
+
+export type RefreshClientSessionResponses = {
+  /**
+   * Rotated
+   */
+  200: ClientSessionTokens;
+};
+
+export type RefreshClientSessionResponse = RefreshClientSessionResponses[keyof RefreshClientSessionResponses];
+
+export type ExchangeClientSignInData = {
+  body: ClientTokenRequest;
+  path?: never;
+  query?: never;
+  url: '/auth/client/token';
+};
+
+export type ExchangeClientSignInErrors = {
+  /**
+   * The body is malformed, the code is unknown, expired, used, or does not match the verifier, client or callback, or a request with a valid CSRF token also carries the browser session cookie
+   */
+  400: ProblemDetail;
+  /**
+   * The request carries the browser session cookie without a valid CSRF token; refused before the endpoint runs
+   */
+  403: unknown;
+  /**
+   * Too many installed-client requests from this address; retry after the Retry-After seconds
+   */
+  429: ProblemDetail;
+};
+
+export type ExchangeClientSignInError = ExchangeClientSignInErrors[keyof ExchangeClientSignInErrors];
+
+export type ExchangeClientSignInResponses = {
+  /**
+   * Signed in
+   */
+  200: ClientSessionTokens;
+};
+
+export type ExchangeClientSignInResponse = ExchangeClientSignInResponses[keyof ExchangeClientSignInResponses];
+
 export type LogoutData = {
   body?: never;
   path?: never;
@@ -8930,6 +9151,10 @@ export type RefreshData = {
 };
 
 export type RefreshErrors = {
+  /**
+   * The token belongs to an installed-client session
+   */
+  400: unknown;
   /**
    * Session has ended
    */
@@ -12040,6 +12265,29 @@ export type GetInAppFeedbackResponses = {
 
 export type GetInAppFeedbackResponse = GetInAppFeedbackResponses[keyof GetInAppFeedbackResponses];
 
+export type GetOwnDeliveredWorkFeedbackData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query: {
+    url: string;
+  };
+  url: '/workspaces/{workspaceSlug}/practices/feedback/on-work';
+};
+
+export type GetOwnDeliveredWorkFeedbackResponses = {
+  /**
+   * OK
+   */
+  200: DeliveredWorkFeedback;
+};
+
+export type GetOwnDeliveredWorkFeedbackResponse = GetOwnDeliveredWorkFeedbackResponses[keyof GetOwnDeliveredWorkFeedbackResponses];
+
 export type GetFeedbackResolutionCountsData = {
   body?: never;
   path: {
@@ -12182,6 +12430,14 @@ export type ListObservationsData = {
      * Only observations on these kinds of reviewed work, e.g. scm.pull_request (repeatable)
      */
     artifactKinds?: Array<string>;
+    /**
+     * Exact reviewed-work kind; requires artifactId, e.g. scm.pull_request or scm.issue
+     */
+    artifactKind?: string;
+    /**
+     * Exact reviewed-work ID; requires artifactKind
+     */
+    artifactId?: number;
     /**
      * Only observations with these severities (repeatable); omit for all
      */
@@ -12413,6 +12669,49 @@ export type ReorderPracticesResponses = {
 };
 
 export type ReorderPracticesResponse = ReorderPracticesResponses[keyof ReorderPracticesResponses];
+
+export type ResolveReviewContextData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query: {
+    /**
+     * The provider page's address, as the browser shows it
+     */
+    url: string;
+  };
+  url: '/workspaces/{workspaceSlug}/practices/review-context';
+};
+
+export type ResolveReviewContextErrors = {
+  /**
+   * Not an HTTPS address, or not the page of a pull request, merge request or issue
+   */
+  400: ProblemDetail;
+  /**
+   * The caller is not a member of this workspace
+   */
+  403: ProblemDetail;
+  /**
+   * This workspace has no reviewed work at this address
+   */
+  404: ProblemDetail;
+};
+
+export type ResolveReviewContextError = ResolveReviewContextErrors[keyof ResolveReviewContextErrors];
+
+export type ResolveReviewContextResponses = {
+  /**
+   * The work, and what the caller may do about it
+   */
+  200: ReviewContext;
+};
+
+export type ResolveReviewContextResponse = ResolveReviewContextResponses[keyof ResolveReviewContextResponses];
 
 export type RequestPracticeReviewData = {
   body: CreateReviewRequest;

@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: "true"
+      extension_changed:
+        description: "Whether Chrome extension files changed (or should run for other reasons)"
+        required: false
+        type: string
+        default: "true"
       application_server_changed:
         description: "Whether application-server files changed (or should run for other reasons)"
         required: false
@@ -67,6 +72,16 @@ jobs:
       checks: write
     with:
       leg: webapp
+
+  extension:
+    name: "Extension"
+    if: inputs.should_skip != 'true' && inputs.extension_changed == 'true'
+    uses: ./.github/workflows/ci-quality-leg.yml
+    permissions:
+      contents: read
+      checks: write
+    with:
+      leg: extension
 
   windows:
     name: "Windows"
@@ -133,7 +148,7 @@ jobs:
         run: |
           timeout --kill-after=30s 15m vp run --filter webapp test:storybook
           vp run --filter webapp export:assets
-          BRAND_ASSETS=(webapp/brand webapp/public docs/images/readme docs/static/img/brand docs/static/img/favicon.png docs/static/img/hephaestus-social-card.png docker/compose.proxy.yaml)
+          BRAND_ASSETS=(webapp/brand webapp/public extension/public/icon docs/images/readme docs/static/img/brand docs/static/img/favicon.png docs/static/img/hephaestus-social-card.png docker/compose.proxy.yaml)
           if [[ -n "$(git status --porcelain --untracked-files=all -- "${BRAND_ASSETS[@]}")" ]]; then
             echo "::error::Brand assets are stale. Run 'vp run --filter webapp export:assets' and commit the result."
             git status --short --untracked-files=all -- "${BRAND_ASSETS[@]}"
