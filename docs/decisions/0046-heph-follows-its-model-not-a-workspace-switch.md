@@ -41,8 +41,8 @@ Slack direct messages, within each member's AI choice. Workspace admins manage t
 - The floating Heph panel appears only where a Heph model is ready.
 - The restore-clone lockdown turns off every Heph model row, and lifting it means turning them back on
   under **AI models**.
-- The schema change is expand/contract: the switch's column stays in place, unread, until a later
-  release drops it.
+- The switch's column is dropped in the same release, after the upgrade has carried its value over to the
+  Heph model rows.
 - Which Heph rows were on before the upgrade is not recorded; undoing it needs a pre-upgrade backup.
 
 ## Revisit trigger

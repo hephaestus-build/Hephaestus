@@ -100,9 +100,10 @@ Activity counts and lists work, for one developer (**Activity**) and for a works
 
 ## Consequences
 
-- The schema change is expand/contract: this release stops reading and writing league points, XP and
-  the leaderboard and league switches but leaves their columns in place, and a later release drops
-  them.
+- League points, XP and the leaderboard and league switches are dropped in the same release that stops
+  reading them, rather than one release later: nothing is left that could read them, and an operator who
+  wants the history exports it before upgrading, as the migration guide describes. A rollback recreates
+  the columns empty; only a pre-upgrade backup brings the previous release back with its data.
 - A workspace can no longer choose competition as a motivator. That is intended; an instance that
   wants a ranking builds it outside Hephaestus.
 - Counts are not comparable with the old scores: nothing is weighted, merges count for the pull

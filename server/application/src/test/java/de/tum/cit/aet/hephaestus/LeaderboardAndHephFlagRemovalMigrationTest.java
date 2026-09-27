@@ -23,8 +23,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The changelog that retires the leaderboard and the workspace Heph flag, applied to a database that holds
- * rows from before it: Heph bindings, merge attribution, defaults for the columns the application stopped
- * writing, and the rollback of the changesets that can be reversed.
+ * rows from before it: the Heph setting and merge attribution are carried over before the leaderboard, league,
+ * XP and Heph flag columns are dropped, and a rollback recreates those columns as the previous release had them.
  */
 @Tag("database")
 class LeaderboardAndHephFlagRemovalMigrationTest {
@@ -34,6 +34,18 @@ class LeaderboardAndHephFlagRemovalMigrationTest {
     private static final LabelExpression LABELS = new LabelExpression();
     private static final TestDatabase DATABASE =
             PostgreSQLTestContainer.createDatabase("leaderboard_heph_flag_removal_migration");
+
+    /** Every column the changelog drops, as SQL {@code (table, column)} rows. */
+    private static final String DROPPED = """
+            ('activity_event', 'xp'), ('workspace_membership', 'league_points'),
+            ('workspace', 'mentor_enabled'), ('workspace', 'leaderboard_enabled'), ('workspace', 'progression_enabled'),
+            ('workspace', 'leagues_enabled'), ('workspace', 'leaderboard_schedule_day'),
+            ('workspace', 'leaderboard_schedule_time'), ('workspace', 'leaderboard_notification_enabled'),
+            ('workspace', 'leaderboard_league_cycle_at')
+            """;
+
+    /** Everything after the two data changesets: the index changes, and the drops of index, constraint and columns. */
+    private static final int REVERSIBLE_CHANGE_SETS = 14;
 
     private static final String SEED = """
             INSERT INTO "user" (id, native_id, provider_id, login)
@@ -121,49 +133,100 @@ class LeaderboardAndHephFlagRemovalMigrationTest {
     }
 
     @Test
-    void shouldAcceptInsertsThatOmitTheColumnsTheApplicationDoesNotWrite() throws SQLException {
-        try (Connection connection = connect(DATABASE);
-                var statement = connection.createStatement()) {
-            statement.execute("""
-                INSERT INTO activity_event (id, event_key, event_type, occurred_at, workspace_id, ingested_at)
-                VALUES ('00000000-0000-0000-0000-000000992060', 'without-xp', 'ISSUE_CREATED', now(), 992010, now());
-                INSERT INTO workspace_membership (workspace_id, user_id, role, created_at, hidden)
-                VALUES (992011, 992001, 'MEMBER', now(), false);
-                """);
-        }
-
-        assertThat(column("SELECT event_key, xp::text FROM activity_event WHERE event_key = 'without-xp'"))
-                .containsExactlyEntriesOf(Map.of("without-xp", "0"));
-        assertThat(column("SELECT user_id::text, league_points::text FROM workspace_membership WHERE user_id = 992001"))
-                .containsExactlyEntriesOf(Map.of("992001", "0"));
+    void shouldDropTheLeaderboardLeagueXpAndHephFlagColumnsWhenTheChangelogIsApplied() throws SQLException {
+        assertThat(column("""
+                SELECT table_name || '.' || column_name, data_type FROM information_schema.columns
+                WHERE table_schema = 'public' AND (table_name, column_name) IN (%s)
+                """.formatted(DROPPED))).isEmpty();
+        assertThat(column("""
+                SELECT name, coalesce(to_regclass('public.' || name)::text, 'gone') FROM (VALUES
+                    ('idx_activity_event_leaderboard_covering'), ('idx_activity_event_leaderboard')) AS index(name)
+                """))
+                .containsExactlyInAnyOrderEntriesOf(Map.of(
+                        "idx_activity_event_leaderboard_covering", "gone",
+                        "idx_activity_event_leaderboard", "gone"));
+        assertThat(column("""
+                SELECT conname, contype::text FROM pg_constraint
+                WHERE conrelid = 'public.activity_event'::regclass AND conname = 'chk_activity_event_xp_non_negative'
+                """)).isEmpty();
     }
 
     @Test
-    void shouldRestoreTheIndexesAndDefaultsWhenTheReversibleChangeSetsRollBack() throws Exception {
+    void shouldRecreateTheDroppedColumnsAsThePreviousReleaseHadThemWhenTheChangelogRollsBack() throws Exception {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("leaderboard_heph_flag_removal_rollback");
         try (Connection connection = connect(database);
                 Liquibase liquibase = liquibase(connection)) {
             liquibase.update(migrateToTheChangelog(liquibase), CONTEXTS, LABELS);
-
-            liquibase.rollback(3, CONTEXTS, LABELS);
-
-            try (var statement = connection.createStatement();
-                    var rows = statement.executeQuery("""
-                        SELECT to_regclass('public.idx_activity_event_xp_lookup') IS NOT NULL AS xp_lookup,
-                            to_regclass('public.idx_activity_event_workspace_target') IS NOT NULL AS workspace_target,
-                            to_regclass('public.idx_activity_event_leaderboard') IS NOT NULL AS leaderboard,
-                            (SELECT count(*) FROM information_schema.columns
-                                WHERE table_schema = 'public' AND column_default IS NOT NULL
-                                AND ((table_name = 'activity_event' AND column_name = 'xp')
-                                    OR (table_name = 'workspace_membership' AND column_name = 'league_points')))
-                                AS defaults
-                        """)) {
-                assertThat(rows.next()).isTrue();
-                assertThat(rows.getBoolean("xp_lookup")).isTrue();
-                assertThat(rows.getBoolean("workspace_target")).isFalse();
-                assertThat(rows.getBoolean("leaderboard")).isTrue();
-                assertThat(rows.getInt("defaults")).isZero();
+            try (var statement = connection.createStatement()) {
+                statement.execute("""
+                    INSERT INTO "user" (id, native_id, provider_id, login)
+                    SELECT 992101, 992101, id, 'rolled-back-member'
+                    FROM identity_provider WHERE type = 'GITHUB' AND server_url = 'https://github.com';
+                    INSERT INTO workspace (
+                        id, account_login, account_type, created_at, display_name, is_publicly_viewable, slug, status
+                    ) VALUES (992110, 'rolled-back', 'ORG', now(), 'Rolled back', false, 'rolled-back', 'ACTIVE');
+                    INSERT INTO workspace_membership (workspace_id, user_id, role, created_at, hidden)
+                    VALUES (992110, 992101, 'MEMBER', now(), false);
+                    INSERT INTO activity_event (id, event_key, event_type, occurred_at, workspace_id, ingested_at)
+                    VALUES ('00000000-0000-0000-0000-000000992120', 'rolled-back', 'ISSUE_CREATED', now(), 992110,
+                        now());
+                    """);
             }
+            connection.commit();
+
+            liquibase.rollback(REVERSIBLE_CHANGE_SETS, CONTEXTS, LABELS);
+
+            assertThat(columns(connection, """
+                    SELECT table_name || '.' || column_name,
+                        data_type || coalesce('(' || character_maximum_length || ')', '') || ' '
+                            || CASE is_nullable WHEN 'NO' THEN 'NOT NULL' ELSE 'NULL' END
+                            || coalesce(' DEFAULT ' || column_default, '')
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public' AND (table_name, column_name) IN (%s)
+                    """.formatted(DROPPED)))
+                    .containsExactlyInAnyOrderEntriesOf(Map.ofEntries(
+                            Map.entry("activity_event.xp", "double precision NOT NULL"),
+                            Map.entry("workspace_membership.league_points", "integer NOT NULL"),
+                            Map.entry("workspace.leaderboard_notification_enabled", "boolean NULL"),
+                            Map.entry("workspace.leaderboard_schedule_day", "integer NULL"),
+                            Map.entry("workspace.leaderboard_schedule_time", "character varying(10) NULL"),
+                            Map.entry("workspace.leaderboard_enabled", "boolean NOT NULL DEFAULT false"),
+                            Map.entry("workspace.progression_enabled", "boolean NOT NULL DEFAULT false"),
+                            Map.entry("workspace.leagues_enabled", "boolean NOT NULL DEFAULT false"),
+                            Map.entry("workspace.mentor_enabled", "boolean NOT NULL DEFAULT false"),
+                            Map.entry("workspace.leaderboard_league_cycle_at", "timestamp with time zone NULL")));
+            assertThat(columns(connection, """
+                    SELECT 'row', concat_ws(',', e.xp, m.league_points, w.mentor_enabled::text, w.leaderboard_enabled::text)
+                    FROM activity_event e
+                    JOIN workspace w ON w.id = e.workspace_id
+                    JOIN workspace_membership m ON m.workspace_id = w.id
+                    WHERE e.event_key = 'rolled-back'
+                    """))
+                    .as("rows written without the columns read as empty, not as the history they had")
+                    .containsExactlyEntriesOf(Map.of("row", "0,0,false,false"));
+            assertThat(columns(connection, """
+                    SELECT name, (to_regclass('public.' || name) IS NOT NULL)::text FROM (VALUES
+                        ('idx_activity_event_leaderboard_covering'), ('idx_activity_event_leaderboard'),
+                        ('idx_activity_event_xp_lookup'), ('idx_activity_event_workspace_target')) AS index(name)
+                    UNION ALL
+                    SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint
+                    WHERE conrelid = 'public.activity_event'::regclass
+                    AND conname = 'chk_activity_event_xp_non_negative'
+                    """))
+                    .containsExactlyInAnyOrderEntriesOf(Map.of(
+                            "idx_activity_event_leaderboard_covering", "true",
+                            "idx_activity_event_leaderboard", "true",
+                            "idx_activity_event_xp_lookup", "true",
+                            "idx_activity_event_workspace_target", "false",
+                            "chk_activity_event_xp_non_negative", "CHECK ((xp >= (0)::double precision))"));
+            assertThat(columns(
+                            connection,
+                            "SELECT indexname, indexdef FROM pg_indexes"
+                                    + " WHERE indexname = 'idx_activity_event_leaderboard_covering'"))
+                    .containsExactlyEntriesOf(Map.of(
+                            "idx_activity_event_leaderboard_covering",
+                            "CREATE INDEX idx_activity_event_leaderboard_covering ON public.activity_event USING btree"
+                                    + " (workspace_id, occurred_at DESC, actor_id, xp)"));
             assertThatThrownBy(() -> liquibase.rollback(1, CONTEXTS, LABELS))
                     .hasStackTraceContaining("restore a pre-upgrade database backup");
         }
@@ -188,9 +251,14 @@ class LeaderboardAndHephFlagRemovalMigrationTest {
     }
 
     private static Map<String, String> column(String query) throws SQLException {
+        try (Connection connection = connect(DATABASE)) {
+            return columns(connection, query);
+        }
+    }
+
+    private static Map<String, String> columns(Connection connection, String query) throws SQLException {
         Map<String, String> values = new LinkedHashMap<>();
-        try (Connection connection = connect(DATABASE);
-                var statement = connection.createStatement();
+        try (var statement = connection.createStatement();
                 var rows = statement.executeQuery(query)) {
             while (rows.next()) {
                 values.put(rows.getString(1), rows.getString(2));
