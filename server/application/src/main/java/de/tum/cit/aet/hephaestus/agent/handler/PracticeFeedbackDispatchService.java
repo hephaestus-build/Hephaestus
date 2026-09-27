@@ -160,7 +160,8 @@ class PracticeFeedbackDispatchService {
         try {
             boolean hasSummary = !dispatch.getBody().isBlank();
             if (hasSummary && summaryRef == null) {
-                ExistingDeliveryLookup existing = commentPoster.findExistingSummaryComment(job);
+                PullRequestCommentPoster.SummaryWrite write = summaryWrite(dispatch, job);
+                ExistingDeliveryLookup existing = commentPoster.findExisting(write);
                 if (existing.kind() == ExistingDeliveryLookup.Kind.UNKNOWN) {
                     return stateMachine.retry(dispatch, owner, "Provider lookup was inconclusive");
                 }
@@ -168,17 +169,15 @@ class PracticeFeedbackDispatchService {
                     summaryRef = existing.commentId();
                 } else if (dispatch.getWriteStarted()) {
                     return stateMachine.retry(dispatch, owner, "A prior provider write has not been reconciled");
+                } else {
+                    PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
+                    if (!decision.allowed()) return stateMachine.refuse(dispatch, owner, decision.refusal());
+                    Integer began = transactionTemplate.execute(
+                            status -> repository.beginWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
+                    if (began == null || began != 1) return Result.inProgress();
+                    writeBegan = true;
+                    summaryRef = commentPoster.post(write);
                 }
-            }
-
-            if (hasSummary && summaryRef == null) {
-                PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
-                if (!decision.allowed()) return stateMachine.refuse(dispatch, owner, decision.refusal());
-                Integer began = transactionTemplate.execute(
-                        status -> repository.beginWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
-                if (began == null || began != 1) return Result.inProgress();
-                writeBegan = true;
-                summaryRef = java.util.Objects.requireNonNull(post(dispatch, job));
             }
 
             List<DiffNote> inlineNotes = inlineNotes(dispatch);
@@ -198,6 +197,8 @@ class PracticeFeedbackDispatchService {
         } catch (JobDeliverySuppressedException exception) {
             return stateMachine.refuse(
                     dispatch, owner, FeedbackSuppressionReason.INSTANCE_SILENCED, summaryRef, inlineSignals);
+        } catch (PullRequestCommentPoster.SummaryNotSentException exception) {
+            return retryUnsent(dispatch, owner, exception.getMessage());
         } catch (RuntimeException exception) {
             if (summaryRef != null) {
                 return stateMachine.retryPackage(dispatch, owner, exception.getMessage(), summaryRef, inlineSignals);
@@ -223,8 +224,8 @@ class PracticeFeedbackDispatchService {
         boolean writeBegan = false;
         try {
             if (summaryRef == null) {
-                ExistingDeliveryLookup existing =
-                        commentPoster.findApprovedProposal(job, dispatch.approvedFeedbackId());
+                PullRequestCommentPoster.SummaryWrite write = summaryWrite(dispatch, job);
+                ExistingDeliveryLookup existing = commentPoster.findExisting(write);
                 if (existing.kind() == ExistingDeliveryLookup.Kind.UNKNOWN) {
                     return stateMachine.retry(dispatch, owner, "Provider lookup was inconclusive");
                 }
@@ -232,21 +233,18 @@ class PracticeFeedbackDispatchService {
                     summaryRef = java.util.Objects.requireNonNull(existing.commentId());
                 } else if (dispatch.getWriteStarted()) {
                     return stateMachine.retry(dispatch, owner, "A prior provider write has not been reconciled");
+                } else {
+                    PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
+                    if (!decision.allowed()) return stateMachine.refuse(dispatch, owner, decision.refusal());
+                    if (!reviewedRevisionMatches(feedback, decision)) {
+                        return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.APPROVAL_STALE);
+                    }
+                    Integer began = transactionTemplate.execute(
+                            status -> repository.beginWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
+                    if (began == null || began != 1) return Result.inProgress();
+                    writeBegan = true;
+                    summaryRef = commentPoster.post(write);
                 }
-            }
-
-            if (summaryRef == null) {
-                PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
-                if (!decision.allowed()) return stateMachine.refuse(dispatch, owner, decision.refusal());
-                if (!reviewedRevisionMatches(feedback, decision)) {
-                    return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.APPROVAL_STALE);
-                }
-                Integer began = transactionTemplate.execute(
-                        status -> repository.beginWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
-                if (began == null || began != 1) return Result.inProgress();
-                writeBegan = true;
-                summaryRef = java.util.Objects.requireNonNull(
-                        commentPoster.postApprovedProposal(job, dispatch.approvedFeedbackId(), dispatch.getBody()));
             }
 
             String deliveredSummaryRef = java.util.Objects.requireNonNull(summaryRef);
@@ -280,6 +278,8 @@ class PracticeFeedbackDispatchService {
         } catch (JobDeliverySuppressedException exception) {
             return stateMachine.refuse(
                     dispatch, owner, FeedbackSuppressionReason.INSTANCE_SILENCED, summaryRef, inlineSignals);
+        } catch (PullRequestCommentPoster.SummaryNotSentException exception) {
+            return retryUnsent(dispatch, owner, exception.getMessage());
         } catch (RuntimeException exception) {
             if (summaryRef != null) {
                 return stateMachine.retryPackage(dispatch, owner, exception.getMessage(), summaryRef, inlineSignals);
@@ -289,6 +289,18 @@ class PracticeFeedbackDispatchService {
             }
             return stateMachine.retry(dispatch, owner, exception.getMessage());
         }
+    }
+
+    /**
+     * Reopens only the fence this lease closed, and only because the channel proved the create request never left.
+     * A create whose outcome is unknown keeps its fence: a marker lookup that finds nothing cannot tell a lost note
+     * from one the provider has not made visible yet.
+     */
+    private Result retryUnsent(FeedbackDispatch dispatch, String owner, @Nullable String error) {
+        Integer released = transactionTemplate.execute(
+                status -> repository.releaseUnsentWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
+        if (released == null || released != 1) return stateMachine.retryAfterWrite(dispatch, owner, error);
+        return stateMachine.retry(dispatch, owner, error, null, false, deliveredSignals(dispatch));
     }
 
     private static boolean reviewedRevisionMatches(
@@ -344,16 +356,12 @@ class PracticeFeedbackDispatchService {
                 .toList();
     }
 
-    private @Nullable String post(FeedbackDispatch dispatch, AgentJob job) {
-        if (dispatch.getDestination() == FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE) {
-            if (isIssue(job)) {
-                return commentPoster.postIssueApprovedProposal(job, dispatch.approvedFeedbackId(), dispatch.getBody());
-            }
-            return commentPoster.postApprovedProposal(job, dispatch.approvedFeedbackId(), dispatch.getBody());
-        }
-        return isIssue(job)
-                ? commentPoster.postIssueFormattedBody(job, dispatch.getBody())
-                : commentPoster.postFormattedBody(job, dispatch.getBody());
+    /** The one routing decision for a package's summary: the reviewed work's own thread, under the package marker. */
+    private PullRequestCommentPoster.SummaryWrite summaryWrite(FeedbackDispatch dispatch, AgentJob job) {
+        String marker = dispatch.getDestination() == FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE
+                ? PullRequestCommentPoster.approvedFeedbackMarker(dispatch.approvedFeedbackId())
+                : PullRequestCommentPoster.summaryMarkerFor(job);
+        return commentPoster.summaryWrite(job, isIssue(job), dispatch.getBody(), marker);
     }
 
     private static boolean isIssue(AgentJob job) {

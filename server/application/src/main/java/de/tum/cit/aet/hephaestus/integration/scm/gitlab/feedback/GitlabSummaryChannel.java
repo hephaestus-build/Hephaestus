@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGateway;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppressedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackNotSentException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
@@ -79,22 +80,11 @@ public class GitlabSummaryChannel implements SummaryChannel {
     @Override
     public SummaryHandle postSummary(FeedbackTarget target, FeedbackContent content) {
         long scopeId = target.ref().workspaceId();
-        if (gitLabProvider.isRateLimitCritical(scopeId)) {
-            throw new FeedbackDeliveryException(
-                    "GitLab rate limit critical — skipping summary post for scope " + scopeId);
-        }
-
-        // The subject is a merge request ("path!iid") or an issue ("path#iid"); both post via the same
-        // generic createNote mutation — only the noteable gid resolution differs.
-        String subject = target.subjectExternalId();
         String noteableGid;
-        if (isIssueSubject(subject)) {
-            MrCoordinates issue = GitlabMrResolver.parseIssueSubjectExternalId(subject);
-            noteableGid = mrResolver.resolveIssueGid(scopeId, issue.projectPath(), issue.iid());
-        } else {
-            MrCoordinates mr = GitlabMrResolver.parseSubjectExternalId(subject);
-            noteableGid =
-                    mrResolver.resolve(scopeId, mr.projectPath(), mr.iid()).globalId();
+        try {
+            noteableGid = resolveNoteable(scopeId, target.subjectExternalId());
+        } catch (RuntimeException e) {
+            throw new FeedbackNotSentException("GitLab note not sent: " + e.getMessage(), e);
         }
         String body = escapeSlashCommands(content.externalBody());
 
@@ -143,6 +133,22 @@ public class GitlabSummaryChannel implements SummaryChannel {
         }
         log.info("Posted GitLab note: workspaceId={}, noteableGid={}, noteId={}", scopeId, noteableGid, noteId);
         return new SummaryHandle(noteId);
+    }
+
+    /**
+     * The subject is a merge request ({@code path!iid}) or an issue ({@code path#iid}); both post via the same
+     * generic createNote mutation, and only the noteable gid resolution differs.
+     */
+    private String resolveNoteable(long scopeId, String subject) {
+        if (gitLabProvider.isRateLimitCritical(scopeId)) {
+            throw new FeedbackDeliveryException("GitLab rate limit critical for scope " + scopeId);
+        }
+        if (isIssueSubject(subject)) {
+            MrCoordinates issue = GitlabMrResolver.parseIssueSubjectExternalId(subject);
+            return mrResolver.resolveIssueGid(scopeId, issue.projectPath(), issue.iid());
+        }
+        MrCoordinates mr = GitlabMrResolver.parseSubjectExternalId(subject);
+        return mrResolver.resolve(scopeId, mr.projectPath(), mr.iid()).globalId();
     }
 
     /**

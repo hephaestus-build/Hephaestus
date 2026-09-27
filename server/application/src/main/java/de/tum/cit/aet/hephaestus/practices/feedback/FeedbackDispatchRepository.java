@@ -63,6 +63,16 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
         """, nativeQuery = true)
     int beginWrite(@Param("id") UUID id, @Param("workspaceId") Long workspaceId, @Param("owner") String owner);
 
+    /** Reopens the fence this lease closed, once its channel proved the create request was never sent. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE feedback_dispatch SET write_started = FALSE, updated_at = CURRENT_TIMESTAMP
+         WHERE id = :id AND workspace_id = :workspaceId AND state = 'CLAIMED'
+           AND lease_owner = :owner AND write_started = TRUE
+           AND lease_expires_at > CURRENT_TIMESTAMP
+        """, nativeQuery = true)
+    int releaseUnsentWrite(@Param("id") UUID id, @Param("workspaceId") Long workspaceId, @Param("owner") String owner);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
         UPDATE feedback_dispatch SET state = :#{#completion.state()}, delivered_external_ref = :#{#completion.externalRef()},

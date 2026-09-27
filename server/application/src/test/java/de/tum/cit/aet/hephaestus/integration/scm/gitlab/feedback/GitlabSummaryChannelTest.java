@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppressedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackNotSentException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
@@ -180,13 +181,24 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
         FeedbackTarget target = gitlabTarget();
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(true);
         assertThatThrownBy(() -> channel.postSummary(target, new FeedbackContent("body", "marker")))
-                .isInstanceOf(FeedbackDeliveryException.class)
+                .isInstanceOf(FeedbackNotSentException.class)
                 .hasMessageContaining("rate limit critical");
+        verify(gitLabProvider, never()).forScope(anyLong());
+    }
+
+    @Test
+    void anIssueThatCannotBeResolvedIsNotSent() {
+        when(mrResolver.resolveIssueGid(1L, "group/project", 7))
+                .thenThrow(new FeedbackDeliveryException("Issue not found via GraphQL"));
+
+        assertThatThrownBy(() -> channel.postSummary(gitlabIssueTarget(), new FeedbackContent("body", "marker")))
+                .isInstanceOf(FeedbackNotSentException.class)
+                .hasMessageContaining("Issue not found");
+        verify(gitLabProvider, never()).forScope(anyLong());
     }
 
     @Test
     void postSummaryWrapsTransportErrorAsFeedbackDeliveryException() {
-        // Must surface as FeedbackDeliveryException so PullRequestCommentPoster's catch-wrap stays uniform.
         FeedbackTarget target = gitlabTarget();
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
         when(mrResolver.resolve(1L, "group/project", 42))
@@ -201,6 +213,7 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> channel.postSummary(target, new FeedbackContent("body", "marker")))
                 .isInstanceOf(FeedbackDeliveryException.class)
+                .isNotInstanceOf(FeedbackNotSentException.class)
                 .hasMessageContaining("createNote transport error");
     }
 
