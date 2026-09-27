@@ -3,14 +3,19 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import java.time.Duration;
 import java.time.Instant;
@@ -41,6 +46,7 @@ public class IssueUpdateCoalescer {
     private final SignalRecorder recorder;
     private final IssueSignalResubmitter submitter;
     private final WorkspaceResolver workspaceResolver;
+    private final PracticeReviewProperties reviewProperties;
     private final TransactionTemplate transactions;
 
     public IssueUpdateCoalescer(
@@ -49,12 +55,14 @@ public class IssueUpdateCoalescer {
             SignalRecorder recorder,
             IssueSignalResubmitter submitter,
             WorkspaceResolver workspaceResolver,
+            PracticeReviewProperties reviewProperties,
             TransactionTemplate transactions) {
         this.signals = signals;
         this.issues = issues;
         this.recorder = recorder;
         this.submitter = submitter;
         this.workspaceResolver = workspaceResolver;
+        this.reviewProperties = reviewProperties;
         this.transactions = transactions;
     }
 
@@ -100,10 +108,13 @@ public class IssueUpdateCoalescer {
         }
         // Recheck this workspace's monitor after the quiet period: a repository can move or be
         // shared by several workspaces (ADR 0024 § re-keying).
-        boolean stillMonitored =
-                workspaceResolver.resolveAllForRepository(issue.getRepository().getNameWithOwner()).stream()
-                        .anyMatch(workspace -> Objects.equals(workspace.getId(), workspaceId));
-        if (!stillMonitored) {
+        Workspace owner = workspaceResolver
+                .resolveAllForRepository(issue.getRepository().getNameWithOwner())
+                .stream()
+                .filter(workspace -> Objects.equals(workspace.getId(), workspaceId))
+                .findFirst()
+                .orElse(null);
+        if (owner == null) {
             pending.forEach(signal -> recorder.markRefused(signal.key(), SignalStateReason.OUT_OF_REVIEW_SCOPE));
             return;
         }
@@ -114,6 +125,9 @@ public class IssueUpdateCoalescer {
         if (issue.getState() == Issue.State.CLOSED) {
             // Closing has its own review occasion.
             pending.forEach(signal -> recorder.markRefused(signal.key(), SignalStateReason.COALESCED));
+            return;
+        }
+        if (coolingDown(signals, owner, reviewProperties, ScmSignals.ISSUE, issueId, ScmSignals.ISSUE_UPDATED, now)) {
             return;
         }
         SignalKey current = ScmSignals.issueKey(
@@ -143,5 +157,30 @@ public class IssueUpdateCoalescer {
         return pending.stream().allMatch(signal -> !signal.getStateChangedAt().isAfter(quietBefore))
                 || pending.stream()
                         .anyMatch(signal -> !signal.getStateChangedAt().isAfter(deadline));
+    }
+
+    /**
+     * Whether the workspace's cooldown still covers the last review this signal occasioned on the
+     * artifact. A group due inside it stays deferred rather than being submitted: submission would
+     * refuse it for good ({@link SignalStateReason#COOLDOWN_ACTIVE}), losing the very change that was
+     * made in answer to that review.
+     */
+    static boolean coolingDown(
+            ArtifactSignalRepository signals,
+            Workspace owner,
+            PracticeReviewProperties reviewProperties,
+            ArtifactKind kind,
+            long artifactId,
+            SignalName signal,
+            Instant now) {
+        int cooldown = owner.getReviewSettings().resolveCooldownMinutes(reviewProperties.cooldownMinutes());
+        if (cooldown <= 0) {
+            return false;
+        }
+        Instant windowStart = now.minus(Duration.ofMinutes(cooldown));
+        return signals.findForArtifact(owner.getId(), kind.value(), artifactId).stream()
+                .anyMatch(row -> signal.value().equals(row.getSignalName())
+                        && row.getState() == SignalState.TRIGGERED
+                        && row.getStateChangedAt().isAfter(windowStart));
     }
 }
