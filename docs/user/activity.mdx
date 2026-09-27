@@ -1,12 +1,12 @@
 ---
 id: activity
 title: Activity
-description: See what is waiting on you, what you have open, and what you and your workspace did lately.
+description: See what needs you, what you did over a time range, and what your workspace worked on.
 ---
 
-Activity shows the work you and your workspace already do on GitHub or GitLab: what is waiting on you,
-what you have open, and what happened lately. It counts and lists that work; it never scores the work
-or ranks anyone.
+Activity shows the work you and your workspace already do on GitHub or GitLab: what needs you now,
+how much you did over a time range, and the work you did it on. It counts and lists that work; it
+never scores the work or ranks anyone.
 
 There are two pages, both in the sidebar under **Dashboards**:
 
@@ -15,38 +15,73 @@ There are two pages, both in the sidebar under **Dashboards**:
 
 Every workspace has both pages; there is nothing to turn on. They show the work in the workspace's
 repositories. Everyone with a role in the workspace sees it, regardless of what each of them can see
-on GitHub or GitLab. On GitLab, pages say *merge request* where this guide says *pull request*.
+on GitHub or GitLab. On GitLab, pages say *merge request* where this guide says *pull request*, and
+the icons and colours are GitLab's own.
 
-## Your Activity
+Every pull request and issue opens on GitHub or GitLab, where you act on it. Hephaestus does not
+change anything there.
 
-- **Waiting on you** lists open pull requests that ask for your review.
-- **Your open pull requests** lists the pull requests you opened that are still open, drafts
-  included. Each one shows whether it is a **Draft**, whether a reviewer asked for **Changes
-  requested**, whether it is **Approved**, and whether **Checks failing** on its latest commit.
-  Requesting changes on a merge request is a GitLab Premium feature; without it, GitLab work never
-  shows **Changes requested** and no change requests are counted.
-- **Assigned to you** lists open issues assigned to you.
-- **Summary** counts what you did in a time range: the last 7 days, 30 days, 90 days or 12 months.
-- **Recent activity** lists what you did in that range, newest first and grouped by day.
+## Needs you
 
-When your workspace reviews practices, a link at the end of the page opens your
-[Practice profile](./practice-profile).
+**Needs you** lists the open pull requests that are waiting on you, grouped by what they need:
 
-Every item opens the work on GitHub or GitLab, where you act on it. Hephaestus does not change
-anything there.
-
-### The summary
-
-The summary has one row for each kind of work:
-
-| Row | What it counts |
+| Group | What is in it |
 | --- | --- |
-| **Pull requests** | Pull requests you opened, and those of yours that were merged or closed without merging |
-| **Reviews** | Your reviews of other people's pull requests: approvals, change requests and reviews with comments only |
-| **Issues** | Issues you opened, and those of yours that were closed |
-| **Comments** | Your comments in the conversation of a pull request or issue, and your comments on code |
+| **Review requested** | Pull requests that ask for your review and that nobody has settled yet |
+| **Returned to you** | Your pull requests where a reviewer requested changes, or whose checks are failing |
+| **Approved** | Your pull requests that reviewers approved |
 
-Open a row to see the activity behind its count; the count and the list follow the same rules.
+Each pull request shows its reviewers, with a mark on each face for where their review stands:
+approved, changes requested, commented, or still requested. When nothing is waiting on you, the
+section says **Nothing needs you**.
+
+Below it, **Waiting on others** holds, folded away, the pull requests where the next step is someone
+else's:
+
+- **Waiting for review**: your pull requests that reviewers have not got to yet.
+- **Drafts**: your draft pull requests.
+- **Covered by other reviewers**: pull requests that still ask for your review, but where your review
+  would change nothing yet. Either another reviewer has already approved it, or someone requested
+  changes, so the author acts first. It moves back to **Review requested** once that approval or
+  request for changes no longer stands.
+- **Reviewed by you**: pull requests that still list you as a reviewer after you approved them or
+  requested changes, as GitLab does until the author asks for your review again. A review with
+  comments only leaves the request in **Review requested**. On GitHub, asking you again makes it a
+  review request once more, so it moves back by itself.
+
+Open **Waiting on others** to see them; it closes again when you leave the page.
+
+**Assigned issues** lists the open issues assigned to you.
+
+Each list holds only the most recently updated; when there are more, a line under it says how
+many it shows.
+
+Requesting changes on a merge request is a GitLab Premium feature; without it, GitLab work never
+shows changes requested and no change requests are counted.
+
+## Your work over a time range
+
+Choose a range: the last 7 days, 30 days, 90 days or 12 months. The page shows one tile for each
+kind of work:
+
+| Tile | Its number | Also shown |
+| --- | --- | --- |
+| **Pull requests** | Your pull requests that were merged | Pull requests you opened, and yours closed without merging |
+| **Reviews** | Your reviews of other people's pull requests | Approvals, reviews that requested changes, and reviews with comments only |
+| **Comments** | Your comments | Comments in the conversation of a pull request or issue, and comments on code |
+| **Issues** | Issues you opened | Yours that were closed |
+
+Each tile has small bars for its number over the range: one bar per day for 7 or 30 days, per week
+for 90 days, and per month for 12 months, in your own time zone. Each tile's bars have their own
+scale, so compare a tile with its own past, not with the tile beside it. The first and last week or
+month can be cut short by the range; hover a bar to see the days it covers. Open a tile to see its
+bars larger, one per kind, with the work behind them: a review's verdicts and a comment's place
+stack to their total, while pull requests opened, merged and closed stand side by side. A tile
+with nothing in the range does not open.
+
+When you choose another range, the page keeps showing the previous range's figures, without
+their colours, until the new ones arrive, and says **Updating…** beside the range if that takes
+more than a moment.
 
 A few rules decide who a count belongs to:
 
@@ -60,21 +95,42 @@ A few rules decide who a count belongs to:
 A count says how much of something happened, not how good the work was. Planning, pairing and
 helping in a chat do not show up here.
 
+## Timeline
+
+**Timeline** lists the work you did in the range, one row per pull request or issue, newest first
+and grouped by day. A row shows what happened on it: *Merged*, *Approved*, *Commented*, or how many
+comments you left. Forty comments on one pull request are one row with *40*, not forty rows.
+**Show more** loads older work.
+
+The counts in the timeline and on the tiles follow the same rules, so the rows of a range add up to
+its tiles. When a pull request or issue is no longer on GitHub or GitLab, its row stays, without a
+link, so the counts stay true.
+
+### Copy as Markdown
+
+**Copy as Markdown** copies the whole timeline for the range, not only the rows on screen: a heading
+with the range, then one line per pull request or issue with a link to it and what happened on it.
+Paste it into a standup note, a 1:1 document or a record of your work. A rich editor pastes it as a
+formatted list; a plain text field pastes the Markdown.
+
 ## Workspace activity
 
-Workspace activity shows the same kinds of counts for everyone. Use **Team** to narrow it to one
+Workspace activity shows the same tiles and timeline for everyone. Use **Team** to narrow it to one
 team; **Everyone** shows the whole workspace. A team includes its sub-teams, and its activity is
 counted in the repositories that team's settings include. Where a team filters reviews by label,
 only reviews of pull requests with one of those labels count for it. Workspace totals count only
 current members.
 
-- **Summary** counts the workspace's or the team's activity in the time range, and says how many
-  members were active.
-- **Members** lists the members by name. Open a member to see what is waiting on their review, what
-  they have open, their summary and their recent activity, with a link to their GitHub or GitLab
-  profile. With a team selected, a member's summary and activity are that team's, so they match
-  the member's row.
-- **Recent activity** lists what happened, with who did it.
+- **The tiles** count the workspace's or the team's work in the range.
+- **Members** lists the members by name, with each one's pull requests, reviews, comments and issues.
+  Search finds a member by name or username. The table shows the first 50 members; **Show all**
+  shows the rest. It is always in order of name and cannot be sorted by a count: Activity never
+  ranks people.
+- **Timeline** lists the work, with who did it, and can be copied as Markdown.
+
+Open a member to see what needs them, their tiles and their timeline, with a link to their GitHub or
+GitLab profile. With a team selected, a member's counts are that team's, so they match the member's
+row.
 
 A workspace admin can hide a member or a team from workspace activity. A hidden member is left out
 of every count and list here. A hidden team is not offered in **Team** and does not count toward the

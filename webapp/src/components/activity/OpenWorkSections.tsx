@@ -1,162 +1,197 @@
-import { ChevronDownIcon, CircleDotIcon, GitPullRequestIcon, InboxIcon } from "lucide-react";
-import { useId, useState } from "react";
-
-import type { OpenWork, WorkItemList } from "@/api/types.gen";
+import { CheckCircleIcon, ChevronRightIcon } from "@primer/octicons-react";
+import { cn } from "cn";
+import type { OpenWork, WorkItem, WorkItemList } from "@/api/types.gen";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { GitLabCheckCircleIcon } from "@/components/icons/gitlab-icons";
 import { Section } from "@/components/layout/Section";
-import { spell } from "@/components/practice-vocabulary/feedback-text";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ARTIFACT_KIND, artifactKindNoun } from "@/lib/artifact-kinds";
 import type { ProviderType } from "@/lib/provider/provider-terms";
-import { capitalise } from "@/lib/text";
+import { andList } from "@/lib/text";
 
-import { ActivityEmpty, type ActivityEmptyProps } from "./ActivityEmpty";
+import { ACTIVITY_TONES, providerIcon } from "./activity-tones";
+import {
+	groupOpenWork,
+	OPEN_WORK_GROUP_DEFS,
+	OPEN_WORK_GROUPS,
+	type OpenWorkGroup,
+	type OpenWorkPerspective,
+} from "./open-work-groups";
 import { WorkItemRow } from "./WorkItemRow";
 
 export interface OpenWorkSectionsProps {
 	state: PanelState<{ openWork: OpenWork }>;
 	providerType: ProviderType;
 	/**
-	 * Whose work: your own page speaks to you and its sections are the page's; a member's level names the
-	 * work plainly and nests its sections under the level's title.
+	 * Whose open work: your own page speaks to you and its sections are the page's; a member's level
+	 * names the work plainly and nests its sections under the level's title.
 	 */
-	perspective: "self" | "member";
-	/**
-	 * The person the open work is about, once the page knows it; a row names its author only when it is
-	 * someone else.
-	 */
-	login?: string;
+	perspective: OpenWorkPerspective;
+	/** The person the open work is about; a row names its author only when it is someone else. */
+	login: string | undefined;
 }
 
-const issueNoun = (n: number) => artifactKindNoun(ARTIFACT_KIND.issue, n);
+const NOTHING_ICON = providerIcon(CheckCircleIcon, GitLabCheckCircleIcon);
 
-/** How many rows a list shows before it asks for the rest. */
-const FIRST_ROWS = 5;
+const COUNTED = OPEN_WORK_GROUPS.filter((group) => OPEN_WORK_GROUP_DEFS[group].counted);
+const WAITING = OPEN_WORK_GROUPS.filter((group) => !OPEN_WORK_GROUP_DEFS[group].counted);
 
-/** What is open right now, most recently moved first: what waits on this person, then their own open work. */
+/**
+ * What is open right now, grouped by the action it needs, as GitHub's pull request inbox and
+ * GitLab's merge request homepage group it: review requests and pull requests returned or approved
+ * first; then, folded away, what waits on someone else — a request other reviewers already covered
+ * sits there, never among the work to do. Assigned issues are their own section.
+ */
 export function OpenWorkSections({
 	state,
 	providerType,
 	perspective,
 	login,
 }: OpenWorkSectionsProps) {
-	const pullRequests = artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType);
-	const pullRequestNoun = (n: number) =>
-		artifactKindNoun(ARTIFACT_KIND.pullRequest, n, providerType);
 	const self = perspective === "self";
-	const whose = self ? "your" : "their";
 	const level = self ? 2 : 3;
-	const size = self ? "lg" : "md";
-
+	const title = self ? "Needs you" : "Open work";
+	const whose = self ? "your" : "their";
+	const NothingIcon = NOTHING_ICON(providerType);
 	if (state.status === "error") {
 		return (
-			<QueryErrorAlert
-				error={state.error}
-				title="Couldn't load open work"
-				onRetry={state.onRetry}
-			/>
+			<Section level={level} size="lg" title={title}>
+				<QueryErrorAlert
+					error={state.error}
+					title="Couldn't load open work"
+					onRetry={state.onRetry}
+				/>
+			</Section>
 		);
 	}
 	const openWork = state.status === "ready" ? state.openWork : undefined;
+	const groups = openWork && groupOpenWork(openWork, login);
 	return (
 		<>
-			<Section
-				level={level}
-				size={size}
-				title={
-					<Counted
-						title={self ? "Waiting on you" : "Review requests"}
-						items={openWork?.reviewRequests}
-						noun={pullRequestNoun}
-					/>
-				}
-				description={self ? `Open ${pullRequests} that ask for your review.` : undefined}
-			>
-				<WorkList
-					items={openWork?.reviewRequests}
-					providerType={providerType}
-					login={login}
-					empty={{
-						icon: <InboxIcon />,
-						title: self ? "Nobody is waiting on your review" : "No review requests",
-						description: `Open ${pullRequests} that ask for ${whose} review show up here.`,
-					}}
-				/>
+			<Section level={level} size="lg" title={title}>
+				{openWork && groups ? (
+					<div className="space-y-4">
+						<GroupLists
+							groups={COUNTED}
+							items={groups}
+							providerType={providerType}
+							perspective={perspective}
+							login={login}
+						/>
+						{COUNTED.every((group) => groups[group].length === 0) && (
+							<p className="flex items-center gap-2 text-sm text-muted-foreground">
+								<NothingIcon size={16} className={cn("shrink-0", ACTIVITY_TONES.success.text)} />
+								{self ? "Nothing needs you" : "Nothing needs them"}
+							</p>
+						)}
+						<WaitingOnOthers
+							items={groups}
+							providerType={providerType}
+							perspective={perspective}
+							login={login}
+						/>
+						<Truncation
+							lists={[
+								{ list: openWork.reviewRequests, of: `${whose} review requests` },
+								{
+									list: openWork.pullRequests,
+									of: `${whose} open ${artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType)}`,
+								},
+							]}
+						/>
+					</div>
+				) : (
+					<GroupSkeleton rows={2} />
+				)}
 			</Section>
-			<Section
-				level={level}
-				size={size}
-				title={
-					<Counted
-						title={self ? `Your open ${pullRequests}` : `Open ${pullRequests}`}
-						items={openWork?.pullRequests}
-						noun={pullRequestNoun}
-					/>
-				}
-			>
-				<WorkList
-					items={openWork?.pullRequests}
-					providerType={providerType}
-					login={login}
-					empty={{
-						icon: <GitPullRequestIcon />,
-						title: self ? `You have no open ${pullRequests}` : `No open ${pullRequests}`,
-						description: `${capitalise(pullRequests)} ${self ? "you" : "they"} open show up here until they are merged or closed.`,
-					}}
-				/>
-			</Section>
-			<Section
-				level={level}
-				size={size}
-				title={
-					<Counted
-						title={self ? "Assigned to you" : "Assigned issues"}
-						items={openWork?.issues}
-						noun={issueNoun}
-					/>
-				}
-			>
-				<WorkList
-					items={openWork?.issues}
-					providerType={providerType}
-					login={login}
-					empty={{
-						icon: <CircleDotIcon />,
-						title: self ? "No open issues assigned to you" : "No open issues assigned",
-						description: `Issues assigned to ${self ? "you" : "them"} show up here until they are closed.`,
-					}}
-				/>
+			<Section level={level} size="lg" title="Assigned issues">
+				{openWork ? (
+					<div className="space-y-4">
+						<WorkList
+							items={openWork.issues.content}
+							providerType={providerType}
+							login={login}
+							empty={self ? "No issues assigned to you" : "No issues assigned"}
+						/>
+						<Truncation lists={[{ list: openWork.issues, of: `${whose} assigned issues` }]} />
+					</div>
+				) : (
+					<GroupSkeleton rows={1} />
+				)}
 			</Section>
 		</>
 	);
 }
 
-/** The section's title with its count, drawn as a tab counts its contents. */
-function Counted({
-	title,
-	items,
-	noun,
-}: {
-	title: string;
-	items: WorkItemList | undefined;
-	noun: (n: number) => string;
-}) {
-	const count = items?.content.length ?? 0;
+interface GroupListsProps {
+	groups: readonly OpenWorkGroup[];
+	items: Record<OpenWorkGroup, WorkItem[]>;
+	providerType: ProviderType;
+	perspective: OpenWorkPerspective;
+	login: string | undefined;
+}
+
+/** Each group that holds anything, as a small header over its bordered list. */
+function GroupLists({ groups, items, providerType, perspective, login }: GroupListsProps) {
+	const Heading = perspective === "self" ? "h3" : "h4";
+	return groups
+		.filter((group) => items[group].length > 0)
+		.map((group) => {
+			const def = OPEN_WORK_GROUP_DEFS[group];
+			const Icon = def.icon(providerType);
+			const count = items[group].length;
+			return (
+				<div key={group} className="space-y-2">
+					<Heading className="flex items-center gap-2 text-sm font-semibold">
+						<Icon size={16} className={cn("shrink-0", ACTIVITY_TONES[def.tone].text)} />
+						{def.label(perspective)}
+						<Badge variant="secondary">{count}</Badge>
+					</Heading>
+					<WorkList items={items[group]} providerType={providerType} login={login} />
+				</div>
+			);
+		});
+}
+
+/**
+ * Where the server lists only the most recently updated of a person's review requests, pull
+ * requests or assigned issues, one line says so, with the number it listed, since the groups are
+ * drawn from those lists and cannot know what lies past them.
+ */
+function Truncation({ lists }: { lists: readonly { list: WorkItemList; of: string }[] }) {
+	const cut = lists
+		.filter(({ list }) => list.hasMore)
+		.map(({ list, of }) => `${list.content.length} most recently updated of ${of}`);
+	if (cut.length === 0) {
+		return null;
+	}
+	return <p className="text-sm text-muted-foreground">Showing the {andList.format(cut)}.</p>;
+}
+
+/** What waits on someone else, folded under one count until the reader asks for it. */
+function WaitingOnOthers({ items, ...rest }: Omit<GroupListsProps, "groups">) {
+	const count = WAITING.reduce((sum, group) => sum + items[group].length, 0);
 	if (count === 0) {
-		return title;
+		return null;
 	}
 	return (
-		<>
-			{title}{" "}
-			<span className="font-normal text-muted-foreground tabular-nums">
-				{count}
-				{items?.hasMore === true && "+"}
-				<span className="sr-only"> {noun(count)}</span>
-			</span>
-		</>
+		<Collapsible>
+			<CollapsibleTrigger render={<Button variant="ghost" size="sm" className="group -ml-2" />}>
+				<ChevronRightIcon
+					size={16}
+					className="transition-transform group-aria-expanded:rotate-90 motion-reduce:transition-none"
+				/>
+				Waiting on others
+				<span className="text-muted-foreground tabular-nums">· {count}</span>
+			</CollapsibleTrigger>
+			<CollapsibleContent className="space-y-4 pt-2">
+				<GroupLists groups={WAITING} items={items} {...rest} />
+			</CollapsibleContent>
+		</Collapsible>
 	);
 }
 
@@ -166,54 +201,47 @@ function WorkList({
 	login,
 	empty,
 }: {
-	items: WorkItemList | undefined;
+	items: WorkItem[];
 	providerType: ProviderType;
 	login: string | undefined;
-	empty: ActivityEmptyProps;
+	/** What an empty list says in one line; a group with nothing in it is not drawn at all. */
+	empty?: string;
 }) {
-	const listId = useId();
-	const [expanded, setExpanded] = useState(false);
-	if (items === undefined) {
-		return (
-			<div aria-busy="true">
-				<span className="sr-only">Loading open work</span>
-				<div className="space-y-2 rounded-xl border bg-card p-3" aria-hidden>
-					<Skeleton className="h-4 w-3/4" />
-					<Skeleton className="h-3.5 w-1/2" />
+	if (items.length === 0) {
+		return <p className="text-sm text-muted-foreground">{empty}</p>;
+	}
+	return (
+		<ul className="overflow-hidden rounded-xl border bg-card">
+			{items.map((work) => (
+				<WorkItemRow key={work.id} work={work} providerType={providerType} login={login} />
+			))}
+		</ul>
+	);
+}
+
+/** A group's shape while open work loads: its header and a bordered list of rows. */
+function GroupSkeleton({ rows }: { rows: number }) {
+	return (
+		<div aria-busy="true" className="space-y-2">
+			<span className="sr-only">Loading open work</span>
+			<div aria-hidden className="space-y-2">
+				<Skeleton className="h-4 w-36" />
+				<div className="overflow-hidden rounded-xl border bg-card">
+					{Array.from({ length: rows }, (_, index) => (
+						<div
+							key={index}
+							className="flex items-start gap-2.5 border-b px-3 py-2.5 last:border-b-0"
+						>
+							<Skeleton className="size-4 rounded-full" />
+							<div className="flex-1 space-y-2">
+								<Skeleton className="h-4 w-3/4" />
+								<Skeleton className="h-3 w-1/3" />
+							</div>
+							<Skeleton className="size-6 rounded-full" />
+						</div>
+					))}
 				</div>
 			</div>
-		);
-	}
-	const { content, hasMore } = items;
-	if (content.length === 0) {
-		return <ActivityEmpty {...empty} />;
-	}
-	const rest = content.length - FIRST_ROWS;
-	const shown = expanded ? content : content.slice(0, FIRST_ROWS);
-	return (
-		<Collapsible open={expanded} onOpenChange={setExpanded}>
-			<ul id={listId} className="overflow-hidden rounded-xl border bg-card">
-				{shown.map((work) => (
-					<WorkItemRow key={work.id} work={work} providerType={providerType} login={login} />
-				))}
-			</ul>
-			{rest > 0 && (
-				<CollapsibleTrigger
-					aria-controls={listId}
-					render={<Button variant="link" size="inline" className="group mt-2 w-fit text-sm" />}
-				>
-					{expanded ? "Show less" : `Show ${spell(rest)} more`}
-					<ChevronDownIcon
-						className="size-3.5 transition-transform group-aria-expanded:rotate-180"
-						aria-hidden
-					/>
-				</CollapsibleTrigger>
-			)}
-			{hasMore && expanded && (
-				<p className="mt-2 text-sm text-muted-foreground">
-					These are the {spell(content.length)} most recently updated.
-				</p>
-			)}
-		</Collapsible>
+		</div>
 	);
 }

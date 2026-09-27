@@ -2813,7 +2813,7 @@ paths:
   /workspaces/{workspaceSlug}/activity/members/{login}/open-work:
     get:
       description: "Review requests, open pull requests and assigned issues, most\
-        \ recently updated first."
+        \ recently updated first. Pull requests carry their reviewers."
       operationId: getOpenWork
       parameters:
       - description: Workspace slug
@@ -2855,7 +2855,8 @@ paths:
     get:
       description: "One member's activity when login is given, otherwise everyone's\
         \ in the workspace or the team. With both, the member's activity within the\
-        \ team's scope."
+        \ team's scope. The range is split into days, weeks or months, by its length,\
+        \ in the given time zone."
       operationId: getActivitySummary
       parameters:
       - description: Workspace slug
@@ -2893,19 +2894,27 @@ paths:
         schema:
           type: string
           format: date-time
+      - description: "The IANA time zone whose midnights start the buckets, such as\
+          \ Europe/Berlin"
+        in: query
+        name: zone
+        required: false
+        schema:
+          type: string
+          default: UTC
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ActivitySummary"
+                $ref: "#/components/schemas/ActivityOverview"
           description: Activity counted
         "400":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: Invalid range
+          description: Invalid range or time zone
         "403":
           content:
             application/problem+json:
@@ -2918,15 +2927,16 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Member or team not found
-      summary: Count activity in a time range
+      summary: "Count activity in a time range, in total and over time"
       tags:
       - Activity
-  /workspaces/{workspaceSlug}/activity/timeline:
+  /workspaces/{workspaceSlug}/activity/work:
     get:
       description: "One member's activity when login is given, otherwise everyone's\
         \ in the workspace or the team. With both, the member's activity within the\
-        \ team's scope."
-      operationId: getActivityTimeline
+        \ team's scope. Each pull request or issue is listed once, by its latest activity\
+        \ in the range, newest first."
+      operationId: getActivityWork
       parameters:
       - description: Workspace slug
         in: path
@@ -2989,22 +2999,22 @@ paths:
         required: false
         schema:
           type: string
-      - description: Page size from 1 to 50; defaults to 20
+      - description: Page size from 1 to 100; defaults to 30
         in: query
         name: size
         required: false
         schema:
           type: integer
           format: int32
-          maximum: 50
+          maximum: 100
           minimum: 1
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ActivityTimelinePage"
-          description: One page of activity
+                $ref: "#/components/schemas/ActivityWorkPage"
+          description: One page of work
         "400":
           content:
             application/problem+json:
@@ -3023,7 +3033,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Member or team not found
-      summary: "List activity newest first, one page at a time"
+      summary: "List activity by the pull request or issue it happened on, one page\
+        \ at a time"
       tags:
       - Activity
   /workspaces/{workspaceSlug}/agents:
@@ -8528,20 +8539,15 @@ components:
           format: int64
       required:
       - id
-    ActivityItem:
+    ActivityAction:
       type: object
-      description: One thing someone did
+      description: How often one kind of activity happened on a piece of work
       properties:
-        actor:
-          $ref: "#/components/schemas/UserInfo"
-          description: Who did it
-        htmlUrl:
-          type: string
-          description: "Link to the review or comment itself; null for pull request\
-            \ and issue activity, and whenever work is null"
-        id:
-          type: string
-          description: Identifier of the activity
+        count:
+          type: integer
+          format: int32
+          description: How often it was done
+          example: 3
         kind:
           type: string
           description: What was done
@@ -8556,24 +8562,55 @@ components:
           - CODE_COMMENTED
           - ISSUE_OPENED
           - ISSUE_CLOSED
-        occurredAt:
+      required:
+      - count
+      - kind
+    ActivityBucket:
+      type: object
+      description: Activity in one time bucket of a range
+      properties:
+        start:
           type: string
           format: date-time
-          description: When it happened
-        work:
-          $ref: "#/components/schemas/WorkItem"
-          description: "The pull request or issue it happened on; null when that pull\
-            \ request or issue, or the review or comment the activity was, is no longer\
-            \ known or was deleted upstream"
+          description: "When the bucket starts: midnight of its day, of its week's\
+            \ Monday or of its month's first day, in the requested time zone. The\
+            \ first bucket may start before the range."
+        summary:
+          $ref: "#/components/schemas/ActivitySummary"
+          description: The activity in the bucket that falls within the range
       required:
-      - actor
-      - id
-      - kind
-      - occurredAt
+      - start
+      - summary
+    ActivityOverview:
+      type: object
+      description: "Activity in a time range, in total and over time"
+      properties:
+        bucket:
+          type: string
+          description: "How long each bucket is: a day for ranges up to 31 days, a\
+            \ week for ranges up to 184 days, a month for longer ones"
+          enum:
+          - DAY
+          - WEEK
+          - MONTH
+        buckets:
+          type: array
+          description: "Every bucket the range touches, oldest first, including those\
+            \ without activity"
+          items:
+            $ref: "#/components/schemas/ActivityBucket"
+        summary:
+          $ref: "#/components/schemas/ActivitySummary"
+          description: The activity in the range; the buckets' summaries add up to
+            it
+      required:
+      - bucket
+      - buckets
+      - summary
     ActivitySummary:
       type: object
-      description: Counts of activity in a time range. Each count is the number of
-        timeline entries of its kind for the same scope and range.
+      description: Counts of activity in a time range. Each count is the sum of that
+        kind's counts in the work list for the same scope and range.
       properties:
         approvals:
           type: integer
@@ -8637,15 +8674,49 @@ components:
       - pullRequestsClosed
       - pullRequestsMerged
       - pullRequestsOpened
-    ActivityTimelinePage:
+    ActivityWork:
       type: object
-      description: "One page of activity, newest first"
+      description: The activity on one pull request or issue in a time range
+      properties:
+        actions:
+          type: array
+          description: "Each kind of activity that happened on it, in a fixed order\
+            \ of kinds"
+          items:
+            $ref: "#/components/schemas/ActivityAction"
+        id:
+          type: string
+          description: "Identifier of the group: work:<id of the pull request or issue>,\
+            \ or event:<id of the activity> for activity whose pull request or issue\
+            \ is not known"
+        lastOccurredAt:
+          type: string
+          format: date-time
+          description: When the latest of this activity happened
+        people:
+          type: array
+          description: "Everyone this activity counts for, by name"
+          items:
+            $ref: "#/components/schemas/UserInfo"
+        work:
+          $ref: "#/components/schemas/WorkItem"
+          description: "The pull request or issue; null when it, or the review or\
+            \ comment the activity was, is no longer known or was deleted upstream"
+      required:
+      - actions
+      - id
+      - lastOccurredAt
+      - people
+    ActivityWorkPage:
+      type: object
+      description: "One page of activity grouped by the pull request or issue it happened\
+        \ on, latest first"
       properties:
         content:
           type: array
-          description: "The activity on this page, newest first"
+          description: "The work on this page, by its latest activity, newest first"
           items:
-            $ref: "#/components/schemas/ActivityItem"
+            $ref: "#/components/schemas/ActivityWork"
         nextCursor:
           type: string
           description: Opaque cursor that fetches the next page when passed back as
@@ -16096,6 +16167,25 @@ components:
       - id
       - kind
       - label
+    Reviewer:
+      type: object
+      description: "Someone reviewing a pull request, and where their review stands"
+      properties:
+        state:
+          type: string
+          description: "REQUESTED while a review is asked of them, otherwise the verdict\
+            \ of their latest review that was not dismissed"
+          enum:
+          - CHANGES_REQUESTED
+          - APPROVED
+          - COMMENTED
+          - REQUESTED
+        user:
+          $ref: "#/components/schemas/UserInfo"
+          description: The reviewer
+      required:
+      - state
+      - user
     RevokeSessionsResult:
       type: object
       properties:
@@ -17890,6 +17980,12 @@ components:
           - APPROVED
           - CHANGES_REQUESTED
           - REVIEW_REQUIRED
+        reviewers:
+          type: array
+          description: "The pull request's reviewers besides its author, where each\
+            \ review stands; only open work lists them"
+          items:
+            $ref: "#/components/schemas/Reviewer"
         state:
           type: string
           description: Current state

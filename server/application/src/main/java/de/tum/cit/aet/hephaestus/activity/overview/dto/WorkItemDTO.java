@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryInf
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserInfoDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import org.hibernate.Hibernate;
 import org.jspecify.annotations.NonNull;
@@ -48,7 +49,13 @@ public record WorkItemDTO(
         Instant createdAt,
 
         @Nullable @Schema(description = "When it was last updated")
-        Instant updatedAt) {
+        Instant updatedAt,
+
+        @Nullable
+        @Schema(
+                description = "The pull request's reviewers besides its author, where each review stands; only open"
+                        + " work lists them")
+        List<ReviewerDTO> reviewers) {
 
     public enum WorkItemType {
         PULL_REQUEST,
@@ -79,7 +86,8 @@ public record WorkItemDTO(
                     RepositoryInfoDTO.fromRepositoryWithoutLabels(pullRequest.getRepository()),
                     UserInfoDTO.fromUser(pullRequest.getAuthor()),
                     pullRequest.getCreatedAt(),
-                    pullRequest.getUpdatedAt());
+                    pullRequest.getUpdatedAt(),
+                    null);
         }
         return new WorkItemDTO(
                 work.getId(),
@@ -94,6 +102,25 @@ public record WorkItemDTO(
                 RepositoryInfoDTO.fromRepositoryWithoutLabels(work.getRepository()),
                 UserInfoDTO.fromUser(work.getAuthor()),
                 work.getCreatedAt(),
-                work.getUpdatedAt());
+                work.getUpdatedAt(),
+                null);
+    }
+
+    public WorkItemDTO withReviewers(List<ReviewerDTO> reviewers) {
+        return new WorkItemDTO(
+                id,
+                type,
+                number,
+                title,
+                state,
+                isDraft,
+                reviewDecision,
+                checks,
+                htmlUrl,
+                repository,
+                author,
+                createdAt,
+                updatedAt,
+                reviewers);
     }
 }

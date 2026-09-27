@@ -18,11 +18,12 @@ import {
 } from "@/components/activity/activity-search";
 import { ActivityDetailDrawer } from "@/components/activity/ActivityDetailDrawer";
 import { type ActivityAccount, ActivityPage } from "@/components/activity/ActivityPage";
+import { workLogTitle } from "@/components/activity/work-log-markdown";
 import { useNow } from "@/components/common/use-now";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
 import { buttonVariants } from "@/components/ui/button";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { useActivitySummary, useActivityTimeline, useOpenWork } from "@/hooks/use-activity";
+import { useActivityOverview, useActivityWork, useOpenWork } from "@/hooks/use-activity";
 import { workspaceHead } from "@/lib/page-title";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useSearchState } from "@/lib/search-params";
@@ -63,16 +64,25 @@ function Activity() {
 
 	const from = rangeStart(useNow(), search.range);
 	const scope = { workspaceSlug, login, from, enabled: login !== undefined };
+	const category = openCategory?.kind === "activity" ? openCategory.category : undefined;
 	const openWork = useOpenWork({ workspaceSlug, login });
-	const summary = useActivitySummary(scope);
-	const timeline = useActivityTimeline(scope);
-	const categoryTimeline = useActivityTimeline({
+	const overview = useActivityOverview(scope);
+	const timeline = useActivityWork({
 		...scope,
-		kinds:
-			openCategory?.kind === "activity"
-				? ACTIVITY_CATEGORY_DEFS[openCategory.category].kinds
-				: undefined,
-		enabled: scope.enabled && openCategory !== undefined,
+		// Your own copy is headed by what it is; a member's or a team's names whose it is.
+		copy: { title: "Activity", providerType, people: false },
+	});
+	const categoryWorkLog = useActivityWork({
+		...scope,
+		kinds: category ? ACTIVITY_CATEGORY_DEFS[category].kinds : undefined,
+		copy: {
+			title: workLogTitle(
+				category ? ACTIVITY_CATEGORY_DEFS[category].label(providerType) : "Activity",
+			),
+			providerType,
+			people: false,
+		},
+		enabled: scope.enabled && category !== undefined,
 	});
 
 	return (
@@ -85,7 +95,7 @@ function Activity() {
 					void setSearch((previous) => ({ ...previous, range }), { state: true, replace: true });
 				}}
 				openWork={openWork}
-				summary={summary}
+				overview={overview}
 				timeline={timeline}
 			/>
 			<ActivityDetailDrawer
@@ -94,8 +104,8 @@ function Activity() {
 				pageLabel="Activity"
 				providerType={providerType}
 				range={search.range}
-				scope="by you"
-				categoryTimeline={categoryTimeline}
+				subject={{ people: "one", login }}
+				page={{ overview, categoryWorkLog }}
 			/>
 		</>
 	);

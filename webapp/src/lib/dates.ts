@@ -1,4 +1,4 @@
-import { format, isSameYear } from "date-fns";
+import { format, isSameDay, isSameMonth, isSameYear } from "date-fns";
 
 export type DateLike = Date | string | undefined | null;
 
@@ -46,6 +46,8 @@ export type Wire<T> = T extends Date
  *   happened, the hour written the English way rather than on a 24-hour clock.
  * - `formatWeekdayDay`, "Monday, 9 September": a day heading a list of what happened on it, with
  *   the year only when it is not `today`'s.
+ * - `formatDayRange`, "3–9 September 2026": the days from one to another, both included, saying
+ *   the month and the year once where the two share them.
  */
 export function formatDay(date: Date): string {
 	return format(date, "d MMMM");
@@ -53,6 +55,19 @@ export function formatDay(date: Date): string {
 
 export function formatWeekdayDay(date: Date, today: Date): string {
 	return format(date, isSameYear(date, today) ? "EEEE, d MMMM" : "EEEE, d MMMM yyyy");
+}
+
+export function formatDayRange(from: Date, to: Date): string {
+	if (isSameDay(from, to)) {
+		return format(to, "d MMMM yyyy");
+	}
+	if (isSameMonth(from, to)) {
+		return `${format(from, "d")}–${format(to, "d MMMM yyyy")}`;
+	}
+	if (isSameYear(from, to)) {
+		return `${format(from, "d MMMM")} – ${format(to, "d MMMM yyyy")}`;
+	}
+	return `${format(from, "d MMMM yyyy")} – ${format(to, "d MMMM yyyy")}`;
 }
 
 export function formatShortDay(date: Date): string {

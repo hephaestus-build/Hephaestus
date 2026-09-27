@@ -3,7 +3,15 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ActivitySummary, ActivityTimelinePage, OpenWork, TeamInfo } from "@/api/types.gen";
+import type {
+	ActivityOverview,
+	ActivitySummary,
+	ActivityWork,
+	ActivityWorkPage,
+	OpenWork,
+	TeamInfo,
+} from "@/api/types.gen";
+import type { Wire } from "@/lib/dates";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
@@ -25,13 +33,52 @@ const summary = {
 	issuesClosed: 0,
 } satisfies ActivitySummary;
 
+/** One bucket holding the whole summary, as a one-day range would read. */
+const overview = {
+	summary,
+	bucket: "DAY",
+	buckets: [{ start: "2026-09-27T00:00:00Z", summary }],
+} satisfies Wire<ActivityOverview>;
+
 const nothing = { content: [], hasMore: false };
 const openWork = {
 	reviewRequests: nothing,
 	pullRequests: nothing,
 	issues: nothing,
 } satisfies OpenWork;
-const timeline = { content: [] } satisfies ActivityTimelinePage;
+const workPage = { content: [] } satisfies ActivityWorkPage;
+
+function workItem(id: number): Wire<ActivityWork> {
+	return {
+		id: `work:${id}`,
+		work: {
+			id,
+			type: "PULL_REQUEST",
+			number: id,
+			title: `Pull request ${id}`,
+			state: "MERGED",
+			isDraft: false,
+			htmlUrl: `https://github.com/acme/app/pull/${id}`,
+		},
+		actions: [{ kind: "PULL_REQUEST_MERGED", count: 1 }],
+		lastOccurredAt: "2026-09-27T09:00:00Z",
+		people: [],
+	};
+}
+
+/** Four pieces of work over three pages: one on the first, two on the next, one on the last. */
+function pagedWork(record: (request: Request) => void) {
+	const pages: Record<string, Wire<ActivityWorkPage>> = {
+		first: { content: [workItem(1)], nextCursor: "page-2" },
+		"page-2": { content: [workItem(2), workItem(3)], nextCursor: "page-3" },
+		"page-3": { content: [workItem(4)] },
+	};
+	return http.get("*/workspaces/:workspaceSlug/activity/work", ({ request }) => {
+		record(request);
+		const cursor = new URL(request.url).searchParams.get("cursor") ?? "first";
+		return HttpResponse.json(pages[cursor]);
+	});
+}
 
 function team(
 	id: number,
@@ -53,13 +100,13 @@ function team(
 
 /** Signed in as `ada`, while the workspace's connected instance knows the same account as `ada-lrz`. */
 describe("Activity", () => {
-	let reads: URL[];
+	let reads: URL[] = [];
+	const record = (request: Request) => {
+		reads.push(new URL(request.url));
+	};
 
 	beforeEach(() => {
 		reads = [];
-		const record = (request: Request) => {
-			reads.push(new URL(request.url));
-		};
 		server.use(
 			http.get("*/user", () => HttpResponse.json({ ...currentUser, username: "ada" })),
 			http.get("*/workspaces", () =>
@@ -71,11 +118,11 @@ describe("Activity", () => {
 			),
 			http.get("*/workspaces/:workspaceSlug/activity/summary", ({ request }) => {
 				record(request);
-				return HttpResponse.json(summary);
+				return HttpResponse.json(overview);
 			}),
-			http.get("*/workspaces/:workspaceSlug/activity/timeline", ({ request }) => {
+			http.get("*/workspaces/:workspaceSlug/activity/work", ({ request }) => {
 				record(request);
-				return HttpResponse.json(timeline);
+				return HttpResponse.json(workPage);
 			}),
 			http.get("*/workspaces/:workspaceSlug/activity/members", ({ request }) => {
 				record(request);
@@ -105,7 +152,7 @@ describe("Activity", () => {
 			() => expect(router.state.location.pathname).toBe("/w/acme/activity"),
 			ROUTE_RENDER_WAIT,
 		);
-		await screen.findByRole("heading", { name: "Waiting on you" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: "Needs you" }, ROUTE_RENDER_WAIT);
 		await waitFor(() => expect(readsOf("/activity/summary").length).toBeGreaterThan(0));
 		expect(readsOf("/activity/summary").map((url) => url.searchParams.get("login"))).toContain(
 			"ada-lrz",
@@ -114,6 +161,37 @@ describe("Activity", () => {
 			"/workspaces/acme/activity/members/ada-lrz/open-work",
 		);
 		expect(reads.some((url) => url.searchParams.get("login") === "ada")).toBe(false);
+	});
+
+	it("reads the summary in the browser's time zone", async () => {
+		renderRouteAtWithRouter("/w/acme/activity");
+
+		await waitFor(
+			() => expect(readsOf("/activity/summary").length).toBeGreaterThan(0),
+			ROUTE_RENDER_WAIT,
+		);
+		expect(readsOf("/activity/summary")[0]?.searchParams.get("zone")).toBe(
+			Intl.DateTimeFormat().resolvedOptions().timeZone,
+		);
+	});
+
+	it("pages the timeline by the server's cursor and sends no end of its own", async () => {
+		server.use(pagedWork(record));
+		const user = userEvent.setup();
+		renderRouteAtWithRouter("/w/acme/activity");
+
+		await user.click(await screen.findByRole("button", { name: "Show more" }, ROUTE_RENDER_WAIT));
+
+		await waitFor(() =>
+			expect(readsOf("/activity/work").map((url) => url.searchParams.get("cursor"))).toContain(
+				"page-2",
+			),
+		);
+		const sent = ["/activity/summary", "/activity/work"].flatMap(readsOf);
+		// The range runs to whenever the server reads it; the cursor carries that end between pages.
+		expect(sent.map((url) => url.searchParams.has("to"))).not.toContain(true);
+		const [first, next] = readsOf("/activity/work");
+		expect(next?.searchParams.get("from")).toBe(first?.searchParams.get("from"));
 	});
 
 	it("reads the summary from local midnight of the range's first day", async () => {
@@ -140,11 +218,11 @@ describe("Activity", () => {
 		await waitFor(
 			() =>
 				expect(
-					readsOf("/activity/timeline").some((url) => url.searchParams.getAll("kinds").length > 0),
+					readsOf("/activity/work").some((url) => url.searchParams.getAll("kinds").length > 0),
 				).toBe(true),
 			ROUTE_RENDER_WAIT,
 		);
-		const filtered = readsOf("/activity/timeline").find(
+		const filtered = readsOf("/activity/work").find(
 			(url) => url.searchParams.getAll("kinds").length > 0,
 		);
 		expect(filtered?.searchParams.getAll("kinds")).toStrictEqual([
@@ -154,10 +232,33 @@ describe("Activity", () => {
 		]);
 	});
 
+	it("copies every page of the timeline, reading the rest at the largest page size", async () => {
+		server.use(pagedWork(record));
+		const user = userEvent.setup();
+		renderRouteAtWithRouter("/w/acme/activity");
+
+		await user.click(
+			await screen.findByRole("button", { name: "Copy as Markdown" }, ROUTE_RENDER_WAIT),
+		);
+
+		await screen.findByText("Copied 4 items as Markdown", undefined, ROUTE_RENDER_WAIT);
+		expect(
+			readsOf("/activity/work")
+				.filter((url) => url.searchParams.get("size") === "100")
+				.map((url) => url.searchParams.get("cursor")),
+		).toStrictEqual(["page-2", "page-3"]);
+		const copied = await navigator.clipboard.readText();
+		expect(copied.split("\n").slice(2)).toStrictEqual(
+			[1, 2, 3, 4].map(
+				(id) => `- [Pull request ${id}](https://github.com/acme/app/pull/${id}) · #${id} · merged`,
+			),
+		);
+	});
+
 	it("reads a team's activity", async () => {
 		renderRouteAtWithRouter("/w/acme/workspace-activity?team=5");
 
-		await screen.findByRole("heading", { name: "Members of Platform" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: "Members" }, ROUTE_RENDER_WAIT);
 		await waitFor(() => expect(readsOf("/activity/members").length).toBeGreaterThan(0));
 		expect(readsOf("/activity/members")[0]?.searchParams.get("teamId")).toBe("5");
 		expect(readsOf("/activity/summary")[0]?.searchParams.get("teamId")).toBe("5");
@@ -185,11 +286,7 @@ describe("Activity", () => {
 		);
 		renderRouteAtWithRouter("/w/acme/activity");
 
-		await screen.findByRole(
-			"heading",
-			{ name: "No connected account in this workspace" },
-			ROUTE_RENDER_WAIT,
-		);
+		await screen.findByRole("heading", { name: "No connected account" }, ROUTE_RENDER_WAIT);
 		expect(screen.getByRole("link", { name: "Connect an account" }).getAttribute("href")).toBe(
 			"/settings#linked-accounts-heading",
 		);
@@ -230,13 +327,13 @@ describe("Activity", () => {
 		await waitFor(
 			() =>
 				expect(
-					readsOf("/activity/timeline").some((url) => url.searchParams.getAll("kinds").length > 0),
+					readsOf("/activity/work").some((url) => url.searchParams.getAll("kinds").length > 0),
 				).toBe(true),
 			ROUTE_RENDER_WAIT,
 		);
 		await expect(screen.findAllByRole("dialog")).resolves.toHaveLength(1);
 		expect(
-			readsOf("/activity/timeline").flatMap((url) => url.searchParams.getAll("kinds")),
+			readsOf("/activity/work").flatMap((url) => url.searchParams.getAll("kinds")),
 		).not.toContain("ISSUE_OPENED");
 	});
 
@@ -246,16 +343,14 @@ describe("Activity", () => {
 		await waitFor(
 			() =>
 				expect(
-					readsOf("/activity/timeline").map((url) => [
+					readsOf("/activity/work").map((url) => [
 						url.searchParams.get("login"),
 						url.searchParams.getAll("kinds").join(","),
 					]),
 				).toContainEqual(["bob", "REVIEW_APPROVED,REVIEW_CHANGES_REQUESTED,REVIEW_COMMENTED"]),
 			ROUTE_RENDER_WAIT,
 		);
-		const categoryReads = readsOf("/activity/timeline").filter((url) =>
-			url.searchParams.has("kinds"),
-		);
+		const categoryReads = readsOf("/activity/work").filter((url) => url.searchParams.has("kinds"));
 		expect(categoryReads.map((url) => url.searchParams.get("login"))).not.toContain(null);
 	});
 
@@ -265,7 +360,7 @@ describe("Activity", () => {
 		await waitFor(
 			() =>
 				expect(
-					readsOf("/activity/timeline").map((url) => [
+					readsOf("/activity/work").map((url) => [
 						url.searchParams.get("login"),
 						url.searchParams.getAll("kinds").join(","),
 					]),
@@ -282,7 +377,7 @@ describe("Activity", () => {
 	it("opens no level for a category it does not know", async () => {
 		renderRouteAtWithRouter("/w/acme/activity?detail=activity:bogus");
 
-		await screen.findByRole("heading", { name: "Waiting on you" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: "Needs you" }, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("dialog")).toBeNull();
 	});
 

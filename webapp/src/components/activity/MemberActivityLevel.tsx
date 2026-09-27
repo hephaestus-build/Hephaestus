@@ -1,17 +1,18 @@
-import type { ActivitySummary, OpenWork, UserInfo } from "@/api/types.gen";
+import type { OpenWork, UserInfo } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { Section } from "@/components/layout/Section";
 import { DrawerBody, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
-import { ARTIFACT_KIND, artifactKindNoun } from "@/lib/artifact-kinds";
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 import { hasText } from "@/lib/text";
 
+import type { ActivityOverviewState } from "./activity-buckets";
 import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "./activity-range";
-import { ActivitySummaryList } from "./ActivitySummaryList";
-import { ActivityTimeline, type ActivityTimelineState } from "./ActivityTimeline";
+import { ActivityTiles } from "./ActivityTiles";
+import { ActivityWorkLog, type ActivityWorkLogState } from "./ActivityWorkLog";
+import { CopyMarkdownButton } from "./CopyMarkdownButton";
 import { MemberAvatar } from "./MemberAvatar";
 import { OpenWorkSections } from "./OpenWorkSections";
 
@@ -24,13 +25,13 @@ export interface MemberActivityLevelProps {
 	providerType: ProviderType;
 	range: ActivityRange;
 	openWork: PanelState<{ openWork: OpenWork }>;
-	summary: PanelState<{ summary: ActivitySummary }>;
-	timeline: ActivityTimelineState;
+	overview: ActivityOverviewState;
+	workLog: ActivityWorkLogState;
 }
 
 /**
- * One member's activity over the workspace page, in the same order as your own: what is open, the summary,
- * then what happened. Their provider profile is one link away for everything else.
+ * One member's activity over the workspace page, in the parts and order of your own Activity page:
+ * what is open, the range's tiles, then the timeline. Their provider profile is one link away.
  */
 export function MemberActivityLevel({
 	nested,
@@ -40,11 +41,10 @@ export function MemberActivityLevel({
 	providerType,
 	range,
 	openWork,
-	summary,
-	timeline,
+	overview,
+	workLog,
 }: MemberActivityLevelProps) {
 	const name = user?.name ?? login;
-	const { label, inSentence } = ACTIVITY_RANGE_DEFS[range];
 	return (
 		<>
 			<DetailDrawerHeader nested={nested}>
@@ -76,18 +76,23 @@ export function MemberActivityLevel({
 					perspective="member"
 					login={login}
 				/>
-				<Section level={3} size="md" title="Summary" description={label}>
-					<ActivitySummaryList state={summary} providerType={providerType} range={range} />
+				<Section level={3} size="lg" title={ACTIVITY_RANGE_DEFS[range].label}>
+					<ActivityTiles state={overview} providerType={providerType} />
 				</Section>
-				<Section level={3} size="md" title="Recent activity">
-					<ActivityTimeline
-						state={timeline}
+				<Section
+					level={3}
+					size="lg"
+					title="Timeline"
+					actions={
+						workLog.status === "ready" && workLog.items.length > 0 ? (
+							<CopyMarkdownButton onCopy={workLog.onCopy} />
+						) : undefined
+					}
+				>
+					<ActivityWorkLog
+						state={workLog}
 						providerType={providerType}
-						people="one"
-						empty={{
-							title: `Nothing in ${inSentence}`,
-							description: `Their ${artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType)}, reviews, issues and comments show up here.`,
-						}}
+						subject={{ people: "one", login }}
 					/>
 				</Section>
 			</DrawerBody>

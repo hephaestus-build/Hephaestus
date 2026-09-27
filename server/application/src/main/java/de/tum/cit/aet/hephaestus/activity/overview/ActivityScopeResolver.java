@@ -27,8 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class ActivityScopeResolver {
 
-    private static final Collator NAMES = Collator.getInstance(Locale.ROOT);
-    private static final Comparator<User> BY_NAME = Comparator.comparing(
+    static final Collator NAMES = Collator.getInstance(Locale.ROOT);
+    static final Comparator<User> BY_NAME = Comparator.comparing(
                     (User user) -> user.getName() != null ? user.getName() : user.getLogin(), NAMES)
             .thenComparing(User::getLogin, NAMES);
 

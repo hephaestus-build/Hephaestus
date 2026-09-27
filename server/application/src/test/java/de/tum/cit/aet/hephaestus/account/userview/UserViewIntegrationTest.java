@@ -305,12 +305,12 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldReadTheNormalActivityAsTheSelectedAccountlessUser() {
         recordReview(viewed);
 
-        sessionRequest("/workspaces/acme/activity/timeline?login=" + viewed.getLogin())
+        sessionRequest("/workspaces/acme/activity/work?login=" + viewed.getLogin())
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.content[0].actor.id")
+                .jsonPath("$.content[0].people[0].id")
                 .isEqualTo(viewed.getId());
         assertThat(userViewRowsFor(viewed)).isEqualTo(1);
     }
@@ -324,7 +324,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         recordReview(gitLabNamesake);
 
         sessionRequest(
-                        "/workspaces/acme/activity/timeline?login=" + gitLabNamesake.getLogin(),
+                        "/workspaces/acme/activity/work?login=" + gitLabNamesake.getLogin(),
                         token(),
                         gitLabNamesake.getId())
                 .exchange()
@@ -333,7 +333,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .expectBody()
                 .jsonPath("$.content.length()")
                 .isEqualTo(1)
-                .jsonPath("$.content[0].actor.id")
+                .jsonPath("$.content[0].people[0].id")
                 .isEqualTo(gitLabNamesake.getId());
     }
 
@@ -343,12 +343,12 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         ensureWorkspaceMembership(workspace, teammate, WorkspaceMembership.WorkspaceRole.MEMBER);
         recordReview(teammate);
 
-        sessionRequest("/workspaces/acme/activity/timeline?login=" + teammate.getLogin())
+        sessionRequest("/workspaces/acme/activity/work?login=" + teammate.getLogin())
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.content[0].actor.id")
+                .jsonPath("$.content[0].people[0].id")
                 .isEqualTo(teammate.getId());
         sessionRequest("/workspaces/acme/activity/members/" + teammate.getLogin() + "/open-work")
                 .exchange()

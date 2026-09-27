@@ -9,6 +9,8 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
+	GitLabIssueClosedIcon,
+	GitLabIssueOpenIcon,
 	GitLabMergeIcon,
 	GitLabMergeRequestClosedIcon,
 	GitLabMergeRequestDraftIcon,
@@ -114,12 +116,23 @@ describe("getPullRequestStateIcon", () => {
 
 describe("getIssueStateIcon", () => {
 	it("draws an open issue open and a closed one done", () => {
-		expect(getIssueStateIcon("OPEN")).toStrictEqual({
+		expect(getIssueStateIcon("GITHUB", "OPEN")).toStrictEqual({
 			icon: IssueOpenedIcon,
 			colorClass: "text-provider-open-foreground",
 		});
-		expect(getIssueStateIcon("CLOSED")).toStrictEqual({
+		expect(getIssueStateIcon("GITHUB", "CLOSED")).toStrictEqual({
 			icon: IssueClosedIcon,
+			colorClass: "text-provider-done-foreground",
+		});
+	});
+
+	it("draws a GitLab issue in GitLab's own icons", () => {
+		expect(getIssueStateIcon("GITLAB", "OPEN")).toStrictEqual({
+			icon: GitLabIssueOpenIcon,
+			colorClass: "text-provider-open-foreground",
+		});
+		expect(getIssueStateIcon("GITLAB", "CLOSED")).toStrictEqual({
+			icon: GitLabIssueClosedIcon,
 			colorClass: "text-provider-done-foreground",
 		});
 	});

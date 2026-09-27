@@ -5,10 +5,10 @@ import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-@Schema(description = "One page of activity, newest first")
-public record ActivityTimelinePageDTO(
-        @NonNull @Schema(description = "The activity on this page, newest first")
-        List<ActivityItemDTO> content,
+@Schema(description = "One page of activity grouped by the pull request or issue it happened on, latest first")
+public record ActivityWorkPageDTO(
+        @NonNull @Schema(description = "The work on this page, by its latest activity, newest first")
+        List<ActivityWorkDTO> content,
 
         @Nullable
         @Schema(

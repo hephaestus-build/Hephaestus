@@ -2,9 +2,10 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
-import { ada, OPEN_WORK, SUMMARY, TIMELINE } from "@/stories/activity-story-data";
+import { ada, OPEN_WORK, OVERVIEW, readyOverview, WORK_LOG } from "@/stories/activity-story-data";
 import { withPageBehind } from "@/stories/decorators";
 import { settledDrawerPanel } from "@/stories/overlay";
+import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
 import { memberLevel } from "./activity-search";
@@ -20,15 +21,19 @@ const meta = {
 		login: ada.login,
 		user: ada,
 		providerType: "GITHUB",
-		range: "7d",
+		range: "30d",
 		openWork: { status: "ready", openWork: OPEN_WORK },
-		summary: { status: "ready", summary: SUMMARY },
-		timeline: {
+		overview: readyOverview(OVERVIEW),
+		workLog: {
 			status: "ready",
-			items: TIMELINE,
+			stale: false,
+			items: WORK_LOG,
 			hasMore: false,
 			isLoadingMore: false,
 			onLoadMore: fn(),
+			onCopy: fn(async () => {
+				/* the copy is the route's */
+			}),
 		},
 	},
 	argTypes: { path: { control: false } },
@@ -68,8 +73,18 @@ export const Default: Story = {
 			"href",
 			"https://github.com/ada",
 		);
-		// A summary row stacks the category over this member, which makes it this member's.
-		await expect(panel.getByRole("link", { name: "Reviews" })).toHaveAttribute(
+		// The same parts as the Activity page, named from the outside.
+		const sections = panel
+			.getAllByRole("heading", { level: 3 })
+			.map((heading) => heading.textContent);
+		await expect(sections).toStrictEqual([
+			"Open work",
+			"Assigned issues",
+			"Last 30 days",
+			"Timeline",
+		]);
+		// A tile stacks its category over this member, which makes it this member's.
+		await expect(panel.getByRole("link", { name: /^Reviews/u })).toHaveAttribute(
 			"href",
 			expect.stringContaining("activity%3Areviews"),
 		);
@@ -85,14 +100,21 @@ export const BeforeTheMemberListArrives: Story = {
 	},
 };
 
+export const Reflow: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async () => {
+		await expectNoPanelOverflow(await settledDrawerPanel());
+	},
+};
+
 export const Loading: Story = {
 	args: {
 		openWork: { status: "loading" },
-		summary: { status: "loading" },
-		timeline: { status: "loading" },
+		overview: { status: "loading" },
+		workLog: { status: "loading" },
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.queryByRole("link", { name: "Reviews" })).not.toBeInTheDocument();
+		await expect(panel.queryByRole("link", { name: /^Reviews/u })).not.toBeInTheDocument();
 	},
 };

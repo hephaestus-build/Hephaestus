@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.activity.overview;
 
-import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivitySummaryDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityTimelinePageDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityOverviewDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkPageDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.MemberActivityDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.OpenWorkDTO;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -54,13 +54,14 @@ public class ActivityController {
     @GetMapping("/summary")
     @Operation(
             operationId = "getActivitySummary",
-            summary = "Count activity in a time range",
+            summary = "Count activity in a time range, in total and over time",
             description = "One member's activity when login is given, otherwise everyone's in the workspace or"
-                    + " the team. With both, the member's activity within the team's scope.")
+                    + " the team. With both, the member's activity within the team's scope. The range is split"
+                    + " into days, weeks or months, by its length, in the given time zone.")
     @ApiResponse(responseCode = "200", description = "Activity counted")
     @ApiResponse(
             responseCode = "400",
-            description = "Invalid range",
+            description = "Invalid range or time zone",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
@@ -72,7 +73,7 @@ public class ActivityController {
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                             schema = @Schema(implementation = ProblemDetail.class)))
-    public ResponseEntity<ActivitySummaryDTO> getActivitySummary(
+    public ResponseEntity<ActivityOverviewDTO> getActivitySummary(
             WorkspaceContext workspaceContext,
             @Parameter(description = "The member; omit for everyone") @RequestParam(required = false) @Nullable
                     String login,
@@ -80,8 +81,12 @@ public class ActivityController {
                     @RequestParam(required = false)
                     @Nullable
                     Long teamId,
-            @Valid @ParameterObject ActivityRangeFilterParams range) {
-        return ResponseEntity.ok(activityService.summarize(workspaceContext.id(), login, teamId, range.toRange(clock)));
+            @Valid @ParameterObject ActivityRangeFilterParams range,
+            @Parameter(description = "The IANA time zone whose midnights start the buckets, such as Europe/Berlin")
+                    @RequestParam(defaultValue = "UTC")
+                    String zone) {
+        return ResponseEntity.ok(activityService.overview(
+                workspaceContext.id(), login, teamId, range.toRange(clock), ActivityBuckets.zone(zone)));
     }
 
     @GetMapping("/members")
@@ -114,13 +119,14 @@ public class ActivityController {
         return ResponseEntity.ok(activityService.members(workspaceContext.id(), teamId, range.toRange(clock)));
     }
 
-    @GetMapping("/timeline")
+    @GetMapping("/work")
     @Operation(
-            operationId = "getActivityTimeline",
-            summary = "List activity newest first, one page at a time",
+            operationId = "getActivityWork",
+            summary = "List activity by the pull request or issue it happened on, one page at a time",
             description = "One member's activity when login is given, otherwise everyone's in the workspace or"
-                    + " the team. With both, the member's activity within the team's scope.")
-    @ApiResponse(responseCode = "200", description = "One page of activity")
+                    + " the team. With both, the member's activity within the team's scope. Each pull request or"
+                    + " issue is listed once, by its latest activity in the range, newest first.")
+    @ApiResponse(responseCode = "200", description = "One page of work")
     @ApiResponse(
             responseCode = "400",
             description = "Invalid range, kind, cursor or size",
@@ -135,7 +141,7 @@ public class ActivityController {
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                             schema = @Schema(implementation = ProblemDetail.class)))
-    public ResponseEntity<ActivityTimelinePageDTO> getActivityTimeline(
+    public ResponseEntity<ActivityWorkPageDTO> getActivityWork(
             WorkspaceContext workspaceContext,
             @Parameter(description = "The member; omit for everyone") @RequestParam(required = false) @Nullable
                     String login,
@@ -144,16 +150,17 @@ public class ActivityController {
                     @Nullable
                     Long teamId,
             @Valid @ParameterObject ActivityRangeFilterParams range,
-            @Valid @ParameterObject ActivityTimelineFilterParams timeline) {
+            @Valid @ParameterObject ActivityWorkFilterParams work) {
         return ResponseEntity.ok(
-                activityService.timeline(workspaceContext.id(), login, teamId, range.toRange(clock), timeline));
+                activityService.work(workspaceContext.id(), login, teamId, work.range(range, clock), work));
     }
 
     @GetMapping("/members/{login}/open-work")
     @Operation(
             operationId = "getOpenWork",
             summary = "List what is open for a member",
-            description = "Review requests, open pull requests and assigned issues, most recently updated first.")
+            description = "Review requests, open pull requests and assigned issues, most recently updated first."
+                    + " Pull requests carry their reviewers.")
     @ApiResponse(responseCode = "200", description = "Open work listed")
     @ApiResponse(
             responseCode = "404",

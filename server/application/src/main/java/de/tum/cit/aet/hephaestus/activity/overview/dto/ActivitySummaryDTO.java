@@ -4,8 +4,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.NonNull;
 
 @Schema(
-        description = "Counts of activity in a time range. Each count is the number of timeline entries of its kind"
-                + " for the same scope and range.")
+        description = "Counts of activity in a time range. Each count is the sum of that kind's counts in the work"
+                + " list for the same scope and range.")
 public record ActivitySummaryDTO(
         @NonNull @Schema(description = "Pull requests opened", example = "4")
         Integer pullRequestsOpened,

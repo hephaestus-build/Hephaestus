@@ -188,7 +188,7 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
         recordIssueOpened(workspace, actor);
 
         client.get()
-                .uri("/workspaces/identity-profile/activity/timeline?login=shared-profile")
+                .uri("/workspaces/identity-profile/activity/work?login=shared-profile")
                 .headers(headers -> headers.setBearerAuth("mock-jwt-user-sub-" + account.getId()))
                 .exchange()
                 .expectStatus()
@@ -196,7 +196,7 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
                 .expectBody()
                 .jsonPath("$.content.length()")
                 .isEqualTo(1)
-                .jsonPath("$.content[0].actor.id")
+                .jsonPath("$.content[0].people[0].id")
                 .isEqualTo(actor.getId());
     }
 

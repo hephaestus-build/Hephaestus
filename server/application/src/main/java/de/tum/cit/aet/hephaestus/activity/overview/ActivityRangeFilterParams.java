@@ -29,6 +29,10 @@ public record ActivityRangeFilterParams(
     static final int MAX_DAYS = 400;
     private static final Duration DEFAULT_WIDTH = Duration.ofDays(7);
 
+    ActivityRangeFilterParams endingAt(Instant end) {
+        return new ActivityRangeFilterParams(from, end);
+    }
+
     /** The range with its defaults filled in; a backwards or too wide range is rejected. */
     ActivityRange toRange(Clock clock) {
         Instant end = to != null ? to : clock.instant();

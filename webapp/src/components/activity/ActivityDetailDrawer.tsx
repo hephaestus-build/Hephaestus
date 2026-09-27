@@ -1,17 +1,24 @@
 import type { ReactNode } from "react";
 
-import type { ActivitySummary, OpenWork, UserInfo } from "@/api/types.gen";
+import type { OpenWork, UserInfo } from "@/api/types.gen";
 import type { PanelState } from "@/components/common/panel-state";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { levelPathAt } from "@/components/layout/detail-drawer/level-path";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 
+import type { ActivityOverviewState } from "./activity-buckets";
 import { ACTIVITY_CATEGORY_DEFS } from "./activity-kind-defs";
 import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "./activity-range";
 import type { ActivityStackEntry } from "./activity-search";
 import { ActivityCategoryLevel } from "./ActivityCategoryLevel";
-import type { ActivityTimelineState } from "./ActivityTimeline";
+import type { ActivityWorkLogState, WorkLogSubject } from "./ActivityWorkLog";
 import { MemberActivityLevel } from "./MemberActivityLevel";
+
+/** One owner's reads for its levels: the range's overview, and its timeline of the open category. */
+export interface ActivityLevelReads {
+	overview: ActivityOverviewState;
+	categoryWorkLog: ActivityWorkLogState;
+}
 
 export interface ActivityDetailDrawerProps {
 	stack: ActivityStackEntry[];
@@ -20,24 +27,20 @@ export interface ActivityDetailDrawerProps {
 	pageLabel: string;
 	providerType: ProviderType;
 	range: ActivityRange;
+	/** Whose the page is, after the range in a category level's description: "Platform". */
+	scope?: string;
+	/** Whose the page's timelines are, which a category level of the page lists the same way. */
+	subject: WorkLogSubject;
+	/** The page's own reads, for a category level opened from the page. */
+	page: ActivityLevelReads;
 	/**
-	 * Whose activity a category level of the page lists, as the words after its title: "by you",
-	 * "in this workspace", "in Platform / Payments".
+	 * The open member level's reads, on a page whose stack opens members, and the category level
+	 * stacked over it.
 	 */
-	scope: string;
-	/** The page's category level: its timeline, filtered to the category. */
-	categoryTimeline: ActivityTimelineState;
-	/**
-	 * The open member level's reads, on a page whose stack opens members — which is also what makes
-	 * the page's timelines several people's.
-	 */
-	member?: {
+	member?: ActivityLevelReads & {
 		user?: UserInfo;
 		openWork: PanelState<{ openWork: OpenWork }>;
-		summary: PanelState<{ summary: ActivitySummary }>;
-		timeline: ActivityTimelineState;
-		/** The category level stacked over the member's. */
-		categoryTimeline: ActivityTimelineState;
+		workLog: ActivityWorkLogState;
 	};
 }
 
@@ -49,10 +52,11 @@ export function ActivityDetailDrawer({
 	providerType,
 	range,
 	scope,
-	categoryTimeline,
+	subject,
+	page,
 	member,
 }: ActivityDetailDrawerProps) {
-	const { inSentence } = ACTIVITY_RANGE_DEFS[range];
+	const rangeLabel = ACTIVITY_RANGE_DEFS[range].label;
 	const nameOf = (login: string): string =>
 		member?.user?.login === login ? member.user.name : login;
 	const labelOf = ({ target }: ActivityStackEntry): string =>
@@ -60,6 +64,8 @@ export function ActivityDetailDrawer({
 			? nameOf(target.login)
 			: ACTIVITY_CATEGORY_DEFS[target.category].label(providerType);
 	const pathAt = levelPathAt(stack, { pageLabel, labelOf, onClose });
+	const described = (owner: string | undefined) =>
+		owner === undefined ? rangeLabel : `${rangeLabel} · ${owner}`;
 
 	return (
 		<DetailDrawerStack stack={stack} size="detailWide" onClose={onClose}>
@@ -67,23 +73,18 @@ export function ActivityDetailDrawer({
 				const target = stack[level.depth]?.target;
 				switch (target?.kind) {
 					case "activity": {
-						const title = ACTIVITY_CATEGORY_DEFS[target.category].label(providerType);
 						const owner = target.member;
-						const empty = {
-							title: `Nothing in ${inSentence}`,
-							description: "A longer range on the page looks further back.",
-						};
 						if (owner === undefined) {
 							return (
 								<ActivityCategoryLevel
 									nested={level.nested}
 									path={pathAt(level.depth)}
-									title={title}
-									description={`${title} ${scope} in ${inSentence}.`}
-									state={categoryTimeline}
+									category={target.category}
+									description={described(scope)}
 									providerType={providerType}
-									people={member ? "several" : "one"}
-									empty={empty}
+									overview={page.overview}
+									workLog={page.categoryWorkLog}
+									subject={subject}
 								/>
 							);
 						}
@@ -92,12 +93,12 @@ export function ActivityDetailDrawer({
 								<ActivityCategoryLevel
 									nested={level.nested}
 									path={pathAt(level.depth)}
-									title={title}
-									description={`${title} by ${nameOf(owner)} in ${inSentence}.`}
-									state={member.categoryTimeline}
+									category={target.category}
+									description={described(nameOf(owner))}
 									providerType={providerType}
-									people="one"
-									empty={empty}
+									overview={member.overview}
+									workLog={member.categoryWorkLog}
+									subject={{ people: "one", login: owner }}
 								/>
 							)
 						);
@@ -113,8 +114,8 @@ export function ActivityDetailDrawer({
 									providerType={providerType}
 									range={range}
 									openWork={member.openWork}
-									summary={member.summary}
-									timeline={member.timeline}
+									overview={member.overview}
+									workLog={member.workLog}
 								/>
 							)
 						);

@@ -2,13 +2,27 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
-import { WORKSPACE_TIMELINE } from "@/stories/activity-story-data";
+import {
+	readyOverview,
+	WORKSPACE_OVERVIEW,
+	WORKSPACE_WORK_LOG,
+} from "@/stories/activity-story-data";
 import { withPageBehind } from "@/stories/decorators";
 import { settledDrawerPanel } from "@/stories/overlay";
+import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
 import { categoryLevel } from "./activity-search";
 import { ActivityCategoryLevel } from "./ActivityCategoryLevel";
+
+const onCopy = fn(async () => {
+	/* the copy is the route's */
+});
+
+const reviews = WORKSPACE_WORK_LOG.flatMap((item) => {
+	const actions = item.actions.filter((action) => action.kind.startsWith("REVIEW_"));
+	return actions.length > 0 ? [{ ...item, actions }] : [];
+});
 
 // The level has no page of its own, so every story mounts a real drawer over a real page.
 const meta = {
@@ -17,21 +31,20 @@ const meta = {
 	decorators: [withPageBehind],
 	args: {
 		path: { behind: [{ label: "Workspace activity", depth: 0 }], onClose: fn() },
-		title: "Reviews",
-		description: "Reviews in Platform / Payments in the last 7 days.",
-		state: {
+		category: "reviews",
+		description: "Last 30 days · Platform / Payments",
+		providerType: "GITHUB",
+		overview: readyOverview(WORKSPACE_OVERVIEW),
+		workLog: {
 			status: "ready",
-			items: WORKSPACE_TIMELINE.filter((item) => item.kind.startsWith("REVIEW_")),
+			stale: false,
+			items: reviews,
 			hasMore: false,
 			isLoadingMore: false,
 			onLoadMore: fn(),
+			onCopy,
 		},
-		providerType: "GITHUB",
-		people: "several",
-		empty: {
-			title: "Nothing in the last 7 days",
-			description: "A longer range on the page looks further back.",
-		},
+		subject: { people: "several" },
 	},
 	argTypes: { path: { control: false } },
 	render: (args) => (
@@ -63,33 +76,47 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-	play: async () => {
+	play: async ({ userEvent }) => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByRole("heading", { name: "Reviews" })).toBeVisible();
-		// A name in the list opens that member one level up the stack.
-		await expect(panel.getByRole("link", { name: "Bob Brenner" })).toHaveAttribute(
-			"href",
-			expect.stringContaining("member%3Abob"),
-		);
+		await expect(panel.getByRole("heading", { level: 2, name: "Reviews" })).toBeVisible();
+		await expect(panel.getByText("Last 30 days · Platform / Payments")).toBeVisible();
+		await expect(panel.getByRole("figure")).toHaveAccessibleName(/reviews; busiest day/u);
+		await userEvent.click(panel.getByRole("button", { name: "Copy as Markdown" }));
+		await expect(onCopy).toHaveBeenCalledOnce();
 	},
 };
 
 export const Empty: Story = {
 	args: {
-		state: {
+		workLog: {
 			status: "ready",
+			stale: false,
 			items: [],
 			hasMore: false,
 			isLoadingMore: false,
 			onLoadMore: fn(),
+			onCopy,
 		},
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(panel.getByText("No activity in this range")).toBeVisible();
+		await expect(panel.queryByRole("button", { name: "Copy as Markdown" })).not.toBeInTheDocument();
+	},
+};
+
+export const Reflow: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async () => {
+		await expectNoPanelOverflow(await settledDrawerPanel());
 	},
 };
 
 export const Loading: Story = {
-	args: { state: { status: "loading" } },
+	args: { overview: { status: "loading" }, workLog: { status: "loading" } },
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.queryByRole("link", { name: "Bob Brenner" })).not.toBeInTheDocument();
+		await expect(panel.queryByRole("figure")).not.toBeInTheDocument();
+		await expect(panel.queryByRole("button", { name: "Copy as Markdown" })).not.toBeInTheDocument();
 	},
 };

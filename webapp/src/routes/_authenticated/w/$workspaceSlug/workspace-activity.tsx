@@ -3,7 +3,10 @@ import { createFileRoute, retainSearchParams, stripSearchParams } from "@tanstac
 import { useEffect } from "react";
 
 import { getAllTeamsOptions } from "@/api/@tanstack/react-query.gen";
-import { ACTIVITY_CATEGORY_DEFS } from "@/components/activity/activity-kind-defs";
+import {
+	ACTIVITY_CATEGORY_DEFS,
+	type ActivityCategory,
+} from "@/components/activity/activity-kind-defs";
 import { rangeStart } from "@/components/activity/activity-range";
 import {
 	parseActivityStack,
@@ -13,6 +16,7 @@ import {
 	workspaceActivitySearchSchema,
 } from "@/components/activity/activity-search";
 import { ActivityDetailDrawer } from "@/components/activity/ActivityDetailDrawer";
+import { workLogTitle } from "@/components/activity/work-log-markdown";
 import { WorkspaceActivityPage } from "@/components/activity/WorkspaceActivityPage";
 import { panelState } from "@/components/common/panel-state";
 import { useNow } from "@/components/common/use-now";
@@ -20,8 +24,8 @@ import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-sta
 import { visibleTeamPaths } from "@/components/teams/visible-team-tree";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import {
-	useActivitySummary,
-	useActivityTimeline,
+	useActivityOverview,
+	useActivityWork,
 	useMemberActivity,
 	useOpenWork,
 } from "@/hooks/use-activity";
@@ -47,9 +51,8 @@ function WorkspaceActivity() {
 	const search = Route.useSearch();
 	const setSearch = useSearchState();
 	const { workspaces } = useActiveWorkspaceSlug();
-	const providerType = toScmProviderType(
-		workspaces.find((workspace) => workspace.workspaceSlug === workspaceSlug)?.providerType,
-	);
+	const workspace = workspaces.find((candidate) => candidate.workspaceSlug === workspaceSlug);
+	const providerType = toScmProviderType(workspace?.providerType);
 	const teams = panelState(useQuery(getAllTeamsOptions({ path: { workspaceSlug } })), (all) => ({
 		status: "ready" as const,
 		teams: visibleTeamPaths(all).map(({ team, path }) => ({ id: team.id, name: path })),
@@ -80,12 +83,32 @@ function WorkspaceActivity() {
 
 	const from = rangeStart(useNow(), search.range);
 	const scope = { workspaceSlug, teamId: team?.id, from, enabled: scopeKnown };
-	const summary = useActivitySummary(scope);
 	const members = useMemberActivity(scope);
-	const timeline = useActivityTimeline(scope);
-	const categoryTimeline = useActivityTimeline({
+	const memberUser =
+		members.status === "ready"
+			? members.members.find((member) => member.user.login === memberLogin)?.user
+			: undefined;
+	// A copy is headed by whose work it lists: the team, or the workspace, or the member opened.
+	const pageOwner = team?.name ?? workspace?.displayName;
+	const memberOwner = memberUser?.name ?? memberLogin;
+	const copyOf = (
+		category: ActivityCategory | undefined,
+		owner: string | undefined,
+		people: boolean,
+	) => ({
+		title: workLogTitle(
+			category && ACTIVITY_CATEGORY_DEFS[category].label(providerType),
+			owner ?? "Activity",
+		),
+		providerType,
+		people,
+	});
+	const overview = useActivityOverview(scope);
+	const timeline = useActivityWork({ ...scope, copy: copyOf(undefined, pageOwner, true) });
+	const categoryWorkLog = useActivityWork({
 		...scope,
 		kinds: pageCategory ? ACTIVITY_CATEGORY_DEFS[pageCategory].kinds : undefined,
+		copy: copyOf(pageCategory, pageOwner, true),
 		enabled: scopeKnown && pageCategory !== undefined,
 	});
 
@@ -96,17 +119,17 @@ function WorkspaceActivity() {
 		enabled: scopeKnown && memberLogin !== undefined,
 	};
 	const memberOpenWork = useOpenWork({ workspaceSlug, login: memberLogin });
-	const memberSummary = useActivitySummary(memberScope);
-	const memberTimeline = useActivityTimeline(memberScope);
-	const memberCategoryTimeline = useActivityTimeline({
+	const memberOverview = useActivityOverview(memberScope);
+	const memberWorkLog = useActivityWork({
+		...memberScope,
+		copy: copyOf(undefined, memberOwner, false),
+	});
+	const memberCategoryWorkLog = useActivityWork({
 		...memberScope,
 		kinds: memberCategory ? ACTIVITY_CATEGORY_DEFS[memberCategory].kinds : undefined,
+		copy: copyOf(memberCategory, memberOwner, false),
 		enabled: memberScope.enabled && memberCategory !== undefined,
 	});
-	const memberUser =
-		members.status === "ready"
-			? members.members.find((member) => member.user.login === memberLogin)?.user
-			: undefined;
 
 	const setView = (view: Partial<WorkspaceActivitySearch>) => {
 		void setSearch((previous) => ({ ...previous, ...view }), { state: true, replace: true });
@@ -121,7 +144,7 @@ function WorkspaceActivity() {
 				teams={teams}
 				teamId={team?.id}
 				onTeamChange={(teamId) => setView({ team: teamId })}
-				summary={summary}
+				overview={overview}
 				members={members}
 				timeline={timeline}
 			/>
@@ -131,14 +154,15 @@ function WorkspaceActivity() {
 				pageLabel="Workspace activity"
 				providerType={providerType}
 				range={search.range}
-				scope={team ? `in ${team.name}` : "in this workspace"}
-				categoryTimeline={categoryTimeline}
+				scope={team?.name}
+				subject={{ people: "several" }}
+				page={{ overview, categoryWorkLog }}
 				member={{
 					user: memberUser,
 					openWork: memberOpenWork,
-					summary: memberSummary,
-					timeline: memberTimeline,
-					categoryTimeline: memberCategoryTimeline,
+					overview: memberOverview,
+					workLog: memberWorkLog,
+					categoryWorkLog: memberCategoryWorkLog,
 				}}
 			/>
 		</>

@@ -32,37 +32,53 @@ export type AccountRef = {
 };
 
 /**
- * One thing someone did
+ * How often one kind of activity happened on a piece of work
  */
-export type ActivityItem = {
+export type ActivityAction = {
   /**
-   * Who did it
+   * How often it was done
    */
-  actor: UserInfo;
-  /**
-   * Link to the review or comment itself; null for pull request and issue activity, and whenever work is null
-   */
-  htmlUrl?: string;
-  /**
-   * Identifier of the activity
-   */
-  id: string;
+  count: number;
   /**
    * What was done
    */
   kind: 'PULL_REQUEST_OPENED' | 'PULL_REQUEST_MERGED' | 'PULL_REQUEST_CLOSED' | 'REVIEW_APPROVED' | 'REVIEW_CHANGES_REQUESTED' | 'REVIEW_COMMENTED' | 'COMMENTED' | 'CODE_COMMENTED' | 'ISSUE_OPENED' | 'ISSUE_CLOSED';
-  /**
-   * When it happened
-   */
-  occurredAt: Date;
-  /**
-   * The pull request or issue it happened on; null when that pull request or issue, or the review or comment the activity was, is no longer known or was deleted upstream
-   */
-  work?: WorkItem;
 };
 
 /**
- * Counts of activity in a time range. Each count is the number of timeline entries of its kind for the same scope and range.
+ * Activity in one time bucket of a range
+ */
+export type ActivityBucket = {
+  /**
+   * When the bucket starts: midnight of its day, of its week's Monday or of its month's first day, in the requested time zone. The first bucket may start before the range.
+   */
+  start: Date;
+  /**
+   * The activity in the bucket that falls within the range
+   */
+  summary: ActivitySummary;
+};
+
+/**
+ * Activity in a time range, in total and over time
+ */
+export type ActivityOverview = {
+  /**
+   * How long each bucket is: a day for ranges up to 31 days, a week for ranges up to 184 days, a month for longer ones
+   */
+  bucket: 'DAY' | 'WEEK' | 'MONTH';
+  /**
+   * Every bucket the range touches, oldest first, including those without activity
+   */
+  buckets: Array<ActivityBucket>;
+  /**
+   * The activity in the range; the buckets' summaries add up to it
+   */
+  summary: ActivitySummary;
+};
+
+/**
+ * Counts of activity in a time range. Each count is the sum of that kind's counts in the work list for the same scope and range.
  */
 export type ActivitySummary = {
   /**
@@ -108,13 +124,39 @@ export type ActivitySummary = {
 };
 
 /**
- * One page of activity, newest first
+ * The activity on one pull request or issue in a time range
  */
-export type ActivityTimelinePage = {
+export type ActivityWork = {
   /**
-   * The activity on this page, newest first
+   * Each kind of activity that happened on it, in a fixed order of kinds
    */
-  content: Array<ActivityItem>;
+  actions: Array<ActivityAction>;
+  /**
+   * Identifier of the group: work:<id of the pull request or issue>, or event:<id of the activity> for activity whose pull request or issue is not known
+   */
+  id: string;
+  /**
+   * When the latest of this activity happened
+   */
+  lastOccurredAt: Date;
+  /**
+   * Everyone this activity counts for, by name
+   */
+  people: Array<UserInfo>;
+  /**
+   * The pull request or issue; null when it, or the review or comment the activity was, is no longer known or was deleted upstream
+   */
+  work?: WorkItem;
+};
+
+/**
+ * One page of activity grouped by the pull request or issue it happened on, latest first
+ */
+export type ActivityWorkPage = {
+  /**
+   * The work on this page, by its latest activity, newest first
+   */
+  content: Array<ActivityWork>;
   /**
    * Opaque cursor that fetches the next page when passed back as cursor; absent on the last page
    */
@@ -4790,6 +4832,20 @@ export type ReviewedWorkRef = {
   url?: string;
 };
 
+/**
+ * Someone reviewing a pull request, and where their review stands
+ */
+export type Reviewer = {
+  /**
+   * REQUESTED while a review is asked of them, otherwise the verdict of their latest review that was not dismissed
+   */
+  state: 'CHANGES_REQUESTED' | 'APPROVED' | 'COMMENTED' | 'REQUESTED';
+  /**
+   * The reviewer
+   */
+  user: UserInfo;
+};
+
 export type RevokeSessionsResult = {
   revoked?: number;
 };
@@ -6024,6 +6080,10 @@ export type WorkItem = {
    * The pull request's review decision, when the provider reported one
    */
   reviewDecision?: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED';
+  /**
+   * The pull request's reviewers besides its author, where each review stands; only open work lists them
+   */
+  reviewers?: Array<Reviewer>;
   /**
    * Current state
    */
@@ -9429,13 +9489,17 @@ export type GetActivitySummaryData = {
      * Exclusive upper bound; defaults to now
      */
     to?: Date;
+    /**
+     * The IANA time zone whose midnights start the buckets, such as Europe/Berlin
+     */
+    zone?: string;
   };
   url: '/workspaces/{workspaceSlug}/activity/summary';
 };
 
 export type GetActivitySummaryErrors = {
   /**
-   * Invalid range
+   * Invalid range or time zone
    */
   400: ProblemDetail;
   /**
@@ -9454,12 +9518,12 @@ export type GetActivitySummaryResponses = {
   /**
    * Activity counted
    */
-  200: ActivitySummary;
+  200: ActivityOverview;
 };
 
 export type GetActivitySummaryResponse = GetActivitySummaryResponses[keyof GetActivitySummaryResponses];
 
-export type GetActivityTimelineData = {
+export type GetActivityWorkData = {
   body?: never;
   path: {
     /**
@@ -9493,14 +9557,14 @@ export type GetActivityTimelineData = {
      */
     cursor?: string;
     /**
-     * Page size from 1 to 50; defaults to 20
+     * Page size from 1 to 100; defaults to 30
      */
     size?: number;
   };
-  url: '/workspaces/{workspaceSlug}/activity/timeline';
+  url: '/workspaces/{workspaceSlug}/activity/work';
 };
 
-export type GetActivityTimelineErrors = {
+export type GetActivityWorkErrors = {
   /**
    * Invalid range, kind, cursor or size
    */
@@ -9515,16 +9579,16 @@ export type GetActivityTimelineErrors = {
   404: ProblemDetail;
 };
 
-export type GetActivityTimelineError = GetActivityTimelineErrors[keyof GetActivityTimelineErrors];
+export type GetActivityWorkError = GetActivityWorkErrors[keyof GetActivityWorkErrors];
 
-export type GetActivityTimelineResponses = {
+export type GetActivityWorkResponses = {
   /**
-   * One page of activity
+   * One page of work
    */
-  200: ActivityTimelinePage;
+  200: ActivityWorkPage;
 };
 
-export type GetActivityTimelineResponse = GetActivityTimelineResponses[keyof GetActivityTimelineResponses];
+export type GetActivityWorkResponse = GetActivityWorkResponses[keyof GetActivityWorkResponses];
 
 export type ListAgentsData = {
   body?: never;

@@ -562,11 +562,9 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         @Test
         @WithMentorUser
-        void shouldReturnNotFoundWhenTimelineMemberOnlyBelongsToAnotherWorkspace() {
-            expectDetailStatus("/activity/timeline?login={key}", "mentor")
-                    .isOk()
-                    .expectBody(Void.class);
-            expectDetailStatus("/activity/timeline?login={key}", bobOnlyB.getLogin())
+        void shouldReturnNotFoundWhenWorkMemberOnlyBelongsToAnotherWorkspace() {
+            expectDetailStatus("/activity/work?login={key}", "mentor").isOk().expectBody(Void.class);
+            expectDetailStatus("/activity/work?login={key}", bobOnlyB.getLogin())
                     .isNotFound()
                     .expectBody(Void.class);
         }

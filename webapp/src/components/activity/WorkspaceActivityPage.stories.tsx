@@ -1,11 +1,24 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, within } from "storybook/test";
 
-import { MEMBERS, WORKSPACE_SUMMARY, WORKSPACE_TIMELINE } from "@/stories/activity-story-data";
-import { withStandardPage } from "@/stories/decorators";
+import {
+	LARGE_ROSTER,
+	LARGE_WORKSPACE_OVERVIEW,
+	MEMBERS,
+	readyMembers,
+	readyOverview,
+	WORKSPACE_OVERVIEW,
+	WORKSPACE_WORK_LOG,
+} from "@/stories/activity-story-data";
+import { withProvider, withStandardPage } from "@/stories/decorators";
 import { settledPopup } from "@/stories/overlay";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { WorkspaceActivityPage } from "./WorkspaceActivityPage";
+
+const onCopy = fn(async () => {
+	/* the copy is the route's */
+});
 
 const meta = {
 	component: WorkspaceActivityPage,
@@ -25,14 +38,16 @@ const meta = {
 		},
 		teamId: undefined,
 		onTeamChange: fn(),
-		summary: { status: "ready", summary: WORKSPACE_SUMMARY },
-		members: { status: "ready", members: MEMBERS },
+		overview: readyOverview(WORKSPACE_OVERVIEW),
+		members: readyMembers(MEMBERS),
 		timeline: {
 			status: "ready",
-			items: WORKSPACE_TIMELINE,
+			stale: false,
+			items: WORKSPACE_WORK_LOG,
 			hasMore: false,
 			isLoadingMore: false,
 			onLoadMore: fn(),
+			onCopy,
 		},
 	},
 } satisfies Meta<typeof WorkspaceActivityPage>;
@@ -42,7 +57,12 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		await expect(canvas.getByText("two of three members active")).toBeVisible();
+		const headings = canvas
+			.getAllByRole("heading", { level: 2 })
+			.map((heading) => heading.textContent);
+		await expect(headings).toStrictEqual(["Last 30 days", "Members", "Timeline"]);
+		// The workspace's tiles add up its members' rows.
+		await expect(canvas.getByRole("link", { name: /^Pull requests\s*7 merged/u })).toBeVisible();
 		await userEvent.click(canvas.getByRole("combobox", { name: "Team" }));
 		const options = within(await settledPopup()).getAllByRole("option");
 		await expect(options.map((option) => option.textContent)).toStrictEqual([
@@ -55,12 +75,23 @@ export const Default: Story = {
 	},
 };
 
+/** 250 members, most of them quiet: the table shows 50 by name and finds the rest. */
+export const LargeWorkspace: Story = {
+	args: {
+		overview: readyOverview(LARGE_WORKSPACE_OVERVIEW),
+		members: readyMembers(LARGE_ROSTER),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Show all 250" })).toBeVisible();
+	},
+};
+
 export const OneTeam: Story = {
 	args: { teamId: 2 },
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByRole("heading", { name: "Members of Platform / Payments" }),
-		).toBeVisible();
+		await expect(canvas.getByRole("combobox", { name: "Team" })).toHaveTextContent(
+			"Platform / Payments",
+		);
 	},
 };
 
@@ -76,7 +107,7 @@ export const TeamsLoading: Story = {
 	args: { teams: { status: "loading" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("combobox", { name: "Team" })).not.toBeInTheDocument();
-		await expect(canvas.getByText("two of three members active")).toBeVisible();
+		await expect(canvas.getByText("5 members · 3 active")).toBeVisible();
 	},
 };
 
@@ -93,14 +124,28 @@ export const TeamsFailed: Story = {
 	},
 };
 
+export const GitLab: Story = {
+	decorators: [withProvider("GITLAB")],
+	args: { providerType: "GITLAB" },
+};
+
+export const Dark: Story = { globals: { theme: "dark" } };
+
+export const Reflow: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async () => {
+		await expectNoPageOverflow();
+	},
+};
+
 export const Loading: Story = {
 	args: {
-		summary: { status: "loading" },
+		overview: { status: "loading" },
 		members: { status: "loading" },
 		timeline: { status: "loading" },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText(/members active/u)).not.toBeInTheDocument();
-		await expect(canvas.queryByRole("link")).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/members ·/u)).not.toBeInTheDocument();
+		await expect(canvas.queryAllByRole("link")).toHaveLength(0);
 	},
 };
