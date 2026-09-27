@@ -256,7 +256,8 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
     @Test
     void shouldCorrectOnlyTheObservationsAnAutomaticPackageWasWrittenFrom() {
         String key = "review:" + job.getId();
-        UUID written = observe(practice, job, 7L, developer, ObservationKind.OMISSION_GAP, Severity.MAJOR, Instant.now());
+        UUID written =
+                observe(practice, job, 7L, developer, ObservationKind.OMISSION_GAP, Severity.MAJOR, Instant.now());
         provider.duringWrite = this::invalidate;
 
         PracticeFeedbackDispatchService.Result result = dispatchService.dispatchAutomaticPackage(

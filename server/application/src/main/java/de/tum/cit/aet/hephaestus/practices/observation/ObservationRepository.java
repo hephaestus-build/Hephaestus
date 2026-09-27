@@ -635,7 +635,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * earlier review recorded before a later one of the same work recorded that practice again. Neither is
      * superseded; the earlier result stays true of the work as it was. Every status.
      */
-    @Query(value = """
+    @Query(
+            value = """
                     SELECT f.* FROM observation f
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
@@ -644,7 +645,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
               AND f.observed_at >= :since
               AND f.agent_job_id <>""" + LATEST_RUN_OF_CLAIM + """
             ORDER BY f.observed_at DESC, f.agent_job_id DESC, f.id DESC
-            """, nativeQuery = true)
+            """,
+            nativeQuery = true)
     List<Observation> findEarlierRunsByDeveloperAndWorkspace(
             @Param("aboutUserId") Long aboutUserId,
             @Param("workspaceId") Long workspaceId,

@@ -34,8 +34,7 @@ public class ObservationInvalidationService {
         Observation observation = observationRepository
                 .lockByIdAndWorkspaceId(observationId, workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Observation", observationId.toString()));
-        if (!valid
-                && dispatchRepository.existsInFlightCiting(workspaceId, observationId)) {
+        if (!valid && dispatchRepository.existsInFlightCiting(workspaceId, observationId)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Hephaestus is delivering feedback that cites this observation right now. Try again in a moment.");

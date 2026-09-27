@@ -860,6 +860,15 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         private List<UUID> recent() {
             return observationRepository
                     .findRecentByDeveloperAndWorkspace(
+                            aboutUser.getId(), workspace.getId(), Instant.EPOCH, VERDICTS, PageRequest.of(0, 10))
+                    .stream()
+                    .map(Observation::getId)
+                    .toList();
+        }
+
+        private List<UUID> earlier() {
+            return observationRepository
+                    .findEarlierRunsByDeveloperAndWorkspace(
                             aboutUser.getId(), workspace.getId(), Instant.EPOCH, PageRequest.of(0, 10))
                     .stream()
                     .map(Observation::getId)
@@ -879,10 +888,12 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             UUID older = insertStrength(agentJob.getId(), "Valid earlier claim", olderAt);
             UUID wrong = insertStrength(newerRun().getId(), "Wrong newer claim", newerAt);
             assertThat(recent()).containsExactly(wrong);
+            assertThat(earlier()).containsExactly(older);
 
             invalidate(wrong);
 
             assertThat(recent()).containsExactly(older);
+            assertThat(earlier()).isEmpty();
             assertThat(window()).containsExactly(older);
             DeveloperPracticeSummaryProjection summary = observationRepository
                     .findSummaryByDeveloperAndWorkspace(aboutUser.getId(), workspace.getId())

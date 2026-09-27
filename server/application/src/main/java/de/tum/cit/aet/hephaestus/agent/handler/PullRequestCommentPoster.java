@@ -213,8 +213,8 @@ class PullRequestCommentPoster {
             JsonNode metadata = job.getMetadata();
             String marker =
                     approvedFeedbackId == null ? summaryMarkerFor(job) : approvedFeedbackMarker(approvedFeedbackId);
-            SummaryWrite write = summaryWrite(
-                    job, metadata != null && metadata.has("issue_number"), formattedBody, marker);
+            SummaryWrite write =
+                    summaryWrite(job, metadata != null && metadata.has("issue_number"), formattedBody, marker);
             return write.channel().updateSummary(write.target(), externalId, write.content());
         } catch (JobDeliveryException e) {
             return UpdateOutcome.unsupported();
