@@ -8,7 +8,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -31,7 +30,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncService
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncResult;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -41,7 +39,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
@@ -111,6 +108,9 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
     @Mock
     private ConnectionService connectionService;
 
+    @Mock
+    private GitLabRepositoryMonitors repositoryMonitors;
+
     private GitLabWorkspaceInitializationService initService;
     private Workspace workspace;
 
@@ -146,6 +146,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                 dataSyncTriggerProvider,
                 connectionService,
                 new GitLabWorkspaceLinkService(workspaceRepository, organizationRepository),
+                repositoryMonitors,
                 monitoringExecutor);
 
         workspace = new Workspace();
@@ -196,6 +197,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                 dataSyncTriggerProvider,
                 connectionService,
                 new GitLabWorkspaceLinkService(workspaceRepository, organizationRepository),
+                repositoryMonitors,
                 monitoringExecutor);
     }
 
@@ -337,13 +339,12 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                 names = {"COMPLETED_WITH_ERRORS", "ABORTED_RATE_LIMIT", "ABORTED_ERROR"})
         void shouldRouteFoundRepositoriesButKeepWebhookClosedWhenDiscoveryIsIncomplete(GitLabSyncResult.Status status)
                 throws Exception {
-            stubDiscovery(new GitLabSyncResult(status, List.of(createRepo("my-group/project-a")), 1, 1, 0, 0));
+            Repository found = createRepo("my-group/project-a");
+            stubDiscovery(new GitLabSyncResult(status, List.of(found), 1, 1, 0, 0));
 
             initService.initialize(workspace);
 
-            ArgumentCaptor<RepositoryToMonitor> monitor = ArgumentCaptor.forClass(RepositoryToMonitor.class);
-            verify(repositoryToMonitorRepository).save(monitor.capture());
-            assertThat(monitor.getValue().getNameWithOwner()).isEqualTo("my-group/project-a");
+            verify(repositoryMonitors).monitorAll(workspace, List.of(found));
             verify(natsConsumerService).establishScopeConsumer(1L, "gitlab");
             verify(gitLabWebhookService, never()).registerWebhook(any());
         }
@@ -384,11 +385,12 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
         @Test
         void shouldKeepWebhookClosedWhenNatsIsDisabled() {
-            stubDiscovery(GitLabSyncResult.completed(List.of(createRepo("my-group/project-a")), 1, 0, 0));
+            List<Repository> repos = List.of(createRepo("my-group/project-a"));
+            stubDiscovery(GitLabSyncResult.completed(repos, 1, 0, 0));
 
             createServiceWithNatsDisabled().initialize(workspace);
 
-            verify(repositoryToMonitorRepository).save(any());
+            verify(repositoryMonitors).monitorAll(workspace, repos);
             verify(gitLabWebhookService, never()).registerWebhook(any());
             verifyNoInteractions(natsConsumerService);
         }
@@ -480,22 +482,12 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                             "my-group/subgroup", IdentityProviderType.GITLAB))
                     .thenReturn(Optional.of(organization));
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
-            when(repositoryToMonitorRepository.findByWorkspaceId(1L)).thenReturn(List.of());
 
             initService.initialize(workspace);
 
             assertThat(workspace.getOrganization()).isEqualTo(organization);
 
-            ArgumentCaptor<RepositoryToMonitor> captor = ArgumentCaptor.forClass(RepositoryToMonitor.class);
-            verify(repositoryToMonitorRepository, times(2)).save(captor.capture());
-
-            Set<String> createdNames = captor.getAllValues().stream()
-                    .map(RepositoryToMonitor::getNameWithOwner)
-                    .collect(Collectors.toSet());
-            assertThat(createdNames).containsExactlyInAnyOrder("my-group/project-a", "my-group/project-b");
-
-            captor.getAllValues()
-                    .forEach(monitor -> assertThat(monitor.getWorkspace()).isSameAs(workspace));
+            verify(repositoryMonitors).monitorAll(workspace, repos);
 
             verify(natsConsumerService).establishScopeConsumer(1L, "gitlab");
         }
@@ -512,7 +504,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
             initService.initialize(workspace);
 
-            verify(repositoryToMonitorRepository, never()).save(any());
+            verify(repositoryMonitors, never()).monitorAll(any(), any());
             verify(organizationRepository, never()).findByLoginIgnoreCaseAndProvider_Type(any(), any());
         }
 
@@ -523,22 +515,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
             initService.initialize(workspace);
 
-            verify(repositoryToMonitorRepository, never()).save(any());
-        }
-
-        @Test
-        void shouldNotDuplicateExistingMonitors() {
-            stubMinimalDiscovery(List.of(createRepo("my-group/existing-project"), createRepo("my-group/new-project")));
-
-            RepositoryToMonitor existingMonitor = new RepositoryToMonitor();
-            existingMonitor.setNameWithOwner("my-group/existing-project");
-            when(repositoryToMonitorRepository.findByWorkspaceId(1L)).thenReturn(List.of(existingMonitor));
-
-            initService.initialize(workspace);
-
-            ArgumentCaptor<RepositoryToMonitor> captor = ArgumentCaptor.forClass(RepositoryToMonitor.class);
-            verify(repositoryToMonitorRepository, times(1)).save(captor.capture());
-            assertThat(captor.getValue().getNameWithOwner()).isEqualTo("my-group/new-project");
+            verify(repositoryMonitors, never()).monitorAll(any(), any());
         }
 
         @Test
@@ -552,7 +529,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             // Should not throw
             initService.initialize(workspace);
 
-            verify(repositoryToMonitorRepository, never()).save(any());
+            verify(repositoryMonitors, never()).monitorAll(any(), any());
         }
 
         @Test
@@ -568,7 +545,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(gitLabSyncServiceHolder.getGroupSyncService()).thenReturn(gitLabGroupSyncService);
             when(gitLabGroupSyncService.syncGroupProjects(eq(1L), eq("my-group/subgroup"), any()))
                     .thenReturn(syncResult);
-            when(repositoryToMonitorRepository.findByWorkspaceId(1L)).thenReturn(List.of());
 
             initService.initialize(workspace);
 
@@ -604,54 +580,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             initService.initializeAsync(99L);
 
             verifyNoInteractions(dataSyncTrigger);
-        }
-    }
-
-    @Nested
-    class EnsureRepositoryMonitors {
-
-        @Test
-        void shouldCreateAllMonitorsAndReturnCount() {
-            List<Repository> repos =
-                    List.of(createRepo("group/repo-1"), createRepo("group/repo-2"), createRepo("group/repo-3"));
-
-            when(repositoryToMonitorRepository.findByWorkspaceId(1L)).thenReturn(List.of());
-
-            int created = initService.ensureRepositoryMonitors(workspace, repos);
-
-            assertThat(created).isEqualTo(3);
-            verify(repositoryToMonitorRepository, times(3)).save(any(RepositoryToMonitor.class));
-        }
-
-        @Test
-        void shouldReturnZeroWhenAllExist() {
-            List<Repository> repos = List.of(createRepo("group/repo-1"), createRepo("group/repo-2"));
-
-            RepositoryToMonitor m1 = new RepositoryToMonitor();
-            m1.setNameWithOwner("group/repo-1");
-            RepositoryToMonitor m2 = new RepositoryToMonitor();
-            m2.setNameWithOwner("group/repo-2");
-            when(repositoryToMonitorRepository.findByWorkspaceId(1L)).thenReturn(List.of(m1, m2));
-
-            int created = initService.ensureRepositoryMonitors(workspace, repos);
-
-            assertThat(created).isEqualTo(0);
-            verify(repositoryToMonitorRepository, never()).save(any());
-        }
-
-        @Test
-        void shouldSkipNullNameWithOwner() {
-            Repository repoWithNullNwo = new Repository();
-            // Don't call setNameWithOwner — leaves it as null (bypassing @NonNull setter)
-            ReflectionTestUtils.setField(repoWithNullNwo, "nameWithOwner", null);
-
-            List<Repository> repos = List.of(repoWithNullNwo, createRepo("group/repo-1"));
-            when(repositoryToMonitorRepository.findByWorkspaceId(1L)).thenReturn(List.of());
-
-            int created = initService.ensureRepositoryMonitors(workspace, repos);
-
-            assertThat(created).isEqualTo(1);
-            verify(repositoryToMonitorRepository, times(1)).save(any(RepositoryToMonitor.class));
         }
     }
 

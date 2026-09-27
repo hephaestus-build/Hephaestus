@@ -698,6 +698,13 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
         Workspace workspace =
                 createWorkspace("repo-conflict", "Repo Conflict", "repo-conflict", AccountType.ORG, owner);
         ensureAdminMembership(workspace);
+        connectionService.provisionPatConnection(
+                workspace,
+                IntegrationKind.GITHUB,
+                "pat",
+                new ConnectionConfig.GitHubPatConfig("repo-conflict", null, Set.of()),
+                "ghp_dummy_token_for_test",
+                "repo-conflict-" + workspace.getId());
 
         RepositoryToMonitor repository = new RepositoryToMonitor();
         repository.setNameWithOwner("acme/test-repo");
