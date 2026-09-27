@@ -12,10 +12,12 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackUsefulness;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
@@ -30,12 +32,16 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
 /**
  * The developer's own practice pages, end to end: who may read it, and what reading it records.
  */
 class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewIntegrationTest {
+
+    @Autowired
+    private ObservationInvalidationRepository invalidationRepository;
 
     private static final String RESPONSE = "/workspaces/{slug}/practices/feedback/{feedbackId}/response";
 
@@ -380,6 +386,36 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
                 .get()
                 .extracting(Feedback::getDeliveryState)
                 .isEqualTo(FeedbackDeliveryState.PREPARED);
+    }
+
+    @Test
+    @WithUser
+    @DisplayName("a card citing an invalidated observation is hidden whole, and its delivery record stays")
+    void shouldHideTheWholeCardWhenAnyObservationItCitesWasInvalidated() {
+        Feedback feedback = persistInAppCard(
+                job,
+                developer,
+                7000,
+                FeedbackDeliveryState.DELIVERED,
+                "You keep shipping untested changes",
+                "Across your last three pull requests the tests did not move with the code.");
+        UUID wrong = persistObservation(practice, job, developer, 101L);
+        bind(feedback, wrong);
+        bind(feedback, persistObservation(practice, job, developer, 102L));
+        invalidationRepository.save(new ObservationInvalidation(
+                observationRepository
+                        .findByIdAndWorkspaceId(wrong, workspace.getId())
+                        .orElseThrow(),
+                1L,
+                "The tests did move",
+                Instant.now()));
+
+        readInAppPage(workspace).jsonPath("$.length()").isEqualTo(0);
+
+        assertThat(feedbackRepository.findById(feedback.getId()))
+                .get()
+                .extracting(Feedback::getDeliveryState)
+                .isEqualTo(FeedbackDeliveryState.DELIVERED);
     }
 
     /** The complete response written through the endpoint the card calls, as the signed-in developer. */

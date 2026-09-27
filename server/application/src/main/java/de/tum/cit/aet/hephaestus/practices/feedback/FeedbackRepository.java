@@ -91,6 +91,8 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     /** Idempotency guard for the ledger recorder: has this job already recorded this unit? */
     boolean existsByAgentJobIdAndPosition(UUID agentJobId, Integer position);
 
+    Optional<Feedback> findByAgentJobIdAndPositionAndWorkspaceId(UUID agentJobId, Integer position, Long workspaceId);
+
     Optional<Feedback> findByIdAndWorkspaceId(UUID id, Long workspaceId);
 
     Optional<Feedback> findByIdAndWorkspaceIdAndRecipientUserIdAndDeliveryState(
@@ -468,6 +470,32 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             nativeQuery = true)
     int markPreparedSuppressed(
             @Param("id") UUID id, @Param("workspaceId") Long workspaceId, @Param("reason") String reason);
+
+    /**
+     * Stops every piece of feedback citing this observation that has not reached anyone yet, as a whole: a
+     * proposal awaiting approval, prepared feedback, and the undispatched rest of a partially delivered package.
+     * Delivered feedback keeps its state, because it was delivered.
+     *
+     * @return how many pieces of feedback this call stopped
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        UPDATE feedback f
+        SET delivery_state = CASE WHEN f.delivery_state = 'PARTIALLY_DELIVERED'
+                THEN 'PARTIALLY_DELIVERED' ELSE 'SUPPRESSED' END,
+            suppression_reason = :reason
+        WHERE f.workspace_id = :workspaceId
+          AND (f.delivery_state IN ('AWAITING_APPROVAL', 'PREPARED')
+               OR (f.delivery_state = 'PARTIALLY_DELIVERED' AND f.suppression_reason IS NULL))
+          AND EXISTS (
+              SELECT 1 FROM feedback_observation fo
+              WHERE fo.feedback_id = f.id AND fo.observation_id = :observationId
+          )
+        """, nativeQuery = true)
+    int suppressUndeliveredCiting(
+            @Param("workspaceId") Long workspaceId,
+            @Param("observationId") UUID observationId,
+            @Param("reason") String reason);
 
     /**
      * Newest PREPARED conversational units for a developer (as recipient) — the mentor's queue. The body on

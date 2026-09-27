@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -83,6 +84,15 @@ public record ObservationDetailDTO(
 
         @NonNull ReviewClaimCurrentness claimCurrentness,
 
+        @Nullable
+        @Schema(
+                description = "When a workspace admin marked this observation as incorrect; null while it stands. "
+                        + "An invalidated observation counts toward nothing current.")
+        Instant invalidatedAt,
+
+        @Nullable @Schema(description = "The admin's reason for the invalidation; null while the observation stands")
+        String invalidationReason,
+
         @NonNull @Schema(description = "What occasioned the measurement; never mix origins in one trend line")
         ObservationOrigin origin,
 
@@ -111,7 +121,8 @@ public record ObservationDetailDTO(
             @Nullable ObservationFeedback feedback,
             @Nullable String nextStep,
             @Nullable String artifactUrl,
-            boolean includeEvidence) {
+            boolean includeEvidence,
+            @Nullable ObservationInvalidation invalidation) {
         var practice = observation.getPractice();
         return new ObservationDetailDTO(
                 observation.getId(),
@@ -131,6 +142,8 @@ public record ObservationDetailDTO(
                 responseTo(feedback),
                 observation.getRecurrenceKey(),
                 ReviewClaimCurrentness.of(observation.getPracticeRevision(), practice, observation.getSupersededAt()),
+                invalidation == null ? null : invalidation.getInvalidatedAt(),
+                invalidation == null ? null : invalidation.getReason(),
                 observation.getOrigin(),
                 artifactUrl,
                 observation.getObservedAt());

@@ -471,6 +471,8 @@ erDiagram
         TIMESTAMPTZ projection_expires_at
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at "NOT NULL"
+        TIMESTAMPTZ write_started_at
+        BOOLEAN inline_write_started
     }
 
     FeedbackObservation {
@@ -843,7 +845,7 @@ erDiagram
     }
 
     Observation {
-        UUID id PK
+        UUID id PK,UK
         VARCHAR(255) occurrence_key UK "NOT NULL"
         UUID agent_job_id FK "NOT NULL"
         BIGINT practice_id FK "NOT NULL"
@@ -860,9 +862,23 @@ erDiagram
         BIGINT practice_revision_id FK
         VARCHAR(8) assessment
         VARCHAR(16) origin "NOT NULL"
-        BIGINT workspace_id FK "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
         VARCHAR(16) assessment_status "NOT NULL"
         TIMESTAMPTZ superseded_at
+    }
+
+    ObservationInvalidation {
+        UUID id PK
+        TIMESTAMPTZ invalidated_at "NOT NULL"
+        BIGINT invalidated_by_account_id FK "NOT NULL"
+        UUID observation_id FK "NOT NULL"
+        VARCHAR(16) provider_copy "NOT NULL"
+        TIMESTAMPTZ provider_copy_retry_at "NOT NULL"
+        VARCHAR(500) reason "NOT NULL"
+        VARCHAR(500) restoration_reason
+        TIMESTAMPTZ restored_at
+        BIGINT restored_by_account_id FK
+        BIGINT workspace_id FK "NOT NULL"
     }
 
     Organization {
@@ -1757,6 +1773,9 @@ erDiagram
     AgentJob ||--o{ Observation : has
     User ||--o{ Observation : has
     Workspace ||--o{ Observation : has
+    Observation ||--o{ ObservationInvalidation : has
+    Account ||--o{ ObservationInvalidation : invalidated_by_account_id
+    Account ||--o{ ObservationInvalidation : restored_by_account_id
     IdentityProvider ||--o{ Organization : references
     Connection ||--o{ OutlineCollection : has
     Workspace ||--o{ OutlineCollection : has

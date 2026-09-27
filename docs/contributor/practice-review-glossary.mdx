@@ -362,6 +362,46 @@ between their behaviors. Comparing outcomes at a shared location or omitting a p
 not establish that a concern was resolved or regressed. Responses apply to the specific observations
 bound to the feedback the developer received.
 
+### Invalidated observations
+
+A workspace admin **invalidates** an observation that was wrong when it was recorded, with a reason; the
+reverse is **restore**, with its own reason. Neither changes the observation: each correction is an
+`observation_invalidation` row keeping both actors, reasons and times, and at most one is in force per
+observation. While one is in force:
+
+- Every current read treats the claim as never made: the standing, the Practice profile, Heph's context,
+  composition history and new feedback. The latest-run rule skips it too, so an earlier valid review of
+  the same work speaks again unless the same run left another valid observation of that practice there.
+- Review history keeps it, labelled with the reason; the developer sees the reason, not who gave it.
+- Feedback citing it that has not reached anyone is suppressed as a whole with `OBSERVATION_INVALIDATED`.
+  A Practice profile card citing it is hidden, however many other observations it cites.
+- A correction and a delivery citing the same observation never overlap. A delivery attempt, automatic,
+  approved or retried, is admitted only while its claim is live and a short transaction share-locking the
+  observations it cites finds none invalidated. The correction takes its observation `FOR UPDATE` and is
+  refused with a conflict while a claim citing it is live. An automatic package cites the observations it was
+  written from, or its whole run if it predates recording them; an approved one, those bound to it. No connection is
+  held across provider calls. A claim whose lease expired mid-write is no longer counted, which is the one
+  window this leaves.
+- Before an invalidated delivery is withheld, every write an earlier attempt started is accounted for by
+  lookup, never by re-posting: the summary by its marker, inline notes by delivery key, including notes an
+  adapter reported `FAILED`, since a lost response reads that way too. Only positive evidence settles a started
+  write, because a POST may still land after its lease expired; a lookup that finds nothing, or cannot finish
+  its scan, keeps the delivery uncertain and never terminal. Its correction reads `PENDING` for a day from when
+  the write began, then `UNRESOLVED`; both keep being checked, every six hours after that day, and change to
+  the real outcome once the copy is found.
+- Delivered feedback keeps its state and stored text. Its posted copies get a durable **provider copy**
+  outcome on the correction: a summary comment is edited in place to open with a correction notice naming
+  the practice, never the reason. `INLINE_REMAINS` means inline comments are still there, since they have
+  no edit path; `UNRESOLVED` means a summary could not be edited, or the provider confirmed a comment without returning its id, so nothing can find it again; that copy is kept on the ledger rather than read as absent. A delivery still settling records each
+  copy it has confirmed on its one feedback unit as it goes, so a known summary is corrected at once while
+  the rest stays unknown. `PENDING` lasts while a delivery citing it is unsettled or an edit must be retried; each retry moves the correction behind every other due one, with
+  a backoff of half its time pending, from a minute to six hours.
+
+Restoring makes the observation count again from then on and removes the notice it added. Feedback the
+invalidation stopped stays stopped.
+Say **invalidated** or **marked incorrect**, never *deleted*, *retracted* or *superseded*: superseded is
+the word for [feedback replaced on its thread](#thread-key-and-supersession).
+
 ### How feedback resolves
 
 A piece of [feedback](./practice-feedback-language.md) on the Practice profile resolves in one of two

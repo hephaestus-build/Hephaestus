@@ -331,8 +331,10 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
     }
 
     private int claim(UUID dispatchId, String owner, Instant leaseUntil) {
+        int loaded = java.util.Objects.requireNonNull(jdbcTemplate.queryForObject(
+                "SELECT attempt_count FROM feedback_dispatch WHERE id = ?", Integer.class, dispatchId));
         return transactions.execute(
-                status -> dispatchRepository.claim(dispatchId, workspace.getId(), owner, leaseUntil, 8));
+                status -> dispatchRepository.claim(dispatchId, workspace.getId(), owner, leaseUntil, 8, loaded));
     }
 
     private int beginWrite(UUID dispatchId, String owner) {

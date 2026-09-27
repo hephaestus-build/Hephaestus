@@ -3,7 +3,9 @@ import { ScanSearchIcon } from "lucide-react";
 
 import type { Practice, ReviewObservation } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { ClaimCurrentnessBadge } from "@/components/practice-vocabulary/ClaimCurrentness";
+import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
 import { observationResult } from "@/components/practice-vocabulary/observation-result";
 import { Button } from "@/components/ui/button";
 import {
@@ -136,6 +138,9 @@ export function ObservationRow({
 					node: (
 						<>
 							<ClaimCurrentnessBadge currentness={observation.claimCurrentness} />
+							{observation.invalidatedAt !== undefined && (
+								<StatusBadge def={MARKED_INCORRECT_DEF} />
+							)}
 							<ObservationOriginBadge origin={observation.origin} />
 						</>
 					),

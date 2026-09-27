@@ -23,6 +23,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class ObservationVisibilityPolicyTest extends BaseUnitTest {
 
+    private final ObservationInvalidationRepository invalidations = mock(ObservationInvalidationRepository.class);
+
     /**
      * Currentness is the policy's own conjunct; the rest of the answer is whatever evidence authorization
      * says, passed through unchanged in both directions.
@@ -35,7 +37,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
         when(authorization.permitsAll(7L, List.of(observation), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(authorized ? Set.of(observation.getId()) : Set.<UUID>of());
 
-        Set<UUID> permitted = new ObservationVisibilityPolicy(authorization)
+        Set<UUID> permitted = new ObservationVisibilityPolicy(authorization, invalidations)
                 .permitsAll(7L, List.of(observation), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
 
         assertThat(permitted.contains(observation.getId())).isEqualTo(authorized);
@@ -54,8 +56,26 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
         when(authorization.permitsAll(7L, List.of(current), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Set.of(current.getId()));
 
-        assertThat(new ObservationVisibilityPolicy(authorization)
+        assertThat(new ObservationVisibilityPolicy(authorization, invalidations)
                         .permitsAll(7L, List.of(current, stale), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .containsExactly(current.getId());
+    }
+
+    @Test
+    void refusesAnInvalidatedObservationWithoutAnEvidenceRead() {
+        EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
+        Observation current = observation("fingerprint", "fingerprint");
+        Observation invalidated = observation("fingerprint", "fingerprint");
+        when(invalidations.findActiveObservationIds(7L, List.of(current.getId(), invalidated.getId())))
+                .thenReturn(Set.of(invalidated.getId()));
+        when(authorization.permitsAll(7L, List.of(current), SourceUsePurpose.CONVERSATIONAL_MENTORING))
+                .thenReturn(Set.of(current.getId()));
+
+        ObservationVisibilityPolicy policy = new ObservationVisibilityPolicy(authorization, invalidations);
+
+        assertThat(policy.permitsAll(7L, List.of(current, invalidated), SourceUsePurpose.CONVERSATIONAL_MENTORING))
+                .containsExactly(current.getId());
+        assertThat(policy.permitsShown(7L, List.of(current, invalidated), SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .containsExactly(current.getId());
     }
 
@@ -63,7 +83,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
     void asksNothingOfEvidenceAuthorizationWhenEveryObservationIsStale() {
         EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
 
-        assertThat(new ObservationVisibilityPolicy(authorization)
+        assertThat(new ObservationVisibilityPolicy(authorization, invalidations)
                         .permitsAll(
                                 7L,
                                 List.of(observation("old", "current")),
@@ -85,7 +105,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
         when(authorization.permitsAll(7L, List.of(current, stale), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Set.of(current.getId(), stale.getId()));
 
-        assertThat(new ObservationVisibilityPolicy(authorization)
+        assertThat(new ObservationVisibilityPolicy(authorization, invalidations)
                         .permitsShown(
                                 7L, List.of(current, stale, unverifiable), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .containsExactlyInAnyOrder(current.getId(), stale.getId());
@@ -95,7 +115,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
     void shouldAskNothingOfEvidenceAuthorizationWhenNothingShownCanBeVerified() {
         EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
 
-        assertThat(new ObservationVisibilityPolicy(authorization)
+        assertThat(new ObservationVisibilityPolicy(authorization, invalidations)
                         .permitsShown(
                                 7L, List.of(observation(null, "current")), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isEmpty();
@@ -109,7 +129,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
         when(authorization.permitsAll(7L, List.of(current), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Set.of());
 
-        assertThat(new ObservationVisibilityPolicy(authorization)
+        assertThat(new ObservationVisibilityPolicy(authorization, invalidations)
                         .permitsShown(7L, List.of(current), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isEmpty();
     }
@@ -119,7 +139,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
         EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
         Observation historical = historicalObservation();
 
-        assertThat(new ObservationVisibilityPolicy(authorization)
+        assertThat(new ObservationVisibilityPolicy(authorization, invalidations)
                         .permitsForNewDelivery(7L, List.of(historical), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isEmpty();
         verifyNoInteractions(authorization);
@@ -132,7 +152,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
         when(authorization.permitsAll(7L, List.of(historical), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Set.of(historical.getId()));
 
-        assertThat(new ObservationVisibilityPolicy(authorization)
+        assertThat(new ObservationVisibilityPolicy(authorization, invalidations)
                         .permitsHistory(7L, List.of(historical), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .containsExactly(historical.getId());
     }

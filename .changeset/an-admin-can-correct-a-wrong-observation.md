@@ -1,0 +1,5 @@
+---
+"hephaestus": minor
+---
+
+Workspace admins can mark an observation as incorrect, with a reason, from its page under **Practice reviews → Observations**, and restore it later with a second reason. An observation marked incorrect stays in the review record and in the developer's review history, labelled with the reason, but no longer counts toward their standing, practice page, Heph's context or new feedback, and any feedback about it that had not reached anyone yet is stopped. No new attempt to post feedback citing it is made, including approved and retried deliveries; while a delivery citing it is in progress the correction asks to be retried, and a comment that attempt had already sent may still arrive, in which case Hephaestus finds it and corrects it like any other. For comments already on a pull request or merge request, Hephaestus tries to add a correction notice to each summary and records the outcome on the observation page: updated, pending, inline comments remaining (these cannot be edited), or unresolved, including when the provider accepted a comment without saying which one it is.

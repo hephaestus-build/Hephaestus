@@ -56,6 +56,10 @@ public record ReviewObservationDTO(
         ObservationOrigin origin,
 
         @NonNull ReviewClaimCurrentness claimCurrentness,
+
+        @Schema(description = "When a workspace admin invalidated this observation; null while it stands") @Nullable
+        Instant invalidatedAt,
+
         @NonNull Instant observedAt,
 
         @NonNull @Schema(description = "Counts of linked feedback by delivery state")
@@ -93,6 +97,7 @@ public record ReviewObservationDTO(
                         row.getPracticeRevisionFingerprint(),
                         row.getCurrentPracticeRevisionFingerprint(),
                         row.getSupersededAt()),
+                row.getInvalidatedAt(),
                 row.getObservedAt(),
                 disposition == null
                         ? ReviewFeedbackDispositionDTO.empty()

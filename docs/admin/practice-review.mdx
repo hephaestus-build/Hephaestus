@@ -67,6 +67,28 @@ delivery. Stop at the first missing stage rather than changing downstream settin
 | Is the review model ready?                                        | **AI models**                                                 |
 | Did a budget stop new work?                                       | **AI usage**                                                  |
 
+### Correct an observation that was wrong
+
+Open the observation under **Practices → Practice reviews → Observations** and choose **Mark as
+incorrect**, with a reason the developer will read. The review record stays as it was, and the observation
+stops counting toward the developer's standing, Practice profile and Heph's context. Feedback about it that
+has not reached anyone is withheld. If Hephaestus is delivering feedback that cites the observation at that
+moment, you are asked to try again and nothing changes.
+
+Comments already on the pull request or merge request are not changed at once. The page shows what became of
+them, and each state is recorded:
+
+| State | Meaning |
+| --- | --- |
+| Pending | A delivery citing it is still being settled, a comment Hephaestus tried to post in the last day has not been confirmed either way yet, or an edit will be retried. Silent Mode keeps it here. |
+| Nothing posted | No comment about it was found on the work. |
+| Updated | Each summary comment opens with a correction notice naming the practice, not your reason. |
+| Inline comments remain | Summaries are updated, but inline comments cannot be edited; remove or answer them yourself. |
+| Unresolved | A summary could not be edited, the provider accepted a comment without saying which one it is, or a comment Hephaestus tried to post more than a day ago is still unconfirmed. Check the work and correct it on the provider; Hephaestus keeps checking every few hours and updates the state if it finds the comment. |
+
+**Restore observation** reverses the correction with a second reason, removes any notice it added and
+re-sends nothing. Every correction stays listed on the page.
+
 ## What starts a review
 
 Five doors start reviews. Provider reconciliation is shown too because it records an occurrence but stops

@@ -5,10 +5,12 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalService;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.DecideFeedbackProposalRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.FeedbackApprovalDTO;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationService;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewObservationDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewObservationDetailDTO;
+import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.UpdateObservationValidityRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -31,6 +33,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -47,6 +50,7 @@ public class PracticeReviewOutputController {
     private final ReviewObservationQueryService observationQueryService;
     private final ReviewFeedbackQueryService feedbackQueryService;
     private final FeedbackApprovalService feedbackApprovalService;
+    private final ObservationInvalidationService invalidationService;
 
     @GetMapping("/observations")
     @Operation(
@@ -93,6 +97,42 @@ public class PracticeReviewOutputController {
                             schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<ReviewObservationDetailDTO> getObservation(
             WorkspaceContext workspaceContext, @PathVariable UUID observationId) {
+        return ResponseEntity.ok(observationQueryService.get(workspaceContext.id(), observationId));
+    }
+
+    @PatchMapping("/observations/{observationId}/validity")
+    @AuditExempt(reason = "The observation_invalidation row is the domain audit trail")
+    @Operation(
+            summary = "Invalidate an observation that was wrong when recorded, or restore it",
+            description = "Invalidating stops feedback citing the observation that has not reached anyone yet. "
+                    + "Feedback already delivered keeps its record, and a comment already posted on the "
+                    + "provider stays there. Restoring does not re-send anything.",
+            operationId = "updatePracticeReviewObservationValidity")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Observation detail after the change",
+            content = @Content(schema = @Schema(implementation = ReviewObservationDetailDTO.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Observation not found in this workspace",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The observation is already in the requested state",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    public ResponseEntity<ReviewObservationDetailDTO> updateObservationValidity(
+            WorkspaceContext workspaceContext,
+            @PathVariable UUID observationId,
+            @Valid @org.springframework.web.bind.annotation.RequestBody UpdateObservationValidityRequestDTO request) {
+        long actorAccountId = SecurityUtils.getCurrentAccountId().orElseThrow();
+        invalidationService.setValidity(
+                workspaceContext.id(), observationId, actorAccountId, request.valid(), request.reason());
         return ResponseEntity.ok(observationQueryService.get(workspaceContext.id(), observationId));
     }
 

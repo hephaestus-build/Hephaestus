@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -145,7 +146,9 @@ class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
                 feedbackObservations,
                 placements,
                 observations,
-                new ObservationVisibilityPolicy(new EvidenceDeliveryAuthorization(jobs, catalogs)));
+                new ObservationVisibilityPolicy(
+                        new EvidenceDeliveryAuthorization(jobs, catalogs),
+                        mock(ObservationInvalidationRepository.class)));
 
         UUID actedOn =
                 switch (ending) {

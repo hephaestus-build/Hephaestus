@@ -1113,6 +1113,7 @@ export function observationDetail(observationId: string): ReviewObservationDetai
 			suppressionReason: item.withheldFor,
 		})),
 		evidenceRationale: observation.evidenceRationale,
+		invalidations: [],
 	};
 }
 
