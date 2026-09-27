@@ -14,6 +14,8 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewPersonMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -253,31 +255,46 @@ public class PracticeReviewCoverageService {
             boolean personMatched,
             boolean admitted) {}
 
+    /** Bulk deletes leave previously read targets managed, so saving a retained key would not reinsert it. */
     @Transactional
     public void replace(Workspace workspace, WorkspaceReviewScope requested) {
         long workspaceId = workspace.getId();
         validate(workspaceId, requested);
-        Map<String, RepositoryToMonitor> monitorsByName = monitorRepository.findByWorkspaceId(workspaceId).stream()
-                .collect(Collectors.toMap(RepositoryToMonitor::getNameWithOwner, Function.identity()));
-        Set<Long> requestedPeople = Set.copyOf(requested.personUserIds());
 
-        repositoryTargetRepository.deleteByWorkspaceId(workspaceId);
-        personTargetRepository.deleteByWorkspaceId(workspaceId);
-
+        Map<Long, List<String>> requestedRepositories = new HashMap<>();
         if (requested.repositoryMode() == ReviewRepositoryMode.SELECTED) {
+            Map<String, Long> monitorIds = monitorRepository.findByWorkspaceId(workspaceId).stream()
+                    .collect(Collectors.toMap(RepositoryToMonitor::getNameWithOwner, RepositoryToMonitor::getId));
             for (ReviewRepositoryTarget selection : requested.repositories()) {
-                RepositoryToMonitor monitor = java.util.Objects.requireNonNull(
-                        monitorsByName.get(selection.nameWithOwner()), "validated repository");
-                repositoryTargetRepository.save(
-                        new PracticeReviewRepositoryTarget(workspaceId, monitor.getId(), selection.baseBranches()));
+                requestedRepositories.put(
+                        java.util.Objects.requireNonNull(
+                                monitorIds.get(selection.nameWithOwner()), "validated repository"),
+                        selection.baseBranches());
             }
         }
-
-        if (requested.personMode() == ReviewPersonMode.SELECTED) {
-            personTargetRepository.saveAll(requestedPeople.stream()
-                    .map(userId -> new PracticeReviewPersonTarget(workspaceId, userId))
-                    .toList());
+        for (PracticeReviewRepositoryTarget target : repositoryTargetRepository.findByWorkspaceId(workspaceId)) {
+            List<String> baseBranches = requestedRepositories.remove(target.getRepositoryMonitorId());
+            if (baseBranches == null) {
+                repositoryTargetRepository.delete(target);
+            } else if (!baseBranches.equals(target.getBaseBranches())) {
+                target.setBaseBranches(baseBranches);
+            }
         }
+        requestedRepositories.forEach((monitorId, baseBranches) -> repositoryTargetRepository.save(
+                new PracticeReviewRepositoryTarget(workspaceId, monitorId, baseBranches)));
+
+        Set<Long> requestedPeople = requested.personMode() == ReviewPersonMode.SELECTED
+                ? new HashSet<>(requested.personUserIds())
+                : new HashSet<>();
+        for (PracticeReviewPersonTarget target : personTargetRepository.findByWorkspaceId(workspaceId)) {
+            if (!requestedPeople.remove(target.getUserId())) {
+                personTargetRepository.delete(target);
+            }
+        }
+        personTargetRepository.saveAll(requestedPeople.stream()
+                .map(userId -> new PracticeReviewPersonTarget(workspaceId, userId))
+                .toList());
+
         workspace.getReviewSettings().applyRollout(requested.repositoryMode(), requested.personMode(), null);
     }
 
