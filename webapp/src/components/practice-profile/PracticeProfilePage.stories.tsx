@@ -48,8 +48,10 @@ export const Default: Story = {
 		// The table of every practice is a level over the page, not a section of it.
 		await expect(canvas.queryByRole("table", { name: "All practice groups" })).toBeNull();
 		// The cards sit under their own sub-heading and a tab row that opens on the newest ones.
-		await expect(canvas.getByRole("heading", { level: 2, name: "Your feedback" })).toBeVisible();
-		const tabs = within(canvas.getByRole("tablist", { name: "Feedback" })).getAllByRole("tab");
+		await expect(canvas.getByRole("heading", { level: 2, name: "Habit feedback" })).toBeVisible();
+		const tabs = within(canvas.getByRole("tablist", { name: "Habit feedback" })).getAllByRole(
+			"tab",
+		);
 		await expect(tabs.map((tab) => tab.textContent)).toStrictEqual([
 			"Newest 2",
 			"Open 6",
@@ -189,9 +191,11 @@ export const ColdStart: Story = {
 		feedbackCards: [],
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No open feedback yet.")).toBeVisible();
+		await expect(canvas.getByText("No open habit feedback yet.")).toBeVisible();
 		await expect(
-			canvas.getByText("Feedback appears once the same shortcoming keeps showing up on your work."),
+			canvas.getByText(
+				"Habit feedback appears once the same shortcoming shows up on more than one piece of your work.",
+			),
 		).toBeVisible();
 		await expect(canvas.queryByRole("article")).toBeNull();
 		await expect(canvas.queryByText("Latest run")).toBeNull();
@@ -208,7 +212,7 @@ export const NothingResolvedYet: Story = {
 		feedbackTab: "resolved",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No resolved feedback yet.")).toBeVisible();
+		await expect(canvas.getByText("No resolved habit feedback yet.")).toBeVisible();
 		await expect(
 			canvas.getByText("A card moves here once the work resolves it or you mark it as addressed."),
 		).toBeVisible();

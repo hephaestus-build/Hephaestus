@@ -12,8 +12,10 @@ import { expectSettledVisible } from "@/stories/overlay";
 import {
 	detailObservation,
 	detailPractices,
+	detailRun,
 	detailRuns,
 	focusedChanges,
+	nextStepBesideDelivery,
 	unwrittenAbout,
 } from "@/stories/practice-detail-story-mock-data";
 import { ALL_FEEDBACK_CARDS } from "@/stories/practice-feedback-cards-story-mock-data";
@@ -162,7 +164,7 @@ export const Default: Story = {
 			"aria-selected",
 			"true",
 		);
-		await expect(screen.getByRole("tab", { name: "Feedback 1" })).toBeVisible();
+		await expect(screen.getByRole("tab", { name: "Habit feedback 1" })).toBeVisible();
 		// The run also observed another practice; only this practice's observation is shown.
 		await expect(
 			screen.queryByText("The description names the motivation"),
@@ -206,9 +208,11 @@ export const Default: Story = {
 export const FeedbackTab: Story = {
 	args: { tab: "feedback", practice: describedPractice },
 	play: async ({ args }) => {
-		await expectSettledVisible(await screen.findByRole("heading", { level: 2, name: "Feedback" }));
+		await expectSettledVisible(
+			await screen.findByRole("heading", { level: 2, name: "Habit feedback" }),
+		);
 		await expect(screen.getByRole("heading", { level: 3, name: "Current feedback" })).toBeVisible();
-		await expect(screen.getByRole("tab", { name: "Feedback 2" })).toHaveAttribute(
+		await expect(screen.getByRole("tab", { name: "Habit feedback 2" })).toHaveAttribute(
 			"aria-selected",
 			"true",
 		);
@@ -245,13 +249,42 @@ export const FeedbackEmpty: Story = {
 	// A practice no feedback was ever written about, so the tab has nothing to list.
 	args: { tab: "feedback", practice: unwrittenAbout },
 	play: async () => {
-		await expectSettledVisible(await screen.findByText("No feedback yet."));
+		await expectSettledVisible(await screen.findByText("No habit feedback yet."));
 		await expect(
-			screen.getByText("Feedback appears once the same shortcoming keeps showing up on your work."),
+			screen.getByText(
+				"Habit feedback appears once the same shortcoming shows up on more than one piece of your work.",
+			),
 		).toBeVisible();
-		await expect(screen.getByRole("heading", { level: 2, name: "Feedback" })).toBeVisible();
+		await expect(screen.getByRole("heading", { level: 2, name: "Habit feedback" })).toBeVisible();
 		await expect(screen.queryByText("Current feedback")).not.toBeInTheDocument();
 		await expect(screen.queryByText("Resolved feedback")).not.toBeInTheDocument();
+	},
+};
+
+/**
+ * Feedback about one pull request was delivered on it and no habit recurred, so no card exists. The
+ * row shows the review's next step rather than the delivered body, which stays on the pull request,
+ * and offers a response to that feedback; the Habit feedback tab counts zero.
+ */
+export const FeedbackOnTheWorkOnly: Story = {
+	args: {
+		feedbackCards: [],
+		feed: {
+			...readyFeed,
+			runs: [{ ...detailRun, observations: [nextStepBesideDelivery] }],
+		},
+	},
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
+		await expect(screen.getByText(nextStepBesideDelivery.nextStep ?? "")).toBeVisible();
+		await expect(
+			screen.queryByText(nextStepBesideDelivery.deliveredFeedback ?? ""),
+		).not.toBeInTheDocument();
+		await expect(screen.getByRole("group", { name: "Your response" })).toBeVisible();
+
+		await userEvent.click(screen.getByRole("tab", { name: "Habit feedback 0" }));
+		await expect(await screen.findByText("No habit feedback yet.")).toBeVisible();
+		await expect(screen.queryByRole("article")).not.toBeInTheDocument();
 	},
 };
 
@@ -289,7 +322,7 @@ export const MoreToLoad: Story = {
 		await expect(screen.getByRole("tab", { name: "Observations" })).toBeVisible();
 		await expect(screen.queryByRole("tab", { name: /^Observations \d/u })).not.toBeInTheDocument();
 		// The feedback cards arrive in one piece, so that tab is counted either way.
-		await expect(screen.getByRole("tab", { name: "Feedback 1" })).toBeVisible();
+		await expect(screen.getByRole("tab", { name: "Habit feedback 1" })).toBeVisible();
 	},
 };
 

@@ -37,7 +37,7 @@ import { PRACTICE_TABS, type PracticeTab } from "./practice-profile-search";
 
 const TAB_LABELS: Record<PracticeTab, string> = {
 	observations: "Observations",
-	feedback: "Feedback",
+	feedback: "Habit feedback",
 	about: "About this practice",
 };
 
@@ -55,7 +55,7 @@ export interface PracticeDetailLevelProps {
 	tab: PracticeTab;
 	onTabChange?: (tab: PracticeTab) => void;
 	feed?: ReviewRunFeedState;
-	/** The developer's practice feedback; the level shows the cards written about this practice. */
+	/** The developer's habit feedback; the level shows the cards written about this practice. */
 	feedbackCards?: PracticeFeedbackCardEntry[];
 	/**
 	 * Wires one card's rating to wherever the ratings are kept; without it the cards cannot be
@@ -193,7 +193,7 @@ export function PracticeDetailLevel({
 					<Section
 						size="lg"
 						title="Observations"
-						description="Reviews of your work that reached this practice, newest first: why each was noted, the evidence, and the next step."
+						description="Reviews of your work that reached this practice, newest first: why each was noted, the evidence, and any next step."
 					>
 						<ReviewRunFeed
 							feed={feed}
@@ -213,8 +213,8 @@ export function PracticeDetailLevel({
 				<TabsContent value="feedback" className="min-w-0">
 					<Section
 						size="lg"
-						title="Feedback"
-						description="The feedback written about this practice: the open card, then the ones that resolved, newest first."
+						title="Habit feedback"
+						description="Feedback about a habit this practice saw on more than one piece of your work: the open card, then the ones that resolved, newest first. Reviews of a single piece of work are under Observations."
 					>
 						{feedbackCount === 0 ? (
 							<FeedbackEmpty />

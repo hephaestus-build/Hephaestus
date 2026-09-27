@@ -22,8 +22,8 @@ export interface FeedbackEmptyProps {
  * names what is missing and the sentence says when it will show up.
  */
 export function FeedbackEmpty({
-	title = "No feedback yet.",
-	description = "Feedback appears once the same shortcoming keeps showing up on your work.",
+	title = "No habit feedback yet.",
+	description = "Habit feedback appears once the same shortcoming shows up on more than one piece of your work.",
 }: FeedbackEmptyProps) {
 	return (
 		<Empty>

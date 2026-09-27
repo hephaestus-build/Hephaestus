@@ -37,7 +37,7 @@ export interface PracticeProfilePageProps {
 	practices: PracticeStanding[];
 	/** The groups a card's group name can open; the header counts them. */
 	groups: PracticeGroup[];
-	/** The developer's practice feedback, open and resolved alike; the tabs split it by state. */
+	/** The developer's habit feedback, open and resolved alike; the tabs split it by state. */
 	feedbackCards: PracticeFeedbackCardEntry[];
 	/**
 	 * Wires one card's rating to wherever the ratings are kept; without it the cards cannot be
@@ -72,14 +72,14 @@ const FEEDBACK_TAB_LABELS: Record<FeedbackTab, string> = {
 };
 
 /** No open card; "Newest" lists only open cards, so it says the same. */
-const NO_OPEN_FEEDBACK: FeedbackEmptyProps = { title: "No open feedback yet." };
+const NO_OPEN_FEEDBACK: FeedbackEmptyProps = { title: "No open habit feedback yet." };
 
 /** What a tab with no cards says where it differs from every other empty list of feedback. */
 const EMPTY_TAB: Record<FeedbackTab, FeedbackEmptyProps> = {
 	newest: NO_OPEN_FEEDBACK,
 	open: NO_OPEN_FEEDBACK,
 	resolved: {
-		title: "No resolved feedback yet.",
+		title: "No resolved habit feedback yet.",
 		description: "A card moves here once the work resolves it or you mark it as addressed.",
 	},
 	all: {},
@@ -147,7 +147,7 @@ export function PracticeProfilePage({
 	};
 
 	// The alert alone, as `profile/ProfilePage` does: the header's "No practices set up yet" and a
-	// tab's "No feedback yet" are claims about the workspace, and a failed load has none to make.
+	// tab's "No habit feedback yet" are claims about the workspace, and a failed load has none to make.
 	if (state.status === "error") {
 		return (
 			<div className="mx-auto w-full max-w-xl">
@@ -183,8 +183,8 @@ export function PracticeProfilePage({
 			)}
 			<Section
 				size="lg"
-				title="Your feedback"
-				description="Each card is one pattern seen more than once across your work, with the one thing to try next."
+				title="Habit feedback"
+				description="Each card is about one habit seen on more than one piece of your work, with the one thing to try next. Reviews of a single piece of work are under Observations when you open a practice."
 			>
 				<Tabs
 					value={feedbackTab}
@@ -197,7 +197,7 @@ export function PracticeProfilePage({
 					className="gap-4"
 				>
 					<PracticeTabsRail>
-						<PracticeTabsList aria-label="Feedback">
+						<PracticeTabsList aria-label="Habit feedback">
 							{FEEDBACK_TABS.map((tab) => (
 								<PracticeTabsTrigger
 									key={tab}

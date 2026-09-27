@@ -266,6 +266,15 @@ export const searchedAndFoundNothing: ObservationDetail = {
 };
 
 /**
+ * Feedback delivered about this work, and the review's own next step beside it: the row shows the
+ * next step, and the delivered body stays on the work it was posted to.
+ */
+export const nextStepBesideDelivery: ObservationDetail = {
+	...detailObservation,
+	nextStep: "Split the rename into its own pull request before changing the caching.",
+};
+
+/**
  * A next step written about this work while nothing was delivered: the row shows the reviewer's
  * own sentence, which is the one the reader can act on.
  */
