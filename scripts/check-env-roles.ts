@@ -200,6 +200,15 @@ const REQUIRED_SETTINGS: readonly RequiredSetting[] = [
 			"GitLabTokenService.resolveServerUrl falls back to it for a workspace whose GitLab connection " +
 			"stores no server URL, on the server to sync and on the worker to check out the merge request",
 	},
+	{
+		variable: "WEBHOOK_ROUTING_SECRET",
+		path: "hephaestus.webhook.routing.secret",
+		readBy: ["server", "webhook"],
+		why:
+			"the server signs each GitLab connection's hook credential with it and the webhook receiver " +
+			"verifies that credential with it; a server without it registers no GitLab hook, and a receiver " +
+			"without it turns every connection hook away",
+	},
 ];
 
 /** `application-<profile>.yml` turns roles off too, so a service's profiles decide as much as its env. */

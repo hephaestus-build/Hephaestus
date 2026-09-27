@@ -110,7 +110,8 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         User author = resolveWebhookAuthor(event, Objects.requireNonNull(context.providerId()));
         Long providerId = Objects.requireNonNull(
                 Objects.requireNonNull(context.repository()).getProvider().getId());
-        Long milestoneId = resolveWebhookMilestoneId(attrs.milestoneId(), providerId);
+        Long milestoneId = resolveWebhookMilestoneId(
+                attrs.milestoneId(), providerId, Objects.requireNonNull(context.repository()));
         Issue.State issueState = convertState(attrs.state());
         // Resolved exactly as the GraphQL sync resolves them: the issue review revision digests both, so a
         // field only one path fills would make a no-op sync look like an edit of the reviewed issue.
@@ -485,12 +486,13 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
     }
 
     @Nullable
-    private Long resolveWebhookMilestoneId(@Nullable Long gitlabMilestoneId, Long providerId) {
+    private Long resolveWebhookMilestoneId(@Nullable Long gitlabMilestoneId, Long providerId, Repository repository) {
         if (gitlabMilestoneId == null) {
             return null;
         }
         return milestoneRepository
                 .findByNativeIdAndProviderId(gitlabMilestoneId, providerId)
+                .filter(milestone -> milestone.getRepository().getId().equals(repository.getId()))
                 .map(Milestone::getId)
                 .orElse(null);
     }

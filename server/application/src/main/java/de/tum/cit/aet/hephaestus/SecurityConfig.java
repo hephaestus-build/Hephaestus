@@ -159,6 +159,7 @@ public class SecurityConfig {
                         "/actuator/info",
                         "/webhooks/github",
                         "/webhooks/gitlab",
+                        "/webhooks/gitlab/connections/**",
                         "/webhooks/slack",
                         "/webhooks/slack/interactivity",
                         "/webhooks/outline",

@@ -1,14 +1,29 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.user;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookUser;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,12 +42,90 @@ public class GitLabUserService {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabUserService.class);
 
+    private static final String GET_USERS_BY_IDS_DOCUMENT = "GetUsersByIds";
+    private static final String USER_GLOBAL_ID_PREFIX = "gid://gitlab/User/";
+
+    /** The users a GitLab response reports, in the {@code GitLabUserFields} shape. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record UserNode(
+            @Nullable String id,
+            @Nullable String username,
+            @Nullable String name,
+            @Nullable String avatarUrl,
+            @Nullable String webUrl,
+            @Nullable String publicEmail) {}
+
     private final UserRepository userRepository;
     private final GitLabProperties gitLabProperties;
+    private final ObjectProvider<GitLabGraphQlClientProvider> graphQlClientProvider;
+    private final ObjectProvider<GitLabGraphQlResponseHandler> responseHandler;
 
-    public GitLabUserService(UserRepository userRepository, GitLabProperties gitLabProperties) {
+    public GitLabUserService(
+            UserRepository userRepository,
+            GitLabProperties gitLabProperties,
+            ObjectProvider<GitLabGraphQlClientProvider> graphQlClientProvider,
+            ObjectProvider<GitLabGraphQlResponseHandler> responseHandler) {
         this.userRepository = userRepository;
         this.gitLabProperties = gitLabProperties;
+        this.graphQlClientProvider = graphQlClientProvider;
+        this.responseHandler = responseHandler;
+    }
+
+    /**
+     * The profiles GitLab reports for {@code nativeIds} to the workspace's own credential. It only reads: a user GitLab
+     * does not report is simply absent, and a response GitLab could not give throws, so a caller can retry.
+     */
+    public Map<Long, GitLabUserLookup> fetchCanonicalUsers(Long scopeId, Collection<Long> nativeIds) {
+        List<Long> ids = List.copyOf(new LinkedHashSet<>(nativeIds));
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        GitLabGraphQlClientProvider clients = graphQlClientProvider.getObject();
+        GitLabGraphQlResponseHandler handler = responseHandler.getObject();
+        Map<Long, GitLabUserLookup> users = new HashMap<>();
+        for (int start = 0; start < ids.size(); start += GitLabSyncConstants.LARGE_PAGE_SIZE) {
+            List<Long> page = ids.subList(start, Math.min(ids.size(), start + GitLabSyncConstants.LARGE_PAGE_SIZE));
+            List<String> globalIds = new ArrayList<>(page.size());
+            page.forEach(id -> globalIds.add(USER_GLOBAL_ID_PREFIX + id));
+            clients.acquirePermission();
+            ClientGraphQlResponse response = clients.forScope(scopeId)
+                    .documentName(GET_USERS_BY_IDS_DOCUMENT)
+                    .variable("ids", globalIds)
+                    .variable("first", globalIds.size())
+                    .execute()
+                    .block(gitLabProperties.graphqlTimeout());
+            if (handler.handle(response, "users", log).action()
+                            != GitLabGraphQlResponseHandler.HandleResult.Action.CONTINUE
+                    || !Objects.requireNonNull(response).getErrors().isEmpty()
+                    || response.field("users.nodes").getValue() == null) {
+                GitLabSyncException failure = new GitLabSyncException("GitLab did not report the requested users");
+                clients.recordFailure(failure);
+                throw failure;
+            }
+            clients.recordSuccess();
+            List<UserNode> nodes =
+                    Objects.requireNonNull(response).field("users.nodes").toEntityList(UserNode.class);
+            for (UserNode node : nodes) {
+                String globalId = node.id();
+                String username = node.username();
+                if (globalId == null || username == null) {
+                    continue;
+                }
+                long nativeId = GitLabSyncConstants.extractNumericId(globalId);
+                if (page.contains(nativeId)) {
+                    users.put(
+                            nativeId,
+                            new GitLabUserLookup(
+                                    globalId,
+                                    username,
+                                    node.name(),
+                                    node.avatarUrl(),
+                                    node.webUrl(),
+                                    node.publicEmail()));
+                }
+            }
+        }
+        return users;
     }
 
     /**
@@ -57,6 +150,11 @@ public class GitLabUserService {
      */
     @Nullable
     public User findOrCreateUser(@Nullable GitLabWebhookUser dto, Long providerId) {
+        // On a connection route the body is only as trustworthy as the group owner who could shape it; a user row is
+        // shared by every workspace, so it is written only as GitLab reported it to that connection.
+        if (GitLabRouteAdmission.current().isPresent()) {
+            return dto == null || dto.id() == null ? null : findOrCreateReportedUser(dto.id(), providerId);
+        }
         if (dto == null || dto.id() == null || dto.username() == null) {
             return null;
         }
@@ -81,6 +179,25 @@ public class GitLabUserService {
                 );
 
         return userRepository.findByNativeIdAndProviderId(nativeId, providerId).orElse(null);
+    }
+
+    /**
+     * The user {@code nativeId} as GitLab reported it for the delivery being handled on a connection route, stored with
+     * that profile; {@code null} when GitLab did not report the user. A stale row that still holds the reported login
+     * gives it up, as in the group member sync.
+     */
+    @Nullable
+    public User findOrCreateReportedUser(long nativeId, Long providerId) {
+        Optional<GitLabUserLookup> reported = GitLabRouteAdmission.reportedUser(nativeId);
+        String login = reported.map(GitLabUserLookup::username).orElse(null);
+        if (reported.isEmpty() || login == null) {
+            log.warn("Skipped user: reason=notReportedByGitLab, userId={}", nativeId);
+            return null;
+        }
+        if (userRepository.tryAcquireLoginLock(login, providerId)) {
+            userRepository.freeLoginConflicts(login, nativeId, providerId);
+        }
+        return findOrCreateUser(reported.get(), providerId);
     }
 
     /**

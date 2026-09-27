@@ -45,6 +45,8 @@ hephaestus:
             reference: ghcr.io/hephaestus-build/agent-pi:1.2.3
     webhook:
         secret: \${WEBHOOK_SECRET:}
+        routing:
+            secret: \${WEBHOOK_ROUTING_SECRET:}
         stream:
             max-bytes: \${HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES:1073741824}
         publish:
@@ -321,9 +323,13 @@ await test("readProfileRoles rejects malformed YAML", async () => {
 /** The lock digest, spelled as the shipped topology spells it. */
 const AGENT_DIGEST = `HEPHAESTUS_AGENT_IMAGE_REFERENCE: \${HEPHAESTUS_IMAGE_AGENT_PI:?verified release lock required}`;
 
+/** The routing secret, spelled as the shipped topology gives it to the server and the webhook receiver. */
+const ROUTING = `WEBHOOK_ROUTING_SECRET: \${WEBHOOK_ROUTING_SECRET:?routing secret required}`;
+
 /** What the shipped server and worker are both given, so a pair differs only where a test says. */
 const SERVER = [
 	AGENT_DIGEST,
+	ROUTING,
 	`GITLAB_ENABLED: \${GITLAB_ENABLED:-false}`,
 	`GITLAB_DEFAULT_SERVER_URL: \${GITLAB_DEFAULT_SERVER_URL:-https://gitlab.com}`,
 ];
@@ -347,6 +353,7 @@ ${lines(server)}
       HEPHAESTUS_RUNTIME_SERVER_ENABLED: "false"
       HEPHAESTUS_RUNTIME_WORKER_ENABLED: "false"
       HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES: \${HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES:-1073741824}
+      ${ROUTING}
 ${lines(receiver)}
 `);
 
@@ -398,7 +405,7 @@ ${lines(SERVER)}
     image: "\${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
     environment:
       HEPHAESTUS_RUNTIME_SERVER_ENABLED: "false"
-${lines([AGENT_DIGEST])}
+${lines([AGENT_DIGEST, ROUTING])}
 ${RECEIVER}`),
 	);
 

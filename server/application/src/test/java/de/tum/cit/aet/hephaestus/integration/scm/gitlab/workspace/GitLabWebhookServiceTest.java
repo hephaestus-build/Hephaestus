@@ -16,10 +16,6 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
-import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties.Http;
-import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties.Publish;
-import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties.Shutdown;
-import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties.TokenRotation;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.integration.core.connection.BearerTokenReplacement;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -35,12 +31,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClie
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.GroupInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,16 +47,19 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
@@ -101,25 +102,106 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
     private static final String EXTERNAL_URL = "https://app.example.com";
     private static final String SECRET = "a]RkF9P2s#Lm7$xQ4wN!vB3yJ6tH0dCe";
+    private static final String KEY = "routing-key-for-webhook-service-tests-0123";
+    private static final String NEXT_KEY = "next-routing-key-for-webhook-service-tests";
+    private static final long CONNECTION_ID = 5L;
+    private static final GitLabRouteCredential.Route ROUTE =
+            new GitLabRouteCredential.Route(CONNECTION_ID, 1L, "https://gitlab.com", 42L, "my-org");
 
-    @BeforeEach
-    void setUp() {
-        WebhookProperties properties = new WebhookProperties(
+    private GitLabRouteCredential routeCredential;
+    private final List<WebhookInfo> hooks = new ArrayList<>();
+    private final List<WebhookConfig> registered = new ArrayList<>();
+    private long nextHookId = 100L;
+
+    private static GitLabRouteCredential credential(@Nullable String secret, @Nullable String previous) {
+        return new GitLabRouteCredential(WebhookPropertiesFixture.configured(
                 EXTERNAL_URL,
                 SECRET,
-                new TokenRotation(7, 90),
-                new Publish(java.time.Duration.ofSeconds(9), 5, java.time.Duration.ofMillis(200)),
                 WebhookPropertiesFixture.stream(),
-                new Shutdown(java.time.Duration.ofSeconds(15)),
-                new Http(26_214_400L));
+                new WebhookProperties.Routing(secret, previous)));
+    }
 
-        webhookService = new GitLabWebhookService(
+    private GitLabWebhookService service(GitLabRouteCredential credential) {
+        return new GitLabWebhookService(
                 webhookClientProvider,
                 rotationClientProvider,
                 tokenServiceProvider,
-                properties,
+                WebhookPropertiesFixture.configured(
+                        EXTERNAL_URL,
+                        SECRET,
+                        WebhookPropertiesFixture.stream(),
+                        new WebhookProperties.Routing(KEY, null)),
+                credential,
                 workspaceRepository,
                 connectionService);
+    }
+
+    /** The hook URL {@code credential} issues for {@code route}. */
+    private static String connectionUrl(GitLabRouteCredential credential, GitLabRouteCredential.Route route) {
+        GitLabRouteCredential.Issued issued = credential.issue(route);
+        return EXTERNAL_URL + "/webhooks/gitlab/connections/" + CONNECTION_ID + "/" + issued.keyId() + "/"
+                + issued.routeId();
+    }
+
+    private static String connectionUrl(GitLabRouteCredential credential) {
+        return connectionUrl(credential, ROUTE);
+    }
+
+    /** The group's hooks as GitLab keeps them: listed, fetched, created and deleted through the client. */
+    private void fakeGroupHooks() {
+        Mockito.lenient().when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
+        Mockito.lenient()
+                .when(webhookClient.lookupGroup(1L, "my-org"))
+                .thenReturn(new GroupInfo(42L, "My Org", "my-org"));
+        Mockito.lenient().when(webhookClient.listGroupWebhooks(1L, 42L)).thenAnswer(inv -> List.copyOf(hooks));
+        Mockito.lenient()
+                .when(webhookClient.getGroupWebhook(eq(1L), eq(42L), anyLong()))
+                .thenAnswer(inv -> hooks.stream()
+                        .filter(hook -> hook.id() == (long) inv.getArgument(2))
+                        .findFirst());
+        Mockito.lenient()
+                .when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
+                .thenAnswer(inv -> {
+                    WebhookConfig config = inv.getArgument(2);
+                    registered.add(config);
+                    WebhookInfo hook = new WebhookInfo(nextHookId++, config.url());
+                    hooks.add(hook);
+                    return hook;
+                });
+        Mockito.lenient()
+                .doAnswer(inv -> hooks.removeIf(hook -> hook.id() == (long) inv.getArgument(2)))
+                .when(webhookClient)
+                .deregisterGroupWebhook(eq(1L), eq(42L), anyLong());
+    }
+
+    private void storeHook(WebhookInfo hook) {
+        hooks.add(hook);
+        bindGitLabConfig(
+                1L,
+                new ConnectionConfig.GitLabConfig(
+                        "https://gitlab.com",
+                        42L,
+                        hook.id(),
+                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
+                        Set.of()));
+    }
+
+    private void storeHook(long webhookId, String url) {
+        storeHook(new WebhookInfo(webhookId, url));
+    }
+
+    @BeforeEach
+    void setUp() {
+        routeCredential = credential(KEY, null);
+        webhookService = service(routeCredential);
+        Connection connection = Mockito.mock(Connection.class);
+        Mockito.lenient().when(connection.getId()).thenReturn(CONNECTION_ID);
+        Mockito.lenient().when(connection.getConfig()).thenAnswer(inv -> gitLabConfigs.get(1L));
+        Mockito.lenient()
+                .when(connectionService.findActive(anyLong(), eq(IntegrationKind.GITLAB)))
+                .thenAnswer(inv -> gitLabConfigs.containsKey((long) inv.getArgument(0))
+                        ? Optional.of(connection)
+                        : Optional.empty());
 
         workspace = new Workspace();
         workspace.setAccountLogin("my-org");
@@ -204,6 +286,11 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     @Nested
     class RegisterWebhook {
 
+        @BeforeEach
+        void setUp() {
+            fakeGroupHooks();
+        }
+
         @Test
         void shouldSkipForNonGitLab() {
             gitLabConfigs.remove(1L);
@@ -225,81 +312,173 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldRegisterNewWebhook() {
-            when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-            when(webhookClient.lookupGroup(1L, "my-org")).thenReturn(new GroupInfo(42L, "My Org", "my-org"));
-            when(webhookClient.listGroupWebhooks(1L, 42L)).thenReturn(List.of());
-            when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
-                    .thenReturn(new WebhookInfo(99L, EXTERNAL_URL + "/webhooks/gitlab"));
-
+        void shouldRegisterTheConnectionHookWithItsOwnCredential() {
             WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
             assertThat(result.registered()).isTrue();
-            assertThat(result.webhookId()).isEqualTo(99L);
-            assertThat(result.groupId()).isEqualTo(42L);
+            GitLabRouteCredential.Issued issued = routeCredential.issue(ROUTE);
+            assertThat(registered).singleElement().satisfies(config -> {
+                assertThat(config.url()).isEqualTo(connectionUrl(routeCredential));
+                assertThat(routeCredential.verify(config.token(), CONNECTION_ID, issued.keyId(), issued.routeId()))
+                        .contains(ROUTE);
+                assertThat(config.token()).isNotEqualTo(SECRET);
+            });
             assertThat(currentConfig(1L).gitlabGroupId()).isEqualTo(42L);
+            assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(result.webhookId());
+        }
+
+        @Test
+        void shouldAdoptOnlyTheExactHookOfThisRoute() {
+            hooks.add(new WebhookInfo(77L, connectionUrl(routeCredential)));
+            hooks.add(new WebhookInfo(78L, EXTERNAL_URL + "/webhooks/gitlab"));
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.webhookId()).isEqualTo(77L);
+            assertThat(registered).isEmpty();
+            verify(webhookClient, never()).deregisterGroupWebhook(anyLong(), anyLong(), anyLong());
+        }
+
+        @Test
+        void shouldLeaveTheStoredHookAloneWhenItIsThisRoute() {
+            storeHook(99L, connectionUrl(routeCredential));
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.webhookId()).isEqualTo(99L);
+            assertThat(registered).isEmpty();
+        }
+
+        @Test
+        void shouldRegisterBesideTheSharedLegacyHookWithoutTouchingIt() {
+            storeHook(99L, EXTERNAL_URL + "/webhooks/gitlab");
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.webhookId()).isEqualTo(100L);
+            assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
+            assertThat(hooks).extracting(WebhookInfo::id).containsExactlyInAnyOrder(99L, 100L);
+            assertThat(registered).noneMatch(config -> config.url().equals(EXTERNAL_URL + "/webhooks/gitlab"));
+        }
+
+        @Test
+        void shouldReRegisterWhenTheStoredHookWasDeleted() {
+            storeHook(99L, connectionUrl(routeCredential));
+            hooks.clear();
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.webhookId()).isEqualTo(100L);
+        }
+
+        @Test
+        void shouldRetireOwnPreviousKeyHookOnlyAfterTheNewOneIsRecorded() {
+            GitLabRouteCredential rotating = credential(NEXT_KEY, KEY);
+            storeHook(99L, connectionUrl(routeCredential));
+
+            WebhookSetupResult result = service(rotating).registerWebhook(workspace);
+
+            assertThat(result.webhookId()).isEqualTo(100L);
+            assertThat(hooks).extracting(WebhookInfo::url).containsExactly(connectionUrl(rotating));
+            InOrder order = Mockito.inOrder(webhookClient, connectionService);
+            order.verify(webhookClient).registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class));
+            order.verify(connectionService).updateConfig(eq(1L), eq(IntegrationKind.GITLAB), any());
+            order.verify(webhookClient).deregisterGroupWebhook(1L, 42L, 99L);
+        }
+
+        @Test
+        void shouldReplaceItsOwnHookWhenTheConnectedGroupWasRenamed() {
+            storeHook(
+                    99L,
+                    connectionUrl(
+                            routeCredential,
+                            new GitLabRouteCredential.Route(
+                                    CONNECTION_ID, 1L, "https://gitlab.com", 42L, "my-old-org")));
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.webhookId()).isEqualTo(100L);
+            assertThat(hooks).extracting(WebhookInfo::url).containsExactly(connectionUrl(routeCredential));
+        }
+
+        @Test
+        void shouldLeaveAHookOfANewerKeyToTheServerThatHoldsIt() {
+            GitLabRouteCredential newer = credential(NEXT_KEY, KEY);
+            storeHook(99L, connectionUrl(newer));
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.registered()).isFalse();
+            assertThat(registered).isEmpty();
+            assertThat(hooks).extracting(WebhookInfo::id).containsExactly(99L);
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(99L);
         }
 
         @Test
-        void shouldAdoptExistingWebhook() {
-            when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-            when(webhookClient.lookupGroup(1L, "my-org")).thenReturn(new GroupInfo(42L, "My Org", "my-org"));
-            when(webhookClient.listGroupWebhooks(1L, 42L))
-                    .thenReturn(List.of(
-                            new WebhookInfo(77L, EXTERNAL_URL + "/webhooks/gitlab"),
-                            new WebhookInfo(78L, "https://other.com/hooks")));
-
-            WebhookSetupResult result = webhookService.registerWebhook(workspace);
-
-            assertThat(result.registered()).isTrue();
-            assertThat(result.webhookId()).isEqualTo(77L);
-            verify(webhookClient, never()).registerGroupWebhook(anyLong(), anyLong(), any());
-        }
-
-        @Test
-        void shouldReturnSuccessForExistingWebhook() {
-            bindGitLabConfig(
-                    1L,
-                    new ConnectionConfig.GitLabConfig(
-                            "https://gitlab.com",
-                            42L,
-                            99L,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of()));
-
-            when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-            when(webhookClient.getGroupWebhook(1L, 42L, 99L))
-                    .thenReturn(Optional.of(new WebhookInfo(99L, EXTERNAL_URL + "/webhooks/gitlab")));
-
-            WebhookSetupResult result = webhookService.registerWebhook(workspace);
-
-            assertThat(result.registered()).isTrue();
-            assertThat(result.webhookId()).isEqualTo(99L);
-            verify(webhookClient, never()).registerGroupWebhook(anyLong(), anyLong(), any());
-        }
-
-        @Test
-        void shouldReRegisterDeletedWebhook() {
-            bindGitLabConfig(
-                    1L,
-                    new ConnectionConfig.GitLabConfig(
-                            "https://gitlab.com",
-                            42L,
-                            99L,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of()));
-
-            when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-            when(webhookClient.getGroupWebhook(1L, 42L, 99L)).thenReturn(Optional.empty()); // Deleted externally
-            when(webhookClient.listGroupWebhooks(1L, 42L)).thenReturn(List.of());
+        void shouldNotRecordItsHookOverOneAConcurrentRegistrationRecordedFirst() {
+            storeHook(99L, EXTERNAL_URL + "/webhooks/gitlab");
             when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
-                    .thenReturn(new WebhookInfo(100L, EXTERNAL_URL + "/webhooks/gitlab"));
+                    .thenAnswer(inv -> {
+                        WebhookConfig config = inv.getArgument(2);
+                        // A registration under a newer key recorded its hook while this one was creating its own.
+                        storeHook(555L, connectionUrl(credential(NEXT_KEY, KEY)));
+                        WebhookInfo hook = new WebhookInfo(nextHookId++, config.url());
+                        hooks.add(hook);
+                        return hook;
+                    });
 
             WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
-            assertThat(result.registered()).isTrue();
+            assertThat(result.registered()).isFalse();
+            assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(555L);
+            verify(webhookClient, never()).deregisterGroupWebhook(anyLong(), anyLong(), anyLong());
+        }
+
+        @Test
+        void shouldKeepTheHookAConcurrentRegistrationOfTheSameRouteRecordedWhenItsOwnRecordLoses() {
+            storeHook(99L, EXTERNAL_URL + "/webhooks/gitlab");
+            when(connectionService.updateConfig(eq(1L), eq(IntegrationKind.GITLAB), any()))
+                    .thenAnswer(inv -> {
+                        // The other registration adopted the same hook and recorded it first; this write conflicts.
+                        bindGitLabConfig(1L, currentConfig(1L).withGitlabWebhookId(100L));
+                        throw new ObjectOptimisticLockingFailureException(Connection.class, 1L);
+                    });
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.registered()).isFalse();
+            assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
+            assertThat(hooks).extracting(WebhookInfo::id).containsExactlyInAnyOrder(99L, 100L);
+            verify(webhookClient, never()).deregisterGroupWebhook(anyLong(), anyLong(), anyLong());
+        }
+
+        @Test
+        void shouldKeepOneHookWhenConcurrentRegistrationsOfOneRouteRace() {
+            when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
+                    .thenAnswer(inv -> {
+                        WebhookConfig config = inv.getArgument(2);
+                        registered.add(config);
+                        // A concurrent registration of the same route landed first, with the same token.
+                        hooks.add(new WebhookInfo(100L, config.url()));
+                        hooks.add(new WebhookInfo(101L, config.url()));
+                        return new WebhookInfo(101L, config.url());
+                    });
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
             assertThat(result.webhookId()).isEqualTo(100L);
+            assertThat(hooks).extracting(WebhookInfo::id).containsExactly(100L);
+            assertThat(routeCredential.issue(ROUTE).token())
+                    .isEqualTo(registered.getFirst().token());
+        }
+
+        @Test
+        void shouldSkipWithoutRoutingKey() {
+            WebhookSetupResult result = service(credential(null, null)).registerWebhook(workspace);
+
+            assertThat(result.registered()).isFalse();
+            assertThat(result.failureReason()).contains("routing secret");
+            assertThat(registered).isEmpty();
         }
 
         @Test
@@ -366,19 +545,14 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         @Test
         void shouldSkipWhenNotConfigured() {
-            WebhookProperties unconfigured = new WebhookProperties(
-                    "",
-                    "",
-                    new TokenRotation(7, 90),
-                    new Publish(java.time.Duration.ofSeconds(9), 5, java.time.Duration.ofMillis(200)),
-                    WebhookPropertiesFixture.stream(),
-                    new Shutdown(java.time.Duration.ofSeconds(15)),
-                    new Http(26_214_400L));
+            WebhookProperties unconfigured = WebhookPropertiesFixture.configured(
+                    "", "", WebhookPropertiesFixture.stream(), new WebhookProperties.Routing(KEY, null));
             var service = new GitLabWebhookService(
                     webhookClientProvider,
                     rotationClientProvider,
                     tokenServiceProvider,
                     unconfigured,
+                    new GitLabRouteCredential(unconfigured),
                     workspaceRepository,
                     connectionService);
 
@@ -650,24 +824,14 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         @BeforeEach
         void bindActiveHookedWorkspace() {
-            // A workspace with a registered group hook (groupId=42, webhookId=99).
-            bindGitLabConfig(
-                    1L,
-                    new ConnectionConfig.GitLabConfig(
-                            "https://gitlab.com",
-                            42L,
-                            99L,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of()));
-            when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
+            fakeGroupHooks();
             when(workspaceRepository.findByStatus(Workspace.WorkspaceStatus.ACTIVE))
                     .thenReturn(List.of(workspace));
         }
 
         @Test
         void leavesExecutableWebhookUntouched() {
-            when(webhookClient.getGroupWebhook(1L, 42L, 99L))
-                    .thenReturn(Optional.of(new WebhookInfo(99L, EXTERNAL_URL + "/webhooks/gitlab", "executable")));
+            storeHook(new WebhookInfo(99L, connectionUrl(routeCredential), "executable"));
 
             webhookService.checkWebhookHealth();
 
@@ -680,11 +844,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         void reRegistersAutoDisabledWebhook() {
             // GitLab kept the hook row but flipped it to alert_status=disabled — an existence check
             // alone would pass forever, so this is the invisible-failure the health check must heal.
-            when(webhookClient.getGroupWebhook(1L, 42L, 99L))
-                    .thenReturn(Optional.of(new WebhookInfo(99L, EXTERNAL_URL + "/webhooks/gitlab", "disabled")));
-            when(webhookClient.listGroupWebhooks(1L, 42L)).thenReturn(List.of());
-            when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
-                    .thenReturn(new WebhookInfo(100L, EXTERNAL_URL + "/webhooks/gitlab", "executable"));
+            storeHook(new WebhookInfo(99L, connectionUrl(routeCredential), "disabled"));
 
             webhookService.checkWebhookHealth();
 
@@ -696,11 +856,20 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         }
 
         @Test
+        void leavesADisabledSharedLegacyHookInPlace() {
+            storeHook(new WebhookInfo(99L, EXTERNAL_URL + "/webhooks/gitlab", "disabled"));
+
+            webhookService.checkWebhookHealth();
+
+            verify(webhookClient, never()).deregisterGroupWebhook(1L, 42L, 99L);
+            assertThat(hooks).extracting(WebhookInfo::id).containsExactlyInAnyOrder(99L, 100L);
+            assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
+        }
+
+        @Test
         void reRegistersExternallyDeletedWebhook() {
-            when(webhookClient.getGroupWebhook(1L, 42L, 99L)).thenReturn(Optional.empty());
-            when(webhookClient.listGroupWebhooks(1L, 42L)).thenReturn(List.of());
-            when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
-                    .thenReturn(new WebhookInfo(100L, EXTERNAL_URL + "/webhooks/gitlab", "executable"));
+            storeHook(99L, connectionUrl(routeCredential));
+            hooks.clear();
 
             webhookService.checkWebhookHealth();
 

@@ -88,8 +88,11 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
         int iid = attributes.iid();
         List<Integer> closing = closingIssueClient.closesIssues(scopeId, project.id(), iid);
         if (closing != null) {
-            transactionTemplate.executeWithoutResult(
-                    status -> mergeRequestProcessor.replaceClosingIssues(repository, iid, closing));
+            transactionTemplate.executeWithoutResult(status -> {
+                if (contextResolver.mayStillWrite()) {
+                    mergeRequestProcessor.replaceClosingIssues(repository, iid, closing);
+                }
+            });
         }
     }
 

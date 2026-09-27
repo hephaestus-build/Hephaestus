@@ -41,7 +41,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeR
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.collaborator.GitLabCollaboratorSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.subissue.GitLabSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.Instant;
@@ -109,6 +111,8 @@ public class GitlabDataSyncScheduler {
     private final SyncJobService syncJobService;
     private final GitLabDeletionSweepService deletionSweepService;
     private final GitLabWorkspaceInitializationService initializationService;
+    private final GitLabRepositoryMonitors repositoryMonitors;
+    private final WorkspaceRepository workspaceRepository;
 
     public GitlabDataSyncScheduler(
             SyncTargetProvider syncTargetProvider,
@@ -122,7 +126,9 @@ public class GitlabDataSyncScheduler {
             ConnectionRepository connectionRepository,
             SyncJobService syncJobService,
             GitLabDeletionSweepService deletionSweepService,
-            GitLabWorkspaceInitializationService initializationService) {
+            GitLabWorkspaceInitializationService initializationService,
+            GitLabRepositoryMonitors repositoryMonitors,
+            WorkspaceRepository workspaceRepository) {
         this.syncTargetProvider = syncTargetProvider;
         this.syncContextProvider = syncContextProvider;
         this.organizationRepository = organizationRepository;
@@ -135,6 +141,8 @@ public class GitlabDataSyncScheduler {
         this.syncJobService = syncJobService;
         this.deletionSweepService = deletionSweepService;
         this.initializationService = initializationService;
+        this.repositoryMonitors = repositoryMonitors;
+        this.workspaceRepository = workspaceRepository;
     }
 
     @PostConstruct
@@ -390,6 +398,10 @@ public class GitlabDataSyncScheduler {
             // Stale repo cleanup: only when sync completed normally
             if (result.status() == GitLabSyncResult.Status.COMPLETED) {
                 removeStaleRepositories(session, result);
+                // A complete listing also monitors projects created since the workspace was set up.
+                workspaceRepository
+                        .findById(session.scopeId())
+                        .ifPresent(workspace -> repositoryMonitors.monitorAllowed(workspace, result.synced()));
             } else {
                 reportWarning(handle);
             }

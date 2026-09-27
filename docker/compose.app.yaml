@@ -242,6 +242,8 @@ services:
       HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY: ${HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY:-200}
       HEPHAESTUS_EMAIL_REPLY_TO: ${HEPHAESTUS_EMAIL_REPLY_TO:-}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:?Set WEBHOOK_SECRET to at least 32 printable ASCII characters}
+      WEBHOOK_ROUTING_SECRET: ${WEBHOOK_ROUTING_SECRET:?Set WEBHOOK_ROUTING_SECRET to at least 32 printable ASCII characters, different from WEBHOOK_SECRET}
+      WEBHOOK_ROUTING_PREVIOUS_SECRET: ${WEBHOOK_ROUTING_PREVIOUS_SECRET:-}
       # WEBHOOK_EXTERNAL_URL intentionally unset: GitLab auto-registration defaults it to
       # APPLICATION_HOST_URL (same origin here), then appends /webhooks/gitlab itself.
       # AES-256-GCM key for credentials encrypted at rest in the `connection` table. Exactly 32

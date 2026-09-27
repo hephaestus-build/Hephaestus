@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -79,7 +80,8 @@ class IntegrationNatsConsumerTest {
                 mock(IntegrationMessageDispatcher.class),
                 mock(IntegrationPoisonHandler.class),
                 new IntegrationConsumerStats(),
-                mock(ConnectionActivityRecorder.class));
+                mock(ConnectionActivityRecorder.class),
+                List.of());
         try {
             consumer.stopConsumingScopeForPurge(7L);
             consumer.startConsumingScope(7L);
@@ -105,7 +107,8 @@ class IntegrationNatsConsumerTest {
                         mock(IntegrationMessageDispatcher.class),
                         mock(IntegrationPoisonHandler.class),
                         new IntegrationConsumerStats(),
-                        mock(ConnectionActivityRecorder.class)) {
+                        mock(ConnectionActivityRecorder.class),
+                        List.of()) {
                     @Override
                     void ensureNatsConnectionEstablished() {}
 
@@ -211,6 +214,83 @@ class IntegrationNatsConsumerTest {
         }
     }
 
+    /** A message on an authenticated route is handled only when its admission passes, after it is durable. */
+    @Nested
+    class RouteAdmissionHook {
+
+        private static final String SUBJECT = "gitlab.?connection.5.issue";
+
+        private final IntegrationMessageDispatcher dispatcher = mock(IntegrationMessageDispatcher.class);
+        private final IntegrationPoisonHandler poisonHandler = mock(IntegrationPoisonHandler.class);
+        private final IntegrationMessageHandler handler = mock(IntegrationMessageHandler.class);
+        private final Message message = mock(Message.class);
+
+        private IntegrationNatsConsumer consumer(RouteAdmission admission) {
+            when(message.getSubject()).thenReturn(SUBJECT);
+            when(handler.key()).thenReturn(new EventTypeKey(IntegrationKind.GITLAB, "issue"));
+            when(dispatcher.dispatch(SUBJECT)).thenReturn(Optional.of(handler));
+            return new IntegrationNatsConsumer(
+                    new NatsConnectionProperties(
+                            true,
+                            "nats://localhost:4222",
+                            "heph",
+                            new NatsConnectionProperties.Consumer(Duration.ofSeconds(60))),
+                    NatsConsumerPropertiesFixture.withFastPoisonBackoff(),
+                    scopeId -> Optional.empty(),
+                    dispatcher,
+                    poisonHandler,
+                    new IntegrationConsumerStats(),
+                    mock(ConnectionActivityRecorder.class),
+                    List.of(admission));
+        }
+
+        @Test
+        void shouldAcknowledgeWithoutHandlingWhenRouteIsNotAdmitted() {
+            consumer(new FixedAdmission(false, null)).handleMessage(5L, message);
+
+            verify(handler, never()).onMessage(message);
+            verify(message).ack();
+        }
+
+        @Test
+        void shouldRedeliverWhenAdmissionCannotBeDecided() {
+            consumer(new FixedAdmission(true, new IllegalStateException("database unavailable")))
+                    .handleMessage(5L, message);
+
+            verify(handler, never()).onMessage(message);
+            verify(message, never()).ack();
+            verify(poisonHandler).nakWithBackoff(message);
+        }
+
+        @Test
+        void shouldHandleWithinTheAdmission() {
+            consumer(new FixedAdmission(true, null)).handleMessage(5L, message);
+
+            verify(handler).onMessage(message);
+            verify(message).ack();
+        }
+
+        private record FixedAdmission(
+                boolean admitted, @Nullable RuntimeException failure) implements RouteAdmission {
+
+            @Override
+            public boolean owns(String subject) {
+                return subject.startsWith("gitlab.?connection.");
+            }
+
+            @Override
+            public boolean admit(@Nullable Long scopeId, Message msg, Runnable handling) {
+                if (failure != null) {
+                    throw failure;
+                }
+                if (admitted) {
+                    handling.run();
+                }
+                return admitted;
+            }
+        }
+    }
+
     @Nested
     class ActivityRecorderHook {
 
@@ -234,7 +314,8 @@ class IntegrationNatsConsumerTest {
                     dispatcher,
                     mock(IntegrationPoisonHandler.class),
                     new IntegrationConsumerStats(),
-                    activityRecorder);
+                    activityRecorder,
+                    List.of());
         }
 
         @Test
@@ -438,7 +519,8 @@ class IntegrationNatsConsumerTest {
                         mock(IntegrationMessageDispatcher.class),
                         mock(IntegrationPoisonHandler.class),
                         new IntegrationConsumerStats(),
-                        mock(ConnectionActivityRecorder.class));
+                        mock(ConnectionActivityRecorder.class),
+                        List.of());
                 this.failingStreams = new ConcurrentSkipListSet<>(failingStreams);
                 this.subscribedStreams = subscribedStreams;
             }

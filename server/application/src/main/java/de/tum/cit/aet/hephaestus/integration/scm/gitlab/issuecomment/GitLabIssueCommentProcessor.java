@@ -243,11 +243,20 @@ public class GitLabIssueCommentProcessor extends BaseGitLabProcessor {
         return saved;
     }
 
-    private IssueComment processCommentInternal(
+    private @Nullable IssueComment processCommentInternal(
             NoteAttributes attrs, Issue parent, @Nullable User author, ProcessingContext context) {
         Long issueId = parent.getId();
         Optional<IssueComment> existingOpt =
                 commentRepository.findByNativeIdAndProviderId(attrs.id(), Objects.requireNonNull(context.providerId()));
+        // A note id is unique on the instance, so a note already stored under another issue or merge request is not
+        // this one's, whatever the payload says: it is never moved.
+        if (existingOpt
+                .map(IssueComment::getIssue)
+                .filter(stored -> !stored.getId().equals(issueId))
+                .isPresent()) {
+            log.warn("Skipped note: reason=belongsToAnotherParent, noteId={}", attrs.id());
+            return null;
+        }
         boolean isNew = existingOpt.isEmpty();
         IssueComment comment = existingOpt.orElseGet(IssueComment::new);
         Set<String> changedFields = new HashSet<>();

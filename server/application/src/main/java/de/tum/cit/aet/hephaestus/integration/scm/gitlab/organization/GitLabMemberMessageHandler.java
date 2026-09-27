@@ -13,14 +13,24 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMemberRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembership;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupMemberResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.dto.GitLabMemberEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserClassifier;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +60,10 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
     private final UserRepository userRepository;
     private final IdentityProviderRepository gitProviderRepository;
     private final GitLabProperties gitLabProperties;
+    private final TeamRepository teamRepository;
+    private final TeamMembershipRepository teamMembershipRepository;
+    private final GitLabRouteAdmission routeAdmission;
+    private final GitLabUserService gitLabUserService;
 
     @Nullable
     private final OrganizationMembershipListener membershipListener;
@@ -62,6 +76,10 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
             UserRepository userRepository,
             IdentityProviderRepository gitProviderRepository,
             GitLabProperties gitLabProperties,
+            TeamRepository teamRepository,
+            TeamMembershipRepository teamMembershipRepository,
+            GitLabRouteAdmission routeAdmission,
+            GitLabUserService gitLabUserService,
             @Nullable OrganizationMembershipListener membershipListener,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
@@ -76,6 +94,10 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
         this.userRepository = userRepository;
         this.gitProviderRepository = gitProviderRepository;
         this.gitLabProperties = gitLabProperties;
+        this.teamRepository = teamRepository;
+        this.teamMembershipRepository = teamMembershipRepository;
+        this.routeAdmission = routeAdmission;
+        this.gitLabUserService = gitLabUserService;
         this.membershipListener = membershipListener;
         this.requiresNewTransaction =
                 new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
@@ -100,6 +122,17 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
                         "IdentityProvider not found for type=GITLAB, serverUrl=" + gitLabProperties.defaultServerUrl()))
                 .getId());
 
+        // On a connection route the event only says that a membership changed: the membership stored is the one GitLab
+        // reports now, so a forged or stale event can neither grant, change nor remove access.
+        Optional<GitLabRouteAdmission.AdmittedRoute> route = GitLabRouteAdmission.current();
+        if (route.isPresent()) {
+            Optional<GitLabRouteAdmission.ReportedMembership> reported = GitLabRouteAdmission.reportedMembership();
+            if (reported.isPresent() && routeAdmission.holdActive(route.get())) {
+                applyReportedMembership(event.userId(), route.get(), reported.get(), providerId);
+            }
+            return;
+        }
+
         // Look up the organization by the group's native ID
         Organization org = organizationRepository
                 .findByNativeIdAndProviderId(event.groupId(), providerId)
@@ -120,6 +153,92 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
         } else {
             log.debug("Unhandled member event action: eventName={}, groupPath={}", event.eventName(), safeGroupPath);
         }
+    }
+
+    /**
+     * Stores the membership GitLab reported for {@code userId}: in the connected group as an organization membership
+     * at the highest access GitLab grants, direct or inherited; in a subgroup as a team membership at the direct access
+     * the team sync also reads. No reported access removes the membership.
+     */
+    private void applyReportedMembership(
+            long userId,
+            GitLabRouteAdmission.AdmittedRoute route,
+            GitLabRouteAdmission.ReportedMembership membership,
+            Long providerId) {
+        GitLabGroupMemberResponse highest = membership.members().stream()
+                .max(Comparator.comparingInt(GitLabMemberMessageHandler::accessLevel))
+                .orElse(null);
+        if (membership.groupId() == route.groupId()) {
+            Organization org = organizationRepository
+                    .findByNativeIdAndProviderId(membership.groupId(), providerId)
+                    .orElse(null);
+            if (org == null) {
+                log.debug("Organization not yet synced, skipping member event: groupId={}", membership.groupId());
+                return;
+            }
+            if (highest == null) {
+                userRepository
+                        .findByNativeIdAndProviderId(userId, providerId)
+                        .ifPresent(user -> removeMember(org, user));
+                return;
+            }
+            User user = gitLabUserService.findOrCreateReportedUser(userId, providerId);
+            if (user == null) {
+                return;
+            }
+            OrganizationMemberRole role = GitLabGroupMemberSyncService.mapAccessLevel(highest.accessLevel());
+            membershipRepository.upsertMembership(org.getId(), user.getId(), role);
+            log.info("Added/updated group member: orgId={}, userId={}, role={}", org.getId(), user.getId(), role);
+            if (membershipListener != null) {
+                membershipListener.onMemberAdded(new MembershipChangedEvent(
+                        org.getId(), org.getLogin(), user.getId(), user.getLogin(), accessName(highest)));
+            }
+            return;
+        }
+        Team team = teamRepository
+                .findByNativeIdAndProviderId(membership.groupId(), providerId)
+                .orElse(null);
+        if (team == null) {
+            log.debug("Team not yet synced, skipping member event: groupId={}", membership.groupId());
+            return;
+        }
+        TeamMembership.Role role = highest == null ? null : GitLabTeamSyncService.mapAccessLevel(accessName(highest));
+        if (role == null) {
+            userRepository
+                    .findByNativeIdAndProviderId(userId, providerId)
+                    .ifPresent(user -> teamMembershipRepository.deleteByTeam_IdAndUser_Id(team.getId(), user.getId()));
+            return;
+        }
+        User user = gitLabUserService.findOrCreateReportedUser(userId, providerId);
+        if (user == null) {
+            return;
+        }
+        TeamMembership teamMembership = teamMembershipRepository
+                .findById(new TeamMembership.Id(team.getId(), user.getId()))
+                .orElseGet(() -> new TeamMembership(team, user, role));
+        teamMembership.setRole(role);
+        teamMembershipRepository.save(teamMembership);
+        log.info("Added/updated team member: teamId={}, role={}", team.getId(), role);
+    }
+
+    private void removeMember(Organization org, User user) {
+        membershipRepository.deleteByOrganizationIdAndUserIdIn(org.getId(), List.of(user.getId()));
+        log.info("Removed group member: orgId={}, userId={}", org.getId(), user.getId());
+        if (membershipListener != null) {
+            membershipListener.onMemberRemoved(
+                    new MembershipChangedEvent(org.getId(), org.getLogin(), user.getId(), user.getLogin(), null));
+        }
+    }
+
+    private static int accessLevel(GitLabGroupMemberResponse member) {
+        GitLabGroupMemberResponse.GitLabAccessLevel level = member.accessLevel();
+        Integer value = level != null ? level.integerValue() : null;
+        return value != null ? value : 0;
+    }
+
+    private static @Nullable String accessName(GitLabGroupMemberResponse member) {
+        GitLabGroupMemberResponse.GitLabAccessLevel level = member.accessLevel();
+        return level != null ? level.stringValue() : null;
     }
 
     private void handleMemberAddOrUpdate(GitLabMemberEventDTO event, Organization org, Long providerId) {

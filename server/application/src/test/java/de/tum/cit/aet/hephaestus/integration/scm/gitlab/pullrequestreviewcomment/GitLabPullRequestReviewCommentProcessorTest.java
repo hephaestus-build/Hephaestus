@@ -298,6 +298,24 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
             verify(commentRepository, never()).save(any());
             verify(eventPublisher, never()).publishEvent(any());
         }
+
+        @Test
+        void shouldNotMoveADiffNoteStoredUnderAnotherMergeRequest() {
+            PullRequest other = new PullRequest();
+            other.setId(PR_ID + 1);
+            PullRequestReviewComment stored = new PullRequestReviewComment();
+            stored.setPullRequest(other);
+            when(commentRepository.findByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
+                    .thenReturn(Optional.of(stored));
+
+            var data = buildDiffNoteData("src/Foo.ts", null, null, 42, null, "head-sha", "base-sha", null);
+            var context = new GitLabPullRequestReviewCommentProcessor.CommentContext(
+                    thread, pr, null, provider, null, null, SCOPE_ID);
+
+            assertThat(processor.findOrCreateComment(data, context)).isNull();
+            assertThat(stored.getPullRequest()).isSameAs(other);
+            verify(commentRepository, never()).save(any());
+        }
     }
 
     // DiffNoteData backward-compat constructor

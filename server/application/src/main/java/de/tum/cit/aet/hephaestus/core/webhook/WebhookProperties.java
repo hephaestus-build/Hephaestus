@@ -28,7 +28,8 @@ public record WebhookProperties(
         @DefaultValue Publish publish,
         @DefaultValue Stream stream,
         @DefaultValue Shutdown shutdown,
-        @DefaultValue Http http) {
+        @DefaultValue Http http,
+        @DefaultValue Routing routing) {
     /** Minimum HMAC-SHA256 secret length recommended by NIST SP 800-107. */
     public static final int MIN_SECRET_LENGTH = 32;
 
@@ -57,6 +58,19 @@ public record WebhookProperties(
         return stream.maxBytesByStream().values().stream().allMatch(size -> size.toBytes() >= floor);
     }
 
+    /**
+     * A routing key signs credentials bound to one connection, so it must not be {@link #secret}: that value is the
+     * token every legacy GitLab hook carries and is readable by an administrator of any instance holding one.
+     */
+    @AssertTrue(message = "hephaestus.webhook.routing secrets must differ from hephaestus.webhook.secret")
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
+    private boolean isRoutingKeyIndependentOfSharedSecret() {
+        if (routing == null || secret == null || secret.isBlank()) {
+            return true;
+        }
+        return !secret.equals(routing.secret()) && !secret.equals(routing.previousSecret());
+    }
+
     /** {@code true} iff auto-registration with the provider can be attempted. Pure predicate — no side effects. */
     public boolean isConfigured() {
         return (externalUrl != null
@@ -82,6 +96,8 @@ public record WebhookProperties(
                 + shutdown
                 + ", http="
                 + http
+                + ", routing="
+                + routing
                 + "]");
     }
 
@@ -257,6 +273,44 @@ public record WebhookProperties(
             if (maxPayloadBytes < 1) {
                 throw new IllegalArgumentException("http.maxPayloadBytes must be >= 1, got: " + maxPayloadBytes);
             }
+        }
+    }
+
+    /**
+     * Signing keys for the connection-scoped GitLab webhook credential. {@code secret} signs new hooks;
+     * {@code previousSecret} is still accepted while an operator rotates, until every hook signed with it has been
+     * replaced. Without {@code secret} no connection-scoped hook is registered.
+     */
+    public record Routing(@Nullable String secret, @Nullable String previousSecret) {
+        public Routing {
+            secret = blankToNull(secret);
+            previousSecret = blankToNull(previousSecret);
+            requireKeyLength("routing.secret", secret);
+            requireKeyLength("routing.previousSecret", previousSecret);
+            if (secret == null && previousSecret != null) {
+                throw new IllegalArgumentException("routing.previousSecret requires routing.secret");
+            }
+            if (secret != null && secret.equals(previousSecret)) {
+                throw new IllegalArgumentException("routing.previousSecret must differ from routing.secret");
+            }
+        }
+
+        private static @Nullable String blankToNull(@Nullable String value) {
+            return value == null || value.isBlank() ? null : value;
+        }
+
+        private static void requireKeyLength(String name, @Nullable String value) {
+            if (value != null && value.length() < MIN_SECRET_LENGTH) {
+                throw new IllegalArgumentException(name + " must be at least " + MIN_SECRET_LENGTH + " characters");
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "Routing[secret=" + (secret == null ? "<unset>" : "<redacted>")
+                    + ", previousSecret="
+                    + (previousSecret == null ? "<unset>" : "<redacted>")
+                    + "]";
         }
     }
 }

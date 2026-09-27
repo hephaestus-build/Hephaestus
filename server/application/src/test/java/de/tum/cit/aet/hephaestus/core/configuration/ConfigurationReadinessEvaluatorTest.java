@@ -52,6 +52,17 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRequireARoutingSecretOfItsOwn() {
+        Map<String, Object> missing = validProperties();
+        missing.remove("hephaestus.webhook.routing.secret");
+        Map<String, Object> reused = validProperties();
+        reused.put("hephaestus.webhook.routing.secret", reused.get("hephaestus.webhook.secret"));
+
+        assertStatus(evaluateReadiness(missing, true), "webhook.routing-secret", ConfigurationStatus.ACTION_REQUIRED);
+        assertStatus(evaluateReadiness(reused, true), "webhook.routing-secret", ConfigurationStatus.ACTION_REQUIRED);
+    }
+
+    @Test
     void shouldSatisfyAllChecksForCombinedRole() {
         assertThat(evaluateReadiness(validProperties(), true))
                 .allMatch(fact -> Set.of(ConfigurationStatus.SATISFIED, ConfigurationStatus.NOT_CONFIGURED)
@@ -83,6 +94,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         properties.put("hephaestus.runtime.server.enabled", false);
         List<ConfigurationFactDTO> facts = evaluateReadiness(properties, true);
         assertStatus(facts, "webhook.shared-secret", ConfigurationStatus.SATISFIED);
+        assertStatus(facts, "webhook.routing-secret", ConfigurationStatus.SATISFIED);
         assertStatus(facts, "auth.login-provider", ConfigurationStatus.NOT_APPLICABLE);
         assertStatus(facts, "agent.image-contract", ConfigurationStatus.NOT_APPLICABLE);
     }
@@ -295,6 +307,7 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         properties.put("hephaestus.security.credential-encryption-key", "0123456789abcdef0123456789abcdef");
         properties.put("hephaestus.host-url", "https://hephaestus.example.com");
         properties.put("hephaestus.webhook.secret", "0123456789abcdef0123456789abcdef");
+        properties.put("hephaestus.webhook.routing.secret", "fedcba9876543210fedcba9876543210");
         properties.put("hephaestus.sync.nats.enabled", true);
         properties.put("hephaestus.sync.nats.server", "nats://nats:4222");
         properties.put("hephaestus.auth.state-cookie-key", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");

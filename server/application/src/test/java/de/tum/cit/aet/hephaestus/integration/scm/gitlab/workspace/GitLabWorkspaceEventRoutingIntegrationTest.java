@@ -4,15 +4,19 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -32,6 +36,8 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobStatus;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.JetStreamPublishers;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookIngestPipeline;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
@@ -39,14 +45,29 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembership;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabDescendantGroupResponse;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupMemberResponse;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuetype.GitLabIssueTypeSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncResult;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDeletionSweepService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitlabDataSyncScheduler;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabConnectionWebhookController;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabSubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -64,11 +85,16 @@ import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -77,12 +103,21 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.convention.TestBean;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * GitLab webhook events from a real JetStream stream reach the database while the workspace's full sync is
@@ -102,6 +137,11 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     private static final Long NATIVE_NOTE_ID = 4406174L;
     private static final long GROUP_ID = 42L;
     private static final long WEBHOOK_ID = 99L;
+    private static final long LEGACY_WEBHOOK_ID = 7L;
+    private static final String NESTED_PROJECT = "hephaestustest/test-subgroup/nested-demo";
+    private static final long NESTED_PROJECT_ID = 777L;
+    private static final long SUBGROUP_ID = 319723L;
+    private static final long MEMBER_USER_ID = 18024L;
 
     @DynamicPropertySource
     static void natsProperties(DynamicPropertyRegistry registry) {
@@ -134,6 +174,15 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @MockitoBean
     private GitLabDeletionSweepService deletionSweepService;
+
+    @MockitoSpyBean
+    private GitLabProjectSyncService projectSyncService;
+
+    @MockitoSpyBean
+    private GitLabTeamSyncService teamSyncService;
+
+    @MockitoSpyBean
+    private GitLabUserService gitLabUserService;
 
     @Autowired
     private WorkspaceActivationService workspaceActivationService;
@@ -183,6 +232,35 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private TransactionTemplate transactionTemplate;
 
+    @Autowired
+    private GitLabRouteCredential routeCredential;
+
+    @Autowired
+    private GitlabSubjectKeyDeriver subjectKeyDeriver;
+
+    @Autowired
+    private WebhookProperties webhookProperties;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private TeamRepository teamRepository;
+
+    @Autowired
+    private TeamMembershipRepository teamMembershipRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    /** The group hooks GitLab holds, as the stubbed webhook API reports them. */
+    private final List<GitLabWebhookClient.WebhookInfo> hooks = new CopyOnWriteArrayList<>();
+
+    private final List<GitLabWebhookClient.WebhookConfig> registeredHooks = new CopyOnWriteArrayList<>();
+    private final AtomicLong nextHookId = new AtomicLong(WEBHOOK_ID);
+    private final String deliveryPrefix = UUID.randomUUID().toString();
+    private @Nullable GitLabConnectionWebhookController ingress;
+
     private final GitLabGroupSyncService groupSync = mock(GitLabGroupSyncService.class);
     private final GitLabIssueTypeSyncService issueTypeSync = mock(GitLabIssueTypeSyncService.class);
     private final CountDownLatch syncBlocked = new CountDownLatch(1);
@@ -204,15 +282,40 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         when(gitLabSyncServices.getIssueTypeSyncService()).thenReturn(issueTypeSync);
         when(groupSync.syncGroupProjects(anyLong(), eq(GROUP), eq(SERVER_URL)))
                 .thenAnswer(invocation -> GitLabSyncResult.completed(List.of(discoveredRepository()), 1, 0, 0));
+        doReturn(Map.of(
+                        MEMBER_USER_ID,
+                        new GitLabUserLookup(
+                                "gid://gitlab/User/" + MEMBER_USER_ID,
+                                "ga84xah",
+                                "Felix Dietrich",
+                                null,
+                                SERVER_URL + "/ga84xah",
+                                null)))
+                .when(gitLabUserService)
+                .fetchCanonicalUsers(anyLong(), anyCollection());
         when(gitLabTokenRotationClient.getTokenInfo(anyLong()))
                 .thenReturn(new GitLabTokenRotationClient.TokenInfo(1L, "hephaestus", null));
         when(gitLabWebhookClient.lookupGroup(anyLong(), eq(GROUP)))
                 .thenReturn(new GitLabWebhookClient.GroupInfo(GROUP_ID, "HephaestusTest", GROUP));
         when(gitLabWebhookClient.registerGroupWebhook(anyLong(), eq(GROUP_ID), any()))
-                .thenAnswer(invocation -> {
-                    filterWhenRegistered.set(filterSubjects());
-                    return new GitLabWebhookClient.WebhookInfo(WEBHOOK_ID, WEBHOOK_URL);
-                });
+                .thenAnswer(invocation -> registerHook(invocation.getArgument(2)));
+        when(gitLabWebhookClient.listGroupWebhooks(anyLong(), eq(GROUP_ID)))
+                .thenAnswer(invocation -> List.copyOf(hooks));
+        when(gitLabWebhookClient.getGroupWebhook(anyLong(), eq(GROUP_ID), anyLong()))
+                .thenAnswer(invocation -> hooks.stream()
+                        .filter(hook -> hook.id() == (long) invocation.getArgument(2))
+                        .findFirst());
+        doAnswer(invocation -> hooks.removeIf(hook -> hook.id() == (long) invocation.getArgument(2)))
+                .when(gitLabWebhookClient)
+                .deregisterGroupWebhook(anyLong(), eq(GROUP_ID), anyLong());
+        ingress = new GitLabConnectionWebhookController(
+                new WebhookIngestPipeline(
+                        List.of(),
+                        List.of(subjectKeyDeriver),
+                        JetStreamPublishers.of(natsConnection, webhookProperties),
+                        objectMapper),
+                routeCredential,
+                subjectKeyDeriver);
         when(deletionSweepService.sweepScope(anyLong(), any()))
                 .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, false));
     }
@@ -238,17 +341,17 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         createStream();
         when(gitLabWebhookClient.registerGroupWebhook(anyLong(), eq(GROUP_ID), any()))
                 .thenAnswer(invocation -> {
-                    filterWhenRegistered.set(filterSubjects());
+                    GitLabWebhookClient.WebhookInfo hook = registerHook(invocation.getArgument(2));
                     publish(ISSUE_SUBJECT, "gitlab/issue.open.json");
                     publish(NOTE_SUBJECT, "gitlab/note.issue.create.json");
-                    return new GitLabWebhookClient.WebhookInfo(WEBHOOK_ID, WEBHOOK_URL);
+                    return hook;
                 });
         holdFullSync();
 
         Workspace connected = connectGroup();
 
         assertThat(syncBlocked.await(30, SECONDS)).isTrue();
-        assertThat(filterWhenRegistered.get()).isEqualTo(expectedFilter());
+        assertThat(filterWhenRegistered.get()).isEqualTo(expectedFilter(connected));
         assertThat(webhookId(connected)).isEqualTo(WEBHOOK_ID);
         assertIssueAndNotePersistedOnce();
     }
@@ -265,7 +368,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                         .durable(ConsumerSubjectMath.scopeConsumerName(
                                         natsConnectionProperties.durableConsumerName(), restarted.getId())
                                 + "-" + STREAM)
-                        .filterSubjects(expectedFilter().toArray(String[]::new))
+                        .filterSubjects(legacyFilter().toArray(String[]::new))
                         .deliverPolicy(DeliverPolicy.New)
                         .build());
         publish(ISSUE_SUBJECT, "gitlab/issue.open.json");
@@ -280,7 +383,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
         assertThat(syncBlocked.await(30, SECONDS)).isTrue();
         assertIssueAndNotePersistedOnce();
-        assertThat(filterSubjects()).isEqualTo(expectedFilter());
+        assertThat(filterSubjects()).isEqualTo(expectedFilter(restarted));
     }
 
     @Test
@@ -298,7 +401,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         assertThat(reconcile(connected)).isEqualTo(SyncJobStatus.SUCCEEDED);
 
         assertThat(webhookId(connected)).isEqualTo(WEBHOOK_ID);
-        assertThat(filterWhenRegistered.get()).isEqualTo(expectedFilter());
+        assertThat(filterWhenRegistered.get()).isEqualTo(expectedFilter(connected));
         verify(gitLabWebhookClient, times(1)).registerGroupWebhook(anyLong(), anyLong(), any());
         publish(ISSUE_SUBJECT, "gitlab/issue.open.json");
         publish(NOTE_SUBJECT, "gitlab/note.issue.create.json");
@@ -314,7 +417,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         awaitMonitoringIdle();
 
         assertThat(webhookId(connected)).isNull();
-        assertThat(filterSubjects()).isEqualTo(expectedFilter());
+        assertThat(filterSubjects()).isEqualTo(expectedFilter(connected));
         verify(gitLabWebhookClient, never()).registerGroupWebhook(anyLong(), anyLong(), any());
 
         when(groupSync.syncGroupProjects(anyLong(), eq(GROUP), eq(SERVER_URL)))
@@ -323,6 +426,428 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
         assertThat(webhookId(connected)).isEqualTo(WEBHOOK_ID);
         verify(gitLabWebhookClient, times(1)).registerGroupWebhook(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    void shouldHandleANestedProjectAndItsFirstWorkWhenTheyArriveThroughTheConnectionRoute() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        Team subgroup = subgroupTeam();
+        String subgroupPath = GROUP + "/test-subgroup";
+        doReturn(Optional.of(reported(NESTED_PROJECT_ID, NESTED_PROJECT)))
+                .when(projectSyncService)
+                .fetchProjectById(connected.getId(), NESTED_PROJECT_ID);
+        doReturn(Optional.of(new GitLabDescendantGroupResponse(
+                        "gid://gitlab/Group/" + SUBGROUP_ID, subgroupPath, "test-subgroup", null, null, null, null)))
+                .when(teamSyncService)
+                .fetchGroup(connected.getId(), SUBGROUP_ID);
+        doReturn(Optional.of(List.of(member("MAINTAINER", 40))))
+                .when(teamSyncService)
+                .fetchMembership(connected.getId(), subgroupPath, SUBGROUP_ID, MEMBER_USER_ID, false);
+
+        deliver(connected, projectCreate(NESTED_PROJECT, NESTED_PROJECT_ID), "project");
+        deliver(connected, onProject(fixture("gitlab/issue.open.json"), NESTED_PROJECT, NESTED_PROJECT_ID), "issue");
+        deliver(
+                connected,
+                onProject(fixture("gitlab/note.issue.create.json"), NESTED_PROJECT, NESTED_PROJECT_ID),
+                "note");
+        // GitLab retries a delivery with the same idempotency key; it is published once.
+        deliver(
+                connected,
+                onProject(fixture("gitlab/note.issue.create.json"), NESTED_PROJECT, NESTED_PROJECT_ID),
+                "note");
+        deliver(connected, fixture("gitlab/member.add.json"), "member");
+
+        assertIssueAndNotePersistedOnce();
+        Repository nested =
+                repositoryRepository.findByNameWithOwner(NESTED_PROJECT).orElseThrow();
+        assertThat(nested.getNativeId()).isEqualTo(NESTED_PROJECT_ID);
+        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(connected.getId(), NESTED_PROJECT))
+                .isTrue();
+        await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+            Long userId = userRepository
+                    .findByNativeIdAndProviderId(MEMBER_USER_ID, gitLabProviderId())
+                    .orElseThrow()
+                    .getId();
+            assertThat(teamMembershipRepository.findById(new TeamMembership.Id(subgroup.getId(), userId)))
+                    .hasValueSatisfying(
+                            membership -> assertThat(membership.getRole()).isEqualTo(TeamMembership.Role.MAINTAINER));
+        });
+        Long userId = userRepository
+                .findByNativeIdAndProviderId(MEMBER_USER_ID, gitLabProviderId())
+                .orElseThrow()
+                .getId();
+        TeamMembership.Id membershipId = new TeamMembership.Id(subgroup.getId(), userId);
+        assertThat(userRepository.findById(userId).orElseThrow().getName()).isEqualTo("Felix Dietrich");
+
+        // A removal GitLab contradicts keeps the access GitLab reports.
+        ObjectNode removal = (ObjectNode) fixture("gitlab/member.add.json");
+        removal.put("event_name", "user_remove_from_group");
+        deliver(connected, removal, "member-removal");
+        awaitAcknowledged();
+        assertThat(teamMembershipRepository.findById(membershipId)).isPresent();
+
+        // Once GitLab reports no membership, even an addition claiming access removes it.
+        doReturn(Optional.of(List.of()))
+                .when(teamSyncService)
+                .fetchMembership(connected.getId(), subgroupPath, SUBGROUP_ID, MEMBER_USER_ID, false);
+        ObjectNode addition = (ObjectNode) fixture("gitlab/member.add.json");
+        addition.put("group_access", "Maintainer");
+        deliver(connected, addition, "member-addition");
+        await().atMost(Duration.ofSeconds(20))
+                .untilAsserted(() -> assertThat(teamMembershipRepository.findById(membershipId))
+                        .isEmpty());
+    }
+
+    @Test
+    void shouldNotLetOneConnectionActForAnotherOrOutsideItsGroup() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        Workspace other = WorkspaceTestFixtures.persistGitLabWorkspace(
+                workspaceRepository,
+                connectionRepository,
+                WorkspaceTestFixtures.gitLabPatWorkspace("othergroup"),
+                SERVER_URL);
+        Repository otherRepository = foreignRepository("othergroup/secret-project", 555L);
+        repositoryToMonitorRepository.save(
+                WorkspaceTestFixtures.repositoryMonitor(other, otherRepository.getNameWithOwner()));
+        GitLabWebhookClient.WebhookConfig hook = registeredHooks.getLast();
+        byte[] outside = bytes(onProject(fixture("gitlab/issue.open.json"), "othergroup/secret-project", 555L));
+
+        assertThat(ingest(connectionId(other), routeOf(hook), hook.token(), SERVER_URL, "a-to-b", outside))
+                .as("a credential replayed to another connection's endpoint")
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(ingest(
+                        connectionId(connected),
+                        routeOf(hook),
+                        hook.token(),
+                        "https://gitlab.example.com",
+                        "forged",
+                        outside))
+                .as("an instance header that contradicts the signed origin")
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(ingest(connectionId(connected), routeOf(hook), hook.token(), SERVER_URL, "outside", outside))
+                .isEqualTo(HttpStatus.ACCEPTED);
+
+        awaitAcknowledged();
+        assertThat(issueRepository.findAll()).noneMatch(issue -> NATIVE_ISSUE_ID.equals(issue.getNativeId()));
+        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(
+                        connected.getId(), otherRepository.getNameWithOwner()))
+                .isFalse();
+    }
+
+    @Test
+    void shouldNotLetAConnectedPathCarryAnotherWorkspacesProjectId() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        Repository victim = foreignRepository("othergroup/secret-project", 555L);
+        String forgedPath = GROUP + "/renamed-secret";
+        doReturn(Optional.of(reported(555L, victim.getNameWithOwner())))
+                .when(projectSyncService)
+                .fetchProjectById(connected.getId(), 555L);
+        doReturn(Optional.of(reported(discoveredRepository().getNativeId(), REPOSITORY)))
+                .when(projectSyncService)
+                .fetchProject(connected.getId(), REPOSITORY);
+        Team foreignTeam = team(888L, "othergroup", "team");
+        doReturn(Optional.of(new GitLabDescendantGroupResponse(
+                        "gid://gitlab/Group/888", "othergroup/team", "team", null, null, null, null)))
+                .when(teamSyncService)
+                .fetchGroup(connected.getId(), 888L);
+
+        ObjectNode rename = (ObjectNode) projectCreate(forgedPath, 555L);
+        rename.put("event_name", "project_rename");
+        rename.put("old_path_with_namespace", victim.getNameWithOwner());
+        deliver(connected, rename, "forged-rename");
+        ObjectNode transfer = rename.deepCopy();
+        transfer.put("event_name", "project_transfer");
+        deliver(connected, transfer, "forged-transfer");
+        deliver(connected, onProject(fixture("gitlab/issue.open.json"), REPOSITORY, 555L), "forged-issue");
+        ObjectNode subgroup = JsonNodeFactory.instance.objectNode();
+        subgroup.put("event_name", "subgroup_create");
+        subgroup.put("group_id", 888L);
+        subgroup.put("full_path", GROUP + "/forged");
+        subgroup.put("name", "forged");
+        deliver(connected, subgroup, "forged-subgroup");
+
+        awaitAcknowledged();
+        Team untouched = teamRepository.findById(foreignTeam.getId()).orElseThrow();
+        assertThat(untouched.getName()).isEqualTo("team");
+        assertThat(untouched.getOrganization()).isEqualTo("othergroup");
+        Repository unchanged = repositoryRepository.findById(victim.getId()).orElseThrow();
+        assertThat(unchanged.getNameWithOwner()).isEqualTo("othergroup/secret-project");
+        assertThat(unchanged.getNativeId()).isEqualTo(555L);
+        assertThat(repositoryRepository.findByNameWithOwner(forgedPath)).isEmpty();
+        assertThat(issueRepository.findAll()).noneMatch(issue -> NATIVE_ISSUE_ID.equals(issue.getNativeId()));
+    }
+
+    @Test
+    void shouldNotResumeMonitoringWhenTheMonitorIsRemovedWhileADeliveryIsPrepared() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY))
+                .isTrue();
+        // The project is moved out of the group while GitLab is asked for the users of work on it.
+        doAnswer(invocation -> {
+                    repositoryToMonitorRepository
+                            .findByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY)
+                            .ifPresent(repositoryToMonitorRepository::delete);
+                    return Map.of();
+                })
+                .when(gitLabUserService)
+                .fetchCanonicalUsers(eq(connected.getId()), anyCollection());
+
+        deliver(connected, fixture("gitlab/issue.open.json"), "moved-while-prepared");
+
+        awaitAcknowledged();
+        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY))
+                .isFalse();
+        assertThat(issueRepository.findAll()).noneMatch(issue -> NATIVE_ISSUE_ID.equals(issue.getNativeId()));
+    }
+
+    @Test
+    void shouldRedeliverWorkOnAProjectUntilGitLabCanReportIt() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        AtomicLong lookups = new AtomicLong();
+        doAnswer(invocation -> {
+                    if (lookups.incrementAndGet() == 1) {
+                        throw new IllegalStateException("GitLab unavailable");
+                    }
+                    return Optional.of(reported(NESTED_PROJECT_ID, NESTED_PROJECT));
+                })
+                .when(projectSyncService)
+                .fetchProject(connected.getId(), NESTED_PROJECT);
+
+        deliver(connected, onProject(fixture("gitlab/issue.open.json"), NESTED_PROJECT, NESTED_PROJECT_ID), "retry");
+
+        await().atMost(Duration.ofSeconds(30))
+                .untilAsserted(() -> assertThat(issueRepository.findAll())
+                        .anyMatch(issue -> NATIVE_ISSUE_ID.equals(issue.getNativeId())));
+        assertThat(lookups.get()).isGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    void shouldNotAdmitTheSameGroupPathOnAnotherInstance() throws Exception {
+        createStream();
+        Workspace elsewhere = WorkspaceTestFixtures.persistGitLabWorkspace(
+                workspaceRepository,
+                connectionRepository,
+                WorkspaceTestFixtures.gitLabPatWorkspace(GROUP).withSlug("same-path-elsewhere"),
+                "https://gitlab.example.com");
+        workspace = elsewhere;
+        connectionService.updateConfig(
+                elsewhere.getId(),
+                IntegrationKind.GITLAB,
+                config -> ((ConnectionConfig.GitLabConfig) config).withGitlabGroupId(GROUP_ID));
+        discoveredRepository();
+        repositoryToMonitorRepository.save(WorkspaceTestFixtures.repositoryMonitor(elsewhere, REPOSITORY));
+        integrationNatsConsumer.establishScopeConsumer(elsewhere.getId(), STREAM);
+        long connectionId = connectionId(elsewhere);
+        GitLabRouteCredential.Issued issued = routeCredential.issue(new GitLabRouteCredential.Route(
+                connectionId, elsewhere.getId(), "https://gitlab.example.com", GROUP_ID, GROUP));
+
+        assertThat(ingest(
+                        connectionId,
+                        routeOf(issued),
+                        issued.token(),
+                        "https://gitlab.example.com",
+                        "elsewhere",
+                        bytes(fixture("gitlab/issue.open.json"))))
+                .isEqualTo(HttpStatus.ACCEPTED);
+
+        awaitAcknowledged();
+        assertThat(issueRepository.findAll()).noneMatch(issue -> NATIVE_ISSUE_ID.equals(issue.getNativeId()));
+    }
+
+    @Test
+    void shouldAcknowledgeWithoutHandlingWhenTheRouteIsNoLongerActive() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        GitLabWebhookClient.WebhookConfig hook = registeredHooks.getLast();
+        Connection connection =
+                connectionRepository.findById(connectionId(connected)).orElseThrow();
+        ReflectionTestUtils.setField(connection, "state", IntegrationState.SUSPENDED);
+        connectionRepository.save(connection);
+
+        assertThat(ingest(
+                        connectionId(connected),
+                        routeOf(hook),
+                        hook.token(),
+                        SERVER_URL,
+                        "inactive",
+                        bytes(fixture("gitlab/issue.open.json"))))
+                .isEqualTo(HttpStatus.ACCEPTED);
+        GitLabRouteCredential.Issued unknownRoute = routeCredential.issue(
+                new GitLabRouteCredential.Route(999_999L, connected.getId(), SERVER_URL, GROUP_ID, GROUP));
+        assertThat(ingest(
+                        999_999L,
+                        routeOf(unknownRoute),
+                        unknownRoute.token(),
+                        SERVER_URL,
+                        "unknown",
+                        bytes(fixture("gitlab/issue.open.json"))))
+                .isEqualTo(HttpStatus.ACCEPTED);
+
+        awaitAcknowledged();
+        assertThat(issueRepository.findAll()).noneMatch(issue -> NATIVE_ISSUE_ID.equals(issue.getNativeId()));
+    }
+
+    private GitLabWebhookClient.WebhookInfo registerHook(GitLabWebhookClient.WebhookConfig config) throws Exception {
+        filterWhenRegistered.set(filterSubjects());
+        registeredHooks.add(config);
+        GitLabWebhookClient.WebhookInfo hook =
+                new GitLabWebhookClient.WebhookInfo(nextHookId.getAndIncrement(), config.url());
+        hooks.add(hook);
+        return hook;
+    }
+
+    /** Delivers {@code payload} the way GitLab sends it to the connection's registered hook. */
+    private void deliver(Workspace target, JsonNode payload, String deliveryKey) throws Exception {
+        GitLabWebhookClient.WebhookConfig hook = registeredHooks.getLast();
+        assertThat(hook.url()).contains("/connections/" + connectionId(target) + "/");
+        assertThat(ingest(connectionId(target), routeOf(hook), hook.token(), SERVER_URL, deliveryKey, bytes(payload)))
+                .isEqualTo(HttpStatus.ACCEPTED);
+    }
+
+    /** Posts {@code body} to the connection endpoint {@code route}, the {@code keyId/routeId} of a hook URL. */
+    private HttpStatusCode ingest(
+            long connectionId, String route, String token, String instance, String deliveryKey, byte[] body)
+            throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "POST", GitLabConnectionWebhookController.PATH_PREFIX + connectionId + "/" + route);
+        request.setContentType("application/json");
+        request.setContent(body);
+        request.addHeader("X-Gitlab-Token", token);
+        request.addHeader("X-Gitlab-Instance", instance);
+        request.addHeader("Idempotency-Key", deliveryPrefix + "-" + deliveryKey);
+        String[] segments = route.split("/");
+        return Objects.requireNonNull(ingress)
+                .ingest(connectionId, segments[0], segments[1], request)
+                .getStatusCode();
+    }
+
+    private static String routeOf(GitLabWebhookClient.WebhookConfig hook) {
+        String[] segments = hook.url().split("/");
+        return segments[segments.length - 2] + "/" + segments[segments.length - 1];
+    }
+
+    private static String routeOf(GitLabRouteCredential.Issued issued) {
+        return issued.keyId() + "/" + issued.routeId();
+    }
+
+    private long connectionId(Workspace target) {
+        return Objects.requireNonNull(connectionRepository
+                .findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
+                        target.getId(), IntegrationKind.GITLAB, IntegrationState.ACTIVE)
+                .orElseGet(() ->
+                        connectionRepository.findByWorkspaceId(target.getId()).getFirst())
+                .getId());
+    }
+
+    private void awaitAcknowledged() {
+        await().atMost(Duration.ofSeconds(20))
+                .until(() -> jsm.getConsumers(STREAM).stream()
+                        .allMatch(durable -> durable.getNumPending() == 0 && durable.getNumAckPending() == 0));
+    }
+
+    private JsonNode fixture(String name) throws Exception {
+        return objectMapper.readTree(new ClassPathResource(name).getContentAsByteArray());
+    }
+
+    private byte[] bytes(JsonNode payload) {
+        return objectMapper.writeValueAsBytes(payload);
+    }
+
+    private static JsonNode projectCreate(String pathWithNamespace, long projectId) {
+        ObjectNode payload = JsonNodeFactory.instance.objectNode();
+        payload.put("event_name", "project_create");
+        payload.put("name", pathWithNamespace.substring(pathWithNamespace.lastIndexOf('/') + 1));
+        payload.put("path", pathWithNamespace.substring(pathWithNamespace.lastIndexOf('/') + 1));
+        payload.put("path_with_namespace", pathWithNamespace);
+        payload.put("project_id", projectId);
+        payload.put("project_visibility", "private");
+        return payload;
+    }
+
+    /** {@code payload} as if it happened in the project at {@code pathWithNamespace}. */
+    private static JsonNode onProject(JsonNode payload, String pathWithNamespace, long projectId) {
+        ObjectNode project = (ObjectNode) payload.get("project");
+        project.put("id", projectId);
+        project.put("path_with_namespace", pathWithNamespace);
+        project.put("web_url", SERVER_URL + "/" + pathWithNamespace);
+        return payload;
+    }
+
+    /** The subgroup the member fixture names, as team sync stores it. */
+    private Team subgroupTeam() {
+        return team(SUBGROUP_ID, GROUP, "test-subgroup");
+    }
+
+    private Team team(long nativeId, String organization, String slug) {
+        Team team = new Team();
+        team.setNativeId(nativeId);
+        team.setProvider(identityProviderRepository
+                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, SERVER_URL)
+                .orElseThrow());
+        team.setName(slug);
+        team.setSlug(slug);
+        team.setHtmlUrl(SERVER_URL + "/" + organization + "/" + slug);
+        team.setOrganization(organization);
+        return teamRepository.save(team);
+    }
+
+    /** A project as GitLab reports it. */
+    private static GitLabProjectResponse reported(long nativeId, String fullPath) {
+        return new GitLabProjectResponse(
+                "gid://gitlab/Project/" + nativeId,
+                fullPath,
+                fullPath.substring(fullPath.lastIndexOf('/') + 1),
+                SERVER_URL + "/" + fullPath,
+                null,
+                "private",
+                false,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    private static GitLabGroupMemberResponse member(String access, int level) {
+        return new GitLabGroupMemberResponse(
+                new GitLabGroupMemberResponse.GitLabMemberUser(
+                        "gid://gitlab/User/" + MEMBER_USER_ID, "ga84xah", "Felix Dietrich", null, null),
+                new GitLabGroupMemberResponse.GitLabAccessLevel(access, level));
+    }
+
+    /** A repository another workspace owns, outside this test's connected group. */
+    private Repository foreignRepository(String nameWithOwner, long nativeId) {
+        Repository repository = new Repository();
+        repository.setNativeId(nativeId);
+        repository.setName(nameWithOwner.substring(nameWithOwner.lastIndexOf('/') + 1));
+        repository.setNameWithOwner(nameWithOwner);
+        repository.setHtmlUrl(SERVER_URL + "/" + nameWithOwner);
+        repository.setVisibility(Repository.Visibility.PRIVATE);
+        repository.setDefaultBranch("main");
+        repository.setCreatedAt(Instant.now());
+        repository.setUpdatedAt(Instant.now());
+        repository.setPushedAt(Instant.now());
+        repository.setProvider(identityProviderRepository
+                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, SERVER_URL)
+                .orElseThrow());
+        return repositoryRepository.save(repository);
+    }
+
+    private long gitLabProviderId() {
+        return Objects.requireNonNull(identityProviderRepository
+                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, SERVER_URL)
+                .orElseThrow()
+                .getId());
     }
 
     /** Connects a GitLab group the way workspace creation does, which starts its initialization. */
@@ -352,9 +877,8 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.GITLAB,
                 config -> ((ConnectionConfig.GitLabConfig) config)
                         .withGitlabGroupId(GROUP_ID)
-                        .withGitlabWebhookId(WEBHOOK_ID));
-        when(gitLabWebhookClient.getGroupWebhook(anyLong(), eq(GROUP_ID), eq(WEBHOOK_ID)))
-                .thenReturn(Optional.of(new GitLabWebhookClient.WebhookInfo(WEBHOOK_ID, WEBHOOK_URL)));
+                        .withGitlabWebhookId(LEGACY_WEBHOOK_ID));
+        hooks.add(new GitLabWebhookClient.WebhookInfo(LEGACY_WEBHOOK_ID, WEBHOOK_URL));
         return saved;
     }
 
@@ -366,7 +890,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                     .orElseGet(() -> identityProviderRepository.save(
                             new IdentityProvider(IdentityProviderType.GITLAB, SERVER_URL)));
             Organization organization = new Organization();
-            organization.setNativeId(1L);
+            organization.setNativeId(GROUP_ID);
             organization.setLogin(GROUP);
             organization.setName("HephaestusTest");
             organization.setAvatarUrl("");
@@ -461,10 +985,17 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 .count();
     }
 
-    private static Set<String> expectedFilter() {
+    /** What the durable of an earlier release subscribed: the monitored repository and the group tier. */
+    private static Set<String> legacyFilter() {
         return Set.of(
                 ConsumerSubjectMath.repositoryFilter(STREAM, REPOSITORY),
                 ConsumerSubjectMath.organizationFilter(STREAM, GROUP));
+    }
+
+    private Set<String> expectedFilter(Workspace target) {
+        Set<String> subjects = new HashSet<>(legacyFilter());
+        subjects.add(ConsumerSubjectMath.connectionFilter(STREAM, connectionId(target)));
+        return subjects;
     }
 
     private Set<String> filterSubjects() throws Exception {

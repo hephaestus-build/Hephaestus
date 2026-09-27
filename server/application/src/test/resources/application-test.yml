@@ -112,6 +112,8 @@ hephaestus:
         # A GitLab signing token's whsec_ form, so signed GitLab webhooks verify end to end.
         secret: whsec_dGVzdC1naXRsYWItc2lnbmluZy1rZXktbm90LXJlYWw=
         external-url: http://localhost:8080
+        routing:
+            secret: test-gitlab-routing-key-not-real-0123456789
     cors:
         allowed-origins:
             - http://localhost:4200

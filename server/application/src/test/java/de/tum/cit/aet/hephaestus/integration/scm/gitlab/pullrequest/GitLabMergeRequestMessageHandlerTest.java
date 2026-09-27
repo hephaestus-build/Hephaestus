@@ -74,6 +74,8 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
         handler = new GitLabMergeRequestMessageHandler(
                 mergeRequestProcessor, contextResolver, closingIssueClient, deserializer, transactionTemplate);
 
+        lenient().when(contextResolver.mayStillWrite()).thenReturn(true);
+
         // Default: context resolver returns a valid context
         lenient()
                 .when(contextResolver.resolve(eq(PROJECT_PATH), any(), any()))

@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
@@ -15,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -28,6 +30,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Integration tests for {@link GitLabIssueCommentProcessor#processFromSync} covering Gap 8
@@ -72,6 +77,9 @@ class GitLabIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private RecordingScmEventListener eventListener;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     private IdentityProvider gitlabProvider;
     private long providerId;
@@ -175,6 +183,28 @@ class GitLabIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
         assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class)).hasSize(1);
         // First-seen comment must not produce a spurious CommentUpdated event.
         assertThat(eventListener.ofType(ScmDomainEvent.CommentUpdated.class)).isEmpty();
+    }
+
+    @Test
+    void shouldNotMoveANoteStoredUnderAnotherIssueWhenAWebhookNamesItsId() throws Exception {
+        IssueComment stored = processor.processFromSync(
+                buildData("Original body", CREATED_AT, UPDATED_AT_SAME), testIssue, providerId, testWorkspace.getId());
+        assertNotNull(stored);
+        ObjectNode payload = (ObjectNode)
+                objectMapper.readTree(new ClassPathResource("gitlab/note.issue.create.json").getContentAsByteArray());
+        ((ObjectNode) payload.get("issue")).put("iid", 6).put("id", 422_297L);
+        ((ObjectNode) payload.get("object_attributes")).put("note", "Rewritten body");
+
+        IssueComment result = processor.processIssueNote(
+                objectMapper.treeToValue(payload, GitLabNoteEventDTO.class),
+                ProcessingContext.forWebhook(testWorkspace.getId(), testRepository, "create"));
+
+        assertThat(result).isNull();
+        IssueComment unchanged = commentRepository.findById(stored.getId()).orElseThrow();
+        Issue parentIssue = unchanged.getIssue();
+        assertNotNull(parentIssue);
+        assertThat(parentIssue.getId()).isEqualTo(testIssue.getId());
+        assertThat(unchanged.getBody()).isEqualTo("Original body");
     }
 
     // Helpers

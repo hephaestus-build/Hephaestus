@@ -672,6 +672,11 @@ hephaestus:
     webhook:
         external-url: ${WEBHOOK_EXTERNAL_URL:${APPLICATION_HOST_URL:}}
         secret: ${WEBHOOK_SECRET:}
+        # Signs each GitLab connection's own hook token; independent of WEBHOOK_SECRET. The previous key stays
+        # accepted while its hooks are replaced during a rotation.
+        routing:
+            secret: ${WEBHOOK_ROUTING_SECRET:}
+            previous-secret: ${WEBHOOK_ROUTING_PREVIOUS_SECRET:}
         token-rotation:
             threshold-days: ${WEBHOOK_TOKEN_ROTATION_THRESHOLD_DAYS:7}
             validity-days: ${WEBHOOK_TOKEN_ROTATION_VALIDITY_DAYS:90}

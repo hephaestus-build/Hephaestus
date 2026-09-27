@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -195,27 +196,34 @@ public class GitLabPullRequestReviewThreadProcessor {
      * @return the thread entity (never null)
      */
     @Transactional
-    public PullRequestReviewThread findOrCreateWebhookThread(
+    public @Nullable PullRequestReviewThread findOrCreateWebhookThread(
             WebhookThreadData data, PullRequest pr, IdentityProvider provider) {
         Long providerId = Objects.requireNonNull(provider.getId());
 
-        return threadRepository
-                .findByNativeIdAndProviderId(data.noteNativeId(), providerId)
-                .orElseGet(() -> {
-                    PullRequestReviewThread thread = new PullRequestReviewThread();
-                    thread.setNativeId(data.noteNativeId());
-                    thread.setProvider(provider);
-                    thread.setPullRequest(pr);
-                    thread.setPath(data.filePath());
-                    thread.setLine(data.line());
-                    thread.setState(PullRequestReviewThread.State.UNRESOLVED);
-                    thread.setCreatedAt(data.createdAt());
-                    thread.setUpdatedAt(data.updatedAt());
+        Optional<PullRequestReviewThread> existing =
+                threadRepository.findByNativeIdAndProviderId(data.noteNativeId(), providerId);
+        // A note id is unique on the instance: a thread stored under another merge request is not this one's.
+        if (existing.map(PullRequestReviewThread::getPullRequest)
+                .filter(parent -> !parent.getId().equals(pr.getId()))
+                .isPresent()) {
+            log.warn("Skipped webhook thread: reason=belongsToAnotherMergeRequest, nativeId={}", data.noteNativeId());
+            return null;
+        }
+        return existing.orElseGet(() -> {
+            PullRequestReviewThread thread = new PullRequestReviewThread();
+            thread.setNativeId(data.noteNativeId());
+            thread.setProvider(provider);
+            thread.setPullRequest(pr);
+            thread.setPath(data.filePath());
+            thread.setLine(data.line());
+            thread.setState(PullRequestReviewThread.State.UNRESOLVED);
+            thread.setCreatedAt(data.createdAt());
+            thread.setUpdatedAt(data.updatedAt());
 
-                    PullRequestReviewThread saved = threadRepository.save(thread);
-                    log.debug("Created webhook thread: nativeId={}, path={}", data.noteNativeId(), data.filePath());
-                    return saved;
-                });
+            PullRequestReviewThread saved = threadRepository.save(thread);
+            log.debug("Created webhook thread: nativeId={}, path={}", data.noteNativeId(), data.filePath());
+            return saved;
+        });
     }
 
     private PullRequestReviewThread updateThread(

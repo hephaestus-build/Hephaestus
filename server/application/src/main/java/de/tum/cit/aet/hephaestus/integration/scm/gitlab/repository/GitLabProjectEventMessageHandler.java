@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabProjectEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,6 +77,13 @@ public class GitLabProjectEventMessageHandler extends AbstractIntegrationMessage
 
         if (provider == null) {
             log.warn("IdentityProvider not found for GITLAB, skipping project event");
+            return;
+        }
+
+        // On a connection route admission has already stored the project as GitLab reports it to the connection and
+        // adjusted this workspace's monitor; the payload's id and path are never written, and the shared repository
+        // row is never deleted, since GitLab not reporting a project to one connection does not prove it is gone.
+        if (GitLabRouteAdmission.current().isPresent()) {
             return;
         }
 
