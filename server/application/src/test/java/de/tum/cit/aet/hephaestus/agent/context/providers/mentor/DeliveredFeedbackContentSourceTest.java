@@ -10,13 +10,15 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.RecipientFeedbackRow;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
@@ -30,6 +32,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -41,6 +46,8 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class DeliveredFeedbackContentSourceTest extends BaseUnitTest {
+
+    private static final Instant AT = Instant.parse("2026-06-17T08:30:00Z");
 
     @Mock
     UserRepository userRepository;
@@ -64,165 +71,177 @@ class DeliveredFeedbackContentSourceTest extends BaseUnitTest {
     DeliveredFeedbackContentSource provider;
 
     @Test
-    @DisplayName("no delivered feedback → empty array, totalDelivered=0")
+    @DisplayName("no feedback → empty arrays")
     void emptyDefaults() throws Exception {
-        User user = new User();
-        user.setLogin("octo");
-        when(userRepository.findById(eq(2L))).thenReturn(Optional.of(user));
-        when(feedbackRepository.findRecentDeliveredForRecipient(
-                        eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
-                .thenReturn(List.of());
+        givenUser();
+        givenRows();
 
-        Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
+        JsonNode root = contribute();
 
-        byte[] bytes = files.get("inputs/context/delivered_feedback.json");
-        assertThat(bytes).isNotNull();
-        JsonNode root = objectMapper.readTree(bytes);
         assertThat(root.get("user").get("login").asString()).isEqualTo("octo");
-        assertThat(root.get("deliveredFeedback").isArray()).isTrue();
         assertThat(root.get("deliveredFeedback")).isEmpty();
-        assertThat(root.get("totalDelivered").asLong()).isEqualTo(0L);
+        assertThat(root.get("feedbackStates")).isEmpty();
     }
 
     @Test
-    @DisplayName("ships the rendered body + skips a delivered unit with a blank body")
+    @DisplayName("ships the delivered body; a blank one keeps its status but no text, and null artifacts are omitted")
     void shipsRenderedBodyAndSkipsBlank() throws Exception {
-        User user = new User();
-        user.setLogin("octo");
-        when(userRepository.findById(eq(2L))).thenReturn(Optional.of(user));
-
-        Feedback withBody = Feedback.builder()
-                .id(UUID.randomUUID())
-                .channel(FeedbackChannel.IN_CONTEXT)
-                .artifactKind(ArtifactKinds.PULL_REQUEST)
-                .artifactId(575L)
-                .deliveredAt(Instant.parse("2026-06-17T08:30:00Z"))
-                .body("Nice work scoping this PR — one thing to tighten before merge.")
-                .build();
-        Feedback blank = Feedback.builder()
-                .id(UUID.randomUUID())
-                .channel(FeedbackChannel.IN_CONTEXT)
-                .artifactKind(ArtifactKinds.ISSUE)
-                .artifactId(574L)
-                .deliveredAt(Instant.parse("2026-06-16T08:30:00Z"))
-                .body("   ")
-                .build();
-        when(feedbackRepository.findRecentDeliveredForRecipient(
-                        eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
-                .thenReturn(List.of(withBody, blank));
+        givenUser();
+        Row withBody = delivered(ArtifactKinds.PULL_REQUEST, 575L, "Nice work scoping this PR.");
+        Row blank = delivered(null, null, "   ");
+        givenRows(withBody, blank);
         authorize(withBody, blank);
 
-        Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
+        JsonNode root = contribute();
 
-        JsonNode root = objectMapper.readTree(files.get("inputs/context/delivered_feedback.json"));
-        assertThat(root.get("totalDelivered").asLong()).isEqualTo(1L);
+        assertThat(root.get("deliveredFeedback")).hasSize(1);
         JsonNode only = root.get("deliveredFeedback").get(0);
-        assertThat(only.get("body").asString()).contains("Nice work scoping this PR");
+        assertThat(only.get("feedbackId").asString()).isEqualTo(withBody.getId().toString());
         assertThat(only.get("surface").asString()).isEqualTo("IN_CONTEXT");
         assertThat(only.get("artifactKind").asString()).isEqualTo("scm.pull_request");
         assertThat(only.get("artifactId").asLong()).isEqualTo(575L);
-    }
-
-    @Test
-    @DisplayName("omits artifactKind/artifactId for an in-app-style unit with no artifact, still ships surface + body")
-    void omitsNullArtifactFields() throws Exception {
-        User user = new User();
-        user.setLogin("octo");
-        when(userRepository.findById(eq(2L))).thenReturn(Optional.of(user));
-
-        Feedback noArtifact = Feedback.builder()
-                .id(UUID.randomUUID())
-                .channel(FeedbackChannel.IN_CONTEXT)
-                .deliveredAt(Instant.parse("2026-06-17T08:30:00Z"))
-                .body("Reflecting on your last few reviews — here is a pattern to watch.")
-                .build();
-        when(feedbackRepository.findRecentDeliveredForRecipient(
-                        eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
-                .thenReturn(List.of(noArtifact));
-        authorize(noArtifact);
-
-        Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
-
-        JsonNode root = objectMapper.readTree(files.get("inputs/context/delivered_feedback.json"));
-        assertThat(root.get("totalDelivered").asLong()).isEqualTo(1L);
-        JsonNode only = root.get("deliveredFeedback").get(0);
-        assertThat(only.has("artifactKind")).isFalse();
-        assertThat(only.has("artifactId")).isFalse();
-        assertThat(only.get("surface").asString()).isEqualTo("IN_CONTEXT");
-        assertThat(only.get("body").asString()).contains("Reflecting on your last few reviews");
+        assertThat(only.get("body").asString()).isEqualTo("Nice work scoping this PR.");
+        JsonNode blankState = root.get("feedbackStates").get(1);
+        assertThat(blankState.get("status").asString()).isEqualTo("DELIVERED");
+        assertThat(blankState.has("artifactKind")).isFalse();
+        assertThat(blankState.has("artifactId")).isFalse();
     }
 
     @Test
     @DisplayName("source authorization is re-evaluated for every turn")
     void authorizationIsReevaluatedForEveryTurn() throws Exception {
-        User user = new User();
-        user.setLogin("octo");
-        when(userRepository.findById(eq(2L))).thenReturn(Optional.of(user));
-        when(feedbackRepository.findRecentDeliveredForRecipient(
-                        eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
-                .thenReturn(List.of());
+        givenUser();
+        givenRows();
 
-        var request = new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID());
-        provider.contribute(request, new HashMap<>());
-        provider.contribute(request, new HashMap<>());
+        contribute();
+        contribute();
 
         verify(feedbackRepository, times(2))
-                .findRecentDeliveredForRecipient(eq(1L), eq(2L), any(Instant.class), any(Pageable.class));
+                .findRecentReceivableForRecipient(
+                        eq(1L), eq(2L), any(Instant.class), any(), any(), any(Pageable.class));
+    }
+
+    @Test
+    void keepsAConversationStatusButNeverItsBody() throws Exception {
+        givenUser();
+        Row chat = new Row(
+                UUID.randomUUID(),
+                FeedbackChannel.IN_CHAT,
+                FeedbackDeliveryState.DELIVERED,
+                null,
+                null,
+                AT,
+                AT,
+                "composer notes for the mentor");
+        givenRows(chat);
+        authorize(chat);
+
+        JsonNode root = contribute();
+
+        assertThat(root.get("deliveredFeedback")).isEmpty();
+        assertThat(root.get("feedbackStates").get(0).get("status").asString()).isEqualTo("DELIVERED");
+        assertThat(root.toString()).doesNotContain("composer notes for the mentor");
     }
 
     @Test
     void withholdsFeedbackWhenItsObservationIsNoLongerVisible() {
-        User user = new User();
-        user.setLogin("octo");
-        Feedback feedback = Feedback.builder()
-                .id(UUID.randomUUID())
-                .channel(FeedbackChannel.IN_CONTEXT)
-                .body("Previously delivered")
-                .build();
-        when(userRepository.findById(2L)).thenReturn(Optional.of(user));
-        when(feedbackRepository.findRecentDeliveredForRecipient(
-                        eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
-                .thenReturn(List.of(feedback));
-        bind(feedback);
+        givenUser();
+        Row row = delivered(ArtifactKinds.PULL_REQUEST, 575L, "Previously delivered");
+        givenRows(row);
+        FeedbackObservationVisibility binding = binding(row);
+        when(feedbackObservationRepository.findForVisibility(eq(1L), any())).thenReturn(List.of(binding));
         when(visibilityPolicy.permitsAll(eq(1L), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
                 .thenReturn(Set.of());
 
         ObjectNode root = provider.buildPayload(1L, 2L);
 
         assertThat(root.path("deliveredFeedback")).isEmpty();
+        assertThat(root.path("feedbackStates")).isEmpty();
     }
 
-    private void authorize(Feedback... feedback) {
+    @Test
+    void readsAFixedNumberOfPagesWhenEveryRowIsHidden() {
+        givenUser();
+        Row beyondBudget = delivered(ArtifactKinds.PULL_REQUEST, 999L, "beyond-the-budget");
+        AtomicInteger pages = new AtomicInteger();
+        when(feedbackRepository.findRecentReceivableForRecipient(
+                        eq(1L), eq(2L), any(Instant.class), any(), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> pages.getAndIncrement() < 5
+                        ? Stream.generate(() -> delivered(ArtifactKinds.PULL_REQUEST, 1L, "hidden-body"))
+                                .limit(30)
+                                .toList()
+                        : List.of(beyondBudget));
+        authorize(beyondBudget);
+
+        ObjectNode root = provider.buildPayload(1L, 2L);
+
+        verify(feedbackRepository, times(5))
+                .findRecentReceivableForRecipient(
+                        eq(1L), eq(2L), any(Instant.class), any(), any(), any(Pageable.class));
+        assertThat(root.path("feedbackStates")).isEmpty();
+        assertThat(root.toString()).doesNotContain("hidden-body", "beyond-the-budget");
+    }
+
+    private JsonNode contribute() throws Exception {
+        Map<String, byte[]> files = new HashMap<>();
+        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
+        return objectMapper.readTree(files.get("inputs/context/delivered_feedback.json"));
+    }
+
+    private void givenUser() {
+        User user = new User();
+        user.setLogin("octo");
+        when(userRepository.findById(eq(2L))).thenReturn(Optional.of(user));
+    }
+
+    private void givenRows(RecipientFeedbackRow... rows) {
+        when(feedbackRepository.findRecentReceivableForRecipient(
+                        eq(1L), eq(2L), any(Instant.class), any(), any(), any(Pageable.class)))
+                .thenReturn(List.of(rows));
+    }
+
+    private void authorize(Row... rows) {
         List<FeedbackObservationVisibility> bindings = new ArrayList<>();
         Set<UUID> permitted = new HashSet<>();
-        for (Feedback unit : feedback) {
-            Observation observation = observationWithId();
-            FeedbackObservationVisibility binding = mock(FeedbackObservationVisibility.class);
-            when(binding.getFeedbackId()).thenReturn(unit.getId());
-            when(binding.getObservation()).thenReturn(observation);
+        for (Row row : rows) {
+            FeedbackObservationVisibility binding = binding(row);
             bindings.add(binding);
-            permitted.add(observation.getId());
+            permitted.add(binding.getObservation().getId());
         }
+        when(feedbackObservationRepository.findForVisibility(eq(1L), any())).thenReturn(bindings);
         when(visibilityPolicy.permitsAll(eq(1L), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
                 .thenReturn(permitted);
-        when(feedbackObservationRepository.findForVisibility(eq(1L), any())).thenReturn(bindings);
     }
 
-    private Observation bind(Feedback feedback) {
-        Observation observation = observationWithId();
-        FeedbackObservationVisibility binding = mock(FeedbackObservationVisibility.class);
-        when(binding.getFeedbackId()).thenReturn(feedback.getId());
-        when(binding.getObservation()).thenReturn(observation);
-        when(feedbackObservationRepository.findForVisibility(eq(1L), any())).thenReturn(List.of(binding));
-        return observation;
-    }
-
-    private static Observation observationWithId() {
+    private static FeedbackObservationVisibility binding(Row row) {
         Observation observation = mock(Observation.class);
         when(observation.getId()).thenReturn(UUID.randomUUID());
-        return observation;
+        FeedbackObservationVisibility binding = mock(FeedbackObservationVisibility.class);
+        when(binding.getFeedbackId()).thenReturn(row.getId());
+        when(binding.getObservation()).thenReturn(observation);
+        return binding;
     }
+
+    private static Row delivered(@Nullable ArtifactKind artifactKind, @Nullable Long artifactId, String body) {
+        return new Row(
+                UUID.randomUUID(),
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.DELIVERED,
+                artifactKind,
+                artifactId,
+                AT,
+                AT,
+                body);
+    }
+
+    private record Row(
+            UUID getId,
+            FeedbackChannel getChannel,
+            FeedbackDeliveryState getDeliveryState,
+            @Nullable ArtifactKind getArtifactKind,
+            @Nullable Long getArtifactId,
+            Instant getCreatedAt,
+            @Nullable Instant getDeliveredAt,
+            @Nullable String getBody)
+            implements RecipientFeedbackRow {}
 }

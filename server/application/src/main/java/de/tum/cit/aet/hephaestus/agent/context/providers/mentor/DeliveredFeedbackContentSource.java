@@ -7,23 +7,24 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.ConversationBriefBody;
-import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.RecipientFeedbackRow;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,7 +40,8 @@ public class DeliveredFeedbackContentSource implements ContentSource {
     public static final String OUTPUT_KEY = OUTPUT_PREFIX + "delivered_feedback.json";
 
     private static final int LOOKBACK_DAYS = 90;
-    private static final int MAX_DELIVERED = 30;
+    private static final int MAX_FEEDBACK = 30;
+    private static final int MAX_PAGES = 5;
 
     private final UserRepository userRepository;
     private final FeedbackRepository feedbackRepository;
@@ -76,94 +78,118 @@ public class DeliveredFeedbackContentSource implements ContentSource {
                 .orElseThrow(() -> new EntityNotFoundException("User", developerId.toString()));
         Instant since = Instant.now().minus(LOOKBACK_DAYS, ChronoUnit.DAYS);
 
-        List<Feedback> candidates = feedbackRepository.findRecentDeliveredForRecipient(
-                workspaceId, developerId, since, PageRequest.of(0, MAX_DELIVERED));
+        // A recent sample, not a history: rows this conversation may not use are skipped rather than counted
+        // against the cap, but a turn reads at most MAX_PAGES pages however many of them it skips.
+        List<RecipientFeedbackRow> sample = new ArrayList<>();
+        @Nullable RecipientFeedbackRow last = null;
+        for (int page = 0; page < MAX_PAGES && sample.size() < MAX_FEEDBACK; page++) {
+            List<RecipientFeedbackRow> rows = feedbackRepository.findRecentReceivableForRecipient(
+                    workspaceId,
+                    developerId,
+                    since,
+                    last == null ? null : last.getCreatedAt(),
+                    last == null ? null : last.getId(),
+                    PageRequest.of(0, MAX_FEEDBACK));
+            sample.addAll(authorized(workspaceId, rows));
+            if (rows.size() < MAX_FEEDBACK) {
+                break;
+            }
+            last = rows.getLast();
+        }
+        sample = sample.subList(0, Math.min(sample.size(), MAX_FEEDBACK));
 
-        List<UUID> feedbackIds = candidates.stream()
-                .map(Feedback::getId)
-                .filter(java.util.Objects::nonNull)
-                .toList();
-        List<FeedbackObservationVisibility> bindings = feedbackIds.isEmpty()
-                ? List.of()
-                : feedbackObservationRepository.findForVisibility(workspaceId, feedbackIds);
-        Map<UUID, List<Observation>> observationsByFeedback = bindings.stream()
-                .collect(Collectors.groupingBy(
-                        FeedbackObservationVisibility::getFeedbackId,
-                        Collectors.mapping(FeedbackObservationVisibility::getObservation, Collectors.toList())));
+        ObjectNode root = objectMapper.createObjectNode();
+        // Untrusted-content quarantine: only when a Slack-derived (attacker-controllable) row survives the gate does
+        // this file carry the envelope — a PR/issue-only payload stays byte-identical (no _meta).
+        if (sample.stream().anyMatch(row -> ArtifactKinds.CONVERSATION_THREAD.equals(row.getArtifactKind()))) {
+            conversationConsentGate.writeUntrustedEnvelope(root);
+        }
+        root.putObject("user").put("login", user.getLogin()).put("name", user.getName());
+        root.put("lookbackDays", LOOKBACK_DAYS);
+
+        ArrayNode delivered = root.putArray("deliveredFeedback");
+        ArrayNode states = root.putArray("feedbackStates");
+        for (RecipientFeedbackRow row : sample) {
+            String body = deliveredText(row);
+            if (body != null) {
+                describe(delivered.addObject(), row).put("body", body);
+            }
+            describe(states.addObject(), row)
+                    .put("status", status(row))
+                    .put("createdAt", row.getCreatedAt().toString());
+        }
+        return root;
+    }
+
+    /**
+     * The rows whose every bound observation this conversation may use, and whose conversation, if any, still
+     * has consent; a row bound to no observation is withheld.
+     */
+    private List<RecipientFeedbackRow> authorized(Long workspaceId, List<RecipientFeedbackRow> rows) {
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        List<FeedbackObservationVisibility> bindings = feedbackObservationRepository.findForVisibility(
+                workspaceId, rows.stream().map(RecipientFeedbackRow::getId).toList());
         Set<UUID> visible = visibilityPolicy.permitsAll(
                 workspaceId,
                 bindings.stream()
                         .map(FeedbackObservationVisibility::getObservation)
                         .toList(),
                 SourceUsePurpose.CONVERSATIONAL_MENTORING);
-        List<Feedback> delivered = candidates.stream()
-                .filter(feedback -> {
-                    List<Observation> observations = observationsByFeedback.getOrDefault(feedback.getId(), List.of());
-                    return (!observations.isEmpty()
-                            && observations.stream().allMatch(observation -> visible.contains(observation.getId())));
-                })
+        Map<UUID, Boolean> permitted = bindings.stream()
+                .collect(Collectors.toMap(
+                        FeedbackObservationVisibility::getFeedbackId,
+                        binding -> visible.contains(binding.getObservation().getId()),
+                        Boolean::logicalAnd));
+        Set<Long> activeThreadIds = conversationConsentGate.activeThreadIds(
+                workspaceId,
+                rows.stream()
+                        .filter(row -> ArtifactKinds.CONVERSATION_THREAD.equals(row.getArtifactKind()))
+                        .map(RecipientFeedbackRow::getArtifactId)
+                        .filter(Objects::nonNull)
+                        .toList());
+        return rows.stream()
+                .filter(row -> permitted.getOrDefault(row.getId(), false))
+                .filter(row -> !ArtifactKinds.CONVERSATION_THREAD.equals(row.getArtifactKind())
+                        || (row.getArtifactId() != null && activeThreadIds.contains(row.getArtifactId())))
                 .toList();
-
-        Set<Long> activeThreadIds =
-                conversationConsentGate.activeThreadIds(workspaceId, conversationThreadIds(delivered));
-        boolean anyConversationSurvivor = delivered.stream().anyMatch(f -> isSurvivingConversation(f, activeThreadIds));
-
-        ObjectNode root = objectMapper.createObjectNode();
-        // Untrusted-content quarantine: only when a Slack-derived (attacker-controllable) body survives the gate does
-        // this file carry the envelope — a PR/issue-only payload stays byte-identical (no _meta).
-        if (anyConversationSurvivor) {
-            conversationConsentGate.writeUntrustedEnvelope(root);
-        }
-        root.putObject("user").put("login", user.getLogin()).put("name", user.getName());
-        root.put("lookbackDays", LOOKBACK_DAYS);
-
-        ArrayNode arr = root.putArray("deliveredFeedback");
-        for (Feedback f : delivered) {
-            String body = f.getBody();
-            if (body == null || body.isBlank()) {
-                continue;
-            }
-            // A conversational unit's body is the composer's notes to the mentor, never the words the mentor
-            // spoke — those live in the chat transcript. Staging one here would show the mentor its own
-            // unspoken plan as something the developer has already been told. The current brief is an
-            // internal handoff, not a delivered message.
-            if (ConversationBriefBody.isBrief(body)) {
-                continue;
-            }
-            if (ArtifactKinds.CONVERSATION_THREAD.equals(f.getArtifactKind())
-                    && !isSurvivingConversation(f, activeThreadIds)) {
-                continue;
-            }
-            ObjectNode node = arr.addObject();
-            node.put("surface", f.getChannel().name());
-            if (f.getArtifactKind() != null) {
-                node.put("artifactKind", f.getArtifactKind().value());
-            }
-            if (f.getArtifactId() != null) {
-                node.put("artifactId", f.getArtifactId());
-            }
-            if (f.getDeliveredAt() != null) {
-                node.put("deliveredAt", f.getDeliveredAt().toString());
-            }
-            node.put("body", body);
-        }
-        root.put("totalDelivered", arr.size());
-        return root;
     }
 
-    private static List<Long> conversationThreadIds(List<Feedback> units) {
-        List<Long> ids = new ArrayList<>();
-        for (Feedback f : units) {
-            if (ArtifactKinds.CONVERSATION_THREAD.equals(f.getArtifactKind()) && f.getArtifactId() != null) {
-                ids.add(f.getArtifactId());
-            }
-        }
-        return ids;
+    /**
+     * The rendered words a delivered unit put in front of the developer, or {@code null}. A conversational unit's
+     * body is the composer's private notes to the mentor, whatever its format, never the words the mentor spoke —
+     * those live in the chat transcript — so no chat body is staged as something the developer was told.
+     */
+    private static @Nullable String deliveredText(RecipientFeedbackRow row) {
+        String body = row.getBody();
+        return row.getChannel() == FeedbackChannel.IN_CHAT || body == null || body.isBlank() ? null : body;
     }
 
-    private static boolean isSurvivingConversation(Feedback f, Set<Long> activeThreadIds) {
-        return (ArtifactKinds.CONVERSATION_THREAD.equals(f.getArtifactKind())
-                && f.getArtifactId() != null
-                && activeThreadIds.contains(f.getArtifactId()));
+    private static ObjectNode describe(ObjectNode node, RecipientFeedbackRow row) {
+        node.put("feedbackId", row.getId().toString());
+        node.put("surface", row.getChannel().name());
+        if (row.getArtifactKind() != null) {
+            node.put("artifactKind", row.getArtifactKind().value());
+        }
+        if (row.getArtifactId() != null) {
+            node.put("artifactId", row.getArtifactId());
+        }
+        if (row.getDeliveredAt() != null) {
+            node.put("deliveredAt", row.getDeliveredAt().toString());
+        }
+        return node;
+    }
+
+    /** The recipient-facing name of what {@link FeedbackRepository#findRecentReceivableForRecipient} returned. */
+    private static String status(RecipientFeedbackRow row) {
+        return switch (row.getDeliveryState()) {
+            case DELIVERED -> "DELIVERED";
+            case PARTIALLY_DELIVERED -> "PARTIALLY_DELIVERED";
+            case PARTIALLY_FAILED -> "PARTIALLY_FAILED";
+            case FAILED -> "DELIVERY_FAILED";
+            case PREPARED -> "PREPARED";
+            default -> throw new IllegalStateException("Not a receivable state: " + row.getDeliveryState());
+        };
     }
 }
