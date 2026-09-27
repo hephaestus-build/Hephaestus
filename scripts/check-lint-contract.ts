@@ -34,6 +34,11 @@ interface Fixture {
 	path: string;
 	code: string | null;
 	source: string;
+	/**
+	 * With `code` null, only this diagnostic must be missing: the fixture imports a package the
+	 * throwaway project cannot resolve, so the type checker reports that as well.
+	 */
+	absent?: string;
 }
 
 const story = (name: string) => `src/components/ui/LintContract-${name}.stories.tsx`;
@@ -408,8 +413,9 @@ void test("vp lint preserves house rules, design-system checks and type-aware di
 	}
 });
 
-void test("webapp and docs use the same lint engine options", () => {
+void test("webapp, mobile and docs use the same lint engine options", () => {
 	assert.deepEqual(effectiveLintOptions("docs"), effectiveLintOptions("webapp"));
+	assert.deepEqual(effectiveLintOptions("mobile"), effectiveLintOptions("webapp"));
 });
 
 /**
@@ -461,5 +467,165 @@ void test("every no-restyle contract names a component the registry exports", ()
 				`no-restyle contract names ${name}, which no registry file exports`,
 			);
 		}
+	}
+});
+
+void test("native lint rejects unsafe types, bypassed requests and handwritten server keys", () => {
+	const project = mkdtempSync(path.join(tmpdir(), "native-lint-contract-"));
+	const mobile = path.join(REPO_ROOT, "mobile");
+	const cases: Fixture[] = [
+		{
+			path: "src/network.ts",
+			code: "eslint(no-restricted-globals)",
+			source: 'void fetch("https://example.org");',
+		},
+		{
+			path: "src/logging.ts",
+			code: "eslint(no-console)",
+			source: 'console.log("private session");',
+		},
+		{
+			path: "src/key.ts",
+			code: "hephaestus(no-manual-query-key)",
+			source: 'export const query = { queryKey: ["account"] };',
+		},
+		{
+			path: "src/types.ts",
+			code: "typescript(TS2322)",
+			source: 'export const count: number = "wrong";',
+		},
+		{
+			path: "src/promise.ts",
+			code: "typescript(no-floating-promises)",
+			source: "Promise.resolve(1);",
+		},
+
+		{
+			path: "src/QueryView.tsx",
+			code: "eslint(no-restricted-imports)",
+			source: 'import { useQuery } from "@tanstack/react-query"; export const read = useQuery;',
+		},
+		{
+			path: "src/WorkspaceView.tsx",
+			code: "eslint(no-restricted-imports)",
+			source:
+				'import { useWorkspace } from "@/workspace/workspace-context"; export const read = useWorkspace;',
+		},
+		{
+			path: "src/NavigatingView.tsx",
+			code: "eslint(no-restricted-imports)",
+			source: 'import { useRouter } from "expo-router"; export const read = useRouter;',
+		},
+		{
+			path: "src/NavigationHookView.tsx",
+			code: "eslint(no-restricted-imports)",
+			source: 'import { useNavigation } from "expo-router"; export const read = useNavigation;',
+		},
+		{
+			path: "src/NamespaceRouterView.tsx",
+			code: "eslint(no-restricted-imports)",
+			source: 'import * as Router from "expo-router"; export const read = Router.router;',
+		},
+		{
+			path: "src/ReactNavigationView.tsx",
+			code: "eslint(no-restricted-imports)",
+			source:
+				'import { useNavigation } from "@react-navigation/native"; export const read = useNavigation;',
+		},
+		{
+			path: "src/HeaderSlotView.tsx",
+			code: null,
+			absent: "eslint(no-restricted-imports)",
+			source: 'import { Stack } from "expo-router"; export const Header = Stack.Screen;',
+		},
+		{
+			path: "src/BrowsingView.tsx",
+			code: "eslint(no-restricted-imports)",
+			source:
+				'import { openBrowserAsync } from "expo-web-browser"; export const open = openBrowserAsync;',
+		},
+		{
+			path: "src/ReportingView.tsx",
+			code: "eslint(no-restricted-imports)",
+			source:
+				'import { setPendingReport } from "@/report/report"; export const report = setPendingReport;',
+		},
+		{
+			path: "src/reversed.ts",
+			code: "eslint(no-restricted-imports)",
+			source: 'import { AppText } from "@/ui/AppText"; export const view = AppText;',
+		},
+		{
+			path: "src/ValidView.tsx",
+			code: null,
+			source:
+				'import type { FeedbackResponse } from "@/api/types.gen";\n\nexport function responseId(response: FeedbackResponse) { return response.feedbackId; }',
+		},
+		{ path: "src/valid.ts", code: null, source: "export const count = 1;" },
+	];
+	try {
+		const lint: Record<string, unknown> = {
+			...loadLintConfig(pathToFileURL(path.join(mobile, ".oxlintrc.json"))),
+			options: effectiveLintOptions("mobile"),
+		};
+		assert.ok(Array.isArray(lint.jsPlugins));
+		const require = createRequire(path.join(mobile, "package.json"));
+		lint.jsPlugins = lint.jsPlugins.map((plugin: unknown) => require.resolve(String(plugin)));
+		writeFileSync(
+			path.join(project, "package.json"),
+			JSON.stringify({ name: "native-lint-contract", private: true, type: "module" }),
+		);
+		writeFileSync(path.join(project, "pnpm-workspace.yaml"), "packages:\n  - .\n");
+		writeFileSync(
+			path.join(project, "vite.config.ts"),
+			`import { defineConfig } from "vite-plus";\nexport default defineConfig({ lint: ${JSON.stringify(lint)} });\n`,
+		);
+		// The canaries exercise the real native tsconfig, including Expo's inherited options.
+		writeFileSync(
+			path.join(project, "tsconfig.json"),
+			JSON.stringify({
+				extends: path.join(mobile, "tsconfig.json"),
+				include: ["src/**/*.ts", "src/**/*.tsx"],
+				exclude: ["node_modules"],
+			}),
+		);
+		symlinkSync(
+			path.join(REPO_ROOT, "node_modules"),
+			path.join(project, "node_modules"),
+			process.platform === "win32" ? "junction" : "dir",
+		);
+		mkdirSync(path.join(project, "src"));
+		for (const fixture of cases) {
+			writeFileSync(path.join(project, fixture.path), fixture.source);
+		}
+		const result = spawnSync(
+			"vp",
+			["-C", project, "lint", "--format", "json", ...cases.map((fixture) => fixture.path)],
+			{ encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES },
+		);
+		assert.equal(result.error, undefined);
+		assert.equal(result.status, 1, `${result.stdout}${result.stderr}`);
+		const report = asRecord(JSON.parse(result.stdout), "native lint diagnostics");
+		assert.ok(Array.isArray(report.diagnostics));
+		const diagnostics = report.diagnostics.filter(isRecord);
+		for (const fixture of cases) {
+			const matches = diagnostics.filter(
+				(entry) => String(entry.filename).replaceAll("\\", "/") === fixture.path,
+			);
+			if (fixture.code === null) {
+				const unexpected =
+					fixture.absent === undefined
+						? matches
+						: matches.filter((entry) => entry.code === fixture.absent);
+				assert.deepEqual(unexpected, [], result.stdout);
+			} else {
+				assert.ok(
+					matches.some((entry) => entry.code === fixture.code && entry.severity === "error"),
+					`${fixture.code} did not reject ${fixture.path}:\n${result.stdout}`,
+				);
+			}
+		}
+	} finally {
+		rmSync(project, { recursive: true, force: true });
 	}
 });

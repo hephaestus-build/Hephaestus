@@ -40,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
  * given_name         — first name; only when known
  * session_exp        — absolute session ceiling (epoch seconds); see {@link TokenConstraints}
  * auth_time          — last interactive sign-in (epoch seconds, standard OIDC claim); see {@link TokenConstraints}
+ * sid                — native app session id (standard OIDC claim); only on tokens a native session rotates
  * </pre>
  *
  * <h2>Issuance contract</h2>
@@ -120,6 +121,9 @@ public class HephaestusJwtIssuer {
             // Stamped once by the login that completed the OAuth dance and copied verbatim through every
             // rotation: a silent refresh must not make a session look freshly signed in.
             claims.claim("auth_time", constraints.authTime().getEpochSecond());
+        }
+        if (constraints.nativeSessionId() != null) {
+            claims.claim("sid", constraints.nativeSessionId().toString());
         }
         JwsHeader header = JwsHeader.with(SignatureAlgorithm.ES256)
                 .keyId(signingKey.getKeyID())

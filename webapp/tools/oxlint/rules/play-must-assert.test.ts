@@ -1,8 +1,9 @@
-import { readFileSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { readJsonc } from "../../jsonc.ts";
 import { ruleTester } from "../rule-tester.ts";
 import { ASSERT_FUNCTION_NAMES, asRegExp, playMustAssert } from "./play-must-assert.ts";
 
@@ -75,23 +76,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isUnknownArray = (value: unknown): value is readonly unknown[] => Array.isArray(value);
 
-/**
- * The `assertFunctionNames` `.oxlintrc.json` hands `vitest/expect-expect`.
- *
- * The file is JSONC, and every comment in it stands on a line of its own. A trailing one would fail
- * `JSON.parse` here — loudly — rather than silently drop the entry it trails.
- */
+/** The assertion functions owned by the test layer both clients extend. */
 function configuredAssertFunctionNames(): readonly string[] {
-	// Resolved as a path rather than through `new URL(…, import.meta.url)`: these tests run in jsdom,
-	// whose `URL` resolves a relative reference against the document's origin, not the module's.
-	const here = import.meta.dirname;
-	const source = readFileSync(path.join(here, "../../../.oxlintrc.json"), "utf8");
-	const json = source
-		.split("\n")
-		.filter((line) => !line.trimStart().startsWith("//"))
-		.join("\n");
-	const config: unknown = JSON.parse(json);
-	const rules = isRecord(config) ? config.rules : undefined;
+	// Node's file URL avoids jsdom's document-relative URL constructor.
+	const file = pathToFileURL(path.join(import.meta.dirname, "../../../../oxlint.vitest.jsonc"));
+	const { rules } = readJsonc(file);
 	const entry = isRecord(rules) ? rules["vitest/expect-expect"] : undefined;
 	const [, options] = isUnknownArray(entry) ? entry : [];
 	const stated = isRecord(options) ? options.assertFunctionNames : undefined;
@@ -99,9 +88,7 @@ function configuredAssertFunctionNames(): readonly string[] {
 		? stated.filter((name): name is string => typeof name === "string")
 		: [];
 	if (names.length === 0) {
-		throw new Error(
-			"`vitest/expect-expect` in `webapp/.oxlintrc.json` states no assert functions.",
-		);
+		throw new Error("`vitest/expect-expect` in `oxlint.vitest.jsonc` states no assert functions.");
 	}
 	return names;
 }

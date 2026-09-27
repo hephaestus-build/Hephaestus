@@ -4,6 +4,8 @@ hephaestus:
     credential-encryption-key: ${HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY:hephaestusLocalDevEncryptKey0123}
   auth:
     dev-login-enabled: true
+    native:
+      redirect-uris: build.hephaestus.app.dev:/auth/callback,build.hephaestus.app:/auth/callback
     cookie-secure: false
     cookie-name: HEPHAESTUS_AT
   workspace:

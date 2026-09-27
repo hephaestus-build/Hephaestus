@@ -14,6 +14,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @ConditionalOnServerRole
 @RestController
@@ -41,6 +42,12 @@ public class AuthLifecycleController {
     @ApiResponse(responseCode = "204", description = "Session renewal completed")
     @ApiResponse(responseCode = "401", description = "Session has ended")
     public ResponseEntity<Void> refresh(HttpServletRequest request, HttpServletResponse response) {
+        if (CurrentAccount.nativeSessionId() != null) {
+            // A native session rotates through its refresh secret, which also keeps its deadline and its
+            // row in step; a cookie rotation here would strand it.
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Native sessions refresh at /auth/native/refresh");
+        }
         boolean sessionContinues = sessionService.refresh(
                 CurrentAccount.requireId(),
                 CurrentAccount.requireJti(),

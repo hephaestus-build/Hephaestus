@@ -13,7 +13,7 @@ import { run } from "./lib/process.ts";
 const serverDirectory = path.join(import.meta.dirname, "..", "server");
 const specification = path.join(serverDirectory, "openapi.yaml");
 const wrapper = path.join(import.meta.dirname, "run-gradlew.ts");
-const startupBudgetMs = 180_000;
+const startupBudgetMs = 300_000;
 
 async function executableJar(): Promise<string> {
 	const configured = process.env.HEPHAESTUS_APPLICATION_JAR;

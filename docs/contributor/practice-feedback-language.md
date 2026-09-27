@@ -39,6 +39,9 @@ area*, `PracticeArea`, `areaSlug`, and `/practice-areas` are retired names, not 
 | **Mentor**                          | The product area for conversations with Heph                                                                                                               |                                                                      |
 | **Practice profile**                | The developer's own page: how their reviewed work stands across practice groups, how it developed, and one next step from Heph. A surface, not a channel   | practice dashboard, standings page                                   |
 | **Holds as**                        | The one present-tense sentence a bundled practice reads as when it holds — what the developer keeps doing — shown on the Practice profile beside a practice that is going well, and written by [the catalogue rules](./practice-catalogue.md#changing-bundled-defaults) | strength summary, praise, positive feedback |
+
+| **Mobile app**                      | The Hephaestus app for iOS and Android; it shows where a developer stands in their practices and their `IN_APP` feedback, hosts conversations with Heph, and is not a channel of its own | companion, native client                                             |
+| **Push notification**               | A content-free nudge on a phone that practice feedback is waiting — neither a channel nor a delivery                                                         | alert, feedback message, delivery                                    |
 | **Hephaestus**                      | The application, named only where the application itself is the subject — installing it, an account linked to it, a release of it                          | agent                                                                |
 | **Hephaestus default**              | A practice or group bundled with the running Hephaestus release                                                                                             | shipped entry                                                        |
 | **Instance catalog**                | The set of practices a workspace may adopt from                                                                                                                              | curated catalog                                                      |
@@ -79,6 +82,12 @@ needs a singular subject, name what the feedback is *about* — "the feedback fo
 *feedback*, or *observation* as the subject. Use **Hephaestus** when the application itself is the subject,
 such as installation, account linking, or releases. Do not call the application or a review an *agent*.
 
+The mentor's own surfaces are the exception, and only for Heph's own words. There, Heph may introduce
+itself as an AI mentor, invite, and offer to talk something through in the first person. The feedback and
+its evidence are never rewritten into Heph's voice, credited to Heph, or presented as a turn of a
+conversation. [`mobile/AGENTS.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/mobile/AGENTS.md)
+lists where the mobile app does this.
+
 **All three channel names say where the feedback lands, and nothing else.** `IN_CONTEXT` lands on the work
 itself — a pull request summary or inline note, an issue comment. `IN_CHAT` lands in a turn of a
 conversation, wherever that conversation runs: the in-app mentor, or Slack. `IN_APP` lands on the
@@ -89,6 +98,12 @@ a turn?** before **which screen?** A channel names a destination, never a cognit
 the developer is supposed to do about it. The three do line up with the levels of Hattie & Timperley's
 model ([which is which](./practice-review-glossary.mdx#the-three-channels-are-three-levels)), but a
 level is a claim about content that a destination cannot enforce, so do not use the level as the name.
+
+**A push notification is not a channel and never a delivery.** It tells a developer on their phone that
+`IN_APP` feedback is waiting and carries none of it — no text, practice or work — because it can show on
+a locked screen. The piece is delivered when the developer opens it, in the web app or the mobile app,
+exactly as without the notification. [Mobile app](/admin/mobile-app#push-notifications) owns
+what is sent.
 
 `IN_APP` is the code noun — the enum constant and the `chk_feedback_channel` value. Do not call it a
 *profile* or *reflection* channel: those words name a different surface or an outcome the system cannot

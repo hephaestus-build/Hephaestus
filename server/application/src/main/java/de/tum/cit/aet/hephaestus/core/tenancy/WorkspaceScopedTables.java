@@ -64,6 +64,12 @@ public class WorkspaceScopedTables {
             "auth_event",
             "issued_jwt",
             "jwt_signing_key",
+            // Native app sessions and their single-use sign-in handoffs; account-scoped like issued_jwt
+            "native_session",
+            "native_session_token",
+            "native_sign_in_handoff",
+            // App installations registered for push; one installation serves every workspace of its account
+            "push_device",
             // GDPR Art. 20 self-service export — account-scoped, spans a principal's data across workspaces.
             "account_export",
             // Account-scoped consent evidence; spans workspaces

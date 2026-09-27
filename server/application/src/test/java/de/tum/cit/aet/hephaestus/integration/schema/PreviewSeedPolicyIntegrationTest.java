@@ -45,6 +45,9 @@ class PreviewSeedPolicyIntegrationTest {
     private static final Pattern UPDATED_TABLE = Pattern.compile("\\bUPDATE\\s+([a-z_]+)");
     private static final Pattern EMPTIED_TABLE = Pattern.compile("\\bDELETE FROM\\s+([a-z_]+)");
     private static final String MARKER_PREFIX = "cleared-by-preview-clone:";
+    /** Native app sign-ins and the push devices registered under them, children first. */
+    private static final List<String> NATIVE_APP_TABLES = List.of(
+            "push_notification", "push_device", "native_session_token", "native_session", "native_sign_in_handoff");
 
     private static final TestDatabase DATABASE =
             PostgreSQLTestContainer.createMigratedDatabase("hephaestus_preview_seed_policy");
@@ -191,6 +194,52 @@ class PreviewSeedPolicyIntegrationTest {
         assertThat(residualCredentials())
                 .as("a credential the policy did not reach leaves the preview un-booted rather than live")
                 .isPositive();
+    }
+
+    @Test
+    void shouldDiscardNativeSignInsAndPushDevicesWhenACloneIsSeeded() {
+        // Seeded as one linked sign-in: a handoff, the session it opened, that session's refresh secret,
+        // the device it registered and a notification queued for it.
+        jdbcTemplate.execute("SET session_replication_role = 'replica'");
+        UUID sessionId = UUID.randomUUID();
+        UUID deviceId = UUID.randomUUID();
+        seeder.insert("native_sign_in_handoff", Map.of("code_hash", "staging-handoff-code-hash"));
+        seeder.insert("native_session", Map.of("id", sessionId));
+        seeder.insert(
+                "native_session_token",
+                Map.of("session_id", sessionId, "refresh_token_hash", "staging-refresh-token-hash"));
+        seeder.insert(
+                "push_device",
+                Map.of(
+                        "id",
+                        deviceId,
+                        "native_session_id",
+                        sessionId,
+                        "expo_push_token",
+                        "ExponentPushToken[staging]"));
+        seeder.insert("push_notification", Map.of("push_device_id", deviceId));
+        jdbcTemplate.execute("SET session_replication_role = 'origin'");
+
+        applyPolicy();
+
+        for (String table : NATIVE_APP_TABLES) {
+            assertThat(rows(table))
+                    .as("a clone keeps no native sign-in, refresh secret or push token staging issued: %s", table)
+                    .isZero();
+        }
+        assertThat(residualCredentials()).isZero();
+
+        jdbcTemplate.execute("SET session_replication_role = 'replica'");
+        seeder.insert("native_session_token", Map.of("refresh_token_hash", "restored-after-the-policy"));
+        jdbcTemplate.execute("SET session_replication_role = 'origin'");
+        assertThat(residualCredentials())
+                .as("a refresh secret the policy did not reach leaves the preview un-booted rather than live")
+                .isPositive();
+    }
+
+    private long rows(String table) {
+        Long count = jdbcTemplate.queryForObject("SELECT count(*) FROM " + table, Long.class);
+        return count == null ? -1 : count;
     }
 
     private void seedConnection(long id, long workspaceId, String kind, String config) {

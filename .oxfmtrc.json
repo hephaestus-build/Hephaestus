@@ -23,6 +23,11 @@
 	"ignorePatterns": [
 		"webapp/src/api/**",
 		"webapp/src/routeTree.gen.ts",
-		"webapp/public/mockServiceWorker.js"
+		"webapp/public/mockServiceWorker.js",
+		"mobile/src/api/**",
+		"mobile/ios/**",
+		"mobile/android/**",
+		"mobile/.expo/**",
+		"mobile/api-contract/released/**"
 	]
 }

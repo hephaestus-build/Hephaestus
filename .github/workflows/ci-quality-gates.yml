@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: "true"
+      mobile_changed:
+        description: "Whether mobile app files changed (or should run for other reasons)"
+        required: false
+        type: string
+        default: "true"
       pmd_canary:
         description: "Whether PMD wiring inputs changed"
         required: false
@@ -67,6 +72,16 @@ jobs:
       checks: write
     with:
       leg: webapp
+
+  mobile:
+    name: "Mobile"
+    if: inputs.should_skip != 'true' && inputs.mobile_changed == 'true'
+    uses: ./.github/workflows/ci-quality-leg.yml
+    permissions:
+      contents: read
+      checks: write
+    with:
+      leg: mobile
 
   windows:
     name: "Windows"

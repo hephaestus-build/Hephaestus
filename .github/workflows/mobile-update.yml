@@ -1,0 +1,86 @@
+name: Mobile update
+
+# A signed over-the-air update of the JavaScript and assets, from a default-branch commit that passed
+# CI, to a staged share of one channel. EAS delivers it only to binaries with the same runtime
+# version, the native fingerprint, so an update after a native change reaches no one until a binary
+# with that change ships. Raising, reverting and rolling back a rollout are in
+# docs/contributor/mobile.mdx § Releases.
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Update channel"
+        required: true
+        type: choice
+        options: [preview, production]
+      platform:
+        description: "Which platforms receive the update"
+        required: true
+        type: choice
+        default: all
+        options: [all, ios, android]
+      rollout:
+        description: "Share of the channel's devices that receive it first, 1 to 100"
+        required: true
+        type: number
+        default: 10
+      message:
+        description: "What changed, in the words a maintainer reads in the EAS dashboard"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: mobile-update-${{ inputs.channel }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: "Publish to ${{ inputs.channel }}"
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: mobile-${{ inputs.channel }}
+    permissions:
+      contents: read
+      actions: read # the preflight reads this commit's CI result
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      PLATFORM: ${{ inputs.platform }}
+      ROLLOUT: ${{ inputs.rollout }}
+      MESSAGE: ${{ inputs.message }}
+      APP_VARIANT: ${{ inputs.channel }}
+      EAS_PROJECT_ID: ${{ vars.EAS_PROJECT_ID }}
+      EAS_OWNER: ${{ vars.EAS_OWNER }}
+      PREVIEW_INSTANCE: ${{ vars.PREVIEW_INSTANCE }}
+      EXPO_UPDATES_CODE_SIGNING_CERTIFICATE: ${{ vars.EXPO_UPDATES_CODE_SIGNING_CERTIFICATE }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+      # The Expo token and the signing key are given only to the steps that need them, never to checkout
+      # or the dependency install, whose lifecycle scripts would otherwise see them.
+      - name: Preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_UPDATES_CODE_SIGNING_KEY: ${{ secrets.EXPO_UPDATES_CODE_SIGNING_KEY }}
+        run: vp run check:mobile:release --profile "$CHANNEL" --mode update --commit "$GITHUB_SHA" --repository "$GITHUB_REPOSITORY"
+      # EAS refuses to sign with a key that does not match the committed certificate, or with an
+      # expired or non-code-signing certificate (@expo/code-signing-certificates), so that is not
+      # checked again here.
+      - name: Publish the signed update
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_UPDATES_CODE_SIGNING_KEY: ${{ secrets.EXPO_UPDATES_CODE_SIGNING_KEY }}
+        run: |
+          key="$RUNNER_TEMP/update-signing-key.pem"
+          trap 'rm -f "$key"' EXIT
+          (umask 077 && printf '%s\n' "$EXPO_UPDATES_CODE_SIGNING_KEY" > "$key")
+          vp -C mobile exec eas update --channel "$CHANNEL" --environment "$CHANNEL" --platform "$PLATFORM" \
+            --message "$MESSAGE" --rollout-percentage "$ROLLOUT" --private-key-path "$key" --non-interactive

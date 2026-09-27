@@ -62,7 +62,7 @@ jobs:
           HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
         run: |
           vp run generate:api
-          if ! node scripts/assert-generated-clean.ts server/openapi.yaml webapp/src/api; then
+          if ! node scripts/assert-generated-clean.ts server/openapi.yaml webapp/src/api mobile/src/api; then
             echo "::error::OpenAPI out of sync. Run: vp run generate:api"
             echo "### OpenAPI Validation" >> $GITHUB_STEP_SUMMARY
             echo "| Check | Status | Fix |" >> $GITHUB_STEP_SUMMARY

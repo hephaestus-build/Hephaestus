@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -73,12 +74,33 @@ public class AuthIntentCookie {
             @Nullable String returnTo,
             Mode mode,
             @Nullable Long linkingAccountId,
-            long issuedAt) {
+            long issuedAt,
+            @Nullable NativeRequest nativeRequest) {
         public enum Mode {
             /** Fresh login — JIT-create Account on first IdP subject we've never seen. */
             LOGIN,
             /** Already authenticated; attach a new IdentityLink to the current Account. */
             LINK,
+            /** Fresh login for the native app: ends in a PKCE-bound handoff, never in a cookie. */
+            NATIVE,
+        }
+
+        /**
+         * What a native sign-in brings with it: the S256 challenge the handoff code will be bound to, the
+         * app's own {@code state}, and the allowlisted redirect it returns to.
+         */
+        public record NativeRequest(String codeChallenge, String state, String redirectUri) {}
+
+        @JsonCreator
+        public Intent {}
+
+        public Intent(
+                @Nullable String workspaceSlug,
+                @Nullable String returnTo,
+                Mode mode,
+                @Nullable Long linkingAccountId,
+                long issuedAt) {
+            this(workspaceSlug, returnTo, mode, linkingAccountId, issuedAt, null);
         }
 
         public static Intent login(@Nullable String workspaceSlug, @Nullable String returnTo) {
@@ -87,6 +109,10 @@ public class AuthIntentCookie {
 
         public static Intent link(@Nullable Long currentAccountId, @Nullable String returnTo) {
             return new Intent(null, returnTo, Mode.LINK, currentAccountId, System.currentTimeMillis());
+        }
+
+        public static Intent nativeLogin(NativeRequest nativeRequest) {
+            return new Intent(null, null, Mode.NATIVE, null, System.currentTimeMillis(), nativeRequest);
         }
     }
 

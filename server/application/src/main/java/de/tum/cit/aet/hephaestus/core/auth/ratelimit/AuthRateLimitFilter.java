@@ -63,6 +63,8 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         OAUTH_AUTHORIZATION("oauth-authz", false, true),
         REFRESH("refresh", true, true),
         USER_VIEW("user-view", true, false),
+        // The native app's body-authenticated session endpoints: unauthenticated by design, so by IP.
+        NATIVE_SESSION("native-session", false, true),
         DELETE_USER("delete-user", true, true),
         // GDPR Art. 20 export: cap POST /user/exports (the async assembly). Account-scoped (JWT sub)
         // with IP fallback — the route requires isAuthenticated(), so sub is normally present.
@@ -151,6 +153,9 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
                 || UserViewContextHolder.USER_VIEW_REQUEST.matches(request)) {
             return Endpoint.USER_VIEW;
         }
+        if ("POST".equals(method) && path.startsWith("/auth/native/")) {
+            return Endpoint.NATIVE_SESSION;
+        }
         if ("DELETE".equals(method) && path.equals("/user")) {
             return Endpoint.DELETE_USER;
         }
@@ -177,6 +182,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             case OAUTH_AUTHORIZATION -> properties.oauthAuthorization();
             case REFRESH -> properties.refresh();
             case USER_VIEW -> properties.userView();
+            case NATIVE_SESSION -> properties.nativeSession();
             case DELETE_USER -> properties.deleteUser();
             case EXPORT -> properties.export();
             case MENTOR_CHAT -> properties.mentorChat();

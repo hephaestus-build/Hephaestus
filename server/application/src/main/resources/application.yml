@@ -315,6 +315,11 @@ hephaestus:
         # postgres-backed=true (default) and a DataSource is present; otherwise an in-JVM
         # PER-REPLICA fallback is used (logged at startup). Each limit: `capacity` requests
         # per `period` (interval refill — a fresh budget per window).
+        # Native app sign-in (docs/admin/mobile-app.mdx). Redirects are matched exactly; list each app
+        # build this server serves, comma-separated (for example the preview build on a staging server).
+        native:
+            redirect-uris: ${HEPHAESTUS_AUTH_NATIVE_REDIRECT_URIS:build.hephaestus.app:/auth/callback}
+            minimum-app-version: ${HEPHAESTUS_AUTH_NATIVE_MINIMUM_APP_VERSION:}
         rate-limit:
             enabled: ${HEPHAESTUS_AUTH_RATE_LIMIT_ENABLED:true}
             postgres-backed: ${HEPHAESTUS_AUTH_RATE_LIMIT_POSTGRES_BACKED:true}
@@ -330,6 +335,10 @@ hephaestus:
             user-view:
                 capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY:120}
                 period: ${HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_PERIOD:1m}
+            # POST /auth/native/* (native app sign-in, refresh, sign-out) — keyed by client IP
+            native-session:
+                capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_NATIVE_SESSION_CAPACITY:30}
+                period: ${HEPHAESTUS_AUTH_RATE_LIMIT_NATIVE_SESSION_PERIOD:1m}
             # DELETE /user — keyed by account, IP fallback
             delete-user:
                 capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_DELETE_USER_CAPACITY:3}
@@ -350,6 +359,10 @@ hephaestus:
                 period: ${HEPHAESTUS_RATE_LIMIT_SYNC_TRIGGER_PERIOD:1h}
 
     host-url: ${APPLICATION_HOST_URL:http://localhost:4200}
+
+    # Push notifications to the native app (docs/admin/mobile-app.mdx). Off while the token is blank.
+    push:
+        expo-access-token: ${HEPHAESTUS_PUSH_EXPO_ACCESS_TOKEN:}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # RUNTIME ROLES (single JAR, deploy-config-selected mode)

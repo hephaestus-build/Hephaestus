@@ -295,6 +295,7 @@ public class SecurityConfig {
             // the CSRF carve-out below so they cannot drift.
             if (devLoginEnabled) {
                 requests.requestMatchers(DEV_LOGIN_MATCHER).permitAll();
+                requests.requestMatchers(DEV_NATIVE_LOGIN_MATCHER).permitAll();
             }
             // OpenAPI documentation endpoints (public for spec generation and dev access)
             requests.requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui/**", "/swagger-ui.html")
@@ -305,6 +306,11 @@ public class SecurityConfig {
             // by AuthSecurityConfig's higher-precedence chain and never reach this one.
             requests.requestMatchers(HttpMethod.GET, "/identity-providers").permitAll();
             requests.requestMatchers(HttpMethod.GET, "/.well-known/**").permitAll();
+            // Native app sessions authenticate with a secret in the body (handoff code + PKCE verifier,
+            // or a refresh secret), never with a cookie or bearer token; see NativeSessionController.
+            requests.requestMatchers(HttpMethod.GET, "/auth/native/configuration")
+                    .permitAll();
+            requests.requestMatchers(NATIVE_SESSION_MATCHER).permitAll();
             // Public workspace provider discovery (workspace creation UI)
             requests.requestMatchers(HttpMethod.GET, "/workspaces/providers").permitAll();
             // Heph is never public, even in a publicly viewable workspace, so this MUST precede the generic
@@ -365,7 +371,25 @@ public class SecurityConfig {
     static final RequestMatcher EMAIL_UNSUBSCRIBE_MATCHER =
             PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/notifications/unsubscribe/{token}");
 
-    /** Unsafe requests require CSRF unless they use only bearer auth or an enabled dev endpoint. */
+    /**
+     * The native app's body-authenticated session endpoints, shared by the authorize rule and the CSRF
+     * predicate. CSRF defends ambient cookie credentials; these endpoints refuse the session cookie and
+     * act only on the secret the request body carries, so there is nothing for a forged request to ride.
+     */
+    static final RequestMatcher NATIVE_SESSION_MATCHER =
+            new org.springframework.security.web.util.matcher.OrRequestMatcher(
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/native/token"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/native/refresh"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/native/logout"));
+
+    /** The native app's dev sign-in (a safe GET that ends in a handoff redirect); absent in production. */
+    static final RequestMatcher DEV_NATIVE_LOGIN_MATCHER =
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/auth/dev-login/native");
+
+    /**
+     * Unsafe requests require CSRF unless they use only bearer auth, a native session secret, a one-click
+     * unsubscribe capability or an enabled dev endpoint.
+     */
     private boolean requiresCsrf(jakarta.servlet.http.HttpServletRequest request) {
         if (EMAIL_UNSUBSCRIBE_MATCHER.matches(request) || SAFE_METHODS.contains(request.getMethod())) {
             return false;
@@ -373,6 +397,9 @@ public class SecurityConfig {
         // The resolver prefers cookies, so adding a bearer header must not bypass their CSRF check.
         String authorization = request.getHeader("Authorization");
         if (authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7) && !hasAuthCookie(request)) {
+            return false;
+        }
+        if (NATIVE_SESSION_MATCHER.matches(request) && !hasAuthCookie(request)) {
             return false;
         }
         if (devTriggerEnabled && DEV_TRIGGER_MATCHER.matches(request)) {

@@ -58,6 +58,8 @@ tags:
   name: Practice Catalog
 - description: Session lifecycle
   name: Auth
+- description: "Sign-in, refresh and sign-out for the native app"
+  name: Native session
 - description: Workspace-scoped practice-review policy
   name: Practice Review Settings
 - description: Instance-admin-only read-only access to users
@@ -69,6 +71,8 @@ tags:
 - description: "Workspace-admin access to review runs, observations, and feedback\
     \ delivery history"
   name: Practice reviews
+- description: Push notification registration for the native app
+  name: Push devices
 - description: GDPR Art. 20 self-service data export
   name: Account
 - description: Workspace-scoped history of admin configuration changes
@@ -2074,6 +2078,87 @@ paths:
       summary: Log out — revoke the current token + clear the cookie
       tags:
       - Auth
+  /auth/native/configuration:
+    get:
+      description: Public. An app that finds no such endpoint is talking to a server
+        without native sign-in.
+      operationId: getNativeClientConfiguration
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NativeClientConfiguration"
+          description: OK
+      summary: What this server requires of the native app
+      tags:
+      - Native session
+  /auth/native/logout:
+    post:
+      operationId: logoutNativeSession
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NativeRefreshRequest"
+        required: true
+      responses:
+        "204":
+          description: "Signed out, or the secret was already unknown"
+      summary: End the native session its refresh secret belongs to
+      tags:
+      - Native session
+  /auth/native/refresh:
+    post:
+      operationId: refreshNativeSession
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NativeRefreshRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NativeSessionTokens"
+          description: Rotated
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The session has ended; sign in again
+      summary: Rotate the native session's access token and refresh secret
+      tags:
+      - Native session
+  /auth/native/token:
+    post:
+      operationId: exchangeNativeSignIn
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NativeTokenRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NativeSessionTokens"
+          description: Signed in
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NativeSessionTokens"
+          description: "The code is unknown, expired, used, or does not match the\
+            \ verifier"
+      summary: Redeem a sign-in handoff code with its PKCE verifier
+      tags:
+      - Native session
   /auth/refresh:
     post:
       operationId: refresh
@@ -2537,6 +2622,67 @@ paths:
       summary: Update your email subscriptions
       tags:
       - notification-preferences
+  /user/push-devices/{installationId}:
+    delete:
+      operationId: unregisterPushDevice
+      parameters:
+      - in: path
+        name: installationId
+        required: true
+        schema:
+          type: string
+          pattern: "[A-Za-z0-9-]{16,64}"
+      responses:
+        "204":
+          description: "Unregistered, or it was not registered"
+      summary: Stop push notifications on this installation
+      tags:
+      - Push devices
+    get:
+      operationId: getPushDeviceStatus
+      parameters:
+      - in: path
+        name: installationId
+        required: true
+        schema:
+          type: string
+          pattern: "[A-Za-z0-9-]{16,64}"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushDeviceStatus"
+          description: OK
+      summary: Whether this server sends push notifications and this installation
+        receives them
+      tags:
+      - Push devices
+    put:
+      operationId: registerPushDevice
+      parameters:
+      - in: path
+        name: installationId
+        required: true
+        schema:
+          type: string
+          pattern: "[A-Za-z0-9-]{16,64}"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushDeviceRegistration"
+        required: true
+      responses:
+        "204":
+          description: Registered
+        "400":
+          description: Not a native app session
+        "409":
+          description: This server does not send push notifications
+      summary: Receive push notifications on this installation
+      tags:
+      - Push devices
   /user/sessions:
     delete:
       operationId: revokeOtherSessions
@@ -12484,6 +12630,63 @@ components:
           - CLOUD
       required:
       - choice
+    NativeClientConfiguration:
+      type: object
+      properties:
+        minimumAppVersion:
+          type: string
+        webappUrl:
+          type: string
+          description: "Web application address for privacy, account export and browser-only\
+            \ workflows"
+      required:
+      - minimumAppVersion
+      - webappUrl
+    NativeRefreshRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          maxLength: 128
+          minLength: 0
+      required:
+      - refreshToken
+    NativeSessionTokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        accessTokenExpiresAt:
+          type: string
+          format: date-time
+        nativeSessionId:
+          type: string
+          format: uuid
+        refreshToken:
+          type: string
+        sessionExpiresAt:
+          type: string
+          format: date-time
+      required:
+      - accessToken
+      - accessTokenExpiresAt
+      - nativeSessionId
+      - refreshToken
+      - sessionExpiresAt
+    NativeTokenRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 128
+          minLength: 0
+        codeVerifier:
+          type: string
+          maxLength: 128
+          minLength: 43
+      required:
+      - code
+      - codeVerifier
     NotificationPreferences:
       type: object
       properties:
@@ -14942,6 +15145,30 @@ components:
       - number
       - state
       - title
+    PushDeviceRegistration:
+      type: object
+      properties:
+        expoPushToken:
+          type: string
+          pattern: "Expo(nent)?PushToken\\[[A-Za-z0-9_-]{8,200}\\]"
+        platform:
+          type: string
+          enum:
+          - IOS
+          - ANDROID
+      required:
+      - expoPushToken
+      - platform
+    PushDeviceStatus:
+      type: object
+      properties:
+        available:
+          type: boolean
+        registered:
+          type: boolean
+      required:
+      - available
+      - registered
     Question:
       type: object
       properties:
@@ -16420,8 +16647,13 @@ components:
         jti:
           type: string
           format: uuid
+        nativeApp:
+          type: boolean
+          description: "The native app, whose session outlives this token until expiresAt"
         userAgent:
           type: string
+      required:
+      - nativeApp
     SlackChannelCandidate:
       type: object
       description: A Slack channel the app can offer in the workspace channel picker

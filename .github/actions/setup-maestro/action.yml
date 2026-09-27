@@ -1,0 +1,19 @@
+name: Set up Maestro
+description: >-
+  Installs the Maestro CLI the native flows in mobile/maestro run on, from its release archive
+  verified against a pinned digest. Maestro runs on the JVM, so the caller sets up Java first.
+runs:
+  using: composite
+  steps:
+    - name: Install Maestro
+      shell: bash
+      env:
+        MAESTRO_VERSION: "2.10.0"
+        MAESTRO_SHA256: "29b675e10cc12080e445e9bfb2e2b4e4dfb9c0f2e30d5884120d258b5e1cd991"
+      run: |
+        archive="$RUNNER_TEMP/maestro.zip"
+        curl --fail --silent --show-error --location --retry 3 --output "$archive" \
+          "https://github.com/mobile-dev-inc/Maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
+        echo "${MAESTRO_SHA256}  ${archive}" | shasum -a 256 --check --status
+        unzip -q "$archive" -d "$RUNNER_TEMP"
+        echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"

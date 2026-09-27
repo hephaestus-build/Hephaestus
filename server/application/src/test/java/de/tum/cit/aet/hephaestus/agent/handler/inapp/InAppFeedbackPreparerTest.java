@@ -39,7 +39,7 @@ class InAppFeedbackPreparerTest extends BaseUnitTest {
             mock(FeedbackObservationRepository.class);
     private final FeedbackSupersession supersession = mock(FeedbackSupersession.class);
     private final InAppFeedbackPreparer preparer =
-            new InAppFeedbackPreparer(feedbackRepository, feedbackObservationRepository, supersession);
+            new InAppFeedbackPreparer(feedbackRepository, feedbackObservationRepository, supersession, List.of());
 
     @Test
     void writesAnAdmittedMessageAsAPreparedInAppUnitCarryingItsBody() {

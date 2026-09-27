@@ -16,6 +16,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *   <li>{@code GET /oauth2/authorization/*} — 20/min, keyed by client IP</li>
  *   <li>{@code POST /auth/refresh} — 60/min, keyed by account (JWT sub; IP fallback)</li>
  *   <li>User-view selection and normal-app reads — 120/min, keyed by admin account</li>
+ *   <li>{@code POST /auth/native/*} — 30/min, keyed by client IP</li>
  *   <li>{@code DELETE /user} — 3/hour, keyed by account</li>
  *   <li>{@code POST /user/exports} — 10/hour, keyed by account</li>
  * </ul>
@@ -35,6 +36,7 @@ public record AuthRateLimitProperties(
         @DefaultValue Limit oauthAuthorization,
         @DefaultValue Limit refresh,
         @DefaultValue Limit userView,
+        @DefaultValue Limit nativeSession,
         @DefaultValue Limit deleteUser,
         @DefaultValue Limit export,
         @DefaultValue Limit mentorChat,
@@ -46,6 +48,7 @@ public record AuthRateLimitProperties(
         oauthAuthorization = oauthAuthorization != null ? oauthAuthorization : Limit.of(20, Duration.ofMinutes(1));
         refresh = refresh != null ? refresh : Limit.of(60, Duration.ofMinutes(1));
         userView = userView != null ? userView : Limit.of(120, Duration.ofMinutes(1));
+        nativeSession = nativeSession != null ? nativeSession : Limit.of(30, Duration.ofMinutes(1));
         deleteUser = deleteUser != null ? deleteUser : Limit.of(3, Duration.ofHours(1));
         // 10/hour: generous for legit "download my data" (POST + a few download polls) but caps a
         // session from spamming async bundle assemblies (each persisting a BYTEA blob).

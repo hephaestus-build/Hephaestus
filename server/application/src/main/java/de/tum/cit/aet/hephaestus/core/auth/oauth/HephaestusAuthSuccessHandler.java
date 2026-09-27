@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.core.auth.nativesession.NativeSessionService;
+import de.tum.cit.aet.hephaestus.core.auth.nativesession.NativeSignInRedirect;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.servlet.http.Cookie;
@@ -15,6 +17,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,6 +48,7 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
     private final AuthProperties authProperties;
     private final AuthEventLogger authEventLogger;
     private final IdentityLinkAuthentication identityLinkAuthentication;
+    private final NativeSessionService nativeSessionService;
     private final Clock clock;
 
     /**
@@ -61,6 +66,7 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
             AuthProperties authProperties,
             AuthEventLogger authEventLogger,
             IdentityLinkAuthentication identityLinkAuthentication,
+            NativeSessionService nativeSessionService,
             Clock clock,
             @Value("${hephaestus.webapp.url:}") String webappBaseUrl) {
         this.provisioningService = provisioningService;
@@ -70,6 +76,7 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
         this.authProperties = authProperties;
         this.authEventLogger = authEventLogger;
         this.identityLinkAuthentication = identityLinkAuthentication;
+        this.nativeSessionService = nativeSessionService;
         this.clock = clock;
         this.appBaseUrl = stripTrailingSlash(webappBaseUrl);
     }
@@ -86,9 +93,14 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
     public void onAuthenticationSuccess(
             HttpServletRequest request, HttpServletResponse response, Authentication authentication)
             throws IOException {
+        AuthIntentCookie.Intent intent = authIntentCookie.read(request);
+        authIntentCookie.clear(response);
+        AuthIntentCookie.Intent.@Nullable NativeRequest nativeRequest =
+                intent != null && intent.mode() == AuthIntentCookie.Intent.Mode.NATIVE ? intent.nativeRequest() : null;
+
         if (!(authentication instanceof OAuth2AuthenticationToken token)) {
             log.error("auth.success: unexpected authentication type {}", authentication.getClass());
-            redirectToApp(request, response, "/auth/error?code=unexpected_auth_type");
+            refuse(request, response, nativeRequest, "unexpected_auth_type");
             return;
         }
         OAuth2User principal = token.getPrincipal();
@@ -96,12 +108,9 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
         String subject = principal.getName();
         if (subject == null || subject.isBlank()) {
             log.error("auth.success: principal has no subject (registrationId={})", registrationId);
-            redirectToApp(request, response, "/auth/error?code=no_subject");
+            refuse(request, response, nativeRequest, "no_subject");
             return;
         }
-
-        AuthIntentCookie.Intent intent = authIntentCookie.read(request);
-        authIntentCookie.clear(response);
 
         // The IdP round-trip can outlive — or be replaced by — the session that authorized the linking,
         // so the authority to attach an identity is re-checked here rather than trusted from the cookie
@@ -131,11 +140,11 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
             provisioned = provisioningService.resolveOrProvision(registrationId, subject, principal, intent);
         } catch (LinkOnlyProviderLoginException e) {
             log.warn("auth.success: refused link-only provider login: {}", e.getMessage());
-            redirectToApp(request, response, "/auth/error?code=link_requires_auth");
+            refuse(request, response, nativeRequest, "link_requires_auth");
             return;
         } catch (AccountLinkConflictException e) {
             log.warn("auth.success: refused link because the identity is already linked to another account");
-            redirectToApp(request, response, "/auth/error?code=identity_already_linked");
+            refuse(request, response, nativeRequest, "identity_already_linked");
             return;
         }
         Account account = provisioned.account();
@@ -150,7 +159,32 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
                     "auth.success: rejecting login for non-ACTIVE accountId={} status={}",
                     account.getId(),
                     account.getStatus());
-            redirectToApp(request, response, "/auth/error?code=account_inactive");
+            refuse(request, response, nativeRequest, "account_inactive");
+            return;
+        }
+
+        // A native sign-in ends in a single-use code bound to the app's PKCE challenge, redeemed by the app
+        // itself. No cookie is set: the browser that ran the sign-in never holds a Hephaestus session.
+        if (nativeRequest != null) {
+            Instant now = clock.instant();
+            String code = nativeSessionService.createHandoff(
+                    Objects.requireNonNull(account.getId()),
+                    nativeRequest.codeChallenge(),
+                    now.plus(authProperties.sessionMaxLifetime()),
+                    now);
+            authEventLogger
+                    .event(
+                            provisioned.identityLinked()
+                                    ? AuthEvent.EventType.IDENTITY_LINKED
+                                    : AuthEvent.EventType.LOGIN,
+                            AuthEvent.Result.SUCCESS)
+                    .account(account.getId())
+                    .record();
+            getRedirectStrategy()
+                    .sendRedirect(
+                            request,
+                            response,
+                            NativeSignInRedirect.success(nativeRequest.redirectUri(), code, nativeRequest.state()));
             return;
         }
 
@@ -183,6 +217,24 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
 
         String redirectTo = (intent != null) ? ReturnToValidator.safeOrFallback(intent.returnTo()) : "/";
         redirectToApp(request, response, redirectTo);
+    }
+
+    /** Ends the sign-in with {@code code}: in the native app when it started there, on the SPA error page otherwise. */
+    private void refuse(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            AuthIntentCookie.Intent.@Nullable NativeRequest nativeRequest,
+            String code)
+            throws IOException {
+        if (nativeRequest != null) {
+            getRedirectStrategy()
+                    .sendRedirect(
+                            request,
+                            response,
+                            NativeSignInRedirect.error(nativeRequest.redirectUri(), code, nativeRequest.state()));
+            return;
+        }
+        redirectToApp(request, response, "/auth/error?code=" + code);
     }
 
     /**

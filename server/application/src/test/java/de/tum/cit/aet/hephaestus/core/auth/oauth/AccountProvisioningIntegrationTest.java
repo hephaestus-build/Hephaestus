@@ -7,9 +7,14 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
@@ -18,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
  * nOAuth defence against a REAL Postgres: the mock-based {@link AccountProvisioningServiceTest} stubs
@@ -45,6 +51,93 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private LoginProviderRepository loginProviderRepository;
+
+    @Autowired
+    private WebTestClient webTestClient;
+
+    @Autowired
+    private HephaestusJwtIssuer jwtIssuer;
+
+    @Autowired
+    private JwtPrincipalFactory principalFactory;
+
+    @Test
+    void shouldShowFreshScmAvatarAfterReturningLoginAndIgnoreLinkOnlyProfiles() {
+        seedProvider("github-avatar", LoginProvider.ProviderType.GITHUB);
+        seedProvider("gitlab-avatar", LoginProvider.ProviderType.GITLAB);
+        seedProvider("slack-avatar", LoginProvider.ProviderType.SLACK);
+        Account account = service.resolveOrProvision(
+                        "github-avatar",
+                        "avatar-gh",
+                        avatarPrincipal("avatar-gh", "avatar_url", "https://avatars.example/old.png"),
+                        AuthIntentCookie.Intent.login(null, null))
+                .account();
+        long accountId = persistedId(account.getId());
+        service.resolveOrProvision(
+                "gitlab-avatar",
+                "avatar-gl",
+                avatarPrincipal("avatar-gl", "picture", "https://gitlab.example/avatar.png"),
+                AuthIntentCookie.Intent.link(accountId, null));
+        assertCurrentAvatar(account, "GITLAB", "https://gitlab.example/avatar.png");
+
+        // Connecting a collaboration identity must not replace the developer's SCM profile.
+        service.resolveOrProvision(
+                "slack-avatar",
+                "avatar-slack",
+                avatarPrincipal("avatar-slack", "picture", "https://slack.example/avatar.png"),
+                AuthIntentCookie.Intent.link(accountId, null));
+        assertCurrentAvatar(account, "GITLAB", "https://gitlab.example/avatar.png");
+
+        service.resolveOrProvision(
+                "github-avatar",
+                "avatar-gh",
+                avatarPrincipal("avatar-gh", "avatar_url", "https://avatars.example/new.png"),
+                AuthIntentCookie.Intent.login(null, null));
+        assertCurrentAvatar(account, "GITHUB", "https://avatars.example/new.png");
+        assertThat(identityLinkRepository.findActiveByAccountId(accountId))
+                .extracting(IdentityLink::getSubject)
+                .containsExactlyInAnyOrder("avatar-gh", "avatar-gl", "avatar-slack");
+
+        // Removing a provider picture clears the old value rather than retaining it forever.
+        service.resolveOrProvision(
+                "github-avatar",
+                "avatar-gh",
+                principal("avatar-gh", "avatar@example.com", true, "avatar-gh"),
+                AuthIntentCookie.Intent.login(null, null));
+        assertCurrentAvatar(account, "GITHUB", null);
+    }
+
+    private void assertCurrentAvatar(Account account, String provider, @Nullable String avatar) {
+        String token = jwtIssuer
+                .issue(principalFactory.forAccount(account), TokenConstraints.session(null, Instant.now()), null)
+                .value();
+        var body = webTestClient
+                .get()
+                .uri("/user")
+                .headers(h -> h.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.identityProvider")
+                .isEqualTo(provider);
+        if (avatar == null) {
+            body.jsonPath("$.avatarUrl").doesNotExist();
+        } else {
+            body.jsonPath("$.avatarUrl").isEqualTo(avatar);
+        }
+    }
+
+    private static OAuth2User avatarPrincipal(String subject, String claim, String avatar) {
+        Map<String, Object> attributes = new HashMap<>();
+        attributes.put("id", subject);
+        attributes.put("login", subject);
+        if (subject.equals("avatar-slack")) {
+            attributes.put("team_id", "avatar-team");
+        }
+        attributes.put(claim, avatar);
+        return new DefaultOAuth2User(List.of(new SimpleGrantedAuthority("ROLE_USER")), attributes, "id");
+    }
 
     @Test
     void twoIdentitiesSharingOneEmailResolveToSeparateAccounts() {

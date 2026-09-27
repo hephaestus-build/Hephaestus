@@ -27,7 +27,8 @@ class HephaestusAuthFailureHandlerTest extends BaseUnitTest {
     void auditsLoginFailedWithExceptionTypeOnlyAndRedirectsToErrorPage() throws Exception {
         AuthEventWriter writer = mock(AuthEventWriter.class);
         // Blank webapp url → SPA + API share an origin, so the redirect is a relative path.
-        HephaestusAuthFailureHandler handler = new HephaestusAuthFailureHandler(new AuthEventLogger(writer), "");
+        HephaestusAuthFailureHandler handler =
+                new HephaestusAuthFailureHandler(new AuthEventLogger(writer), mock(AuthIntentCookie.class), "");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         handler.onAuthenticationFailure(

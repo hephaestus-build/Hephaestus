@@ -1,0 +1,306 @@
+---
+title: Mobile app
+description: How the iOS and Android app is built, run, tested, checked against the API and released.
+---
+
+# Mobile app
+
+`mobile/` is the Hephaestus app for iOS and Android: an Expo app with native navigation, built from
+`app.config.ts` by continuous native generation, so `ios/` and `android/` are generated and never
+committed. It talks to the server only through its own generated client from `server/openapi.yaml`,
+the same spec and generator the webapp uses. [ADR 0045](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0045-mobile-app.md)
+records why it is shaped this way; `mobile/AGENTS.md` has the conventions for changing it.
+
+## Layout
+
+| Path                                          | Owns                                                                                      |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `src/app/`                                    | Routes (Expo Router). Thin: each file reads its data and composes feature components      |
+| `src/session/`                                | Sign-in, the session authority, and the API client's credentials                          |
+| `src/instance/`                               | Which server the app talks to, and whether it serves this app version                     |
+| `src/workspace/`                              | The selected workspace, per session                                                       |
+| `src/practice/`, `src/feedback/`, `src/heph/` | Where the developer stands, practice feedback and Heph                                    |
+| `src/account/`                                | The avatar and the account sheet's shared parts                                           |
+| `src/push/`                                   | Device registration and notification taps                                                 |
+| `src/consent/`                                | The transparency notice, mirrored from the webapp's wording                               |
+| `src/ui/`                                     | Native building blocks: text, rows, sections, state views, colors                         |
+| `src/api/`                                    | The generated client. Never edited: `vp run generate:api:client` regenerates both clients |
+| `maestro/`                                    | Native end-to-end flows                                                                   |
+| `api-contract/`                               | The operations the app calls, and the API each released version was built against         |
+
+The interface is native first: native stacks and tabs, which take Liquid Glass from the system on
+iOS 26 and later, inset grouped lists on system colours, and screen actions and menus in the native
+header through `Stack.Toolbar`. List rows do not use `Link.Menu`: its native preview wrapper removes the
+row from the accessibility tree. The one control the app draws itself over content, Heph's composer,
+uses `expo-glass-effect` where `isLiquidGlassAvailable()` and a plain bar elsewhere; glass is never used
+for content.
+Heph's presence is the Hephaestus mark (`HephMark`, the web's Heph avatar) beside its name, only where
+Heph speaks; `mobile/AGENTS.md` has the rules its wording follows.
+
+The chrome is quiet so Heph's blue mark carries identity: the committing control is filled in the label
+colour, blue is kept for links, action rows and the tab tint, and settings rows use line icons. A
+conversation is LegendList's documented chat without inversion: messages sit at the end above the
+composer, and a reply is followed as it grows (`maintainScrollAtEnd`) only while the end is in sight.
+Scrolling up pauses that, and **Jump to latest** or scrolling back to the end resumes it; sending, or
+sending again, brings the new message into view from wherever the reader was. The keyboard lifts content
+only when the end is on screen (`keyboardLiftBehavior="whenAtEnd"`). Following is the only thing that
+moves the list on a send; Jump to latest is the one explicit scroll, and keyboard-controller is never
+frozen, so its keyboard inset is always current.
+
+### Composition
+
+Routes own navigation and server state; focused feature hooks own substantial or reused orchestration.
+Reusable components receive data and actions through props. They can use local visual state, theme,
+accessibility and keyboard geometry, but do not read credentials, select workspaces or start queries.
+Generated DTO types are allowed at the presentation boundary. Pure policy modules cannot import views.
+The mobile Oxlint configuration enforces these directions, and the repository lint-contract suite
+exercises invalid imports as well as valid typed components.
+
+`Section` and `Row` share only their visual grouping context. `QueryStates` renders loading, error,
+empty and stale states from an explicit query-shaped prop. Feedback forms receive saved values and
+mutation callbacks; only a route that loaded the feedback mounts the answer hook. Conversation state
+and streaming live in `heph/use-conversation.ts`; the screen and `TranscriptView` own native geometry
+and scrolling. These boundaries follow the web app's container/presentation model without sharing its
+DOM components or imposing its compiler settings on Metro.
+
+### Tabs
+
+Two native tabs, Practice and Heph. The account is a sheet (`src/app/account/`, one modal stack) opened
+from the avatar at the trailing edge of both tabs' headers (the code host's picture from `GET /user`,
+with a tab's own action, such as Heph's compose, before it), from the workspace chooser and from the
+consent notice; privacy and deletion open before the notice is accepted, the rest after. Material asks
+for three to five destinations in a navigation bar; Android keeps these two rather than invent a
+third, which would be a tab with nothing of its own. The sheet closes with the system Close button (`xmark`), not Done: every setting in it applies as
+it changes, and Apple reserves Done for a sheet that completes a task or saves changes. A sheet that
+commits, such as Report, has Cancel leading and its action trailing.
+
+Practice leads with the developer's profile, built as the web's is (`src/practice/profile.ts`): the
+catalog (`listGroups`, `listReviewedPractices`) decides which groups and practices exist, the standings
+say where the developer stands, and anything without a standing is "not observed yet". Groups with
+observations are cards, most in need of attention first; the rest are one short list, and the overview
+counts only the former, because not observed is coverage, not a result. Each page leads with what to do
+(next step, then practices or observations) and follows with the evidence for it (direction, recent
+reviews). It drills down group →
+practice → observation, each with its direction and what it rests on (`trend.ts`, the web's wording),
+and every observation opens its citations, currentness and origin. Pages show two recent review runs;
+the whole history is its own virtualized route. Practice feedback is a separate page behind a plain
+row, because reading it delivers it.
+
+Heph's tab icon is its own
+glyph from `webapp/public/brand/hephaestus-mark.svg`, not a chat bubble: `assets/heph-tab.svg` and its
+filled selected state `assets/heph-tab-selected.svg`, rendered to the `@1x`–`@3x` PNGs beside them
+(the command is in each file). Both platforms tint it as a template image, like the system icons.
+
+iOS 27 can set one tab apart as prominent (`UITabBarController.prominentTabIdentifier`, SwiftUI
+`TabRole.prominent`), which is where Heph belongs. The installed Expo Router native tabs and
+react-native-screens offer only the `search` role, and marking Heph as search would announce it as
+Search. The prominent role is adopted once a released native tabs library provides it, within the
+repository's release-age window. For `react-native-bottom-tabs` the route is iOS only: its standalone
+`TabView`, wired to Expo Router's `TabRouter` through `unstable_createStandardRouterNavigator`, with
+Android keeping `NativeTabs`. The library's React Navigation adapter would bring a second React
+Navigation, beside the fork Expo Router ships. A git dependency or a native patch that reaches into
+the tab bar controller is not a substitute.
+
+Two rules decide most reviews:
+
+- **The session authority is the only path to credentials.** [Auth architecture § Native app sessions](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/auth-architecture.md#native-app-sessions)
+  owns the protocol. `src/session/session-core.ts` serializes restore, refresh, sign-out and the
+  revocation queue, and its tests drive every lifecycle race with controlled storage and network
+  promises. A new request path gets its token from the wired client, never from storage.
+- **Opening in-app feedback delivers it.** The in-app feedback request records the delivery, so the
+  app fetches it only while the Practice feedback list is on screen, or once for a feedback page opened
+  directly: never in the background, on a notification, or as a prefetch, and the rest of Practice
+  neither counts nor previews it.
+
+## Run it
+
+You need Xcode with an iOS simulator, or the Android SDK with an emulator, and the JDK from
+`.java-version` for Android builds.
+
+1. Start the server with dev sign-in: `vp run dev:server:e2e`. Its `e2e` profile allows the
+   development build's callback. [Local development](./local-development.mdx) has the port it listens on.
+2. Build and install the development client once, and again whenever native code or `app.config.ts`
+   changes:
+
+   ```bash
+   vp -C mobile exec expo run:ios --device <simulator UDID>
+   vp -C mobile exec expo run:android --device <AVD name>
+   ```
+
+3. Start Metro: `vp run dev:mobile`.
+
+The welcome screen of a development build offers this worktree's server first: the port is
+`SERVER_PORT` from the `.env` file of this worktree's server (the server's default 8080 without one), read when Metro or a build
+configures the app. The host follows the device: `localhost` on the iOS Simulator, `10.0.2.2` on the
+Android emulator, and the address a physical device reaches Metro on. A physical device reaches the
+server only if it listens on the network, which the worktree `.env` may restrict with
+`server.address`. `EXPO_PUBLIC_DEV_SERVER_URL=<url> vp run dev:mobile` offers another server instead;
+**Use another Hephaestus** reaches any other.
+
+On Android, a development build may warn at launch that React updated "a component that hasn't mounted
+yet", from `ContextNavigator`. That is Expo Router resolving the initial link before its navigator
+commits ([expo/expo#49378](https://github.com/expo/expo/issues/49378)); React reports it only in
+development builds.
+
+`adb reverse tcp:<port> tcp:<port>` makes `localhost` reach the host from the Android emulator too, for
+the app and its sign-in browser alike.
+
+Only the development build (`APP_VARIANT=development`, the default) talks plain HTTP to a local server
+and offers dev sign-in. Preview and production builds refuse both.
+
+## Tests
+
+| Command                                                         | Proves                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `vp run test:mobile`                                            | Pure modules: the session authority and token validation, API client wiring, PKCE, sign-in callbacks, conversation hydration, drafts, push ownership across sessions, untrusted Markdown, dates, and vocabulary and consent-wording drift against the webapp |
+| `vp run check:mobile` | Native lint/typecheck, repository formatting and the unit suite, together |
+| `vp run gate:mobile`                                            | Expo route generation, type-aware lint and the type check                                                                                                                                                                                                                           |
+| `vp run test:mobile:e2e --platform ios\|android --flow smoke`   | The installed binary boots, evaluates every route, and validates an instance address. Needs no server                                                                                                                                                        |
+| `vp run test:mobile:e2e --platform ios\|android --flow journey` | Sign-in through the system browser and the real PKCE exchange, consent, session restore across a relaunch, and sign-out, against a server with dev sign-in                                                                                                   |
+
+The mobile type gate first runs Expo’s headless `customize tsconfig.json` command. It generates
+ignored route declarations even on a clean checkout, so navigation targets and route parameters are
+checked without starting Metro. `generate:mobile-routes` runs this step on its own.
+
+The flows need [Maestro](https://maestro.dev) on `PATH` and a build already installed on a booted
+simulator or emulator; pass `--device` when more than one is running, and `--server-url` for the
+journey (default `http://localhost:8080`). The journey signs in a new account each run, so it asserts
+first-sign-in consent and the empty workspace state rather than seeded feedback. Run the smoke flow on
+a Release build, which embeds its bundle; a development client opens its launcher instead.
+
+For looking around by hand, Expo recommends Callstack's
+[agent-device](https://docs.expo.dev/agents/agent-device/): accessibility snapshots, taps and
+screenshots on a simulator or emulator, with nothing added to the app. It is a local tool, not a test:
+what must keep working goes into a Maestro flow.
+
+## Native CI
+
+`.github/workflows/ci-mobile.yml` runs when `mobile/`, the spec, or the files the app mirrors change.
+
+- **iOS** builds the production variant with Xcode 27.0 and runs the smoke flow on an
+  iPhone 18 Pro with iOS 27.0. GitHub's
+  [`xcode-27` image](https://github.com/actions/runner-images/issues/14404) provides that simulator;
+  the runner image is in public preview, while the selected Xcode and iOS versions are stable.
+  The simulator build uses ad-hoc signing, which preserves the app identifier entitlement required
+  by Keychain. Disabling signing makes secure session storage fail even in the simulator.
+  A macOS runner has no Docker, so it runs no server.
+- **Android** builds the development variant in its release configuration, which embeds the bundle
+  and drops the development launcher, and runs both flows on an Android 15 emulator against the packaged server
+  JAR every other runtime check uses. The server runs the `e2e` and `playwright` profiles, like the
+  browser suite: PostgreSQL only, with dev sign-in and the development build's callback.
+
+Android 16 also belongs in device acceptance testing. Maestro currently hangs while injecting text
+on that version ([upstream issue](https://github.com/mobile-dev-inc/Maestro/issues/2718)); the CI
+image keeps the complete sign-in journey executable without changing the app or its target SDK.
+
+Neither job needs credentials. Neither proves a real provider sign-in, push delivery, an EAS build or
+an update; those need the accounts in [Releases](#releases).
+
+## API compatibility
+
+An installed app keeps calling the API it shipped with. `mobile/api-contract/operations.json` lists
+every operation the app calls, as `METHOD /path`, and the mobile client is generated from those alone:
+a call missing from the list does not compile. When a version ships, its spec and its list are
+recorded under `mobile/api-contract/released/<version>/`. `gate:mobile-api` runs oasdiff from each
+recorded spec to today's and fails on a breaking change to an operation that release calls; an
+operation no released app calls cannot fail it. Before judging, the gate checks itself on a small API:
+a changed response and a new required parameter must be reported, and a removed operation nobody calls
+must not. It runs in the mobile CI leg; locally, `vp run gate:mobile-api` downloads its pinned oasdiff
+on first use.
+
+- **When a version ships**, run `vp run generate:mobile-api-contract` and commit the new directory. It
+  refuses to overwrite a recorded version. Until a version's first binary is released, delete and
+  re-record it freely.
+- **A recorded release is never edited.** When the gate fails, change the server so the old app keeps
+  working. If that is impossible, retire the old version: release the server with
+  `hephaestus.auth.native.minimum-app-version` raised past it, say so in the changeset, and delete its
+  directory in the same pull request.
+- **Heph's stream is outside the spec**, because the controller is hidden from it. The app sends
+  `{id, message}` and reads AI SDK UI message chunks, like the webapp. A change to either needs the
+  same care by hand.
+
+The fingerprint runtime version keeps an update from reaching a binary with different native code. It
+says nothing about the server API; the contract does.
+
+## Releases
+
+Three build variants install side by side:
+
+| Variant     | Identifier and scheme          | EAS profile and channel | Talks to                                                                                        |
+| ----------- | ------------------------------ | ----------------------- | ----------------------------------------------------------------------------------------------- |
+| Development | `build.hephaestus.app.dev`     | `development`           | This worktree's server first; any server, HTTP allowed; dev sign-in                             |
+| Preview     | `build.hephaestus.app.preview` | `preview`               | `PREVIEW_INSTANCE` first, which a preview build refuses to be configured without; HTTPS servers |
+| Production  | `build.hephaestus.app`         | `production`            | hephaestus.build first; HTTPS servers                                                           |
+
+[Store release](./mobile-store-release.mdx) covers what the stores ask of a release. Every server lists the callbacks of the builds it serves; [Mobile app](/admin/mobile-app#sign-in-callbacks)
+tells operators which.
+
+### Prerequisites
+
+A release needs accounts and keys the repository never holds:
+
+- An Apple Developer team with the app record, and an APNs key for push.
+- A Google Play app, and a Firebase project whose `google-services.json` is an EAS file variable
+  `GOOGLE_SERVICES_JSON`, for Android push.
+- An Expo account and EAS project. The GitHub environments `mobile-preview` and `mobile-production`
+  hold the variables `EAS_PROJECT_ID`, `EAS_OWNER`, `EXPO_UPDATES_CODE_SIGNING_CERTIFICATE` and, for preview, `PREVIEW_INSTANCE` and the
+  secrets `EXPO_TOKEN` and `EXPO_UPDATES_CODE_SIGNING_KEY`, with required reviewers. The workflows
+  hand those secrets only to the steps that call EAS, never to the dependency install. The same
+  variables are set in the EAS environments of the same names.
+- An update-signing key pair. Generate it once, commit the certificate, and keep the key only in the
+  environment secret:
+
+  ```bash
+  vp -C mobile exec expo-updates codesigning:generate --key-output-directory keys \
+    --certificate-output-directory certs --certificate-validity-duration-years 10 \
+    --certificate-common-name "Hephaestus"
+  ```
+
+  A preview or production build with an EAS project and no certificate is refused when it is
+  configured, so no binary ships accepting unsigned updates. Git ignores the `keys` directory; `EXPO_UPDATES_CODE_SIGNING_CERTIFICATE` is then `certs/certificate.pem`.
+
+- For push from an instance the publisher runs, that instance's Expo access token, which stays with
+  the publisher ([Mobile app § Push notifications](/admin/mobile-app#push-notifications)).
+
+`vp run check:mobile:release --profile <preview|production> --mode <build|update> --commit <sha>
+--repository <owner/name>` lists whatever is missing, including a passing CI run for that exact commit.
+Both workflows run it first: dispatching from the default branch alone proves nothing, since the branch
+can move ahead of CI.
+
+### Ship a binary
+
+Run **Mobile release** from the default branch with a profile and platforms. It builds in EAS and
+waits until the binaries are finished, so a green run means installable artifacts exist. Cancelling
+the run stops only the wait: cancel the EAS builds themselves with `vp -C mobile exec eas build:cancel`. Record the
+API contract for the version (above), then submit to the stores with `eas submit` as a maintainer.
+Production builds increment the build number in EAS; raise `version` in `app.config.ts` for each
+store release.
+
+### Ship an update
+
+Run **Mobile update** from the default branch with a channel, platforms, a message and a first
+rollout percentage. It signs the update with the environment's key and publishes it with the EAS
+environment of the same name, so the runtime version EAS computes is the one its builds were given.
+EAS delivers the update only to binaries with that runtime version: check the update's compatible
+builds in the EAS dashboard before widening it. Then, with `vp -C mobile exec eas`:
+
+- **Widen the rollout** with `update:edit --rollout-percentage <n>` on the update group, up to 100.
+- **Stop a rollout** with `update:revert-update-rollout`: devices that had not taken it stay where
+  they were.
+- **Roll back a finished rollout** with `update:rollback`, or `update:republish --group <earlier
+group>` to send an earlier update again as the newest.
+
+A native change never ships as an update: it gets a new fingerprint, so its update finds no binary
+until a new one is released.
+
+### Lint and format ownership
+
+Mobile extends the repository base, the shared React layer and `oxlint.vitest.jsonc`, which also owns
+the web app’s test conventions. Native exceptions stay in `mobile/.oxlintrc.json` with their reasons.
+The same oxfmt configuration formats both apps; `check:mobile` includes the root formatting gate,
+so the local command and CI judge the same files. Generated clients and native projects are excluded.
+
+The lint contract exercises deliberately invalid native files through the actual Vite+ configuration:
+type errors, floating promises, console logging, direct fetch and handwritten server query keys must
+all fail. Network streaming has one adapter in `src/heph/transport.ts`; a device-only permission query
+has no OpenAPI key and documents that exception where it is used.

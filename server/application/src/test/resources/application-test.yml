@@ -65,6 +65,8 @@ spring:
 # Disable workspace bootstrapping during tests to prevent API calls
 hephaestus:
     auth:
+        native:
+            redirect-uris: build.hephaestus.app.dev:/auth/callback
         rate-limit:
             enabled: false
     # Worker role off in tests: the worker capability is the Docker sandbox

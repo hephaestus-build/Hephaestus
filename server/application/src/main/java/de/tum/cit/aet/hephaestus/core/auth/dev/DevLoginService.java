@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.core.auth.nativesession.NativeSessionService;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
@@ -53,6 +54,7 @@ public class DevLoginService {
     private final HephaestusJwtIssuer jwtIssuer;
     private final Clock clock;
     private final Duration sessionMaxLifetime;
+    private final NativeSessionService nativeSessionService;
 
     public DevLoginService(
             AuthProperties authProperties,
@@ -60,13 +62,15 @@ public class DevLoginService {
             JwtPrincipalFactory principalFactory,
             HephaestusJwtIssuer jwtIssuer,
             Clock clock,
-            Environment environment) {
+            Environment environment,
+            NativeSessionService nativeSessionService) {
         this.enabled = authProperties.devLoginEnabled();
         this.accountRepository = accountRepository;
         this.principalFactory = principalFactory;
         this.jwtIssuer = jwtIssuer;
         this.clock = clock;
         this.sessionMaxLifetime = authProperties.sessionMaxLifetime();
+        this.nativeSessionService = nativeSessionService;
 
         // acceptsProfiles (not a raw spring.profiles.active string-split) so the guard also fires when
         // prod is activated via a deploy-role GROUP alias — webhook-server/worker-node expand to include
@@ -101,6 +105,32 @@ public class DevLoginService {
     @Transactional
     public HephaestusJwtIssuer.Token devLogin(
             String username, @Nullable String displayName, boolean admin, @Nullable HttpServletRequest request) {
+        Account account = resolveAccount(username, displayName, admin);
+        // Parity with the OAuth success path: stamp the same absolute session ceiling so a dev session
+        // can't be silently kept alive past sessionMaxLifetime by the rolling refresh (OWASP absolute
+        // timeout). Reuses the identical issuer seam, so the token stays issued_jwt-backed and revocable.
+        Instant now = clock.instant();
+        return jwtIssuer.issue(
+                principalFactory.forAccountId(Objects.requireNonNull(account.getId())),
+                TokenConstraints.session(now.plus(sessionMaxLifetime), now),
+                request);
+    }
+
+    /**
+     * The native app's dev sign-in: the same account resolution, ending in the same PKCE-bound handoff a
+     * federated native sign-in ends in, so local and E2E runs exercise the real exchange and refresh.
+     *
+     * @return the single-use handoff code for the app's redirect
+     */
+    @Transactional
+    public String devNativeHandoff(String username, String codeChallenge) {
+        Account account = resolveAccount(username, null, false);
+        Instant now = clock.instant();
+        return nativeSessionService.createHandoff(
+                Objects.requireNonNull(account.getId()), codeChallenge, now.plus(sessionMaxLifetime), now);
+    }
+
+    private Account resolveAccount(String username, @Nullable String displayName, boolean admin) {
         if (!enabled) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
@@ -116,13 +146,6 @@ public class DevLoginService {
             account = accountRepository.save(account);
         }
         log.info("auth.dev-login: signed in dev account id={} login={} admin={}", account.getId(), username, admin);
-        // Parity with the OAuth success path: stamp the same absolute session ceiling so a dev session
-        // can't be silently kept alive past sessionMaxLifetime by the rolling refresh (OWASP absolute
-        // timeout). Reuses the identical issuer seam, so the token stays issued_jwt-backed and revocable.
-        Instant now = clock.instant();
-        return jwtIssuer.issue(
-                principalFactory.forAccountId(Objects.requireNonNull(account.getId())),
-                TokenConstraints.session(now.plus(sessionMaxLifetime), now),
-                request);
+        return account;
     }
 }

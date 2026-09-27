@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.web;
 import de.tum.cit.aet.hephaestus.core.auth.AuthSessionService;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.util.List;
@@ -39,20 +40,26 @@ public class SessionWebController {
             Instant expiresAt,
             @Nullable String userAgent,
             @Nullable String ip,
-            boolean current) {}
+            boolean current,
+
+            @Schema(
+                    requiredMode = Schema.RequiredMode.REQUIRED,
+                    description = "The native app, whose session outlives this token until expiresAt")
+            boolean nativeApp) {}
 
     @GetMapping
     @Operation(summary = "List active sessions for the current user", operationId = "listSessions")
     public ResponseEntity<List<SessionViewDTO>> list() {
         UUID currentJti = CurrentAccount.requireJti();
         List<SessionViewDTO> views = sessionService.activeSessions(CurrentAccount.requireId()).stream()
-                .map(j -> new SessionViewDTO(
-                        j.getJti(),
-                        j.getIssuedAt(),
-                        j.getExpiresAt(),
-                        j.getUserAgent(),
-                        j.getIpInet(),
-                        j.getJti().equals(currentJti)))
+                .map(session -> new SessionViewDTO(
+                        session.token().getJti(),
+                        session.token().getIssuedAt(),
+                        session.expiresAt(),
+                        session.token().getUserAgent(),
+                        session.token().getIpInet(),
+                        session.token().getJti().equals(currentJti),
+                        session.nativeApp()))
                 .toList();
         return ResponseEntity.ok(views);
     }

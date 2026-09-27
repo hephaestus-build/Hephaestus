@@ -51,6 +51,7 @@ const group = (dependsOn: readonly string[]) => ({
 });
 
 const webappSources = "'webapp/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
+const mobileSources = "'mobile/**/*.{js,jsx,ts,tsx,json,jsonc}'";
 const agentSources =
 	"'server/application/src/{main,test}/resources/agent/**/*.ts' 'server/application/src/main/resources/practices/precompute/**/*.ts' 'docker/agents/{precompute,pi}/**/*.ts' 'scripts/**/*.ts'";
 const loadSources = "'load-tests/**/*.js'";
@@ -83,6 +84,7 @@ const docsLintInputs = [
 	"webapp/tools/oxlint/**",
 	".oxlintrc.json",
 	"oxlint.react.jsonc",
+	"oxlint.vitest.jsonc",
 	"tsconfig.json",
 	"pnpm-lock.yaml",
 ];
@@ -103,6 +105,7 @@ const policyGates = [
 const serverGates = ["gate:java-nullness", "gate:server"];
 const webappGates = ["gate:webapp", "gate:webapp-format", "gate:components", "gate:stories"];
 const agentGates = ["gate:agents", "gate:agent-tests"];
+const mobileGates = ["gate:mobile", "gate:mobile-format", "gate:mobile-tests"];
 const docsGates = ["gate:docs", "gate:diagrams", "gate:docs-tokens"];
 const loadGates = ["gate:load-format"];
 const checkTasks = [
@@ -110,6 +113,7 @@ const checkTasks = [
 	...serverGates,
 	...webappGates,
 	...agentGates,
+	...mobileGates,
 	...docsGates,
 	...loadGates,
 ];
@@ -145,6 +149,7 @@ export default defineConfig({
 				"format:java",
 				"format:webapp",
 				"format:agents",
+				"format:mobile",
 				"format:load",
 				"format:docs",
 				"format:config",
@@ -153,6 +158,7 @@ export default defineConfig({
 				"format:java:check",
 				"gate:webapp-format",
 				"gate:agents-format",
+				"gate:mobile-format",
 				"gate:load-format",
 				"gate:docs-format",
 				"gate:config-format",
@@ -163,6 +169,8 @@ export default defineConfig({
 			"format:webapp:check": group(["gate:webapp-format"]),
 			"format:agents": run(`vp fmt --write ${agentSources}`),
 			"format:agents:check": group(["gate:agents-format"]),
+			"format:mobile": run(`vp fmt --write ${mobileSources}`),
+			"format:mobile:check": group(["gate:mobile-format"]),
 			"format:load": run(`vp fmt --write ${loadSources}`),
 			"format:load:check": group(["gate:load-format"]),
 			"format:docs": run(`vp fmt --write ${docsSources}`),
@@ -171,8 +179,19 @@ export default defineConfig({
 			"format:config:check": group(["gate:config-format"]),
 
 			// Lint and typecheck
-			lint: group(["lint:java", "lint:webapp", "gate:agents-lint", "gate:docs-lint"]),
-			typecheck: group(["typecheck:webapp", "gate:scripts-typecheck", "gate:agents-typecheck"]),
+			lint: group([
+				"lint:java",
+				"lint:webapp",
+				"lint:mobile",
+				"gate:agents-lint",
+				"gate:docs-lint",
+			]),
+			typecheck: group([
+				"typecheck:webapp",
+				"typecheck:mobile",
+				"gate:scripts-typecheck",
+				"gate:agents-typecheck",
+			]),
 			"lint:java": run(`${gradlew} :application:pmdMain --quiet`),
 			"lint:java:report": run(
 				`${gradlew} :application:pmdMain && echo 'Report: server/application/build/reports/pmd/main.html'`,
@@ -249,6 +268,31 @@ export default defineConfig({
 			"build:webapp": run("vp -C webapp build"),
 			"dev:webapp": run("vp -C webapp dev"),
 
+			// Mobile app. As in the webapp, the root config turns `typeAware` and `typeCheck` on, so the
+			// lint half of `gate:mobile` is also its type check. Its tests are pure modules; the screens
+			// are proven on simulators by `test:mobile:e2e`, which CI runs on its macOS and Linux legs.
+			"generate:mobile-routes": run("vp -C mobile exec expo customize tsconfig.json"),
+			"gate:mobile": {
+				...cached("vp -C mobile check --no-fmt"),
+				dependsOn: ["generate:mobile-routes"],
+			},
+			"gate:mobile-format": cached(`vp fmt --check ${mobileSources}`),
+			"gate:mobile-tests": group(["test:mobile"]),
+			"lint:mobile": run("vp -C mobile lint .", { dependsOn: ["generate:mobile-routes"] }),
+			"lint:mobile:fix": run("vp -C mobile lint --fix .", {
+				dependsOn: ["generate:mobile-routes"],
+			}),
+			"typecheck:mobile": group(["gate:mobile"]),
+			"check:mobile": group(mobileGates),
+			"test:mobile": run("vp run --filter mobile test"),
+			"test:mobile:e2e": run("node scripts/mobile-e2e.ts"),
+			"check:mobile:deps": run("node scripts/mobile-sdk-check.ts"),
+			"check:mobile:release": run("node scripts/mobile-release-preflight.ts"),
+			// CI-only: it fetches the pinned oasdiff on first use, which `check` must not need.
+			"gate:mobile-api": run("node scripts/mobile-api-contract.ts check"),
+			"generate:mobile-api-contract": run("node scripts/mobile-api-contract.ts record"),
+			"dev:mobile": run("vp -C mobile exec expo start --dev-client"),
+
 			// Agent runtime, precompute, repository scripts and tooling config
 			"gate:agents-format": cached(`vp fmt --check ${agentSources}`),
 			"gate:config-format": cached(configFormatCommand("--check")),
@@ -316,12 +360,14 @@ export default defineConfig({
 			// second name after `vp run` is an argument, not a second task, so the two are separate.
 			"ci:webapp": run(["vp run ci:webapp:static", "vp run verification:webapp-build"]),
 			"ci:windows": group(checkTasks.filter((gate) => !linuxOnly.has(gate))),
+			"ci:mobile": group([...mobileGates, "gate:mobile-api", "check:mobile:deps"]),
 
 			// Scoped selections for check:affected
 			"affected:agents": group(agentGates),
 			"affected:docs": group([...docsGates, "gate:instructions"]),
 			"affected:server": group(serverGates),
 			"affected:webapp": group(webappGates),
+			"affected:mobile": group(mobileGates),
 
 			// The credential-free builds and suites that verification adds to quality
 			"verification:storybook-tests": group(["test:webapp:stories"]),
@@ -336,9 +382,13 @@ export default defineConfig({
 			// Generated artefacts, schema and integration schemas
 			"generate:api": run(["vp run generate:api:specs", "vp run generate:api:client"]),
 			"generate:api:specs": run("node scripts/generate-openapi-spec.ts"),
-			"generate:api:client": run(
-				"node scripts/rm.ts webapp/src/api && vp run --filter webapp generate:api",
-			),
+			// Both clients come from the one spec; each generator run empties its own output first.
+			"generate:api:client": run([
+				"node scripts/rm.ts webapp/src/api",
+				"vp run --filter webapp generate:api",
+				"node scripts/rm.ts mobile/src/api",
+				"vp run --filter mobile generate:api",
+			]),
 			"db:draft-changelog": run("node scripts/db-utils.ts draft-changelog"),
 			"db:check-drift": run("node scripts/db-utils.ts check-drift"),
 			"db:generate-erd-docs": run("node scripts/db-utils.ts generate-erd"),

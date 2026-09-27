@@ -15,6 +15,8 @@ const sidebars: SidebarsConfig = {
 				"local-verification",
 				"testing",
 				"e2e-testing",
+				"mobile",
+				"mobile-store-release",
 				"accessibility-audit-plan",
 				"security-mutation-testing",
 				"coding-guidelines",

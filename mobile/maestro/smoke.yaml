@@ -1,0 +1,31 @@
+# Needs no server. Boots the installed binary, which evaluates every route module, and checks that
+# another Hephaestus's address is refused when it cannot be used. Runs against any build variant.
+appId: ${APP_ID}
+name: Smoke — the app boots and validates an instance address
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: instance-default
+    timeout: 60000
+- assertVisible: Hephaestus
+- tapOn:
+    id: instance-other
+- extendedWaitUntil:
+    visible:
+      id: instance-address
+    timeout: 10000
+# Another instance starts empty on every build.
+- tapOn:
+    id: instance-continue
+- assertVisible:
+    id: instance-problem
+- assertVisible: Enter the address of your team's Hephaestus.
+- tapOn:
+    id: instance-address
+- inputText: not a web address
+- hideKeyboard
+- tapOn:
+    id: instance-continue
+- assertVisible: That is not a web address. It looks like hephaestus.example.org.

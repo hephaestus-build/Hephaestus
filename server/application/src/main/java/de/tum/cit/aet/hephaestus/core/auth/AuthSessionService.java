@@ -12,6 +12,8 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
+import de.tum.cit.aet.hephaestus.core.auth.nativesession.NativeSession;
+import de.tum.cit.aet.hephaestus.core.auth.nativesession.NativeSessionService;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.micrometer.core.instrument.Timer;
 import jakarta.servlet.http.Cookie;
@@ -19,7 +21,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +43,7 @@ public class AuthSessionService {
     private final AuthProperties properties;
     private final Clock clock;
     private final AuthMetrics metrics;
+    private final NativeSessionService nativeSessionService;
 
     public AuthSessionService(
             JwtPrincipalFactory principalFactory,
@@ -47,7 +53,8 @@ public class AuthSessionService {
             AuthEventLogger authEventLogger,
             AuthProperties properties,
             Clock clock,
-            AuthMetrics metrics) {
+            AuthMetrics metrics,
+            NativeSessionService nativeSessionService) {
         this.principalFactory = principalFactory;
         this.issuedJwtRepository = issuedJwtRepository;
         this.accountRepository = accountRepository;
@@ -56,11 +63,13 @@ public class AuthSessionService {
         this.properties = properties;
         this.clock = clock;
         this.metrics = metrics;
+        this.nativeSessionService = nativeSessionService;
     }
 
     /** Revoke the presenting token and clear the cookie. */
     @Transactional
     public void logout(Long accountId, UUID jti, HttpServletResponse response) {
+        nativeSessionService.endSessionsBackedBy(accountId, jti, IssuedJwt.RevokedReason.LOGOUT);
         issuedJwtRepository.revoke(jti, clock.instant(), IssuedJwt.RevokedReason.LOGOUT);
         authEventLogger
                 .event(AuthEvent.EventType.LOGOUT, AuthEvent.Result.SUCCESS)
@@ -132,22 +141,56 @@ public class AuthSessionService {
         response.addCookie(cookie);
     }
 
-    /** Active (non-revoked, non-expired) sessions for an account. */
-    public List<IssuedJwt> activeSessions(Long accountId) {
-        return issuedJwtRepository.findActiveByAccountId(accountId, clock.instant());
+    /**
+     * One entry of the session list: a live access token, or the token a live native session backs.
+     *
+     * @param expiresAt when the entry stops working without a new sign-in — the access token's expiry for
+     *                  a browser session, the absolute session deadline for a native one
+     */
+    public record ActiveSession(IssuedJwt token, Instant expiresAt, boolean nativeApp) {}
+
+    /**
+     * Active sessions for an account. A native session stays listed while its access token is expired
+     * but its refresh secret still works, so it can be revoked from here like any other.
+     */
+    public List<ActiveSession> activeSessions(Long accountId) {
+        Map<UUID, NativeSession> nativeByJti = new HashMap<>();
+        for (NativeSession session : nativeSessionService.liveSessions(accountId)) {
+            nativeByJti.put(session.getCurrentJti(), session);
+        }
+        List<ActiveSession> sessions = new ArrayList<>();
+        for (IssuedJwt token : issuedJwtRepository.findActiveByAccountId(accountId, clock.instant())) {
+            NativeSession nativeSession = nativeByJti.remove(token.getJti());
+            sessions.add(
+                    nativeSession == null
+                            ? new ActiveSession(token, token.getExpiresAt(), false)
+                            : new ActiveSession(token, nativeSession.getSessionExpiresAt(), true));
+        }
+        for (NativeSession idle : nativeByJti.values()) {
+            issuedJwtRepository
+                    .findById(idle.getCurrentJti())
+                    .filter(token -> token.getRevokedAt() == null)
+                    .ifPresent(token -> sessions.add(new ActiveSession(token, idle.getSessionExpiresAt(), true)));
+        }
+        return sessions;
     }
 
-    /** Revokes only sessions owned by {@code accountId}; ownership is checked in the update. */
+    /**
+     * Revokes only sessions owned by {@code accountId}; ownership is checked in the update. A native
+     * session backed by that token, or rotated away from it since the list was read, ends with it.
+     */
     @Transactional
     public void revokeSession(Long accountId, UUID jti) {
+        nativeSessionService.endSessionsBackedBy(accountId, jti, IssuedJwt.RevokedReason.SELF_REVOKE);
         issuedJwtRepository.revokeOwned(jti, accountId, clock.instant(), RevokedReason.SELF_REVOKE);
     }
 
     /** Sign out everywhere except the presenting session. */
     @Transactional
     public void revokeAllExcept(Long accountId, UUID currentJti) {
+        UUID retainedJti = nativeSessionService.endAllExcept(accountId, currentJti);
         issuedJwtRepository.revokeAllForAccountExcept(
-                accountId, currentJti, clock.instant(), RevokedReason.SIGN_OUT_EVERYWHERE);
+                accountId, retainedJti, clock.instant(), RevokedReason.SIGN_OUT_EVERYWHERE);
     }
 
     public void clearCookie(HttpServletResponse response) {

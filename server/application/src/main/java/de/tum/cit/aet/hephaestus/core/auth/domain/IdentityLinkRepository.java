@@ -35,10 +35,11 @@ public interface IdentityLinkRepository extends JpaRepository<IdentityLink, Long
     @Modifying
     @Query("""
         UPDATE IdentityLink il
-           SET il.lastLoginAt = :now
+           SET il.lastLoginAt = :now, il.avatarUrl = :avatarUrl
          WHERE il.id = :id
         """)
-    int touchLastLogin(@Param("id") Long id, @Param("now") Instant now);
+    int refreshLoginProfile(
+            @Param("id") Long id, @Param("now") Instant now, @Param("avatarUrl") @Nullable String avatarUrl);
 
     /** Active identity links in linking order, keeping the representative actor stable when another is linked. */
     @Query("""

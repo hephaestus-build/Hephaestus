@@ -1,0 +1,13 @@
+# Continuous Native Generation: `expo prebuild` writes these from app.config.ts.
+/ios
+/android
+.expo/
+expo-env.d.ts
+test-results/
+# EAS Update code-signing keys are provisioned, never committed.
+/keys/
+*.p8
+*.jks
+*.keystore
+google-services.json
+GoogleService-Info.plist

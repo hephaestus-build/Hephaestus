@@ -30,6 +30,8 @@ hold, each enforced before Coolify is asked to deploy:
   the application server is allowed to boot: every review trigger, agent binding and sweep schedule
   is disabled, queued jobs are cancelled, pending deliveries are failed, and the instance identity
   (`login_provider`, `jwt_signing_key`, `issued_jwt`) is dropped so the preview signs its own tokens.
+  Native app sign-ins go with it: handoffs, sessions and their refresh secrets, and the push devices
+  staging registered with the notifications queued for them.
   The seed loader verifies that against the database and refuses to mark the preview seeded
   otherwise, so a policy that silently did not apply leaves the preview un-booted rather than live.
 - Staging's provider credentials do not survive the clone either: the instance and workspace AI

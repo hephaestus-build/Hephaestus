@@ -7,6 +7,7 @@ import path from "node:path";
 import { describe, test } from "node:test";
 
 import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
+import { parse as parseJsonc } from "jsonc-parser";
 import { type Document, isMap, isScalar, isSeq, parseDocument, visit, type YAMLMap } from "yaml";
 
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
@@ -61,9 +62,10 @@ async function readSources(files: string[]): Promise<Map<string, string>> {
 const TASK_INVOCATION =
 	/\bvp run (?:(?:--(?!filter\b)[\w-]+|\$\{\{ *matrix\.\w+ *\}\}) +)*(?<name>(?:[\w:-]|\$\{\{ *matrix\.\w+ *\}\})+)/gu;
 
-// The two gates `check` cannot run: the k6 syntax check needs the pinned container, and the PMD
-// canary runs only when CI decides PMD inputs changed. Every other CI gate is part of `check`.
-const CI_ONLY_GATES = new Set(["gate:load-syntax", "gate:pmd-canary"]);
+// The gates `check` cannot run: the k6 syntax check needs the pinned container, the PMD canary runs
+// only when CI decides PMD inputs changed, and the mobile API check fetches oasdiff on first use.
+// Every other CI gate is part of `check`.
+const CI_ONLY_GATES = new Set(["gate:load-syntax", "gate:pmd-canary", "gate:mobile-api"]);
 
 /** The task names one job's steps invoke, with a `${{ matrix.<key> }}` resolved from its matrix. */
 function invokedTasks(definition: YAMLMap): string[] {
@@ -387,6 +389,15 @@ void describe("CI contract", () => {
 		const rootInputs = [
 			...config.matchAll(/new URL\("\.\.\/(?<file>[^"/]+)", import\.meta\.url\)/gu),
 		].map(({ groups }) => groups?.file);
+		const lintConfig = asRecord(
+			parseJsonc(await readFile("webapp/.oxlintrc.json", "utf8")),
+			"webapp lint configuration",
+		);
+		for (const base of asArray(lintConfig.extends, "webapp lint bases")) {
+			const file = path.posix.normalize(path.posix.join("webapp", asString(base, "lint base")));
+			assert.equal(path.posix.dirname(file), ".", "Shared lint bases live at the repo root");
+			rootInputs.push(file);
+		}
 		assert.ok(rootInputs.length > 0, "Expected root configuration dependencies");
 		const copied =
 			/^COPY (?<files>.+) \/repo\/$/mu.exec(dockerfile)?.groups?.files?.split(/\s+/u) ?? [];
@@ -2743,7 +2754,7 @@ void test(
 		const workflow = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
 		const script = runScript(workflow, ["jobs", "quality"], "Quality gates");
 		const probe = `vp() { printf 'command=%s\\n' "$*" >> "$GITHUB_OUTPUT"; }\n${script}`;
-		for (const leg of ["server", "tooling", "webapp", "windows"]) {
+		for (const leg of ["server", "tooling", "webapp", "mobile", "windows"]) {
 			const result = await runStep(probe, { LEG: leg });
 			assert.equal(result.failed, false, result.diagnosis);
 			assert.equal(
@@ -2765,6 +2776,7 @@ void test("unchanged quality legs are skipped before runner allocation", async (
 		["server", "application_server"],
 		["tooling", "tooling"],
 		["webapp", "webapp"],
+		["mobile", "mobile"],
 		["windows", "tooling"],
 	]) {
 		assert.equal(

@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       leg:
-        description: "Quality task: server, tooling, webapp, or windows"
+        description: "Quality task: server, tooling, webapp, mobile, or windows"
         required: true
         type: string
       pmd_canary:
@@ -63,6 +63,7 @@ jobs:
             server) vp run ci:server ;;
             tooling) vp run ci:tooling ;;
             webapp) vp run ci:webapp ;;
+            mobile) vp run ci:mobile ;;
             windows) vp run --no-cache ci:windows ;;
             *) echo "::error::Unknown quality leg: $LEG"; exit 1 ;;
           esac

@@ -244,6 +244,16 @@ public final class ConfigurationReadinessEvaluator {
                 relayConfigured && notBlank(property("hephaestus.email.from")),
                 "Email is optional; with a relay host set, hephaestus.email.from must name the sender address.",
                 "email");
+        add(
+                facts,
+                "notification.push",
+                "hephaestus.push.expo-access-token",
+                roles(RuntimeRole.SERVER),
+                ConfigurationRequirement.OPTIONAL,
+                server,
+                ConfigurationReadinessEvaluator::notBlank,
+                "Push notifications to the native app are off until an Expo access token is set.",
+                "push-notifications");
 
         verifyCatalogue(facts);
         return List.copyOf(facts);

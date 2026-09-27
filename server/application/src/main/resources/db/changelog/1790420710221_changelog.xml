@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790420710221-1" author="hephaestus">
+        <createTable tableName="native_session">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="native_sessionPK"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="auth_time" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="current_jti" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revoked_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="revoked_reason" type="VARCHAR(32)"/>
+            <column name="session_expires_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790420710221-2" author="hephaestus">
+        <createTable tableName="native_sign_in_handoff">
+            <column name="code_hash" type="VARCHAR(64)">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="native_sign_in_handoffPK"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="auth_time" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="code_challenge" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="consumed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="session_expires_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790420710221-3" author="hephaestus">
+        <createTable tableName="push_device">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="push_devicePK"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expo_push_token" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="installation_id" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="native_session_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="platform" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790420710221-4" author="hephaestus">
+        <createTable tableName="push_notification">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="push_notificationPK"/>
+            </column>
+            <column name="attempts" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="failure_reason" type="VARCHAR(64)"/>
+            <column name="kind" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="next_attempt_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="push_device_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="recipient_user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sent_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="settled_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="state" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ticket_id" type="VARCHAR(64)"/>
+            <column name="window_start" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790420710221-6" author="hephaestus">
+        <addUniqueConstraint columnNames="expo_push_token" constraintName="uk_push_device_expo_push_token" tableName="push_device"/>
+    </changeSet>
+    <changeSet id="1790420710221-7" author="hephaestus">
+        <addUniqueConstraint columnNames="installation_id" constraintName="uk_push_device_installation_id" tableName="push_device"/>
+    </changeSet>
+    <changeSet id="1790420710221-8" author="hephaestus">
+        <addUniqueConstraint columnNames="push_device_id, workspace_id, kind, window_start" constraintName="uk_push_notification_window" tableName="push_notification"/>
+    </changeSet>
+    <changeSet id="1790420710221-9" author="hephaestus">
+        <createIndex indexName="ix_native_session_account_id" tableName="native_session">
+            <column name="account_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790420710221-10" author="hephaestus">
+        <createIndex indexName="ix_native_session_current_jti" tableName="native_session">
+            <column name="current_jti"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790420710221-12" author="hephaestus">
+        <createIndex indexName="ix_native_session_session_expires_at" tableName="native_session">
+            <column name="session_expires_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790420710221-13" author="hephaestus">
+        <createIndex indexName="ix_native_sign_in_handoff_account_id" tableName="native_sign_in_handoff">
+            <column name="account_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790420710221-14" author="hephaestus">
+        <createIndex indexName="ix_native_sign_in_handoff_expires_at" tableName="native_sign_in_handoff">
+            <column name="expires_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790420710221-15" author="hephaestus">
+        <createIndex indexName="ix_push_device_account_id" tableName="push_device">
+            <column name="account_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790420710221-16" author="hephaestus">
+        <createIndex indexName="ix_push_notification_state" tableName="push_notification">
+            <column name="state"/>
+            <column name="next_attempt_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790420710221-17" author="hephaestus">
+        <createIndex indexName="ix_push_notification_workspace" tableName="push_notification">
+            <column name="workspace_id"/>
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790420710221-18" author="hephaestus">
+        <comment>Every row goes with the account, workspace, developer or device it belongs to.</comment>
+        <addForeignKeyConstraint baseTableName="native_session" baseColumnNames="account_id" constraintName="sfk_native_session_account" referencedTableName="account" referencedColumnNames="id" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="native_sign_in_handoff" baseColumnNames="account_id" constraintName="sfk_native_sign_in_handoff_account" referencedTableName="account" referencedColumnNames="id" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="push_device" baseColumnNames="account_id" constraintName="sfk_push_device_account" referencedTableName="account" referencedColumnNames="id" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="push_notification" baseColumnNames="push_device_id" constraintName="sfk_push_notification_device" referencedTableName="push_device" referencedColumnNames="id" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="push_notification" baseColumnNames="workspace_id" constraintName="sfk_push_notification_workspace" referencedTableName="workspace" referencedColumnNames="id" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="push_notification" baseColumnNames="recipient_user_id" constraintName="sfk_push_notification_recipient" referencedTableName="user" referencedColumnNames="id" onDelete="CASCADE"/>
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="push_notification" constraintName="sfk_push_notification_recipient"/>
+            <dropForeignKeyConstraint baseTableName="push_notification" constraintName="sfk_push_notification_workspace"/>
+            <dropForeignKeyConstraint baseTableName="push_notification" constraintName="sfk_push_notification_device"/>
+            <dropForeignKeyConstraint baseTableName="push_device" constraintName="sfk_push_device_account"/>
+            <dropForeignKeyConstraint baseTableName="native_sign_in_handoff" constraintName="sfk_native_sign_in_handoff_account"/>
+            <dropForeignKeyConstraint baseTableName="native_session" constraintName="sfk_native_session_account"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790420710221-19" author="hephaestus">
+        <createTable tableName="native_session_token">
+            <column name="jti" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="native_session_tokenPK"/>
+            </column>
+            <column name="refresh_token_hash" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="session_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790420710221-20" author="hephaestus">
+        <addColumn tableName="push_notification">
+            <column name="sent_device_version" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790420710221-21" author="hephaestus">
+        <addColumn tableName="push_device">
+            <column name="version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790420710221-22" author="hephaestus">
+        <addColumn tableName="push_notification">
+            <column name="version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790420710221-23" author="hephaestus">
+        <addUniqueConstraint columnNames="refresh_token_hash" constraintName="uk_native_session_token_hash" tableName="native_session_token"/>
+    </changeSet>
+    <changeSet id="1790420710221-24" author="hephaestus">
+        <createIndex indexName="ix_native_session_token_session_id" tableName="native_session_token">
+            <column name="session_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790420710221-25" author="hephaestus">
+        <addForeignKeyConstraint baseTableName="native_session_token" baseColumnNames="session_id" constraintName="sfk_native_session_token_session" referencedTableName="native_session" referencedColumnNames="id" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="push_device" baseColumnNames="native_session_id" constraintName="sfk_push_device_session" referencedTableName="native_session" referencedColumnNames="id" onDelete="CASCADE"/>
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="push_device" constraintName="sfk_push_device_session"/>
+            <dropForeignKeyConstraint baseTableName="native_session_token" constraintName="sfk_native_session_token_session"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

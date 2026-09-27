@@ -1,0 +1,147 @@
+---
+title: Mobile store release
+description: The evidence, privacy disclosures and review access needed to publish the native app.
+---
+
+# Mobile store release
+
+A successful native build proves that the app compiles. Publication also needs the deployed server,
+real-device verification, accurate privacy declarations and reviewer access. The publisher owns those
+facts for the exact binary and backend being submitted. Neither this document nor a passing test
+suite is a store approval or a legal assessment.
+
+[Mobile development](./mobile.mdx#releases) owns signing, EAS environments, binary releases and
+updates. [The personal-data map](/admin/dsms/personal-data-map) owns retention and erasure;
+[the processor checklist](/admin/dsms/processor-checklist) owns provider onboarding. Do not keep
+separate retention numbers in store metadata.
+
+## Submission identity and access
+
+Publish under the entity entitled to operate the service and use the Hephaestus name. Register the
+identifiers from the production app configuration with Apple and Google; a configured identifier is
+not proof that an app record exists. Complete support contact, privacy URL, countries, age/content
+rating, export-compliance questions and any required trader declarations in the publisher accounts.
+Use the real app icon and screenshots from the submitted build, with synthetic developer and
+workspace content. Do not put real private feedback or confidential reference material in screenshots.
+
+The production app starts with `hephaestus.build`; another instance is an explicit choice. Before
+submission, deploy a server that supports the app's native configuration and sign-in endpoints, and
+verify that the live privacy and support pages describe this deployment. A website loading at an
+address does not prove that its API supports native sign-in.
+
+Give reviewers a dedicated, non-privileged account in a synthetic workspace with practice feedback,
+a practice profile and working Heph conversations. Keep the backend and the configured AI provider
+available throughout review. Explain instance selection, the normal provider sign-in, account
+deletion, optional push and content reporting in the review notes. Never enable the development
+sign-in endpoint on a public server or ship its controls in a store build to bypass reviewer access.
+Store review credentials belong in the stores' private review fields, not Git, screenshots or logs.
+
+Apple requires complete metadata and access to account-based features in
+[App Review Guidelines §2.1](https://developer.apple.com/app-store/review/guidelines/#app-completeness).
+Google's [app access instructions](https://support.google.com/googleplay/android-developer/answer/9859455)
+also need to describe any prerequisites that a reviewer cannot discover by installing the app.
+
+## Sign-in and account control
+
+GitHub/GitLab sign-in is part of accessing a developer's connected work. Document the actual account
+requirement when submitting: Apple's [§4.8 login services](https://developer.apple.com/app-store/review/guidelines/#login-services)
+contains exceptions for existing enterprise/education accounts and clients that require access to a
+specific third-party service. This is a rationale to assess against the shipped product, not a
+blanket exemption for every app with a GitHub button. If distribution or account creation no longer
+fits an exception, provide a compliant equivalent login option before publication.
+
+Deletion must be reachable within the app even before joining a workspace. Account controls must not
+be hidden by a failed workspace request. A newly provisioned account must not have to accept new
+terms just to request deletion. Test deletion on a disposable account, including that its sessions
+and push eligibility end, and that the retention job completes after the documented cooldown.
+
+The existing account-deletion path removes account-bound data; independently mirrored contributor
+and source records have the separate verified operator erasure process in the privacy notice. The
+app and store declarations must explain this distinction. The publisher must establish any lawful
+retention exception and operational handling of remaining erasure requests before representing this
+as complete deletion. Do not describe disabling an account as deletion of all personal data.
+
+Google additionally requires a functional [web deletion resource](https://support.google.com/googleplay/android-developer/answer/13327111)
+that works without reinstalling the app. The deployed privacy notice's prominent rights/erasure
+section can provide that route only when its contact and request procedure are actually monitored.
+Apple's [account deletion guidance](https://developer.apple.com/support/offering-account-deletion-in-your-app)
+requires an easy-to-find in-app initiation path and an explanation of any completion delay.
+
+## AI disclosure and reports
+
+Before sending a message to Heph, explain that the message, conversation history and relevant
+connected-work context are processed by the workspace's configured AI service. Obtain an explicit
+affirmative action; cancellation sends nothing and preserves the draft. The permission must not
+silently follow a different account, instance or workspace. Research participation is a separate
+choice and must never be treated as permission for unrelated AI processing.
+
+The live operator privacy notice must identify the actual recipients and their processing terms.
+An arbitrary self-hosted instance must not inherit claims about TUM's provider, data location or
+training policy. Reassess the disclosure when a workspace changes its provider. Apple's
+[§5.1.2 data use and sharing](https://developer.apple.com/app-store/review/guidelines/#data-use-and-sharing)
+explicitly addresses sharing personal data with third-party AI.
+
+People must be able to report inappropriate generated content from inside the app. Reports use the
+existing instance product-feedback service and its administrator triage queue. Show what text will
+be attached and who receives it; do not attach the entire private conversation invisibly. Operators
+must monitor reports, respond to concerns and use them to improve content safeguards. A disabled
+report button, a mail link or a success message without a saved report is not that workflow.
+Google's [AI-generated content policy](https://support.google.com/googleplay/android-developer/answer/13985936)
+requires in-app reporting and prevention of restricted content. Review the actual model/provider
+safeguards and test representative misuse cases before making the service public; a model being
+configured is not evidence of those safeguards.
+
+## Privacy declarations
+
+Complete Apple's [App Privacy details](https://developer.apple.com/app-store/app-privacy-details/)
+and Google's [Data safety form](https://support.google.com/googleplay/android-developer/answer/10787469)
+from the shipped app, its SDKs and the deployed service together. A native app that sends data to
+its own server still collects data for these disclosures. Do not select “no data collected” because
+the app has no analytics SDK.
+
+| Surface                 | Facts to assess in the store forms                                                                                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity                | Provider account identifier, display name and any email/profile fields the configured sign-in returns; linked to the account and used for app functionality.                     |
+| Heph and connected work | Messages, code/work excerpts, conversation history and generated responses; identify actual external AI recipients and purposes.                                                 |
+| Responses and reports   | Practice-feedback responses, research choices and user-submitted product/content reports; recipients and retention follow the data map.                                          |
+| Sessions                | Account/session identifiers, user agent and authentication-event IP information stored by the server; security and app functionality.                                            |
+| Optional push           | Installation and push token, workspace slug and opaque session identifier; Expo and Apple/Google process delivery. Feedback text is excluded from the notification.              |
+| App updates             | When configured, the Expo update service receives requests needed to locate and download compatible updates; inspect the SDK's transmitted headers and applicable service terms. |
+| Diagnostics             | Declare only what this release and deployment actually collect. Adding monitoring changes the inventory, even when it is described as anonymous.                                 |
+
+Distinguish collection, sharing, account linkage and tracking using each store's definitions. The
+shipped mobile app has no advertising or cross-app tracking feature; do not request tracking
+permission simply because it connects to a server. If the product changes, reassess rather than
+copying an earlier submission's answers.
+
+Inspect the **built** iOS privacy manifest aggregation and Android merged permissions. Expo and React
+Native SDKs contribute required-reason API declarations; source configuration alone is insufficient.
+The app should request no camera, microphone, contacts or photo-library permission for its current
+workflows. Notifications remain optional and their permission prompt follows an explicit action.
+Keep the dependency/privacy inventory with the release evidence, including any changed SDK.
+
+## Native acceptance and update limits
+
+Use the same release commit and packaged server validated by CI. Run both native flows plus the
+signed-in product journeys on iPhone 18 Pro and Android: feedback and its reversible response,
+practice pages, chat and interruption/retry, content reporting, account deletion and session
+revocation. Check light/dark appearance, large text, screen-reader labels, reduced motion/transparency,
+keyboard open/closed, offline recovery, cancellation and denied notification permission. Verify any
+additional device classes advertised by the app, including tablet and landscape support.
+
+Physical-device acceptance must include the real provider login and callback, APNs/FCM delivery,
+notification taps across sign-out/account switching, and an installed store-distribution build.
+Simulator success does not prove signing, push credentials or the real provider configuration.
+Exercise the signed OTA rollout and rollback on a compatible distributed binary before using it for
+production fixes.
+
+Keep Liquid Glass in the native navigation and control layer. Apple's
+[materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials)
+discourages using it throughout content; native components inherit system appearance and accessibility
+preferences. Android keeps its own navigation, back behavior and material conventions.
+
+An EAS update must remain within the app functionality reviewed by the stores. Native runtime
+compatibility and a valid update signature do not permit bypassing review for a materially different
+product. Follow [Apple §2.5.2](https://developer.apple.com/app-store/review/guidelines/#software-requirements)
+and [Expo's update guidance](https://docs.expo.dev/eas-update/introduction/); ship a reviewed binary
+when native capabilities or review-relevant functionality change.

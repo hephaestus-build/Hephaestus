@@ -1,6 +1,7 @@
 packages:
   - .
   - webapp
+  - mobile
   - docs
 
 linkWorkspacePackages: true
@@ -24,9 +25,23 @@ allowBuilds:
   '@sentry/cli': true
   "@swc/core": true
   core-js: false
+  # eas-cli's logger falls back to plain output without this optional DTrace addon.
+  dtrace-provider: false
   esbuild: true
   msw: false
   protobufjs: false
+  # Its postinstall downloads highlighting grammars and a math renderer; the app turns both off
+  # (mobile/package.json `enriched-markdown`), so nothing is fetched at install time.
+  react-native-enriched-markdown: false
+
+# Declares what a package requires but only receives through hoisting, so it resolves under the
+# isolated layout above.
+packageExtensions:
+  # The Babel plugin requires both; they only arrive through @babel/core in a hoisted install.
+  react-native-worklets:
+    dependencies:
+      "@babel/generator": ^7.29.0
+      "@babel/traverse": ^7.29.0
 
 # The tools vite-plus bundles, at the versions it bundles; `vp run sync:toolchain-pins` writes them.
 catalog:
@@ -40,6 +55,14 @@ catalog:
   "@vitest/coverage-v8": 4.1.11
   "@vitest/runner": 4.1.11
   vite: npm:@voidzero-dev/vite-plus-core@0.3.2
+  # Shared by the webapp and the mobile app: one generator for both API clients, one contract for the
+  # query cache and the mentor chat stream, and one date library.
+  "@hey-api/openapi-ts": 0.0.0-next-20260824173136
+  "@tanstack/react-query": 5.102.8
+  ai: 7.0.93
+  "@ai-sdk/react": 4.0.96
+  zod: 4.5.4
+  date-fns: 4.4.0
 
 overrides:
   mermaid: 11.17.2

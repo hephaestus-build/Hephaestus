@@ -128,7 +128,11 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces
             "AccountAiChoice", // The account's own AI choice; one answer for every workspace
             "WorkerRegistry", // Fleet-wide worker liveness/capacity registry (#1138); not workspace-scoped
-            "InstanceSettings" // Singleton instance-wide operator settings (silent-mode brake, #1386)
+            "InstanceSettings", // Singleton instance-wide operator settings (silent-mode brake, #1386)
+            "NativeSession", // Native app session (refresh secret); account-scoped like IssuedJwt
+            "NativeSessionToken", // Credential lineage belongs to an account-scoped native session
+            "NativeSignInHandoff", // Single-use native sign-in code; belongs to an account before any workspace
+            "PushDevice" // App installation registered for push; one account's installation spans workspaces
             );
 
     // ENTITY WORKSPACE RELATIONSHIPS

@@ -116,7 +116,8 @@ public class AccountProvisioningService {
                 throw new AccountLinkConflictException(
                         registrationId, subject, link.getAccount().getId());
             }
-            identityLinkRepository.touchLastLogin(link.getId(), clock.instant());
+            identityLinkRepository.refreshLoginProfile(
+                    link.getId(), clock.instant(), stringAttr(principal, "avatar_url", "picture"));
             if (link.getExternalActorId() == null) {
                 // A developer synced from a repository before their first sign-in has a user row this
                 // link did not know about; a later sync can also create it after the link.

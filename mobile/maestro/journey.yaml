@@ -1,0 +1,147 @@
+# Needs a live Hephaestus with dev sign-in enabled (the `e2e` server profile) and a development-variant
+# build. Signs in through the system browser sheet and the real PKCE exchange, completes consent,
+# restores the session after a relaunch — a refresh against the server — and signs out.
+# USERNAME must be new to the server: consent and the empty workspace state assume a fresh account.
+appId: ${APP_ID}
+name: Journey — sign in, consent, restore, sign out
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: instance-default
+    timeout: 60000
+- tapOn:
+    id: instance-other
+- extendedWaitUntil:
+    visible:
+      id: instance-address
+    timeout: 10000
+- tapOn:
+    id: instance-address
+- inputText: ${SERVER_URL}
+# Submitted with the keyboard's Go key, as the dev username is below.
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: dev-username
+    timeout: 20000
+- tapOn:
+    id: dev-username
+- inputText: ${USERNAME}
+# Submitted with the keyboard's return key, as a person does: on a small screen the open keyboard
+# covers the button below the field.
+- pressKey: Enter
+# iOS asks before an app opens a sign-in sheet.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible: Continue
+          timeout: 15000
+      - tapOn: Continue
+# A fresh Android runner may show Chrome's first-run screens before opening the Custom Tab.
+# These are browser controls observed on the API 36 image, never Hephaestus account choices.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn:
+          text: Use without an account
+          optional: true
+      - tapOn:
+          text: No thanks
+          optional: true
+      - tapOn:
+          text: Got it
+          optional: true
+- extendedWaitUntil:
+    visible:
+      id: consent-screen
+    timeout: 30000
+# Privacy and deletion remain reachable before accepting anything. Close closes the entire sheet.
+- scrollUntilVisible:
+    element:
+      id: consent-privacy
+- tapOn:
+    id: consent-privacy
+- extendedWaitUntil:
+    visible:
+      id: privacy-screen
+    timeout: 10000
+# The sheet's Close is a native toolbar button, found by its accessibility label.
+- tapOn:
+    text: Close
+- extendedWaitUntil:
+    visible:
+      id: consent-screen
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: consent-accept
+    direction: UP
+- tapOn:
+    id: consent-accept
+- runFlow:
+    when:
+      visible:
+        id: consent-research-no
+    commands:
+      - scrollUntilVisible:
+          element:
+            id: consent-research-no
+      - tapOn:
+          id: consent-research-no
+- scrollUntilVisible:
+    element:
+      id: consent-continue
+- tapOn:
+    id: consent-continue
+- extendedWaitUntil:
+    visible: You are not in a workspace yet
+    timeout: 30000
+# Account works without a workspace, including closing from a nested settings page.
+- tapOn:
+    id: account-open
+- extendedWaitUntil:
+    visible:
+      id: account-screen
+    timeout: 10000
+- tapOn:
+    id: account-privacy
+- extendedWaitUntil:
+    visible:
+      id: privacy-screen
+    timeout: 10000
+# The sheet's Close is a native toolbar button, found by its accessibility label.
+- tapOn:
+    text: Close
+- extendedWaitUntil:
+    visible: You are not in a workspace yet
+    timeout: 10000
+# A cold start restores the session from the keychain by rotating its refresh secret.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: You are not in a workspace yet
+    timeout: 30000
+- assertNotVisible:
+    id: instance-default
+# On a small screen, Sign out sits below the fold under Account.
+- scrollUntilVisible:
+    element:
+      text: Sign out
+- tapOn: Sign out
+- extendedWaitUntil:
+    visible:
+      id: instance-default
+    timeout: 20000
+# Signed out stays signed out across a relaunch.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: instance-default
+    timeout: 60000
