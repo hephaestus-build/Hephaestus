@@ -53,11 +53,8 @@ class FeedbackDeliveryService {
         deliverFeedback(job, delivery, Set.of());
     }
 
-    void recordProposal(
-            AgentJob job,
-            @Nullable DeliveryContent delivery,
-            List<PracticeDetectionResultParser.ValidatedObservation> observations) {
-        feedbackLedgerRecorder.recordProposal(job, delivery, observations);
+    void recordProposal(AgentJob job, @Nullable DeliveryContent delivery) {
+        feedbackLedgerRecorder.recordProposal(job, delivery);
     }
 
     ExistingDeliveryLookup findExistingSummary(AgentJob job) {
@@ -79,8 +76,9 @@ class FeedbackDeliveryService {
     }
 
     void deliverFeedback(AgentJob job, @Nullable DeliveryContent delivery, Set<String> contributingPracticeSlugs) {
-        if (delivery == null) {
-            log.debug("No delivery content, skipping: jobId={}", job.getId());
+        if (delivery == null
+                || (delivery.mrNote() == null && delivery.diffNotes().isEmpty())) {
+            feedbackLedgerRecorder.recordNothingToPost(job, delivery);
             return;
         }
 
@@ -139,6 +137,8 @@ class FeedbackDeliveryService {
                 if (summaryDelivered || inlineDelivered) {
                     feedbackLedgerRecorder.recordWithoutConversation(
                             job, delivery, artifactKind, signals, dispatch.getDeliveredExternalRef(), inlineDelivered);
+                    feedbackLedgerRecorder.recordUndeliveredRemainder(
+                            job, delivery, missingInlineKeys(delivery, signals));
                 } else {
                     feedbackLedgerRecorder.recordUndelivered(job, delivery);
                 }
@@ -156,8 +156,17 @@ class FeedbackDeliveryService {
         String summary = delivery.mrNote();
         if (summary == null) return delivery;
         String sanitized = PullRequestCommentPoster.sanitize(summary);
-        if (sanitized.isBlank()) return new DeliveryContent(null, delivery.diffNotes(), delivery.withheld());
-        return new DeliveryContent(commentFormatter.format(sanitized, job), delivery.diffNotes(), delivery.withheld());
+        if (sanitized.isBlank())
+            return new DeliveryContent(
+                    null,
+                    delivery.diffNotes(),
+                    delivery.withheld(),
+                    delivery.summaryContributors() == null ? null : List.of());
+        return new DeliveryContent(
+                commentFormatter.format(sanitized, job),
+                delivery.diffNotes(),
+                delivery.withheld(),
+                delivery.summaryContributors());
     }
 
     private static List<String> missingInlineKeys(DeliveryContent delivery, List<DeliveredSignal> signals) {

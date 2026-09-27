@@ -1,7 +1,23 @@
 import { z } from "zod";
 
 import type { ChatMessage as ThreadMessage } from "@/api/types.gen";
+import { hasText } from "@/lib/text";
 import type { ChatMessage } from "@/lib/types";
+
+/** A `data-observation` part's data. A link stored without `text` showed nothing and proves nothing. */
+export const observationDataSchema = z.object({
+	observationId: z.uuid(),
+	text: z.string().optional(),
+});
+
+/** Parsed where it is read, so a streamed part and a stored one pass the same check. */
+export function shownFeedbackText(part: ChatMessage["parts"][number]): string | undefined {
+	if (part.type !== "data-observation") {
+		return undefined;
+	}
+	const parsed = observationDataSchema.safeParse(part.data);
+	return parsed.success && hasText(parsed.data.text?.trim()) ? parsed.data.text : undefined;
+}
 
 /**
  * Unknown keys survive: the mentor streams part kinds this client does not model, and stripping

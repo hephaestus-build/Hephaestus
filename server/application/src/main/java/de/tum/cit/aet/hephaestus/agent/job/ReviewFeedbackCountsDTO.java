@@ -9,8 +9,9 @@ public record ReviewFeedbackCountsDTO(
         @NonNull Long delivered,
         @NonNull Long superseded,
         @NonNull Long suppressed,
-        @NonNull Long failed) {
+        @NonNull Long failed,
+        @NonNull Long unconfirmed) {
     public static ReviewFeedbackCountsDTO empty() {
-        return new ReviewFeedbackCountsDTO(0L, 0L, 0L, 0L, 0L);
+        return new ReviewFeedbackCountsDTO(0L, 0L, 0L, 0L, 0L, 0L);
     }
 }

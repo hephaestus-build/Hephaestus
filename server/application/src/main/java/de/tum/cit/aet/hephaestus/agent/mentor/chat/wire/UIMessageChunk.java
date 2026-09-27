@@ -6,6 +6,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.JsonValue;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -209,23 +211,49 @@ public sealed interface UIMessageChunk {
     }
 
     /**
-     * Hephaestus-specific data part emitted when Pi calls the {@code link_observation} custom tool.
-     * Permanent (NOT transient) — the linked-observation chip is part of the message history.
-     * Carries the observation id both at the top-level {@code id} (for AI SDK deduplication) and
-     * inside the {@code data} envelope.
+     * Hephaestus-specific data part emitted when Pi calls the {@code link_observation} custom tool: the feedback
+     * the mentor wrote about one observation, shown to the developer as part of the reply. Permanent (NOT
+     * transient), and the only place those words live — they are not Pi assistant text, so they never enter the
+     * streamed-text verification. Each link gets its own {@code id}, because the AI SDK merges a data part into an
+     * earlier one with the same type and id.
      */
     record DataObservation(
             @JsonProperty("id") UUID id,
             @JsonProperty("data") DataObservationPayload data) implements UIMessageChunk {
+        public static final String PART_TYPE = "data-observation";
+
         public DataObservation {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(data, "data");
         }
 
-        public record DataObservationPayload(UUID observationId) {}
+        public record DataObservationPayload(UUID observationId, String text) {}
 
-        public static DataObservation of(UUID observationId) {
-            return new DataObservation(observationId, new DataObservationPayload(observationId));
+        public static DataObservation of(UUID observationId, String text) {
+            return new DataObservation(UUID.randomUUID(), new DataObservationPayload(observationId, text));
+        }
+
+        /**
+         * The observations a stored reply showed the developer feedback about, in order: its data-observation
+         * parts that carry text. A part stored before links carried text showed nothing, so it names none.
+         */
+        public static List<UUID> shownObservationIds(@Nullable JsonNode parts) {
+            List<UUID> shown = new ArrayList<>();
+            if (parts == null || !parts.isArray()) {
+                return shown;
+            }
+            for (JsonNode part : parts) {
+                JsonNode data = part.path("data");
+                if (PART_TYPE.equals(part.path("type").asString(""))
+                        && !data.path("text").asString("").isBlank()) {
+                    try {
+                        shown.add(UUID.fromString(data.path("observationId").asString("")));
+                    } catch (IllegalArgumentException unreadable) {
+                        // Not a link this server wrote; it settles nothing.
+                    }
+                }
+            }
+            return shown;
         }
     }
 }

@@ -283,10 +283,13 @@ class DeliveryComposerTest extends BaseUnitTest {
                 .doesNotContain("promise nobody can check");
         assertThat(everything).contains("The discount fix has no test");
 
-        DeliveryContent clean = DeliveryComposer.compose(
-                List.of(positiveObservation("ships-tests-with-the-change")),
+        ValidatedObservation shipped = identified(positiveObservation("ships-tests-with-the-change"));
+        DeliveryContent clean = DeliveryComposer.composeAdmitted(
+                List.of(shipped),
                 ArtifactKinds.PULL_REQUEST,
-                Map.of("ships-tests-with-the-change", why));
+                Map.of("ships-tests-with-the-change", why),
+                List.of(artifactInContextUnit(shipped, "Tests landed with it", COMPOSED_NEXT_STEP)),
+                null);
         assertThat(clean).isNotNull();
         assertThat(clean.mrNote())
                 .as("the rule holds on a clean change too")
@@ -492,7 +495,7 @@ class DeliveryComposerTest extends BaseUnitTest {
 
     @Test
     void shouldUseLeadForCleanChange() {
-        ValidatedObservation strength = new ValidatedObservation(
+        ValidatedObservation strength = identified(new ValidatedObservation(
                 "error-state-handling",
                 "Error state handling (positive)",
                 AssessmentStatus.ASSESSED,
@@ -500,51 +503,154 @@ class DeliveryComposerTest extends BaseUnitTest {
                 Assessment.GOOD,
                 null,
                 null,
-                "Network errors are surfaced to the user via an alert.");
+                "Network errors are surfaced to the user via an alert."));
         String lead = "Small change, and it carries its own error handling.";
 
-        assertThat(noteWithLead(List.of(strength), lead)).startsWith(lead + "\n\n");
+        String note = note(DeliveryComposer.composeAdmitted(
+                List.of(strength),
+                ArtifactKinds.PULL_REQUEST,
+                Map.of(),
+                List.of(artifactInContextUnit(strength, "Errors reach the user", COMPOSED_NEXT_STEP)),
+                lead));
+
+        assertThat(note).startsWith(lead + "\n\n");
     }
 
     @Test
-    void compose_withAllPositive_producesObservationNoteWithoutPraise() {
+    void compose_withAllPositiveAndNoComposedUnit_postsNothingEvenWithALead() {
         List<ValidatedObservation> observations = List.of(
-                positiveObservation("error-state-handling"),
-                positiveObservation("view-decomposition"),
-                positiveObservation("meaningful-naming"));
+                positiveObservation("links-the-change-to-its-issue"),
+                positiveObservation("plans-the-work-in-an-issue-first"));
 
-        DeliveryContent result = DeliveryComposer.compose(observations);
-
-        assertThat(result).isNotNull();
-        // Each observation says what it observed, so each earns a bullet; none of it is praise.
-        assertThat(result.mrNote()).contains("Error state handling").contains("View decomposition");
-        assertThat(result.mrNote()).doesNotContain("stood out");
-        assertThat(result.diffNotes()).isEmpty();
+        assertThat(DeliveryComposer.composeAdmitted(
+                        observations,
+                        ArtifactKinds.PULL_REQUEST,
+                        Map.of(),
+                        List.of(),
+                        "The issue-first workflow held up again here."))
+                .isNull();
     }
 
     @Test
-    void compose_withAllPositive_bulletsSayWhatWasObservedNotHowItWasChecked() {
-        ValidatedObservation observed = new ValidatedObservation(
-                "error-state-handling",
-                "Network errors are surfaced to the user via an alert",
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.GOOD,
-                null,
-                null,
-                // The warrant is written for whoever audits the review: first person, about the search.
-                "I walked every added subscribe block and followed each error callback to its sink.");
+    void compose_withAllPositive_rendersAndNamesOnlyTheStrengthsTheCompositionStageWrote() {
+        ValidatedObservation composed = identified(
+                positiveObservation("error-state-handling").withKeys(new ObservationKeys("occ-said", "rk-said")));
+        ValidatedObservation uncomposed =
+                positiveObservation("view-decomposition").withKeys(new ObservationKeys("occ-unsaid", "rk-unsaid"));
 
-        DeliveryContent result = DeliveryComposer.compose(List.of(observed));
+        DeliveryContent result = content(DeliveryComposer.composeAdmitted(
+                List.of(composed, uncomposed),
+                ArtifactKinds.PULL_REQUEST,
+                Map.of(),
+                List.of(artifactInContextUnit(composed, "The retry path reaches the user", COMPOSED_NEXT_STEP)),
+                null));
 
-        assertThat(result).isNotNull();
         assertThat(result.mrNote())
-                .contains("What's working well here")
-                .contains("Error state handling")
-                .contains("Network errors are surfaced")
-                .doesNotContain("I walked")
-                .doesNotContain("No issues found");
-        assertThat(result.diffNotes()).isEmpty();
+                .contains("Error state handling:** The retry path reaches the user. " + COMPOSED_NEXT_STEP)
+                .doesNotContain("View decomposition");
+        assertThat(result.contributors()).containsExactly("occ-said");
+    }
+
+    @Test
+    void compose_withheldStrengthBesideAProblem_isOneWithheldDecisionAndNotAContributor() {
+        ValidatedObservation problem = untestedBranchObservation().withKeys(new ObservationKeys("occ-bad", "rk-bad"));
+        ValidatedObservation strength = identified(positiveObservation("links-the-change-to-its-issue")
+                .withKeys(new ObservationKeys("occ-good", "rk-good")));
+
+        DeliveryContent result = content(DeliveryComposer.composeAdmitted(
+                List.of(problem, strength),
+                ArtifactKinds.PULL_REQUEST,
+                Map.of(),
+                List.of(withholdUnit(strength)),
+                null));
+
+        assertThat(result.withheld())
+                .containsExactly(new WithheldObservation("occ-good", FeedbackSuppressionReason.COMPOSER_WITHHELD));
+        assertThat(result.contributors()).containsExactly("occ-bad");
+    }
+
+    @Test
+    void compose_positiveUnit_isRenderedAtTheStrengthItCitesNotTheBestAttestedOne() {
+        for (var artifact : List.of(ArtifactKinds.PULL_REQUEST, ArtifactKinds.ISSUE)) {
+            ValidatedObservation broad = identified(new ValidatedObservation(
+                    "links-the-change-to-its-issue",
+                    "Title, body and branch all name the issue",
+                    AssessmentStatus.ASSESSED,
+                    Presence.PRESENT,
+                    Assessment.GOOD,
+                    null,
+                    buildEvidence(List.of(new LocationSpec("README.md", 1), new LocationSpec("docs/plan.md", 3)), null),
+                    "Three places name it."));
+            ValidatedObservation cited = identified(new ValidatedObservation(
+                    "links-the-change-to-its-issue",
+                    "The closing keyword names the issue",
+                    AssessmentStatus.ASSESSED,
+                    Presence.PRESENT,
+                    Assessment.GOOD,
+                    null,
+                    buildEvidence(List.of(new LocationSpec("README.md", 1)), null),
+                    "One place names it."));
+
+            DeliveryContent result = content(DeliveryComposer.composeAdmitted(
+                    List.of(broad, cited),
+                    artifact,
+                    Map.of(),
+                    List.of(artifactInContextUnit(cited, "The closing keyword does the linking", COMPOSED_NEXT_STEP)),
+                    null));
+
+            assertThat(result.mrNote()).contains("The closing keyword does the linking");
+            assertThat(result.contributors()).containsExactly(cited.occurrenceKey());
+        }
+    }
+
+    @Test
+    void compose_unitCitingAnObservationThisDeliveryDoesNotAdmit_isRefusedNotMovedToAnotherOne() {
+        ValidatedObservation problem = identified(untestedBranchObservation());
+        ValidatedObservation strength = identified(positiveObservation("links-the-change-to-its-issue"));
+        ValidatedObservation excluded = identified(positiveObservation("links-the-change-to-its-issue"));
+
+        DeliveryContent withProblem = content(DeliveryComposer.composeAdmitted(
+                List.of(problem),
+                ArtifactKinds.PULL_REQUEST,
+                Map.of(),
+                List.of(citing(
+                        List.of(problem, excluded), "Untested branch", COMPOSED_NEXT_STEP, onTheLineOf(problem))),
+                null));
+        DeliveryContent withStrength = DeliveryComposer.composeAdmitted(
+                List.of(strength),
+                ArtifactKinds.PULL_REQUEST,
+                Map.of(),
+                List.of(artifactInContextUnit(excluded, "The link names the outcome", COMPOSED_NEXT_STEP)),
+                null);
+
+        assertThat(reachedTheDeveloper(withProblem))
+                .as("the problem keeps its own summary; the refused unit's words are not used")
+                .contains("New branch ships without a test")
+                .doesNotContain(COMPOSED_NEXT_STEP);
+        assertThat(withProblem.contributors()).containsExactly(problem.occurrenceKey());
+        assertThat(withStrength)
+                .as("a strength has no fallback, so nothing is said")
+                .isNull();
+    }
+
+    @Test
+    void compose_lineNoteCarriesEveryObservationItsUnitCites() {
+        ValidatedObservation branch = identified(untestedBranchObservation());
+        ValidatedObservation supporting = identified(positiveObservation("describe-what-and-why"));
+
+        DeliveryContent result = content(DeliveryComposer.composeAdmitted(
+                List.of(branch, supporting),
+                ArtifactKinds.PULL_REQUEST,
+                Map.of(),
+                List.of(citing(
+                        List.of(branch, supporting), "Untested branch", COMPOSED_NEXT_STEP, onTheLineOf(branch))),
+                null));
+
+        assertThat(result.diffNotes())
+                .singleElement()
+                .extracting(DiffNote::contributors)
+                .isEqualTo(List.of(branch.occurrenceKey(), supporting.occurrenceKey()));
+        assertThat(result.summaryContributors()).isEmpty();
     }
 
     @Test
@@ -763,7 +869,6 @@ class DeliveryComposerTest extends BaseUnitTest {
             String clean = DeliveryComposer.sanitizeStudentText(s);
             assertThat(clean).doesNotContainIgnoringCase("NEGATIVE observation");
             assertThat(clean).doesNotContainIgnoringCase("POSITIVE observation");
-            assertThat(clean).doesNotContainIgnoringCase("POSITIVE observation");
             assertThat(clean).doesNotContainIgnoringCase("severity band");
             assertThat(clean).doesNotContainIgnoringCase("severity level");
             assertThat(clean).doesNotContainIgnoringCase("MINOR severity");
@@ -940,56 +1045,6 @@ class DeliveryComposerTest extends BaseUnitTest {
         assertThat(issue.mrNote()).contains("Missing checkable outcome");
         assertThat(issue.diffNotes()).isEmpty();
         assertThat(issue.mrNote()).doesNotContain("metadata.json");
-    }
-
-    @Test
-    void compose_noIssuesNote_skipsObservationWhoseReasoningScrubsToBlank() {
-        ValidatedObservation scrubbed = new ValidatedObservation(
-                "issue-has-checkable-outcome",
-                // Grading vocabulary rather than an observation: scrubbed to nothing for a developer.
-                "The practice requires a checkable outcome for a POSITIVE observation",
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.GOOD,
-                null,
-                null,
-                "The practice requires a checkable outcome for a POSITIVE observation.");
-        ValidatedObservation real = new ValidatedObservation(
-                "issue-scoped-to-single-concern",
-                "The issue describes one deliverable and stays within that single concern",
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.GOOD,
-                null,
-                null,
-                "Its body names one outcome and the diff touches only that area.");
-
-        DeliveryContent dc = DeliveryComposer.compose(List.of(scrubbed, real), ArtifactKinds.ISSUE);
-
-        assertThat(dc).isNotNull();
-        assertThat(dc.mrNote()).contains("one deliverable");
-        assertThat(dc.mrNote()).doesNotContain(":** \n");
-        assertThat(dc.mrNote()).doesNotContain("Checkable outcome:**\n");
-    }
-
-    @Test
-    void compose_noIssuesNote_allReasoningScrubbed_fallsBackToNothingToChange() {
-        ValidatedObservation scrubbed = new ValidatedObservation(
-                "issue-has-checkable-outcome",
-                // Grading vocabulary rather than an observation: scrubbed to nothing for a developer.
-                "The practice requires a checkable outcome for a POSITIVE observation",
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.GOOD,
-                null,
-                null,
-                "The practice requires a checkable outcome for a POSITIVE observation.");
-
-        DeliveryContent dc = DeliveryComposer.compose(List.of(scrubbed), ArtifactKinds.ISSUE);
-
-        assertThat(dc).isNotNull();
-        assertThat(dc.mrNote()).contains("nothing to change here");
-        assertThat(dc.mrNote()).doesNotContain("What I observed");
     }
 
     @Test
@@ -1327,10 +1382,9 @@ class DeliveryComposerTest extends BaseUnitTest {
                 .isNotEmpty();
         assertThat(reachedTheDeveloper(asProblem)).contains("Force-unwrap present in changed code");
 
-        assertThat(asStrength).isNotNull();
-        assertThat(asStrength.diffNotes())
+        assertThat(asStrength)
                 .as("(PRESENT, GOOD) is a strength → no problem diff note")
-                .isEmpty();
+                .isNull();
     }
 
     @Test
@@ -1494,9 +1548,15 @@ class DeliveryComposerTest extends BaseUnitTest {
 
     @Test
     void compose_allGoodPath_noPrincipleWhenNoneAuthored() {
-        var observed = List.of(positiveWithReasoning("scope-one-reviewable-change", "The change stays focused."));
+        ValidatedObservation focused =
+                identified(positiveWithReasoning("scope-one-reviewable-change", "The change stays focused."));
 
-        String note = note(DeliveryComposer.compose(observed, ArtifactKinds.PULL_REQUEST, Map.of()));
+        String note = note(DeliveryComposer.composeAdmitted(
+                List.of(focused),
+                ArtifactKinds.PULL_REQUEST,
+                Map.of(),
+                List.of(artifactInContextUnit(focused, "One concern", COMPOSED_NEXT_STEP)),
+                null));
 
         assertThat(note).contains("What's working well here");
         assertThat(note).doesNotContain("_Why this matters:_");
@@ -1664,35 +1724,45 @@ class DeliveryComposerTest extends BaseUnitTest {
                         new WithheldObservation("occ-rk-checkable", FeedbackSuppressionReason.COMPOSER_DEDUPED));
     }
 
-    private static final String COMPOSED_BODY = "Nothing in this change exercises the tax-exempt branch you added.";
     private static final String COMPOSED_NEXT_STEP =
             "Write the assertion that distinguishes the exempt case, then run the suite.";
 
-    private ComposedFeedbackUnit inContextUnit(String slug, String title, String body, String nextStep) {
-        return inContextUnit(
-                slug,
-                title,
-                nextStep,
-                new ComposedFeedbackUnit.InContextPlacement(
-                        ComposedFeedbackUnit.InContextPlacement.PlacementKind.DIFF,
-                        new ComposedFeedbackUnit.ResolvedAnchor("obs-0", 0, "Billing/Invoice.java", "NEW", 42, 42)));
+    /** The observation as a delivery handler stamps it, with the id a composed unit cites. */
+    private static ValidatedObservation identified(ValidatedObservation f) {
+        UUID id = UUID.randomUUID();
+        String occurrenceKey = f.occurrenceKey() == null ? "occ-" + id : f.occurrenceKey();
+        return f.withKeys(new ObservationKeys(occurrenceKey, f.recurrenceKey(), id));
     }
 
-    private ComposedFeedbackUnit artifactInContextUnit(String slug, String title, String nextStep) {
-        return inContextUnit(
-                slug,
-                title,
-                nextStep,
-                new ComposedFeedbackUnit.InContextPlacement(
-                        ComposedFeedbackUnit.InContextPlacement.PlacementKind.ARTIFACT, null));
+    private static ComposedFeedbackUnit.InContextPlacement onTheLineOf(ValidatedObservation f) {
+        return new ComposedFeedbackUnit.InContextPlacement(
+                ComposedFeedbackUnit.InContextPlacement.PlacementKind.DIFF,
+                new ComposedFeedbackUnit.ResolvedAnchor(
+                        String.valueOf(f.observationId()), 0, "Billing/Invoice.java", "NEW", 42, 42));
     }
 
-    private ComposedFeedbackUnit inContextUnit(
-            String slug, String title, String nextStep, ComposedFeedbackUnit.InContextPlacement placement) {
+    private static final ComposedFeedbackUnit.InContextPlacement ON_THE_ARTIFACT =
+            new ComposedFeedbackUnit.InContextPlacement(
+                    ComposedFeedbackUnit.InContextPlacement.PlacementKind.ARTIFACT, null);
+
+    private ComposedFeedbackUnit inContextUnit(ValidatedObservation cited, String title, String nextStep) {
+        return citing(List.of(cited), title, nextStep, onTheLineOf(cited));
+    }
+
+    private ComposedFeedbackUnit artifactInContextUnit(ValidatedObservation cited, String title, String nextStep) {
+        return citing(List.of(cited), title, nextStep, ON_THE_ARTIFACT);
+    }
+
+    /** A unit of the first cited observation's practice, based on every observation it names. */
+    private static ComposedFeedbackUnit citing(
+            List<ValidatedObservation> cited,
+            String title,
+            String nextStep,
+            ComposedFeedbackUnit.InContextPlacement placement) {
         return new ComposedFeedbackUnit(
                 FeedbackChannel.IN_CONTEXT,
-                slug,
-                List.of("obs-0"),
+                cited.get(0).practiceSlug(),
+                cited.stream().map(f -> String.valueOf(f.observationId())).toList(),
                 ComposedFeedbackUnit.Action.NEW,
                 null,
                 null,
@@ -1745,19 +1815,18 @@ class DeliveryComposerTest extends BaseUnitTest {
 
     @Test
     void compose_composedInContextUnit_usesServerEvidenceAndTheComposedNextStep() {
+        ValidatedObservation branch = identified(untestedBranchObservation());
         DeliveryContent result = DeliveryComposer.composeAdmitted(
-                List.of(untestedBranchObservation()),
+                List.of(branch),
                 ArtifactKinds.PULL_REQUEST,
                 Map.of(),
-                List.of(inContextUnit(
-                        "ships-tests-with-the-change", "Untested branch", COMPOSED_BODY, COMPOSED_NEXT_STEP)),
+                List.of(inContextUnit(branch, "Untested branch", COMPOSED_NEXT_STEP)),
                 null);
 
         assertThat(result).isNotNull();
         assertThat(result.diffNotes()).hasSize(1);
         String note = result.diffNotes().get(0).body();
-        assertThat(note).contains(COMPOSED_NEXT_STEP).doesNotContain(COMPOSED_BODY);
-        assertThat(note).doesNotContain("MEASURED REASONING").doesNotContain("MEASURED GUIDANCE");
+        assertThat(note).contains(COMPOSED_NEXT_STEP).doesNotContain("MEASURED REASONING");
         assertThat(note).contains("Untested branch").doesNotContain("New branch ships without a test");
         assertThat(note).contains("🟠");
         assertThat(reachedTheDeveloper(result))
@@ -1774,93 +1843,49 @@ class DeliveryComposerTest extends BaseUnitTest {
         assertThat(result.diffNotes()).hasSize(1);
         String body = result.diffNotes().get(0).body();
         assertThat(body).doesNotContain("MEASURED REASONING").contains("New branch ships without a test");
-        assertThat(body).doesNotContain("MEASURED GUIDANCE");
-    }
-
-    @Test
-    void compose_inContextIgnoresLegacyBodyAndUsesTheNextStep() {
-        DeliveryContent result = DeliveryComposer.composeAdmitted(
-                List.of(untestedBranchObservation()),
-                ArtifactKinds.PULL_REQUEST,
-                Map.of(),
-                List.of(inContextUnit(
-                        "ships-tests-with-the-change",
-                        "Untested branch",
-                        "The practice requires an assertion for every new branch.",
-                        COMPOSED_NEXT_STEP)),
-                null);
-
-        assertThat(result).isNotNull();
-        assertThat(result.diffNotes()).hasSize(1);
-        String note = result.diffNotes().get(0).body();
-        assertThat(note).contains(COMPOSED_NEXT_STEP);
-        assertThat(note).doesNotContain("The practice requires").doesNotContain("MEASURED REASONING");
-    }
-
-    @Test
-    void compose_inContextNeverRendersTheLegacyBody() {
-        DeliveryContent result = DeliveryComposer.composeAdmitted(
-                List.of(untestedBranchObservation()),
-                ArtifactKinds.PULL_REQUEST,
-                Map.of(),
-                List.of(inContextUnit(
-                        "ships-tests-with-the-change",
-                        "Untested branch",
-                        COMPOSED_BODY + " The practice requires an assertion for every new branch.",
-                        COMPOSED_NEXT_STEP)),
-                null);
-
-        assertThat(result).isNotNull();
-        assertThat(result.diffNotes()).hasSize(1);
-        assertThat(result.diffNotes().get(0).body())
-                .contains(COMPOSED_NEXT_STEP)
-                .doesNotContain(COMPOSED_BODY)
-                .doesNotContain("The practice requires");
     }
 
     @Test
     void compose_composedUnitForAPracticeThatCannotBeAnchored_landsInTheSummaryInsteadOfInventingAPlacement() {
-        ValidatedObservation f = negativeObservation(
+        ValidatedObservation f = identified(negativeObservation(
                 "describe-what-and-why",
                 "Description does not say why",
                 Severity.MAJOR,
                 List.of(),
                 null,
-                "MEASURED REASONING: the description lists what changed only.");
+                "MEASURED REASONING: the description lists what changed only."));
 
         DeliveryContent result = DeliveryComposer.composeAdmitted(
                 List.of(f),
                 ArtifactKinds.PULL_REQUEST,
                 Map.of(),
-                List.of(artifactInContextUnit("describe-what-and-why", "Unexplained change", COMPOSED_NEXT_STEP)),
+                List.of(artifactInContextUnit(f, "Unexplained change", COMPOSED_NEXT_STEP)),
                 null);
 
         assertThat(result).isNotNull();
         assertThat(result.diffNotes()).isEmpty();
         assertThat(result.mrNote())
                 .contains("Unexplained change")
-                .doesNotContain(COMPOSED_BODY)
                 .contains(COMPOSED_NEXT_STEP)
                 .doesNotContain("MEASURED REASONING");
     }
 
     @Test
     void compose_twoLociOfOnePractice_rendersItsSingleComposedMessageOnceAtTheMostSevereLocus() {
-        ValidatedObservation severe = untestedBranchObservation();
-        ValidatedObservation lesser = negativeObservation(
+        ValidatedObservation severe = identified(untestedBranchObservation());
+        ValidatedObservation lesser = identified(negativeObservation(
                 "ships-tests-with-the-change",
                 "Second untested branch",
                 Severity.MINOR,
                 List.of(new LocationSpec("Billing/Refund.java", 9)),
                 List.of("if (order.isRefundable()) {"),
-                "SECOND LOCUS REASONING: another branch with no test.");
+                "SECOND LOCUS REASONING: another branch with no test."));
 
         DeliveryContent result = DeliveryComposer.composeAdmitted(
                 List.of(lesser, severe),
                 ArtifactKinds.PULL_REQUEST,
                 Map.of(),
-                List.of(inContextUnit(
-                        "ships-tests-with-the-change", "Untested branch", COMPOSED_BODY, COMPOSED_NEXT_STEP)),
+                List.of(citing(List.of(severe, lesser), "Untested branch", COMPOSED_NEXT_STEP, onTheLineOf(severe))),
                 null);
 
         assertThat(result).isNotNull();
@@ -1870,19 +1895,17 @@ class DeliveryComposerTest extends BaseUnitTest {
                         .count())
                 .isEqualTo(1);
         assertThat(result.diffNotes().get(0).filePath()).isEqualTo("Billing/Invoice.java");
-        assertThat(result.diffNotes().get(0).body())
-                .contains(COMPOSED_NEXT_STEP)
-                .doesNotContain(COMPOSED_BODY);
+        assertThat(result.diffNotes().get(0).body()).contains(COMPOSED_NEXT_STEP);
         assertThat(result.diffNotes().get(1).body())
                 .contains("Second untested branch")
                 .doesNotContain("SECOND LOCUS REASONING");
     }
 
-    private static ComposedFeedbackUnit withholdUnit(String slug, String observationId) {
+    private static ComposedFeedbackUnit withholdUnit(ValidatedObservation withheld) {
         return new ComposedFeedbackUnit(
                 FeedbackChannel.IN_CONTEXT,
-                slug,
-                List.of(observationId),
+                withheld.practiceSlug(),
+                List.of(String.valueOf(withheld.observationId())),
                 ComposedFeedbackUnit.Action.WITHHOLD,
                 null,
                 ComposedFeedbackUnit.WithholdReason.ALREADY_SAID,
@@ -1895,21 +1918,22 @@ class DeliveryComposerTest extends BaseUnitTest {
 
     @Test
     void compose_withholdUnit_deliversNothingForThePracticeAndRecordsTheDecision() {
-        ValidatedObservation withheld = untestedBranchObservation().withKeys(new ObservationKeys("occ-w", "rk-w"));
+        ValidatedObservation withheld =
+                identified(untestedBranchObservation().withKeys(new ObservationKeys("occ-w", "rk-w")));
 
         DeliveryContent result = DeliveryComposer.composeAdmitted(
-                List.of(withheld),
-                ArtifactKinds.PULL_REQUEST,
-                Map.of(),
-                List.of(withholdUnit("ships-tests-with-the-change", "obs-0")),
-                null);
+                List.of(withheld), ArtifactKinds.PULL_REQUEST, Map.of(), List.of(withholdUnit(withheld)), null);
 
-        assertThat(result).isNull();
+        assertThat(result).isNotNull();
+        assertThat(result.mrNote()).isNull();
+        assertThat(result.withheld())
+                .containsExactly(new WithheldObservation("occ-w", FeedbackSuppressionReason.COMPOSER_WITHHELD));
     }
 
     @Test
     void compose_withholdUnit_besideOtherNegatives_withholdsOnlyItsPracticeAndDoesNotCountItAsHidden() {
-        ValidatedObservation withheld = untestedBranchObservation().withKeys(new ObservationKeys("occ-w", "rk-w"));
+        ValidatedObservation withheld =
+                identified(untestedBranchObservation().withKeys(new ObservationKeys("occ-w", "rk-w")));
         List<ValidatedObservation> observations = new ArrayList<>();
         observations.add(withheld);
         for (int i = 0; i < DeliveryComposer.MAX_IMPROVEMENT_SUGGESTIONS; i++) {
@@ -1924,11 +1948,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         }
 
         DeliveryContent result = DeliveryComposer.composeAdmitted(
-                observations,
-                ArtifactKinds.PULL_REQUEST,
-                Map.of(),
-                List.of(withholdUnit("ships-tests-with-the-change", "obs-0")),
-                null);
+                observations, ArtifactKinds.PULL_REQUEST, Map.of(), List.of(withholdUnit(withheld)), null);
 
         assertThat(result).isNotNull();
         assertThat(result.mrNote()).doesNotContain("New branch ships without a test");
@@ -1942,19 +1962,16 @@ class DeliveryComposerTest extends BaseUnitTest {
 
     @Test
     void compose_withholdUnit_besideANewUnitForTheSamePractice_keepsTheNewUnit() {
-        ValidatedObservation observation = untestedBranchObservation().withKeys(new ObservationKeys("occ-w", "rk-w"));
-        ComposedFeedbackUnit written = inContextUnit(
-                "ships-tests-with-the-change",
-                "Cover the tax-exempt branch",
-                COMPOSED_NEXT_STEP,
-                new ComposedFeedbackUnit.InContextPlacement(
-                        ComposedFeedbackUnit.InContextPlacement.PlacementKind.ARTIFACT, null));
+        ValidatedObservation observation =
+                identified(untestedBranchObservation().withKeys(new ObservationKeys("occ-w", "rk-w")));
+        ComposedFeedbackUnit written =
+                artifactInContextUnit(observation, "Cover the tax-exempt branch", COMPOSED_NEXT_STEP);
 
         DeliveryContent result = DeliveryComposer.composeAdmitted(
                 List.of(observation),
                 ArtifactKinds.PULL_REQUEST,
                 Map.of(),
-                List.of(written, withholdUnit("ships-tests-with-the-change", "obs-1")),
+                List.of(written, withholdUnit(observation)),
                 null);
 
         assertThat(result).isNotNull();
@@ -1989,7 +2006,7 @@ class DeliveryComposerTest extends BaseUnitTest {
 
     @Test
     void compose_composedUnitOnTheAgentsOwnSuggestedAnchor_keepsThePlacementAndTakesTheWords() {
-        ValidatedObservation f = new ValidatedObservation(
+        ValidatedObservation f = identified(new ValidatedObservation(
                 "ships-tests-with-the-change",
                 "New branch ships without a test",
                 AssessmentStatus.ASSESSED,
@@ -1999,14 +2016,13 @@ class DeliveryComposerTest extends BaseUnitTest {
                 buildEvidence(
                         List.of(new LocationSpec("Billing/Invoice.java", 42)),
                         List.of("if (customer.isTaxExempt()) {")),
-                "MEASURED REASONING: the change adds a branch and no test covers it.");
+                "MEASURED REASONING: the change adds a branch and no test covers it."));
 
         DeliveryContent result = DeliveryComposer.composeAdmitted(
                 List.of(f),
                 ArtifactKinds.PULL_REQUEST,
                 Map.of(),
-                List.of(inContextUnit(
-                        "ships-tests-with-the-change", "Untested branch", COMPOSED_BODY, COMPOSED_NEXT_STEP)),
+                List.of(inContextUnit(f, "Untested branch", COMPOSED_NEXT_STEP)),
                 null);
 
         assertThat(result).isNotNull();
@@ -2015,15 +2031,12 @@ class DeliveryComposerTest extends BaseUnitTest {
         assertThat(note.filePath()).isEqualTo("Billing/Invoice.java");
         assertThat(note.startLine()).isEqualTo(42);
         assertThat(note.endLine()).isEqualTo(42);
-        assertThat(note.body())
-                .doesNotContain(COMPOSED_BODY)
-                .contains(COMPOSED_NEXT_STEP)
-                .doesNotContain("SUGGESTED NOTE BODY");
+        assertThat(note.body()).contains(COMPOSED_NEXT_STEP);
     }
 
     @Test
     void compose_strengthsOnlyRun_prefersTheComposedMessageInTheBullet() {
-        ValidatedObservation good = new ValidatedObservation(
+        ValidatedObservation good = identified(new ValidatedObservation(
                 "ships-tests-with-the-change",
                 "Tests ship with the change",
                 AssessmentStatus.ASSESSED,
@@ -2031,22 +2044,18 @@ class DeliveryComposerTest extends BaseUnitTest {
                 Assessment.GOOD,
                 null,
                 null,
-                "MEASURED REASONING: the new branch is covered.");
+                "MEASURED REASONING: the new branch is covered."));
 
         DeliveryContent result = DeliveryComposer.composeAdmitted(
                 List.of(good),
                 ArtifactKinds.PULL_REQUEST,
                 Map.of(),
-                List.of(inContextUnit(
-                        "ships-tests-with-the-change", "Tests landed with it", COMPOSED_BODY, COMPOSED_NEXT_STEP)),
+                List.of(inContextUnit(good, "Tests landed with it", COMPOSED_NEXT_STEP)),
                 null);
 
         assertThat(result).isNotNull();
         assertThat(result.diffNotes()).isEmpty();
-        assertThat(result.mrNote())
-                .doesNotContain(COMPOSED_BODY)
-                .contains(COMPOSED_NEXT_STEP)
-                .doesNotContain("MEASURED REASONING");
+        assertThat(result.mrNote()).contains(COMPOSED_NEXT_STEP).doesNotContain("MEASURED REASONING");
         assertThat(result.mrNote())
                 .as("a title with no terminal stop must not run into the step that follows it")
                 .contains("Tests landed with it. " + COMPOSED_NEXT_STEP);

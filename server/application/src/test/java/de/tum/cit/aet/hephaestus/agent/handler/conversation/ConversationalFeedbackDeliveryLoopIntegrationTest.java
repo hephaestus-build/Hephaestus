@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler.conversation;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures;
@@ -30,7 +31,6 @@ import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
@@ -50,15 +50,19 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationTest {
 
     private static final ObjectMapper OM = new ObjectMapper();
+    private static final String SHOWN = "Your description names the decision but not why it beat the alternative.";
 
     @Autowired
     private FeedbackChannelRouter router;
@@ -160,34 +164,77 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
     }
 
     @Test
-    void oneBriefCanBindMultipleObservationsAndReconciliationIsIdempotent() {
+    void shouldDeliverTheFeedbackOnceWhenACompletedReplyShowedIt() {
         AgentJob job = newJob();
         Observation a = saveObservation(job, "occ-a");
         Observation b = saveObservation(job, "occ-b");
-        Observation c = saveObservation(job, "occ-c");
         prepareFor(job);
+        ChatMessage assistant = persistAssistantMessage(ChatMessage.Status.in_flight);
+        TranslatorState state = new TranslatorState(assistant.getId());
+        state.recordDataObservation(UIMessageChunk.DataObservation.of(a.getId(), SHOWN));
+        state.recordDataObservation(UIMessageChunk.DataObservation.of(b.getId(), SHOWN));
+        MentorTurnPersistence.TurnPersistenceCookie cookie = cookie(assistant);
+        mentorTurnPersistence.complete(
+                cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
+
+        mentorTurnPersistence.recordDelivery(cookie, MentorChannel.DeliveryOutcome.DELIVERED);
+        mentorTurnPersistence.recordDelivery(cookie, MentorChannel.DeliveryOutcome.DELIVERED);
+
+        assertThat(conversationUnits()).singleElement().satisfies(f -> {
+            assertThat(f.getDeliveryState()).isEqualTo(FeedbackDeliveryState.DELIVERED);
+            assertThat(f.getBody()).contains("\"kind\":\"conversation-brief\"");
+        });
+        assertThat(feedbackPlacementRepository.findAll()).singleElement().satisfies(placement -> {
+            assertThat(placement.getPlacementType()).isEqualTo(PlacementType.CONVERSATION_TURN);
+            assertThat(placement.getChatMessageId()).isEqualTo(assistant.getId());
+        });
+        assertThat(chatMessageRepository
+                        .findById(assistant.getId())
+                        .orElseThrow()
+                        .getParts())
+                .extracting(part -> part.path("data").path("text").asString())
+                .containsExactly(SHOWN, SHOWN);
+    }
+
+    @Test
+    void shouldLeaveFeedbackPreparedWhenTheReplyOnlyNamedItsObservation() {
+        AgentJob job = newJob();
+        Observation observation = saveObservation(job, "occ-named");
+        prepareFor(job);
+        ChatMessage assistant = persistAssistantMessage(
+                ChatMessage.Status.completed,
+                OM.createArrayNode()
+                        .add(OM.createObjectNode().put("type", "text").put("text", "How did the review go?"))
+                        .add(link(observation.getId(), null)));
+
+        mentorTurnPersistence.recordDelivery(cookie(assistant), MentorChannel.DeliveryOutcome.DELIVERED);
+
         assertThat(preparedCount()).isEqualTo(1);
+        assertThat(feedbackPlacementRepository.findAll()).isEmpty();
+    }
 
-        UUID chatMessageId = persistAssistantMessage();
-        int flips = reconciler.reconcile(
-                workspace.getId(), recipient.getId(), chatMessageId, List.of(a.getId(), b.getId(), c.getId()));
+    @Test
+    void shouldDeliverOnlyTheFeedbackTheReplyShowedWhenItAlsoNamedAnother() {
+        AgentJob named = newJob();
+        Observation onlyNamed = saveObservation(named, "occ-only-named");
+        prepareFor(named);
+        AgentJob shownJob = newJob();
+        Observation shown = saveObservation(shownJob, "occ-shown");
+        prepareFor(shownJob);
+        ChatMessage assistant = persistAssistantMessage(
+                ChatMessage.Status.completed,
+                OM.createArrayNode().add(link(onlyNamed.getId(), null)).add(link(shown.getId(), SHOWN)));
 
-        assertThat(flips).isEqualTo(1);
-        assertThat(deliveredCount()).isEqualTo(1);
-        List<FeedbackPlacement> placements = feedbackPlacementRepository.findAll();
-        assertThat(placements).hasSize(1);
-        assertThat(placements.get(0).getPlacementType()).isEqualTo(PlacementType.CONVERSATION_TURN);
-        assertThat(placements.get(0).getChatMessageId()).isEqualTo(chatMessageId);
-
-        // A re-run linking the already-delivered observation is a no-op (guarded CAS returns 0).
-        int reflips = reconciler.reconcile(workspace.getId(), recipient.getId(), chatMessageId, List.of(a.getId()));
-        assertThat(reflips).isZero();
-        assertThat(deliveredCount()).isEqualTo(1);
-        assertThat(feedbackPlacementRepository.findAll()).hasSize(1);
+        mentorTurnPersistence.recordDelivery(cookie(assistant), MentorChannel.DeliveryOutcome.DELIVERED);
 
         assertThat(conversationUnits())
+                .extracting(f -> f.getAgentJobId(), f -> f.getDeliveryState())
+                .containsExactlyInAnyOrder(
+                        tuple(named.getId(), FeedbackDeliveryState.PREPARED),
+                        tuple(shownJob.getId(), FeedbackDeliveryState.DELIVERED));
+        assertThat(feedbackPlacementRepository.findAll())
                 .singleElement()
-                .satisfies(f -> assertThat(f.getBody()).contains("\"kind\":\"conversation-brief\""));
+                .satisfies(placement -> assertThat(placement.getChatMessageId()).isEqualTo(assistant.getId()));
     }
 
     @Test
@@ -197,19 +244,13 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
         prepareFor(job);
         ChatMessage assistant = persistAssistantMessage(ChatMessage.Status.in_flight);
         TranslatorState state = new TranslatorState(assistant.getId());
-        state.recordDataObservation(observation.getId());
-        MentorTurnPersistence.TurnPersistenceCookie cookie = new MentorTurnPersistence.TurnPersistenceCookie(
-                assistant.getThread().getId(),
-                UUID.randomUUID(),
-                assistant.getId(),
-                Instant.now(),
-                "test-model",
-                org.mockito.Mockito.mock(LlmPriceSnapshot.class));
+        state.recordDataObservation(UIMessageChunk.DataObservation.of(observation.getId(), SHOWN));
+        MentorTurnPersistence.TurnPersistenceCookie cookie = cookie(assistant);
 
         mentorTurnPersistence.complete(
                 cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
 
-        mentorTurnPersistence.recordDelivery(cookie, state, MentorChannel.DeliveryOutcome.INSTANCE_SILENCED);
+        mentorTurnPersistence.recordDelivery(cookie, MentorChannel.DeliveryOutcome.INSTANCE_SILENCED);
 
         assertThat(reconciler.suppressForSilentMode(workspace.getId(), recipient.getId(), List.of(observation.getId())))
                 .isZero();
@@ -265,12 +306,6 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
                 .count();
     }
 
-    private long deliveredCount() {
-        return conversationUnits().stream()
-                .filter(f -> f.getDeliveryState() == FeedbackDeliveryState.DELIVERED)
-                .count();
-    }
-
     private AgentJob newJob() {
         AgentJob job = new AgentJob();
         job.setWorkspace(workspace);
@@ -311,11 +346,33 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
         return observationRepository.findById(id).orElseThrow();
     }
 
-    private UUID persistAssistantMessage() {
-        return persistAssistantMessage(ChatMessage.Status.completed).getId();
+    private static MentorTurnPersistence.TurnPersistenceCookie cookie(ChatMessage assistant) {
+        return new MentorTurnPersistence.TurnPersistenceCookie(
+                assistant.getThread().getId(),
+                UUID.randomUUID(),
+                assistant.getId(),
+                Instant.now(),
+                "test-model",
+                org.mockito.Mockito.mock(LlmPriceSnapshot.class));
+    }
+
+    /** A stored link; one with no text is how replies stored links before they carried the feedback. */
+    private static ObjectNode link(UUID observationId, @Nullable String text) {
+        ObjectNode part = OM.createObjectNode()
+                .put("type", "data-observation")
+                .put("id", UUID.randomUUID().toString());
+        ObjectNode data = part.putObject("data").put("observationId", observationId.toString());
+        if (text != null) {
+            data.put("text", text);
+        }
+        return part;
     }
 
     private ChatMessage persistAssistantMessage(ChatMessage.Status status) {
+        return persistAssistantMessage(status, OM.createArrayNode());
+    }
+
+    private ChatMessage persistAssistantMessage(ChatMessage.Status status, ArrayNode parts) {
         ChatThread thread = new ChatThread();
         thread.setId(UUID.randomUUID());
         thread.setUser(recipient);
@@ -327,7 +384,7 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
         message.setThread(thread);
         message.setRole(ChatMessage.Role.ASSISTANT);
         message.setStatus(status);
-        message.setParts(OM.createArrayNode());
+        message.setParts(parts);
         message.setMetadata(OM.createObjectNode());
         return chatMessageRepository.save(message);
     }

@@ -1,14 +1,13 @@
 import type { UIMessage } from "ai";
+import type { z } from "zod";
 
-/**
- * Custom UI data types streamed by the Pi mentor.
- *
- * The Pi mentor emits a single custom data part today (`data-usage` for token
- * accounting, which the client currently ignores). Keep this open enough to
- * absorb future server-side additions without coupling the webapp to a
- * generated TypeScript schema.
- */
-export type CustomUIDataTypes = Record<string, unknown>;
+import type { observationDataSchema } from "@/lib/chat-validation";
+
+/** Mirrors `UIMessageChunk.DataObservation`; read it through `shownFeedbackText`, which checks the payload. */
+export interface CustomUIDataTypes {
+	[name: string]: unknown;
+	observation: z.infer<typeof observationDataSchema>;
+}
 
 /**
  * Token usage block — mirror of {@code UIMessageChunk.FinishMetadata.Usage} on the Java side

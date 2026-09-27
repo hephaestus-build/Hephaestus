@@ -6470,6 +6470,7 @@ paths:
             - SUPPRESSED
             - FAILED
             - DISCARDED
+            - UNCONFIRMED
       - in: query
         name: suppressionReason
         required: false
@@ -15384,6 +15385,7 @@ components:
           - SUPPRESSED
           - FAILED
           - DISCARDED
+          - UNCONFIRMED
         feedbackId:
           type: string
           format: uuid
@@ -15545,6 +15547,7 @@ components:
           - SUPPRESSED
           - FAILED
           - DISCARDED
+          - UNCONFIRMED
         id:
           type: string
           format: uuid
@@ -15620,12 +15623,16 @@ components:
         suppressed:
           type: integer
           format: int64
+        unconfirmed:
+          type: integer
+          format: int64
       required:
       - delivered
       - failed
       - prepared
       - superseded
       - suppressed
+      - unconfirmed
     ReviewFeedbackDetail:
       type: object
       description: Full feedback detail including the stored composed body
@@ -15672,6 +15679,7 @@ components:
           - SUPPRESSED
           - FAILED
           - DISCARDED
+          - UNCONFIRMED
         id:
           type: string
           format: uuid
@@ -15772,12 +15780,18 @@ components:
           type: integer
           format: int64
           description: Linked feedback withheld by policy
+        unconfirmed:
+          type: integer
+          format: int64
+          description: Linked feedback a conversation linked without a record that
+            it was shown
       required:
       - delivered
       - failed
       - prepared
       - superseded
       - suppressed
+      - unconfirmed
     ReviewObservation:
       type: object
       description: A practice review observation with its linked feedback outcomes

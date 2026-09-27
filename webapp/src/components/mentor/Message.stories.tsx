@@ -147,6 +147,46 @@ export const CompletedAssistantMessage: Story = {
 };
 
 /**
+ * Feedback the mentor gave about an observation renders in place, with the reply's markdown, and is copied
+ * with the prose around it. A link stored before links carried their feedback shows nothing.
+ */
+export const AssistantMessageWithFeedback: Story = {
+	args: {
+		message: {
+			id: "msg-feedback",
+			role: "assistant",
+			metadata: { status: "completed" },
+			parts: [
+				{ type: "text", text: "Let me look at your pull request." },
+				{
+					type: "data-observation",
+					id: "part-1",
+					data: {
+						observationId: "3f0c2b4e-8a1d-4c6e-9b7f-2d5e8a1c4b6f",
+						text: "Your description names **the decision** but not why it beat the alternative.",
+					},
+				},
+				{
+					type: "data-observation",
+					id: "part-2",
+					data: { observationId: "c9bf9e57-1685-4c89-bafb-ff5af830be8a" },
+				},
+				{ type: "text", text: "What made you pick it?" },
+			],
+		},
+	},
+	play: async ({ args, canvas, userEvent }) => {
+		await expect(canvas.getByText("the decision")).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: "Copy message" }));
+		await expect(args.onCopy).toHaveBeenCalledWith(
+			"Let me look at your pull request.\n" +
+				"Your description names **the decision** but not why it beat the alternative.\n" +
+				"What made you pick it?",
+		);
+	},
+};
+
+/**
  * Simple user message with plain text content.
  */
 export const UserMessage: Story = {

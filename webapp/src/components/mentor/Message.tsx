@@ -6,6 +6,7 @@ import { Streamdown } from "streamdown";
 import { cn } from "cn";
 import type { ChatMessageVote } from "@/api/types.gen";
 import { MarkdownCode } from "@/components/common/MarkdownCode";
+import { shownFeedbackText } from "@/lib/chat-validation";
 import type { ChatMessage } from "@/lib/types";
 
 import { MentorAvatar } from "./MentorAvatar";
@@ -37,6 +38,10 @@ const MESSAGE_MARKDOWN_COMPONENTS = {
 	code: MarkdownCode,
 	input: MarkdownTaskCheckbox,
 };
+
+function visibleText(part: ChatMessage["parts"][number]): string | undefined {
+	return part.type === "text" ? part.text : shownFeedbackText(part);
+}
 
 export function PreviewMessage({
 	message,
@@ -99,26 +104,9 @@ export function PreviewMessage({
 						)}
 
 						{message.parts.map((part, index) => {
-							const { type } = part;
 							const key = `message-${message.id}-part-${index}`;
 
-							if (type === "text") {
-								if (mode === "view") {
-									return (
-										<div
-											key={key}
-											className={cn("flex flex-col gap-4", {
-												"ml-5 w-fit min-w-0 self-end rounded-xl bg-primary px-3 py-2 text-primary-foreground":
-													message.role === "user",
-											})}
-										>
-											<Streamdown components={MESSAGE_MARKDOWN_COMPONENTS}>
-												{sanitizeMessageText(part.text)}
-											</Streamdown>
-										</div>
-									);
-								}
-
+							if (part.type === "text" && mode === "edit") {
 								return (
 									<div key={key} className="flex flex-row items-start gap-2">
 										<div className="size-8" />
@@ -136,7 +124,23 @@ export function PreviewMessage({
 								);
 							}
 
-							return null;
+							const text = visibleText(part);
+							if (text === undefined) {
+								return null;
+							}
+							return (
+								<div
+									key={key}
+									className={cn("flex flex-col gap-4", {
+										"ml-5 w-fit min-w-0 self-end rounded-xl bg-primary px-3 py-2 text-primary-foreground":
+											message.role === "user",
+									})}
+								>
+									<Streamdown components={MESSAGE_MARKDOWN_COMPONENTS}>
+										{sanitizeMessageText(text)}
+									</Streamdown>
+								</div>
+							);
 						})}
 
 						{isInterrupted && (
@@ -152,8 +156,8 @@ export function PreviewMessage({
 								className="-mt-3"
 								key={`action-${message.id}`}
 								messageContentToCopy={message.parts
-									.filter((p) => p.type === "text")
-									.map((p) => p.text)
+									.map(visibleText)
+									.filter((text) => text !== undefined)
 									.join("\n")}
 								messageRole={message.role}
 								vote={vote}

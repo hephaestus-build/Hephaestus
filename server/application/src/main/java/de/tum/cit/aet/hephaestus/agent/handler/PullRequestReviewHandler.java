@@ -248,30 +248,32 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         List<PracticeDetectionResultParser.ValidatedObservation> composable = java.util.stream.Stream.concat(
                         proposals.stream(), deliverable.stream())
                 .toList();
+        Set<String> included = composable.stream()
+                .map(PracticeDetectionResultParser.ValidatedObservation::occurrenceKey)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        List<PracticeDetectionResultParser.ValidatedObservation> reviewPackage = scopedObservations.stream()
+                .filter(observation -> included.contains(observation.occurrenceKey()))
+                .toList();
+        // The lead is unattributed prose that may speak for any practice, so automatic content goes without it.
+        var automatic = DeliveryComposer.composeAdmitted(
+                reviewPackage, ArtifactKinds.PULL_REQUEST, why, units, null, recurring);
         if (ReviewCoverage.withholdsAllClear(job.getOutput(), composable)) {
             log.info("Withholding an all-clear from a review that did not reach every practice: jobId={}", job.getId());
+            feedbackService.deliverFeedback(job, automatic == null ? null : automatic.withoutNote(), Set.of());
             return;
         }
         if (!proposals.isEmpty()) {
-            Set<String> included = composable.stream()
-                    .map(PracticeDetectionResultParser.ValidatedObservation::occurrenceKey)
-                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
-            List<PracticeDetectionResultParser.ValidatedObservation> reviewPackage = scopedObservations.stream()
-                    .filter(observation -> included.contains(observation.occurrenceKey()))
-                    .toList();
-            feedbackService.recordProposal(
-                    job,
-                    DeliveryComposer.composeAdmitted(
-                            reviewPackage, ArtifactKinds.PULL_REQUEST, why, units, lead, recurring),
-                    reviewPackage);
-            return;
+            var proposal = DeliveryComposer.composeAdmitted(
+                    reviewPackage, ArtifactKinds.PULL_REQUEST, why, units, lead, recurring);
+            // Only an observation the note was written from puts it under approval; a not-applicable
+            // result of an approval-gated practice beside it does not.
+            if (proposal != null && proposal.writtenFromAny(proposals)) {
+                feedbackService.recordProposal(job, proposal);
+                return;
+            }
         }
-        var content =
-                DeliveryComposer.composeAdmitted(deliverable, ArtifactKinds.PULL_REQUEST, why, units, lead, recurring);
-        Set<String> contributingPracticeSlugs = deliverable.stream()
-                .map(PracticeDetectionResultParser.ValidatedObservation::practiceSlug)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        feedbackService.deliverFeedback(job, content, contributingPracticeSlugs);
+        feedbackService.deliverFeedback(
+                job, automatic, automatic == null ? Set.of() : automatic.contributingPracticeSlugs(reviewPackage));
     }
 
     private PracticeDetectionResultParser.ValidatedObservation validated(Observation observation) {
@@ -284,7 +286,8 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 observation.getSeverity(),
                 observation.getEvidence(),
                 observation.getEvidenceRationale(),
-                new ObservationKeys(observation.getOccurrenceKey(), observation.getRecurrenceKey()),
+                new ObservationKeys(
+                        observation.getOccurrenceKey(), observation.getRecurrenceKey(), observation.getId()),
                 observation.getPracticeRevision() == null
                         ? observation.getPractice().getDeliveryBehavior()
                         : observation.getPracticeRevision().getDeliveryBehavior());

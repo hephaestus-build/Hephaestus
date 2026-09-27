@@ -98,8 +98,12 @@ records the naming
 decision. On an operator surface, the place reads **On their practice pages**.
 
 **Feedback waiting for a mentor conversation is *prepared*, never *queued*.** A queue implies somebody has
-to work it; nothing does — `FeedbackDeliveryState.PREPARED` advances to `DELIVERED` on the next chat turn
-that links the feedback. The label is **Prepared for conversation**.
+to work it; nothing does — `FeedbackDeliveryState.PREPARED` advances to `DELIVERED` when a completed chat turn
+shows the developer feedback about it: the mentor's `link_observation` call carries the words, and the reply
+renders them in the app and in Slack. The label is **Prepared for conversation**.
+
+**Unconfirmed** (`UNCONFIRMED`) is conversation feedback a completed turn linked with no record that the feedback
+was shown. Its visibility is unknown, so it counts as neither delivered nor withheld, and it is never prepared again.
 
 **Observation, not finding**, for the measurement — in copy, URLs, API schema, field names, and Java.
 Delivery uses `FeedbackAnchor` and `InlineFeedbackChannel`; the mentor uses `link_observation` and

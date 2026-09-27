@@ -118,6 +118,7 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
         persistFeedback(2, FeedbackDeliveryState.PREPARED, null, null);
         persistFeedback(3, FeedbackDeliveryState.SUPERSEDED, null, "Replaced");
         persistFeedback(4, FeedbackDeliveryState.FAILED, null, "Failed");
+        persistFeedback(5, FeedbackDeliveryState.UNCONFIRMED, null, null);
 
         webTestClient
                 .get()
@@ -164,6 +165,8 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .jsonPath("$.content[0].feedback.suppressed")
                 .isEqualTo(1)
                 .jsonPath("$.content[0].feedback.failed")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].feedback.unconfirmed")
                 .isEqualTo(1);
     }
 

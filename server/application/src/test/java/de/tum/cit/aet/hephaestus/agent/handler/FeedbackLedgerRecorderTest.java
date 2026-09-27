@@ -132,7 +132,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         new WithheldObservation(
                                 observations.get(3).getOccurrenceKey(), FeedbackSuppressionReason.VOLUME_CAPPED),
                         new WithheldObservation(
-                                observations.get(4).getOccurrenceKey(), FeedbackSuppressionReason.VOLUME_CAPPED)));
+                                observations.get(4).getOccurrenceKey(), FeedbackSuppressionReason.VOLUME_CAPPED)),
+                null);
 
         recorder().record(job(), delivery, ArtifactKinds.PULL_REQUEST, List.of(), "summary-ref", false);
 
@@ -163,7 +164,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         recorder()
                 .record(
                         job(),
-                        new DeliveryContent("body", List.of(), List.of()),
+                        new DeliveryContent("body", List.of(), List.of(), null),
                         ArtifactKinds.PULL_REQUEST,
                         List.of(),
                         "summary-ref",
@@ -185,7 +186,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(observation));
 
-        var note = new DiffNote("src/Foo.java", 10, null, "Fix this", "ck-foo-10");
+        var note = new DiffNote("src/Foo.java", 10, null, "Fix this", "ck-foo-10", null);
         var signal = new InlineFeedbackChannel.DeliveredSignal(
                 "ck-foo-10",
                 new FeedbackAnchor.DiffAnchor("src/Foo.java", 10, null),
@@ -196,7 +197,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         recorder()
                 .record(
                         job(),
-                        new DeliveryContent("body", List.of(note), List.of()),
+                        new DeliveryContent("body", List.of(note), List.of(), null),
                         ArtifactKinds.PULL_REQUEST,
                         List.of(signal),
                         "summary-ref",
@@ -228,7 +229,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         recorder()
                 .record(
                         job(),
-                        new DeliveryContent("body", List.of(note), List.of()),
+                        new DeliveryContent("body", List.of(note), List.of(), null),
                         ArtifactKinds.PULL_REQUEST,
                         List.of(signal),
                         null,
@@ -255,7 +256,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 "body",
                 List.of(),
                 List.of(new WithheldObservation(
-                        observations.get(5).getOccurrenceKey(), FeedbackSuppressionReason.VOLUME_CAPPED)));
+                        observations.get(5).getOccurrenceKey(), FeedbackSuppressionReason.VOLUME_CAPPED)),
+                null);
 
         recorder.record(job(), delivery, ArtifactKinds.PULL_REQUEST, List.of(), "summary-ref", false);
 
@@ -281,7 +283,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
         recorder.record(
                 job(),
-                new DeliveryContent("body", List.of(), List.of()),
+                new DeliveryContent("body", List.of(), List.of(), null),
                 ArtifactKinds.PULL_REQUEST,
                 List.of(),
                 "summary-ref",
@@ -307,7 +309,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         recorder()
                 .record(
                         job(),
-                        new DeliveryContent("body", List.of(), List.of()),
+                        new DeliveryContent("body", List.of(), List.of(), null),
                         ArtifactKinds.PULL_REQUEST,
                         List.of(),
                         "summary-ref",
@@ -324,6 +326,9 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     @Test
     void reReview_proposal_carriesItsThreadAndRetiresTheUndecidedOneBeforeIt() {
         Observation observation = problem();
+        var practice = mock(de.tum.cit.aet.hephaestus.practices.model.Practice.class);
+        when(practice.getSlug()).thenReturn("practice");
+        when(observation.getPractice()).thenReturn(practice);
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(observation));
         when(feedbackRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -339,18 +344,9 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         job,
                         new DeliveryContent(
                                 "proposed body",
-                                List.of(new DiffNote("src/Example.java", 12, 14, "inline body", "rk")),
-                                List.of()),
-                        List.of(new PracticeDetectionResultParser.ValidatedObservation(
-                                "practice",
-                                "summary",
-                                AssessmentStatus.ASSESSED,
-                                Presence.ABSENT,
-                                Assessment.GOOD,
-                                Severity.MAJOR,
-                                null,
-                                "reasoning",
-                                new ObservationKeys(observation.getOccurrenceKey(), "rk"))));
+                                List.of(new DiffNote("src/Example.java", 12, 14, "inline body", "rk", null)),
+                                List.of(),
+                                List.of(observation.getOccurrenceKey())));
 
         var saved = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository).save(saved.capture());
@@ -388,7 +384,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
         recorder.record(
                 job(),
-                new DeliveryContent("body", List.of(), List.of()),
+                new DeliveryContent("body", List.of(), List.of(), null),
                 ArtifactKinds.PULL_REQUEST,
                 List.of(),
                 "summary-ref",
@@ -419,7 +415,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         recorder()
                 .record(
                         job(),
-                        new DeliveryContent("body", List.of(), List.of()),
+                        new DeliveryContent("body", List.of(), List.of(), null),
                         ArtifactKinds.PULL_REQUEST,
                         List.of(),
                         "summary-ref",
@@ -449,7 +445,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         var recorder = recorder();
         recorder.record(
                 job(),
-                new DeliveryContent("body", List.of(), List.of()),
+                new DeliveryContent("body", List.of(), List.of(), null),
                 ArtifactKinds.PULL_REQUEST,
                 List.of(),
                 null,
@@ -466,7 +462,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         var observation = problem();
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(observation));
-        var note = new DiffNote("src/Foo.java", 10, null, "Fix this", "ck-foo");
+        var note = new DiffNote("src/Foo.java", 10, null, "Fix this", "ck-foo", null);
         var signal = new InlineFeedbackChannel.DeliveredSignal(
                 "ck-foo",
                 new FeedbackAnchor.DiffAnchor("src/Foo.java", 10, null),
@@ -477,7 +473,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         recorder()
                 .record(
                         job(),
-                        new DeliveryContent(null, List.of(note), List.of()),
+                        new DeliveryContent(null, List.of(note), List.of(), null),
                         ArtifactKinds.PULL_REQUEST,
                         List.of(signal),
                         null,
@@ -506,7 +502,9 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(bad, good));
 
-        recorder().recordUndelivered(job(), new DeliveryContent("the advice that never landed", List.of(), List.of()));
+        recorder()
+                .recordUndelivered(
+                        job(), new DeliveryContent("the advice that never landed", List.of(), List.of(), null));
 
         var saved = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository).save(saved.capture());
@@ -532,7 +530,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         // Override AFTER recorder() installed the anyInt()->false default, so eq(0) wins for the IN_CONTEXT unit.
         when(feedbackRepository.existsByAgentJobIdAndPosition(any(), eq(0))).thenReturn(true);
 
-        rec.recordUndelivered(job(), new DeliveryContent("body", List.of(), List.of()));
+        rec.recordUndelivered(job(), new DeliveryContent("body", List.of(), List.of(), null));
 
         verify(feedbackRepository, org.mockito.Mockito.never()).save(any());
         // Typed, not any(): ApplicationEventPublisher.publishEvent is overloaded, and a bare any() binds to
@@ -567,7 +565,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         FeedbackLedgerRecorder recorder = recorder();
         when(egressGuard.deliveryAllowed(any())).thenReturn(false);
 
-        recorder.recordUndelivered(job(), new DeliveryContent("body", List.of(), List.of()));
+        recorder.recordUndelivered(job(), new DeliveryContent("body", List.of(), List.of(), null));
 
         var saved = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository).save(saved.capture());
@@ -587,7 +585,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 .thenReturn(List.of(bad));
         FeedbackLedgerRecorder rec = recorder();
 
-        rec.recordSuppressedUnit(job(), new DeliveryContent("body", List.of(), List.of()), reason);
+        rec.recordSuppressedUnit(job(), new DeliveryContent("body", List.of(), List.of(), null), reason);
 
         verify(eventPublisher, wakes ? org.mockito.Mockito.times(1) : org.mockito.Mockito.never())
                 .publishEvent(any(
@@ -605,7 +603,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         // Past the DELIVERED(0) guard (default false), but the FAILED(4000) unit already exists (retry).
         when(feedbackRepository.existsByAgentJobIdAndPosition(any(), eq(4000))).thenReturn(true);
 
-        rec.recordUndelivered(job(), new DeliveryContent("body", List.of(), List.of()));
+        rec.recordUndelivered(job(), new DeliveryContent("body", List.of(), List.of(), null));
 
         verify(eventPublisher)
                 .publishEvent(any(
@@ -619,7 +617,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         // artifact to bind — persist nothing and signal nothing.
         AgentJob noWorkspace = TestEntities.agentJob(); // no setWorkspace
 
-        recorder().recordUndelivered(noWorkspace, new DeliveryContent("body", List.of(), List.of()));
+        recorder().recordUndelivered(noWorkspace, new DeliveryContent("body", List.of(), List.of(), null));
 
         verify(feedbackRepository, org.mockito.Mockito.never()).save(any());
         verify(eventPublisher, org.mockito.Mockito.never()).publishEvent(any());
@@ -637,7 +635,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 "body",
                 List.of(),
                 List.of(new WithheldObservation(
-                        deduped.getOccurrenceKey(), FeedbackSuppressionReason.COMPOSER_DEDUPED)));
+                        deduped.getOccurrenceKey(), FeedbackSuppressionReason.COMPOSER_DEDUPED)),
+                null);
 
         recorder().record(job(), delivery, ArtifactKinds.PULL_REQUEST, List.of(), "summary-ref", false);
 
@@ -647,6 +646,32 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         .filter(f -> f.getDeliveryState() == FeedbackDeliveryState.SUPPRESSED)
                         .map(Feedback::getSuppressionReason))
                 .containsExactly(FeedbackSuppressionReason.COMPOSER_DEDUPED);
+    }
+
+    @Test
+    void recordNothingToPost_recordsTheWithheldStrengthWakesTheLanesAndOpensNoApprovalItem() {
+        Observation withheld = strength();
+        lenient().when(withheld.getOccurrenceKey()).thenReturn("occ-withheld");
+        when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(List.of(withheld));
+
+        recorder()
+                .recordNothingToPost(
+                        job(),
+                        new DeliveryContent(
+                                null,
+                                List.of(),
+                                List.of(new WithheldObservation(
+                                        "occ-withheld", FeedbackSuppressionReason.COMPOSER_WITHHELD)),
+                                List.of()));
+
+        var saved = ArgumentCaptor.forClass(Feedback.class);
+        verify(feedbackRepository).save(saved.capture());
+        assertThat(saved.getValue().getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
+        assertThat(saved.getValue().getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.COMPOSER_WITHHELD);
+        verify(eventPublisher)
+                .publishEvent(any(
+                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
     }
 
     @Test
@@ -661,7 +686,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         recorder()
                 .recordSuppressedUnit(
                         job(),
-                        new DeliveryContent("the withheld advice", List.of(), List.of()),
+                        new DeliveryContent("the withheld advice", List.of(), List.of(), null),
                         FeedbackSuppressionReason.ARTIFACT_CLOSED);
 
         var saved = ArgumentCaptor.forClass(Feedback.class);
@@ -682,7 +707,9 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         when(feedbackRepository.existsByAgentJobIdAndPosition(any(), eq(0))).thenReturn(true);
 
         rec.recordSuppressedUnit(
-                job(), new DeliveryContent("body", List.of(), List.of()), FeedbackSuppressionReason.ARTIFACT_MERGED);
+                job(),
+                new DeliveryContent("body", List.of(), List.of(), null),
+                FeedbackSuppressionReason.ARTIFACT_MERGED);
 
         verify(feedbackRepository, org.mockito.Mockito.never()).save(any());
     }
@@ -700,7 +727,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
         rec.recordSuppressedUnit(
                 job(),
-                new DeliveryContent("would have updated", List.of(), List.of()),
+                new DeliveryContent("would have updated", List.of(), List.of(), null),
                 FeedbackSuppressionReason.INSTANCE_SILENCED);
 
         var saved = ArgumentCaptor.forClass(Feedback.class);
@@ -722,9 +749,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         DeliveryContent delivery = new DeliveryContent(
                 "summary",
                 List.of(
-                        new DiffNote("src/Foo.java", 10, null, "landed", "observation:key-1"),
-                        new DiffNote("src/Foo.java", 10, null, "suppressed", "observation:key-2")),
-                List.of());
+                        new DiffNote("src/Foo.java", 10, null, "landed", "observation:key-1", null),
+                        new DiffNote("src/Foo.java", 10, null, "suppressed", "observation:key-2", null)),
+                List.of(),
+                null);
         InlineFeedbackChannel.DeliveredSignal signal = new InlineFeedbackChannel.DeliveredSignal(
                 "observation:key-1",
                 new FeedbackAnchor.DiffAnchor("src/Foo.java", 10, null),
@@ -763,7 +791,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         recorder()
                 .recordWithoutConversation(
                         job(),
-                        new DeliveryContent("landed summary", List.of(), List.of()),
+                        new DeliveryContent("landed summary", List.of(), List.of(), null),
                         ArtifactKinds.PULL_REQUEST,
                         List.of(),
                         "summary-ref",
@@ -784,7 +812,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         recorder()
                 .record(
                         job,
-                        new DeliveryContent("body", List.of(), List.of()),
+                        new DeliveryContent("body", List.of(), List.of(), null),
                         ArtifactKinds.PULL_REQUEST,
                         List.of(),
                         null,
@@ -804,7 +832,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         recorder()
                 .record(
                         job,
-                        new DeliveryContent("body", List.of(), List.of()),
+                        new DeliveryContent("body", List.of(), List.of(), null),
                         ArtifactKinds.PULL_REQUEST,
                         List.of(),
                         "dispatch-ref",

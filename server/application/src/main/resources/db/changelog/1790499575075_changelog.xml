@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790499575075-1" author="hephaestus">
+        <preConditions onFail="MARK_RAN" onFailMessage="feedback delivery states already admit UNCONFIRMED">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM pg_constraint
+                WHERE conname = 'chk_feedback_state'
+                  AND conrelid = 'feedback'::regclass
+                  AND pg_get_constraintdef(oid) LIKE '%UNCONFIRMED%'
+            </sqlCheck>
+        </preConditions>
+        <comment>Admit UNCONFIRMED: conversation feedback a turn linked without recording what it said about it.</comment>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE feedback DROP CONSTRAINT IF EXISTS chk_feedback_state;
+            ALTER TABLE feedback ADD CONSTRAINT chk_feedback_state
+                CHECK (delivery_state IN (
+                    'AWAITING_APPROVAL', 'PREPARED', 'PARTIALLY_DELIVERED', 'PARTIALLY_FAILED', 'DELIVERED',
+                    'DISCARDED', 'SUPERSEDED', 'SUPPRESSED', 'FAILED', 'UNCONFIRMED'));
+        ]]></sql>
+        <rollback><![CDATA[
+            UPDATE feedback SET delivery_state = 'DELIVERED' WHERE delivery_state = 'UNCONFIRMED';
+            ALTER TABLE feedback DROP CONSTRAINT IF EXISTS chk_feedback_state;
+            ALTER TABLE feedback ADD CONSTRAINT chk_feedback_state
+                CHECK (delivery_state IN (
+                    'AWAITING_APPROVAL', 'PREPARED', 'PARTIALLY_DELIVERED', 'PARTIALLY_FAILED', 'DELIVERED',
+                    'DISCARDED', 'SUPERSEDED', 'SUPPRESSED', 'FAILED'));
+        ]]></rollback>
+    </changeSet>
+    <changeSet id="1790499575075-2" author="hephaestus">
+        <comment>
+            Conversation feedback is delivered only when its turn showed the feedback's words. A turn before that
+            stored just the observation id, so what it said about the feedback is unknown: UNCONFIRMED, never
+            re-prepared, because the developer may already have been told. Its delivery time goes with the claim;
+            the placement keeps when the turn linked it, which is also the time a rollback restores.
+        </comment>
+        <sql><![CDATA[
+            UPDATE feedback f SET delivery_state = 'UNCONFIRMED', delivered_at = NULL
+            WHERE f.channel = 'IN_CHAT'
+              AND f.delivery_state = 'DELIVERED'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM feedback_placement fp
+                  JOIN chat_message cm ON cm.id = fp.chat_message_id
+                  JOIN feedback_observation fo ON fo.feedback_id = f.id
+                  CROSS JOIN LATERAL jsonb_array_elements(
+                      CASE WHEN jsonb_typeof(cm.parts) = 'array' THEN cm.parts ELSE '[]'::jsonb END) AS part
+                  WHERE fp.feedback_id = f.id
+                    AND fp.placement_type = 'CONVERSATION_TURN'
+                    AND part ->> 'type' = 'data-observation'
+                    AND part -> 'data' ->> 'observationId' = fo.observation_id::text
+                    AND btrim(coalesce(part -> 'data' ->> 'text', '')) <> '')
+        ]]></sql>
+        <rollback><![CDATA[
+            UPDATE feedback f SET delivery_state = 'DELIVERED', delivered_at = (
+                SELECT min(fp.created_at) FROM feedback_placement fp
+                WHERE fp.feedback_id = f.id AND fp.placement_type = 'CONVERSATION_TURN')
+            WHERE f.delivery_state = 'UNCONFIRMED'
+        ]]></rollback>
+    </changeSet>
+</databaseChangeLog>

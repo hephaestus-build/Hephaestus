@@ -100,7 +100,7 @@ class DiffNotePosterTest extends BaseUnitTest {
     void multiLineNote_swapsToEndLineAnchorWithRangeStart_andCarriesRecurrenceKey() {
         RecordingChannel channel = new RecordingChannel();
         DiffNotePoster poster = poster(channel);
-        DiffNote multi = new DiffNote("src/A.java", 10, 14, "Fix this range", "ck-multi");
+        DiffNote multi = new DiffNote("src/A.java", 10, 14, "Fix this range", "ck-multi", null);
 
         poster.reconcileInlineNotes(gitlabJob(), List.of(multi));
 
@@ -120,7 +120,7 @@ class DiffNotePosterTest extends BaseUnitTest {
     void singleLineNote_hasNoRangeStart() {
         RecordingChannel channel = new RecordingChannel();
         DiffNotePoster poster = poster(channel);
-        DiffNote single = new DiffNote("src/A.java", 10, null, "Fix this line", "ck-single");
+        DiffNote single = new DiffNote("src/A.java", 10, null, "Fix this line", "ck-single", null);
 
         poster.reconcileInlineNotes(gitlabJob(), List.of(single));
 
@@ -139,7 +139,7 @@ class DiffNotePosterTest extends BaseUnitTest {
                 .reconcileApprovedInlineNotes(
                         gitlabJob(),
                         feedbackId,
-                        List.of(new DiffNote("src/A.java", 10, null, "Exact body", "cross-review-key")));
+                        List.of(new DiffNote("src/A.java", 10, null, "Exact body", "cross-review-key", null)));
 
         InlineFeedback delivered = posted(channel).get(0);
         assertThat(channel.immutable).isTrue();
@@ -152,7 +152,7 @@ class DiffNotePosterTest extends BaseUnitTest {
     void blankBodyNote_isSkipped_andClearsStaleWhenAllBlank() {
         RecordingChannel channel = new RecordingChannel();
         DiffNotePoster poster = poster(channel);
-        DiffNote blank = new DiffNote("src/A.java", 10, null, "   ", "ck-blank");
+        DiffNote blank = new DiffNote("src/A.java", 10, null, "   ", "ck-blank", null);
 
         DiffNotePoster.DiffNoteResult result = poster.reconcileInlineNotes(gitlabJob(), List.of(blank));
 
@@ -188,7 +188,7 @@ class DiffNotePosterTest extends BaseUnitTest {
     void repoRelativeAnchorPath_flowsThroughUnchanged() {
         RecordingChannel channel = new RecordingChannel();
         DiffNotePoster poster = poster(channel);
-        DiffNote note = new DiffNote("src/components/Button.tsx", 1, null, "Remove unused import", "ck-1");
+        DiffNote note = new DiffNote("src/components/Button.tsx", 1, null, "Remove unused import", "ck-1", null);
 
         poster.reconcileInlineNotes(gitlabJob(), List.of(note));
 
@@ -204,7 +204,7 @@ class DiffNotePosterTest extends BaseUnitTest {
         var captor = ArgumentCaptor.forClass(IntegrationKind.class);
 
         DiffNotePoster.DiffNoteResult result = poster.reconcileInlineNotes(
-                gitlabJob(), List.of(new DiffNote("src/A.java", 10, null, "real body", "ck-1")));
+                gitlabJob(), List.of(new DiffNote("src/A.java", 10, null, "real body", "ck-1", null)));
 
         assertThat(result.posted()).isEqualTo(1);
         assertThat(result.failed()).isZero();

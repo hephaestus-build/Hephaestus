@@ -104,7 +104,8 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
                COUNT(*) FILTER (WHERE f.delivery_state = 'SUPERSEDED') AS "superseded",
                COUNT(*) FILTER (WHERE f.delivery_state = 'SUPPRESSED' OR
                    (f.delivery_state = 'PARTIALLY_DELIVERED' AND f.suppression_reason IS NOT NULL)) AS "suppressed",
-               COUNT(*) FILTER (WHERE f.delivery_state IN ('FAILED', 'PARTIALLY_FAILED')) AS "failed"
+               COUNT(*) FILTER (WHERE f.delivery_state IN ('FAILED', 'PARTIALLY_FAILED')) AS "failed",
+               COUNT(*) FILTER (WHERE f.delivery_state = 'UNCONFIRMED') AS "unconfirmed"
         FROM feedback f
         WHERE f.workspace_id = :workspaceId
           AND f.agent_job_id IN :jobIds
@@ -125,6 +126,8 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
         Long getSuppressed();
 
         Long getFailed();
+
+        Long getUnconfirmed();
     }
 
     /** Delivered summary and inline-only feedback for a recipient, newest first. */

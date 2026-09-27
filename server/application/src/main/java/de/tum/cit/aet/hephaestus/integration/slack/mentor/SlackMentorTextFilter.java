@@ -42,6 +42,22 @@ final class SlackMentorTextFilter {
         return out.toString();
     }
 
+    /**
+     * The prose still pending, then feedback the mentor wrote for the developer as its own paragraph. It is shown as
+     * written: the duplicate and leaked-analysis checks are guesses about prose, and a guess must not hide feedback.
+     */
+    String feedback(String text) {
+        StringBuilder out = new StringBuilder(finish());
+        String paragraph = "\n\n" + normalize(text).strip() + "\n\n";
+        if (emitted.isEmpty() || emitted.toString().endsWith("\n\n")) {
+            paragraph = paragraph.stripLeading();
+        }
+        out.append(paragraph);
+        emitted.append(paragraph);
+        acceptedVisibleSentence = true;
+        return out.toString();
+    }
+
     static String normalize(String text) {
         if (text == null || text.isEmpty()) {
             return text;

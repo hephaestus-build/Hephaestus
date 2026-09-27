@@ -115,6 +115,7 @@ export const WhatEachReviewProduced: Story = {
 			"1 delivered",
 			"2 withheld",
 			"0 failed to deliver",
+			"0 unconfirmed",
 			// The bare stored state: this strip counts a run's units across every channel, so it cannot
 			// name the moment one lane's prepared unit is waiting for.
 			"0 prepared",
@@ -126,7 +127,7 @@ export const WhatEachReviewProduced: Story = {
 			await expect(within(strip).getAllByRole("listitem")).toHaveLength(4);
 		}
 		for (const strip of canvas.getAllByRole("list", { name: "Feedback" })) {
-			await expect(within(strip).getAllByRole("listitem")).toHaveLength(5);
+			await expect(within(strip).getAllByRole("listitem")).toHaveLength(6);
 		}
 	},
 };

@@ -90,7 +90,8 @@ class PracticeFeedbackDispatchService {
                         new DeliveryContent(
                                 java.util.Objects.requireNonNull(feedback.getBody()),
                                 proposedInlineNotes(feedback),
-                                List.of())),
+                                List.of(),
+                                null)),
                 job);
     }
 
@@ -352,7 +353,8 @@ class PracticeFeedbackDispatchService {
                         java.util.Objects.requireNonNull(placement.startLine()),
                         placement.endLine(),
                         placement.body(),
-                        placement.deliveryKey()))
+                        placement.deliveryKey(),
+                        null))
                 .toList();
     }
 

@@ -312,7 +312,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(types).doesNotContain("error");
         var deliveryOutcome = ArgumentCaptor.forClass(MentorChannel.DeliveryOutcome.class);
         verify(persistence).complete(any(), any(), any(UIMessageChunk.Finish.class));
-        verify(persistence).recordDelivery(any(), any(), deliveryOutcome.capture());
+        verify(persistence).recordDelivery(any(), deliveryOutcome.capture());
         assertThat(deliveryOutcome.getValue()).isEqualTo(MentorChannel.DeliveryOutcome.DELIVERED);
         verify(persistence, never()).interrupt(any(), any(), any());
         assertThat(turnLock.activeKeys()).isZero();
@@ -326,7 +326,9 @@ class MentorChatServiceTest extends BaseUnitTest {
             sandbox.push(assistantStart());
             // ". The C" never arrived; Pi's final message still carries it.
             sandbox.push(textDelta("it"));
-            sandbox.push(event("link_observation", n -> n.put("observationId", OBSERVATION_ID.toString())));
+            sandbox.push(event(
+                    "link_observation",
+                    n -> n.put("observationId", OBSERVATION_ID.toString()).put("text", "Name the trade-off.")));
             sandbox.push(textDelta("loses #1"));
             sandbox.push(assistantEnd("it. The Closes #1"));
             sandbox.push(event("turn_end", n -> {}));
@@ -345,7 +347,6 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(interrupted.getValue().partsSnapshot().toString())
                 .contains("it. The Closes #1", OBSERVATION_ID.toString())
                 .doesNotContain("itloses #1");
-        assertThat(interrupted.getValue().linkedObservationIds()).containsExactly(OBSERVATION_ID);
         assertThat(closedUnderSandboxLock)
                 .as("the runner is discarded before another turn can take it")
                 .containsExactly(true);
@@ -417,7 +418,7 @@ class MentorChatServiceTest extends BaseUnitTest {
                 .containsSubsequence("text-delta", "error")
                 .doesNotContain("finish");
         assertThat(String.join("\n", emitter.rawData)).contains("couldn't be saved");
-        verify(persistence, never()).recordDelivery(any(), any(), any());
+        verify(persistence, never()).recordDelivery(any(), any());
         verify(persistence, saveThrows ? times(1) : never()).interrupt(any(), any(), any());
         assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
     }

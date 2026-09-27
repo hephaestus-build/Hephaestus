@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DeliveryContent;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DiffNote;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalFeedbackPreparer;
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -264,15 +263,22 @@ public class FeedbackLedgerRecorder {
                 composerWithheld.stream().map(Observation::getId).collect(Collectors.toCollection(HashSet::new));
         excludedIds.addAll(alreadySuppressed);
 
-        // Bind every DELIVERED observation: BAD (the problems surfaced) lead as PRIMARY, GOOD
-        // strengths as SUPPORTING; observations that carry no valence and withheld observations are excluded —
-        // feedback is an intervention, and there is nothing in either to intervene about.
+        // Bind the observations behind the placements that reached the developer: BAD (the problems surfaced)
+        // lead as PRIMARY, GOOD strengths as SUPPORTING. Each placement carries its own evidence, so a line note
+        // that never landed binds nothing and an unsaid strength stays open to the other channels. A package
+        // persisted before contributors were recorded keeps the earlier rule.
         // Severity is null for a positive observation (ADR 0022) — sort it after any problem (least severe).
         Set<String> deliveredInlineKeys = deliveredKeys(inlineSignals);
+        List<String> summaryContributors = delivery.summaryContributors();
+        Set<String> landed = summaryContributors == null
+                ? Set.of()
+                : evidenceOf(delivery, summaryDelivered ? summaryContributors : List.of(), deliveredInlineKeys);
         List<Observation> assessed = observations.stream()
+                .filter(f -> summaryContributors == null
+                        ? summaryDelivered || deliveredInlineKeys.contains("observation:" + f.getOccurrenceKey())
+                        : landed.contains(f.getOccurrenceKey()))
                 .filter(f -> (f.getAssessmentStatus() == AssessmentStatus.ASSESSED))
                 .filter(f -> !excludedIds.contains(f.getId()))
-                .filter(f -> summaryDelivered || deliveredInlineKeys.contains("observation:" + f.getOccurrenceKey()))
                 // Stable order matching the composer's prioritisation, and the same ObservationOrder it uses:
                 // severity, then how much of the work the observation's citations span, then id — so the persisted
                 // PRIMARY ordinal of equal-severity problems is reproducible across re-runs rather than flapping
@@ -329,6 +335,32 @@ public class FeedbackLedgerRecorder {
                 feedbackThreadKey);
     }
 
+    /** The summary's evidence plus the evidence of every line note named by {@code noteKeys}. */
+    private static Set<String> evidenceOf(DeliveryContent delivery, List<String> summary, Set<String> noteKeys) {
+        Set<String> evidence = new HashSet<>(summary);
+        for (DiffNote note : delivery.diffNotes()) {
+            List<String> contributors = note.contributors();
+            if (note.deliveryKey() != null && noteKeys.contains(note.deliveryKey()) && contributors != null) {
+                evidence.addAll(contributors);
+            }
+        }
+        return evidence;
+    }
+
+    /** The observations behind the named line notes; for a pre-upgrade package, the ones the keys name. */
+    private static List<Observation> behindNotes(
+            List<Observation> observations, DeliveryContent delivery, Set<String> noteKeys) {
+        if (delivery.summaryContributors() == null) {
+            return observations.stream()
+                    .filter(f -> noteKeys.contains("observation:" + f.getOccurrenceKey()))
+                    .toList();
+        }
+        Set<String> evidence = evidenceOf(delivery, List.of(), noteKeys);
+        return observations.stream()
+                .filter(f -> evidence.contains(f.getOccurrenceKey()))
+                .toList();
+    }
+
     private static Set<String> deliveredKeys(List<DeliveredSignal> signals) {
         return signals.stream()
                 .filter(signal -> signal.disposition() != Disposition.FAILED)
@@ -356,6 +388,37 @@ public class FeedbackLedgerRecorder {
         } catch (RuntimeException e) {
             log.warn("Feedback-lane trigger publish failed (delivery unaffected): jobId={}", job.getId(), e);
         }
+    }
+
+    /**
+     * Close a review that composed nothing to put on the work: wake the longitudinal lanes, which do not depend
+     * on a public note, and record each observation the composer explicitly withheld. Opens no approval item.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordNothingToPost(AgentJob job, @Nullable DeliveryContent delivery) {
+        publishFeedbackLaneTrigger(job);
+        recordWithheldOnly(job, delivery);
+    }
+
+    private void recordWithheldOnly(AgentJob job, @Nullable DeliveryContent delivery) {
+        if (delivery == null || delivery.withheld().isEmpty() || job.getWorkspace() == null) {
+            return;
+        }
+        Set<UUID> alreadySuppressed =
+                new HashSet<>(feedbackObservationRepository.findObservationIdsSuppressedForJob(job.getId()));
+        Map<String, FeedbackSuppressionReason> withheldByKey = delivery.withheld().stream()
+                .collect(Collectors.toMap(
+                        PracticeDetectionResultParser.WithheldObservation::occurrenceKey,
+                        PracticeDetectionResultParser.WithheldObservation::reason));
+        List<Observation> withheld =
+                observationRepository
+                        .findByAgentJobId(job.getId(), job.getWorkspace().getId())
+                        .stream()
+                        .filter(f -> withheldByKey.containsKey(f.getOccurrenceKey()))
+                        .filter(f -> !alreadySuppressed.contains(f.getId()))
+                        .sorted(ObservationOrder.worstFirst())
+                        .toList();
+        recordComposerWithheld(job, withheld, withheldByKey);
     }
 
     /**
@@ -428,7 +491,7 @@ public class FeedbackLedgerRecorder {
         if (observations.isEmpty()) {
             return;
         }
-        saveSuppressedUnit(job, delivery, reason, observations, observations);
+        saveSuppressedUnit(job, delivery, reason, observations, writtenFrom(observations, delivery));
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -448,11 +511,60 @@ public class FeedbackLedgerRecorder {
         if (observations.isEmpty()) {
             return;
         }
-        Set<String> suppressedKeys = Set.copyOf(suppressedDeliveryKeys);
-        List<Observation> suppressedObservations = observations.stream()
-                .filter(f -> suppressedKeys.contains("observation:" + f.getOccurrenceKey()))
-                .toList();
-        saveSuppressedUnit(job, delivery, reason, observations, suppressedObservations);
+        saveSuppressedUnit(
+                job,
+                delivery,
+                reason,
+                observations,
+                behindNotes(observations, delivery, Set.copyOf(suppressedDeliveryKeys)));
+    }
+
+    /**
+     * Record the line notes of a partially delivered package that never landed as one FAILED unit, bound to
+     * their own evidence and carrying their text, beside the DELIVERED unit {@link #record} wrote for the
+     * placements that did.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordUndeliveredRemainder(AgentJob job, DeliveryContent delivery, List<String> undeliveredKeys) {
+        if (undeliveredKeys.isEmpty() || job.getWorkspace() == null) {
+            return;
+        }
+        if (feedbackRepository.existsByAgentJobIdAndPosition(job.getId(), UNDELIVERED_UNIT_ORDINAL)) {
+            return; // already recorded (job retry)
+        }
+        List<Observation> observations = observationRepository.findByAgentJobId(
+                job.getId(), job.getWorkspace().getId());
+        if (observations.isEmpty()) {
+            return;
+        }
+        Set<String> keys = Set.copyOf(undeliveredKeys);
+        Observation any = observations.get(0);
+        Feedback feedback = feedbackRepository.save(Feedback.builder()
+                .agentJobId(job.getId())
+                .workspaceId(job.getWorkspace().getId())
+                .artifactKind(any.getArtifactKind())
+                .artifactId(any.getArtifactId())
+                .recipientUserId(any.getAboutUserId())
+                .aboutUserId(any.getAboutUserId())
+                .channel(FeedbackChannel.IN_CONTEXT)
+                .position(UNDELIVERED_UNIT_ORDINAL)
+                .deliveryState(FeedbackDeliveryState.FAILED)
+                .body(delivery.diffNotes().stream()
+                        .filter(note -> note.deliveryKey() != null && keys.contains(note.deliveryKey()))
+                        .map(DiffNote::body)
+                        .collect(Collectors.joining("\n\n")))
+                .source(FeedbackSource.AGENT)
+                .threadKey(feedbackThreadKeyFor(any))
+                .createdAt(Instant.now())
+                .build());
+        int ordinal = 0;
+        for (Observation f : behindNotes(observations, delivery, keys).stream()
+                .filter(f -> f.getAssessmentStatus() == AssessmentStatus.ASSESSED)
+                .sorted(ObservationOrder.worstFirst())
+                .toList()) {
+            EvidenceRole role = f.getOutcome() == Outcome.NEGATIVE ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
+            feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal++);
+        }
     }
 
     private void saveSuppressedUnit(
@@ -534,30 +646,23 @@ public class FeedbackLedgerRecorder {
 
     /** Stores the exact separately composed human-approval body before any provider side effect. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordProposal(AgentJob job, @Nullable DeliveryContent delivery, List<ValidatedObservation> proposed) {
+    public void recordProposal(AgentJob job, @Nullable DeliveryContent delivery) {
         publishFeedbackLaneTrigger(job);
         final int position = APPROVAL_UNIT_ORDINAL;
-        if (delivery == null || delivery.mrNote() == null) return;
+        if (delivery == null || delivery.mrNote() == null) {
+            recordWithheldOnly(job, delivery);
+            return;
+        }
         String body = PullRequestCommentPoster.sanitize(delivery.mrNote());
         if (body.isBlank()) return;
         String providerSummary = commentFormatter.appendDisclosure(body, job);
         if (feedbackRepository.existsByAgentJobIdAndPosition(job.getId(), position)) return;
-        Map<String, Observation> stored =
-                observationRepository
-                        .findByAgentJobId(job.getId(), job.getWorkspace().getId())
-                        .stream()
-                        .filter(observation -> observation.getOccurrenceKey() != null)
-                        .collect(java.util.stream.Collectors.toMap(
-                                Observation::getOccurrenceKey,
-                                observation -> observation,
-                                (first, duplicate) -> first));
-        Observation first = proposed.stream()
-                .map(ValidatedObservation::occurrenceKey)
-                .map(stored::get)
-                .filter(java.util.Objects::nonNull)
-                .findFirst()
-                .orElse(null);
-        if (first == null) return;
+        List<Observation> proposed = writtenFrom(
+                observationRepository.findByAgentJobId(
+                        job.getId(), job.getWorkspace().getId()),
+                delivery);
+        if (proposed.isEmpty()) return;
+        Observation first = proposed.get(0);
         Feedback feedback = feedbackRepository.save(Feedback.builder()
                 .agentJobId(job.getId())
                 .workspaceId(job.getWorkspace().getId())
@@ -572,7 +677,7 @@ public class FeedbackLedgerRecorder {
                 .proposedPlacements(proposedPlacements(delivery, providerSummary))
                 .reviewedRevision(reviewedRevision(job))
                 .proposedPracticeSlugs(proposed.stream()
-                        .map(ValidatedObservation::practiceSlug)
+                        .map(observation -> observation.getPractice().getSlug())
                         .distinct()
                         .sorted()
                         .toList())
@@ -583,13 +688,22 @@ public class FeedbackLedgerRecorder {
         feedbackRepository.supersedeUndecidedProposals(
                 job.getWorkspace().getId(), feedbackThreadKeyFor(first), feedback.getId());
         int ordinal = 0;
-        for (ValidatedObservation candidate : proposed) {
-            Observation observation = stored.get(candidate.occurrenceKey());
-            if (observation != null) {
-                feedbackObservationRepository.insertIfAbsent(
-                        feedback.getId(), observation.getId(), EvidenceRole.PRIMARY.name(), ordinal++);
-            }
+        for (Observation observation : proposed) {
+            feedbackObservationRepository.insertIfAbsent(
+                    feedback.getId(), observation.getId(), EvidenceRole.PRIMARY.name(), ordinal++);
         }
+        recordWithheldOnly(job, delivery);
+    }
+
+    /** The observations the content was written from, in its order; all of them for a pre-upgrade package. */
+    private static List<Observation> writtenFrom(List<Observation> observations, DeliveryContent delivery) {
+        List<String> contributors = delivery.contributors();
+        if (contributors == null) return observations;
+        return observations.stream()
+                .filter(observation -> contributors.contains(observation.getOccurrenceKey()))
+                .sorted(java.util.Comparator.comparingInt(
+                        observation -> contributors.indexOf(observation.getOccurrenceKey())))
+                .toList();
     }
 
     private List<ProposedPlacement> proposedPlacements(DeliveryContent delivery, String summary) {
@@ -649,7 +763,7 @@ public class FeedbackLedgerRecorder {
 
     /**
      * Persist the composed body a delivery attempt could not place as a single {@link FeedbackDeliveryState#FAILED}
-     * {@code IN_CONTEXT} unit (ordinal {@link #UNDELIVERED_UNIT_ORDINAL}), bind its assessed observations
+     * {@code IN_CONTEXT} unit (ordinal {@link #UNDELIVERED_UNIT_ORDINAL}), bind the assessed observations it was written from
      * (BAD=PRIMARY, GOOD=SUPPORTING), and signal the conversational channel to cover the loci the developer never
      * saw in-context. No-ops entirely when there is no body/workspace or a DELIVERED unit already exists (a prior
      * run landed); otherwise signals the conversation, then writes the FAILED row unless it already exists (a
@@ -703,10 +817,8 @@ public class FeedbackLedgerRecorder {
                 .threadKey(feedbackThreadKeyFor(any))
                 .createdAt(now)
                 .build());
-        // Bind the assessed observations (valence-carrying only) so the undelivered body traces back to its
-        // observations.
         int ordinal = 0;
-        List<Observation> assessed = observations.stream()
+        List<Observation> assessed = writtenFrom(observations, delivery).stream()
                 .filter(f -> (f.getAssessmentStatus() == AssessmentStatus.ASSESSED))
                 .sorted(ObservationOrder.worstFirst())
                 .toList();
