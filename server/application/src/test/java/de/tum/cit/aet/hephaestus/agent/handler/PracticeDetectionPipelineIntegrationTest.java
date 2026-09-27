@@ -728,6 +728,81 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                     .isZero();
         }
 
+        /** One unchanged lapse, raised on the work and prepared for a conversation, as each review composes it. */
+        private static final String SWALLOWED_ERROR = """
+                {"observations": [
+                  {"practiceSlug": "error-handling", "summary": "Export errors stop at the log",
+                   "assessmentStatus": "ASSESSED", "presence": "ABSENT", "assessment": "GOOD", "severity": "MAJOR",
+                   "evidenceRationale": "The export call logs the failure and returns an empty file."}
+                ]}""";
+
+        @Test
+        void aRepeatedNoteIsWithheldFromTheWorkWhileTheReviewsConversationBriefIsStillPrepared() {
+            AgentJob first = reviewOf(prId, 50, "pipelinesha", null, SWALLOWED_ERROR);
+            compose(first, LEAD, lapseNote(), lapseBrief());
+            when(commentPoster.post(any())).thenReturn("comment-first");
+            handler.deliver(first);
+
+            AgentJob second = reviewOf(prId, 50, "pipelinesha", null, SWALLOWED_ERROR);
+            compose(second, LEAD, lapseNote(), lapseBrief());
+            handler.deliver(second);
+
+            verify(commentPoster, times(1)).post(any());
+            assertThat(deliveredBody(first)).contains("Return the export error to the caller");
+            List<UUID> current = observationRepository.findByAgentJobId(second.getId(), workspace.getId()).stream()
+                    .map(Observation::getId)
+                    .toList();
+            assertThat(unitsOf(second, FeedbackChannel.IN_CONTEXT))
+                    .singleElement()
+                    .satisfies(held -> {
+                        assertThat(held.getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
+                        assertThat(held.getSuppressionReason())
+                                .isEqualTo(FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE);
+                        assertThat(boundTo(held)).containsExactlyElementsOf(current);
+                    });
+            assertThat(unitsOf(first, FeedbackChannel.IN_CHAT))
+                    .as("a note on the work is not echoed into a conversation")
+                    .isEmpty();
+            assertThat(unitsOf(second, FeedbackChannel.IN_CHAT))
+                    .as("the withheld note leaves this review's own brief to its own routing")
+                    .singleElement()
+                    .satisfies(brief -> {
+                        assertThat(brief.getDeliveryState()).isEqualTo(FeedbackDeliveryState.PREPARED);
+                        assertThat(boundTo(brief)).containsExactlyElementsOf(current);
+                    });
+        }
+
+        private String lapseNote() {
+            return """
+                    {"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"error-handling",
+                     "basedOn":["{error-handling}"],"title":"Export errors stop at the log",
+                     "nextStep":"Return the export error to the caller","placement":{"kind":"ARTIFACT"}}""";
+        }
+
+        private String lapseBrief() {
+            return """
+                    {"channel":"IN_CHAT","action":"NEW","practiceSlug":"error-handling",
+                     "basedOn":["{error-handling}"],"title":"Where export failures go",
+                     "notes":{"situation":"The export call logs a failure and returns an empty file.",
+                              "capability":"Deciding who should learn that an export failed.",
+                              "evidenceSummary":"The review cites the logging branch of the export call.",
+                              "inConversationSignal":"They name who needs the error and how it reaches them."}}""";
+        }
+
+        private List<Feedback> unitsOf(AgentJob job, FeedbackChannel channel) {
+            return feedbackRepository.findAll().stream()
+                    .filter(feedback ->
+                            feedback.getAgentJobId().equals(job.getId()) && feedback.getChannel() == channel)
+                    .toList();
+        }
+
+        private List<@Nullable UUID> boundTo(Feedback feedback) {
+            return jdbcTemplate.queryForList(
+                    "SELECT observation_id FROM feedback_observation WHERE feedback_id = ?",
+                    UUID.class,
+                    feedback.getId());
+        }
+
         @Test
         void aDistinctComposedStrengthIsPostedAutomaticallyWithoutTheLead() {
             AgentJob review = reviewOf(prId, 50, "pipelinesha", "scm.pull_request.ready", BOTH_HOLD);

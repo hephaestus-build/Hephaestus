@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790510734717-1" author="hephaestus">
+        <comment>Admit a note withheld because it reads exactly as the one last delivered on the same work.</comment>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE feedback DROP CONSTRAINT chk_feedback_suppression_reason;
+            ALTER TABLE feedback ADD CONSTRAINT chk_feedback_suppression_reason
+                CHECK (suppression_reason IS NULL OR suppression_reason IN (
+                    'VOLUME_CAPPED', 'COMPOSER_DEDUPED', 'COMPOSER_WITHHELD', 'REACTED_DISPUTED',
+                    'REACTED_NOT_APPLICABLE', 'CONVERSATION_EXPIRED', 'ARTIFACT_GONE', 'ARTIFACT_CLOSED',
+                    'ISSUE_SNAPSHOT_CHANGED', 'ARTIFACT_MERGED', 'ARTIFACT_DRAFT', 'RECIPIENT_OPTED_OUT',
+                    'EMPTY_AFTER_SANITIZE', 'INSTANCE_SILENCED', 'PRACTICE_REQUIRES_APPROVAL', 'BACKFILL_QUIET',
+                    'WORKSPACE_DISABLED', 'APPROVAL_STALE', 'APPROVAL_NO_LONGER_ELIGIBLE',
+                    'WORKSPACE_DELIVERY_PAUSED', 'STALE_ROLLOUT_REVISION', 'OUTSIDE_CURRENT_COVERAGE',
+                    'OBSERVATION_INVALIDATED', 'REPEATS_DELIVERED_NOTE'));
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

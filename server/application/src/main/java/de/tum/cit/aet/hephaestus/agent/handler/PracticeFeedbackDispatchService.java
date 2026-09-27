@@ -52,6 +52,7 @@ class PracticeFeedbackDispatchService {
     private final DiffNotePoster diffNotePoster;
     private final FeedbackDispatchStateMachine stateMachine;
     private final ObservationInvalidationRepository invalidations;
+    private final RepeatedSummaryCheck repeatedSummaries;
 
     PracticeFeedbackDispatchService(
             FeedbackDispatchRepository repository,
@@ -62,7 +63,8 @@ class PracticeFeedbackDispatchService {
             FeedbackRepository feedbackRepository,
             DiffNotePoster diffNotePoster,
             FeedbackDispatchStateMachine stateMachine,
-            ObservationInvalidationRepository invalidations) {
+            ObservationInvalidationRepository invalidations,
+            RepeatedSummaryCheck repeatedSummaries) {
         this.repository = repository;
         this.policy = policy;
         this.commentPoster = commentPoster;
@@ -72,6 +74,7 @@ class PracticeFeedbackDispatchService {
         this.diffNotePoster = diffNotePoster;
         this.stateMachine = stateMachine;
         this.invalidations = invalidations;
+        this.repeatedSummaries = repeatedSummaries;
     }
 
     Result dispatchAutomaticPackage(
@@ -188,6 +191,9 @@ class PracticeFeedbackDispatchService {
                 } else {
                     PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
                     if (!decision.allowed()) return stateMachine.refuse(dispatch, owner, decision.refusal());
+                    if (inlineNotes(dispatch).isEmpty() && repeatedSummaries.repeatsLastPosted(dispatch, job)) {
+                        return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE);
+                    }
                     Integer began = transactionTemplate.execute(
                             status -> repository.beginWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
                     if (began == null || began != 1) return Result.inProgress();

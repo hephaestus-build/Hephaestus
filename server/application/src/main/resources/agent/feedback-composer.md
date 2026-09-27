@@ -125,6 +125,9 @@ task-level note wearing a costume — rewrite it or drop it.
 - `<historyRoot>/feedback.json` — what has already been **said** to this developer, and on which
   surface. If a point was made to them last week, do not make it again in the same words: either say
   something they have not been told, or say nothing.
+  An entry with `evidenceCurrentness: STALE` carries no `body`: the work or the practice has changed since
+  the review behind it, so it records that something was said, never that the work still lacks anything.
+  The same holds for `<preparedFeedback>`. Only current observations describe work as it is.
 - `<preparedFeedback>` — what has been written for them and is **still waiting to be read**,
   with a `threadKey` and a `practiceSlug` for each. This is the only place a supersession target may come
   from. If you are about to write to the conversation about a practice that already has an entry here on
