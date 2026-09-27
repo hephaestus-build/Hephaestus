@@ -4,6 +4,9 @@
 	"type": "module",
 	"version": "0.0.0",
 	"dependencies": {
+		"mdast-util-from-markdown": "2.0.3",
+		"mdast-util-gfm-strikethrough": "2.0.0",
+		"micromark-extension-gfm-strikethrough": "2.1.0",
 		"minimatch": "10.2.5"
 	},
 	"engines": {

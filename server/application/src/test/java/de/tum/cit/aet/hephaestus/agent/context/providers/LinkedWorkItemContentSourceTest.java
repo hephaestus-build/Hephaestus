@@ -521,22 +521,64 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldTruncateAtTheMemoryBoundAndSaySo() throws Exception {
-            int max = LinkedWorkItemContentSource.MAX_ITEMS;
+        void shouldFailTheCaptureRatherThanDropAReferenceTheAuthorWrote() {
             StringBuilder body = new StringBuilder();
-            for (int i = 1; i <= max + 1; i++) body.append('#').append(i).append(' ');
+            for (int i = 1; i <= LinkedWorkItemContentSource.MAX_ITEMS + 1; i++)
+                body.append('#').append(i).append(' ');
             pullRequestWithBody(body.toString());
+            when(gitRepositoryManager.isEnabled()).thenReturn(true);
+
+            assertThatExceptionOfType(EvidenceCollectionException.class)
+                    .isThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(KIND)));
+            verify(gitRepositoryManager, never()).forEachCommitMessage(any(), any(), any(), any());
+            verify(issueRepository, never()).findByRepositoryIdAndNumber(eq(REPO_ID), anyInt());
+        }
+
+        @Test
+        void shouldFailTheCaptureRatherThanLoadMoreProviderClosingIssuesThanItHolds() {
+            var pr = new PullRequest();
+            pr.setId(PR_ID);
+            when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+            when(pullRequestRepository.countClosingIssuesById(PR_ID))
+                    .thenReturn((long) LinkedWorkItemContentSource.MAX_ITEMS + 1);
+
+            assertThatExceptionOfType(EvidenceCollectionException.class)
+                    .isThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(KIND)));
+            verify(pullRequestRepository, never()).findClosingIssuesById(any());
+        }
+
+        @Test
+        void shouldFailTheCaptureWhenASyncAddsClosingIssuesPastTheBoundAfterTheCount() {
+            int max = LinkedWorkItemContentSource.MAX_ITEMS;
+            var pr = new PullRequest();
+            pr.setId(PR_ID);
+            when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
+            when(pullRequestRepository.countClosingIssuesById(PR_ID)).thenReturn((long) max);
+            when(pullRequestRepository.findClosingIssuesById(PR_ID))
+                    .thenReturn(java.util.stream.IntStream.rangeClosed(1, max + 1)
+                            .mapToObj(number -> issue(number, "Issue", ""))
+                            .toList());
+
+            assertThatExceptionOfType(EvidenceCollectionException.class)
+                    .isThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(KIND)));
+            verify(issueRepository, never()).findByRepositoryIdAndNumber(eq(REPO_ID), anyInt());
+        }
+
+        @Test
+        void shouldCutOffOnlyCommitHistoryAtTheMemoryBoundAndSaySo() throws Exception {
+            int max = LinkedWorkItemContentSource.MAX_ITEMS;
+            pullRequestWithBody("Related to #" + (max + 1));
+            StringBuilder history = new StringBuilder();
+            for (int i = 1; i <= max; i++) history.append('#').append(i).append(' ');
+            commitMessages(history.toString());
             when(issueRepository.findByRepositoryIdAndNumber(eq(REPO_ID), anyInt()))
-                    .thenAnswer(inv -> {
-                        int number = inv.getArgument(1);
-                        return Optional.of(issue(number, "Issue", ""));
-                    });
+                    .thenAnswer(inv -> Optional.of(issue(inv.getArgument(1), "Issue", "")));
 
             JsonNode root = payload(sampleMetadata());
 
-            assertThat(root.get("workItems")).hasSize(max);
             assertThat(root.get("truncated").asBoolean()).isTrue();
-            verify(issueRepository, never()).findByRepositoryIdAndNumber(REPO_ID, max + 1);
+            assertThat(itemNumbers(root)).hasSize(max).first().isEqualTo(max + 1);
+            verify(issueRepository, never()).findByRepositoryIdAndNumber(REPO_ID, max);
         }
     }
 

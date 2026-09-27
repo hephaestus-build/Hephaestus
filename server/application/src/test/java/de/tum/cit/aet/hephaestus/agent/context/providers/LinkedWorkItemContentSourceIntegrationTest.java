@@ -48,18 +48,22 @@ class LinkedWorkItemContentSourceIntegrationTest extends BaseIntegrationTest {
                 .findByTypeAndServerUrl(IdentityProviderType.GITLAB, "https://gitlab.example.com")
                 .orElseGet(() -> gitProviderRepository.save(
                         new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.example.com")));
-        repository = new Repository();
-        repository.setNativeId(nextNativeId());
-        repository.setProvider(provider);
-        repository.setName("web");
-        repository.setNameWithOwner("acme/web");
-        repository.setHtmlUrl("https://gitlab.example.com/acme/web");
-        repository.setVisibility(Repository.Visibility.PUBLIC);
-        repository.setDefaultBranch("main");
-        repository.setCreatedAt(Instant.now());
-        repository.setUpdatedAt(Instant.now());
-        repository.setPushedAt(Instant.now());
-        repository = repositoryRepository.save(repository);
+        repository = persistRepository("acme/web");
+    }
+
+    private Repository persistRepository(String nameWithOwner) {
+        Repository created = new Repository();
+        created.setNativeId(nextNativeId());
+        created.setProvider(provider);
+        created.setName(nameWithOwner.substring(nameWithOwner.indexOf('/') + 1));
+        created.setNameWithOwner(nameWithOwner);
+        created.setHtmlUrl("https://gitlab.example.com/" + nameWithOwner);
+        created.setVisibility(Repository.Visibility.PUBLIC);
+        created.setDefaultBranch("main");
+        created.setCreatedAt(Instant.now());
+        created.setUpdatedAt(Instant.now());
+        created.setPushedAt(Instant.now());
+        return repositoryRepository.save(created);
     }
 
     @Test
@@ -114,19 +118,46 @@ class LinkedWorkItemContentSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(closing.get(0).getLabels()).isEmpty();
     }
 
+    @Test
+    void shouldLeaveOutAClosingIssueOfAnotherRepositoryEvenWhenItsNumberIsTakenHere() {
+        Repository other = persistRepository("acme/api");
+        Issue foreign = persistIssue(other, 7, Issue.State.OPEN, null);
+        persistIssue(repository, 7, Issue.State.OPEN, null);
+        Issue closing = persistIssue(repository, 10, Issue.State.OPEN, null);
+        PullRequest mr = new PullRequest();
+        mr.setNativeId(nextNativeId());
+        mr.setProvider(provider);
+        mr.setNumber(8);
+        mr.setTitle("MR !8");
+        mr.setState(Issue.State.OPEN);
+        mr.setHtmlUrl("https://gitlab.example.com/acme/web/-/merge_requests/8");
+        mr.setRepository(repository);
+        mr.replaceClosingIssues(Set.of(foreign, closing));
+        mr = pullRequestRepository.save(mr);
+
+        List<Issue> candidates = pullRequestRepository.findClosingIssuesById(mr.getId());
+
+        assertThat(candidates).extracting(Issue::getId).containsExactly(closing.getId());
+        assertThat(pullRequestRepository.countClosingIssuesById(mr.getId())).isEqualTo(1);
+    }
+
     private long nextNativeId() {
         return nativeIdSeq++;
     }
 
     private Issue persistIssue(int number, Issue.State state, @Nullable Issue parent) {
+        return persistIssue(repository, number, state, parent);
+    }
+
+    private Issue persistIssue(Repository owner, int number, Issue.State state, @Nullable Issue parent) {
         Issue issue = new Issue();
         issue.setNativeId(nextNativeId());
         issue.setProvider(provider);
         issue.setNumber(number);
         issue.setTitle("Issue #" + number);
         issue.setState(state);
-        issue.setHtmlUrl("https://gitlab.example.com/acme/web/-/issues/" + number);
-        issue.setRepository(repository);
+        issue.setHtmlUrl(owner.getHtmlUrl() + "/-/issues/" + number);
+        issue.setRepository(owner);
         issue.setParentIssue(parent);
         issue.setCreatedAt(Instant.now());
         issue.setUpdatedAt(Instant.now());

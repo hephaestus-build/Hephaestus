@@ -195,12 +195,13 @@ never pushed out by discussion rows.
 that the provider records as closing candidates for the pull request (GitHub's closing references,
 GitLab's closes-issues), and the ones named by every `#N` the title, the description (HTML comments
 removed), the branch name and the full commit messages of the change mention. Each item says `how`:
-`closesOnMerge` for a provider-recorded candidate — linked by a keyword, in the provider's UI or
-through a cross-project reference — and `mentions` when only the text names it. A candidate closes
+`closesOnMerge` for a provider-recorded candidate — linked by a keyword or in the provider's UI; a
+candidate in another repository is left out, since its number is not this repository's — and
+`mentions` when only the text names it; `mentions` is read from the text, not a provider relation. A candidate closes
 only on an eligible merge, and a project can turn automatic closing off; whether the issue closed is
 its `state` and `closedAt`, as last synced. A `#N` that continues another
 name — `owner/repo#12`, `v1.2#3`, `GH-12` — is not this repository's issue and is not looked up.
-`unresolvedReferences[]` lists the mentioned numbers this repository does not hold. An item's `subIssuesTotal` and `subIssuesCompleted` come with
+`unresolvedReferences[]` lists the mentioned numbers this repository does not hold, and `truncated` says the lookup stopped at its bound before reaching every number the commit messages mention. The provider's closing candidates and the title, description and branch are always looked up in full: more of them than the bound fails the capture instead of losing one. An item's `subIssuesTotal` and `subIssuesCompleted` come with
 `subIssuesSource`: `provider` when the provider synced the rollup (GitHub), `children` when the record
 counted the issues this repository stores as the item's children, closed ones as completed (GitLab,
 whose sync links a child to its parent and never totals them). All three are absent when there is

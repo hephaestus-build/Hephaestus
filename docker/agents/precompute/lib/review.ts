@@ -85,16 +85,22 @@ function objects(value: unknown): Record<string, unknown>[] {
 	return Array.isArray(value) ? value.filter(isJsonObject) : [];
 }
 
-/** The issues the change names, as `linked_work_items.json` records them; null when not captured. */
-export async function readLinkedWorkItems(
+/** What `linked_work_items.json` records: the resolved items and the numbers this repository holds no issue for. */
+export interface LinkedWorkItemCapture {
+	items: LinkedWorkItem[];
+	unresolved: number[];
+}
+
+/** The linked-work-item capture; null when not captured. */
+export async function readLinkedWorkItemCapture(
 	contextDir: string | undefined,
-): Promise<LinkedWorkItem[] | null> {
+): Promise<LinkedWorkItemCapture | null> {
 	const parsed = await readContextJson(contextDir, "linked_work_items.json");
 	if (parsed === null) {
 		return null;
 	}
-	const items = isJsonObject(parsed) ? objects(parsed.workItems) : objects(parsed);
-	return items.flatMap((item) => {
+	const envelope = isJsonObject(parsed) ? parsed : { workItems: parsed };
+	const items = objects(envelope.workItems).flatMap((item) => {
 		const number = optionalNumber(item.number);
 		if (number === undefined) {
 			return [];
@@ -113,6 +119,18 @@ export async function readLinkedWorkItems(
 			},
 		];
 	});
+	const unresolved = Array.isArray(envelope.unresolvedReferences)
+		? envelope.unresolvedReferences.flatMap((n) => optionalNumber(n) ?? [])
+		: [];
+	return { items, unresolved };
+}
+
+/** The issues the change names, as `linked_work_items.json` records them; null when not captured. */
+export async function readLinkedWorkItems(
+	contextDir: string | undefined,
+): Promise<LinkedWorkItem[] | null> {
+	const capture = await readLinkedWorkItemCapture(contextDir);
+	return capture?.items ?? null;
 }
 
 /** The inline comments, oldest first; null when `comments.json` was not captured. */

@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -143,36 +144,55 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
                             .orElse(null);
 
             // The provider's closing candidates before what the text mentions: a link made in the
-            // provider's UI or through a cross-project reference matches no `#N`.
+            // provider's UI matches no `#N`.
             Map<Integer, Issue> closing = new LinkedHashMap<>();
             if (pullRequest != null) {
-                for (Issue issue : pullRequestRepository.findClosingIssuesById(pullRequest.getId())) {
+                // A closing link is the provider's word that this change names the issue, so like the
+                // author's own references none may fall past the bound unseen. Counted before loading,
+                // and the loaded list checked again, since a sync may add links between the two reads.
+                if (pullRequestRepository.countClosingIssuesById(pullRequest.getId()) > MAX_ITEMS) {
+                    throw tooManyClosingIssues();
+                }
+                List<Issue> closingIssues = pullRequestRepository.findClosingIssuesById(pullRequest.getId());
+                if (closingIssues.size() > MAX_ITEMS) {
+                    throw tooManyClosingIssues();
+                }
+                for (Issue issue : closingIssues) {
                     closing.put(issue.getNumber(), issue);
                 }
             }
             Set<Integer> numbers = new LinkedHashSet<>(closing.keySet());
-            collect(NUMBER_REF, pullRequest == null ? null : pullRequest.getTitle(), numbers);
-            collect(NUMBER_REF, pullRequest == null ? null : withoutHtmlComments(pullRequest.getBody()), numbers);
-            collect(
-                    BRANCH_REF,
-                    firstNonBlank(
-                            MetaJson.optString(m, "source_branch"),
-                            pullRequest == null ? null : pullRequest.getHeadRefName()),
-                    numbers);
+            // The author's own references are what a review reads as the issues this change names, so
+            // none of them may fall past the bound unseen either: one more than it holds fails the
+            // capture, and only numbers mentioned in commit history are ever cut off.
+            boolean authoredFit = collect(NUMBER_REF, pullRequest == null ? null : pullRequest.getTitle(), numbers)
+                    && collect(
+                            NUMBER_REF,
+                            pullRequest == null ? null : withoutHtmlComments(pullRequest.getBody()),
+                            numbers)
+                    && collect(
+                            BRANCH_REF,
+                            firstNonBlank(
+                                    MetaJson.optString(m, "source_branch"),
+                                    pullRequest == null ? null : pullRequest.getHeadRefName()),
+                            numbers);
+            if (!authoredFit) {
+                throw new EvidenceCollectionException(
+                        "The title, description and branch name mention more issue numbers than the capture holds",
+                        null);
+            }
+            AtomicBoolean truncated = new AtomicBoolean();
             if (prepared != null) {
                 gitRepositoryManager.forEachCommitMessage(
-                        prepared.key(),
-                        prepared.target(),
-                        prepared.head(),
-                        message -> collect(NUMBER_REF, message, numbers));
+                        prepared.key(), prepared.target(), prepared.head(), message -> {
+                            if (!truncated.get() && !collect(NUMBER_REF, message, numbers)) truncated.set(true);
+                        });
             }
 
             ArrayNode items = objectMapper.createArrayNode();
             List<Integer> unresolved = new ArrayList<>();
             Map<String, byte[]> files = new LinkedHashMap<>();
-            int examined = 0;
             for (int number : numbers) {
-                if (examined++ >= MAX_ITEMS) break;
                 Optional<Issue> resolved = closing.containsKey(number)
                         ? Optional.of(closing.get(number))
                         : issueRepository.findByRepositoryIdAndNumber(repositoryId, number);
@@ -190,7 +210,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
             root.set("workItems", items);
             ArrayNode unresolvedRefs = root.putArray("unresolvedReferences");
             unresolved.forEach(unresolvedRefs::add);
-            root.put("truncated", numbers.size() > MAX_ITEMS);
+            root.put("truncated", truncated.get());
 
             files.put(OUTPUT_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
             log.info("Linked work items: wrote {} item(s), unresolved={}", items.size(), unresolved.size());
@@ -261,21 +281,33 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         return node;
     }
 
+    private static EvidenceCollectionException tooManyClosingIssues() {
+        return new EvidenceCollectionException("The provider records more closing issues than the capture holds", null);
+    }
+
     private static @Nullable String withoutHtmlComments(@Nullable String text) {
         return text == null ? null : HTML_COMMENT.matcher(text).replaceAll("");
     }
 
-    private static void collect(Pattern pattern, @Nullable String text, Set<Integer> numbers) {
-        if (text == null || text.isBlank()) return;
+    /** Adds what the pattern finds; false, adding nothing more, once a new number would pass the bound. */
+    private static boolean collect(Pattern pattern, @Nullable String text, Set<Integer> numbers) {
+        if (text == null || text.isBlank()) return true;
         Matcher matcher = pattern.matcher(text);
         while (matcher.find()) {
+            int number;
             try {
                 long value = Long.parseLong(matcher.group(1));
-                if (value > 0 && value <= Integer.MAX_VALUE) numbers.add((int) value);
+                if (value <= 0 || value > Integer.MAX_VALUE) continue;
+                number = (int) value;
             } catch (NumberFormatException ignored) {
                 // Longer than any issue number: not a reference.
+                continue;
             }
+            if (numbers.contains(number)) continue;
+            if (numbers.size() >= MAX_ITEMS) return false;
+            numbers.add(number);
         }
+        return true;
     }
 
     private static @Nullable String firstNonBlank(@Nullable String a, @Nullable String b) {
