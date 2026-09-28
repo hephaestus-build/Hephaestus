@@ -6016,36 +6016,6 @@ paths:
       summary: List observations for current user
       tags:
       - Practice Observations
-  /workspaces/{workspaceSlug}/practices/observations/pull-request/{prId}:
-    get:
-      description: All observations for a specific pull request within the workspace
-      operationId: getObservationsForPullRequest
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
-        name: prId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ObservationList"
-          description: PR observations returned
-      summary: List observations for a pull request
-      tags:
-      - Practice Observations
   /workspaces/{workspaceSlug}/practices/observations/summary:
     get:
       description: Aggregated observation counts per practice for dashboard cards

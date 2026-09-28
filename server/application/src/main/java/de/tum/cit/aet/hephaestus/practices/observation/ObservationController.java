@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.practices.observation;
 
-import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.DeveloperPracticeSummaryDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationDetailDTO;
@@ -30,8 +29,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
  * Read-only REST API for practice observations.
  *
  * <p>All endpoints require workspace membership (enforced by {@link WorkspaceScopedController}).
- * List, summary, and detail endpoints are scoped to the authenticated developer's own
- * observations. The pull-request endpoint returns observations for all developers on that PR.
+ * Every endpoint is scoped to the authenticated developer's own observations.
  */
 @WorkspaceScopedController
 @RequestMapping("/practices/observations")
@@ -87,28 +85,5 @@ public class ObservationController {
     public ResponseEntity<ObservationDetailDTO> getObservation(
             WorkspaceContext workspaceContext, @PathVariable UUID observationId) {
         return ResponseEntity.ok(observationService.getObservationDetail(workspaceContext.id(), observationId));
-    }
-
-    @GetMapping("/pull-request/{prId}")
-    @Operation(
-            summary = "List observations for a pull request",
-            description = "All observations for a specific pull request within the workspace")
-    @ApiResponse(
-            responseCode = "200",
-            description = "PR observations returned",
-            content = @Content(array = @ArraySchema(schema = @Schema(implementation = ObservationListDTO.class))))
-    public ResponseEntity<List<ObservationListDTO>> getObservationsForPullRequest(
-            WorkspaceContext workspaceContext, @PathVariable Long prId) {
-        // Unlike the per-developer endpoints, this returns EVERY developer's BAD/ABSENT observations on the PR,
-        // unscoped to the caller. On a public-read workspace an anonymous (membership-less) request would
-        // otherwise expose them — require workspace membership.
-        if (!workspaceContext.hasMembership()) {
-            throw new AccessForbiddenException("Workspace membership is required to view pull-request observations");
-        }
-        List<ObservationListDTO> observations =
-                observationService.getObservationsForPullRequest(workspaceContext.id(), prId).stream()
-                        .map(ObservationListDTO::from)
-                        .toList();
-        return ResponseEntity.ok(observations);
     }
 }

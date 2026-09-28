@@ -30,7 +30,6 @@ const READS_OF_OBSERVATION_VALIDITY: ReadonlySet<string> = new Set([
 	"getArtifactTrace",
 	"listObservations",
 	"getObservation",
-	"getObservationsForPullRequest",
 	"getSummary",
 	"listPracticeStandings",
 	"listPracticeGroupStandings",

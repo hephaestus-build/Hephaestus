@@ -12213,28 +12213,6 @@ export type ListObservationsResponses = {
 
 export type ListObservationsResponse = ListObservationsResponses[keyof ListObservationsResponses];
 
-export type GetObservationsForPullRequestData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    prId: number;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/practices/observations/pull-request/{prId}';
-};
-
-export type GetObservationsForPullRequestResponses = {
-  /**
-   * PR observations returned
-   */
-  200: Array<ObservationList>;
-};
-
-export type GetObservationsForPullRequestResponse = GetObservationsForPullRequestResponses[keyof GetObservationsForPullRequestResponses];
-
 export type GetSummaryData = {
   body?: never;
   path: {
