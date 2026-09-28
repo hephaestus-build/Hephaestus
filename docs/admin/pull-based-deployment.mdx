@@ -107,8 +107,8 @@ reconcile:
 A host that also brings its own edge keeps its certificates in the `proxy_letsencrypt` volume. Before
 reconciling a host that used the old bind mount, pause the timer and stop its existing Traefik container
 so the ACME store cannot change during the copy. Back up that `acme.json` first; in a release worktree
-it is under `docker/letsencrypt/`. Copy it into the volume before starting the new proxy, or Traefik
-issues the certificates again.
+it is under `docker/letsencrypt/`, and the reconciler never prunes a worktree that still holds it.
+Copy it into the volume before starting the new proxy, or Traefik issues the certificates again.
 
 A volume that already holds an `acme.json` holds the store Traefik is using: copying an older backup
 over it discards the certificates currently being served. The command below refuses in that case
@@ -189,6 +189,7 @@ ingress, omit `proxy` and use `core app`.
 | Move a following host onto the commit's database image | Promote the commit with **refresh-database-image**                       |
 | Prevent new reconciliation runs                        | `sudo systemctl disable --now hephaestus-reconcile.timer`                |
 | See what a host runs                                   | `cat /var/lib/hephaestus/applied.json`                                   |
+| Keep a release worktree while you work in it           | Lock it; see [What it keeps on disk](#what-it-keeps-on-disk)             |
 
 :::warning Pause reconciliation before manual changes
 Disable the timer and confirm the service is no longer running with
@@ -222,6 +223,47 @@ On such a host the database restarts when:
 
 A release is applied exactly as its signed lock names it, so a release that rebuilt the image
 restarts the database.
+
+### What it keeps on disk
+
+Every release or commit the host applies gets a Git worktree under `/var/lib/hephaestus/releases/`
+and a lock under `/var/lib/hephaestus/release-locks/`. After each successful apply, the reconciler
+removes the worktrees nothing needs any more with `git worktree remove`, and then the lock of every
+release left without a worktree. It keeps:
+
+- the release it has just applied;
+- the release it ran before that, so a rollback starts from a worktree that is already there;
+  promoting the running release again keeps this one as well;
+- the worktree the `/var/lib/hephaestus/tooling` link names;
+- a worktree locked with `git worktree lock`, which is how you keep one you are working in;
+- a worktree that holds anything its release does not, such as a modified file or an untracked or
+  ignored one. An `acme.json` from before certificates moved to the `proxy_letsencrypt` volume is
+  one of these.
+
+The journal names each worktree it keeps for one of the last two reasons, with the lock reason or
+the files it holds. Pruning deletes worktrees and lock files only. It never touches a Docker volume,
+so the certificates in `proxy_letsencrypt` and the database stay as they are.
+
+To keep a worktree while you use it, lock it, and unlock it when you are done:
+
+```bash
+sudo git -C /var/lib/hephaestus/checkout worktree lock --reason "incident review" \
+  /var/lib/hephaestus/releases/<release>
+sudo git -C /var/lib/hephaestus/checkout worktree unlock /var/lib/hephaestus/releases/<release>
+```
+
+A worktree kept because of its files stays until you remove it. Save what it holds first, then
+use `sudo git -C /var/lib/hephaestus/checkout worktree remove --force <worktree>`.
+
+A rollback to a pruned release creates its worktree again at the commit the host accepts for it.
+The proxy then finds its certificates in the volume, so nothing is issued again. This is not true
+for a release whose proxy still used the bind mount; see
+[Moving an existing host](#moving-an-existing-host).
+
+If pruning fails, the pass fails after the new release is running, recorded and its tooling
+adopted. The journal gives the reason. The next apply prunes everything that is still obsolete.
+The pass runs only through `hephaestus-reconcile.service`, and systemd runs one at a time, so no
+other pass uses a worktree that pruning removes.
 
 ## Watching it
 

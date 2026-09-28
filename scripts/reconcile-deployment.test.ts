@@ -5,6 +5,7 @@ import {
 	copyFile,
 	mkdir,
 	mkdtemp,
+	readdir,
 	readFile,
 	readlink,
 	rm,
@@ -18,7 +19,7 @@ import { test } from "node:test";
 import { parseDocument } from "yaml";
 
 import { environmentForGitFixture, GIT_REPOSITORY_VARIABLES } from "./lib/git-environment.ts";
-import { at, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, at, parseJson } from "./lib/json.ts";
 import {
 	adoptTooling,
 	appliedCommit,
@@ -144,6 +145,12 @@ await test("only a missing applied-state file means first run", async () => {
 		assert.deepEqual(await readApplied(legacy), applied);
 		await writeFile(corrupt, JSON.stringify({ ...applied, commit: "v1.2.3" }));
 		await assert.rejects(readApplied(corrupt), /applied\.commit must be a Git commit/u);
+
+		// The rollback target names a tree to keep, so it is a release or a commit like any other.
+		await writeFile(withCommit, JSON.stringify({ ...applied, previous: "v0.75.1" }));
+		assert.deepEqual(await readApplied(withCommit), { ...applied, previous: "v0.75.1" });
+		await writeFile(corrupt, JSON.stringify({ ...applied, previous: "../checkout" }));
+		await assert.rejects(readApplied(corrupt), /applied\.previous must be/u);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
@@ -669,6 +676,8 @@ async function reconcilerFixture(directory: string) {
 		path.join(checkout, "scripts/prepare-release-lock.ts"),
 		'throw new Error("candidate release must not verify itself");\n',
 	);
+	// As the repository does: the proxy's ACME store lived there before it moved to a volume.
+	await writeFile(path.join(checkout, ".gitignore"), "docker/letsencrypt/\n");
 	gitIn(checkout, "init", "--quiet", "--initial-branch=main");
 	gitIn(checkout, "config", "user.email", "host@example.invalid");
 	gitIn(checkout, "config", "user.name", "host");
@@ -698,6 +707,7 @@ appendFileSync(${JSON.stringify(callsFile)}, [NAME, ...args].join(" ") + "\\n");
 	// `--` keeps Node from interpreting Docker's --env-file as its own startup option.
 	for (const [name, body] of Object.entries({
 		git: `import { spawnSync } from "node:child_process";
+if (process.env.FAIL_WORKTREE_REMOVE === "1" && args[0] === "worktree" && args[1] === "remove") process.exit(1);
 const result = spawnSync(${JSON.stringify(realGit)}, args, { stdio: "inherit" });
 process.exit(result.status ?? 1);`,
 		cosign: 'process.exit(process.env.FAIL_VERIFICATION === "1" ? 1 : 0);',
@@ -730,6 +740,9 @@ await main(${JSON.stringify(units)});\n`,
 	const record = { release: "v1.0.0", channelCommit, appliedAt: applied.appliedAt };
 	return {
 		bootstrap,
+		checkout,
+		origin,
+		image,
 		units,
 		releaseCommit,
 		record,
@@ -738,11 +751,13 @@ await main(${JSON.stringify(units)});\n`,
 		run: ({
 			cli = false,
 			failVerification = false,
+			failWorktreeRemove = false,
 			unlockedStack,
 			channel = "test",
 		}: {
 			cli?: boolean;
 			failVerification?: boolean;
+			failWorktreeRemove?: boolean;
 			channel?: string;
 			unlockedStack?: string;
 		} = {}) =>
@@ -760,6 +775,7 @@ await main(${JSON.stringify(units)});\n`,
 						HEPHAESTUS_PROMOTE_IDENTITY: "https://example.invalid/promote",
 						HEPHAESTUS_METRICS_FILE: metricsFile,
 						FAIL_VERIFICATION: failVerification ? "1" : "0",
+						FAIL_WORKTREE_REMOVE: failWorktreeRemove ? "1" : "0",
 						UNLOCKED_STACK: unlockedStack,
 					}),
 				},
@@ -957,3 +973,271 @@ await test(
 		}
 	},
 );
+
+/**
+ * A host following the default branch, the one whose disk fills when nothing prunes: `publish`
+ * commits to `main` and promotes that commit, and `promote` names a commit again, as a re-promotion
+ * or a rollback does.
+ */
+async function followingHost(directory: string) {
+	const fixture = await reconcilerFixture(directory);
+	const publisher = path.join(directory, "publisher");
+	gitIn(directory, "clone", "--quiet", fixture.origin, publisher);
+	gitIn(publisher, "config", "user.email", "ci@example.invalid");
+	gitIn(publisher, "config", "user.name", "ci");
+	const promote = async (target: string, allowRollback = false): Promise<void> => {
+		gitIn(publisher, "checkout", "--quiet", "deploy-state");
+		await writeFile(
+			path.join(publisher, "channels/test.json"),
+			JSON.stringify({
+				commit: target,
+				images: { HEPHAESTUS_IMAGE_APP: fixture.image },
+				allowRollback,
+			}),
+		);
+		gitIn(publisher, "commit", "--quiet", "--allow-empty", "-am", `promote ${target}`);
+		gitIn(publisher, "push", "--quiet", "origin", "deploy-state");
+	};
+	let builds = 0;
+	const releases = path.join(directory, "releases");
+	return {
+		...fixture,
+		releases,
+		promote,
+		publish: async (): Promise<string> => {
+			gitIn(publisher, "checkout", "--quiet", "main");
+			builds += 1;
+			await writeFile(path.join(publisher, "build.txt"), `${builds}\n`);
+			gitIn(publisher, "add", "build.txt");
+			gitIn(publisher, "commit", "--quiet", "-m", `build ${builds}`);
+			gitIn(publisher, "push", "--quiet", "origin", "main");
+			const built = gitIn(publisher, "rev-parse", "HEAD");
+			await promote(built);
+			return built;
+		},
+		/** Applies what the channel names and returns the output, failing the test if the run failed. */
+		apply: (options: Parameters<typeof fixture.run>[0] = {}) => {
+			const result = fixture.run(options);
+			assert.equal(result.status, 0, result.stderr);
+			return result.stdout;
+		},
+		/** The release trees on disk, sorted. */
+		trees: async () => {
+			const trees = await readdir(releases);
+			return trees.toSorted();
+		},
+		/** The releases with a lock on disk, sorted. */
+		locks: async () => {
+			const files = await readdir(path.join(directory, "release-locks"));
+			return files.map((file) => file.slice(0, -".env".length)).toSorted();
+		},
+		record: async () => readApplied(path.join(directory, "applied.json")),
+		registered: () => gitIn(fixture.checkout, "worktree", "list", "--porcelain"),
+	};
+}
+
+const sorted = (...releases: string[]): string[] => releases.toSorted();
+
+await test(
+	"a host following the branch keeps the release it runs, the one before it and any tree in use",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-prune-"));
+		try {
+			const host = await followingHost(directory);
+			const first = await host.publish();
+			host.apply();
+			const second = await host.publish();
+			host.apply();
+			assert.deepEqual(await host.trees(), sorted(first, second));
+
+			const third = await host.publish();
+			const pruned = host.apply();
+			assert.deepEqual(await host.trees(), sorted(second, third));
+			assert.deepEqual(await host.locks(), sorted(second, third));
+			assert.match(pruned, new RegExp(`Removed .*releases/${first}\\n`, "u"));
+			// Removed through git, so the checkout forgets the tree rather than keeping a registration.
+			assert.doesNotMatch(host.registered(), new RegExp(first, "u"));
+			const afterThird = await host.record();
+			assert.equal(afterThird?.previous, second);
+
+			// A tree someone locked is in use, whatever the host would otherwise decide about it.
+			gitIn(
+				host.checkout,
+				"worktree",
+				"lock",
+				"--reason",
+				"copying acme.json",
+				path.join(host.releases, second),
+			);
+			const fourth = await host.publish();
+			assert.match(
+				host.apply(),
+				new RegExp(`Keeping .*${second}: locked copying acme\\.json`, "u"),
+			);
+			assert.deepEqual(await host.trees(), sorted(second, third, fourth));
+
+			// A certificate store left in a tree from before the volume is ignored by git, which is
+			// exactly what a plain `git worktree remove` deletes.
+			const store = path.join(host.releases, third, "docker/letsencrypt/acme.json");
+			await mkdir(path.dirname(store), { recursive: true });
+			await writeFile(store, '{"letsencrypt":{}}\n');
+			const fifth = await host.publish();
+			assert.match(
+				host.apply(),
+				new RegExp(`Keeping .*${third}: it holds docker/letsencrypt/acme\\.json`, "u"),
+			);
+			assert.equal(await readFile(store, "utf8"), '{"letsencrypt":{}}\n');
+			assert.deepEqual(await host.trees(), sorted(second, third, fourth, fifth));
+			assert.deepEqual(await host.locks(), sorted(second, third, fourth, fifth));
+
+			// Re-promoting the running commit converges it without losing the rollback target, and
+			// the unlocked tree goes with its lock.
+			gitIn(host.checkout, "worktree", "unlock", path.join(host.releases, second));
+			await host.promote(fifth);
+			host.apply();
+			const reapplied = await host.record();
+			assert.equal(reapplied?.release, fifth);
+			assert.equal(reapplied.previous, fourth);
+			assert.deepEqual(await host.trees(), sorted(third, fourth, fifth));
+			assert.deepEqual(await host.locks(), sorted(third, fourth, fifth));
+			assert.doesNotMatch(await host.calls(), /worktree remove .*--force/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"a rollback recreates a pruned tree at the accepted commit and leaves every volume alone",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-rollback-"));
+		try {
+			const host = await followingHost(directory);
+			const first = await host.publish();
+			host.apply();
+			const second = await host.publish();
+			host.apply();
+			const third = await host.publish();
+			host.apply();
+			assert.deepEqual(await host.trees(), sorted(second, third));
+
+			const earlier = await host.calls();
+			await host.promote(first, true);
+			host.apply();
+			const tree = path.join(host.releases, first);
+			assert.equal(gitIn(tree, "rev-parse", "HEAD"), first);
+			assert.equal(await readlink(path.join(directory, "tooling")), tree);
+			const record = await host.record();
+			assert.equal(record?.release, first);
+			assert.equal(record.previous, third);
+			assert.deepEqual(await host.trees(), sorted(first, third));
+			assert.deepEqual(await host.locks(), sorted(first, third));
+
+			// The certificates are in a volume no release tree holds (see the Compose test below), and
+			// nothing the rollback runs removes or renews a volume.
+			const calls = await host.calls();
+			const docker = calls
+				.slice(earlier.length)
+				.split("\n")
+				.filter((line) => line.startsWith("docker"));
+			assert.match(docker.join("\n"), /--project-name proxy .* up /u);
+			for (const call of docker) {
+				assert.doesNotMatch(call, / volume | down|--volumes| -v |--renew-anon-volumes| -V /u);
+			}
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"a failed prune leaves the new release running and recorded, and the next apply finishes it",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-failed-prune-"));
+		try {
+			const host = await followingHost(directory);
+			const first = await host.publish();
+			host.apply();
+			const second = await host.publish();
+			host.apply();
+			const third = await host.publish();
+
+			const failed = host.run({ failWorktreeRemove: true });
+			assert.notEqual(failed.status, 0);
+			assert.match(failed.stderr, /git exited with code 1/u);
+			const record = await host.record();
+			assert.equal(record?.release, third);
+			assert.equal(record.previous, second);
+			const tree = path.join(host.releases, third);
+			assert.equal(await readlink(path.join(directory, "tooling")), tree);
+			assert.equal(
+				await readFile(path.join(host.units, "hephaestus-reconcile.service"), "utf8"),
+				await readFile(
+					path.join(tree, "docker/self-host/systemd/hephaestus-reconcile.service"),
+					"utf8",
+				),
+			);
+			assert.match(
+				await host.calls(),
+				new RegExp(`${third}/docker/compose\\.proxy\\.yaml up `, "u"),
+			);
+			assert.match(await readFile(host.metricsFile, "utf8"), new RegExp(`release="${third}"`, "u"));
+			assert.deepEqual(await host.trees(), sorted(first, second, third));
+
+			// Nothing is left half-done: the next tick sees the release it runs, and the next apply
+			// prunes everything the failed one did not.
+			assert.match(host.apply(), /No change: already running/u);
+			assert.match(
+				await readFile(host.metricsFile, "utf8"),
+				/^hephaestus_deploy_reconcile_success 1$/mu,
+			);
+			const fourth = await host.publish();
+			host.apply();
+			assert.deepEqual(await host.trees(), sorted(third, fourth));
+			assert.deepEqual(await host.locks(), sorted(third, fourth));
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test("no stack keeps anything in the release tree it was started from", () => {
+	// Pruning deletes release trees and a rollback recreates one from git, so anything a service
+	// mounted from beside its Compose file would be lost or come back empty. The proxy's ACME store
+	// was one such path, and every certificate would be issued again.
+	for (const stack of ["app", "core", "proxy"]) {
+		const file = `docker/compose.${stack}.yaml`;
+		const services = asRecord(
+			at(parseDocument(readFileSync(file, "utf8")).toJS(), ["services"], file),
+			`${file} services`,
+		);
+		for (const [name, service] of Object.entries(services)) {
+			const volumes = asRecord(service, `${file} ${name}`).volumes ?? [];
+			for (const volume of asArray(volumes, `${file} ${name} volumes`)) {
+				const source =
+					typeof volume === "string"
+						? volume.split(":")[0]
+						: asRecord(volume, `${file} ${name} volume`).source;
+				assert.ok(
+					source === undefined ||
+						(typeof source === "string" && (source.startsWith("/") || /^\w[\w.-]*$/u.test(source))),
+					`${file} ${name} mounts ${String(source)} from its release tree`,
+				);
+			}
+		}
+	}
+	const proxy: unknown = parseDocument(readFileSync("docker/compose.proxy.yaml", "utf8")).toJS();
+	const traefik = asRecord(
+		at(proxy, ["services", "reverse-proxy"], "docker/compose.proxy.yaml"),
+		"reverse-proxy",
+	);
+	assert.ok(
+		asArray(traefik.command, "reverse-proxy command").includes(
+			"--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json",
+		),
+	);
+	assert.ok(asArray(traefik.volumes, "reverse-proxy volumes").includes("letsencrypt:/letsencrypt"));
+});
