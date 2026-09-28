@@ -85,5 +85,6 @@ do, its home is the Admin Guide (`docs/admin/`) and the runbook links to it.
 | [0044](0044-email-is-a-notification-transport.md) | Email is a notification transport, delivered through the event publication registry | Accepted |
 | [0045](0045-activity-counts-work-and-never-ranks-people.md) | Activity counts and lists work; it never scores or ranks people | Accepted |
 | [0046](0046-heph-follows-its-model-not-a-workspace-switch.md) | Heph follows its model, not a workspace switch | Accepted |
+| [0047](0047-the-practice-profile-has-one-reader.md) | The Practice profile has one reader | Accepted |
 
 Template: [0000-template.md](0000-template.md).

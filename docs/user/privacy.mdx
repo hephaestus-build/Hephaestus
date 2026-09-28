@@ -47,7 +47,8 @@ Workspace admins choose the connected sources and what runs in the workspace:
 These sources provide context for practice reviews and mentoring. A connection does not authorise every use
 of its content. Hephaestus records **observations and practice feedback**, including observations that never
 become comments. [Activity](./activity) counts and lists the pull requests, reviews, issues and comments
-you do in the workspace's repositories.
+you do in the workspace's repositories, and your open work, such as review requests and assigned
+issues. It lists members by name and never ranks them.
 
 Your sign-in details, linked accounts, memberships, preferences, chats, and feedback reactions support your
 account and conversations. Product-feedback submissions (with the page path and browser identification you choose to attach, and the
@@ -140,7 +141,7 @@ The JSON file contains your account, linked sign-in identities, memberships, acc
 your AI choice, and authentication history—not credentials or session secrets. Keep it private.
 
 **The self-service export is limited.** Request conversations, observations and feedback (including
-never-delivered results), recognition, mirrored source content, product-feedback submissions, survey
+never-delivered results), activity records, mirrored source content, product-feedback submissions, survey
 responses, and other retained copies through your instance's privacy contact. Obtain original
 source-platform exports from those platforms separately.
 
@@ -182,8 +183,9 @@ and export timing is described above.
 - **Outline:** selected content stays while its collection and connection remain active.
 - **Web chats, Slack mentor DMs, and memberships:** retained with their workspace records;
   removed through workspace removal or verified person erasure.
-- **League points and XP from the retired leaderboard:** no longer shown or updated, but kept with your
-  membership and activity records until a later release removes them.
+- **League points and XP from the retired leaderboard:** deleted by the upgrade that retired the
+  leaderboard. The operator may have exported a copy before upgrading; that copy is kept outside
+  Hephaestus, for as long as the operator decides.
 - **Product-feedback and survey submissions:** no automatic time-based expiry; removed with account deletion,
   with their workspace where applicable, or through verified erasure.
 
