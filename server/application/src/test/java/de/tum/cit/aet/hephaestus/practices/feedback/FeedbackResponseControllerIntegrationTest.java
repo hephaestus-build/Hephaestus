@@ -262,8 +262,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .severity(Severity.MINOR)
                     .observedAt(Instant.now())
                     .build());
-            var resolutions = reactionRepository.findCurrentResolutionByObservationIds(
-                    List.of(observationId, sibling.getId()), adminUser.getId(), workspace.getId());
+            var resolutions = reactionRepository.findCurrentResolutions(
+                    workspace.getId(), List.of(observationId, sibling.getId()), new String[] {RECURRENCE_KEY});
             assertThat(feedbackRepository.existsDeliveredInContextForObservation(
                             workspace.getId(), adminUser.getId(), observationId))
                     .isTrue();

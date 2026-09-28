@@ -9,8 +9,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Hash of a practice, reviewed artifact, developer and exact evidence path for location grouping.
- * A shared location does not establish that two observations describe the same behavior.
- * Feedback delivery and recipient reactions are bound to observation IDs.
+ * A shared location does not establish that two observations describe the same behavior. Feedback delivery
+ * is bound to observation IDs; a developer's dispute follows this key to later reviews of the same work.
  */
 public final class ObservationFingerprint {
 
