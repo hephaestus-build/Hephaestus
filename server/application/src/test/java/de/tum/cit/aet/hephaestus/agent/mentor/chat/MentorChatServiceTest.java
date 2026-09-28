@@ -153,6 +153,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     private MentorProxyCredentialRegistry proxyCredentialRegistry;
     private String sessionToken;
     private MentorChatService service;
+    private MentorSandboxPreparer preparer;
     private RecordingEmitter emitter;
     private io.micrometer.core.instrument.simple.SimpleMeterRegistry meterRegistry;
     private MemberAiPreferences.Decision aiDecision = new MemberAiPreferences.Decision(false, null);
@@ -180,6 +181,15 @@ class MentorChatServiceTest extends BaseUnitTest {
 
         meterRegistry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
         service = serviceWithExecutor(turnExec);
+        preparer = new MentorSandboxPreparer(
+                sandboxServiceProvider(interactiveSandboxService),
+                turnLock,
+                memberAiRouting,
+                llmAdmissionService,
+                llmBudgetService,
+                mentorPiAdapter,
+                proxyCredentialRegistry,
+                new MentorChatExecutorConfig.MentorTurnExecutor(turnExec));
 
         when(llmBudgetService.decide(WORKSPACE_ID)).thenReturn(LlmBudgetDecision.ALLOWED);
 
@@ -379,7 +389,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         });
         scheduleHappyPathResponses(sandbox).run();
 
-        service.prepare(WORKSPACE_ID, USER_ID);
+        preparer.prepare(WORKSPACE_ID, USER_ID);
         runTurnSync();
 
         assertThat(created).hasSize(1);
@@ -402,7 +412,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         try (var turnHolds = turnLock.acquireSandboxLock(new MentorTurnLock.SandboxKey(WORKSPACE_ID, USER_ID))) {
             // From another thread, as a turn would be: the lock is reentrant for the thread that holds it.
             Thread.ofVirtual()
-                    .start(() -> service.prepare(WORKSPACE_ID, USER_ID))
+                    .start(() -> preparer.prepare(WORKSPACE_ID, USER_ID))
                     .join();
         }
 
@@ -415,7 +425,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     void shouldPrepareNothingWhereATurnCouldNotRun() {
         when(memberAiRouting.binding(eq(WORKSPACE_ID), eq(AgentPurpose.MENTOR), any()))
                 .thenReturn(Optional.empty());
-        service.prepare(WORKSPACE_ID, USER_ID);
+        preparer.prepare(WORKSPACE_ID, USER_ID);
 
         verify(mentorPiAdapter, never()).buildSandboxSpec(any(), any());
         verify(interactiveSandboxService, never()).attach(any());
@@ -425,7 +435,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     void shouldPrepareNothingForADeveloperOverBudget() {
         when(llmBudgetService.decide(WORKSPACE_ID))
                 .thenReturn(new LlmBudgetDecision(LlmBudgetBlockReason.EXHAUSTED, LlmBudgetBlockReason.NONE));
-        service.prepare(WORKSPACE_ID, USER_ID);
+        preparer.prepare(WORKSPACE_ID, USER_ID);
 
         verify(mentorPiAdapter, never()).buildSandboxSpec(any(), any());
         verify(interactiveSandboxService, never()).attach(any());
@@ -446,7 +456,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         when(mentorPiAdapter.buildSandboxSpec(any(), any())).thenReturn(spec);
         when(interactiveSandboxService.isWarm(spec)).thenReturn(true);
 
-        service.prepare(WORKSPACE_ID, USER_ID);
+        preparer.prepare(WORKSPACE_ID, USER_ID);
 
         verify(interactiveSandboxService, never()).attach(any());
         assertThat(proxyCredentialRegistry.validate(token)).isEmpty();
@@ -457,7 +467,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         when(interactiveSandboxService.attach(any()))
                 .thenThrow(new InteractiveSandboxException("Mentor session cap reached"));
 
-        service.prepare(WORKSPACE_ID, USER_ID);
+        preparer.prepare(WORKSPACE_ID, USER_ID);
 
         verify(interactiveSandboxService).attach(any());
         assertThat(turnLock.activeSandboxKeys()).isZero();

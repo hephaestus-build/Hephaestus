@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @RequiredArgsConstructor
 public class MentorSandboxController {
 
-    private final MentorTurnRunner mentorTurnRunner;
+    private final MentorSandboxPreparer mentorSandboxPreparer;
 
     @PostMapping
     @Operation(summary = "Prepare the current member's Heph sandbox in the background")
@@ -29,7 +29,7 @@ public class MentorSandboxController {
     @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")
     public ResponseEntity<Void> prepareMentorSandbox(WorkspaceContext workspaceContext) {
         CurrentScmIdentityHolder.getUserId()
-                .ifPresent(developerId -> mentorTurnRunner.prepare(workspaceContext.id(), developerId));
+                .ifPresent(developerId -> mentorSandboxPreparer.prepare(workspaceContext.id(), developerId));
         return ResponseEntity.accepted().build();
     }
 }

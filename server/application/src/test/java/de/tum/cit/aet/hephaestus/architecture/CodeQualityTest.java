@@ -424,6 +424,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     "MentorChatService", // InteractiveSandboxService is part of the worker capability
                     // (DockerSandboxConfiguration, gated on the worker role); absent on non-worker
                     // pods — resolved lazily at attach time
+                    "MentorSandboxPreparer", // the same worker-capability InteractiveSandboxService; a pod
+                    // without it prepares nothing
                     "OutlineWorkspacePurgeAdapter", // OutlineWebhookRegistrar is optional (gated by
                     // @ConditionalOnProperty(hephaestus.integration.outline.enabled));
                     // the always-on purge contributor resolves it lazily so it still

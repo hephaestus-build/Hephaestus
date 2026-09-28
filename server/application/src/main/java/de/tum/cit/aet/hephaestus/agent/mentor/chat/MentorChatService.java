@@ -70,8 +70,6 @@ import tools.jackson.databind.node.JsonNodeFactory;
  * Runs one mentor chat turn: persist → attach sandbox → handshake → translate runner events
  * into {@link UIMessageChunk}s on the SSE stream. {@link #start} returns once the turn is
  * submitted to the virtual-thread executor; all blocking work happens off the request thread.
- * {@link #prepare} starts a developer's sandbox the same way, without a turn, so the first message
- * finds it warm.
  */
 @Service
 @RequiredArgsConstructor
@@ -166,67 +164,6 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             log.warn("Slack mentor turn rejected by executor: {}", rejected.getMessage());
             metrics.recordCompleted(MentorChatMetrics.Outcome.REJECTED);
             channel.completeWithError("Mentor service is shutting down — please retry shortly.");
-        }
-    }
-
-    /**
-     * Returns at once; the sandbox starts on the turn executor. Skipped where a turn could not run or would
-     * not need it: no sandbox service in this runtime, a turn holding the sandbox, a warm sandbox, no Heph
-     * model for the developer, a spent budget, or the session caps.
-     */
-    @Override
-    public void prepare(long workspaceId, long developerId) {
-        InteractiveSandboxService sandboxService = interactiveSandboxServiceProvider.getIfAvailable();
-        if (sandboxService == null) {
-            return;
-        }
-        try {
-            turnExecutor.executor().execute(() -> prepareSandbox(sandboxService, workspaceId, developerId));
-        } catch (RejectedExecutionException rejected) {
-            log.debug("Mentor sandbox prepare rejected by executor: {}", rejected.getMessage());
-        }
-    }
-
-    // Closing the scope is the operation; its binding is intentionally unread.
-    @SuppressWarnings("try")
-    private void prepareSandbox(InteractiveSandboxService sandboxService, long workspaceId, long developerId) {
-        // tryLock, never lock: a turn that holds the sandbox attaches for itself, and a prepare must not queue it.
-        var lock = turnLock.tryAcquireSandboxLock(new MentorTurnLock.SandboxKey(workspaceId, developerId));
-        if (lock.isEmpty()) {
-            return;
-        }
-        try (var ignored = lock.get()) {
-            Optional<WorkspaceAgentBinding> binding =
-                    memberAiRouting.binding(workspaceId, AgentPurpose.MENTOR, developerId);
-            if (binding.isEmpty()) {
-                return;
-            }
-            MentorLlmConfig llmConfig =
-                    MentorLlmConfig.fromAdmission(binding.get(), llmAdmissionService.admit(binding.get()));
-            if (llmBudgetService.decide(workspaceId).blocks(llmConfig.connectionScope())) {
-                return;
-            }
-            InteractiveSandboxSpec spec =
-                    mentorPiAdapter.buildSandboxSpec(new MentorAgentRequest(workspaceId, developerId), llmConfig);
-            boolean warm = true;
-            try {
-                warm = sandboxService.isWarm(spec);
-            } finally {
-                if (warm) {
-                    releaseUnattached(spec);
-                }
-            }
-            if (!warm) {
-                sandboxService.attach(spec);
-                log.debug("Prepared mentor sandbox: workspaceId={}, developerId={}", workspaceId, developerId);
-            }
-        } catch (RuntimeException e) {
-            // The next turn attaches for itself and reports whatever still fails.
-            log.info(
-                    "Mentor sandbox not prepared: workspaceId={}, developerId={}: {}",
-                    workspaceId,
-                    developerId,
-                    e.getMessage());
         }
     }
 
@@ -376,7 +313,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     channel.send(UIMessageChunk.DataMentorStatus.of("warming-up", "container-cold"));
                 }
             } catch (RuntimeException beforeAttach) {
-                releaseUnattached(spec);
+                // Only attach uses, and so revokes, the credential the spec minted.
+                proxyCredentialRegistry.revoke(spec.sessionId());
                 throw beforeAttach;
             }
             // Pi is single-session: hold the lock from attach through the terminal chunk, so a second turn can
@@ -627,11 +565,6 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         } catch (RuntimeException e) {
             log.warn("Failed to close mentor sandbox: {}", e.toString());
         }
-    }
-
-    /** Only attach uses, and so revokes, the proxy credential a spec mints; a spec that never reaches it must. */
-    private void releaseUnattached(InteractiveSandboxSpec spec) {
-        proxyCredentialRegistry.revoke(spec.sessionId());
     }
 
     /** A failed attach revokes its spec's credential with the sandbox, so the retry needs a spec of its own. */

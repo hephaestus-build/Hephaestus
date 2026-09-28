@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorSandboxPreparer;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRunner;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
@@ -58,6 +59,9 @@ class SlackMentorServiceTest extends BaseUnitTest {
     @Mock
     private MentorReadinessQuery mentorReadinessQuery;
 
+    @Mock
+    private MentorSandboxPreparer sandboxPreparer;
+
     private SlackMentorService service() {
         when(mentorReadinessQuery.isReady(WORKSPACE)).thenReturn(true);
         return new SlackMentorService(
@@ -68,7 +72,8 @@ class SlackMentorServiceTest extends BaseUnitTest {
                 identityResolver,
                 new KeywordSlackMentorInputGuard(),
                 onboardingService,
-                mentorReadinessQuery);
+                mentorReadinessQuery,
+                sandboxPreparer);
     }
 
     @ParameterizedTest
@@ -93,7 +98,7 @@ class SlackMentorServiceTest extends BaseUnitTest {
 
         service().prepare(TEAM, USER);
 
-        verify(mentorTurnRunner).prepare(WORKSPACE, 314L);
+        verify(sandboxPreparer).prepare(WORKSPACE, 314L);
         verifyNoInteractions(slackMessageService, threadLinker);
     }
 
@@ -104,7 +109,7 @@ class SlackMentorServiceTest extends BaseUnitTest {
 
         service().prepare(TEAM, USER);
 
-        verify(mentorTurnRunner, never()).prepare(anyLong(), anyLong());
+        verify(sandboxPreparer, never()).prepare(anyLong(), anyLong());
         verifyNoInteractions(slackMessageService, threadLinker);
     }
 
@@ -116,7 +121,7 @@ class SlackMentorServiceTest extends BaseUnitTest {
 
         service.prepare(TEAM, USER);
 
-        verifyNoInteractions(identityResolver, mentorTurnRunner, slackMessageService);
+        verifyNoInteractions(identityResolver, sandboxPreparer, slackMessageService);
     }
 
     @Test

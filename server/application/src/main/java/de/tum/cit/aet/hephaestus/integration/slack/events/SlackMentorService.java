@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorSandboxPreparer;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRunner;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
@@ -32,6 +33,7 @@ public class SlackMentorService {
     private final SlackMentorInputGuard inputGuard;
     private final SlackOnboardingService onboardingService;
     private final MentorReadinessQuery mentorReadinessQuery;
+    private final MentorSandboxPreparer sandboxPreparer;
 
     public SlackMentorService(
             SlackWorkspaceResolver workspaceResolver,
@@ -41,7 +43,8 @@ public class SlackMentorService {
             SlackMentorIdentityResolver identityResolver,
             SlackMentorInputGuard inputGuard,
             SlackOnboardingService onboardingService,
-            MentorReadinessQuery mentorReadinessQuery) {
+            MentorReadinessQuery mentorReadinessQuery,
+            MentorSandboxPreparer sandboxPreparer) {
         this.workspaceResolver = workspaceResolver;
         this.threadLinker = threadLinker;
         this.mentorTurnRunner = mentorTurnRunner;
@@ -50,6 +53,7 @@ public class SlackMentorService {
         this.inputGuard = inputGuard;
         this.onboardingService = onboardingService;
         this.mentorReadinessQuery = mentorReadinessQuery;
+        this.sandboxPreparer = sandboxPreparer;
     }
 
     public void handleDm(
@@ -116,7 +120,7 @@ public class SlackMentorService {
             }
             identityResolver
                     .resolveActiveMemberId(workspace.get(), teamId, slackUserId)
-                    .ifPresent(developerId -> mentorTurnRunner.prepare(workspace.get(), developerId));
+                    .ifPresent(developerId -> sandboxPreparer.prepare(workspace.get(), developerId));
         } catch (RuntimeException e) {
             // Advisory: the event it rides on must not fail, and the next message starts the sandbox anyway.
             log.debug("Could not prepare Heph for Slack team={}: {}", teamId, e.toString());
