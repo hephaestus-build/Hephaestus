@@ -5,12 +5,13 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import type { ChangedFile } from "../../../../../../docker/agents/precompute/lib/change.ts";
 import { subjectFacts } from "../../../../../../docker/agents/precompute/lib/commit-subjects.ts";
 import { isPracticeModule } from "../../../../../../docker/agents/precompute/lib/practice-contract.ts";
 
 const repositoryRoot = fileURLToPath(new URL("../../../../../../", import.meta.url));
 
-const commit = (sha: string, message: string, parents = ["p"]) => ({
+const commit = (sha: string, message: string, parents = ["p"], files: ChangedFile[] = []) => ({
 	sha,
 	message,
 	author: "a",
@@ -18,7 +19,7 @@ const commit = (sha: string, message: string, parents = ["p"]) => ({
 	committer: "a",
 	committedAt: "",
 	parents,
-	files: [],
+	files,
 	line: 0,
 });
 
@@ -42,9 +43,9 @@ void test("a subject's shape is a fact — bare, repeated, listed, cut off — a
 		[false, true, false],
 	);
 	assert.equal(by["3333333"]?.repeat, true);
-	assert.equal(by["4444444"]?.conjoined, true);
-	assert.equal(by["7777777"]?.conjoined, true);
-	assert.equal(by["1111111"]?.conjoined, false);
+	assert.equal(by["4444444"]?.joinedClauses, true);
+	assert.equal(by["7777777"]?.joinedClauses, true);
+	assert.equal(by["1111111"]?.joinedClauses, false);
 	assert.equal(by["5555555"]?.cutOff, true);
 	assert.equal(by["6666666"]?.merge, true);
 });
@@ -109,7 +110,7 @@ void test("both commit practices read the subjects from the commit record and st
 			);
 			// One record row per authored commit; the merge is set aside.
 			assert.deepEqual(
-				result.hints.map((h) => [h.file, h.pattern, h.context, h.flags.conjoined]),
+				result.hints.map((h) => [h.file, h.pattern, h.context, h.flags.joinedClauses]),
 				[
 					["areas/changed-work/commits.json", "commit", "1111111 Add button to start run", false],
 					[
@@ -123,5 +124,74 @@ void test("both commit practices read the subjects from the commit record and st
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
+	}
+});
+
+const renamed = (name: string) => ({
+	status: "R",
+	oldPath: `IntrocourseApp/${name}`,
+	path: `PillApp/${name}`,
+	additions: 0,
+	deletions: 0,
+});
+
+void test("a commit row lists the edited files with their line counts before the moves, and names no kinds", async () => {
+	const commits = [
+		// A README subject whose commit also moves the source tree and adds a view: only the edited files
+		// and their counts show the second piece of work, so the moves must not push them out of view.
+		commit(
+			"1111111",
+			"Create problem statement\n",
+			["p"],
+			[
+				...["Assets.xcassets/Contents.json", "Info.plist", "ContentView.swift"].map(renamed),
+				...["AccentColor.colorset/Contents.json", "AppIcon.appiconset/Contents.json"].map(renamed),
+				renamed("PillApp.swift"),
+				{ status: "A", path: "PillApp/WelcomeView.swift", additions: 18, deletions: 0 },
+				{ status: "M", path: "README.md", additions: 20, deletions: 5 },
+			],
+		),
+		// A feature and its package entry: two top-level locations, one piece of work.
+		commit(
+			"2222222",
+			"Add cast fetching, and adjust movie fetching\n",
+			["p"],
+			[
+				{ status: "M", path: "Movies/CreditViewModel.swift", additions: 40, deletions: 2 },
+				{ status: "M", path: "project.yml", additions: 3, deletions: 0 },
+				{
+					status: "R",
+					oldPath: "Movies/MovieResponse.swift",
+					path: "Movies/MovieListResponse.swift",
+					additions: 3,
+					deletions: 3,
+				},
+			],
+		),
+	];
+	const { root, script, contextDir } = await stage("commits-are-atomic-and-cohesive", commits);
+	try {
+		const result = await script(path.join(root, "repo"), new Map(), metadata, contextDir);
+		const [readme, feature] = result.hints;
+		assert.ok(readme && feature);
+		assert.equal(readme.flags.moved, 6);
+		assert.match(
+			String(readme.flags.paths),
+			/^PillApp\/WelcomeView\.swift \+18\/-0, README\.md \+20\/-5, PillApp\//u,
+		);
+		// A rename that edits lines is not a move.
+		assert.equal(feature.flags.moved, 0);
+		assert.equal(feature.flags.joinedClauses, true);
+		assert.equal(
+			feature.flags.paths,
+			"Movies/CreditViewModel.swift +40/-2, project.yml +3/-0, Movies/MovieListResponse.swift +3/-3",
+		);
+		for (const hint of result.hints) {
+			assert.equal("kinds" in hint.flags, false);
+		}
+		// The directions describe the record; none of them counts concerns or names a lapse.
+		assert.doesNotMatch(result.directions.join(" "), /literally|concern|tangle|lapse/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
 	}
 });
