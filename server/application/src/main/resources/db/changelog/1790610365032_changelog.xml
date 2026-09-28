@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+        A GitHub App connection that recorded no installation, or a different one than its key names, was bound by a
+        callback that proved nothing about the installation. It never ran (its credentials resolve to nothing), so it is
+        retired the way a disconnect retires one, keeping its row and audit trail as the record of what happened. A
+        rollback leaves it retired: the previous release reads it as a disconnected connection.
+    -->
+    <changeSet id="1790610365032-1" author="hephaestus">
+        <sql>
+            INSERT INTO connection_audit (connection_id, event_type, from_state, to_state, actor_kind, actor_ref, correlation_id, detail)
+            SELECT id, 'UNVERIFIED_INSTALLATION', state, 'UNINSTALLED', 'SYSTEM', 'migration', 'migration-1790610365032-1',
+                   jsonb_build_object('reason', 'GitHub App installation was never verified')
+            FROM connection
+            WHERE kind = 'GITHUB'
+              AND state &lt;&gt; 'UNINSTALLED'
+              AND config ->> 'type' = 'GITHUB_APP'
+              AND (config ->> 'installationId') IS DISTINCT FROM instance_key;
+            UPDATE connection
+            SET state = 'UNINSTALLED',
+                state_reason = 'GitHub App installation was never verified',
+                credentials_encrypted = NULL,
+                credentials_alg = NULL,
+                credentials_key_version = NULL,
+                credentials_rotation_failed_at = NULL,
+                updated_at = now(),
+                version = version + 1
+            WHERE kind = 'GITHUB'
+              AND state &lt;&gt; 'UNINSTALLED'
+              AND config ->> 'type' = 'GITHUB_APP'
+              AND (config ->> 'installationId') IS DISTINCT FROM instance_key;
+        </sql>
+        <rollback/>
+    </changeSet>
+    <!--
+        Should an installation still be held by more than one workspace, the first to bind it keeps it: the installation
+        webhook binds the account that installed the app before anyone else can reach it. The others are retired as above.
+    -->
+    <changeSet id="1790610365032-2" author="hephaestus">
+        <sql>
+            WITH superseded AS (
+                SELECT id, state FROM connection c
+                WHERE kind = 'GITHUB'
+                  AND state &lt;&gt; 'UNINSTALLED'
+                  AND config ->> 'type' = 'GITHUB_APP'
+                  AND EXISTS (
+                      SELECT 1 FROM connection earlier
+                      WHERE earlier.kind = 'GITHUB'
+                        AND earlier.state &lt;&gt; 'UNINSTALLED'
+                        AND earlier.config ->> 'type' = 'GITHUB_APP'
+                        AND earlier.instance_key = c.instance_key
+                        AND earlier.id &lt; c.id)
+            ), audited AS (
+                INSERT INTO connection_audit (connection_id, event_type, from_state, to_state, actor_kind, actor_ref, correlation_id, detail)
+                SELECT id, 'SUPERSEDED_INSTALLATION', state, 'UNINSTALLED', 'SYSTEM', 'migration', 'migration-1790610365032-2',
+                       jsonb_build_object('reason', 'GitHub App installation is held by an earlier workspace')
+                FROM superseded
+            )
+            UPDATE connection
+            SET state = 'UNINSTALLED',
+                state_reason = 'GitHub App installation is held by an earlier workspace',
+                credentials_encrypted = NULL,
+                credentials_alg = NULL,
+                credentials_key_version = NULL,
+                credentials_rotation_failed_at = NULL,
+                updated_at = now(),
+                version = version + 1
+            WHERE id IN (SELECT id FROM superseded);
+        </sql>
+        <rollback/>
+    </changeSet>
+    <!--
+        One workspace holds a GitHub App installation at a time. Suspended and pending connections still hold it; only a
+        disconnect or uninstall releases it. PAT connections share the key "pat" and are not installations.
+    -->
+    <changeSet id="1790610365032-3" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="uq_connection_one_github_installation already exists; this changeset creates it">
+            <not>
+                <indexExists tableName="connection" indexName="uq_connection_one_github_installation"/>
+            </not>
+        </preConditions>
+        <sql>
+            CREATE UNIQUE INDEX uq_connection_one_github_installation ON connection (instance_key)
+            WHERE kind = 'GITHUB' AND state &lt;&gt; 'UNINSTALLED' AND config ->> 'type' = 'GITHUB_APP'
+        </sql>
+        <rollback>
+            <dropIndex tableName="connection" indexName="uq_connection_one_github_installation"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

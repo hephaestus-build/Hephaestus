@@ -752,6 +752,10 @@ hephaestus:
                 privateKey: ${GH_APP_PRIVATE_KEY:}
                 # URL where users install the GitHub App (shown in workspace creation UI)
                 installation-url: ${GH_APP_INSTALLATION_URL:}
+                # The App's own client credentials (not the login OAuth App's). Connecting an installation to a
+                # workspace exchanges the code GitHub returns with them, to prove the admin controls it.
+                client-id: ${GH_APP_CLIENT_ID:}
+                client-secret: ${GH_APP_CLIENT_SECRET:}
             meta:
                 # DEPRECATED: token used to live here; the Hephaestus-contributor
                 # endpoint now reads hephaestus.contributors.github.auth-token instead.

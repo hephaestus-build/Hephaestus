@@ -214,7 +214,7 @@ A lapsed key reports `accepted=false` and the mirror stops refreshing until it i
 
 Hephaestus can connect to GitHub using either a **Personal Access Token (PAT)** or a **GitHub App**. The full setup — mode comparison, required GitHub App permissions, the webhook event list, and manual webhook creation (GitHub has **no** auto-registration, unlike GitLab) — lives in [GitHub Integration](./github-integration).
 
-Environment variables for GitHub App mode: `GH_APP_ID`, `GH_APP_PRIVATE_KEY` (or `GH_APP_PRIVATE_KEY_LOCATION`), `GH_APP_INSTALLATION_URL`. If not provided (`GH_APP_ID=0`, the default), workspaces use PATs configured through the UI.
+Environment variables for GitHub App mode: `GH_APP_ID`, `GH_APP_PRIVATE_KEY` (or `GH_APP_PRIVATE_KEY_LOCATION`), `GH_APP_INSTALLATION_URL`, `GH_APP_CLIENT_ID`, `GH_APP_CLIENT_SECRET`. If not provided (`GH_APP_ID=0`, the default), workspaces use PATs configured through the UI.
 
 ### GitLab rollout bundle
 

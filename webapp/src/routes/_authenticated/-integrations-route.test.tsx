@@ -17,7 +17,7 @@ const CONFLICT =
 function failureRedirect() {
 	const query = new URLSearchParams({
 		status: "error",
-		reason: "slack_team_connected_elsewhere",
+		reason: "connected_elsewhere",
 		description: CONFLICT,
 		kind: "SLACK",
 	});
@@ -65,6 +65,6 @@ describe("integration connection outcome", () => {
 
 		await screen.findByRole("heading", { name: "Connection failed" }, ROUTE_RENDER_WAIT);
 		expect(screen.getAllByText(CONFLICT).length).toBeGreaterThan(0);
-		expect(screen.queryByText("slack_team_connected_elsewhere")).toBeNull();
+		expect(screen.queryByText("connected_elsewhere")).toBeNull();
 	});
 });

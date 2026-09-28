@@ -30,6 +30,14 @@ public interface ConnectionStrategy {
     ConnectFinalization finalizeConnect(IntegrationRef ref, Map<String, String> callbackParams);
 
     /**
+     * Whether a callback carrying no state is the provider ending a flow started on its own site rather than from a
+     * workspace. It connects nothing, so the callback sends the person home instead of reporting a failure.
+     */
+    default boolean isProviderInitiated(Map<String, String> callbackParams) {
+        return false;
+    }
+
+    /**
      * Erases the data this integration mirrored into the workspace. Joins the caller's transaction and
      * throws on failure, so a disconnect that cannot erase leaves the connection as it was. Idempotent.
      */

@@ -22,7 +22,7 @@ install. Use a GitHub App before enabling feedback delivery so comments have a d
 | | PAT | GitHub App |
 | --- | --- | --- |
 | Setup effort | Paste a token in the workspace UI | Create + install an App, manage a private key |
-| Environment variables | None | `GH_APP_ID`, `GH_APP_PRIVATE_KEY`, `GH_APP_INSTALLATION_URL` |
+| Environment variables | None | `GH_APP_ID`, `GH_APP_PRIVATE_KEY`, `GH_APP_INSTALLATION_URL`, `GH_APP_CLIENT_ID`, `GH_APP_CLIENT_SECRET` |
 | API rate-limit budget | Shared with the user's other API use | Per installation; see [GitHub's limits](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/rate-limits-for-github-apps) |
 | Practice feedback posted back to GitHub (PR comments, inline notes, approvals) | Posted as the token's user; do not use for active delivery | Posted as the App |
 | Webhooks | Create manually (below) | Configured once on the App |
@@ -82,6 +82,31 @@ Use [`external-app-icon-1024.png`](/img/brand/external-app-icon-1024.png) as its
 - **Where can this GitHub App be installed:** **Any account**. A personally owned app can
   be installed on organizations when public; **Only on this account** restricts it to its owner.
   Installation and repository selection are still required.
+- **Identifying and authorizing users → Request user authorization (OAuth) during installation:** ✔,
+  **Callback URL:** `https://<APP_HOSTNAME>/oauth/callback/github`. GitHub then returns to
+  Hephaestus after an installation, and hides the **Setup URL** field.
+
+### Connecting an installation to a workspace
+
+The App requests user authorization during installation. When a workspace administrator connects
+GitHub, Hephaestus exchanges the authorization GitHub returns for a short-lived token of the person
+who installed the App, and connects the installation only if that person can
+[access it](https://docs.github.com/en/rest/apps/installations#list-app-installations-accessible-to-the-user-access-token)
+and owns the account it is installed on — an owner of the organization, or the user themselves. The
+token is used once and never stored. GitHub
+[documents](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-setup-url)
+that the `installation_id` it appends to the return URL can be forged, so it is never trusted alone.
+
+- **One workspace per installation.** An installation connected to a workspace cannot be connected to
+  another until it is disconnected there, even while its connection is suspended. The refusal names the
+  other workspace only to that workspace's administrators.
+- **Disconnect uninstalls only what the workspace holds.** Disconnecting removes the installation from
+  GitHub only when the connection recorded that installation.
+- **Installed from GitHub or the workspace wizard.** Such an installation returns without a workspace
+  to connect; Hephaestus sends the person to its home page, and the installation webhook creates or
+  updates the workspace as before.
+- **Installation requests.** A member who may not install the App sends a request to the account's
+  owners instead; connect again once an owner has approved it.
 
 ### Workspace attachment
 
@@ -242,7 +267,8 @@ you have tooling for GitHub's manifest registration flow; Hephaestus does not im
     "url": "https://<APP_HOSTNAME>/webhooks/github",
     "active": true
   },
-  "request_oauth_on_install": false,
+  "callback_urls": ["https://<APP_HOSTNAME>/oauth/callback/github"],
+  "request_oauth_on_install": true,
   "default_permissions": {
     "metadata": "read",
     "contents": "read",
@@ -271,9 +297,11 @@ you have tooling for GitHub's manifest registration flow; Hephaestus does not im
 }
 ```
 
-The GitHub App uses installation tokens, so the manifest has no `callback_urls`.
+The GitHub App reads repositories with installation tokens; its callback URL and client credentials
+serve only to [confirm who installed it](#connecting-an-installation-to-a-workspace).
 Login uses a [separate OAuth App](./install#3-create-the-github-oauth-app-login--mandatory);
-only that app's credentials belong in `GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SECRET`.
+only that app's credentials belong in `GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SECRET`, and only the
+GitHub App's in `GH_APP_CLIENT_ID` / `GH_APP_CLIENT_SECRET`.
 
 ### Install and configure
 
@@ -292,6 +320,9 @@ only that app's credentials belong in `GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SE
    -----END RSA PRIVATE KEY-----"
    # The workspace-creation wizard sends operators to this URL to install the App.
    GH_APP_INSTALLATION_URL=https://github.com/apps/<your-app-slug>/installations/new
+   # App settings → General → Client ID; generate a client secret there too.
+   GH_APP_CLIENT_ID=Iv23...
+   GH_APP_CLIENT_SECRET=...
    ```
 
 4. `docker compose up -d` to restart with the new environment.

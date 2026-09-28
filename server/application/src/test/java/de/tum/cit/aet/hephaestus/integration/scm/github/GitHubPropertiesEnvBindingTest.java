@@ -90,6 +90,18 @@ class GitHubPropertiesEnvBindingTest {
         assertThat(availability.hintUrl()).contains(url);
     }
 
+    @Test
+    void shouldBindTheAppsClientCredentialsAndTreatBlankOnesAsAbsent() throws IOException {
+        assertThat(bindWith(Map.of("GH_APP_CLIENT_ID", "Iv1.client", "GH_APP_CLIENT_SECRET", "secret"))
+                        .app())
+                .extracting(GitHubProperties.App::clientId, GitHubProperties.App::clientSecret)
+                .containsExactly("Iv1.client", "secret");
+        assertThat(bindWith(Map.of("GH_APP_CLIENT_ID", " ", "GH_APP_CLIENT_SECRET", ""))
+                        .app())
+                .extracting(GitHubProperties.App::clientId, GitHubProperties.App::clientSecret)
+                .containsOnlyNulls();
+    }
+
     private static GitHubProperties bindWith(Map<String, Object> environmentVariables) throws IOException {
         var environment = new StandardEnvironment();
         environment

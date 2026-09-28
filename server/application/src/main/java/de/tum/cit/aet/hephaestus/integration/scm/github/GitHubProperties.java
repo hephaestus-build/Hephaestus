@@ -46,7 +46,7 @@ public record GitHubProperties(@Valid App app, @Valid Meta meta) {
      */
     public GitHubProperties {
         if (app == null) {
-            app = new App(0, null, null, null);
+            app = new App(0, null, null, null, null, null);
         }
         if (meta == null) {
             meta = new Meta(null);
@@ -69,6 +69,9 @@ public record GitHubProperties(@Valid App app, @Valid Meta meta) {
      * @param privateKeyLocation resource location of the private key file
      * @param privateKey         PEM-encoded private key as inline string
      * @param installationUrl    URL where users install the GitHub App (e.g. https://github.com/apps/my-app/installations/new)
+     * @param clientId           the App's client ID, which exchanges the code GitHub returns when an installation
+     *                           requests user authorization
+     * @param clientSecret       the App's client secret, paired with {@code clientId}
      */
     public record App(
             @Min(value = 0, message = "GitHub App ID must be non-negative (0 means disabled)") @DefaultValue("0")
@@ -76,12 +79,20 @@ public record GitHubProperties(@Valid App app, @Valid Meta meta) {
 
             @Nullable Resource privateKeyLocation,
             @Nullable String privateKey,
-            @Nullable String installationUrl) {
-        // application.yml binds `${GH_APP_INSTALLATION_URL:}`, so an install that configured no URL
-        // arrives as "" rather than null — treat blank as absent, or GitHubWorkspaceProviderAvailability
+            @Nullable String installationUrl,
+            @Nullable String clientId,
+            @Nullable String clientSecret) {
+        // application.yml binds `${GH_APP_INSTALLATION_URL:}` and its siblings, so an install that configured
+        // nothing arrives as "" rather than null — treat blank as absent, or GitHubWorkspaceProviderAvailability
         // offers a wizard option whose link is the empty string.
         public App {
-            installationUrl = installationUrl == null || installationUrl.isBlank() ? null : installationUrl;
+            installationUrl = blankToNull(installationUrl);
+            clientId = blankToNull(clientId);
+            clientSecret = blankToNull(clientSecret);
+        }
+
+        private static @Nullable String blankToNull(@Nullable String value) {
+            return value == null || value.isBlank() ? null : value;
         }
     }
 

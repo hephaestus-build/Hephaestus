@@ -318,6 +318,61 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(body.getProperties()).containsEntry("error", "strategy_error");
     }
 
+    // Callbacks the provider started
+
+    @Test
+    void shouldSendAProviderInitiatedCallbackHomeWithoutConnectingAnything() {
+        slackStrategy.providerInitiated = true;
+
+        ResponseEntity<?> response = controller.callbackGet(
+                "slack", null, null, null, Map.of("installation_id", "4242", "setup_action", "install"), htmlRequest());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
+        assertThat(response.getHeaders().getLocation()).hasToString("/");
+        assertThat(slackStrategy.finalizeCalls).isZero();
+        verify(oauthStateService, never()).consume(any());
+        verify(callbackService, never()).findOrCreatePendingConnection(anyLong(), any());
+    }
+
+    @Test
+    void shouldStillRequireStateWhenTheStrategyDoesNotRecognizeTheCallback() {
+        ResponseEntity<?> response = controller.callbackGet(
+                "slack", null, null, null, Map.of("installation_id", "4242", "code", "c"), jsonRequest());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        ProblemDetail body = (ProblemDetail) response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.getProperties()).containsEntry("error", "missing_state");
+    }
+
+    @Test
+    void shouldReportAnInstanceConnectedElsewhereAsAConflict() {
+        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), "5");
+        when(oauthStateService.consume("s")).thenReturn(binding);
+        Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
+        when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
+                .thenReturn(pending);
+        slackStrategy.nextFinalization = new ConnectFinalization.Completed("T1", new BearerToken("t", null), null);
+        when(callbackService.completeConnection(any(), any(), any()))
+                .thenThrow(new OAuthCallbackService.InstanceConnectedElsewhereException("Held elsewhere.", null));
+
+        ResponseEntity<?> response =
+                controller.callbackGet("slack", "s", null, null, Map.of("code", "c", "state", "s"), jsonRequest());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        ProblemDetail body = (ProblemDetail) response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.getDetail()).isEqualTo("Held elsewhere.");
+        assertThat(body.getProperties()).containsEntry("error", "connected_elsewhere");
+    }
+
+    @Test
+    void shouldSendHomeToTheRootOfTheApplicationTheSuccessRedirectPointsInto() {
+        assertThat(new OAuthCallbackProperties("https://app.example.com/integrations?status=success", null)
+                        .homeRedirect())
+                .isEqualTo("https://app.example.com/");
+    }
+
     // Transition guard rejection
 
     @Test
@@ -509,8 +564,15 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         @Nullable
         Map<String, String> lastCallbackParams;
 
+        boolean providerInitiated;
+
         FakeStrategy(IntegrationKind kind) {
             this.kind = kind;
+        }
+
+        @Override
+        public boolean isProviderInitiated(Map<String, String> callbackParams) {
+            return providerInitiated;
         }
 
         @Override
