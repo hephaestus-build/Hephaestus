@@ -6,11 +6,13 @@ import type {
 import { type StatusDef, statusValues } from "@/components/common/status-def";
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import {
-	DELIVERY_STATE_DEFS,
-	type DeliveryState,
-} from "@/components/practice-vocabulary/delivery-outcome-defs";
+	DELIVERY_FAMILY_DEFS,
+	DELIVERY_FAMILY_STATES,
+	type DeliveryFamily,
+} from "@/components/practice-vocabulary/delivery-family-defs";
+import type { DeliveryState } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
-import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
+import { OUTCOME_DEFS, outcomeCountNoun } from "@/components/practice-vocabulary/outcome-defs";
 import {
 	REVIEW_STATUS_DEFS,
 	type ReviewStatus,
@@ -32,7 +34,7 @@ export type ReviewListTarget =
 export interface OutcomeSlot {
 	key: string;
 	def: StatusDef;
-	/** The count's noun for this count: "strength", "strengths", "delivered". */
+	/** The count's noun for this count: "positive outcome", "negative outcomes", "delivered". */
 	label: string;
 	count: number;
 	target?: ReviewListTarget;
@@ -48,6 +50,18 @@ export interface OutcomeScope {
 	practiceSlug?: string;
 }
 
+/**
+ * What each split is called as a legend's accessible name, wherever it is drawn — a stage's tile, a
+ * practice's level — so a screen reader meets one name for one split.
+ */
+export const OUTCOME_LEGEND_LABELS = {
+	reviews: "Reviews by outcome",
+	observations: "Observations by outcome",
+	/** The counts that overlap the observations' outcomes, listed apart from them. */
+	checkedObservations: "Observations checked by an admin",
+	feedback: "Feedback by delivery",
+} as const;
+
 const lower = (def: StatusDef) => def.label.toLowerCase();
 
 const REVIEW_COUNT: Record<ReviewStatus, keyof ReviewRunCounts> = {
@@ -59,6 +73,11 @@ const REVIEW_COUNT: Record<ReviewStatus, keyof ReviewRunCounts> = {
 	CANCELLED: "cancelled",
 };
 
+/** A slot built with a scope, which always names the list it opens. */
+type ScopedOutcomeSlot = OutcomeSlot & { target: ReviewListTarget };
+
+export function reviewSlots(counts: ReviewRunCounts, scope: OutcomeScope): ScopedOutcomeSlot[];
+export function reviewSlots(counts: ReviewRunCounts, scope?: OutcomeScope): OutcomeSlot[];
 export function reviewSlots(counts: ReviewRunCounts, scope?: OutcomeScope): OutcomeSlot[] {
 	return statusValues(REVIEW_STATUS_DEFS).map((status) => ({
 		key: status,
@@ -69,9 +88,17 @@ export function reviewSlots(counts: ReviewRunCounts, scope?: OutcomeScope): Outc
 	}));
 }
 
+/** The statuses a review ends in, which is what a count of reviews in a range splits into. */
+export const FINISHED_REVIEW_STATUSES = [
+	"COMPLETED",
+	"FAILED",
+	"TIMED_OUT",
+	"CANCELLED",
+] as const satisfies readonly ReviewStatus[];
+
 /**
  * The four results that partition observations: the two outcomes of an assessment, then the two
- * ways of not reaching one. The outcomes are nominalised because a count needs a noun.
+ * ways of not reaching one, each in its registry's count noun.
  */
 export function observationSlots(
 	counts: ReviewObservationCounts,
@@ -82,14 +109,14 @@ export function observationSlots(
 		{
 			key: "strengths",
 			def: OUTCOME_DEFS.POSITIVE,
-			label: counts.strengths === 1 ? "strength" : "strengths",
+			label: outcomeCountNoun("POSITIVE", counts.strengths),
 			count: counts.strengths,
 			target: search && { list: "observations", search: { ...search, outcome: ["POSITIVE"] } },
 		},
 		{
 			key: "problems",
 			def: OUTCOME_DEFS.NEGATIVE,
-			label: counts.problems === 1 ? "improvement" : "improvements",
+			label: outcomeCountNoun("NEGATIVE", counts.problems),
 			count: counts.problems,
 			target: search && { list: "observations", search: { ...search, outcome: ["NEGATIVE"] } },
 		},
@@ -107,8 +134,8 @@ export function observationSlots(
 }
 
 /**
- * Observations an admin marked incorrect. They overlap the partition — an incorrect strength is
- * still a strength — so this count is drawn beside the mix, never inside it.
+ * Observations an admin marked incorrect. They overlap the partition — an incorrect positive outcome
+ * is still a positive outcome — so this count is listed beside the mix, never added into it.
  */
 export function markedIncorrectSlot(count: number, scope?: OutcomeScope): OutcomeSlot {
 	return {
@@ -136,17 +163,33 @@ const FEEDBACK_COUNT: Record<DeliveryState, keyof ReviewFeedbackCounts> = {
 	UNCONFIRMED: "unconfirmed",
 };
 
-/** Feedback by delivery state. Feedback has no practice filter, so a practice's counts open nothing. */
+/** How many pieces of feedback are in one delivery family. */
+export function familyCount(counts: ReviewFeedbackCounts, family: DeliveryFamily): number {
+	return DELIVERY_FAMILY_STATES[family].reduce(
+		(sum: number, state: DeliveryState) => sum + counts[FEEDBACK_COUNT[state]],
+		0,
+	);
+}
+
+/**
+ * Feedback by delivery family, each opening the Feedback list filtered to exactly the states it
+ * counts — and, for a practice's counts, to the feedback citing that practice.
+ */
 export function feedbackSlots(counts: ReviewFeedbackCounts, scope?: OutcomeScope): OutcomeSlot[] {
-	return statusValues(DELIVERY_STATE_DEFS).map((state) => ({
-		key: state,
-		def: DELIVERY_STATE_DEFS[state],
-		label: lower(DELIVERY_STATE_DEFS[state]),
-		count: counts[FEEDBACK_COUNT[state]],
-		target:
-			scope !== undefined && scope.practiceSlug === undefined
-				? { list: "feedback", search: { from: scope.from, to: scope.to, deliveryState: [state] } }
-				: undefined,
+	return statusValues(DELIVERY_FAMILY_DEFS).map((family) => ({
+		key: family,
+		def: DELIVERY_FAMILY_DEFS[family],
+		label: lower(DELIVERY_FAMILY_DEFS[family]),
+		count: familyCount(counts, family),
+		target: scope && {
+			list: "feedback",
+			search: {
+				from: scope.from,
+				to: scope.to,
+				practiceSlug: scope.practiceSlug === undefined ? undefined : [scope.practiceSlug],
+				deliveryState: [...DELIVERY_FAMILY_STATES[family]],
+			},
+		},
 	}));
 }
 

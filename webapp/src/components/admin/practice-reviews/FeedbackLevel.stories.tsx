@@ -103,7 +103,7 @@ const meta = {
 	},
 	argTypes: { path: { control: false } },
 	render: (args) => (
-		<InLevelStack entry={feedbackLevel(reviewFeedbackDetail.id)} path={args.path}>
+		<InLevelStack entry={feedbackLevel(reviewFeedbackDetail.id)} path={args.path} size="detailWide">
 			{(level) => <FeedbackLevel {...args} {...level} />}
 		</InLevelStack>
 	),
@@ -112,13 +112,13 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A chip in the header: it says what became of the feedback before the title does. */
+/** A chip in the header: what became of the feedback, under the title, where standing goes. */
 async function expectHeaderChip(panel: HTMLElement, label: string) {
 	const [chip] = within(panel).getAllByText(label);
 	if (!chip) {
 		throw new Error(`No "${label}" on the level`);
 	}
-	await expect(precedes(chip, within(panel).getByRole("heading", { level: 2 }))).toBe(true);
+	await expect(precedes(within(panel).getByRole("heading", { level: 2 }), chip)).toBe(true);
 }
 
 export const NotDelivered: Story = {
@@ -261,6 +261,86 @@ export const AwaitingApprovalReflow: Story = {
 		const panel = await settledDrawerPanel();
 		await expect(within(panel).getByRole("button", { name: "Approve for delivery" })).toBeVisible();
 		await expectNoPanelOverflow(panel);
+	},
+};
+
+const PREVIOUS_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+const NEXT_ID = "aaaaaaaa-0000-4000-8000-000000000003";
+
+/**
+ * Opened from the approval queue: where it sits among all awaiting approval, oldest first, a step
+ * either way that swaps this level for its neighbour, and a decision that moves on to the next.
+ */
+export const InApprovalQueue: Story = {
+	args: {
+		feedback: ready(awaitingApproval),
+		queue: { position: 2, total: 7, previous: PREVIOUS_ID, next: NEXT_ID },
+	},
+	play: async ({ args, userEvent }) => {
+		const panel = within(await settledDrawerPanel());
+		const steps = within(panel.getByRole("navigation", { name: "Feedback awaiting approval" }));
+		steps.getByText("2 of 7");
+		// A step replaces the level in front rather than stacking one over it.
+		await expect(levelsOpenedBy(steps.getByRole("link", { name: "Previous" }))).toEqual([
+			`feedback:${PREVIOUS_ID}`,
+		]);
+		await expect(levelsOpenedBy(steps.getByRole("link", { name: "Next" }))).toEqual([
+			`feedback:${NEXT_ID}`,
+		]);
+		await userEvent.click(panel.getByRole("button", { name: "Approve and next" }));
+		await expect(args.onApprove).toHaveBeenCalledOnce();
+	},
+};
+
+/**
+ * The last in the queue, with no step forward — but the ones before it may have been skipped on the
+ * way here and still wait, so a decision moves on to them and the button does not promise to close.
+ */
+export const LastInApprovalQueue: Story = {
+	args: {
+		feedback: ready(awaitingApproval),
+		queue: { position: 7, total: 7, previous: PREVIOUS_ID },
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		panel.getByText("7 of 7");
+		await expectGenuinelyDisabled(panel.getByRole("button", { name: "Next" }));
+		panel.getByRole("button", { name: "Approve and next" });
+	},
+};
+
+/** The only one awaiting approval: no steps to take, and approving it closes the level. */
+export const OnlyInApprovalQueue: Story = {
+	args: {
+		feedback: ready(awaitingApproval),
+		queue: { position: 1, total: 1 },
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(
+			panel.queryByRole("navigation", { name: "Feedback awaiting approval" }),
+		).not.toBeInTheDocument();
+		panel.getByRole("button", { name: "Approve and close" });
+	},
+};
+
+const top = (element: HTMLElement) => element.getBoundingClientRect().top;
+
+export const InApprovalQueueReflow: Story = {
+	args: InApprovalQueue.args,
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async () => {
+		const panel = await settledDrawerPanel();
+		await expect(within(panel).getByRole("button", { name: "Approve and next" })).toBeVisible();
+		await expectNoPanelOverflow(panel);
+		// The stacked footer shows the steps first, as the tab order reaches them first.
+		const steps = within(panel).getByRole("navigation", { name: "Feedback awaiting approval" });
+		await expect(top(steps)).toBeLessThan(
+			top(within(panel).getByRole("button", { name: "Approve and next" })),
+		);
+		await expect(top(steps)).toBeLessThan(
+			top(within(panel).getByRole("button", { name: "Reject feedback" })),
+		);
 	},
 };
 

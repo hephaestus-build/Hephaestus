@@ -2,14 +2,16 @@ import { CircleAlert, Copy, ShieldCheck } from "lucide-react";
 
 import { cn } from "cn";
 import type { CatalogPracticePreview, PracticeDefinitionOptions } from "@/api/types.gen";
+import { PRACTICE_SETUP_LEVEL_LABELS } from "@/components/admin/practices/practice-search";
 import { PracticeDefinitionPreview } from "@/components/admin/practices/PracticeDefinitionPreview";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { DetailRow } from "@/components/common/DetailRow";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
+import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { Section } from "@/components/layout/Section";
 import { AUTONOMY_DEFS } from "@/components/practice-vocabulary/autonomy-defs";
 import { CATALOG_AVAILABILITY_DEFS } from "@/components/practice-vocabulary/catalog-availability-defs";
@@ -23,7 +25,7 @@ import {
 } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { DrawerBody, DrawerDescription, DrawerFooter, DrawerTitle } from "@/components/ui/drawer";
+import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
 import {
 	Item,
 	ItemContent,
@@ -45,11 +47,21 @@ export interface PracticeAdoptionPanelProps {
 	state: PracticeAdoptionState;
 	onAdopt: () => void;
 	nested?: boolean;
+	/** Where the level sits, from the drawer. */
+	path: LevelPath;
 }
 
-export function PracticeAdoptionPanel({ state, onAdopt, nested }: PracticeAdoptionPanelProps) {
+/** What the path calls this level: a practice the instance catalog offers, not one this workspace has. */
+const LEVEL_LABEL = PRACTICE_SETUP_LEVEL_LABELS["catalog-practice"];
+
+export function PracticeAdoptionPanel({
+	state,
+	onAdopt,
+	nested,
+	path,
+}: PracticeAdoptionPanelProps) {
 	if (state.status !== "ready") {
-		return <PracticeAdoptionPlaceholder state={state} nested={nested} />;
+		return <PracticeAdoptionPlaceholder state={state} nested={nested} path={path} />;
 	}
 	const { preview, definitionOptions, action } = state;
 	const availability = CATALOG_AVAILABILITY_DEFS[preview.availability];
@@ -57,22 +69,23 @@ export function PracticeAdoptionPanel({ state, onAdopt, nested }: PracticeAdopti
 
 	return (
 		<>
-			<DetailDrawerHeader nested={nested}>
-				<GroupPill
-					size="lg"
-					slug={preview.group.slug}
-					name={preview.group.definition?.name}
-					icon={preview.group.definition?.icon}
-					color={preview.group.definition?.color}
-				/>
-				<div className="min-w-0 flex-1 space-y-1">
-					<DrawerTitle className="break-words">{preview.definition.name}</DrawerTitle>
-					<DrawerDescription>
-						<WorkTypeLabel artifactKind={preview.definition.artifactKind} />
-					</DrawerDescription>
-					{availability.badged && <StatusBadge def={availability} className="mt-1.5" />}
-				</div>
-			</DetailDrawerHeader>
+			<LevelHeader
+				nested={nested}
+				path={path}
+				current={LEVEL_LABEL}
+				mark={
+					<GroupPill
+						size="lg"
+						slug={preview.group.slug}
+						name={preview.group.definition?.name}
+						icon={preview.group.definition?.icon}
+						color={preview.group.definition?.color}
+					/>
+				}
+				title={preview.definition.name}
+				chips={availability.badged && <StatusBadge def={availability} />}
+				description={<WorkTypeLabel artifactKind={preview.definition.artifactKind} />}
+			/>
 
 			<DrawerBody className="space-y-6">
 				{action === "stale" && (
@@ -161,15 +174,20 @@ export function PracticeAdoptionPanel({ state, onAdopt, nested }: PracticeAdopti
 function PracticeAdoptionPlaceholder({
 	state,
 	nested,
+	path,
 }: {
 	state: Extract<PracticeAdoptionState, { status: "loading" } | { status: "error" }>;
 	nested?: boolean;
+	path: LevelPath;
 }) {
 	return (
 		<>
-			<DetailDrawerHeader nested={nested}>
-				<DrawerTitle>Practice</DrawerTitle>
-			</DetailDrawerHeader>
+			<LevelHeader
+				nested={nested}
+				path={path}
+				current={LEVEL_LABEL}
+				loading={state.status === "loading"}
+			/>
 			<DrawerBody>
 				{state.status === "loading" ? (
 					<PracticeDefinitionSkeleton />

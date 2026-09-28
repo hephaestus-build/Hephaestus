@@ -59,7 +59,7 @@ import { ReviewLevelHeader } from "./ReviewLevelHeader";
 import { ReviewPerson } from "./ReviewPerson";
 import { ReviewPracticeLink } from "./ReviewPracticeLink";
 import { ReviewProvenanceLine } from "./ReviewProvenanceLine";
-import { ReviewRow, ReviewRowList, ReviewRowMeta } from "./ReviewRow";
+import { ReviewRow, ReviewRowLink, ReviewRowList, ReviewRowMeta } from "./ReviewRow";
 
 export interface ObservationLevelProps {
 	nested?: boolean;
@@ -205,14 +205,14 @@ export function ObservationLevel({
 									key={feedback.feedbackId}
 									status={deliveryOutcome(feedback)}
 									title={
-										<DetailStackLink entry={feedbackLevel(feedback.feedbackId)}>
+										<ReviewRowLink entry={feedbackLevel(feedback.feedbackId)}>
 											{/* Named by what it is to *this* observation. Titling it with the delivery
 											    place would say nothing about the thing the link opens, and repeat
 											    the fact the meta line beside it already carries. */}
 											{feedback.role === "PRIMARY"
 												? "Feedback about this observation"
 												: "Feedback this observation supports"}
-										</DetailStackLink>
+										</ReviewRowLink>
 									}
 									meta={
 										<>
@@ -222,13 +222,6 @@ export function ObservationLevel({
 											)}
 										</>
 									}
-									chips={[
-										{
-											key: "outcome",
-											width: "lg:w-48",
-											node: <StatusBadge def={deliveryOutcome(feedback)} />,
-										},
-									]}
 								/>
 							))}
 						</ReviewRowList>

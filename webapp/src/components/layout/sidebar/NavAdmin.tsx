@@ -25,6 +25,7 @@ import {
 	SidebarGroup,
 	SidebarGroupLabel,
 	SidebarMenu,
+	SidebarMenuBadge,
 	SidebarMenuButton,
 	SidebarMenuItem,
 	SidebarMenuSub,
@@ -38,6 +39,8 @@ export interface NavAdminProps {
 	isOwner?: boolean;
 	integrationKinds: readonly IntegrationCatalogEntry["kind"][];
 	scmProviderType?: "GITHUB" | "GITLAB";
+	/** Feedback awaiting an admin's approval, shown beside Practice reviews; nothing while unknown. */
+	awaitingApproval?: number;
 }
 
 /**
@@ -64,6 +67,7 @@ export function NavAdmin({
 	integrationKinds,
 	isOwner = false,
 	scmProviderType = "GITHUB",
+	awaitingApproval,
 }: NavAdminProps) {
 	const matchRoute = useMatchRoute();
 	const { isMobile, state: sidebarState } = useSidebar();
@@ -107,6 +111,13 @@ export function NavAdmin({
 	const ScmIcon = scmProviderType === "GITLAB" ? GitlabIcon : GithubIcon;
 	const scmLabel = scmProviderType === "GITLAB" ? "GitLab" : "GitHub";
 	const scmKind = scmProviderType === "GITLAB" ? "GITLAB" : "GITHUB";
+	const awaiting =
+		awaitingApproval !== undefined && awaitingApproval > 0
+			? {
+					count: awaitingApproval,
+					phrase: `${awaitingApproval} ${awaitingApproval === 1 ? "piece" : "pieces"} of feedback awaiting approval`,
+				}
+			: undefined;
 
 	return (
 		<SidebarGroup>
@@ -161,6 +172,7 @@ export function NavAdmin({
 					open={practicesOpen}
 					onOpenChange={setPracticesOpen}
 					collapsed={!isMobile && sidebarState === "collapsed"}
+					badge={awaiting}
 					// The section opens on what the reviews need from the admin; setup is the occasional visit.
 					landingLink={
 						<Link
@@ -178,8 +190,18 @@ export function NavAdmin({
 							}
 						>
 							<Workflow />
-							<span>Practice reviews</span>
+							<span>
+								Practice reviews
+								{awaiting && <span className="sr-only"> ({awaiting.phrase})</span>}
+							</span>
 						</SidebarMenuSubButton>
+						{awaiting && (
+							// The link names the count for a screen reader; this is its picture. The badge
+							// aligns itself only beside a menu button, not a sub-button, so it is placed here.
+							<SidebarMenuBadge aria-hidden className="top-1">
+								{awaiting.count}
+							</SidebarMenuBadge>
+						)}
 					</SidebarMenuSubItem>
 					<SidebarMenuSubItem>
 						<SidebarMenuSubButton
@@ -334,6 +356,11 @@ interface AdminNavSectionProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	collapsed: boolean;
+	/**
+	 * A count owed somewhere in the section, shown on the section itself while its entries are out of
+	 * sight — closed, or the sidebar down to icons — so it is seen however the sidebar is folded.
+	 */
+	badge?: { count: number; phrase: string };
 	landingLink: ReactElement;
 	children: ReactNode;
 }
@@ -345,27 +372,43 @@ function AdminNavSection({
 	open,
 	onOpenChange,
 	collapsed,
+	badge,
 	landingLink,
 	children,
 }: AdminNavSectionProps) {
+	const shown = collapsed || !open ? badge : undefined;
+	const name = (
+		<span>
+			{label}
+			{shown && <span className="sr-only"> ({shown.phrase})</span>}
+		</span>
+	);
+	// The badge hides itself in the icon-only sidebar, where the tooltip says the count instead.
+	const tooltip = shown ? `${label} (${shown.phrase})` : label;
 	return (
 		<Collapsible open={open} onOpenChange={onOpenChange} render={<SidebarMenuItem />}>
 			{collapsed ? (
-				<SidebarMenuButton tooltip={label} isActive={active} render={landingLink}>
+				<SidebarMenuButton tooltip={tooltip} isActive={active} render={landingLink}>
 					{icon}
-					<span>{label}</span>
+					{name}
 				</SidebarMenuButton>
 			) : (
 				<CollapsibleTrigger
-					render={<SidebarMenuButton tooltip={label} isActive={!open && active} />}
+					render={<SidebarMenuButton tooltip={tooltip} isActive={!open && active} />}
 				>
 					{icon}
-					<span>{label}</span>
+					{name}
 					<ChevronRight
 						className="ml-auto transition-transform group-aria-expanded/menu-button:rotate-90"
 						aria-hidden
 					/>
 				</CollapsibleTrigger>
+			)}
+			{shown && (
+				// The button names the count for a screen reader; this is its picture, clear of the chevron.
+				<SidebarMenuBadge aria-hidden className="right-7">
+					{shown.count}
+				</SidebarMenuBadge>
 			)}
 			<CollapsibleContent>
 				{/* The list carries the section's name: a screen reader jumping by list otherwise

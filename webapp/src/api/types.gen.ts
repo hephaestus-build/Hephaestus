@@ -4817,6 +4817,10 @@ export type ReviewRunSummary = {
   feedback: ReviewFeedbackCounts;
   id: string;
   observations: ReviewObservationCounts;
+  /**
+   * Result-processing status: null = not applicable, PENDING = awaiting processing, DELIVERED = processing finished, FAILED = processing error. Processing may include delivery; this status alone does not establish feedback publication.
+   */
+  resultProcessing?: 'PENDING' | 'DELIVERED' | 'FAILED';
   status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'TIMED_OUT' | 'CANCELLED';
   target: ReviewRunTarget;
 };
@@ -12523,6 +12527,10 @@ export type ListPracticeReviewsData = {
      */
     status?: Array<'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'TIMED_OUT' | 'CANCELLED'>;
     /**
+     * Result-processing statuses to list (repeatable), such as FAILED for the reviews whose results can be processed again; omit for every review, including those without one
+     */
+    resultProcessing?: Array<'PENDING' | 'DELIVERED' | 'FAILED'>;
+    /**
      * Inclusive lower bound on when the review was requested
      */
     from?: Date;
@@ -12584,6 +12592,10 @@ export type ListPracticeReviewFeedbackData = {
   query?: {
     page?: number;
     size?: number;
+    /**
+     * Sorting strategy. NEWEST and OLDEST order by when the feedback was created; ties by id.
+     */
+    sort?: 'NEWEST' | 'OLDEST';
     deliveryState?: Array<'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED' | 'UNCONFIRMED'>;
     suppressionReason?: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REPEATS_DELIVERED_NOTE' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED'>;
     channel?: Array<'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP'>;
@@ -12597,6 +12609,10 @@ export type ListPracticeReviewFeedbackData = {
      */
     artifactId?: number;
     recipientUserId?: number;
+    /**
+     * Practices whose feedback to list (repeatable): feedback bound to an observation of any of them, in any role
+     */
+    practiceSlug?: Array<string>;
     /**
      * Inclusive lower bound
      */
@@ -12714,7 +12730,7 @@ export type ListPracticeReviewObservationsData = {
     page?: number;
     size?: number;
     /**
-     * Sorting strategy. ACTIONABILITY orders problems from CRITICAL to INFO, then strengths, then not-applicable observations; ties are newest first.
+     * Sorting strategy. ACTIONABILITY orders negative outcomes from CRITICAL to INFO, then positive outcomes, then not-applicable observations; ties are newest first.
      */
     sort?: 'NEWEST' | 'ACTIONABILITY';
     practiceSlug?: Array<string>;

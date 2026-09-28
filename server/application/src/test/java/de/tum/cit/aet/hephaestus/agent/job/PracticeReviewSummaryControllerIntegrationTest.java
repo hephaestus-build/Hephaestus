@@ -342,6 +342,40 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .isEqualTo(failed.getId().toString());
     }
 
+    @Test
+    @WithAdminUser
+    void shouldListOnlyReviewsWhoseResultProcessingFailedWhenFilteredByIt() {
+        Instant at = Instant.parse("2026-03-10T00:00:00Z");
+        AgentJob failed = persistReviewAt(workspace, at, AgentJobStatus.COMPLETED);
+        failed.setDeliveryStatus(DeliveryStatus.FAILED);
+        jobRepository.save(failed);
+        AgentJob pending = persistReviewAt(workspace, at.plusSeconds(60), AgentJobStatus.COMPLETED);
+        pending.setDeliveryStatus(DeliveryStatus.PENDING);
+        jobRepository.save(pending);
+        AgentJob delivered = persistReviewAt(workspace, at.plusSeconds(120), AgentJobStatus.COMPLETED);
+        delivered.setDeliveryStatus(DeliveryStatus.DELIVERED);
+        jobRepository.save(delivered);
+
+        listReviews("?resultProcessing=FAILED")
+                .jsonPath("$.page.totalElements")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].id")
+                .isEqualTo(failed.getId().toString())
+                .jsonPath("$.content[0].resultProcessing")
+                .isEqualTo("FAILED");
+        listReviews("?resultProcessing=FAILED&resultProcessing=PENDING")
+                .jsonPath("$.page.totalElements")
+                .isEqualTo(2);
+        listReviews("?status=QUEUED")
+                .jsonPath("$.page.totalElements")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].id")
+                .isEqualTo(job.getId().toString())
+                .jsonPath("$.content[0].resultProcessing")
+                .doesNotExist();
+        listReviews("").jsonPath("$.page.totalElements").isEqualTo(4);
+    }
+
     /** A backwards window is a mistake, not an empty page — the siblings answer it the same way. */
     @Test
     @WithAdminUser

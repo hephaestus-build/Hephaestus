@@ -1,13 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent } from "storybook/test";
+import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import { mockPractices } from "@/components/admin/practices/fixtures";
-import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { mockPracticeDefinitionOptions } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
+import { InLevelStack } from "@/stories/level-stack";
 import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
 import { expectNoPanelOverflow } from "@/stories/reflow";
-import { Stateful } from "@/stories/stateful";
 
 import { WorkspacePracticePanel, type WorkspacePracticeState } from "./WorkspacePracticePanel";
 
@@ -30,16 +29,16 @@ const meta = {
 	component: WorkspacePracticePanel,
 	parameters: { layout: "fullscreen" },
 	decorators: [withPageBehind],
-	args: { workspaceSlug: "demo", state: ready() },
-	argTypes: { state: { control: false } },
+	args: {
+		workspaceSlug: "demo",
+		state: ready(),
+		path: { behind: [{ label: "Practice setup", depth: 0 }], onClose: fn() },
+	},
+	argTypes: { state: { control: false }, path: { control: false } },
 	render: (args) => (
-		<Stateful initial={[{ kind: "practice", id: practice.slug }]}>
-			{(stack, setStack) => (
-				<DetailDrawerStack stack={stack} onClose={(depth) => setStack(stack.slice(0, depth))}>
-					{(_entry, level) => <WorkspacePracticePanel {...args} nested={level.nested} />}
-				</DetailDrawerStack>
-			)}
-		</Stateful>
+		<InLevelStack entry={{ kind: "practice", id: practice.slug }} path={args.path}>
+			{(level) => <WorkspacePracticePanel {...args} {...level} />}
+		</InLevelStack>
 	),
 	tags: ["autodocs"],
 } satisfies Meta<typeof WorkspacePracticePanel>;
@@ -48,7 +47,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-	play: async () => {
+	play: async ({ args }) => {
 		const edit = await screen.findByRole("link", { name: "Edit practice" });
 		await expectSettledVisible(edit);
 		// Editing is another level on top of this one, so leaving the editor lands back on the panel
@@ -58,6 +57,11 @@ export const Default: Story = {
 		);
 		// Level 2 is the panel's own title; criteria headings render below it at level 4.
 		await expect(screen.getByRole("heading", { name: practice.name, level: 2 })).toBeVisible();
+		// The path says where the level sits, and its crumb closes back down to the page.
+		const path = screen.getByRole("list", { name: "Path" });
+		await expect(path).toHaveTextContent(/Practice setup.*Practice/u);
+		await userEvent.click(within(path).getByRole("button", { name: "Practice setup" }));
+		await expect(args.path.onClose).toHaveBeenCalledWith(0);
 	},
 };
 
@@ -94,6 +98,8 @@ export const Loading: Story = {
 		const panel = await settledDrawerPanel();
 		await expect(panel.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
 		await expect(screen.queryByRole("status")).not.toBeInTheDocument();
+		// The drawer is named by what is loading while its title's shape stands in.
+		await expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Loading practice");
 	},
 };
 

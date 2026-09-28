@@ -63,7 +63,11 @@ const meta = {
 	},
 	argTypes: { path: { control: false } },
 	render: (args) => (
-		<InLevelStack entry={observationLevel(reviewObservationDetail.id)} path={args.path}>
+		<InLevelStack
+			entry={observationLevel(reviewObservationDetail.id)}
+			path={args.path}
+			size="detailWide"
+		>
 			{(level) => <ObservationLevel {...args} {...level} />}
 		</InLevelStack>
 	),
@@ -98,7 +102,7 @@ export const Default: Story = {
 			[expect.stringMatching(/^feedback:/u)],
 			[expect.stringMatching(/^feedback:/u)],
 		]);
-		panel.getByText("Replaced by newer");
+		panel.getByRole("button", { name: "Replaced by newer" });
 		// Standing, it offers the one decision there is, and not its reverse.
 		await expect(panel.getByRole("button", { name: "Mark as incorrect" })).toBeEnabled();
 		await expect(
@@ -202,12 +206,12 @@ export const MarkedIncorrect: Story = {
 		const panelElement = await settledDrawerPanel();
 		const panel = within(panelElement);
 		await expect(panel.getByText("Marked as incorrect")).toBeVisible();
-		// The header says it before the title does.
+		// The header says it under the title, where its standing goes.
 		const [chip] = panel.getAllByText("Marked incorrect");
 		if (!chip) {
 			throw new Error("The level does not say it was marked incorrect");
 		}
-		await expect(precedes(chip, panel.getByRole("heading", { level: 2 }))).toBe(true);
+		await expect(precedes(panel.getByRole("heading", { level: 2 }), chip)).toBe(true);
 		await expect(
 			panel.getByText(
 				/Inline comments Hephaestus posted about it are still on the work unchanged/u,

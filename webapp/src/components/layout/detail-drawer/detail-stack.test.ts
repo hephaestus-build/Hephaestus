@@ -64,6 +64,20 @@ describe("openInStack", () => {
 			pushed: false,
 		});
 	});
+
+	it("replaces the level in front when asked to swap, as a queue steps to its next record", () => {
+		expect(openInStack(["practice:p", "feedback:a"], "feedback:b", { swap: true })).toStrictEqual({
+			detail: ["practice:p", "feedback:b"],
+			pushed: false,
+		});
+	});
+
+	it("opens the first level of an empty stack even when asked to swap", () => {
+		expect(openInStack([], "feedback:a", { swap: true })).toStrictEqual({
+			detail: ["feedback:a"],
+			pushed: true,
+		});
+	});
 });
 
 describe("encodeDetailStack", () => {

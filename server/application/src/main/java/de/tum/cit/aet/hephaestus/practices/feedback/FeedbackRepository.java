@@ -115,6 +115,17 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
                COUNT(*) FILTER (WHERE f.delivery_state = 'UNCONFIRMED') AS "unconfirmed"
         """;
 
+    /**
+     * Feedback {@code f} joined to each observation {@code o} of its workspace it is bound to, in any role: the one
+     * definition of which practices a piece of feedback belongs to, shared by the per-practice counts and the practice
+     * filter of the operator feedback list so that a practice's count and its filtered list agree.
+     */
+    String WITH_BOUND_OBSERVATIONS = """
+            FROM feedback f
+            JOIN feedback_observation fo ON fo.feedback_id = f.id
+            JOIN observation o ON o.id = fo.observation_id AND o.workspace_id = f.workspace_id
+        """;
+
     /** Feedback created in {@code [from, to)}, the window the operator feedback list filters by. */
     String CREATED_IN_RANGE = """
           AND f.created_at >= :from
@@ -159,11 +170,10 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             value = "SELECT f.practice_id AS \"practiceId\"," + STATE_COUNTS + """
         FROM (
             SELECT DISTINCT o.practice_id, f.id, f.delivery_state
-            FROM feedback f
-            JOIN feedback_observation fo ON fo.feedback_id = f.id
-            JOIN observation o ON o.id = fo.observation_id AND o.workspace_id = f.workspace_id
+        """ + WITH_BOUND_OBSERVATIONS + """
             WHERE f.workspace_id = :workspaceId
-        """ + CREATED_IN_RANGE + """
+        """
+                    + CREATED_IN_RANGE + """
         ) f
         GROUP BY f.practice_id
         """,
@@ -683,6 +693,15 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
 
     int BODY_PREVIEW_LENGTH = 320;
 
+    /**
+     * Keeps feedback bound to an observation of a practice asked for, by {@link #WITH_BOUND_OBSERVATIONS}. The
+     * subquery's own {@code f} shadows the outer one.
+     */
+    String PRACTICE_FILTER = "AND (CAST(:#{#f.practiceSlugArray()} AS text[]) IS NULL OR f.id IN (SELECT f.id"
+            + WITH_BOUND_OBSERVATIONS
+            + " JOIN practice p ON p.id = o.practice_id WHERE f.workspace_id = :workspaceId"
+            + " AND p.slug = ANY(CAST(:#{#f.practiceSlugArray()} AS text[]))))\n";
+
     String OPERATOR_PREDICATES = """
           AND (CAST(:#{#f.deliveryStateNames()} AS text[]) IS NULL OR f.delivery_state = ANY(CAST(:#{#f.deliveryStateNames()} AS text[])))
           AND (CAST(:#{#f.suppressionReasonNames()} AS text[]) IS NULL OR f.suppression_reason = ANY(CAST(:#{#f.suppressionReasonNames()} AS text[])))
@@ -693,7 +712,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
           AND (CAST(:#{#f.recipientUserId()} AS bigint) IS NULL OR f.recipient_user_id = CAST(:#{#f.recipientUserId()} AS bigint))
           AND (CAST(:#{#f.from()} AS timestamptz) IS NULL OR f.created_at >= CAST(:#{#f.from()} AS timestamptz))
           AND (CAST(:#{#f.to()} AS timestamptz) IS NULL OR f.created_at < CAST(:#{#f.to()} AS timestamptz))
-        """;
+        """ + PRACTICE_FILTER;
 
     /**
      * The operator's page of feedback.
@@ -743,11 +762,15 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
                     + " WHERE fo.feedback_id = f.id AND p.workspace_id = f.workspace_id) AS \"observationCount\""
                     + " FROM feedback f WHERE f.workspace_id = :workspaceId"
                     + OPERATOR_PREDICATES
-                    + " ORDER BY f.created_at DESC, f.id DESC",
+                    + " ORDER BY CASE WHEN :oldestFirst THEN f.created_at END ASC,"
+                    + " CASE WHEN :oldestFirst THEN f.id END ASC, f.created_at DESC, f.id DESC",
             countQuery = "SELECT count(*) FROM feedback f WHERE f.workspace_id = :workspaceId" + OPERATOR_PREDICATES,
             nativeQuery = true)
     Page<OperatorFeedbackRow> findForWorkspace(
-            @Param("workspaceId") Long workspaceId, @Param("f") FeedbackQueryFilter filter, Pageable pageable);
+            @Param("workspaceId") Long workspaceId,
+            @Param("f") FeedbackQueryFilter filter,
+            @Param("oldestFirst") boolean oldestFirst,
+            Pageable pageable);
 
     interface OperatorFeedbackRow {
         UUID getId();

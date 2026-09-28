@@ -10,18 +10,23 @@ import { precedes } from "@/test/dom";
 
 import {
 	awaitingApprovalFeedback,
-	failedFeedback,
-	failedReviewRuns,
 	practiceReviewOverview,
 	readyReviewOverview,
 	reviewOverviewScope,
+	workspacePractices,
 } from "./fixtures";
 import { PracticeReviewOverviewPage } from "./PracticeReviewOverviewPage";
-import type { ReviewSectionState } from "./review-states";
+import type { ReviewCountState, ReviewSectionState } from "./review-states";
 
-function ready<T>(items: T[]): ReviewSectionState<T> {
-	return { status: "ready", items, total: items.length };
+function ready<T>(items: T[], total = items.length): ReviewSectionState<T> {
+	return { status: "ready", items, total };
 }
+
+function counted(total: number): ReviewCountState {
+	return { status: "ready", total, stale: false };
+}
+
+const RANGE = { from: reviewOverviewScope.from, to: reviewOverviewScope.to };
 
 /**
  * The home of Practice reviews, in the order an admin's questions come: can reviews run, what do I
@@ -40,23 +45,39 @@ const meta = {
 		onRangeChange: fn(),
 		scope: reviewOverviewScope,
 		overview: readyReviewOverview(),
+		previous: {
+			status: "ready",
+			period: { overview: practiceReviewOverview, name: "the previous 30 days" },
+		},
 		attention: {
 			approvals: {
 				state: ready(awaitingApprovalFeedback),
-				list: { list: "feedback", search: { deliveryState: ["AWAITING_APPROVAL"] } },
-			},
-			failedDeliveries: {
-				state: ready(failedFeedback),
-				list: { list: "feedback", search: { ...reviewOverviewScope, deliveryState: ["FAILED"] } },
+				list: {
+					list: "feedback",
+					search: { deliveryState: ["AWAITING_APPROVAL"], order: "OLDEST" },
+				},
 			},
 			failedReviews: {
-				state: ready(failedReviewRuns),
-				list: { list: "runs", search: { ...reviewOverviewScope, status: ["FAILED", "TIMED_OUT"] } },
+				state: counted(2),
+				list: { list: "runs", search: { ...RANGE, status: ["FAILED", "TIMED_OUT"] } },
+			},
+			unprocessedResults: {
+				state: counted(0),
+				list: { list: "runs", search: { ...RANGE, resultProcessing: ["FAILED"] } },
+			},
+			failedDeliveries: {
+				state: counted(1),
+				list: {
+					list: "feedback",
+					search: { ...RANGE, deliveryState: ["FAILED", "PARTIALLY_FAILED"] },
+				},
 			},
 		},
+		practices: workspacePractices,
 	},
 	argTypes: {
 		overview: { control: false },
+		previous: { control: false },
 		attention: { control: false },
 		banner: { control: false },
 	},
@@ -85,10 +106,18 @@ export const Default: Story = {
 		await expect(
 			canvas.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
 		).toEqual(["Needs you", "What the reviews did", "Practices"]);
+		// The range heads the page, above what it governs and what it does not.
+		const rangeControl = canvas.getByRole("button", { name: "30 days" });
+		await expect(precedes(rangeControl, canvas.getByRole("heading", { name: "Needs you" }))).toBe(
+			true,
+		);
 		canvas.getByRole("list", { name: "Awaiting your approval" });
-		canvas.getByText(/^In this range: 38 reviews, 78 observations/u);
-		// A header row and five practices: the sixth was not checked, so it is not ranked at all.
-		await expect(canvas.getAllByRole("row")).toHaveLength(6);
+		canvas.getByRole("link", { name: "2 reviews failed or timed out" });
+		canvas.getByRole("list", { name: "Stages" });
+		// A header row, five practices, and the sixth — not checked — as one line, not a ranked row.
+		await expect(canvas.getAllByRole("row")).toHaveLength(7);
+		canvas.getByText(/1 practice recorded nothing in this range/u);
+		canvas.getByRole("link", { name: "Open Practice setup" });
 
 		// The range belongs to the whole page: the practices' sentence follows it.
 		canvas.getByText("How the reviews judged each practice in the last 30 days, busiest first.");

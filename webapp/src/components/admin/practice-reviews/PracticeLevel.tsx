@@ -1,14 +1,20 @@
 import { Link } from "@tanstack/react-router";
-import { ScanSearchIcon, SlidersHorizontalIcon } from "lucide-react";
+import { PencilIcon, ScanSearchIcon, SlidersHorizontalIcon } from "lucide-react";
 
 import { cn } from "cn";
 import type { Practice, PracticeReviewCounts, ReviewObservation } from "@/api/types.gen";
 import { STALE } from "@/components/activity/activity-tones";
-import { practiceSetupLevel } from "@/components/admin/practices/practice-search";
+import {
+	practiceFormLevel,
+	practiceSetupLevel,
+} from "@/components/admin/practices/practice-search";
+import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { AutonomyBadge } from "@/components/practice-vocabulary/AutonomyBadge";
+import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
 import { buttonVariants } from "@/components/ui/button";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
 import {
@@ -25,8 +31,10 @@ import { OutcomeMix } from "./OutcomeMix";
 import {
 	feedbackSlots,
 	markedIncorrectSlot,
+	OUTCOME_LEGEND_LABELS,
 	observationSlots,
 	type OutcomeScope,
+	slotsTotal,
 } from "./review-outcomes";
 import type { ReviewSectionState } from "./review-states";
 import { ReviewLevelHeader } from "./ReviewLevelHeader";
@@ -37,7 +45,7 @@ export interface PracticeLevelProps {
 	nested?: boolean;
 	path: LevelPath;
 	practiceSlug: string;
-	/** The practice as the workspace defines it, for its name and why it matters. */
+	/** The practice as the workspace defines it, for its name, why it matters and its autonomy. */
 	practice: Practice | undefined;
 	/** "Last 30 days": the range every count on the level covers. */
 	rangeLabel: string;
@@ -45,14 +53,14 @@ export interface PracticeLevelProps {
 	scope: OutcomeScope;
 	/** The practice's counts in the range; absent when it recorded nothing there. */
 	counts: PanelState<{ counts?: PracticeReviewCounts; stale: boolean }>;
-	/** Its observations most worth acting on, in the range. */
+	/** Its most recent observations in the range. */
 	observations: ReviewSectionState<ReviewObservation>;
 }
 
 /**
- * One practice as the reviews saw it: how its observations turned out, what feedback cited it, and
- * the observations most worth acting on. The footer opens its definition, which is where a practice
- * that reviews wrongly is fixed.
+ * One practice as the reviews saw it: how much autonomy it runs with, how its observations turned
+ * out, what became of the feedback citing it, and what it observed most recently. The footer edits
+ * its definition, which is where a practice that reviews wrongly is fixed.
  */
 export function PracticeLevel({
 	workspaceSlug,
@@ -76,6 +84,7 @@ export function PracticeLevel({
 				kind="practice"
 				loading={name === undefined && counts.status === "loading"}
 				title={name ?? practiceSlug}
+				chips={practice && <AutonomyBadge autonomy={practice.autonomy.effective} />}
 				description={<p>{rangeLabel}</p>}
 			/>
 			<DrawerBody className="flex flex-col gap-8 pt-2">
@@ -84,18 +93,25 @@ export function PracticeLevel({
 						{practice.whyItMatters}
 					</p>
 				)}
+				{practice && (
+					<p className="text-sm text-muted-foreground">
+						<InlineLink
+							className="font-medium"
+							render={
+								<Link to="/w/$workspaceSlug/admin/practices/review" params={{ workspaceSlug }} />
+							}
+						>
+							Change its autonomy in Review settings
+						</InlineLink>
+					</p>
+				)}
 				<Counts workspaceSlug={workspaceSlug} counts={counts} scope={practiceScope} />
 				<ObservationsSection
 					workspaceSlug={workspaceSlug}
 					state={observations}
 					list={{
 						list: "observations",
-						search: {
-							from: scope.from,
-							to: scope.to,
-							practiceSlug: [practiceSlug],
-							order: "ACTIONABILITY",
-						},
+						search: { from: scope.from, to: scope.to, practiceSlug: [practiceSlug] },
 					}}
 					practices={practice && [practice]}
 				/>
@@ -109,6 +125,15 @@ export function PracticeLevel({
 				>
 					<SlidersHorizontalIcon />
 					Open in Practice setup
+				</Link>
+				<Link
+					to="/w/$workspaceSlug/admin/practices"
+					params={{ workspaceSlug }}
+					search={detailSearch(practiceFormLevel(practiceSlug))}
+					className={cn(buttonVariants(), "w-full sm:w-auto")}
+				>
+					<PencilIcon />
+					Edit practice
 				</Link>
 			</DrawerFooter>
 		</>
@@ -133,13 +158,13 @@ function Counts({
 			/>
 		);
 	}
-	if (counts.status === "loading") {
+	// Another range's "not checked", standing in while this one loads, says nothing about this one.
+	if (counts.status === "loading" || (counts.stale && counts.counts === undefined)) {
 		return (
 			<div className="grid gap-6 sm:grid-cols-2" aria-hidden>
 				{Array.from({ length: 2 }, (_, index) => (
 					<div key={index} className="space-y-2">
 						<Skeleton className="h-7 w-32" />
-						<Skeleton className="h-2 w-full" />
 						<Skeleton className="h-4 w-48" />
 					</div>
 				))}
@@ -163,25 +188,40 @@ function Counts({
 		);
 	}
 	const { observations, observationsInvalidated, feedback } = counts.counts;
+	const outcomes = observationSlots(observations, scope);
+	const total = slotsTotal(outcomes);
+	const incorrect = markedIncorrectSlot(observationsInvalidated, scope);
+	const feedbackFamilies = feedbackSlots(feedback, scope);
 	return (
 		<div
 			aria-busy={counts.stale || undefined}
 			className={cn("grid gap-6 sm:grid-cols-2", counts.stale && STALE)}
 		>
+			<div className="space-y-2">
+				<OutcomeMix
+					workspaceSlug={workspaceSlug}
+					total={total}
+					slots={outcomes}
+					flags={{
+						label: OUTCOME_LEGEND_LABELS.checkedObservations,
+						// "1 of 33 marked incorrect": the share an admin found wrong, out of all of them.
+						slots: [{ ...incorrect, label: `of ${total} ${incorrect.label}` }],
+					}}
+					noun={(count) => (count === 1 ? "observation" : "observations")}
+					label={OUTCOME_LEGEND_LABELS.observations}
+				/>
+				{observationsInvalidated > 0 && (
+					<p className="text-xs text-muted-foreground">{MARKED_INCORRECT_DEF.note}</p>
+				)}
+			</div>
 			<OutcomeMix
 				workspaceSlug={workspaceSlug}
-				slots={observationSlots(observations, scope)}
-				flags={[markedIncorrectSlot(observationsInvalidated, scope)]}
-				noun={(total) => (total === 1 ? "observation" : "observations")}
-				label="Observations by outcome"
-			/>
-			<OutcomeMix
-				workspaceSlug={workspaceSlug}
-				slots={feedbackSlots(feedback, scope)}
-				noun={(total) =>
-					total === 1 ? "piece of feedback cited it" : "pieces of feedback cited it"
+				total={slotsTotal(feedbackFamilies)}
+				slots={feedbackFamilies}
+				noun={(count) =>
+					count === 1 ? "piece of feedback cited it" : "pieces of feedback cited it"
 				}
-				label="Feedback citing this practice, by delivery state"
+				label={OUTCOME_LEGEND_LABELS.feedback}
 			/>
 		</div>
 	);

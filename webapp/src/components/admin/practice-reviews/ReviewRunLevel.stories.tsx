@@ -73,7 +73,7 @@ const meta = {
 	},
 	argTypes: { path: { control: false } },
 	render: (args) => (
-		<InLevelStack entry={reviewLevel(COMPLETED_RUN)} path={args.path}>
+		<InLevelStack entry={reviewLevel(COMPLETED_RUN)} path={args.path} size="detailWide">
 			{(level) => <ReviewRunLevel {...args} {...level} />}
 		</InLevelStack>
 	),
@@ -118,12 +118,29 @@ export const CompletedWithMixedOutput: Story = {
 	},
 };
 
+/**
+ * At 320px the panel is the viewport. A row's status icon stays on its title's line: a row that
+ * wrapped before its title would leave the icon alone above what it describes.
+ */
 export const Reflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async () => {
 		const panel = await settledDrawerPanel();
 		await within(panel).findByText(/2 issues to tighten in this change/u);
 		await expectNoPanelOverflow(panel);
+		const rows = within(within(panel).getByRole("list", { name: "Observations" })).getAllByRole(
+			"listitem",
+		);
+		for (const row of rows) {
+			const icon = within(row).getAllByRole("button")[0];
+			const title = within(row).getAllByRole("link")[0];
+			if (icon === undefined || title === undefined) {
+				throw new Error("A row with no status icon or no title has no line to share.");
+			}
+			await expect(icon.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+				title.getBoundingClientRect().top - 4,
+			);
+		}
 	},
 };
 
@@ -139,7 +156,7 @@ export const ProcessedWithFeedbackAwaitingApproval: Story = {
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
 		await panel.findByText("Results processed");
-		await panel.findByText("Awaiting approval");
+		await panel.findByRole("button", { name: "Awaiting approval" });
 		await expect(panel.queryByText("Summary posted")).not.toBeInTheDocument();
 		await expect(panel.queryByText("Delivered")).not.toBeInTheDocument();
 	},

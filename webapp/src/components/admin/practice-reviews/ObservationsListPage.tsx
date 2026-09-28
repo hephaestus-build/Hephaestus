@@ -102,6 +102,8 @@ export function ObservationsListPage({
 				renderPageLink={(page, props) => (
 					<Link
 						{...props}
+						// Why `from`: `order` in `review-search.ts`.
+						from="/w/$workspaceSlug/admin/practices/reviews/observations"
 						to="/w/$workspaceSlug/admin/practices/reviews/observations"
 						params={{ workspaceSlug }}
 						search={(previous) => ({ ...previous, page: page === 0 ? undefined : page })}

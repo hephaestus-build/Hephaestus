@@ -6446,6 +6446,20 @@ paths:
             - FAILED
             - TIMED_OUT
             - CANCELLED
+      - description: "Result-processing statuses to list (repeatable), such as FAILED\
+          \ for the reviews whose results can be processed again; omit for every review,\
+          \ including those without one"
+        in: query
+        name: resultProcessing
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - PENDING
+            - DELIVERED
+            - FAILED
       - description: Inclusive lower bound on when the review was requested
         in: query
         name: from
@@ -6504,7 +6518,8 @@ paths:
       - Practice reviews
   /workspaces/{workspaceSlug}/practices/reviews/feedback:
     get:
-      description: Results are ordered newest first and include every delivery state.
+      description: Results include every delivery state and are ordered newest first
+        by default.
       operationId: listPracticeReviewFeedback
       parameters:
       - description: Workspace slug
@@ -6531,6 +6546,17 @@ paths:
           default: 50
           maximum: 100
           minimum: 1
+      - description: Sorting strategy. NEWEST and OLDEST order by when the feedback
+          was created; ties by id.
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: string
+          default: NEWEST
+          enum:
+          - NEWEST
+          - OLDEST
       - in: query
         name: deliveryState
         required: false
@@ -6619,6 +6645,15 @@ paths:
           type: integer
           format: int64
           exclusiveMinimum: 0
+      - description: "Practices whose feedback to list (repeatable): feedback bound\
+          \ to an observation of any of them, in any role"
+        in: query
+        name: practiceSlug
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
       - description: Inclusive lower bound
         in: query
         name: from
@@ -6771,9 +6806,9 @@ paths:
           default: 50
           maximum: 100
           minimum: 1
-      - description: "Sorting strategy. ACTIONABILITY orders problems from CRITICAL\
-          \ to INFO, then strengths, then not-applicable observations; ties are newest\
-          \ first."
+      - description: "Sorting strategy. ACTIONABILITY orders negative outcomes from\
+          \ CRITICAL to INFO, then positive outcomes, then not-applicable observations;\
+          \ ties are newest first."
         in: query
         name: sort
         required: false
@@ -16216,6 +16251,16 @@ components:
           format: uuid
         observations:
           $ref: "#/components/schemas/ReviewObservationCounts"
+        resultProcessing:
+          type: string
+          description: "Result-processing status: null = not applicable, PENDING =\
+            \ awaiting processing, DELIVERED = processing finished, FAILED = processing\
+            \ error. Processing may include delivery; this status alone does not establish\
+            \ feedback publication."
+          enum:
+          - PENDING
+          - DELIVERED
+          - FAILED
         status:
           type: string
           enum:

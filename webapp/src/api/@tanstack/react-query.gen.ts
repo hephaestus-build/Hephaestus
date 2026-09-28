@@ -4302,7 +4302,7 @@ export const listPracticeReviewFeedbackQueryKey = (options: Options<ListPractice
 /**
  * List practice review feedback across the workspace
  *
- * Results are ordered newest first and include every delivery state.
+ * Results include every delivery state and are ordered newest first by default.
  */
 export const listPracticeReviewFeedbackOptions = (options: Options<ListPracticeReviewFeedbackData>) => queryOptions<ListPracticeReviewFeedbackResponse, ListPracticeReviewFeedbackError, ListPracticeReviewFeedbackResponse, ReturnType<typeof listPracticeReviewFeedbackQueryKey>>({
   queryFn: async ({ queryKey, signal }) => {
@@ -4322,7 +4322,7 @@ export const listPracticeReviewFeedbackInfiniteQueryKey = (options: Options<List
 /**
  * List practice review feedback across the workspace
  *
- * Results are ordered newest first and include every delivery state.
+ * Results include every delivery state and are ordered newest first by default.
  */
 export const listPracticeReviewFeedbackInfiniteOptions = (options: Options<ListPracticeReviewFeedbackData>) => {
   const opts = infiniteQueryOptions<ListPracticeReviewFeedbackResponse, ListPracticeReviewFeedbackError, InfiniteData<ListPracticeReviewFeedbackResponse>, QueryKey<Options<ListPracticeReviewFeedbackData>>, number | Pick<QueryKey<Options<ListPracticeReviewFeedbackData>>[0], 'body' | 'headers' | 'path' | 'query'>>(

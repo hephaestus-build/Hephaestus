@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { listPracticeReviewsOptions } from "@/api/@tanstack/react-query.gen";
+import { practiceReviewsHead } from "@/components/admin/practice-reviews/review-levels";
 import {
 	ACTIVE_REVIEW_POLL_MS,
 	REVIEW_PAGE_SIZE,
@@ -11,14 +12,13 @@ import {
 } from "@/components/admin/practice-reviews/review-search";
 import { ReviewRunsPage } from "@/components/admin/practice-reviews/ReviewRunsPage";
 import { useClampedPage } from "@/hooks/use-clamped-page";
-import { workspaceAdminHead } from "@/lib/page-title";
 import { pageParam, useSearchState } from "@/lib/search-params";
 
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/admin/practices/reviews/runs",
 )({
 	validateSearch: runsSearchSchema,
-	head: workspaceAdminHead("Reviews"),
+	head: practiceReviewsHead("Reviews"),
 	component: ReviewRunsRoute,
 });
 

@@ -1,12 +1,23 @@
 import { Link, type LinkComponentProps, useSearch } from "@tanstack/react-router";
 
-import { type DetailStackEntry, detailStackKey, openInStack } from "./detail-stack";
+import {
+	type DetailStackEntry,
+	detailStackKey,
+	type OpenInStackOptions,
+	openInStack,
+	stackInSearch,
+} from "./detail-stack";
 
-export interface DetailStackLinkProps extends Omit<
-	LinkComponentProps,
-	"to" | "search" | "resetScroll" | "state" | "replace"
-> {
+export interface DetailStackLinkProps
+	extends
+		Omit<LinkComponentProps, "to" | "search" | "resetScroll" | "state" | "replace">,
+		OpenInStackOptions {
 	entry: DetailStackEntry;
+	/**
+	 * Search params that say how the level was opened — as a queue, say — written in the same step,
+	 * so the level reads them from its own address.
+	 */
+	levelSearch?: Record<string, unknown>;
 }
 
 /**
@@ -15,30 +26,29 @@ export interface DetailStackLinkProps extends Omit<
  * current stack rather than a captured one is what lets one component work at every depth; a level
  * already open is closed down to rather than repeated (`openInStack`).
  */
-export function DetailStackLink({ entry, ...props }: DetailStackLinkProps) {
-	const current = useSearch({ strict: false, select: (search) => toStack(search.detail) });
+export function DetailStackLink({
+	entry,
+	swap = false,
+	levelSearch,
+	...props
+}: DetailStackLinkProps) {
+	const current = useSearch({ strict: false, select: (search) => stackInSearch(search.detail) });
 	const key = detailStackKey(entry);
-	const { detail, pushed } = openInStack(current, key);
-	// A link to the level already in front changes nothing, so it must not rewrite that entry's mark.
-	const inFront = current.at(-1) === key;
+	const { detail, pushed } = openInStack(current, key, { swap });
+	// A link to the level already in front changes nothing, so it must not rewrite that entry's mark;
+	// nor does a swap, which stands in for the level it replaces (`OpenInStackOptions.swap`).
+	const keepsEntry = current.at(-1) === key || swap;
 	return (
 		<Link
 			to="."
-			search={(previous: Record<string, unknown>) => ({ ...previous, detail })}
+			search={(previous: Record<string, unknown>) => ({ ...previous, ...levelSearch, detail })}
 			// See `useDetailStack`: marks a level this visit pushed, so its dismiss can go back.
-			state={(previous) => (inFront ? previous : { ...previous, detailPush: pushed })}
-			replace={inFront}
+			state={(previous) => (keepsEntry ? previous : { ...previous, detailPush: pushed })}
+			replace={keepsEntry}
 			// Omitted from the props above too: opening a panel must never move the page underneath it,
 			// and a caller that could pass this could reintroduce that.
 			resetScroll={false}
 			{...props}
 		/>
 	);
-}
-
-function toStack(detail: unknown): string[] {
-	if (Array.isArray(detail)) {
-		return detail.filter((value) => typeof value === "string");
-	}
-	return typeof detail === "string" ? [detail] : [];
 }

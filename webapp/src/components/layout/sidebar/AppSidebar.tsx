@@ -42,6 +42,8 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	isMember: boolean;
 	readOnly?: boolean;
 	integrationKinds: readonly IntegrationCatalogEntry["kind"][];
+	/** Feedback awaiting approval in the active workspace, for an admin; undefined while unknown. */
+	awaitingApproval?: number;
 	context: SidebarContext;
 	workspaces: WorkspaceListItem[];
 	activeWorkspace?: WorkspaceListItem;
@@ -60,6 +62,7 @@ export function AppSidebar({
 	isMember,
 	readOnly = false,
 	integrationKinds,
+	awaitingApproval,
 	context,
 	workspaces,
 	activeWorkspace,
@@ -146,6 +149,7 @@ export function AppSidebar({
 						isOwner={isOwner}
 						workspaceSlug={activeWorkspace.workspaceSlug}
 						integrationKinds={integrationKinds}
+						awaitingApproval={awaitingApproval}
 						scmProviderType={activeWorkspace.providerType === "GITLAB" ? "GITLAB" : "GITHUB"}
 					/>
 				)}

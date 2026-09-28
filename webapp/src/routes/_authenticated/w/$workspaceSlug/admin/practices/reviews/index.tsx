@@ -1,5 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
+import { listPracticesOptions } from "@/api/@tanstack/react-query.gen";
 import { rangeStart } from "@/components/activity/activity-range";
 import { PracticeReviewOverviewPage } from "@/components/admin/practice-reviews/PracticeReviewOverviewPage";
 import { rangeScope } from "@/components/admin/practice-reviews/review-outcomes";
@@ -9,6 +11,7 @@ import { InlineLink } from "@/components/common/InlineLink";
 import { useNow } from "@/components/common/use-now";
 import {
 	usePracticeReviewOverview,
+	usePreviousReviewPeriod,
 	useReviewAttention,
 } from "@/hooks/use-practice-review-overview";
 import { useReviewRunning } from "@/hooks/use-review-running";
@@ -26,8 +29,10 @@ function PracticeReviewOverviewRoute() {
 	const from = rangeStart(nowMs, range);
 	const scope = rangeScope(from, nowMs);
 	const overview = usePracticeReviewOverview(workspaceSlug, from);
+	const previousPeriod = usePreviousReviewPeriod(workspaceSlug, from, range);
 	const attention = useReviewAttention(workspaceSlug, scope, overview);
 	const running = useReviewRunning(workspaceSlug);
+	const practices = useQuery(listPracticesOptions({ path: { workspaceSlug } })).data;
 	// Stated only while reviews are not known to run: a working workspace is not told so on every visit.
 	const stopped =
 		running !== undefined && !["running", "checking"].includes(reviewRunningTone(running));
@@ -44,7 +49,9 @@ function PracticeReviewOverviewRoute() {
 			}}
 			scope={scope}
 			overview={overview}
+			previous={previousPeriod}
 			attention={attention}
+			practices={practices}
 			banner={
 				stopped && (
 					<ReviewRunningBanner running={running}>
@@ -53,7 +60,7 @@ function PracticeReviewOverviewRoute() {
 								<Link to="/w/$workspaceSlug/admin/practices/review" params={{ workspaceSlug }} />
 							}
 						>
-							Open review settings
+							Open Review settings
 						</InlineLink>
 					</ReviewRunningBanner>
 				)

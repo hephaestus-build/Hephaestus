@@ -10,41 +10,46 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 
-import type { ObservationSort } from "./review-search";
-
 /**
- * The endpoint's orderings in the operator's words. Each label says what arrives at the *top*,
+ * One of an endpoint's orderings in the operator's words. The label says what arrives at the *top*,
  * because that is the only part of an ordering a reader of the first screenful can check.
  */
-const SORT_ITEMS: { value: ObservationSort; label: string }[] = [
-	{ value: "NEWEST", label: "Newest first" },
-	{ value: "ACTIONABILITY", label: "Most actionable first" },
-];
+export interface ReviewSortItem<T extends string> {
+	value: T;
+	label: string;
+}
 
-export interface ObservationSortSelectProps {
-	value: ObservationSort | undefined;
-	onChange: (sort: ObservationSort | undefined) => void;
+export interface ReviewSortSelectProps<T extends string> {
+	/** The orderings the list offers, the server's default first. */
+	items: readonly [ReviewSortItem<T>, ...ReviewSortItem<T>[]];
+	value: T | undefined;
+	onChange: (sort: T | undefined) => void;
 }
 
 /**
  * A list has no sortable column headers, so the ordering has to be offered explicitly.
  *
- * `NEWEST` is reported as `undefined` rather than as the string: it is the server's default, so
- * writing it into the URL would put a parameter in every link that changes nothing.
+ * The first item is reported as `undefined` rather than as its value: it is the server's default,
+ * so writing it into the URL would put a parameter in every link that changes nothing.
  */
-export function ObservationSortSelect({ value, onChange }: ObservationSortSelectProps) {
+export function ReviewSortSelect<T extends string>({
+	items,
+	value,
+	onChange,
+}: ReviewSortSelectProps<T>) {
 	const sortId = useId();
 	const sortLabelId = useId();
+	const [byDefault] = items;
 	return (
 		<Field orientation="horizontal" className="w-auto max-w-full flex-wrap text-sm">
 			<FieldLabel id={sortLabelId} htmlFor={sortId} className="text-muted-foreground">
 				Sort
 			</FieldLabel>
 			<Select
-				items={SORT_ITEMS}
-				value={value ?? "NEWEST"}
+				items={items}
+				value={value ?? byDefault.value}
 				onValueChange={(next: string | null) =>
-					onChange(next === "ACTIONABILITY" ? "ACTIONABILITY" : undefined)
+					onChange(items.find((item) => item.value === next && item !== byDefault)?.value)
 				}
 			>
 				<SelectTrigger id={sortId} size="sm" className="w-52 max-w-full">
@@ -52,7 +57,7 @@ export function ObservationSortSelect({ value, onChange }: ObservationSortSelect
 					<SelectValue />
 				</SelectTrigger>
 				<SelectContent aria-labelledby={sortLabelId}>
-					{SORT_ITEMS.map((item) => (
+					{items.map((item) => (
 						<SelectItem key={item.value} value={item.value}>
 							{item.label}
 						</SelectItem>

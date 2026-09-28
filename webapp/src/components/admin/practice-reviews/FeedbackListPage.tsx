@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 
 import type { ListPracticeReviewFeedbackResponse, ReviewFeedback } from "@/api/types.gen";
+import type { FacetSource } from "@/components/common/FacetMultiSelect";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { TablePagination } from "@/components/common/TablePagination";
 
@@ -18,6 +19,7 @@ export interface FeedbackListPageProps {
 	isLoading: boolean;
 	error: unknown;
 	onRetry?: () => void;
+	practices: FacetSource;
 	people: ReviewPeople;
 }
 
@@ -45,6 +47,7 @@ export function FeedbackListPage({
 	isLoading,
 	error,
 	onRetry,
+	practices,
 	people,
 }: FeedbackListPageProps) {
 	const rows = feedback?.content ?? [];
@@ -60,6 +63,7 @@ export function FeedbackListPage({
 				search={search}
 				onPatch={onSearchChange}
 				onReset={reset}
+				practices={practices}
 				people={people}
 				total={feedback?.page?.totalElements}
 				scopedArtifact={rows[0]?.reviewedWork}
@@ -76,6 +80,8 @@ export function FeedbackListPage({
 				renderPageLink={(page, props) => (
 					<Link
 						{...props}
+						// Why `from`: `order` in `review-search.ts`.
+						from="/w/$workspaceSlug/admin/practices/reviews/feedback"
 						to="/w/$workspaceSlug/admin/practices/reviews/feedback"
 						params={{ workspaceSlug }}
 						search={(previous) => ({ ...previous, page: page === 0 ? undefined : page })}

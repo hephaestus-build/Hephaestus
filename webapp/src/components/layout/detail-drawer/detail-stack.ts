@@ -50,6 +50,16 @@ export function parseDetailStack<TKind extends string>(
 	});
 }
 
+export interface OpenInStackOptions {
+	/**
+	 * Replace the level in front instead of opening one over it — for stepping through a queue of
+	 * records, where the next one takes the place of the one just handled. A swap is written over
+	 * the current history entry and keeps its mark, so dismissing the level still goes back to where
+	 * it was first opened from, and Back does not walk through every record already handled.
+	 */
+	swap?: boolean;
+}
+
 /**
  * The stack after opening `key` over `stack`, both in wire form, and whether it grew by one level.
  *
@@ -65,15 +75,30 @@ export function parseDetailStack<TKind extends string>(
 export function openInStack(
 	stack: readonly string[],
 	key: string,
+	{ swap = false }: OpenInStackOptions = {},
 ): { detail: string[]; pushed: boolean } {
 	const open = stack.indexOf(key);
 	if (open !== -1) {
 		return { detail: stack.slice(0, open + 1), pushed: false };
 	}
+	if (swap && stack.length > 0) {
+		return { detail: [...stack.slice(0, -1), key], pushed: false };
+	}
 	if (stack.length >= DETAIL_STACK_MAX_DEPTH) {
 		return { detail: [...stack.slice(0, DETAIL_STACK_MAX_DEPTH - 1), key], pushed: false };
 	}
 	return { detail: [...stack, key], pushed: true };
+}
+
+/**
+ * The stack in wire form from a search read without the route's schema — `useSearch({ strict: false })`
+ * — where a one-level stack is still the bare string the URL carries and a deeper one an array.
+ */
+export function stackInSearch(detail: unknown): string[] {
+	if (Array.isArray(detail)) {
+		return detail.filter((value) => typeof value === "string");
+	}
+	return typeof detail === "string" ? [detail] : [];
 }
 
 export function encodeDetailStack(entries: DetailStackEntry[]): string[] | undefined {

@@ -3,7 +3,10 @@ import { FacetMultiSelect } from "@/components/common/FacetMultiSelect";
 import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { ResultCount } from "@/components/common/ResultCount";
 import { statusFacetOptions } from "@/components/common/status-def";
-import { REVIEW_STATUS_DEFS } from "@/components/practice-vocabulary/review-status-defs";
+import {
+	RESULT_PROCESSING_DEFS,
+	REVIEW_STATUS_DEFS,
+} from "@/components/practice-vocabulary/review-status-defs";
 import { fromDateRange, toDateRange } from "@/lib/date-range-search";
 import { nonEmpty } from "@/lib/search-params";
 
@@ -11,12 +14,18 @@ import { AppliedFacetPills, facetPills } from "./AppliedFacetPills";
 import type { RunsSearch } from "./review-search";
 
 const STATUS_OPTIONS = statusFacetOptions(REVIEW_STATUS_DEFS);
+const RESULT_PROCESSING_OPTIONS = statusFacetOptions(RESULT_PROCESSING_DEFS);
 
 /** True when the reader has narrowed the list, which decides both the count's wording and whether
  * the empty state offers to clear anything. Derived here so the toolbar and the page it sits above
  * cannot disagree about what "filtered" means. */
 export function hasRunFilter(search: RunsSearch): boolean {
-	return (search.status?.length ?? 0) > 0 || search.from !== undefined || search.to !== undefined;
+	return (
+		(search.status?.length ?? 0) > 0 ||
+		(search.resultProcessing?.length ?? 0) > 0 ||
+		search.from !== undefined ||
+		search.to !== undefined
+	);
 }
 
 /**
@@ -25,7 +34,7 @@ export function hasRunFilter(search: RunsSearch): boolean {
  * and so a field added above cannot be forgotten in one of them.
  */
 export function clearedRunFilters(): Partial<RunsSearch> {
-	return { status: undefined, from: undefined, to: undefined };
+	return { status: undefined, resultProcessing: undefined, from: undefined, to: undefined };
 }
 
 export interface ReviewRunFiltersProps {
@@ -53,6 +62,14 @@ export function ReviewRunFilters({ search, onPatch, onReset, total }: ReviewRunF
 				selected={search.status ?? []}
 				onChange={(values) => onPatch({ status: nonEmpty(values) })}
 			/>
+			{/* A review can complete and still fail to process what it produced, which its status alone
+			    reports as a success. */}
+			<FacetMultiSelect
+				title="Result processing"
+				options={RESULT_PROCESSING_OPTIONS}
+				selected={search.resultProcessing ?? []}
+				onChange={(values) => onPatch({ resultProcessing: nonEmpty(values) })}
+			/>
 			{/* "Requested", not "Started": the timestamp the rows show and this filters is the review's
 			    `createdAt`, which is when it was enqueued, and a review can sit queued before a worker
 			    claims it. */}
@@ -62,9 +79,17 @@ export function ReviewRunFilters({ search, onPatch, onReset, total }: ReviewRunF
 				onChange={(range) => onPatch(fromDateRange(range))}
 			/>
 			<AppliedFacetPills
-				pills={facetPills("Status", STATUS_OPTIONS, search.status, (values) =>
-					onPatch({ status: nonEmpty(values) }),
-				)}
+				pills={[
+					...facetPills("Status", STATUS_OPTIONS, search.status, (values) =>
+						onPatch({ status: nonEmpty(values) }),
+					),
+					...facetPills(
+						"Result processing",
+						RESULT_PROCESSING_OPTIONS,
+						search.resultProcessing,
+						(values) => onPatch({ resultProcessing: nonEmpty(values) }),
+					),
+				]}
 			/>
 		</FilterToolbar>
 	);

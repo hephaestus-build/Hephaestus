@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, within } from "storybook/test";
+import { expect, screen, within } from "storybook/test";
 
 import type { ReviewRunSummary } from "@/api/types.gen";
+import { expectSettledVisible } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { levelsOpenedBy } from "@/test/detail-stack";
 
@@ -21,10 +22,11 @@ const completed = run("11111111-1111-1111-1111-111111111111");
 const conversation = run("33333333-3333-3333-3333-333333333333");
 const running = run("aaaaaaaa-8888-8888-8888-888888888888");
 const failed = run("bbbbbbbb-8888-8888-8888-888888888888");
+const processingFailed: ReviewRunSummary = { ...completed, resultProcessing: "FAILED" };
 
 /**
- * One row of the Reviews list: the work's title as the only link, the facts that place it, what the
- * review produced, and its status in a slot whose width is the same on every row of a list.
+ * One row of the Reviews list: the review's status as the leading icon, the work's title as the only
+ * link, the facts that place it, and what the review produced.
  *
  * The tally is the part worth reading closely. A review that is still going and a review that
  * stopped early both have nothing to count, and neither gets a strip of zeroes — a strip means "this
@@ -53,7 +55,14 @@ type Story = StoryObj<typeof meta>;
  * down the list, and its feedback as a sentence of only what happened.
  */
 export const Completed: Story = {
-	play: async ({ canvas }) => {
+	play: async ({ canvas, userEvent }) => {
+		// The status is the icon, named and explained on hover or focus, and not repeated as a badge.
+		// It is the row's first stop for a keyboard, since nothing else on the row says the words.
+		const status = canvas.getByRole("button", { name: "Completed" });
+		await expect(canvas.queryByText("Completed")).not.toBeInTheDocument();
+		await userEvent.tab();
+		await expect(status).toHaveFocus();
+		await expectSettledVisible(await screen.findByText(/It ran to the end/u));
 		// The title opens the review over the list rather than leaving it.
 		await expect(
 			levelsOpenedBy(
@@ -63,7 +72,7 @@ export const Completed: Story = {
 		const observations = canvas.getByRole("list", { name: "Observations" });
 		await expect(within(observations).getAllByRole("listitem")).toHaveLength(4);
 		await expect(observations).toHaveTextContent("0 not applicable");
-		canvas.getByText("Feedback: 2 delivered · 1 replaced by newer · 1 withheld");
+		canvas.getByText("Feedback: 2 delivered · 2 withheld");
 	},
 };
 
@@ -73,6 +82,18 @@ export const AConversation: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByRole("link", { name: "How should we roll back the pricing migration?" });
 		canvas.getByText(/engineering/u);
+	},
+};
+
+/**
+ * A review can run to the end and still fail to process what it produced. The status says it
+ * completed, so the failure is the one qualifier the row carries.
+ */
+export const ResultProcessingFailed: Story = {
+	args: { review: processingFailed },
+	play: async ({ canvas }) => {
+		canvas.getByRole("button", { name: "Completed" });
+		canvas.getByText("Result processing failed");
 	},
 };
 
@@ -94,21 +115,48 @@ export const StoppedWithNothing: Story = {
 	},
 };
 
-/**
- * The status slot keeps its width whatever the badge says, so the column holds down the list. At
- * narrow widths the reservation is dropped and the chips wrap instead of pushing the row off-screen.
- */
+/** Every status in one list, at the reflow width, where the qualifier wraps under the facts. */
 export const EveryOutcomeInOneList: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" } },
 	render: (args) => (
 		<>
-			{[completed, conversation, running, failed].map((review) => (
+			{[processingFailed, conversation, running, failed].map((review) => (
 				<ReviewRunRow key={review.id} {...args} review={review} />
 			))}
 		</>
 	),
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByRole("listitem").length).toBeGreaterThanOrEqual(4);
+		for (const status of ["Completed", "Running", "Failed"]) {
+			await expect(canvas.getAllByRole("button", { name: status }).length).toBeGreaterThan(0);
+		}
 		await expectNoPageOverflow();
+	},
+};
+
+/**
+ * The review open in the panel beside the list is the list's current item, and its row keeps a bar
+ * on its leading edge, so the list says which row the panel belongs to; the other rows are neither.
+ */
+export const OpenInThePanel: Story = {
+	parameters: {
+		router: {
+			initialUrl: `/?detail=${encodeURIComponent(JSON.stringify([`review:${completed.id}`]))}`,
+		},
+	},
+	render: (args) => (
+		<>
+			{[completed, conversation, running].map((review) => (
+				<ReviewRunRow key={review.id} {...args} review={review} />
+			))}
+		</>
+	),
+	play: async ({ canvas }) => {
+		const open = await canvas.findByRole("link", {
+			name: "Cache the workspace member lookup on the review path",
+		});
+		await expect(open).toHaveAttribute("aria-current", "page");
+		for (const title of ["How should we roll back the pricing migration?", running.target.title]) {
+			await expect(canvas.getByRole("link", { name: title })).not.toHaveAttribute("aria-current");
+		}
 	},
 };

@@ -36,6 +36,11 @@ function values(url: URL | undefined, name: string): string[] {
 	return (url?.searchParams.getAll(name) ?? []).flatMap((value) => value.split(","));
 }
 
+/** The overview's own range: the read for the period before it names where it ends, this one does not. */
+function currentOverview(): URL | undefined {
+	return requestsTo("/practices/reviews/overview").find((url) => !url.searchParams.has("to"));
+}
+
 function instant(url: URL | undefined, name: string): number | undefined {
 	const value = url?.searchParams.get(name);
 	return value == null ? undefined : new Date(value).getTime();
@@ -48,15 +53,8 @@ function timedOutWhenAsked(url: URL) {
 	}
 	const [finished] = reviewRuns;
 	return HttpResponse.json({
-		content: [
-			{
-				...finished,
-				id: "cccccccc-8888-8888-8888-888888888888",
-				status: "TIMED_OUT",
-				target: { ...finished?.target, title: "Split the invoice export into pages" },
-			},
-		],
-		page: { number: 0, size: 5, totalElements: 1, totalPages: 1 },
+		content: [{ ...finished, id: "cccccccc-8888-8888-8888-888888888888", status: "TIMED_OUT" }],
+		page: { number: 0, size: 1, totalElements: 1, totalPages: 1 },
 	});
 }
 
@@ -185,7 +183,7 @@ describe("practice review levels", () => {
 		const { router } = renderRouteAtWithRouter(REVIEWS);
 
 		await userEvent.click(
-			await screen.findByRole("link", { name: "27 improvements" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("link", { name: "27 negative outcomes" }, ROUTE_RENDER_WAIT),
 		);
 		await waitFor(
 			() => expect(router.state.location.pathname).toBe(`${REVIEWS}/observations`),
@@ -193,7 +191,7 @@ describe("practice review levels", () => {
 		);
 		await waitFor(() => expect(requestsTo("/practices/reviews/observations")).not.toHaveLength(0));
 
-		const overview = requestsTo("/practices/reviews/overview").at(0);
+		const overview = currentOverview();
 		const list = requestsTo("/practices/reviews/observations").at(-1);
 		expect(overview?.searchParams.get("zone")).toBe(browserTimeZone());
 		// The reader's midnight, as an instant: the server buckets from exactly this moment.
@@ -206,15 +204,39 @@ describe("practice review levels", () => {
 	});
 
 	/**
-	 * A decision owed does not expire with the range, so the approvals ask for every piece of
-	 * feedback awaiting one; what failed is asked for over the range the page shows.
+	 * Each total is set against the period of the same length before the range: a second read of
+	 * the overview that ends where the range starts, in the same zone.
 	 */
-	it("asks for every decision owed, and for failures over the range", async () => {
+	it("asks for the period before the range, to set the totals against", async () => {
+		renderRouteAtWithRouter(`${REVIEWS}?range=7d`);
+		await screen.findByRole("heading", { name: "What the reviews did" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(requestsTo("/practices/reviews/overview")).toHaveLength(2));
+
+		const current = currentOverview();
+		const previous = requestsTo("/practices/reviews/overview").find((url) =>
+			url.searchParams.has("to"),
+		);
+		const from = instant(current, "from");
+		assert(from !== undefined);
+		expect(instant(previous, "to")).toBe(from);
+		const previousFrom = instant(previous, "from");
+		assert(previousFrom !== undefined);
+		// Seven days before, give or take the hour a daylight-saving change moves a local midnight.
+		expect(Math.round((from - previousFrom) / 3_600_000 / 24)).toBe(7);
+		expect(previous?.searchParams.get("zone")).toBe(browserTimeZone());
+	});
+
+	/**
+	 * A decision owed does not expire with the range, so the approvals ask for every piece of
+	 * feedback awaiting one, oldest first — the order they are worked through in. What failed is
+	 * asked for over the range the page shows, one row each, since the line reads only totals.
+	 */
+	it("asks for every decision owed, oldest first, and for failures over the range", async () => {
 		renderRouteAtWithRouter(REVIEWS);
 		await screen.findByRole("heading", { name: "Needs you" }, ROUTE_RENDER_WAIT);
-		await waitFor(() => expect(requestsTo("/practices/reviews")).not.toHaveLength(0));
+		await waitFor(() => expect(requestsTo("/practices/reviews")).toHaveLength(2));
 
-		const overviewFrom = instant(requestsTo("/practices/reviews/overview").at(0), "from");
+		const overviewFrom = instant(currentOverview(), "from");
 		const feedbackReads = requestsTo("/practices/reviews/feedback");
 		const approvals = feedbackReads.find(
 			(url) => values(url, "deliveryState").join(",") === "AWAITING_APPROVAL",
@@ -225,40 +247,49 @@ describe("practice review levels", () => {
 		const failedReviews = requestsTo("/practices/reviews").find((url) =>
 			values(url, "status").includes("FAILED"),
 		);
+		const unprocessedResults = requestsTo("/practices/reviews").find((url) =>
+			values(url, "resultProcessing").includes("FAILED"),
+		);
 
+		expect(approvals?.searchParams.get("sort")).toBe("OLDEST");
 		expect(approvals?.searchParams.has("from")).toBe(false);
 		expect(approvals?.searchParams.has("to")).toBe(false);
-		expect(instant(failedDeliveries, "from")).toBe(overviewFrom);
-		expect(failedDeliveries?.searchParams.has("to")).toBe(true);
-		expect(instant(failedReviews, "from")).toBe(overviewFrom);
-		expect(failedReviews?.searchParams.has("to")).toBe(true);
+		expect(values(failedDeliveries, "deliveryState")).toStrictEqual(["FAILED", "PARTIALLY_FAILED"]);
+		for (const problem of [failedDeliveries, failedReviews, unprocessedResults]) {
+			expect(instant(problem, "from")).toBe(overviewFrom);
+			expect(problem?.searchParams.has("to")).toBe(true);
+			expect(problem?.searchParams.get("size")).toBe("1");
+		}
+		expect(values(unprocessedResults, "status")).toStrictEqual([]);
 	});
 
-	/** A review that ran out of time did not finish either, so it is owed a look like a failed one. */
-	it("lists a review that timed out among the failed reviews that need you", async () => {
+	/**
+	 * A review that ran out of time did not finish either, so it is counted with the failed ones,
+	 * and the count opens the list filtered to both.
+	 */
+	it("counts a review that timed out among the failed reviews that need you", async () => {
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/practices/reviews", ({ request }) =>
 				timedOutWhenAsked(new URL(request.url)),
 			),
 		);
-		renderRouteAtWithRouter(REVIEWS);
+		const { router } = renderRouteAtWithRouter(REVIEWS);
 
-		const failed = await screen.findByRole("list", { name: "Failed reviews" }, ROUTE_RENDER_WAIT);
-		within(failed).getByRole("link", { name: "Split the invoice export into pages" });
-		const asked = requestsTo("/practices/reviews").find((url) =>
-			values(url, "status").includes("TIMED_OUT"),
+		await userEvent.click(
+			await screen.findByRole("link", { name: "1 review failed or timed out" }, ROUTE_RENDER_WAIT),
 		);
-		expect(values(asked, "status")).toHaveLength(2);
-		expect(values(asked, "status")).toStrictEqual(expect.arrayContaining(["FAILED", "TIMED_OUT"]));
+		await waitFor(
+			() => expect(router.state.location.pathname).toBe(`${REVIEWS}/runs`),
+			ROUTE_RENDER_WAIT,
+		);
+		expect(router.state.location.search).toMatchObject({ status: ["FAILED", "TIMED_OUT"] });
 	});
 
 	/**
-	 * A practice opens its level over the overview, and the level asks for the practice's
-	 * observations most worth acting on over the overview's range: the endpoint's default order is
-	 * newest first, and five rows re-sorted in the browser are the five that arrived, not the five
-	 * that matter.
+	 * A practice opens its level over the overview, and the level asks for the practice's most
+	 * recent observations over the overview's range, in the list's own order.
 	 */
-	it("opens a practice from the overview and asks for its observations worth acting on", async () => {
+	it("opens a practice from the overview and asks for its most recent observations", async () => {
 		const [practice] = practiceCounts;
 		assert(practice);
 		const { router } = renderRouteAtWithRouter(REVIEWS);
@@ -274,11 +305,25 @@ describe("practice review levels", () => {
 		await waitFor(() => expect(requestsTo("/practices/reviews/observations")).not.toHaveLength(0));
 		const observations = requestsTo("/practices/reviews/observations").at(-1);
 		expect(values(observations, "practiceSlug")).toStrictEqual([practice.practiceSlug]);
-		expect(observations?.searchParams.get("sort")).toBe("ACTIONABILITY");
+		expect(observations?.searchParams.has("sort")).toBe(false);
 		expect(observations?.searchParams.get("size")).toBe("5");
-		expect(instant(observations, "from")).toBe(
-			instant(requestsTo("/practices/reviews/overview").at(0), "from"),
-		);
+		expect(instant(observations, "from")).toBe(instant(currentOverview(), "from"));
+	});
+
+	/**
+	 * A practice level reads its range and nothing before it: only the overview's totals are set
+	 * against the period before, so a level over a list does not pay for that read.
+	 */
+	it("reads no earlier period for a practice level", async () => {
+		const [practice] = practiceCounts;
+		assert(practice);
+		renderRouteAtWithRouter(`${REVIEWS}/runs?detail=practice:${practice.practiceSlug}`);
+
+		await screen.findByRole("dialog", { name: practice.practiceName }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(currentOverview()).toBeDefined());
+		expect(
+			requestsTo("/practices/reviews/overview").filter((url) => url.searchParams.has("to")),
+		).toStrictEqual([]);
 	});
 
 	/**

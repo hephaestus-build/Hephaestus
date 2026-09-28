@@ -27,7 +27,7 @@ if (!THIN_CONTROLLERS || !COUNTS) {
 	throw new Error("The fixtures no longer cover thin-controllers");
 }
 
-/** The practice's observations the endpoint would rank most actionable, as a preview of `total`. */
+/** The practice's most recent observations, as a preview of `total`. */
 function ready(total: number): ReviewSectionState<ReviewObservation> {
 	return {
 		status: "ready",
@@ -41,10 +41,10 @@ function ready(total: number): ReviewSectionState<ReviewObservation> {
 }
 
 /**
- * One practice as the reviews saw it over the overview's range: how its observations turned out,
- * what feedback cited it, and the observations most worth acting on. Every count opens the rows it
- * counts, except feedback, which cannot be filtered by practice. The footer leads to the practice's
- * definition in Practice setup, where "this practice is wrong" is fixed.
+ * One practice as the reviews saw it over the overview's range: the autonomy it runs with, how its
+ * observations turned out, what became of the feedback citing it, and what it observed most
+ * recently. Every count opens the rows it counts. The footer edits the practice's definition in
+ * Practice setup, where "this practice is wrong" is fixed.
  */
 const meta = {
 	component: PracticeLevel,
@@ -63,7 +63,7 @@ const meta = {
 	},
 	argTypes: { path: { control: false } },
 	render: (args) => (
-		<InLevelStack entry={practiceLevel(args.practiceSlug)} path={args.path}>
+		<InLevelStack entry={practiceLevel(args.practiceSlug)} path={args.path} size="detailWide">
 			{(level) => <PracticeLevel {...args} {...level} />}
 		</InLevelStack>
 	),
@@ -78,32 +78,45 @@ export const Default: Story = {
 		await expect(panel.getByRole("heading", { name: "Thin controllers", level: 2 })).toBeVisible();
 		panel.getByText(THIN_CONTROLLERS.whyItMatters ?? "");
 
+		// The autonomy it runs with, and where that is changed.
+		panel.getByText("Review before sending");
+		await expect(
+			panel.getByRole("link", { name: "Change its autonomy in Review settings" }),
+		).toHaveAttribute("href", "/w/demo/admin/practices/review");
 		const observed = within(panel.getByRole("list", { name: "Observations by outcome" }));
 		await expect(observed.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-			"18 strengths",
-			"9 improvements",
+			"18 positive outcomes",
+			"9 negative outcomes",
 			"4 not applicable",
 			"2 undetermined",
-			"1 marked incorrect",
 		]);
 		// An observation count opens the list narrowed to this practice as well as the value.
-		const improvements = new URL(
-			observed.getByRole<HTMLAnchorElement>("link", { name: "9 improvements" }).href,
+		const negative = new URL(
+			observed.getByRole<HTMLAnchorElement>("link", { name: "9 negative outcomes" }).href,
 		);
-		await expect(improvements.searchParams.get("outcome")).toBe('["NEGATIVE"]');
-		await expect(improvements.searchParams.get("practiceSlug")).toBe(`["${SLUG}"]`);
-		// Feedback cannot be filtered by practice, so its counts are words: a link would open rows
-		// the count never counted.
-		const cited = within(
-			panel.getByRole("list", { name: "Feedback citing this practice, by delivery state" }),
+		await expect(negative.searchParams.get("outcome")).toBe('["NEGATIVE"]');
+		await expect(negative.searchParams.get("practiceSlug")).toBe(`["${SLUG}"]`);
+		// What an admin marked incorrect, out of all of them, and what that share means.
+		within(panel.getByRole("list", { name: "Observations checked by an admin" })).getByRole(
+			"link",
+			{ name: "1 of 33 marked incorrect" },
 		);
+		panel.getByText(
+			"Only observations an admin found wrong are marked; an unmarked one is not confirmed correct.",
+		);
+		// Feedback opens the feedback citing this practice, by family.
+		const cited = within(panel.getByRole("list", { name: "Feedback by delivery" }));
 		await expect(cited.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
 			"2 awaiting approval",
 			"7 delivered",
 			"2 withheld",
 			"1 failed to deliver",
 		]);
-		await expect(cited.queryAllByRole("link")).toHaveLength(0);
+		const awaiting = new URL(
+			cited.getByRole<HTMLAnchorElement>("link", { name: "2 awaiting approval" }).href,
+		);
+		await expect(awaiting.pathname).toBe("/w/demo/admin/practices/reviews/feedback");
+		await expect(awaiting.searchParams.get("practiceSlug")).toBe(`["${SLUG}"]`);
 
 		const [firstRow] = within(panel.getByRole("list", { name: "Observations" })).getAllByRole(
 			"link",
@@ -112,14 +125,19 @@ export const Default: Story = {
 			throw new Error("The level shows no observation");
 		}
 		await expect(levelsOpenedBy(firstRow)).toEqual([expect.stringMatching(/^observation:/u)]);
+		// The list in its own order, newest first — not a ranking the preview did not use.
 		const all = new URL(
 			panel.getByRole<HTMLAnchorElement>("link", { name: "See all 9 observations" }).href,
 		);
-		await expect(all.searchParams.get("order")).toBe("ACTIONABILITY");
-		await expect(panel.getByRole("link", { name: "Open in Practice setup" })).toHaveAttribute(
-			"href",
-			expect.stringContaining("/w/demo/admin/practices?"),
-		);
+		await expect(all.searchParams.get("order")).toBeNull();
+		await expect(all.searchParams.get("practiceSlug")).toBe(`["${SLUG}"]`);
+		// One primary: edit the definition. Reading it in setup is the secondary.
+		await expect(levelsOpenedBy(panel.getByRole("link", { name: "Edit practice" }))).toEqual([
+			`practice-edit:${SLUG}`,
+		]);
+		await expect(
+			levelsOpenedBy(panel.getByRole("link", { name: "Open in Practice setup" })),
+		).toEqual([`practice:${SLUG}`]);
 	},
 };
 
@@ -132,13 +150,16 @@ export const Reflow: Story = {
 	},
 };
 
-/** Everything it recorded is shown, so there is nothing further to link to. */
+/**
+ * Everything it recorded is shown, and the list is still one press away: it is where observations
+ * are filtered, paged and compared.
+ */
 export const EveryObservationShown: Story = {
 	args: { observations: ready(REVIEW_PREVIEW_SIZE) },
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByRole("list", { name: "Observations" })).toBeVisible();
-		await expect(panel.queryByRole("link", { name: /^See all/u })).not.toBeInTheDocument();
+		panel.getByRole("link", { name: `See all ${REVIEW_PREVIEW_SIZE} observations` });
 	},
 };
 
@@ -162,6 +183,22 @@ export const NotCheckedInRange: Story = {
 		await expect(panel.queryByRole("list", { name: /by outcome/u })).not.toBeInTheDocument();
 		// Setup is still one press away: a practice that never fires is exactly what it is for.
 		panel.getByRole("link", { name: "Open in Practice setup" });
+	},
+};
+
+/**
+ * The previous range did not check it: that says nothing about the range just chosen, so the counts
+ * wait in their shape rather than claiming it was not checked.
+ */
+export const StaleNotChecked: Story = {
+	args: {
+		...NotCheckedInRange.args,
+		counts: { status: "ready", counts: undefined, stale: true },
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(panel.queryByText("Not checked in this range")).not.toBeInTheDocument();
+		await expect(panel.queryByRole("list", { name: /by outcome/u })).not.toBeInTheDocument();
 	},
 };
 

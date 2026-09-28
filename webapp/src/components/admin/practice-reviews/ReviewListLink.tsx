@@ -11,7 +11,7 @@ export interface ReviewListLinkProps extends Omit<ComponentProps<"a">, "href"> {
 /**
  * A list tab with its filters set. One branch per list because a route's search is typed by its
  * literal path, which a union of paths loses. No `detail` is carried, so opening a list closes any
- * open level; the page's range comes along through the route's search middleware.
+ * open level, and no overview range either: the destination's own days say what it lists.
  */
 export function ReviewListLink({ workspaceSlug, destination, ...props }: ReviewListLinkProps) {
 	switch (destination.list) {

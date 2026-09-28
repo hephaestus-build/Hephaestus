@@ -23,9 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * How practice reviews went in a time range: reviews by {@code created_at}, observations by {@code observed_at} and
- * feedback by {@code created_at}, the columns the admin lists filter by. Every total, and each practice's
- * observation counts, therefore match the list filtered to the same range and value; the feedback list has no
- * practice filter to match a practice's feedback counts.
+ * feedback by {@code created_at}, the columns the admin lists filter by. Every total therefore matches the list
+ * filtered to the same range and value, and each practice's observation and feedback counts match the list
+ * filtered to the same range, practice and value.
  */
 @Service
 @RequiredArgsConstructor

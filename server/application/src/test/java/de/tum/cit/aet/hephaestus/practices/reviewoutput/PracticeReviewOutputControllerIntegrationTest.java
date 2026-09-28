@@ -46,8 +46,11 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.Nullable;
@@ -60,6 +63,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
@@ -1033,6 +1037,98 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
             expectFeedbackTotal("?deliveryState=PREPARED&" + range, 1);
             expectFeedbackTotal("?deliveryState=SUPPRESSED&" + range, 0);
             expectFeedbackTotal("?deliveryState=FAILED&" + range, 0);
+        }
+
+        /**
+         * A practice's overview feedback counts open the feedback list filtered to that practice, the same range and
+         * one delivery state, on the same rows.
+         */
+        @Test
+        @WithAdminUser
+        void shouldListAsMuchFeedbackAsEachPracticeCountsWhenFilteredToThePracticeStateAndRange() {
+            Instant inside = Instant.parse("2026-02-03T12:00:00Z");
+            UUID firstA = insertProblem(practiceA, job, alice, "First A", "MAJOR");
+            UUID secondA = insertProblem(practiceA, job, alice, "Second A", "MAJOR");
+            UUID onlyB = insertProblem(practiceB, job, bob, "Only B", "MAJOR");
+            Feedback fusedA =
+                    persistUnit(workspace, job, alice, 0, FeedbackDeliveryState.PARTIALLY_DELIVERED, null, "A", inside);
+            bind(fusedA, firstA);
+            bind(fusedA, secondA);
+            Feedback acrossBoth =
+                    persistUnit(workspace, job, alice, 1, FeedbackDeliveryState.DELIVERED, null, "A and B", inside);
+            bind(acrossBoth, firstA);
+            bind(acrossBoth, onlyB);
+            bind(persistUnit(workspace, job, bob, 2, FeedbackDeliveryState.PREPARED, null, "B", inside), onlyB);
+            persistUnit(workspace, job, bob, 3, FeedbackDeliveryState.SUPPRESSED, null, "Unbound", inside);
+            bind(
+                    persistUnit(
+                            workspace,
+                            job,
+                            alice,
+                            4,
+                            FeedbackDeliveryState.DELIVERED,
+                            null,
+                            "Late",
+                            Instant.parse("2026-02-08T00:00:00Z")),
+                    firstA);
+            String range = "from=2026-02-01T00:00:00Z&to=2026-02-08T00:00:00Z";
+
+            JsonNode practices = OBJECT_MAPPER
+                    .readTree(Objects.requireNonNull(getOk(
+                                    "/workspaces/{slug}/practices/reviews/overview?" + range,
+                                    workspace.getWorkspaceSlug())
+                            .returnResult()
+                            .getResponseBody()))
+                    .get("practices");
+            Map<String, JsonNode> feedbackBySlug = new HashMap<>();
+            practices.forEach(
+                    practice -> feedbackBySlug.put(practice.get("practiceSlug").asString(), practice.get("feedback")));
+            JsonNode countsA = Objects.requireNonNull(feedbackBySlug.get(practiceA.getSlug()));
+            JsonNode countsB = Objects.requireNonNull(feedbackBySlug.get(practiceB.getSlug()));
+            assertThat(countsA.path("partiallyDelivered").asLong()).isEqualTo(1);
+            assertThat(countsA.path("delivered").asLong()).isEqualTo(1);
+            assertThat(countsB.path("delivered").asLong()).isEqualTo(1);
+            assertThat(countsB.path("prepared").asLong()).isEqualTo(1);
+            feedbackBySlug.forEach((slug, counts) -> {
+                for (FeedbackDeliveryState state : FeedbackDeliveryState.values()) {
+                    expectFeedbackTotal(
+                            "?practiceSlug=" + slug + "&deliveryState=" + state + "&" + range,
+                            counts.path(camelCase(state.name())).asInt());
+                }
+            });
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldListFeedbackOldestFirstWhenSortedOldest() {
+            Instant at = Instant.parse("2026-02-03T12:00:00Z");
+            Feedback middle = persistUnit(workspace, job, alice, 0, FeedbackDeliveryState.PREPARED, null, "Middle", at);
+            Feedback oldest = persistUnit(
+                    workspace, job, alice, 1, FeedbackDeliveryState.PREPARED, null, "Oldest", at.minusSeconds(60));
+            Feedback newest = persistUnit(
+                    workspace, job, alice, 2, FeedbackDeliveryState.PREPARED, null, "Newest", at.plusSeconds(60));
+
+            getOk(FEEDBACK, workspace.getWorkspaceSlug())
+                    .jsonPath("$.content[*].id")
+                    .isEqualTo(List.of(
+                            newest.getId().toString(),
+                            middle.getId().toString(),
+                            oldest.getId().toString()));
+            getOk(FEEDBACK + "?sort=OLDEST", workspace.getWorkspaceSlug())
+                    .jsonPath("$.content[*].id")
+                    .isEqualTo(List.of(
+                            oldest.getId().toString(),
+                            middle.getId().toString(),
+                            newest.getId().toString()));
+        }
+
+        private static String camelCase(String constant) {
+            String[] words = constant.toLowerCase(Locale.ROOT).split("_");
+            StringBuilder result = new StringBuilder(words[0]);
+            for (int i = 1; i < words.length; i++) {
+                result.append(words[i].substring(0, 1).toUpperCase(Locale.ROOT)).append(words[i].substring(1));
+            }
+            return result.toString();
         }
 
         private void expectFeedbackTotal(String query, int total) {

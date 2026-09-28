@@ -192,19 +192,25 @@ export function reviewHandlers({
 			"*/workspaces/:workspaceSlug/practices/reviews/observations/:observationId",
 			({ params }) => HttpResponse.json(observationDetail(String(params.observationId))),
 		),
-		http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback", ({ request }) =>
-			page(filterFeedback(feedbackRows, new URL(request.url)), new URL(request.url)),
-		),
+		http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback", ({ request }) => {
+			const url = new URL(request.url);
+			const rows = filterFeedback(feedbackRows, url);
+			// The fixture is newest first, as the endpoint's default order is.
+			return page(single(url, "sort") === "OLDEST" ? [...rows].reverse() : rows, url);
+		}),
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback/:feedbackId", ({ params }) =>
 			HttpResponse.json(feedbackDetail(String(params.feedbackId))),
 		),
 		http.get("*/workspaces/:workspaceSlug/practices/reviews", ({ request }) => {
 			const url = new URL(request.url);
 			return page(
-				// Both filters, intersected, exactly as the endpoint applies them. Honouring only
+				// Every filter, intersected, exactly as the endpoint applies them. Honouring only
 				// `status` here would let a story "prove" a date range that the screen never sent.
 				reviewRuns.filter(
-					(run) => matches(values(url, "status"), run.status) && withinDates(url, run.createdAt),
+					(run) =>
+						matches(values(url, "status"), run.status) &&
+						matches(values(url, "resultProcessing"), run.resultProcessing) &&
+						withinDates(url, run.createdAt),
 				),
 				url,
 			);

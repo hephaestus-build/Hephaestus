@@ -2374,7 +2374,7 @@ export const listPracticeEvidenceOutcomes = <ThrowOnError extends boolean = fals
 /**
  * List practice review feedback across the workspace
  *
- * Results are ordered newest first and include every delivery state.
+ * Results include every delivery state and are ordered newest first by default.
  */
 export const listPracticeReviewFeedback = <ThrowOnError extends boolean = false>(options: Options<ListPracticeReviewFeedbackData, ThrowOnError>): RequestResult<ListPracticeReviewFeedbackResponses, ListPracticeReviewFeedbackErrors, ThrowOnError> => (options.client ?? client).get<ListPracticeReviewFeedbackResponses, ListPracticeReviewFeedbackErrors, ThrowOnError>({
   responseTransformer: listPracticeReviewFeedbackResponseTransformer,

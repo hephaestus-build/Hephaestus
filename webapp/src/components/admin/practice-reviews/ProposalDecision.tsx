@@ -1,12 +1,20 @@
-import { CheckIcon, CircleXIcon } from "lucide-react";
+import {
+	CheckIcon,
+	ChevronLeftIcon,
+	ChevronRightIcon,
+	CircleAlertIcon,
+	CircleXIcon,
+} from "lucide-react";
 import { useId, useState } from "react";
 
 import type { GetPracticeReviewFeedbackResponse } from "@/api/types.gen";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Section } from "@/components/layout/Section";
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
 import { placementLabel } from "@/components/practice-vocabulary/placement-defs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import {
 	Popover,
@@ -25,6 +33,7 @@ import {
 	PROPOSAL_REJECTION_REASONS,
 	type ProposalRejectionReason,
 } from "./proposal-rejection-vocabulary";
+import { feedbackLevel } from "./review-levels";
 import { ReviewFact } from "./ReviewFactGrid";
 import { ReviewPackage } from "./ReviewPackage";
 
@@ -77,15 +86,28 @@ export function ProposalPackage({ feedback }: { feedback: GetPracticeReviewFeedb
 			}`}
 		>
 			{proposedPlacements.length === 0 ? (
-				<p role="alert" className="rounded-lg border border-destructive/40 p-3 text-sm">
-					This review package is unavailable, so it cannot be approved. Reject it or wait for a
-					replacement.
-				</p>
+				<Alert variant="destructive">
+					<CircleAlertIcon aria-hidden />
+					<AlertDescription>
+						This review package is unavailable, so it cannot be approved. Reject it or wait for a
+						replacement.
+					</AlertDescription>
+				</Alert>
 			) : (
 				<ReviewPackage feedback={feedback} defaultExpanded />
 			)}
 		</Section>
 	);
+}
+
+/** Where one proposal sits among all awaiting approval, oldest first. */
+export interface ApprovalQueue {
+	/** 1-based. */
+	position: number;
+	total: number;
+	/** The feedback ids either side of this one, when there are any. */
+	previous?: string;
+	next?: string;
 }
 
 export interface ProposalDecisionProps {
@@ -94,22 +116,83 @@ export interface ProposalDecisionProps {
 	isDeciding: boolean;
 	onApprove: () => void;
 	onReject: (reason: ProposalRejectionReason, note?: string) => void;
+	/**
+	 * Where this proposal sits in the approval queue; absent when it is not in the part of the queue
+	 * that was read. In a queue, a decision moves on to another proposal still waiting, or closes the
+	 * level when this is the only one — the caller does that in `onApprove` and `onReject` — so the
+	 * button says so.
+	 */
+	queue?: ApprovalQueue;
 }
 
-/** The level's footer: reject, with a reason, or approve for delivery. */
+/**
+ * The level's footer: where this proposal is in the queue and a step either way, then reject, with
+ * a reason, or approve for delivery.
+ */
 export function ProposalDecision({
 	canApprove,
 	isDeciding,
 	onApprove,
 	onReject,
+	queue,
 }: ProposalDecisionProps) {
+	let approveLabel = "Approve for delivery";
+	if (queue) {
+		// By the total, not by position or `next`: the last one reached may have others skipped on the
+		// way, and a queue longer than the page it was read in goes on past it.
+		approveLabel = queue.total === 1 ? "Approve and close" : "Approve and next";
+	}
 	return (
 		<>
+			{queue && queue.total > 1 && <QueueSteps queue={queue} />}
 			<RejectFeedbackPopover disabled={isDeciding} onReject={onReject} />
 			<Button disabled={isDeciding || !canApprove} onClick={onApprove}>
-				{isDeciding ? <Spinner /> : <CheckIcon />} Approve for delivery
+				{isDeciding ? <Spinner /> : <CheckIcon />} {approveLabel}
 			</Button>
 		</>
+	);
+}
+
+/**
+ * "2 of 7" and a step to either neighbour. Each step swaps the level in front rather than opening one
+ * over it, so the stack stays one deep however far the reader walks.
+ */
+function QueueSteps({ queue }: { queue: ApprovalQueue }) {
+	const step = buttonVariants({ variant: "ghost", size: "icon" });
+	return (
+		// Below `sm` the footer stacks in reverse, which would put the steps last on screen while
+		// they are first in the tab order; ordered last, the reversal shows them first, as they read.
+		<nav
+			aria-label="Feedback awaiting approval"
+			className="flex items-center gap-1 max-sm:order-last sm:mr-auto"
+		>
+			{queue.previous === undefined ? (
+				<Button variant="ghost" size="icon" disabled aria-label="Previous">
+					<ChevronLeftIcon />
+				</Button>
+			) : (
+				<DetailStackLink
+					entry={feedbackLevel(queue.previous)}
+					swap
+					className={step}
+					aria-label="Previous"
+				>
+					<ChevronLeftIcon aria-hidden />
+				</DetailStackLink>
+			)}
+			<span className="px-1 text-sm text-muted-foreground tabular-nums">
+				{queue.position} of {queue.total}
+			</span>
+			{queue.next === undefined ? (
+				<Button variant="ghost" size="icon" disabled aria-label="Next">
+					<ChevronRightIcon />
+				</Button>
+			) : (
+				<DetailStackLink entry={feedbackLevel(queue.next)} swap className={step} aria-label="Next">
+					<ChevronRightIcon aria-hidden />
+				</DetailStackLink>
+			)}
+		</nav>
 	);
 }
 

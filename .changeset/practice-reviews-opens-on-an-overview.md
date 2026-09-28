@@ -1,0 +1,5 @@
+---
+"hephaestus": minor
+---
+
+Practice reviews opens on an overview. Feedback that waits for your approval comes first, oldest first. **Review N pieces of feedback** opens the oldest; the arrows beside its place in the queue, such as **2 of 7**, step through the rest, and approving or rejecting one moves on to the next without leaving the panel, closing it once nothing else waits. Feedback opened from a list, a review or an observation opens on its own. One line below counts the reviews that failed or timed out, the reviews whose results could not be processed or delivered, and the feedback that failed to deliver. Then you see what the reviews did over the last 7 days, 30 days, 90 days or 12 months, stage by stage and against the period before, and how each practice turned out. Feedback is counted as awaiting approval, prepared, delivered, unconfirmed, withheld and failed to deliver, and each count opens the list of exactly the rows it counts. The upgrade adds an index on observations, which speeds up the overview and the date filter on the Observations list.

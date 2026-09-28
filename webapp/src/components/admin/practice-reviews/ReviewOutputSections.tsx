@@ -144,9 +144,12 @@ function PreviewSection<T>({
 		<Section
 			level={3}
 			title={title}
+			// Whenever there is anything to list, even when all of it is shown here: the list is where
+			// it is filtered, paged and compared, which a preview cannot do.
 			actions={
-				state.status === "ready" && state.total > state.items.length ? (
+				state.status === "ready" && state.total > 0 ? (
 					<InlineLink
+						tone="count"
 						className="text-sm"
 						render={<ReviewListLink workspaceSlug={workspaceSlug} destination={list} />}
 					>

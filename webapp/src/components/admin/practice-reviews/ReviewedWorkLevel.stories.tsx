@@ -74,7 +74,7 @@ const meta = {
 	},
 	argTypes: { path: { control: false } },
 	render: (args) => (
-		<InLevelStack entry={WORK_LEVEL} path={args.path}>
+		<InLevelStack entry={WORK_LEVEL} path={args.path} size="detailWide">
 			{(level) => <ReviewedWorkLevel {...args} {...level} />}
 		</InLevelStack>
 	),

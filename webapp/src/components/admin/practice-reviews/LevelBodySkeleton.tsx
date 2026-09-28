@@ -11,11 +11,12 @@ export function LevelBodySkeleton() {
 		<div className="space-y-8" aria-hidden>
 			<ReviewFactGrid>
 				{Array.from({ length: 3 }, (_, index) => (
-					<div key={index} className="space-y-2">
-						<dt>
+					// Each blank sits in the line box its text will fill, so the facts land without a jump.
+					<div key={index} className="space-y-0.5">
+						<dt className="flex h-4 items-center">
 							<Skeleton className="h-3 w-20" />
 						</dt>
-						<dd>
+						<dd className="flex h-5 items-center">
 							<Skeleton className="h-4 w-40" />
 						</dd>
 					</div>

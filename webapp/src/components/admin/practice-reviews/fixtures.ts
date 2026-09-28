@@ -1633,13 +1633,3 @@ export const awaitingApprovalFeedback: ReviewFeedback[] = reviewFeedback
 		deliveredAt: undefined,
 		suppressionReason: undefined,
 	}));
-
-/** Feedback whose delivery failed. */
-export const failedFeedback: ReviewFeedback[] = reviewFeedback.filter(
-	(item) => item.deliveryState === "FAILED",
-);
-
-/** Reviews that ended in failure. */
-export const failedReviewRuns: ReviewRunSummary[] = reviewRuns.filter(
-	(review) => review.status === "FAILED",
-);

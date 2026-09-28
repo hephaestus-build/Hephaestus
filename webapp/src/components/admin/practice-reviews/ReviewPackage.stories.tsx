@@ -59,13 +59,3 @@ export const ExactSummaryAndInlinePackage: Story = {
 		await expectNoPageOverflow();
 	},
 };
-
-export const Unavailable: Story = {
-	args: { feedback: { ...feedback, proposedPlacements: [] }, defaultExpanded: false },
-	parameters: { chromatic: { viewports: [320] } },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("alert")).toHaveTextContent(
-			"This review package is unavailable.",
-		);
-	},
-};

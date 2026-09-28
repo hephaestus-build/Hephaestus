@@ -14,6 +14,7 @@ public record FeedbackQueryFilter(
         @Nullable ArtifactKind artifactKind,
         @Nullable Long artifactId,
         @Nullable Long recipientUserId,
+        @Nullable List<String> practiceSlugs,
         @Nullable Instant from,
         @Nullable Instant to) {
     public String @Nullable [] deliveryStateNames() {
@@ -26,6 +27,10 @@ public record FeedbackQueryFilter(
 
     public String @Nullable [] channelNames() {
         return names(channels);
+    }
+
+    public String @Nullable [] practiceSlugArray() {
+        return practiceSlugs == null || practiceSlugs.isEmpty() ? null : practiceSlugs.toArray(String[]::new);
     }
 
     public @Nullable String artifactKindValue() {

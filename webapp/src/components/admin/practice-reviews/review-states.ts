@@ -7,11 +7,33 @@ export type ReviewSectionState<T> =
 	| { status: "pending" }
 	| { status: "ready"; items: T[]; total: number };
 
-/** The overview once it is in, and whether it is the previous range's, standing in for this one's. */
+/**
+ * How many rows a list holds, read without the rows: `stale` while the previous range's count stands
+ * in for the range just chosen.
+ */
+export type ReviewCountState =
+	| { status: "loading" }
+	| { status: "error"; error: unknown; onRetry: () => void }
+	| { status: "ready"; total: number; stale: boolean };
+
+/** The period of the same length before the range, which a total is set against. */
+interface PreviousReviewPeriod {
+	overview: PracticeReviewOverview;
+	/** "the previous 30 days": the period after "than" or "as". */
+	name: string;
+}
+
+/**
+ * The overview once it is in: current, or stale — the previous range's, standing in while the range
+ * just chosen loads.
+ */
 export type PracticeReviewOverviewState = PanelState<{
 	overview: PracticeReviewOverview;
 	stale: boolean;
 }>;
+
+/** The period before, which the totals are set against; failed, they go without a comparison. */
+export type PreviousReviewPeriodState = PanelState<{ period: PreviousReviewPeriod }>;
 
 /** The overview as a region under the page draws it: the page reports a failure once, for all of them. */
 export type OverviewRegionState = Exclude<PracticeReviewOverviewState, { status: "error" }>;

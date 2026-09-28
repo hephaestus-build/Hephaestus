@@ -2,8 +2,6 @@ import { MessageSquareTextIcon } from "lucide-react";
 
 import type { ReviewFeedback } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
-import { StatusBadge } from "@/components/common/StatusBadge";
-import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { deliveryOutcome } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
 import { withholdingReasonSentence } from "@/components/practice-vocabulary/withholding-defs";
@@ -24,7 +22,7 @@ import { REVIEW_PAGE_SIZE } from "./review-search";
 import { ReviewArtifactLabel } from "./ReviewArtifact";
 import { ReviewPerson } from "./ReviewPerson";
 import { ReviewResultsSkeleton } from "./ReviewResultsSkeleton";
-import { ReviewRow, ReviewRowList, ReviewRowMeta } from "./ReviewRow";
+import { ReviewRow, ReviewRowLink, ReviewRowList, ReviewRowMeta } from "./ReviewRow";
 
 /** See `ObservationResultsState`: a filtered empty state has to carry the way out of itself. */
 export type FeedbackResultsState =
@@ -83,27 +81,28 @@ export interface FeedbackRowProps {
 
 /**
  * The row's name is the feedback's own opening words, because that is the only text that tells two
- * rows apart — a title built from the recipient repeats down the page. The person goes in a chip,
- * where it is scanned rather than read.
+ * rows apart — a title built from the recipient repeats down the page. The recipient sits at the end
+ * of the row, where it is scanned rather than read.
  *
- * <p>Place and outcome stay separate: the badge says what happened, the meta line says where it was
- * going. A withheld row also carries its own precise reason, because the outcome badge only says
- * that something stopped it.
+ * Place and outcome stay separate: the icon says what happened, the meta line says where it was
+ * going. A withheld row also carries its own precise reason, because the outcome only says that
+ * something stopped it.
  */
 export function FeedbackRow({ feedback }: FeedbackRowProps) {
+	const entry = feedbackLevel(feedback.id);
 	const place = DELIVERY_PLACE_DEFS[feedback.channel];
 	return (
 		<ReviewRow
 			status={deliveryOutcome(feedback)}
 			title={
-				<DetailStackLink entry={feedbackLevel(feedback.id)} className="line-clamp-2">
+				<ReviewRowLink entry={entry} className="line-clamp-2">
 					{/* Feedback whose preview is nothing but a code quote has a body and no prose to show
 					    for it, which is not the same state as feedback nobody has composed yet. */}
 					{feedbackPreviewText(feedback) ??
 						(hasText(feedback.bodyPreview)
 							? "Opens with a quote from the work…"
 							: "No feedback text was composed")}
-				</DetailStackLink>
+				</ReviewRowLink>
 			}
 			meta={
 				<>
@@ -122,11 +121,7 @@ export function FeedbackRow({ feedback }: FeedbackRowProps) {
 				</>
 			}
 			chips={[
-				// Both facts are on every row, which is what earns them reserved slots: the outcome badge
-				// then sits at one x down the list however long the recipient's name is. A badge that only
-				// some rows carry belongs in a free chip instead — see `ReviewRowChip`.
-				{ key: "person", width: "lg:w-40", node: <ReviewPerson person={feedback.recipient} /> },
-				{ key: "outcome", width: "lg:w-48", node: <StatusBadge def={deliveryOutcome(feedback)} /> },
+				{ key: "person", width: "lg:w-44", node: <ReviewPerson person={feedback.recipient} /> },
 			]}
 		/>
 	);

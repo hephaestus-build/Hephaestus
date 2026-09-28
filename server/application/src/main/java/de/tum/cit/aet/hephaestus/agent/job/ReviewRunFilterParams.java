@@ -25,6 +25,13 @@ public record ReviewRunFilterParams(
         @Nullable
         List<AgentJobStatus> status,
 
+        @Parameter(
+                description = "Result-processing statuses to list (repeatable), such as FAILED for the reviews whose"
+                        + " results can be processed again; omit for every review, including those without one")
+        @RequestParam(required = false)
+        @Nullable
+        List<DeliveryStatus> resultProcessing,
+
         @Parameter(description = "Inclusive lower bound on when the review was requested")
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
@@ -46,5 +53,16 @@ public record ReviewRunFilterParams(
 
     public Collection<AgentJobStatus> statuses() {
         return status == null || status.isEmpty() ? EnumSet.allOf(AgentJobStatus.class) : status;
+    }
+
+    public boolean anyResultProcessing() {
+        return resultProcessing == null || resultProcessing.isEmpty();
+    }
+
+    /** Never empty, so the query can bind it even when {@link #anyResultProcessing()} leaves it unused. */
+    public Collection<DeliveryStatus> resultProcessingStates() {
+        return resultProcessing == null || resultProcessing.isEmpty()
+                ? EnumSet.allOf(DeliveryStatus.class)
+                : resultProcessing;
     }
 }

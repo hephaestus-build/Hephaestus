@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -93,19 +93,48 @@ describe("practice review routes", () => {
 		}
 	});
 
-	it("carries a chosen range to every tab", async () => {
-		renderRouteAtWithRouter(`${REVIEWS}/runs?range=90d`);
-		const chosen = await sectionNavigation();
-		for (const tab of ["Overview", "Reviews", "Observations", "Feedback"]) {
-			expect(carriedSearch(sectionLink(chosen, tab))).toStrictEqual({ range: "90d" });
-		}
-	});
-
-	it("leaves the default range out of every tab's address", async () => {
-		renderRouteAtWithRouter(`${REVIEWS}/runs`);
+	/**
+	 * The range is the overview's: a list has its own dates, so a range chosen on the overview does
+	 * not follow the reader to a list tab — and neither back to the overview from one.
+	 */
+	it("keeps a chosen range on the overview and off every tab", async () => {
+		renderRouteAtWithRouter(`${REVIEWS}?range=90d`);
 		const navigation = await sectionNavigation();
 		for (const tab of ["Overview", "Reviews", "Observations", "Feedback"]) {
 			expect(carriedSearch(sectionLink(navigation, tab))).toStrictEqual({});
 		}
+	});
+
+	/** A practice level counts over the overview's range, so opening one keeps it. */
+	it("keeps the chosen range on a practice level opened from the overview", async () => {
+		renderRouteAtWithRouter(`${REVIEWS}?range=90d`);
+		const practice = await screen.findByRole<HTMLAnchorElement>(
+			"link",
+			{ name: "Thin controllers" },
+			ROUTE_RENDER_WAIT,
+		);
+		expect(carriedSearch(practice)).toMatchObject({ range: "90d" });
+	});
+});
+
+describe("practice review page titles", () => {
+	it.each([
+		["the tab, with nothing open", REVIEWS, "Practice reviews · Admin · Hephaestus"],
+		[
+			"the record open in front",
+			`${REVIEWS}?detail=feedback:${FEEDBACK}`,
+			"Feedback · Practice reviews · Admin · Hephaestus",
+		],
+	])("names %s", async (_, url, title) => {
+		const { router } = renderRouteAtWithRouter(url);
+		await sectionNavigation();
+		await waitFor(() =>
+			expect(
+				router.state.matches
+					.flatMap((match) => match.meta)
+					.reverse()
+					.find((meta) => meta !== undefined),
+			).toStrictEqual({ title }),
+		);
 	});
 });

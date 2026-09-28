@@ -7,6 +7,7 @@ import {
 	parseDetailStack,
 } from "@/components/layout/detail-drawer/detail-stack";
 import type { KnownArtifactKind } from "@/lib/artifact-kinds";
+import { workspaceAdminHead } from "@/lib/page-title";
 
 import { reviewArtifactTypeFromSlug, reviewArtifactTypeSlug } from "./ReviewArtifact";
 
@@ -38,11 +39,31 @@ const rangeFilterSchema = z.object({
 
 export const PRACTICE_REVIEWS_SEARCH_DEFAULTS = rangeFilterSchema.parse({});
 
-export const practiceReviewsSearchSchema = rangeFilterSchema.extend(
-	detailStackSchema(LEVEL_KINDS).shape,
-);
+export const practiceReviewsSearchSchema = rangeFilterSchema.extend({
+	...detailStackSchema(LEVEL_KINDS).shape,
+	/**
+	 * The feedback level in front was opened as the approval queue, from Needs you, so it steps
+	 * through every piece awaiting approval. Opened any other way — a list row, a review, an
+	 * observation — the same level shows that one piece alone.
+	 */
+	queue: z.literal("approvals").optional().catch(undefined),
+});
 
 export type PracticeReviewsSearch = z.infer<typeof practiceReviewsSearchSchema>;
+
+/**
+ * A Practice reviews route's `head`: the record open in front — "Observation · Practice reviews" —
+ * or, with none open, the tab. Every route under the layout uses it, because the router takes the
+ * title of the deepest match, so the layout alone cannot name a level opened over a list.
+ */
+export function practiceReviewsHead(tab: string) {
+	return ({ match }: { match: { search: { detail?: string[] } } }) => {
+		const front = parsePracticeReviewLevels(match.search.detail).at(-1);
+		return workspaceAdminHead(
+			front === undefined ? tab : `${PRACTICE_REVIEW_LEVEL_LABELS[front.kind]} · Practice reviews`,
+		)();
+	};
+}
 
 export function parsePracticeReviewLevels(raw: string[] | undefined): PracticeReviewLevel[] {
 	return parseDetailStack(raw, LEVEL_KINDS);

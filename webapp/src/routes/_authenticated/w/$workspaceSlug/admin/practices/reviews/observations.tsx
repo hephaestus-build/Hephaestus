@@ -11,6 +11,7 @@ import {
 	practiceFacetOptions,
 } from "@/components/admin/practice-reviews/ObservationFilters";
 import { ObservationsListPage } from "@/components/admin/practice-reviews/ObservationsListPage";
+import { practiceReviewsHead } from "@/components/admin/practice-reviews/review-levels";
 import {
 	type ObservationsSearch,
 	observationsQuery,
@@ -19,14 +20,13 @@ import {
 } from "@/components/admin/practice-reviews/review-search";
 import { useClampedPage } from "@/hooks/use-clamped-page";
 import { useReviewPeople } from "@/hooks/use-review-people";
-import { workspaceAdminHead } from "@/lib/page-title";
 import { pageParam, useSearchState } from "@/lib/search-params";
 
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/admin/practices/reviews/observations",
 )({
 	validateSearch: observationsSearchSchema,
-	head: workspaceAdminHead("Observations"),
+	head: practiceReviewsHead("Observations"),
 	component: ObservationsListRoute,
 });
 

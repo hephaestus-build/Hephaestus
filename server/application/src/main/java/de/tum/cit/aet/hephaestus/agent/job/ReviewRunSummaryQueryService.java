@@ -29,7 +29,7 @@ class ReviewRunSummaryQueryService {
     @Transactional(readOnly = true)
     public Page<ReviewRunSummaryDTO> list(Long workspaceId, ReviewRunFilterParams filter, Pageable pageable) {
         Page<ReviewRunSummaryRow> reviews = agentJobRepository.findReviewRunSummaries(
-                workspaceId, AgentPurpose.PRACTICE_REVIEW, filter.statuses(), filter.from(), filter.to(), pageable);
+                workspaceId, AgentPurpose.PRACTICE_REVIEW, filter, filter.from(), filter.to(), pageable);
         if (reviews.isEmpty()) {
             return reviews.map(this::withoutCounts);
         }

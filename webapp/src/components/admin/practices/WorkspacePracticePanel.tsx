@@ -5,21 +5,25 @@ import { cn } from "cn";
 import type { Practice, PracticeDefinitionOptions } from "@/api/types.gen";
 import { practiceLevel } from "@/components/admin/practice-reviews/review-levels";
 import { CatalogOriginBadge } from "@/components/admin/practices/CatalogOriginBadge";
-import { practiceFormLevel } from "@/components/admin/practices/practice-search";
+import {
+	PRACTICE_SETUP_LEVEL_LABELS,
+	practiceFormLevel,
+} from "@/components/admin/practices/practice-search";
 import { PracticeDefinitionPreview } from "@/components/admin/practices/PracticeDefinitionPreview";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
-import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
+import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { AUTONOMY_DEFS } from "@/components/practice-vocabulary/autonomy-defs";
 import { AutonomySourceNote } from "@/components/practice-vocabulary/AutonomySourceNote";
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
 import { buttonVariants } from "@/components/ui/button";
-import { DrawerBody, DrawerDescription, DrawerFooter, DrawerTitle } from "@/components/ui/drawer";
+import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { autonomySourceOf } from "@/lib/practice-autonomy";
@@ -35,6 +39,8 @@ export interface WorkspacePracticePanelProps {
 	workspaceSlug: string;
 	state: WorkspacePracticeState;
 	nested?: boolean;
+	/** Where the level sits, from the drawer. */
+	path: LevelPath;
 }
 
 /**
@@ -49,13 +55,17 @@ export function WorkspacePracticePanel({
 	workspaceSlug,
 	state,
 	nested,
+	path,
 }: WorkspacePracticePanelProps) {
 	if (state.status !== "ready") {
 		return (
 			<>
-				<DetailDrawerHeader nested={nested}>
-					<DrawerTitle>Practice</DrawerTitle>
-				</DetailDrawerHeader>
+				<LevelHeader
+					nested={nested}
+					path={path}
+					current={PRACTICE_SETUP_LEVEL_LABELS.practice}
+					loading={state.status === "loading"}
+				/>
 				<DrawerBody>
 					{state.status === "loading" ? (
 						<PracticeDefinitionSkeleton />
@@ -77,18 +87,15 @@ export function WorkspacePracticePanel({
 
 	return (
 		<>
-			<DetailDrawerHeader nested={nested}>
-				<GroupPill size="lg" slug={practice.groupSlug} name={groupName} />
-				<div className="min-w-0 flex-1 space-y-1">
-					<DrawerTitle className="break-words">{practice.name}</DrawerTitle>
-					<DrawerDescription>
-						<WorkTypeLabel artifactKind={practice.artifactKind} />
-					</DrawerDescription>
-					{/* Under the title, not beside it: provenance is a sentence of its own, and a second
-					    text column would take the width the title needs. */}
-					<CatalogOriginBadge origin={practice.catalogOrigin} kind="practice" className="mt-1.5" />
-				</div>
-			</DetailDrawerHeader>
+			<LevelHeader
+				nested={nested}
+				path={path}
+				current={PRACTICE_SETUP_LEVEL_LABELS.practice}
+				mark={<GroupPill size="lg" slug={practice.groupSlug} name={groupName} />}
+				title={practice.name}
+				chips={<CatalogOriginBadge origin={practice.catalogOrigin} kind="practice" />}
+				description={<WorkTypeLabel artifactKind={practice.artifactKind} />}
+			/>
 
 			<DrawerBody className="space-y-6">
 				<ItemGroup className="gap-2">

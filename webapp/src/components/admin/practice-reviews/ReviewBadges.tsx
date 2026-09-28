@@ -28,8 +28,8 @@ export function ObservationResultBadge({
 }
 
 /**
- * Severity is only ever read alongside a shortfall — a "Minor" beside a strength would be a cost for
- * something that cost nothing.
+ * Severity is only ever read alongside a shortfall — a "Minor" beside a positive outcome would be
+ * a cost for something that cost nothing.
  */
 export function observationSeverity(
 	observation: ObservationResultFacts & Pick<ReviewObservation, "severity">,
@@ -60,8 +60,8 @@ export function ObservationOriginBadge({ origin }: { origin: ReviewObservation["
  * count at a different x on every row, reflow under the reader as a poll refreshes, and make an
  * absent count indistinguishable from one this screen does not render at all.
  *
- * Each number keeps its word beside it, so a screen reader gets "0 improvements" rather than a bare
- * nought.
+ * Each number keeps its word beside it, so a screen reader gets "0 negative outcomes" rather than a
+ * bare nought.
  */
 export function ReviewCountStrip({ slots, label }: { slots: OutcomeSlot[]; label: string }) {
 	return (
@@ -77,9 +77,9 @@ export function ReviewCountStrip({ slots, label }: { slots: OutcomeSlot[]; label
 						{slot.count}
 					</span>
 					{
-						// A real space, so the pair reads "0 improvements" to a screen reader and in a test.
-						// Flex drops whitespace-only children, so the visible gap is still the one `gap-1`
-						// sets and this adds nothing to the layout.
+						// A real space, so the pair reads "0 negative outcomes" to a screen reader and in a
+						// test. Flex drops whitespace-only children, so the visible gap is still the one
+						// `gap-1` sets and this adds nothing to the layout.
 						" "
 					}
 					<span className="min-w-0 break-words">{slot.label}</span>

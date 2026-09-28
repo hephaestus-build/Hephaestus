@@ -7,8 +7,9 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 import { PracticeReviewsLayout } from "./PracticeReviewsLayout";
 
 /**
- * The page's header and its four sections. Which section is current is the router's to decide, and
- * which scope a section link carries is read from the URL, so both are proved by the route's tests.
+ * The page's header and its four sections, drawn as line tabs but made of links, since each changes
+ * the URL. Which scope a section link carries is read from the URL, so it is proved by the route's
+ * tests.
  */
 const meta = {
 	component: PracticeReviewsLayout,
@@ -52,5 +53,26 @@ export const Reflow: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByRole("navigation", { name: "Practice review sections" });
 		await expectNoPageOverflow();
+	},
+};
+
+/**
+ * The router marks the section at the current address, and the tab's bar and weight follow that
+ * mark; a section is a link, never a `tab`.
+ */
+export const CurrentSection: Story = {
+	parameters: { router: { initialUrl: "/w/demo/admin/practices/reviews/feedback" } },
+	play: async ({ canvas }) => {
+		const sections = within(canvas.getByRole("navigation", { name: "Practice review sections" }));
+		await expect(sections.getByRole("link", { name: "Feedback" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		// Overview's address is a prefix of every other section's, so it is the one a fuzzy match would
+		// also mark.
+		for (const name of ["Overview", "Reviews", "Observations"]) {
+			await expect(sections.getByRole("link", { name })).not.toHaveAttribute("aria-current");
+		}
+		await expect(sections.queryByRole("tab")).not.toBeInTheDocument();
 	},
 };

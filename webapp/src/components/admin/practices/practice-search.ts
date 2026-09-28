@@ -22,6 +22,20 @@ export const DETAIL_LEVEL_KINDS = [
 	"practice-new",
 ] as const;
 
+type PracticeSetupLevelKind = (typeof DETAIL_LEVEL_KINDS)[number];
+
+/**
+ * What each level is called: the last crumb of its own path, and its title and the crumb it leaves
+ * behind until its record has loaded.
+ */
+export const PRACTICE_SETUP_LEVEL_LABELS = {
+	"catalog-group": "Catalog group",
+	"catalog-practice": "Catalog practice",
+	practice: "Practice",
+	"practice-edit": "Edit practice",
+	"practice-new": "Create practice",
+} as const satisfies Record<PracticeSetupLevelKind, string>;
+
 /** Levels holding a draft, so their close must reach the URL before anything animates out. */
 export const GUARDED_LEVEL_KINDS = ["practice-edit", "practice-new"] as const;
 
@@ -29,16 +43,12 @@ export const GUARDED_LEVEL_KINDS = ["practice-edit", "practice-new"] as const;
 const NEW_PRACTICE_ID = "draft";
 
 /** A workspace practice, read-only: what a link from elsewhere in the console opens. */
-export function practiceSetupLevel(
-	practiceSlug: string,
-): DetailStackEntry<(typeof DETAIL_LEVEL_KINDS)[number]> {
+export function practiceSetupLevel(practiceSlug: string): DetailStackEntry<PracticeSetupLevelKind> {
 	return { kind: "practice", id: practiceSlug };
 }
 
 /** The editor level for `practiceSlug`, or for a practice about to be written. */
-export function practiceFormLevel(
-	practiceSlug?: string,
-): DetailStackEntry<(typeof DETAIL_LEVEL_KINDS)[number]> {
+export function practiceFormLevel(practiceSlug?: string): DetailStackEntry<PracticeSetupLevelKind> {
 	return practiceSlug === undefined
 		? { kind: "practice-new", id: NEW_PRACTICE_ID }
 		: { kind: "practice-edit", id: practiceSlug };

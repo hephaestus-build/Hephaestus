@@ -1,6 +1,7 @@
 import { cn } from "cn";
 import type { Practice, ReviewPracticeGroup } from "@/api/types.gen";
 import { PracticeDetailHoverCard } from "@/components/admin/practice-editor/PracticeDetailHoverCard";
+import { InlineLink } from "@/components/common/InlineLink";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 
@@ -29,16 +30,13 @@ export function ReviewPracticeLink({
 	// `relative` lifts this above the stretched title link of `ReviewRow`, which otherwise covers the
 	// whole row and would swallow the click.
 	const link = (
-		<DetailStackLink
-			entry={practiceLevel(practiceSlug)}
-			className={cn(
-				"relative inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md hover:underline",
-				className,
-			)}
+		<InlineLink
+			render={<DetailStackLink entry={practiceLevel(practiceSlug)} />}
+			className={cn("relative inline-flex max-w-full min-w-0 items-center gap-1.5", className)}
 		>
 			<PracticeGroupMark group={group} />
 			<span className="min-w-0 break-words">{practiceName}</span>
-		</DetailStackLink>
+		</InlineLink>
 	);
 
 	return practice ? (

@@ -5,9 +5,13 @@ import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-def
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { FILTERABLE_PLACES } from "@/components/practice-vocabulary/delivery-place-defs";
+import { OBSERVATION_ORIGIN_DEFS } from "@/components/practice-vocabulary/observation-origin-defs";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
-import { REVIEW_STATUS_DEFS } from "@/components/practice-vocabulary/review-status-defs";
+import {
+	RESULT_PROCESSING_DEFS,
+	REVIEW_STATUS_DEFS,
+} from "@/components/practice-vocabulary/review-status-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import {
 	reasonsInFamilies,
@@ -50,11 +54,17 @@ export const PRACTICE_REVIEW_READS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Ordering names the server understands. `ACTIONABILITY` puts shortfalls first, worst severity down
- * to informational, then strengths, then the observations that judged nothing.
+ * Ordering names the server understands. `ACTIONABILITY` puts negative outcomes first, worst
+ * severity down to informational, then positive outcomes, then the observations that judged nothing.
  */
 export const OBSERVATION_SORTS = ["NEWEST", "ACTIONABILITY"] as const;
+
 export type ObservationSort = (typeof OBSERVATION_SORTS)[number];
+
+/** Ordering names the server understands for feedback: when it was composed, either way round. */
+export const FEEDBACK_SORTS = ["NEWEST", "OLDEST"] as const;
+
+export type FeedbackSort = (typeof FEEDBACK_SORTS)[number];
 
 const uuidParam = z.uuid().optional().catch(undefined);
 const positiveId = z.coerce.number().int().positive().optional().catch(undefined);
@@ -97,6 +107,12 @@ export const feedbackSearchSchema = z
 		withheldFamily: enumValues(statusValues(WITHHOLDING_FAMILY_DEFS)),
 		channel: enumValues(FILTERABLE_PLACES),
 		recipientUserId: positiveId,
+		practiceSlug: multiValue,
+		// The endpoint's `sort`. The observations list declares `order` too, with other values. A link
+		// without `from` types `previous` in `search={(previous) => …}` as every route's search, where
+		// a param two sibling routes declare with different types holds both, so returning it to either
+		// list stops compiling: a relative link on either list names its `from`.
+		order: z.enum(FEEDBACK_SORTS).optional().catch(undefined),
 	})
 	.transform(canonicalDateRange);
 
@@ -113,10 +129,8 @@ export const observationsSearchSchema = z
 		assessment: enumValues(statusValues(ASSESSMENT_DEFS)),
 		severity: enumValues(statusValues(SEVERITY_DEFS)),
 		subjectUserId: positiveId,
-		// Spelled `order`, not `sort`, which is what the endpoint calls it: other routes already put a
-		// `sort` in the URL with entirely different values, and TanStack's search params are one
-		// namespace — another meaning of the word makes `search={(previous) => previous}`, the idiom
-		// every link on this screen uses to carry the reader's filters forward, stop compiling.
+		origin: enumValues(statusValues(OBSERVATION_ORIGIN_DEFS)),
+		// The endpoint's `sort`; the feedback list's `order` says what sharing the word costs.
 		order: z.enum(OBSERVATION_SORTS).optional().catch(undefined),
 	})
 	.transform(canonicalDateRange);
@@ -130,6 +144,7 @@ export const runsSearchSchema = z
 	.object({
 		page,
 		status: enumValues(statusValues(REVIEW_STATUS_DEFS)),
+		resultProcessing: enumValues(statusValues(RESULT_PROCESSING_DEFS)),
 		from: day,
 		to: day,
 	})
@@ -185,6 +200,7 @@ export function runsQuery(search: Partial<RunsSearch>, size: number) {
 		page: search.page ?? 0,
 		size,
 		status: search.status,
+		resultProcessing: search.resultProcessing,
 	};
 }
 
@@ -200,6 +216,11 @@ export function feedbackQuery(search: Partial<FeedbackSearch>, size: number) {
 				: undefined,
 		channel: search.channel,
 		recipientUserId: search.recipientUserId,
+		practiceSlug:
+			search.practiceSlug !== undefined && search.practiceSlug.length > 0
+				? search.practiceSlug
+				: undefined,
+		sort: search.order,
 	};
 }
 
@@ -221,6 +242,7 @@ export function observationsQuery(search: Partial<ObservationsSearch>, size: num
 		assessment: search.assessment,
 		severity: search.severity,
 		subjectUserId: search.subjectUserId,
+		origin: search.origin,
 		sort: search.order,
 	};
 }

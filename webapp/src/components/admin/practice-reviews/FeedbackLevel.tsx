@@ -42,18 +42,22 @@ import {
 	type ProposalRejectionReason,
 	proposalRejectionReasonLabel,
 } from "./proposal-rejection-vocabulary";
-import { ProposalDecision, ProposalFacts, ProposalPackage } from "./ProposalDecision";
+import {
+	type ApprovalQueue,
+	ProposalDecision,
+	ProposalFacts,
+	ProposalPackage,
+} from "./ProposalDecision";
 import { subjectLabel } from "./review-format";
 import { feedbackLevel, observationLevel, workLevel } from "./review-levels";
 import { ReviewArtifactLink } from "./ReviewArtifact";
-import { ObservationResultBadge } from "./ReviewBadges";
 import { ReviewFact, ReviewFactGrid } from "./ReviewFactGrid";
 import { ReviewLevelHeader } from "./ReviewLevelHeader";
 import { ReviewPackage } from "./ReviewPackage";
 import { ReviewPerson } from "./ReviewPerson";
 import { ReviewPracticeLink } from "./ReviewPracticeLink";
 import { ReviewProvenanceLine } from "./ReviewProvenanceLine";
-import { ReviewRow, ReviewRowList, ReviewRowMeta } from "./ReviewRow";
+import { ReviewRow, ReviewRowLink, ReviewRowList, ReviewRowMeta } from "./ReviewRow";
 
 export interface FeedbackLevelProps {
 	nested?: boolean;
@@ -63,6 +67,8 @@ export interface FeedbackLevelProps {
 	isDeciding: boolean;
 	onApprove: () => void;
 	onReject: (reason: ProposalRejectionReason, note?: string) => void;
+	/** Where this feedback sits among all awaiting approval; absent when it awaits none. */
+	queue?: ApprovalQueue;
 }
 
 /**
@@ -79,6 +85,7 @@ export function FeedbackLevel({
 	isDeciding,
 	onApprove,
 	onReject,
+	queue,
 }: FeedbackLevelProps) {
 	const feedback = state.status === "ready" ? state.feedback : undefined;
 	const awaitingApproval = feedback?.deliveryState === "AWAITING_APPROVAL";
@@ -171,6 +178,7 @@ export function FeedbackLevel({
 						isDeciding={isDeciding}
 						onApprove={onApprove}
 						onReject={onReject}
+						queue={queue}
 					/>
 				</DrawerFooter>
 			)}
@@ -300,9 +308,9 @@ function SourceObservations({
 							key={observation.observationId}
 							status={observationResult(observation)}
 							title={
-								<DetailStackLink entry={observationLevel(observation.observationId)}>
+								<ReviewRowLink entry={observationLevel(observation.observationId)}>
 									{observation.summary}
-								</DetailStackLink>
+								</ReviewRowLink>
 							}
 							meta={
 								<ReviewRowMeta
@@ -323,11 +331,6 @@ function SourceObservations({
 								/>
 							}
 							chips={[
-								{
-									key: "result",
-									width: "lg:w-64",
-									node: <ObservationResultBadge observation={observation} />,
-								},
 								{
 									key: "currentness",
 									width: "lg:w-44",

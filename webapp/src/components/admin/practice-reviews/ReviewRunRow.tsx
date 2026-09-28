@@ -1,27 +1,32 @@
 import type { ReviewRunSummary } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
-import { REVIEW_STATUS_DEFS } from "@/components/practice-vocabulary/review-status-defs";
+import {
+	RESULT_PROCESSING_DEFS,
+	REVIEW_STATUS_DEFS,
+} from "@/components/practice-vocabulary/review-status-defs";
 
 import { reviewLevel } from "./review-levels";
 import { feedbackSlots, observationSlots, slotsTotal } from "./review-outcomes";
 import { ReviewArtifactLabel } from "./ReviewArtifact";
 import { FeedbackCountsSummary, ReviewCountStrip } from "./ReviewBadges";
-import { ReviewRow, ReviewRowMeta } from "./ReviewRow";
+import { ReviewRow, ReviewRowLink, ReviewRowMeta } from "./ReviewRow";
 
 export interface ReviewRunRowProps {
 	review: ReviewRunSummary;
 }
 
-/** Named after the work, because a review has no name an operator knows — it has a UUID. */
+/**
+ * Named after the work, because a review has no name an operator knows — it has a UUID. The leading
+ * icon is the review's status; the one qualifier is a failure to process what it produced, which the
+ * status alone would report as a review that simply completed.
+ */
 export function ReviewRunRow({ review }: ReviewRunRowProps) {
+	const entry = reviewLevel(review.id);
 	return (
 		<ReviewRow
 			status={REVIEW_STATUS_DEFS[review.status]}
-			title={
-				<DetailStackLink entry={reviewLevel(review.id)}>{review.target.title}</DetailStackLink>
-			}
+			title={<ReviewRowLink entry={entry}>{review.target.title}</ReviewRowLink>}
 			meta={
 				<>
 					<ReviewRowMeta
@@ -34,13 +39,11 @@ export function ReviewRunRow({ review }: ReviewRunRowProps) {
 					<RunOutputSummary review={review} />
 				</>
 			}
-			chips={[
-				{
-					key: "status",
-					width: "lg:w-40",
-					node: <StatusBadge def={REVIEW_STATUS_DEFS[review.status]} />,
-				},
-			]}
+			chips={
+				review.resultProcessing === "FAILED"
+					? [{ key: "processing", node: <StatusBadge def={RESULT_PROCESSING_DEFS.FAILED} /> }]
+					: undefined
+			}
 		/>
 	);
 }

@@ -46,23 +46,6 @@ export function statusToneClass(variant: BadgeVariant): string {
 }
 
 /**
- * The same colours as a filled mark — a bar segment — for a proportion drawn beside its legend. The
- * two neutral variants differ in weight, so a neutral segment beside another stays a separate one.
- */
-const FILL_CLASS: Record<BadgeVariant, string> = {
-	default: "bg-primary",
-	secondary: "bg-muted-foreground/60",
-	destructive: "bg-destructive",
-	outline: "bg-muted-foreground/30",
-	success: "bg-success",
-	warning: "bg-warning",
-};
-
-export function statusFillClass(variant: BadgeVariant): string {
-	return FILL_CLASS[variant];
-}
-
-/**
  * The registry's values in declaration order, typed as a non-empty tuple: a registry with no values
  * is a programming error, and the throw below is what backs that type up at runtime.
  */

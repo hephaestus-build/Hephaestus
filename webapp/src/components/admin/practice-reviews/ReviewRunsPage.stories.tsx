@@ -1,7 +1,7 @@
 import type { Meta, StoryContext, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, waitFor, within } from "storybook/test";
 
-import type { ListPracticeReviewsResponse } from "@/api/types.gen";
+import type { ListPracticeReviewsResponse, ReviewRunSummary } from "@/api/types.gen";
 import { withStandardPage, withWidePage } from "@/stories/decorators";
 import { settledPopup } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
@@ -10,6 +10,11 @@ import { StatefulPatch } from "@/stories/stateful";
 import { reviewRuns } from "./fixtures";
 import { REVIEW_PAGE_SIZE, type RunsSearch, runsQuery } from "./review-search";
 import { ReviewRunsPage } from "./ReviewRunsPage";
+
+/** The fixture's reviews, one of which completed and then failed to process what it produced. */
+const RUNS: ReviewRunSummary[] = reviewRuns.map((run) =>
+	run.id === "11111111-1111-1111-1111-111111111111" ? { ...run, resultProcessing: "FAILED" } : run,
+);
 
 /**
  * The page of reviews the endpoint would return for a search, computed from the fixture instead of
@@ -23,9 +28,12 @@ import { ReviewRunsPage } from "./ReviewRunsPage";
  */
 function reviewsFor(search: RunsSearch): ListPracticeReviewsResponse {
 	const query = runsQuery(search, REVIEW_PAGE_SIZE);
-	const rows = reviewRuns.filter(
+	const rows = RUNS.filter(
 		(run) =>
 			(query.status === undefined || query.status.includes(run.status)) &&
+			(query.resultProcessing === undefined ||
+				(run.resultProcessing !== undefined &&
+					query.resultProcessing.includes(run.resultProcessing))) &&
 			(!query.from || run.createdAt >= query.from) &&
 			(!query.to || run.createdAt < query.to),
 	);
@@ -72,9 +80,9 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		workspaceSlug: "demo",
-		search: { status: undefined },
+		search: { status: undefined, resultProcessing: undefined },
 		onSearchChange: fn(),
-		reviews: reviewsFor({ status: undefined }),
+		reviews: reviewsFor({ status: undefined, resultProcessing: undefined }),
 		isLoading: false,
 		error: null,
 		onRetry: fn(),
@@ -133,7 +141,12 @@ export const WhatEachReviewProduced: Story = {
 		// the first row.
 		const observations = canvas.getAllByRole("list", { name: "Observations" })[0];
 		// A count and its word are two elements, so each pair is asserted on the strip, not per cell.
-		for (const pair of ["1 strength", "2 improvements", "0 not applicable", "0 undetermined"]) {
+		for (const pair of [
+			"1 positive outcome",
+			"2 negative outcomes",
+			"0 not applicable",
+			"0 undetermined",
+		]) {
 			await expect(observations).toHaveTextContent(pair);
 		}
 		for (const strip of canvas.getAllByRole("list", { name: "Observations" })) {
@@ -158,12 +171,49 @@ export const StatusFilter: Story = {
 };
 
 /**
+ * A completed review whose results could not be processed is found by that failure, which its status
+ * alone does not tell apart from a review that finished cleanly.
+ */
+export const ResultProcessingFilter: Story = {
+	parameters: { chromatic: { viewports: [1440] } },
+	play: async ({ canvas, userEvent }) => {
+		await canvas.findByText("7 reviews.");
+		const trigger = canvas.getByRole("combobox", { name: /^Result processing/u });
+		await userEvent.click(trigger);
+		await settledPopup();
+		const listbox = screen.getByRole("listbox", { name: "Result processing options" });
+		await userEvent.click(
+			within(listbox).getByRole("option", { name: /Result processing failed/u }),
+		);
+		await userEvent.keyboard("{Escape}");
+		await canvas.findByText("1 review matches your filters.");
+		const list = canvas.getByRole("list", { name: /Practice reviews/u });
+		const [row] = within(list).getAllByRole("listitem");
+		if (!row) {
+			throw new Error("The filtered list has no row");
+		}
+		within(row).getByRole("link", { name: "Cache the workspace member lookup on the review path" });
+		within(row).getByText("Result processing failed");
+		await waitFor(() => {
+			void expect(screen.queryByRole("listbox")).toBeNull();
+		});
+	},
+};
+
+/**
  * The range arrives through `args` rather than through the calendar: the state worth pinning is a
  * populated filtered list that then intersects with the status filter, which clicking two days on an
  * empty toolbar does not reach.
  */
 export const FilterByRequestedDate: Story = {
-	args: { search: { status: undefined, from: "2026-07-28", to: "2026-07-29" } },
+	args: {
+		search: {
+			status: undefined,
+			resultProcessing: undefined,
+			from: "2026-07-28",
+			to: "2026-07-29",
+		},
+	},
 	parameters: { viewport: { defaultViewport: "desktop" }, chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
 		await canvas.findByText("3 reviews match your filters.");
@@ -214,7 +264,14 @@ export const Mobile: Story = {
  * date range out, rather than printing the same range twice.
  */
 export const MobileAppliedDateRange: Story = {
-	args: { search: { status: undefined, from: "2026-07-28", to: "2026-07-29" } },
+	args: {
+		search: {
+			status: undefined,
+			resultProcessing: undefined,
+			from: "2026-07-28",
+			to: "2026-07-29",
+		},
+	},
 	parameters: { chromatic: { viewports: [320] }, viewport: { defaultViewport: "reflow" } },
 	play: async ({ canvas }) => {
 		await canvas.findByText("3 reviews match your filters.");

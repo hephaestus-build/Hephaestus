@@ -3,7 +3,6 @@ import { ScanSearchIcon } from "lucide-react";
 import type { Practice, ReviewObservation } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { ClaimCurrentnessBadge } from "@/components/practice-vocabulary/ClaimCurrentness";
 import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
 import { observationResult } from "@/components/practice-vocabulary/observation-result";
@@ -20,15 +19,11 @@ import {
 import { observationLevel } from "./review-levels";
 import { REVIEW_PAGE_SIZE } from "./review-search";
 import { ReviewArtifactLabel } from "./ReviewArtifact";
-import {
-	FeedbackCountsSummary,
-	ObservationOriginBadge,
-	ObservationResultBadge,
-} from "./ReviewBadges";
+import { FeedbackCountsSummary, ObservationOriginBadge, observationSeverity } from "./ReviewBadges";
 import { ReviewPerson } from "./ReviewPerson";
 import { ReviewPracticeLink } from "./ReviewPracticeLink";
 import { ReviewResultsSkeleton } from "./ReviewResultsSkeleton";
-import { ReviewRow, ReviewRowList, ReviewRowMeta } from "./ReviewRow";
+import { ReviewRow, ReviewRowLink, ReviewRowList, ReviewRowMeta } from "./ReviewRow";
 
 export type ObservationResultsState =
 	| { status: "loading" }
@@ -90,15 +85,18 @@ export interface ObservationRowProps {
 	practice?: Practice;
 }
 
+/**
+ * The leading icon is the result; the trailing column holds only what qualifies that result — its
+ * severity, a claim that is no longer current, a correction, an origin other than live — and then
+ * names the developer.
+ */
 export function ObservationRow({ observation, practice }: ObservationRowProps) {
+	const entry = observationLevel(observation.id);
+	const severity = observationSeverity(observation);
 	return (
 		<ReviewRow
 			status={observationResult(observation)}
-			title={
-				<DetailStackLink entry={observationLevel(observation.id)}>
-					{observation.summary}
-				</DetailStackLink>
-			}
+			title={<ReviewRowLink entry={entry}>{observation.summary}</ReviewRowLink>}
 			meta={
 				<>
 					<ReviewRowMeta
@@ -111,6 +109,7 @@ export function ObservationRow({ observation, practice }: ObservationRowProps) {
 								practice={practice}
 							/>,
 							<ReviewArtifactLabel key="work" reviewedWork={observation.reviewedWork} />,
+							// No hover target under a stretched row link, so the time carries no tooltip.
 							<RelativeTime key="observed" value={observation.observedAt} tooltip={false} />,
 						]}
 					/>
@@ -121,9 +120,10 @@ export function ObservationRow({ observation, practice }: ObservationRowProps) {
 			}
 			chips={[
 				{
-					key: "flags",
+					key: "qualifiers",
 					node: (
 						<>
+							{severity && <StatusBadge def={severity} />}
 							<ClaimCurrentnessBadge currentness={observation.claimCurrentness} />
 							{observation.invalidatedAt !== undefined && (
 								<StatusBadge def={MARKED_INCORRECT_DEF} />
@@ -132,12 +132,7 @@ export function ObservationRow({ observation, practice }: ObservationRowProps) {
 						</>
 					),
 				},
-				{ key: "person", width: "lg:w-36", node: <ReviewPerson person={observation.subject} /> },
-				{
-					key: "result",
-					width: "lg:w-44",
-					node: <ObservationResultBadge observation={observation} />,
-				},
+				{ key: "person", width: "lg:w-44", node: <ReviewPerson person={observation.subject} /> },
 			]}
 		/>
 	);

@@ -94,24 +94,26 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     }
 
     /**
-     * One page of review runs in any of {@code statuses}, optionally narrowed to a {@code createdAt} window.
+     * One page of review runs narrowed by {@code filter}.
      *
      * <p>The window is inclusive at {@code from} and exclusive at {@code to}, the same half-open convention the
      * observation and feedback listings use, so a day picked in both surfaces means the same day; a null bound drops
-     * out of the predicate. {@code CAST(:from AS Instant)} is what lets Hibernate type a null bound; see
-     * {@code AuthEventRepository#findForAdmin}, which is allowlisted out of the parameter-count arch rule for exactly
-     * this reason.
+     * out of the predicate. The bounds are bound on their own rather than read from {@code filter}: {@code CAST(:from
+     * AS Instant)} types a null bound only when Hibernate sees an {@code Instant} parameter. A run whose results have
+     * no processing status yet matches only when the filter leaves result processing open.
      */
-    @Query("SELECT j.id AS id, j.status AS status, j.jobType AS jobType, j.integrationKind AS integrationKind, "
-            + "j.metadata AS metadata, j.createdAt AS createdAt FROM AgentJob j "
+    @Query("SELECT j.id AS id, j.status AS status, j.deliveryStatus AS deliveryStatus, j.jobType AS jobType, "
+            + "j.integrationKind AS integrationKind, j.metadata AS metadata, j.createdAt AS createdAt FROM AgentJob j "
             + "WHERE j.workspace.id = :workspaceId AND j.purpose = :purpose "
-            + "AND j.status IN :statuses "
+            + "AND j.status IN :#{#filter.statuses()} "
+            + "AND (:#{#filter.anyResultProcessing()} = TRUE "
+            + "OR j.deliveryStatus IN :#{#filter.resultProcessingStates()}) "
             + "AND (CAST(:from AS Instant) IS NULL OR j.createdAt >= :from) "
             + "AND (CAST(:to AS Instant) IS NULL OR j.createdAt < :to)")
     Page<ReviewRunSummaryRow> findReviewRunSummaries(
             @Param("workspaceId") Long workspaceId,
             @Param("purpose") AgentPurpose purpose,
-            @Param("statuses") Collection<AgentJobStatus> statuses,
+            @Param("filter") ReviewRunFilterParams filter,
             @Param("from") @Nullable Instant from,
             @Param("to") @Nullable Instant to,
             Pageable pageable);
@@ -878,6 +880,9 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
     interface ReviewRunSummaryRow extends ReviewRunTargetRow {
         AgentJobStatus getStatus();
+
+        @Nullable
+        DeliveryStatus getDeliveryStatus();
 
         Instant getCreatedAt();
     }

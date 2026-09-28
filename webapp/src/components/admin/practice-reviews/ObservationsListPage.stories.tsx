@@ -80,34 +80,20 @@ function observationPage(
 			selects(query.presence, row.presence) &&
 			selects(query.assessment, row.assessment) &&
 			selects(query.severity, row.severity) &&
+			selects(query.origin, row.origin) &&
 			(query.subjectUserId === undefined || row.subject?.id === query.subjectUserId),
 	);
-	const ordered = query.sort === "ACTIONABILITY" ? [...rows].sort(byActionability) : rows;
 	const number = query.page;
 	return {
-		content: ordered.slice(number * REVIEW_PAGE_SIZE, (number + 1) * REVIEW_PAGE_SIZE),
+		content: rows.slice(number * REVIEW_PAGE_SIZE, (number + 1) * REVIEW_PAGE_SIZE),
 		page: {
 			number,
 			size: REVIEW_PAGE_SIZE,
-			totalElements: ordered.length,
-			totalPages: Math.max(1, Math.ceil(ordered.length / REVIEW_PAGE_SIZE)),
+			totalElements: rows.length,
+			totalPages: Math.max(1, Math.ceil(rows.length / REVIEW_PAGE_SIZE)),
 		},
 	};
 }
-
-/** Shortfalls worst-first, then strengths, then the observations that judged nothing. */
-const ACTIONABILITY_RANK: Record<string, number> = { CRITICAL: 0, MAJOR: 1, MINOR: 2, INFO: 3 };
-function actionability(row: ReviewObservation): number {
-	if (row.assessmentStatus !== "ASSESSED" || !row.presence || !row.assessment) {
-		return 6;
-	}
-	if ((row.presence === "PRESENT") !== (row.assessment === "GOOD")) {
-		return ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4;
-	}
-	return 5;
-}
-const byActionability = (a: ReviewObservation, b: ReviewObservation) =>
-	actionability(a) - actionability(b) || b.observedAt.getTime() - a.observedAt.getTime();
 
 const meta = {
 	component: ObservationsListPage,
@@ -119,7 +105,13 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		workspaceSlug: "demo",
-		search: { outcome: undefined, presence: undefined, assessment: undefined, severity: undefined },
+		search: {
+			outcome: undefined,
+			presence: undefined,
+			assessment: undefined,
+			severity: undefined,
+			origin: undefined,
+		},
 		onSearchChange: fn(),
 		observations: pool(reviewObservations),
 		isLoading: false,
@@ -140,7 +132,10 @@ const meta = {
 				<ObservationsListPage
 					{...args}
 					search={search}
-					onSearchChange={onSearchChange}
+					onSearchChange={(patch) => {
+						args.onSearchChange(patch);
+						onSearchChange(patch);
+					}}
 					observations={
 						args.observations && observationPage(args.observations.content ?? [], search)
 					}
@@ -231,38 +226,20 @@ export const FilteredToNothing: Story = {
 };
 
 /**
- * `ACTIONABILITY` is the server's ordering, not one the browser applies: shortfalls worst-first, then
- * strengths, then the observations that judged nothing. The control's only job is to put the choice
- * in the search the route turns into a request — that the endpoint spells it `sort` is pinned by
- * `-lists-route.test.tsx`, which is the only place the wire name can be checked.
+ * `ACTIONABILITY` is the server's ordering, not one the browser applies: negative outcomes
+ * worst-first, then positive outcomes, then the observations that judged nothing. The control's only
+ * job is to put the choice in the search the route turns into a request — that the endpoint spells it
+ * `sort` is pinned by `-lists-route.test.tsx`, which is the only place the wire name can be checked.
  */
 export const SortByActionability: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
-	play: async ({ canvas, userEvent }) => {
+	play: async ({ args, canvas, userEvent }) => {
 		await canvas.findByText("12 observations.");
-		const firstRowBefore = within(
-			await canvas.findByRole("list", { name: "Observations" }),
-		).getAllByRole("listitem")[0];
-		await expect(firstRowBefore).toHaveTextContent("A dropped delivery is logged at debug");
-
 		await userEvent.click(canvas.getByRole("combobox", { name: /Sort/u }));
 		await userEvent.click(await screen.findByRole("option", { name: "Most actionable first" }));
-
-		const rows = await within(
-			await canvas.findByRole("list", { name: "Observations" }),
-		).findAllByRole("listitem");
-		await expect(rows[0]).toHaveTextContent("Invoice numbering leaks the ledger's table name");
-		await expect(rows[0]).toHaveTextContent("Critical");
-		const titles = rows.map((row) => row.textContent);
-		const problems = titles.flatMap((text, index) =>
-			text.includes("Negative outcome") ? [index] : [],
+		await expect(args.onSearchChange).toHaveBeenLastCalledWith(
+			expect.objectContaining({ order: "ACTIONABILITY" }),
 		);
-		const strengths = titles.flatMap((text, index) =>
-			text.includes("Positive outcome") ? [index] : [],
-		);
-		await expect(problems.length).toBeGreaterThan(0);
-		await expect(strengths.length).toBeGreaterThan(0);
-		await expect(Math.min(...strengths)).toBeGreaterThan(Math.max(...problems));
 	},
 };
 
@@ -330,6 +307,7 @@ export const MoreThanOnePage: Story = {
 			presence: undefined,
 			assessment: undefined,
 			severity: undefined,
+			origin: undefined,
 		},
 		observations: pool(manyObservations(64)),
 	},

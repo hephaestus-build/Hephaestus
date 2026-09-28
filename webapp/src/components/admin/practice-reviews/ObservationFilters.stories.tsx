@@ -6,7 +6,12 @@ import { withStandardPage } from "@/stories/decorators";
 import { StatefulPatch } from "@/stories/stateful";
 
 import { practiceGroups, reviewArtifact, workspaceMembers, workspacePractices } from "./fixtures";
-import { groupFacetOptions, ObservationFilters, practiceFacetOptions } from "./ObservationFilters";
+import {
+	clearedObservationFilters,
+	groupFacetOptions,
+	ObservationFilters,
+	practiceFacetOptions,
+} from "./ObservationFilters";
 import type { ObservationsSearch } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
 
@@ -39,6 +44,7 @@ const UNFILTERED = {
 	presence: undefined,
 	assessment: undefined,
 	severity: undefined,
+	origin: undefined,
 } satisfies ObservationsSearch;
 
 const meta = {
@@ -68,19 +74,7 @@ const meta = {
 						args.onPatch(next);
 					}}
 					onReset={() => {
-						patch({
-							assessmentStatus: undefined,
-							outcome: undefined,
-							invalidated: undefined,
-							groupSlug: undefined,
-							practiceSlug: undefined,
-							presence: undefined,
-							assessment: undefined,
-							severity: undefined,
-							subjectUserId: undefined,
-							agentJobId: undefined,
-							artifactKind: undefined,
-						});
+						patch(clearedObservationFilters());
 						args.onReset();
 					}}
 				/>
@@ -268,5 +262,32 @@ export const OnlyObservationsMarkedIncorrect: Story = {
 		await expect(args.onPatch).toHaveBeenCalledWith({ invalidated: undefined });
 		await expect(canvas.queryByTitle("Marked incorrect: Only")).not.toBeInTheDocument();
 		await expect(canvas.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
+	},
+};
+
+/**
+ * A requested or backfilled review chose its work rather than meeting it as it arrived, so an
+ * operator reading a mix separates them. Live is offered too, though no row badges it.
+ */
+export const ReportsAChosenOrigin: Story = {
+	play: async ({ args, canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("combobox", { name: "Origin" }));
+		const listbox = await screen.findByRole("listbox", { name: "Origin options" });
+		await within(listbox).findByRole("option", { name: /Live/u });
+		await userEvent.click(await within(listbox).findByRole("option", { name: /Backfilled/u }));
+		await expect(args.onPatch).toHaveBeenCalledWith({ origin: ["BACKFILL"] });
+	},
+};
+
+/** An applied origin is a filter like any other: a pill below `sm`, and something Reset clears. */
+export const AnOriginOnAPhone: Story = {
+	args: { search: { ...UNFILTERED, origin: ["MANUAL"] }, total: 2 },
+	parameters: { chromatic: { viewports: [320] }, viewport: { defaultViewport: "reflow" } },
+	play: async ({ args, canvas, userEvent }) => {
+		canvas.getByText("2 observations match your filters.");
+		await canvas.findByTitle("Origin: Requested");
+		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
+		await expect(args.onReset).toHaveBeenCalledTimes(1);
+		await expect(canvas.queryByTitle("Origin: Requested")).not.toBeInTheDocument();
 	},
 };

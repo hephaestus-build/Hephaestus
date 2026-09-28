@@ -73,18 +73,45 @@ delivery. Stop at the first missing stage rather than changing downstream settin
 
 ### Read the Practice reviews overview
 
-**Practices → Practice reviews** opens on an overview for a time range: the last 7 days, 30 days,
-90 days or 12 months.
+**Practices → Practice reviews** opens on an overview. The time range at the top of the page — the
+last 7 days, 30 days, 90 days or 12 months — decides everything on it except the feedback waiting for
+your approval, which waits however long ago it was composed. The number beside **Practice reviews** in
+the sidebar counts that feedback, so you see it from anywhere in the workspace. While the **Practices**
+section of the sidebar is folded, the number sits on **Practices** instead; with the sidebar down to
+icons, the **Practices** tooltip says it.
 
-- **Needs you** lists feedback that waits for your approval, whenever it was composed, then feedback
-  that failed to deliver and reviews that failed or timed out in the range. When nothing needs you,
-  one line says so.
-- **What the reviews did** shows the three stages a review goes through: **Reviews**, **Observations**
-  and **Feedback**. Each has its total, its volume over the range, and how it turned out. Each count
-  under a stage opens the list of exactly the rows it counts.
+- **Needs you** lists the feedback that waits for your approval, oldest first. **Review N pieces of
+  feedback** opens the oldest as a queue: the panel shows where you are, such as **2 of 7**, and the
+  arrows beside it step back and forward through the queue. Approving or rejecting a piece moves on to
+  the next, or back to one you stepped past, and closes the panel once nothing else waits. Feedback
+  opened any other way — from the **Feedback**
+  list, a review or an observation — opens on its own, without the queue. Below that, one line counts
+  what went wrong in the range: reviews that failed or timed out, reviews whose results could not be
+  processed or delivered, and feedback that failed to deliver. A review whose automatic delivery
+  failed counts in both of the last two. Each count opens the list of exactly those. When
+  nothing needs you, one line says so.
+- **What the reviews did** has a tile for each stage: **Reviews**, **Observations** and **Feedback**.
+  Each shows its total, the change against the period of the same length before, its volume over the
+  range, and what it split into. Reviews still queued or running are counted apart, since they have no
+  result yet. Observations marked incorrect are listed apart from the outcomes they overlap. Feedback is
+  grouped as awaiting approval, prepared, delivered, unconfirmed, withheld, and failed to deliver.
+  Delivered includes feedback that reached the developer in part; unconfirmed is conversation feedback
+  with no record that it was shown, so it is neither delivered nor withheld and is never prepared
+  again; withheld includes feedback that a reviewer rejected or that newer feedback replaced. Each
+  count opens the list of exactly the rows it counts.
 - **Practices** lists each practice with an observation, or feedback about one, in the range, busiest
-  first: how its observations turned out, the feedback that cited it, and how many of its observations
-  were marked incorrect. Open a practice to reach its observations and its definition.
+  first. For each it shows how many observations it recorded, how many of those were negative outcomes
+  and how many were marked incorrect, and how much of the feedback citing it was delivered. Only
+  observations an admin found wrong are marked, so one that is not marked is not confirmed correct
+  either. A last line counts
+  the practices that are turned on, that Hephaestus can review, and that recorded nothing in the range. Open a practice to see its
+  autonomy, its counts and its most recent observations, and to edit it.
+
+The lists behind the overview are **Reviews**, **Observations** and **Feedback**. Each has its own date
+filter: its tab opens without one, and a count on the overview opens its list filtered to the
+overview's range. **Reviews** filters by status and by
+**Result processing**, **Observations** by **Origin** among its other filters, and **Feedback** by
+**Practice** — the practices its observations are about — and can list the oldest first.
 
 A review, an observation, a piece of feedback, a piece of reviewed work or a practice opens as a panel
 over the page you are on. Links inside a panel open the next record over it, and the path at the top
@@ -357,6 +384,6 @@ run themselves once a sync finds the work again, and are dropped if it does not 
    no email — while reviews still run and in-app feedback still reaches each developer's Practice
    profile. A banner says so on every instance-admin page.
 
-The per-workspace review list under Administration → **Practices → Practice reviews** shows each review's
-status, the model it ran on, and its error message — the fastest way to tell "never submitted" from
-"submitted and failed".
+The per-workspace review list, the **Reviews** tab under Administration → **Practices → Practice
+reviews**, shows each review's status; open a review to see the model it ran on and its error message —
+the fastest way to tell "never submitted" from "submitted and failed".

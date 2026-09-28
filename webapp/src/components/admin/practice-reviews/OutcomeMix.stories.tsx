@@ -5,22 +5,31 @@ import { withStandardPage } from "@/stories/decorators";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { practiceReviewOverview, reviewOverviewScope } from "./fixtures";
-import { OutcomeBar, OutcomeLegend, OutcomeMix } from "./OutcomeMix";
-import { feedbackSlots, markedIncorrectSlot, observationSlots } from "./review-outcomes";
+import { OutcomeMix } from "./OutcomeMix";
+import {
+	feedbackSlots,
+	markedIncorrectSlot,
+	observationSlots,
+	slotsTotal,
+} from "./review-outcomes";
 
 const observationNoun = (total: number): string => (total === 1 ? "observation" : "observations");
+const feedbackNoun = (total: number): string =>
+	total === 1 ? "piece of feedback" : "pieces of feedback";
+
+const OBSERVATIONS = observationSlots(practiceReviewOverview.observations, reviewOverviewScope);
+const FEEDBACK = feedbackSlots(practiceReviewOverview.feedback, reviewOverviewScope);
 
 /**
- * A total, then how it splits: a bar for the eye and a legend with the contract. The bar is a
- * picture of the legend and hidden from assistive technology, so the legend's words come from the
- * registry that owns each value, and each count opens the list of exactly the rows it counts.
+ * A total, how it changed, then what it splits into — as counts in words, never as a bar: each
+ * count wears the words, icon and tone of the registry that owns its value, and opens the list of
+ * exactly the rows it counts. A count that opens a list carries a faint underline at rest.
  *
- * A flag such as "marked incorrect" overlaps the parts — an incorrect strength is still a strength —
- * so it is a legend entry the bar never draws and the total never adds.
+ * A flag such as "marked incorrect" overlaps the parts — a positive outcome marked incorrect is
+ * still a positive outcome — so it is listed apart, under its own name, and never added.
  */
 const meta = {
 	component: OutcomeMix,
-	subcomponents: { OutcomeBar, OutcomeLegend },
 	parameters: { layout: "padded" },
 	decorators: [
 		withStandardPage,
@@ -33,12 +42,17 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		workspaceSlug: "demo",
-		slots: observationSlots(practiceReviewOverview.observations, reviewOverviewScope),
-		flags: [
-			markedIncorrectSlot(practiceReviewOverview.observationsInvalidated, reviewOverviewScope),
-		],
+		total: slotsTotal(OBSERVATIONS),
+		slots: OBSERVATIONS,
+		flags: {
+			label: "Observations checked by an admin",
+			slots: [
+				markedIncorrectSlot(practiceReviewOverview.observationsInvalidated, reviewOverviewScope),
+			],
+		},
 		noun: observationNoun,
 		label: "Observations by outcome",
+		delta: "12 more than the previous 30 days",
 		children: <p className="text-xs text-muted-foreground">The total over time draws here.</p>,
 	},
 	argTypes: {
@@ -54,102 +68,117 @@ type Story = StoryObj<typeof meta>;
 
 export const Observations: Story = {
 	play: async ({ canvas }) => {
-		// The flag is listed but not added: 35 + 27 + 10 + 6, not + 3.
-		canvas.getByText("78");
-		canvas.getByText("observations");
-		canvas.getByText("The total over time draws here.");
 		const legend = within(canvas.getByRole("list", { name: "Observations by outcome" }));
 		await expect(legend.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-			"35 strengths",
-			"27 improvements",
+			"35 positive outcomes",
+			"27 negative outcomes",
 			"10 not applicable",
 			"6 undetermined",
-			"3 marked incorrect",
 		]);
-		const strengths = new URL(
-			legend.getByRole<HTMLAnchorElement>("link", { name: "35 strengths" }).href,
+		const positive = new URL(
+			legend.getByRole<HTMLAnchorElement>("link", { name: "35 positive outcomes" }).href,
 		);
-		await expect(strengths.pathname).toBe("/w/demo/admin/practices/reviews/observations");
-		await expect(strengths.searchParams.get("outcome")).toBe('["POSITIVE"]');
-		await expect(strengths.searchParams.get("from")).toBe(reviewOverviewScope.from);
+		await expect(positive.pathname).toBe("/w/demo/admin/practices/reviews/observations");
+		await expect(positive.searchParams.get("outcome")).toBe('["POSITIVE"]');
+		await expect(positive.searchParams.get("from")).toBe(reviewOverviewScope.from);
+		const flags = within(canvas.getByRole("list", { name: "Observations checked by an admin" }));
 		const incorrect = new URL(
-			legend.getByRole<HTMLAnchorElement>("link", { name: "3 marked incorrect" }).href,
+			flags.getByRole<HTMLAnchorElement>("link", { name: "3 marked incorrect" }).href,
 		);
 		await expect(incorrect.searchParams.get("invalidated")).toBe("true");
 	},
 };
 
-/** Zeroes are left out of the legend: ten noughts would hide the numbers that matter. */
+/**
+ * Feedback by delivery family. Each family opens the list filtered to every state it stands for,
+ * and a family with none in it is left out.
+ */
 export const Feedback: Story = {
 	args: {
-		slots: feedbackSlots(practiceReviewOverview.feedback, reviewOverviewScope),
+		total: slotsTotal(FEEDBACK),
+		slots: FEEDBACK,
 		flags: undefined,
-		noun: (total) => (total === 1 ? "piece of feedback" : "pieces of feedback"),
-		label: "Feedback by delivery state",
+		noun: feedbackNoun,
+		label: "Feedback by delivery",
+		delta: undefined,
+		children: undefined,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("24");
-		const legend = within(canvas.getByRole("list", { name: "Feedback by delivery state" }));
+		const legend = within(canvas.getByRole("list", { name: "Feedback by delivery" }));
 		await expect(legend.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
 			"3 awaiting approval",
-			"14 delivered",
 			"1 prepared",
-			"1 replaced by newer",
-			"3 withheld",
+			"14 delivered",
+			"5 withheld",
 			"1 failed to deliver",
-			"1 rejected",
 		]);
-		await expect(
-			new URL(legend.getByRole<HTMLAnchorElement>("link", { name: "3 awaiting approval" }).href)
-				.pathname,
-		).toBe("/w/demo/admin/practices/reviews/feedback");
+		const withheld = new URL(
+			legend.getByRole<HTMLAnchorElement>("link", { name: "5 withheld" }).href,
+		);
+		await expect(withheld.pathname).toBe("/w/demo/admin/practices/reviews/feedback");
+		await expect(withheld.searchParams.get("deliveryState")).toBe(
+			'["SUPPRESSED","DISCARDED","SUPERSEDED"]',
+		);
 	},
 };
 
-/**
- * Feedback has no practice filter, so a practice's feedback counts build no list to open and read
- * as words: a link would open rows the count never counted.
- */
-export const WordsOnly: Story = {
+/** A practice's feedback opens the feedback citing that practice. */
+export const OnePractice: Story = {
 	args: {
+		...Feedback.args,
 		slots: feedbackSlots(practiceReviewOverview.feedback, {
 			...reviewOverviewScope,
 			practiceSlug: "thin-controllers",
 		}),
-		flags: undefined,
-		noun: (total) => (total === 1 ? "piece of feedback cited it" : "pieces of feedback cited it"),
-		label: "Feedback citing this practice",
 	},
 	play: async ({ canvas }) => {
-		const legend = within(canvas.getByRole("list", { name: "Feedback citing this practice" }));
-		await expect(legend.getAllByRole("listitem")).toHaveLength(7);
+		const legend = within(canvas.getByRole("list", { name: "Feedback by delivery" }));
+		const delivered = new URL(
+			legend.getByRole<HTMLAnchorElement>("link", { name: "14 delivered" }).href,
+		);
+		await expect(delivered.searchParams.get("practiceSlug")).toBe('["thin-controllers"]');
+		await expect(delivered.searchParams.get("deliveryState")).toBe(
+			'["DELIVERED","PARTIALLY_DELIVERED"]',
+		);
+	},
+};
+
+/** Counts built with no range name no list, and read as words. */
+export const WordsOnly: Story = {
+	args: {
+		...Feedback.args,
+		slots: feedbackSlots(practiceReviewOverview.feedback),
+		label: "Feedback by delivery",
+	},
+	play: async ({ canvas }) => {
+		const legend = within(canvas.getByRole("list", { name: "Feedback by delivery" }));
+		await expect(legend.getAllByRole("listitem")).toHaveLength(5);
 		await expect(legend.queryAllByRole("link")).toHaveLength(0);
 	},
 };
 
-/** Nothing counted: a nought, and neither what it splits over time, nor a bar, nor a legend. */
+/** Nothing counted: a nought and no legend. */
 export const NothingCounted: Story = {
 	args: {
+		total: 0,
 		slots: observationSlots({ strengths: 0, problems: 0, notApplicable: 0, undetermined: 0 }),
-		flags: [markedIncorrectSlot(0)],
+		flags: { label: "Observations checked by an admin", slots: [markedIncorrectSlot(0)] },
+		delta: "Same as the previous 30 days",
+		children: undefined,
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText("0");
-		await expect(canvas.queryByText("The total over time draws here.")).not.toBeInTheDocument();
+		canvas.getByText("Same as the previous 30 days");
 		await expect(canvas.queryByRole("list")).not.toBeInTheDocument();
 	},
 };
 
 /** The legend wraps rather than pushing the page sideways. */
 export const Reflow: Story = {
-	args: {
-		slots: feedbackSlots(practiceReviewOverview.feedback, reviewOverviewScope),
-		flags: undefined,
-		label: "Feedback by delivery state",
-	},
+	args: Feedback.args,
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvas }) => {
-		canvas.getByRole("list", { name: "Feedback by delivery state" });
+		canvas.getByRole("list", { name: "Feedback by delivery" });
 		await expectNoPageOverflow();
 	},
 };

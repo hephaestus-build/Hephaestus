@@ -1,7 +1,10 @@
 import type { ReactElement } from "react";
 
 import type { DetailStackEntry } from "@/components/layout/detail-drawer/detail-stack";
-import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import {
+	DetailDrawerStack,
+	type DetailDrawerStackProps,
+} from "@/components/layout/detail-drawer/DetailDrawerStack";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 
 import { Stateful } from "./stateful";
@@ -13,10 +16,13 @@ import { Stateful } from "./stateful";
 export function InLevelStack({
 	entry,
 	path,
+	size = "detail",
 	children,
 }: {
 	entry: DetailStackEntry;
 	path: LevelPath;
+	/** The width the level's production host gives its stack, so a story wraps where the app does. */
+	size?: DetailDrawerStackProps["size"];
 	children: (level: { nested: boolean; path: LevelPath }) => ReactElement;
 }) {
 	return (
@@ -24,7 +30,7 @@ export function InLevelStack({
 			{(stack, setStack) => (
 				<DetailDrawerStack
 					stack={stack}
-					size="detailWide"
+					size={size}
 					onClose={(depth) => setStack(stack.slice(0, depth))}
 				>
 					{(_entry, level) =>
