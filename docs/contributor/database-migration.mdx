@@ -41,6 +41,14 @@ conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
    without one. Keep the summary user-facing; the release notes flag the migration automatically.
 5. Commit the changelog, the `master.xml` edit, the changeset, and `docs/contributor/erd/schema.mmd`.
 
+## Data corrections
+
+A fix that leaves wrong rows behind corrects them in the code that writes them, so the next sync or event heals
+them. Only rows that nothing will ever write again, such as merge requests that incremental sync never reads again,
+get a hand-written `<sql>` change set. It goes in this branch's single changelog, with a comment saying which rows are
+wrong and why, a `HALT` precondition on the columns it reads, and a `<rollback><stop>` that names the backup to
+restore. A data correction needs maintainer approval in the pull request.
+
 ## Changelog immutability policy
 
 The Liquibase changelog chain **is** the upgrade path: every production and self-hosted
