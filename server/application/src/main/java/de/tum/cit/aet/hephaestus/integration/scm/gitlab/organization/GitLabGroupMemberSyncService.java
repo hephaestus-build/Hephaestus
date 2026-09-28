@@ -202,6 +202,9 @@ public class GitLabGroupMemberSyncService {
                         response.field("group.groupMembers.nodes").toEntityList(GitLabGroupMemberResponse.class);
 
                 for (GitLabGroupMemberResponse member : members) {
+                    if (member != null && member.isPendingInvitation()) {
+                        continue;
+                    }
                     // A listed member this sync cannot identify, or whose access level is missing, may be one already
                     // stored, so the listing no longer proves who is gone or what role they hold.
                     ListedMember listed = ListedMember.of(member);

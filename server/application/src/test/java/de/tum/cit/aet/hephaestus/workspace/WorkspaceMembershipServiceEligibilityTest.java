@@ -6,9 +6,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -16,7 +13,6 @@ import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -38,12 +34,6 @@ class WorkspaceMembershipServiceEligibilityTest extends BaseUnitTest {
     private WorkspaceActorSelector actorSelector;
 
     @Mock
-    private OrganizationMembershipRepository roster;
-
-    @Mock
-    private TeamMembershipRepository teams;
-
-    @Mock
     private EntityManager entityManager;
 
     @Mock
@@ -56,82 +46,49 @@ class WorkspaceMembershipServiceEligibilityTest extends BaseUnitTest {
     private HiddenFormerMemberRepository hiddenFormerMembers;
 
     private WorkspaceMembershipService service;
-    private Workspace workspace;
-    private Organization group;
 
     @BeforeEach
     void setUp() {
         service = new WorkspaceMembershipService(
-                memberships,
-                workspaces,
-                entityManager,
-                configAudit,
-                accessService,
-                hiddenFormerMembers,
-                actorSelector,
-                roster,
-                teams);
-        group = new Organization();
-        group.setId(5L);
-        group.setLogin("course/intro");
-        group.setProvider(GITLAB);
-        workspace = new Workspace();
-        workspace.setId(WORKSPACE_ID);
-        workspace.setOrganization(group);
-        when(workspaces.findById(WORKSPACE_ID)).thenReturn(Optional.of(workspace));
+                memberships, workspaces, entityManager, configAudit, accessService, hiddenFormerMembers, actorSelector);
     }
 
     @Test
-    void shouldReviewOnlyMembersTheGroupOrOneOfItsTeamsStillGrants() {
+    void shouldCountOnlyHumanMembersOnTheConnectedInstance() {
         when(actorSelector.connectedProviderId(WORKSPACE_ID)).thenReturn(Optional.of(10L));
         WorkspaceMembership student = membership(100L, User.Type.USER, GITLAB);
-        WorkspaceMembership tutor = membership(101L, User.Type.USER, GITLAB);
-        WorkspaceMembership retainedOwner = membership(102L, User.Type.USER, GITLAB);
+        WorkspaceMembership creatorOnGitHub = membership(200L, User.Type.USER, GITHUB);
         WorkspaceMembership bot = membership(103L, User.Type.BOT, GITLAB);
-        when(memberships.findAllWithUserByWorkspaceId(WORKSPACE_ID))
-                .thenReturn(List.of(student, tutor, retainedOwner, bot));
-        when(roster.findUserIdsByOrganizationId(5L)).thenReturn(List.of(100L, 103L));
-        when(teams.findDistinctUserIdsOfSubteams("course/intro", 10L)).thenReturn(Set.of(101L));
+        when(memberships.findAllWithUserByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(student, creatorOnGitHub, bot));
 
         assertThat(service.practiceReviewEligibleUserIds(WORKSPACE_ID))
-                .as("an owner kept only for administration is not a review subject, and a bot never is")
-                .containsExactlyInAnyOrder(100L, 101L);
+                .as("the owner's linked GitHub profile never authors GitLab work, and a bot is never a subject")
+                .containsExactly(100L);
     }
 
     @Test
-    void shouldNotReviewAnEntitledIdOnAnotherProviderUnderALinkedGroup() {
+    void shouldAdmitOneMemberOnlyOnTheConnectedInstance() {
         when(actorSelector.connectedProviderId(WORKSPACE_ID)).thenReturn(Optional.of(10L));
-        WorkspaceMembership student = membership(100L, User.Type.USER, GITLAB);
-        WorkspaceMembership githubIdentity = membership(200L, User.Type.USER, GITHUB);
-        when(memberships.findAllWithUserByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(student, githubIdentity));
-        when(roster.findUserIdsByOrganizationId(5L)).thenReturn(List.of(100L, 200L));
-        when(teams.findDistinctUserIdsOfSubteams("course/intro", 10L)).thenReturn(Set.of());
+        when(memberships.findByWorkspace_IdAndUser_Id(WORKSPACE_ID, 100L))
+                .thenReturn(Optional.of(membership(100L, User.Type.USER, GITLAB)));
+        when(memberships.findByWorkspace_IdAndUser_Id(WORKSPACE_ID, 200L))
+                .thenReturn(Optional.of(membership(200L, User.Type.USER, GITHUB)));
 
-        assertThat(service.practiceReviewEligibleUserIds(WORKSPACE_ID)).containsExactly(100L);
+        assertThat(service.isPracticeReviewEligible(WORKSPACE_ID, 100L)).isTrue();
+        assertThat(service.isPracticeReviewEligible(WORKSPACE_ID, 200L)).isFalse();
+        assertThat(service.isPracticeReviewEligible(WORKSPACE_ID, 300L)).isFalse();
     }
 
     @Test
-    void shouldReviewNobodyWithoutAnActiveConnectionOrWhenTheGroupIsOnAnotherProvider() {
-        WorkspaceMembership student = membership(100L, User.Type.USER, GITLAB);
-        when(memberships.findAllWithUserByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(student));
+    void shouldCountEveryHumanMemberWhenNoConnectionNamesTheInstance() {
         when(actorSelector.connectedProviderId(WORKSPACE_ID)).thenReturn(Optional.empty());
+        when(memberships.findAllWithUserByWorkspaceId(WORKSPACE_ID))
+                .thenReturn(List.of(
+                        membership(100L, User.Type.USER, GITLAB),
+                        membership(200L, User.Type.USER, GITHUB),
+                        membership(103L, User.Type.BOT, GITLAB)));
 
-        assertThat(service.practiceReviewEligibleUserIds(WORKSPACE_ID)).isEmpty();
-
-        when(actorSelector.connectedProviderId(WORKSPACE_ID)).thenReturn(Optional.of(20L));
-
-        assertThat(service.practiceReviewEligibleUserIds(WORKSPACE_ID)).isEmpty();
-    }
-
-    @Test
-    void shouldReviewOnlyIdentitiesOnTheConnectedProviderBeforeAGroupIsLinked() {
-        workspace.setOrganization(null);
-        when(actorSelector.connectedProviderId(WORKSPACE_ID)).thenReturn(Optional.of(10L));
-        WorkspaceMembership onGitLab = membership(100L, User.Type.USER, GITLAB);
-        WorkspaceMembership creatorOnGitHub = membership(200L, User.Type.USER, GITHUB);
-        when(memberships.findAllWithUserByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(onGitLab, creatorOnGitHub));
-
-        assertThat(service.practiceReviewEligibleUserIds(WORKSPACE_ID)).containsExactly(100L);
+        assertThat(service.practiceReviewEligibleUserIds(WORKSPACE_ID)).containsExactlyInAnyOrder(100L, 200L);
     }
 
     private static WorkspaceMembership membership(long userId, User.Type type, IdentityProvider provider) {

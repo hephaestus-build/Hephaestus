@@ -34,26 +34,24 @@ public interface TeamMembershipRepository extends JpaRepository<TeamMembership, 
     boolean existsByTeam_IdAndUser_Id(Long teamId, Long userId);
 
     /**
-     * Collect distinct user IDs of every member of a subgroup team under the given root group path
-     * (case-insensitive) on one provider instance.
+     * Collect distinct user IDs of every member of a team under the given root group path (case-insensitive) on one
+     * provider instance.
      * <p>
      * Used to reconcile workspace memberships from the team graph — e.g., tutors
      * who are subgroup maintainers and therefore appear in {@code team_membership}
-     * but not in {@code organization_membership}. The root group's own team mirrors its roster, which
-     * {@code organization_membership} already holds, so only teams with a parent count; another instance can
-     * host the same path.
+     * but not in {@code organization_membership}, and students who are members only of a project, whom the team
+     * of the project's group lists. Another instance can host the same path.
      *
      * @param organization the root group full path (e.g., {@code "ase/introcourse"})
      * @param providerId   the provider instance the teams were synced from
-     * @return distinct user IDs of all members of subgroup teams under that root group
+     * @return distinct user IDs of all members of teams under that root group
      */
     @Query("""
             SELECT DISTINCT tm.user.id
             FROM TeamMembership tm
             WHERE LOWER(tm.team.organization) = LOWER(:organization)
             AND tm.team.provider.id = :providerId
-            AND tm.team.parentId IS NOT NULL
         """)
-    Set<Long> findDistinctUserIdsOfSubteams(
+    Set<Long> findDistinctUserIdsOfTeams(
             @Param("organization") String organization, @Param("providerId") Long providerId);
 }

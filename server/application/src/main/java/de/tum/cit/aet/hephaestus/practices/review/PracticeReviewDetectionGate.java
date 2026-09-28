@@ -144,26 +144,41 @@ public class PracticeReviewDetectionGate {
 
         GateDecision.@Nullable Skip scopeSkip = null;
         String targetBranch = reviewable instanceof PullRequest pr ? pr.getBaseRefName() : null;
-        if (!allowOutsideCoverage
-                && !(reviewable instanceof PullRequest
-                        ? coverageService.admits(workspace, nameWithOwner, targetBranch, subject)
-                        : coverageService.admits(workspace, nameWithOwner, null, subject, false))) {
+        var coverage = allowOutsideCoverage
+                ? null
+                : coverageService.assess(
+                        workspace, nameWithOwner, targetBranch, subject, reviewable instanceof PullRequest);
+        if (coverage != null && !coverage.admitted()) {
             log.debug(
-                    "Practice review gate: SKIP, reason=outsideCoverage, artifactId={}, repo={}, targetBranch={}, subjectId={}",
+                    "Practice review gate: SKIP, reason=outsideCoverage, artifactId={}, repo={}, targetBranch={}, subjectId={}, subjectStatus={}",
                     reviewable.getId(),
                     nameWithOwner,
                     targetBranch,
-                    subject.actorId());
+                    subject.actorId(),
+                    coverage.subjectStatus());
             scopeSkip = new GateDecision.Skip(
-                    "the repository, branch, or linked subject is outside review coverage",
-                    subject.actorId() == null
-                            ? SignalStateReason.SUBJECT_UNLINKED
-                            : SignalStateReason.OUT_OF_REVIEW_SCOPE);
+                    "the repository, branch, or linked subject is outside review coverage", scopeSkipReason(coverage));
         }
 
         GateDecision shared = evaluateWorkspaceAndSignal(
                 workspace, signal, draft, triggerMode, String.valueOf(reviewable.getId()), scopeSkip);
         return shared;
+    }
+
+    /**
+     * A repository or base branch outside the selection is a fact of the work, so that refusal is terminal. An author
+     * who is not a member the workspace reviews, or no known author, can change with the next roster sync or link,
+     * so that refusal waits and the work is offered again. A member the selection leaves out is the workspace's
+     * choice, and terminal like a repository.
+     */
+    private static SignalStateReason scopeSkipReason(PracticeReviewCoverageService.CoverageAssessment coverage) {
+        if (!coverage.repositoryMatched() || !coverage.branchMatched()) {
+            return SignalStateReason.OUT_OF_REVIEW_SCOPE;
+        }
+        return switch (coverage.subjectStatus()) {
+            case MISSING, UNLINKED -> SignalStateReason.SUBJECT_UNLINKED;
+            case NON_HUMAN, RESOLVED_LINKED_HUMAN -> SignalStateReason.OUT_OF_REVIEW_SCOPE;
+        };
     }
 
     private GateDecision evaluateWorkspaceAndSignal(

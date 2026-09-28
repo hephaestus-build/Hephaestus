@@ -104,8 +104,8 @@ public class WorkspaceTeamMembershipAdapter implements TeamMembershipListener {
         }
 
         try {
-            Set<Long> userIds = teamMembershipRepository.findDistinctUserIdsOfSubteams(
-                    event.rootGroupFullPath(), event.providerId());
+            Set<Long> userIds =
+                    teamMembershipRepository.findDistinctUserIdsOfTeams(event.rootGroupFullPath(), event.providerId());
 
             if (userIds.isEmpty()) {
                 log.debug(

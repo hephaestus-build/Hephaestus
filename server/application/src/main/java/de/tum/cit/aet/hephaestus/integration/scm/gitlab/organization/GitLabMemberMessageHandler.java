@@ -176,9 +176,15 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
                 return;
             }
             if (highest == null) {
-                userRepository
-                        .findByNativeIdAndProviderId(userId, providerId)
-                        .ifPresent(user -> removeMember(org, user));
+                userRepository.findByNativeIdAndProviderId(userId, providerId).ifPresent(user -> {
+                    // No effective access to the group is no direct grant in it either, so the group's own team,
+                    // which would otherwise keep them in the workspace until the next team sync, drops them too.
+                    teamRepository
+                            .findByNativeIdAndProviderId(membership.groupId(), providerId)
+                            .ifPresent(team ->
+                                    teamMembershipRepository.deleteByTeam_IdAndUser_Id(team.getId(), user.getId()));
+                    removeMember(org, user);
+                });
                 return;
             }
             User user = gitLabUserService.findOrCreateReportedUser(userId, providerId);

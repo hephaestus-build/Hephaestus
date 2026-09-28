@@ -65,8 +65,9 @@ public enum SignalStateReason {
     BUDGET_EXHAUSTED(SignalState.PENDING),
 
     /**
-     * Its own reason rather than a gate skip because it is retryable: linking the account afterwards makes
-     * everything passed over reviewable again, and {@link #GATE_SKIPPED} would make it terminal silently.
+     * Its own reason rather than a gate skip because it is retryable: linking the account afterwards, or the
+     * member sync admitting the author, makes everything passed over reviewable again, and {@link #GATE_SKIPPED}
+     * would make it terminal silently.
      */
     SUBJECT_UNLINKED(SignalState.PENDING),
 
@@ -126,7 +127,7 @@ public enum SignalStateReason {
             case BUDGET_EXHAUSTED ->
                 "The budget funding this review was exhausted; it is re-offered when the budget refills.";
             case SUBJECT_UNLINKED ->
-                "This work could not be attributed to anybody Hephaestus knows; resolving the author re-offers it.";
+                "The author is unknown or not yet a workspace member Hephaestus reviews; it is re-offered once they are one.";
             case MODEL_UNAVAILABLE ->
                 "The model this review is bound to left the catalog; re-pointing the binding re-offers it.";
             case ARTIFACT_NOT_VISIBLE ->

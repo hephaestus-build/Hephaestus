@@ -65,7 +65,7 @@ class WorkspaceTeamMembershipAdapterTest extends BaseUnitTest {
         when(workspaceRepository.findById(WORKSPACE_ID)).thenReturn(Optional.of(workspace));
         lenient().when(actorSelector.connectedProviderId(WORKSPACE_ID)).thenReturn(Optional.of(PROVIDER_ID));
         lenient()
-                .when(teamMembershipRepository.findDistinctUserIdsOfSubteams(any(), anyLong()))
+                .when(teamMembershipRepository.findDistinctUserIdsOfTeams(any(), anyLong()))
                 .thenReturn(Set.of(7L));
     }
 

@@ -541,6 +541,9 @@ public class GitLabTeamSyncService {
         }
         Map<Long, ListedMember> listedByNativeId = new HashMap<>();
         for (GitLabGroupMemberResponse member : allMembers) {
+            if (member != null && member.isPendingInvitation()) {
+                continue;
+            }
             ListedMember listed = ListedMember.of(member);
             if (listed == null) {
                 log.warn("Skipped team membership changes: reason=unreadableMember, groupPath={}", groupFullPath);

@@ -148,6 +148,11 @@ public class GitLabCollaboratorSyncService {
                 boolean everyEntryReadable = true;
                 for (Object node :
                         response.field("project.projectMembers.nodes").toEntityList(Map.class)) {
+                    // A pending e-mail invitation is listed with no user and grants nobody access
+                    // (GitLabGroupMemberResponse#isPendingInvitation).
+                    if (node instanceof Map<?, ?> member && member.containsKey("user") && member.get("user") == null) {
+                        continue;
+                    }
                     ListedCollaborator listed = ListedCollaborator.of(node);
                     if (listed == null) {
                         everyEntryReadable = false;

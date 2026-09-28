@@ -38,6 +38,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -402,23 +403,26 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
     @Nested
     class ErrorHandling {
 
+        /** GraphQL lists an e-mail invitation nobody has accepted with no user; it grants nobody access. */
         @Test
-        void nullMemberUser_leavesTheRosterIncomplete() {
-            var nullUserMember = new GitLabGroupMemberResponse(null, new GitLabAccessLevel("DEVELOPER", 30));
+        void pendingInvitation_isSkippedAndTheRosterStaysComplete() {
+            var pendingInvitation = new GitLabGroupMemberResponse(null, new GitLabAccessLevel("DEVELOPER", 30));
             var validMember = createMember("gid://gitlab/User/10", "alice", "Alice", 30);
 
-            ClientGraphQlResponse response = mockMembersPage(List.of(nullUserMember, validMember), LAST_PAGE);
+            ClientGraphQlResponse response = mockMembersPage(List.of(pendingInvitation, validMember), LAST_PAGE);
             HttpGraphQlClient client = mockClient();
             mockSequentialExecute(client, response);
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(100);
+            stubUserLookup(10L, 1010L);
+            when(organizationMembershipRepository.findUserIdsByOrganizationId(42L))
+                    .thenReturn(List.of(1010L, 1030L));
 
             int result = service.syncGroupMemberships(SCOPE_ID, GROUP_PATH, testOrg);
 
-            assertThat(result).isEqualTo(-1);
-            // The listing is incomplete, so nothing it lists is written either.
-            verify(organizationMembershipRepository, never()).upsertMembership(anyLong(), anyLong(), any());
-            verify(organizationMembershipRepository, never()).deleteByOrganizationIdAndUserIdIn(anyLong(), any());
-            verify(organizationMembershipListener, never()).onOrganizationMembershipsSynced(any());
+            assertThat(result).isEqualTo(1);
+            verify(organizationMembershipRepository).upsertMembership(42L, 1010L, OrganizationMemberRole.MEMBER);
+            verify(organizationMembershipRepository).deleteByOrganizationIdAndUserIdIn(42L, Set.of(1030L));
+            verify(organizationMembershipListener).onOrganizationMembershipsSynced(any());
         }
 
         @Test

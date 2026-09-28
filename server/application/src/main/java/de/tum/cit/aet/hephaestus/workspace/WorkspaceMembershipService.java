@@ -5,9 +5,6 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
 import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
@@ -58,8 +55,6 @@ public class WorkspaceMembershipService {
     private final WorkspaceAccessService accessService;
     private final HiddenFormerMemberRepository hiddenFormerMemberRepository;
     private final WorkspaceActorSelector actorSelector;
-    private final OrganizationMembershipRepository organizationMembershipRepository;
-    private final TeamMembershipRepository teamMembershipRepository;
 
     public WorkspaceMembershipService(
             WorkspaceMembershipRepository workspaceMembershipRepository,
@@ -68,9 +63,7 @@ public class WorkspaceMembershipService {
             ConfigAuditPort configAudit,
             WorkspaceAccessService accessService,
             HiddenFormerMemberRepository hiddenFormerMemberRepository,
-            WorkspaceActorSelector actorSelector,
-            OrganizationMembershipRepository organizationMembershipRepository,
-            TeamMembershipRepository teamMembershipRepository) {
+            WorkspaceActorSelector actorSelector) {
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceRepository = workspaceRepository;
         this.entityManager = entityManager;
@@ -78,8 +71,6 @@ public class WorkspaceMembershipService {
         this.accessService = accessService;
         this.hiddenFormerMemberRepository = hiddenFormerMemberRepository;
         this.actorSelector = actorSelector;
-        this.organizationMembershipRepository = organizationMembershipRepository;
-        this.teamMembershipRepository = teamMembershipRepository;
     }
 
     @Transactional(readOnly = true)
@@ -478,12 +469,11 @@ public class WorkspaceMembershipService {
     }
 
     /**
-     * The members practice review can take as its subject: linked humans whose identity is on the provider of the
+     * The members practice review can take as its subject: linked humans whose identity is on the instance of the
      * workspace's active connection, since only that identity authors the work it reviews. The account that created
-     * a GitLab workspace through its GitHub identity is a member, but never an author there. A workspace without an
-     * active connection reviews nobody; a linked organization must be on that provider, and the member must still be
-     * one it grants ({@link #entitledUserIds}): a workspace role kept for administration, such as an owner the roster
-     * dropped, grants no review.
+     * a GitLab workspace through its GitHub identity is a member, but never an author there. Without an active
+     * connection nothing tells which instance that is, and every human member counts. Who is a member at all is the
+     * provider's roster's answer, which reconciliation keeps the membership rows to.
      */
     @Transactional(readOnly = true)
     public Set<Long> practiceReviewEligibleUserIds(Long workspaceId) {
@@ -506,43 +496,11 @@ public class WorkspaceMembershipService {
 
     private Predicate<WorkspaceMembership> practiceReviewEligibility(Long workspaceId) {
         Optional<Long> connectedProvider = actorSelector.connectedProviderId(workspaceId);
-        if (connectedProvider.isEmpty()) {
-            return membership -> false;
-        }
-        Long providerId = connectedProvider.get();
-        Organization organization = workspaceRepository
-                .findById(workspaceId)
-                .map(Workspace::getOrganization)
-                .orElse(null);
-        Predicate<WorkspaceMembership> onConnectedProvider = membership -> membership.hasHumanUser()
-                && providerId.equals(membership.getUser().getProvider().getId());
-        if (organization == null) {
-            return onConnectedProvider;
-        }
-        if (!providerId.equals(organization.getProvider().getId())) {
-            return membership -> false;
-        }
-        Set<Long> entitled = entitledBy(organization);
-        return onConnectedProvider.and(
-                membership -> entitled.contains(membership.getUser().getId()));
-    }
-
-    /**
-     * Who the organization currently grants its workspace: its roster and the members of its subgroup teams on the
-     * same instance. A team-only member, such as a tutor listed only in a subgroup, is entitled like a roster member.
-     */
-    @Transactional(readOnly = true)
-    public Set<Long> entitledUserIds(Organization organization) {
-        return entitledBy(organization);
-    }
-
-    private Set<Long> entitledBy(Organization organization) {
-        Set<Long> entitled =
-                new HashSet<>(organizationMembershipRepository.findUserIdsByOrganizationId(organization.getId()));
-        entitled.addAll(teamMembershipRepository.findDistinctUserIdsOfSubteams(
-                organization.getLogin(),
-                Objects.requireNonNull(organization.getProvider().getId())));
-        return entitled;
+        return membership -> membership.hasHumanUser()
+                && connectedProvider
+                        .map(providerId -> providerId.equals(
+                                membership.getUser().getProvider().getId()))
+                        .orElse(true);
     }
 
     private Workspace lockForMembershipChange(Long workspaceId) {

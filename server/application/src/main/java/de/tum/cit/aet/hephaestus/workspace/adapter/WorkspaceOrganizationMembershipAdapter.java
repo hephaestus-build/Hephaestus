@@ -104,7 +104,7 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
 
     /**
      * One person's membership changed: only their workspace membership follows, from what the stored roster and
-     * subgroup teams grant them now. Nobody else is re-read, so a one-person event cannot remove anyone else.
+     * teams grant them now. Nobody else is re-read, so a one-person event cannot remove anyone else.
      */
     private void syncWorkspaceFromOrganization(MembershipChangedEvent event, String action) {
         Optional<Workspace> workspaceOpt = findWorkspace(event.organizationId(), event.organizationLogin());
@@ -141,7 +141,7 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
         }
     }
 
-    /** The role the organization's roster or one of its subgroup teams grants {@code userId} now, if any. */
+    /** The role the organization's roster or one of its teams grants {@code userId} now, if any. */
     private WorkspaceMembership.@Nullable WorkspaceRole currentGrant(Organization organization, Long userId) {
         Optional<WorkspaceMembership.WorkspaceRole> rosterRole =
                 organizationMembershipRepository.findByOrganizationId(organization.getId()).stream()
@@ -152,7 +152,7 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
             return rosterRole.get();
         }
         return teamMembershipRepository
-                        .findDistinctUserIdsOfSubteams(
+                        .findDistinctUserIdsOfTeams(
                                 organization.getLogin(),
                                 Objects.requireNonNull(
                                         organization.getProvider().getId()))
@@ -188,7 +188,7 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
 
     /**
      * Sets the workspace's members to what the provider currently grants: the organization roster's roles, and
-     * MEMBER for anyone only a subgroup team of the organization lists, since a team grants no administration.
+     * MEMBER for anyone only a team of the organization lists, since a team grants no administration.
      * No role is carried over from the workspace itself except OWNER, which is kept for anyone who holds it.
      *
      * @param workspace      the workspace to sync
@@ -217,7 +217,7 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
             desiredRoles.put(orgMembership.getUserId(), mapOrgRoleToWorkspaceRole(orgMembership.getRole()));
         }
         organizationRepository.findById(organizationId).ifPresent(organization -> {
-            for (Long userId : teamMembershipRepository.findDistinctUserIdsOfSubteams(
+            for (Long userId : teamMembershipRepository.findDistinctUserIdsOfTeams(
                     organization.getLogin(),
                     Objects.requireNonNull(organization.getProvider().getId()))) {
                 desiredRoles.putIfAbsent(userId, WorkspaceMembership.WorkspaceRole.MEMBER);
