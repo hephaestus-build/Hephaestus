@@ -24,11 +24,20 @@ const DELIVERED_UNSUBSCRIBED = new Set([
 	"installation_target",
 ]);
 
+/**
+ * GitHub offers these to Apps only, so the fine-grained token table asks for the core contract without
+ * them.
+ */
+const APP_ONLY = new Set(["checks"]);
+
 /** Manifest access levels, keyed by what the page's Level column calls them. */
 const LEVELS = new Map([
 	["Read", "read"],
 	["Read & write", "write"],
 ]);
+
+/** Each manifest level grants the ones before it. */
+const LEVEL_ORDER = ["read", "write", "admin"];
 
 const page = await readFile(PAGE, "utf8");
 
@@ -103,6 +112,28 @@ void test("the manifest grants exactly the permissions the tables explain", () =
 		new Map(Object.entries(permissions).map(([key, level]) => [key, asString(level, key)])),
 		explained,
 		"the permission tables and the manifest must name the same grants at the same levels",
+	);
+});
+
+void test("the manifest grants no held permission at its held level", () => {
+	const granted = [...grants("Held — do not grant")].flatMap(([key, held]) => {
+		const level = permissions[key];
+		return level !== undefined &&
+			LEVEL_ORDER.indexOf(asString(level, key)) >= LEVEL_ORDER.indexOf(held)
+			? [`${key}: ${asString(level, key)}`]
+			: [];
+	});
+
+	assert.deepEqual(granted, [], "a held permission is granted by the manifest");
+});
+
+void test("the fine-grained token table asks for the core contract GitHub offers to tokens", () => {
+	const core = [...grants("Core contract — required")].filter(([key]) => !APP_ONLY.has(key));
+
+	assert.deepEqual(
+		grants("Fine-grained token permissions"),
+		new Map(core),
+		"a token without a core permission leaves the sync that reads it empty",
 	);
 });
 

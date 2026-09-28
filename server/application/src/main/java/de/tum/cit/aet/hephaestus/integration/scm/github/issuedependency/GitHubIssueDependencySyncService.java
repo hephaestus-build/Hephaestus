@@ -71,14 +71,10 @@ import reactor.util.retry.Retry;
  * issue</li>
  * </ul>
  * <p>
- * <b>NOTE (Dec 2025):</b> The {@code issue_dependencies} webhook event is
- * <b>STILL NOT AVAILABLE</b> for subscription in GitHub App settings.
- * GitHub shipped the "Blocked by" UI without webhook/API event support
- * (see <a href="https://github.com/orgs/community/discussions/165749">
- * Community Discussion #165749</a>). Until webhooks become available,
- * use {@link #syncDependenciesForScope} for bulk GraphQL sync.
+ * {@code issue_dependencies} deliveries apply single changes through {@link #processIssueDependencyEvent};
+ * {@link #syncDependenciesForScope} reconciles every relationship through GraphQL.
  * <p>
- * <b>ARCHITECTURE NOTE (Jan 2026):</b> This service implements the "find-or-create"
+ * This service implements the "find-or-create"
  * pattern for blocker issues. When a blocking issue doesn't exist locally (e.g.,
  * it's in a different repository or hasn't been synced yet), we create a stub
  * issue entity on-the-fly using the GraphQL response data. This ensures blocking
@@ -128,15 +124,15 @@ public class GitHubIssueDependencySyncService {
         this.graphQlSyncHelper = graphQlSyncHelper;
     }
 
-    // WEBHOOK EVENT PROCESSING (for when webhooks become available)
+    // WEBHOOK EVENT PROCESSING
 
     /**
      * Process an issue_dependencies webhook event.
      * <p>
      * Creates or removes blocking relationships based on the event type.
      *
-     * @param blockedIssueId  ID of the issue being blocked
-     * @param blockingIssueId ID of the issue doing the blocking
+     * @param blockedIssueId  row id of the issue being blocked
+     * @param blockingIssueId row id of the issue doing the blocking
      * @param isBlock         true if creating a block, false if removing
      */
     @Transactional
@@ -173,9 +169,6 @@ public class GitHubIssueDependencySyncService {
 
     /**
      * Sync all issue dependencies for a scope via GraphQL.
-     * <p>
-     * This is the primary sync mechanism until issue_dependencies webhooks
-     * become available in GitHub App settings.
      * <p>
      * <b>Transaction Strategy:</b> This method is NOT transactional at the top
      * level. GraphQL HTTP calls are made outside any transaction to avoid blocking

@@ -341,7 +341,7 @@ class WorkspaceMembershipControllerIntegrationTest extends AbstractWorkspaceInte
 
     @Test
     @WithAdminUser
-    void hiddenFlagIsPreservedWhenOrgSyncOmitsMember() {
+    void hiddenMemberLeavesWhenOrgSyncOmitsThemAndIsHiddenAgainOnReturn() {
 
         User owner = persistUser("sync-owner");
         Workspace workspace = createWorkspace("sync-space", "Sync Space", "syncorg", AccountType.ORG, owner);
@@ -358,13 +358,19 @@ class WorkspaceMembershipControllerIntegrationTest extends AbstractWorkspaceInte
 
         workspaceMembershipService.syncWorkspaceMembers(workspace, desiredRoles);
 
+        // Hiding is not a grant: someone the provider no longer lists loses the workspace, hidden or not.
+        assertThat(workspaceMembershipRepository.findByWorkspace_IdAndUser_Id(workspace.getId(), hiddenUser.getId()))
+                .isEmpty();
+        assertThat(workspaceMembershipRepository.findByWorkspace_IdAndUser_Id(workspace.getId(), visibleUser.getId()))
+                .isEmpty();
+
+        desiredRoles.put(hiddenUser.getId(), WorkspaceRole.MEMBER);
+        workspaceMembershipService.syncWorkspaceMembers(workspace, desiredRoles);
+
         assertThat(workspaceMembershipRepository.findByWorkspace_IdAndUser_Id(workspace.getId(), hiddenUser.getId()))
                 .get()
                 .extracting(WorkspaceMembership::isHidden)
                 .isEqualTo(true);
-
-        assertThat(workspaceMembershipRepository.findByWorkspace_IdAndUser_Id(workspace.getId(), visibleUser.getId()))
-                .isEmpty();
     }
 
     @Test

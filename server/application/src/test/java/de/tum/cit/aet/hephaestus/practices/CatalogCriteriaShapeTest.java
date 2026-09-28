@@ -61,6 +61,14 @@ class CatalogCriteriaShapeTest extends BaseUnitTest {
                         failures.add(slug + ": the Judge section does not decide " + cell);
                     }
                 }
+                // Ordinary work and a lapse are cells; uncertainty and inapplicability are the other two
+                // outcomes a review must tell apart from them, so the criteria name where each is decided.
+                if (!judge.contains("UNDETERMINED")) {
+                    failures.add(slug + ": the Judge section does not say when the review is UNDETERMINED");
+                }
+                if (!(sectionOf(criteria, "## Occasion") + judge).contains("NOT_APPLICABLE")) {
+                    failures.add(slug + ": neither the Occasion nor the Judge section says when it is NOT_APPLICABLE");
+                }
             }
         }
         assertThat(failures)

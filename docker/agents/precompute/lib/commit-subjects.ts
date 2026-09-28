@@ -12,8 +12,11 @@ export interface SubjectFacts {
 	bare: boolean;
 	/** The same subject, ignoring case and trailing punctuation, appears on an earlier commit. */
 	repeat: boolean;
-	/** Two or more concerns joined by "and", commas, "+", "&", ";" or a bullet list in the message. */
-	conjoined: boolean;
+	/**
+	 * The subject joins clauses with "and", "&", "+", a comma or a semicolon, or the body lists two or more
+	 * bullets. Punctuation, not a count of changes: "parse the header and validate it" is one step.
+	 */
+	joinedClauses: boolean;
 	/** Ends mid-phrase: on an article, a preposition or a conjunction, or with an unbalanced quote. */
 	cutOff: boolean;
 	bodyLines: number;
@@ -55,7 +58,7 @@ export function subjectFacts(commits: readonly ChangeCommit[]): SubjectFacts[] {
 			merge,
 			bare,
 			repeat: !merge && seen.has(normalized),
-			conjoined: !merge && (CONJUNCTION.test(subject) || bulleted),
+			joinedClauses: !merge && (CONJUNCTION.test(subject) || bulleted),
 			cutOff: !merge && DANGLING.test(subject),
 			bodyLines: body.length,
 			files: commit.files,
@@ -68,22 +71,32 @@ export function subjectFacts(commits: readonly ChangeCommit[]): SubjectFacts[] {
 	return facts;
 }
 
-/** A path's kind: its top-level directory, or its extension when it lives at the root. */
-function kindOf(path: string): string {
-	const slash = path.indexOf("/");
-	if (slash > 0) {
-		return `${path.slice(0, slash)}/`;
-	}
-	const dot = path.lastIndexOf(".");
-	return dot > 0 ? path.slice(dot) : path;
+/** Shown per commit; the rest are counted, so a long rename cannot push the edited files out of view. */
+const LISTED_FILES = 8;
+
+/** Renamed with no line changed: a move, which is known only where the record counts the lines. */
+function isMove(file: ChangedFile): boolean {
+	return file.status === "R" && file.additions === 0 && file.deletions === 0;
 }
 
-/** One record row per authored commit — its subject's shape and what it touched — for the model to read. */
+function describeFile(file: ChangedFile): string {
+	return file.additions === undefined || file.deletions === undefined
+		? file.path
+		: `${file.path} +${String(file.additions)}/-${String(file.deletions)}`;
+}
+
+/**
+ * One record row per authored commit — its subject's shape and what it touched — for the model to read.
+ * The files with content changes come first, each with its line counts, then the moves.
+ */
 export function commitRows(facts: readonly SubjectFacts[], contextReference: string): Hint[] {
 	return facts
 		.filter((f) => !f.merge)
 		.map((f) => {
-			const paths = f.files.map((file) => file.path);
+			const moved = f.files.filter(isMove);
+			const ordered = [...f.files.filter((file) => !isMove(file)), ...moved];
+			const shown = ordered.slice(0, LISTED_FILES).map(describeFile).join(", ");
+			const more = ordered.length - LISTED_FILES;
 			return {
 				file: contextFile(contextReference, "commits.json"),
 				line: f.line,
@@ -93,12 +106,12 @@ export function commitRows(facts: readonly SubjectFacts[], contextReference: str
 				flags: {
 					bare: f.bare,
 					repeat: f.repeat,
-					conjoined: f.conjoined,
+					joinedClauses: f.joinedClauses,
 					cutOff: f.cutOff,
 					bodyLines: f.bodyLines,
-					files: paths.length,
-					paths: paths.slice(0, 5).join(", "),
-					kinds: [...new Set(paths.map(kindOf))].slice(0, 5).join(", "),
+					files: f.files.length,
+					moved: moved.length,
+					paths: more > 0 ? `${shown}, +${String(more)} more` : shown,
 				},
 			};
 		});

@@ -49,8 +49,6 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
 
     static final int MAX_COMMENTS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
-    static final String HEPHAESTUS_MARKER = "<!-- hephaestus:";
-
     private final ObjectMapper objectMapper;
     private final IssueCommentRepository issueCommentRepository;
     private final PullRequestRepository pullRequestRepository;
@@ -126,10 +124,12 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
         try {
             List<IssueComment> comments =
                     new java.util.ArrayList<>(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(
-                            pullRequestId, HEPHAESTUS_MARKER, PageRequest.of(0, MAX_COMMENTS + 1)));
+                            pullRequestId,
+                            ReviewThreadContentSource.HEPHAESTUS_MARKER,
+                            PageRequest.of(0, MAX_COMMENTS + 1)));
             comments.removeIf(comment -> {
                 String body = comment == null ? null : comment.getBody();
-                return body == null || body.isBlank() || body.contains(HEPHAESTUS_MARKER);
+                return body == null || body.isBlank() || body.contains(ReviewThreadContentSource.HEPHAESTUS_MARKER);
             });
             if (comments.size() > MAX_COMMENTS + 1) {
                 comments = new java.util.ArrayList<>(comments.subList(0, MAX_COMMENTS + 1));

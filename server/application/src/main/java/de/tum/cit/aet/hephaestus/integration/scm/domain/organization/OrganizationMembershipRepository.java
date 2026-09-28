@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.organization;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +18,8 @@ public interface OrganizationMembershipRepository
     List<Long> findUserIdsByOrganizationId(@Param("orgId") Long organizationId);
 
     List<OrganizationMembership> findByOrganizationId(Long organizationId);
+
+    Optional<OrganizationMembership> findByOrganizationIdAndUserId(Long organizationId, Long userId);
 
     @Modifying
     @Transactional
