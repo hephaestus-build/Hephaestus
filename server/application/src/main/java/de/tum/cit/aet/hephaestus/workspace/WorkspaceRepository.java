@@ -45,24 +45,26 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
     Optional<Workspace> findByWorkspaceSlugForUpdate(@Param("slug") String slug);
 
     /**
-     * Reverse-lookup a workspace by its GitHub App installation id. Joins through the
-     * {@code Connection} row whose {@code kind='GITHUB'} and {@code instance_key=installationId}.
-     * Cross-workspace collision is structurally impossible at this layer because the
-     * inline-create-from-installation path in {@code GithubLifecycleListener} only writes a
-     * {@code Connection} row for the workspace it is creating, so the join is at-most-one.
+     * Reverse-lookup a workspace by its GitHub App installation id, through the {@code Connection} whose
+     * {@code kind='GITHUB'} and {@code instance_key=installationId}. At most one connection holds an installation
+     * ({@code uq_connection_one_github_installation}); uninstalled ones stay as history, so the holder wins and
+     * otherwise the latest to have held it — which a provider uninstall that follows a disconnect still finds.
      */
     default Optional<Workspace> findByInstallationId(Long installationId) {
         if (installationId == null) {
             return Optional.empty();
         }
-        return findByGitHubInstallationInstanceKey(installationId.toString());
+        return findWorkspaceIdsByGitHubInstallationInstanceKey(installationId.toString()).stream()
+                .findFirst()
+                .flatMap(this::findById);
     }
 
     default Optional<Workspace> findByInstallationIdForUpdate(Long installationId) {
         if (installationId == null) {
             return Optional.empty();
         }
-        return findWorkspaceIdByGitHubInstallationInstanceKey(installationId.toString())
+        return findWorkspaceIdsByGitHubInstallationInstanceKey(installationId.toString()).stream()
+                .findFirst()
                 .flatMap(this::findByIdForUpdate);
     }
 
@@ -72,20 +74,17 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
     }
 
     @Query("""
-        SELECT c.workspace
-        FROM Connection c
-        WHERE c.kind = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITHUB
-          AND c.instanceKey = :instanceKey
-        """)
-    Optional<Workspace> findByGitHubInstallationInstanceKey(@Param("instanceKey") String instanceKey);
-
-    @Query("""
         SELECT c.workspace.id
         FROM Connection c
         WHERE c.kind = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITHUB
           AND c.instanceKey = :instanceKey
+        ORDER BY CASE
+                   WHEN c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.UNINSTALLED THEN 1
+                   ELSE 0
+                 END,
+                 c.id DESC
         """)
-    Optional<Long> findWorkspaceIdByGitHubInstallationInstanceKey(@Param("instanceKey") String instanceKey);
+    List<Long> findWorkspaceIdsByGitHubInstallationInstanceKey(@Param("instanceKey") String instanceKey);
 
     Optional<Workspace> findByRepositoriesToMonitor_NameWithOwner(String nameWithOwner);
 

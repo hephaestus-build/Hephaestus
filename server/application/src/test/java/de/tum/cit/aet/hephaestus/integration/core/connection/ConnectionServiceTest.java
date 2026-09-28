@@ -182,6 +182,19 @@ class ConnectionServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReactivateTheWorkspacesOwnDisconnectedGitHubInstallationWhenAConnectProvesItAgain() {
+        Connection connection = connectionInState(IntegrationState.UNINSTALLED);
+        when(connectionRepository.findByIdAndWorkspaceId(connection.getId(), workspace.getId()))
+                .thenReturn(java.util.Optional.of(connection));
+
+        Connection result = service.transition(
+                connection,
+                new TransitionRequest(IntegrationState.ACTIVE, "OAUTH_COMPLETE", "USER", "5", "corr-gh", "acme"));
+
+        assertThat(result.getState()).isEqualTo(IntegrationState.ACTIVE);
+    }
+
+    @Test
     void transition_illegalSuspendedToPending_throwsAndWritesNoAuditRow() {
         Connection connection = connectionInState(IntegrationState.SUSPENDED);
 

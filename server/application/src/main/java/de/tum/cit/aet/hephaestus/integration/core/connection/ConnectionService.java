@@ -612,9 +612,10 @@ public class ConnectionService {
 
     /**
      * Guarded revival of a terminal UNINSTALLED row — the kind-specific reconnect flows the
-     * {@link IntegrationState} javadoc reserves. Two doors only: a completed Slack OAuth round-trip,
-     * and an admin-driven inline re-connect ({@code INITIATE}) whose strategy just re-validated
-     * fresh credentials against the vendor. Both preserve the vendor natural key
+     * {@link IntegrationState} javadoc reserves. Two doors only: a completed Slack or GitHub OAuth
+     * round-trip, whose strategy just proved the team or installation belongs to the person
+     * connecting, and an admin-driven inline re-connect ({@code INITIATE}) whose strategy just
+     * re-validated fresh credentials against the vendor. Both preserve the vendor natural key
      * {@code (workspace, kind, instance_key)} instead of colliding with the unique constraint.
      */
     private static boolean isGuardedReconnect(
@@ -622,7 +623,8 @@ public class ConnectionService {
         if (current != IntegrationState.UNINSTALLED || request.next() != IntegrationState.ACTIVE) {
             return false;
         }
-        if (connection.getKind() == IntegrationKind.SLACK && "OAUTH_COMPLETE".equals(request.eventType())) {
+        if ((connection.getKind() == IntegrationKind.SLACK || connection.getKind() == IntegrationKind.GITHUB)
+                && "OAUTH_COMPLETE".equals(request.eventType())) {
             return true;
         }
         return "INITIATE".equals(request.eventType());

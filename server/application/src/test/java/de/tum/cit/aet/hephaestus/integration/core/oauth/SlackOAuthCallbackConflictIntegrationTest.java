@@ -106,7 +106,7 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
 
         assertThat(problem.getDetail()).isEqualTo(GENERIC_CONFLICT);
         assertThat(problem.getProperties())
-                .containsExactlyInAnyOrderEntriesOf(Map.of("kind", "SLACK", "error", "slack_team_connected_elsewhere"));
+                .containsExactlyInAnyOrderEntriesOf(Map.of("kind", "SLACK", "error", "connected_elsewhere"));
         assertThat(connectionRepository.findActive(target.getId(), IntegrationKind.SLACK))
                 .isEmpty();
         assertThat(connectionRepository.findActive(source.getId(), IntegrationKind.SLACK))
@@ -143,7 +143,7 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
                         query.put(name, URLDecoder.decode(values.getFirst(), StandardCharsets.UTF_8)));
         assertThat(query)
                 .containsEntry("status", "error")
-                .containsEntry("reason", "slack_team_connected_elsewhere")
+                .containsEntry("reason", "connected_elsewhere")
                 .containsEntry(
                         "description",
                         "This Slack workspace is already connected to the Hephaestus workspace \"Staging\" ("
@@ -184,7 +184,7 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
 
             ProblemDetail problem = loser.get(30, TimeUnit.SECONDS);
             assertThat(problem.getDetail()).isEqualTo(GENERIC_CONFLICT);
-            assertThat(problem.getProperties()).containsEntry("error", "slack_team_connected_elsewhere");
+            assertThat(problem.getProperties()).containsEntry("error", "connected_elsewhere");
         }
         assertThat(connectionRepository.findActive(target.getId(), IntegrationKind.SLACK))
                 .isEmpty();

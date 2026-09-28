@@ -60,6 +60,8 @@ const DELIBERATELY_OMITTED = new Set([
 	"OUTLINE_OAUTH_CLIENT_SECRET",
 	"OUTLINE_OAUTH_DISPLAY_NAME",
 	"GH_APP_INSTALLATION_URL",
+	"GH_APP_CLIENT_ID",
+	"GH_APP_CLIENT_SECRET",
 	// GitHub App authentication is disabled, so no private key is mounted.
 	"GH_APP_PRIVATE_KEY_LOCATION",
 	// The agent sandbox is off, so nothing reads its runtime, limits or image override.

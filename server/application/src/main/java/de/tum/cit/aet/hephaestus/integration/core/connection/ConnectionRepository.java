@@ -65,6 +65,10 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     List<Connection> findAllByKindAndInstanceKeyInAndState(
             IntegrationKind kind, Collection<String> instanceKeys, IntegrationState state);
 
+    @WorkspaceAgnostic("A connect refuses a Slack team or GitHub App installation that another workspace holds")
+    List<Connection> findAllByKindAndInstanceKeyAndStateIn(
+            IntegrationKind kind, String instanceKey, Collection<IntegrationState> states);
+
     /** Lookup for kinds where there is at most one row per (workspace, kind). */
     Optional<Connection> findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
             long workspaceId, IntegrationKind kind, IntegrationState state);

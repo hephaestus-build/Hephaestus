@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.oauth;
 
+import java.net.URI;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -19,6 +20,11 @@ public record OAuthCallbackProperties(
         if (failureRedirect != null && failureRedirect.isBlank()) {
             failureRedirect = null;
         }
+    }
+
+    /** The root of the application {@code successRedirect} points into, for a callback that connected nothing. */
+    public String homeRedirect() {
+        return URI.create(successRedirect).resolve("/").toString();
     }
 
     /**
