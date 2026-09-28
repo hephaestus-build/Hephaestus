@@ -674,21 +674,6 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("aboutUserId") Long aboutUserId,
             @Param("workspaceId") Long workspaceId);
 
-    @EntityGraph(attributePaths = {"practice.currentRevision", "practiceRevision"})
-    @Query("""
-        SELECT f FROM Observation f
-        JOIN FETCH f.practice p
-        WHERE f.artifactKind = :artifactKind
-        AND f.artifactId = :pullRequestId
-        AND f.workspaceId = :workspaceId
-        AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
-        ORDER BY f.observedAt DESC
-        """)
-    List<Observation> findByPullRequestAndWorkspace(
-            @Param("artifactKind") ArtifactKind artifactKind,
-            @Param("pullRequestId") Long pullRequestId,
-            @Param("workspaceId") Long workspaceId);
-
     /**
      * The run that speaks for the claim of the observation aliased {@code f}: the newest run that recorded this
      * practice about this developer on this work within one origin class, and still stands, not superseded and not
