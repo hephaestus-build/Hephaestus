@@ -3,6 +3,7 @@ import { expect, within } from "storybook/test";
 
 import type { ReviewRunSummary } from "@/api/types.gen";
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { levelsOpenedBy } from "@/test/detail-stack";
 
 import { reviewRuns } from "./fixtures";
 import { ReviewRowList } from "./ReviewRow";
@@ -34,7 +35,7 @@ const meta = {
 	component: ReviewRunRow,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],
-	args: { workspaceSlug: "demo", search: {}, review: completed },
+	args: { review: completed },
 	decorators: [
 		(Story) => (
 			<ReviewRowList label="Practice reviews, newest first">
@@ -47,14 +48,22 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A finished review, with both tallies drawn in full — zeroes included. */
+/**
+ * A finished review: its observations as a strip that keeps its zeroes, so the four results line up
+ * down the list, and its feedback as a sentence of only what happened.
+ */
 export const Completed: Story = {
 	play: async ({ canvas }) => {
-		canvas.getByRole("link", { name: "Cache the workspace member lookup on the review path" });
+		// The title opens the review over the list rather than leaving it.
+		await expect(
+			levelsOpenedBy(
+				canvas.getByRole("link", { name: "Cache the workspace member lookup on the review path" }),
+			),
+		).toEqual([`review:${completed.id}`]);
 		const observations = canvas.getByRole("list", { name: "Observations" });
 		await expect(within(observations).getAllByRole("listitem")).toHaveLength(4);
 		await expect(observations).toHaveTextContent("0 not applicable");
-		await expect(canvas.getByRole("list", { name: "Feedback" })).toHaveTextContent("2 delivered");
+		canvas.getByText("Feedback: 2 delivered · 1 replaced by newer · 1 withheld");
 	},
 };
 
@@ -81,7 +90,7 @@ export const StoppedWithNothing: Story = {
 	args: { review: failed },
 	play: async ({ canvas }) => {
 		canvas.getByText("It produced nothing before it stopped.");
-		await expect(canvas.queryByRole("list", { name: "Feedback" })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("list", { name: "Observations" })).not.toBeInTheDocument();
 	},
 };
 

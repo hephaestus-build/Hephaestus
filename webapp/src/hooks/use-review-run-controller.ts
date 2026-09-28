@@ -10,19 +10,25 @@ import {
 	listPracticeReviewFeedbackQueryKey,
 	listPracticeReviewObservationsOptions,
 	listPracticeReviewObservationsQueryKey,
-	listPracticeReviewsQueryKey,
 	retryAgentJobDeliveryMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { AgentJob, ReviewFeedback, ReviewObservation } from "@/api/types.gen";
-import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/review-search";
 import {
+	ACTIVE_REVIEW_POLL_MS,
+	PRACTICE_REVIEW_READS,
 	REVIEW_PREVIEW_SIZE,
-	type ReviewSectionState,
-} from "@/components/admin/practice-reviews/ReviewOutputSections";
+} from "@/components/admin/practice-reviews/review-search";
+import { type PanelState, panelState } from "@/components/common/panel-state";
 import { problemDetailOf } from "@/lib/problem-detail";
+import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-workspace-reads";
+
+import {
+	type ReviewSectionState,
+	toSectionState,
+} from "@/components/admin/practice-reviews/review-states";
 
 /**
- * Everything the review detail screen needs, already resolved: the run, the two previews of what it
+ * Everything the review level needs, already resolved: the run, the two previews of what it
  * produced, and the two actions an operator can take on it.
  *
  * The screen is handed states, not queries. "Still running" reaches it as a section's `pending`
@@ -30,51 +36,13 @@ import { problemDetailOf } from "@/lib/problem-detail";
  * terminal status, is this module's business alone.
  */
 export interface ReviewRunController {
-	job: AgentJob | undefined;
-	isLoading: boolean;
-	error: unknown;
-	onRetry: () => void;
+	job: PanelState<{ job: AgentJob }>;
 	observations: ReviewSectionState<ReviewObservation>;
 	feedback: ReviewSectionState<ReviewFeedback>;
 	onCancel: () => void;
 	cancelPending: boolean;
 	onRetryResultProcessing: () => void;
 	retryResultProcessingPending: boolean;
-}
-
-/** The shape of a paged query this module reads, spelled out rather than taken as a
- * `UseQueryResult` so the element type is inferred from the page's own `content`. */
-interface PagedQuery<T> {
-	isLoading: boolean;
-	isError: boolean;
-	error: unknown;
-	refetch: () => unknown;
-	data?: { content?: T[]; page?: { totalElements?: number } };
-}
-
-/**
- * `pending` is the one state a page of results cannot report for itself: an empty answer from a run
- * still in flight means "not yet", and the identical answer from a finished run means "none". The
- * caller knows which, so it passes `stillRunning` in.
- */
-function toSectionState<T>(query: PagedQuery<T>, stillRunning: boolean): ReviewSectionState<T> {
-	if (query.isLoading) {
-		return { status: "loading" };
-	}
-	if (query.isError) {
-		return {
-			status: "error",
-			error: query.error,
-			onRetry: () => {
-				void query.refetch();
-			},
-		};
-	}
-	const items = query.data?.content ?? [];
-	if (stillRunning && items.length === 0) {
-		return { status: "pending" };
-	}
-	return { status: "ready", items, total: query.data?.page?.totalElements ?? 0 };
 }
 
 export function useReviewRunController(workspaceSlug: string, jobId: string): ReviewRunController {
@@ -128,15 +96,12 @@ export function useReviewRunController(workspaceSlug: string, jobId: string): Re
 	}, [jobQuery.data, runIsActive, queryClient, workspaceSlug, jobId]);
 
 	/**
-	 * Both actions answer with the job as it now stands, so it is written straight into the cache
-	 * rather than refetched. The list of reviews is only invalidated: it is a different page's data,
-	 * and this one row's new status is not enough to rebuild whatever filtered page that reader is on.
+	 * Both actions answer with the job as it now stands, so it is written straight into the cache;
+	 * the lists and counts it appears in are re-read, since one row's status cannot rebuild them.
 	 */
 	const updateJob = (job: AgentJob) => {
 		queryClient.setQueryData(getAgentJobQueryKey({ path: { workspaceSlug, jobId } }), job);
-		void queryClient.invalidateQueries({
-			queryKey: listPracticeReviewsQueryKey({ path: { workspaceSlug } }),
-		});
+		void invalidateWorkspaceReads(queryClient, workspaceSlug, PRACTICE_REVIEW_READS);
 	};
 	const cancelJob = useMutation({
 		...cancelAgentJobMutation(),
@@ -162,12 +127,7 @@ export function useReviewRunController(workspaceSlug: string, jobId: string): Re
 	});
 
 	return {
-		job: jobQuery.data,
-		isLoading: jobQuery.isLoading,
-		error: jobQuery.error,
-		onRetry: () => {
-			void jobQuery.refetch();
-		},
+		job: panelState(jobQuery, (job) => ({ status: "ready" as const, job })),
 		observations: toSectionState<ReviewObservation>(observationsQuery, runIsActive),
 		feedback: toSectionState<ReviewFeedback>(
 			feedbackQuery,

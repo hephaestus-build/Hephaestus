@@ -161,15 +161,26 @@ export function NavAdmin({
 					open={practicesOpen}
 					onOpenChange={setPracticesOpen}
 					collapsed={!isMobile && sidebarState === "collapsed"}
+					// The section opens on what the reviews need from the admin; setup is the occasional visit.
 					landingLink={
 						<Link
-							to="/w/$workspaceSlug/admin/practices"
+							to="/w/$workspaceSlug/admin/practices/reviews"
 							params={{ workspaceSlug }}
-							activeOptions={{ exact: true }}
-							aria-current={onCatalog ? "page" : undefined}
+							aria-current={onReviews ? "page" : undefined}
 						/>
 					}
 				>
+					<SidebarMenuSubItem>
+						<SidebarMenuSubButton
+							isActive={onReviews}
+							render={
+								<Link to="/w/$workspaceSlug/admin/practices/reviews" params={{ workspaceSlug }} />
+							}
+						>
+							<Workflow />
+							<span>Practice reviews</span>
+						</SidebarMenuSubButton>
+					</SidebarMenuSubItem>
 					<SidebarMenuSubItem>
 						<SidebarMenuSubButton
 							isActive={onCatalog}
@@ -198,18 +209,7 @@ export function NavAdmin({
 							}
 						>
 							<ScanEye />
-							<span>Review</span>
-						</SidebarMenuSubButton>
-					</SidebarMenuSubItem>
-					<SidebarMenuSubItem>
-						<SidebarMenuSubButton
-							isActive={onReviews}
-							render={
-								<Link to="/w/$workspaceSlug/admin/practices/reviews" params={{ workspaceSlug }} />
-							}
-						>
-							<Workflow />
-							<span>Practice reviews</span>
+							<span>Review settings</span>
 						</SidebarMenuSubButton>
 					</SidebarMenuSubItem>
 				</AdminNavSection>

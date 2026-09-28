@@ -21,10 +21,10 @@ Use this short path before tuning coverage, campaigns, or per-practice overrides
 1. Connect GitHub or GitLab and confirm a recent pull or merge request appears under **Review activity**.
    If it does not, fix ingestion first; practice-review settings cannot make missing work appear.
 2. Under **AI models**, assign a ready model to practice reviews.
-3. On **Practices → Review → When and where**, turn on **Start practice reviews**, then turn on at least
+3. On **Practices → Review settings → When and where**, turn on **Start practice reviews**, then turn on at least
    one way in under **How reviews start** — **Start from work activity**, **Start requested reviews**, or
    both. The screen says *"Nothing can start a review"* when both are off.
-4. On **Practices → Review → How much**, set the **Workspace default** to **Review before sending** for the
+4. On **Practices → Review settings → How much**, set the **Workspace default** to **Review before sending** for the
    first test. Back on **When and where**, keep coverage at **All monitored repositories** and **All
    eligible linked members**, and leave **Send feedback** on.
 5. Open a small pull or merge request whose author is an eligible linked member, then follow it in **Review
@@ -46,8 +46,10 @@ Suppose a developer opens **Update dependencies** with no explanation in its des
    to the description it searched. This is the observation; it is retained even if nobody is contacted.
 4. Composition considers that observation alongside recent observations and feedback. It may propose a
    public summary, private process feedback, mentor context, or no feedback.
-5. Server-side policy admits or refuses each proposal. Under **Delivery**, a workspace owner or administrator
-   can inspect the exact in-context feedback and evidence, then approve and send it or reject it. A provider
+5. Server-side policy admits or refuses each proposal. Feedback waiting for a decision is listed first on
+   **Practices → Practice reviews**, under **Needs you**. A workspace owner or administrator opens it,
+   reads the exact in-context feedback and the observations behind it, then approves and sends it or
+   rejects it. A provider
    comment exists only after approval and a successful release-time policy check.
 
 This is the smallest useful diagnostic slice: occurrence → readiness → observation → composition →
@@ -58,19 +60,40 @@ delivery. Stop at the first missing stage rather than changing downstream settin
 | Question                                                          | Open                                                          |
 | ----------------------------------------------------------------- | ------------------------------------------------------------- |
 | Did this piece of work enter the system, and why was it quiet?    | **Review activity**, then open the work                       |
-| Did a job run, fail, or produce observations and feedback?        | **Practices → Practice reviews → Reviews**                    |
-| Is in-context feedback waiting for approval?                      | **Practices → Practice reviews → Delivery**, then open a row  |
-| Which work may start reviews, and may feedback be sent?           | **Practices → Review → When and where**                       |
-| How far do reviews go without a person?                           | **Practices → Review → How much**                             |
+| What needs me, and are the reviews working?                       | **Practices → Practice reviews** (the overview)               |
+| Did a job run, fail, or produce observations and feedback?        | **Practices → Practice reviews → Reviews**, then open a row   |
+| Is in-context feedback waiting for approval?                      | **Practices → Practice reviews**, under **Needs you**         |
+| How does one practice behave: its outcomes and incorrect marks?   | **Practices → Practice reviews**, then open the practice      |
+| Which work may start reviews, and may feedback be sent?           | **Practices → Review settings → When and where**              |
+| How far do reviews go without a person?                           | **Practices → Review settings → How much**                    |
 | What does one practice review and which evidence does it require? | **Practices → Practice setup**                                |
 | Who counts as a covered person?                                   | **Members**                                                   |
 | Is the review model ready?                                        | **AI models**                                                 |
 | Did a budget stop new work?                                       | **AI usage**                                                  |
 
+### Read the Practice reviews overview
+
+**Practices → Practice reviews** opens on an overview for a time range: the last 7 days, 30 days,
+90 days or 12 months.
+
+- **Needs you** lists feedback that waits for your approval, whenever it was composed, then feedback
+  that failed to deliver and reviews that failed or timed out in the range. When nothing needs you,
+  one line says so.
+- **What the reviews did** shows the three stages a review goes through: **Reviews**, **Observations**
+  and **Feedback**. Each has its total, its volume over the range, and how it turned out. Each count
+  under a stage opens the list of exactly the rows it counts.
+- **Practices** lists each practice with an observation, or feedback about one, in the range, busiest
+  first: how its observations turned out, the feedback that cited it, and how many of its observations
+  were marked incorrect. Open a practice to reach its observations and its definition.
+
+A review, an observation, a piece of feedback, a piece of reviewed work or a practice opens as a panel
+over the page you are on. Links inside a panel open the next record over it, and the path at the top
+takes you back. The address of the page names the open panels, so you can share it.
+
 ### Correct an observation that was wrong
 
 Open the observation under **Practices → Practice reviews → Observations** and choose **Mark as
-incorrect**, with a reason the developer will read. The review record stays as it was, and the observation
+incorrect** at the bottom of the panel, with a reason the developer will read. The review record stays as it was, and the observation
 stops counting toward the developer's standing, Practice profile and Heph's context. Feedback about it that
 has not reached anyone is withheld. If Hephaestus is delivering feedback that cites the observation at that
 moment, you are asked to try again and nothing changes.
@@ -208,7 +231,7 @@ is wrong; a workspace runs dozens of practices across a dozen groups, and a sett
 row is a setting nobody applies. Coverage does not work this way and is not inherited — it is set once for
 the whole workspace, on **When and where**.
 
-**Review → How much** shows, above the list, how many practices sit at each setting — once for the
+**Review settings → How much** shows, above the list, how many practices sit at each setting — once for the
 workspace and again for each group. Read that line before changing anything; it is the fastest way to see
 whether an override somebody made long ago is still doing what you think. **Set by hand** filters the list
 down to the overrides.
@@ -247,7 +270,7 @@ Full budget mechanics, including what an unverifiable month does, are on
 
 Two instruments, and the difference between them is the difference between a purchase and a standing
 order. The campaign is on
-**Administration → Practices → Review → Past work**; the recurring check is on the same page's
+**Administration → Practices → Review settings → Past work**; the recurring check is on the same page's
 **When and where** section, beside the other things that start a review.
 
 **A campaign — *Past work*.** You choose a kind of work and a lookback window, press
@@ -309,7 +332,7 @@ run themselves once a sync finds the work again, and are dropped if it does not 
    can lift it. `agent.queue.held` counts jobs parked on a cap; `agent.queue.depth` counts only what a
    worker could claim now, so alert on held rather than reading depth.
 4. **Is practice review, or the workspace, switched off?** The switch is **Start practice reviews** on
-   Administration → Practices → **Review → When and where** — *not* on the Workspace settings page. A
+   Administration → Practices → **Review settings → When and where** — *not* on the Workspace settings page. A
    workspace paused from Workspace settings runs nothing regardless of its AI configuration.
 5. **Can anything still start a review?** Same screen, **How reviews start**. With both **Start from work
    activity** and **Start requested reviews** off, the workspace is on and nothing reaches it; the screen

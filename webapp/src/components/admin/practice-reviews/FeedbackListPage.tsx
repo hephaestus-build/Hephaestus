@@ -53,13 +53,12 @@ export function FeedbackListPage({
 	const filteredRecipient = search.recipientUserId == null ? undefined : rows[0]?.recipient;
 	const hasFilter = hasFeedbackFilter(search);
 	const reset = () => onSearchChange(clearedFeedbackFilters());
-	const patchFilter = (patch: Partial<FeedbackSearch>) => onSearchChange({ ...patch, page: 0 });
 
 	return (
-		<section aria-label="Feedback delivery" className="space-y-4">
+		<section aria-label="Feedback" className="space-y-4">
 			<FeedbackFilters
 				search={search}
-				onPatch={patchFilter}
+				onPatch={onSearchChange}
 				onReset={reset}
 				people={people}
 				total={feedback?.page?.totalElements}
@@ -67,10 +66,7 @@ export function FeedbackListPage({
 				recipientName={filteredRecipient?.name ?? filteredRecipient?.login}
 			/>
 			{error == null ? (
-				<FeedbackResults
-					workspaceSlug={workspaceSlug}
-					state={resultsState(isLoading, rows, hasFilter ? reset : undefined)}
-				/>
+				<FeedbackResults state={resultsState(isLoading, rows, hasFilter ? reset : undefined)} />
 			) : (
 				<QueryErrorAlert error={error} title="Couldn't load feedback" onRetry={onRetry} />
 			)}
@@ -80,7 +76,7 @@ export function FeedbackListPage({
 				renderPageLink={(page, props) => (
 					<Link
 						{...props}
-						to="/w/$workspaceSlug/admin/practices/reviews/delivery"
+						to="/w/$workspaceSlug/admin/practices/reviews/feedback"
 						params={{ workspaceSlug }}
 						search={(previous) => ({ ...previous, page: page === 0 ? undefined : page })}
 					/>

@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.activity.overview;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
+import de.tum.cit.aet.hephaestus.core.time.TimeRange;
+import de.tum.cit.aet.hephaestus.core.time.TimeRangeFilterParams;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -35,7 +37,7 @@ public record ActivityWorkFilterParams(
     }
 
     /** The range the page is read in: a later page keeps the end the first page had. */
-    ActivityRange range(ActivityRangeFilterParams range, Clock clock) {
+    TimeRange range(TimeRangeFilterParams range, Clock clock) {
         return (cursor == null
                         ? range
                         : range.endingAt(ActivityWorkCursor.decode(cursor).to()))
@@ -43,7 +45,7 @@ public record ActivityWorkFilterParams(
     }
 
     /** Where the page starts; an unreadable cursor is rejected. */
-    ActivityWorkCursor position(ActivityRange range) {
+    ActivityWorkCursor position(TimeRange range) {
         return cursor == null ? ActivityWorkCursor.startOf(range) : ActivityWorkCursor.decode(cursor);
     }
 

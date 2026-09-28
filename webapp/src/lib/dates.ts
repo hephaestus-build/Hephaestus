@@ -82,3 +82,8 @@ export function formatTime(date: Date): string {
 export function formatDayTime(date: Date): string {
 	return `${formatDay(date)}, ${formatTime(date)}`;
 }
+
+/** The browser's IANA time zone, whose midnights start a summary's days, weeks and months. */
+export function browserTimeZone(): string {
+	return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}

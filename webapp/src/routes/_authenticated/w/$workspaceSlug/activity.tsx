@@ -1,10 +1,5 @@
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
-import {
-	createFileRoute,
-	Link,
-	retainSearchParams,
-	stripSearchParams,
-} from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 
 import type { WorkspaceMembership } from "@/api/types.gen";
 import { ACTIVITY_CATEGORY_DEFS } from "@/components/activity/activity-kind-defs";
@@ -26,7 +21,7 @@ import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useActivityOverview, useActivityWork, useOpenWork } from "@/hooks/use-activity";
 import { workspaceHead } from "@/lib/page-title";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
-import { useSearchState } from "@/lib/search-params";
+import { useSearchState, carriedSearchParams } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
@@ -36,10 +31,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/activity"
 	head: workspaceHead("Activity"),
 	validateSearch: activitySearchSchema,
 	search: {
-		middlewares: [
-			retainSearchParams(["range"] satisfies (keyof ActivitySearch)[]),
-			stripSearchParams(ACTIVITY_SEARCH_DEFAULTS),
-		],
+		middlewares: carriedSearchParams<ActivitySearch>(["range"], ACTIVITY_SEARCH_DEFAULTS),
 	},
 });
 

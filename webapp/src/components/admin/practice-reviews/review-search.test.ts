@@ -50,7 +50,7 @@ describe("practice review search", () => {
 
 	it("gives the reviews list the same day window as its sibling lists, alongside the status", () => {
 		const search = runsSearchSchema.parse({
-			status: "COMPLETED",
+			status: ["COMPLETED", "FAILED"],
 			from: "2026-07-01",
 			to: "2026-07-03",
 		});
@@ -61,9 +61,9 @@ describe("practice review search", () => {
 		expect(query.from?.getDate()).toBe(1);
 		expect(query.from?.getHours()).toBe(0);
 		expect(query.to?.getDate()).toBe(4);
-		// Both filters travel: a status must not be dropped once a range is picked, which is the
+		// Both filters travel: the statuses must not be dropped once a range is picked, which is the
 		// composition the endpoint applies and the list promises.
-		expect(query.status).toBe("COMPLETED");
+		expect(query.status).toStrictEqual(["COMPLETED", "FAILED"]);
 	});
 
 	it("drops a reviews window that ends before it starts, rather than querying an empty range", () => {

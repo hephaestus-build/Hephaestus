@@ -1,125 +1,111 @@
-import { QueryClient } from "@tanstack/react-query";
-import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { screen, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { reviewHandlers } from "@/components/admin/practice-reviews/story-mock-server";
 import { server } from "@/mocks/server";
-import { routeTree } from "@/routeTree.gen";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
 // deadlock backstop, not a budget these renders were meant to fit inside.
 vi.setConfig({ testTimeout: 15_000 });
 
-function routerAt(url: string) {
-	return createRouter({
-		routeTree,
-		history: createMemoryHistory({ initialEntries: [url] }),
-		context: {
-			queryClient: new QueryClient({
-				defaultOptions: { queries: { retry: false } },
-			}),
-			auth: undefined,
-		},
-	});
-}
+const FEEDBACK = "dddddddd-2222-2222-2222-222222222222";
 
-async function land(url: string) {
-	const router = routerAt(url);
-	await router.load();
-	return router.state.location;
-}
+const REVIEWS = "/w/acme/admin/practices/reviews";
+
+/**
+ * Every scope param the two record lists share, set at once, so a dropped one cannot hide. The
+ * review id is a real version-4 UUID: the lists' schema drops one that is not, as the fixtures' are.
+ */
+const SCOPE = {
+	agentJobId: "3f2b6c1e-8a4d-4f0b-9c7e-2d5a1b0c9e84",
+	artifactKind: "scm.pull_request",
+	artifactId: "42",
+	from: "2026-09-01",
+	to: "2026-09-10",
+};
+const SCOPE_QUERY = new URLSearchParams(SCOPE).toString();
 
 beforeEach(() => {
 	server.use(
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json({ role: "ADMIN", userId: 1, userLogin: "ada", userName: "Ada" }),
 		),
+		...reviewHandlers(),
 	);
 });
 
+/**
+ * An open level is modal, so the page under it leaves the accessibility tree while it is open; the
+ * tabs are still the tabs the reader returns to, which is what is asserted here.
+ */
+async function sectionNavigation() {
+	return screen.findByRole(
+		"navigation",
+		{ name: "Practice review sections", hidden: true },
+		ROUTE_RENDER_WAIT,
+	);
+}
+
+function carriedSearch(link: HTMLAnchorElement) {
+	return Object.fromEntries(new URL(link.href).searchParams);
+}
+
+function sectionLink(navigation: HTMLElement, name: string) {
+	return within(navigation).getByRole<HTMLAnchorElement>("link", { name, hidden: true });
+}
+
 describe("practice review routes", () => {
 	it.each([
-		["Reviews", "/w/acme/admin/practices/reviews"],
-		["Reviews", "/w/acme/admin/practices/reviews/11111111-1111-1111-1111-111111111111"],
-		["Observations", "/w/acme/admin/practices/reviews/observations"],
-		[
-			"Observations",
-			"/w/acme/admin/practices/reviews/observations/55555555-5555-5555-5555-555555555555",
-		],
-		["Delivery", "/w/acme/admin/practices/reviews/delivery"],
-		["Delivery", "/w/acme/admin/practices/reviews/delivery/33333333-3333-3333-3333-333333333333"],
+		["Overview", REVIEWS],
+		["Reviews", `${REVIEWS}/runs`],
+		["Observations", `${REVIEWS}/observations`],
+		["Feedback", `${REVIEWS}/feedback`],
+		// A level is opened over the tab the reader is on, and never moves them off it.
+		["Observations", `${REVIEWS}/observations?detail=feedback:${FEEDBACK}`],
 	])("marks only %s as current on %s", async (expectedCurrent, url) => {
 		renderRouteAtWithRouter(url);
 
-		const navigation = await screen.findByRole(
-			"navigation",
-			{
-				name: "Practice review sections",
-			},
-			ROUTE_RENDER_WAIT,
-		);
-		const currentLinks = within(navigation).getAllByRole("link", { current: "page" });
+		const navigation = await sectionNavigation();
+		const currentLinks = within(navigation).getAllByRole("link", { current: "page", hidden: true });
 		expect(currentLinks).toHaveLength(1);
-		within(navigation).getByRole("link", { name: expectedCurrent, current: "page" });
+		within(navigation).getByRole("link", { name: expectedCurrent, current: "page", hidden: true });
 	});
 
-	it("redirects the former Runs page to Reviews", async () => {
-		const location = await land("/w/acme/admin/practices/runs");
-
-		expect(location.pathname).toBe("/w/acme/admin/practices/reviews");
-	});
-
-	// The URL said "findings" for a concept the product calls an observation, and a bookmark or a
-	// link in a chat thread is the one copy of it nobody can be asked to update.
+	/**
+	 * "What did this review say" and "what became of it" are one switch apart: the two record lists
+	 * hand each other what they are narrowed to, and the overview and the review list take none of it.
+	 */
 	it.each([
-		[
-			"/w/acme/admin/practices/reviews/findings?severity=MAJOR",
-			"/w/acme/admin/practices/reviews/observations",
-		],
-		[
-			"/w/acme/admin/practices/reviews/findings/55555555-5555-5555-5555-555555555555",
-			"/w/acme/admin/practices/reviews/observations/55555555-5555-5555-5555-555555555555",
-		],
-	])("redirects the former Findings URL %s", async (from, expected) => {
-		const location = await land(from);
+		["observations", "Feedback", "feedback"],
+		["feedback", "Observations", "observations"],
+	])("carries the %s list's scope into the %s tab", async (fromPath, to, toPath) => {
+		renderRouteAtWithRouter(`${REVIEWS}/${fromPath}?${SCOPE_QUERY}`);
 
-		expect(location.pathname).toBe(expected);
+		const navigation = await sectionNavigation();
+		const target = sectionLink(navigation, to);
+		expect(new URL(target.href).pathname).toBe(`${REVIEWS}/${toPath}`);
+		expect(carriedSearch(target)).toStrictEqual(SCOPE);
+
+		for (const unscoped of ["Overview", "Reviews"]) {
+			expect(carriedSearch(sectionLink(navigation, unscoped))).toStrictEqual({});
+		}
 	});
 
-	it("carries a filter through the Findings redirect", async () => {
-		const location = await land("/w/acme/admin/practices/reviews/findings?severity=MAJOR");
-
-		// The multi-value params serialise as a JSON array, so this asserts the value survived rather
-		// than the encoding: the point is that a filtered bookmark stays filtered across the rename.
-		expect(decodeURIComponent(location.searchStr)).toContain('severity=["MAJOR"]');
+	it("carries a chosen range to every tab", async () => {
+		renderRouteAtWithRouter(`${REVIEWS}/runs?range=90d`);
+		const chosen = await sectionNavigation();
+		for (const tab of ["Overview", "Reviews", "Observations", "Feedback"]) {
+			expect(carriedSearch(sectionLink(chosen, tab))).toStrictEqual({ range: "90d" });
+		}
 	});
 
-	it("treats reviewed work as a neutral view and carries its scope into Delivery", async () => {
-		const emptyPage = {
-			content: [],
-			page: { number: 0, size: 5, totalElements: 0, totalPages: 0 },
-		};
-		server.use(
-			http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback", () =>
-				HttpResponse.json(emptyPage),
-			),
-			http.get("*/workspaces/:workspaceSlug/practices/reviews/observations", () =>
-				HttpResponse.json(emptyPage),
-			),
-		);
-		renderRouteAtWithRouter("/w/acme/admin/practices/reviews/targets/pull-request/42");
-		await screen.findByText("Nothing has been reviewed on this work");
-		const navigation = screen.getByRole("navigation", { name: "Practice review sections" });
-		expect(within(navigation).queryByRole("link", { current: "page" })).toBeNull();
-
-		const deliveryLink = within(navigation).getByRole<HTMLAnchorElement>("link", {
-			name: "Delivery",
-		});
-		const deliveryUrl = new URL(deliveryLink.href);
-		expect(deliveryUrl.pathname).toBe("/w/acme/admin/practices/reviews/delivery");
-		expect(deliveryUrl.searchParams.get("artifactKind")).toBe("scm.pull_request");
-		expect(deliveryUrl.searchParams.get("artifactId")).toBe("42");
+	it("leaves the default range out of every tab's address", async () => {
+		renderRouteAtWithRouter(`${REVIEWS}/runs`);
+		const navigation = await sectionNavigation();
+		for (const tab of ["Overview", "Reviews", "Observations", "Feedback"]) {
+			expect(carriedSearch(sectionLink(navigation, tab))).toStrictEqual({});
+		}
 	});
 });

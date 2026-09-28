@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import type { ListPracticeReviewsResponse } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { TablePagination } from "@/components/common/TablePagination";
-import { REVIEW_STATUS_DEFS } from "@/components/practice-vocabulary/review-status-defs";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -15,7 +14,6 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
-import { hasText } from "@/lib/text";
 
 import { REVIEW_PAGE_SIZE, type RunsSearch } from "./review-search";
 import { ReviewResultsSkeleton } from "./ReviewResultsSkeleton";
@@ -52,20 +50,9 @@ export function ReviewRunsPage({
 	const hasFilter = hasRunFilter(search);
 	// The toolbar's Reset and the empty state's button are one action, not two copies of it.
 	const reset = () => onSearchChange(clearedRunFilters());
-	// Page one, because a narrowed list is a different list: page 4 of the old one is very likely
-	// past the end of the new one. The screen owns the URL, so the screen owns this — the toolbar
-	// reports the facet the reader changed and nothing else.
-	const patchFilter = (patch: Partial<RunsSearch>) => onSearchChange({ ...patch, page: 0 });
-	// A range can empty this list too, so "never triggered" is not the only reason and must not be
-	// said to a reader who has just picked a window.
-	let emptyDescription =
-		"Reviews appear when an enabled practice is triggered or a contributor requests one.";
-	if (hasFilter) {
-		emptyDescription =
-			search.status && !hasText(search.from) && !hasText(search.to)
-				? `No review is ${REVIEW_STATUS_DEFS[search.status].label.toLowerCase()}. Other reviews may exist under another status.`
-				: "No review matches these filters. Other reviews may exist outside them.";
-	}
+	const emptyDescription = hasFilter
+		? "No review matches these filters. Other reviews may exist outside them."
+		: "Reviews appear when an enabled practice is triggered or a contributor requests one.";
 	let results: ReactNode;
 	if (error != null) {
 		results = <QueryErrorAlert error={error} title="Couldn't load reviews" onRetry={onRetry} />;
@@ -94,12 +81,7 @@ export function ReviewRunsPage({
 		results = (
 			<ReviewRowList label="Practice reviews, newest first">
 				{rows.map((review) => (
-					<ReviewRunRow
-						key={review.id}
-						workspaceSlug={workspaceSlug}
-						review={review}
-						search={search}
-					/>
+					<ReviewRunRow key={review.id} review={review} />
 				))}
 			</ReviewRowList>
 		);
@@ -109,7 +91,7 @@ export function ReviewRunsPage({
 		<section aria-label="Practice reviews" className="space-y-4">
 			<ReviewRunFilters
 				search={search}
-				onPatch={patchFilter}
+				onPatch={onSearchChange}
 				onReset={reset}
 				total={reviews?.page?.totalElements}
 			/>
@@ -120,7 +102,7 @@ export function ReviewRunsPage({
 				renderPageLink={(page, props) => (
 					<Link
 						{...props}
-						to="/w/$workspaceSlug/admin/practices/reviews"
+						to="/w/$workspaceSlug/admin/practices/reviews/runs"
 						params={{ workspaceSlug }}
 						// Spread rather than list the filters: page 2 of a filtered list has to stay
 						// filtered, and naming them one by one is what silently dropped the next one.

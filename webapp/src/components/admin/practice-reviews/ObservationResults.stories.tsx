@@ -3,8 +3,9 @@ import { expect, fn, screen } from "storybook/test";
 
 import type { ReviewObservation } from "@/api/types.gen";
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { levelsOpenedBy } from "@/test/detail-stack";
 
-import { reviewObservations, workspacePractices } from "./fixtures";
+import { feedbackCounts, reviewObservations, workspacePractices } from "./fixtures";
 import { ObservationResults } from "./ObservationResults";
 
 const [firstObservation] = reviewObservations;
@@ -41,7 +42,6 @@ const meta = {
 	},
 	tags: ["autodocs"],
 	args: {
-		workspaceSlug: "demo",
 		state: { status: "ready", observations: reviewObservations },
 		// A row names its practice but carries none of its prose, so the screen hands the list down and
 		// each row reads its own record out of it. Handed over as a prop, not fetched: see
@@ -66,6 +66,10 @@ export const Default: Story = {
 		await expect(canvas.getAllByText("Backfilled")).toHaveLength(2);
 		await expect(canvas.getAllByText("Requested")).toHaveLength(2);
 		await expect(canvas.queryAllByText("No result")).toHaveLength(0);
+		// A row opens its observation over the list, so the list stays where the reader left it.
+		await expect(
+			levelsOpenedBy(canvas.getByRole("link", { name: firstObservation.summary })),
+		).toEqual([`observation:${firstObservation.id}`]);
 	},
 };
 
@@ -106,14 +110,7 @@ export const UnconfirmedConversationFeedback: Story = {
 			observations: [
 				{
 					...firstObservation,
-					feedbackDisposition: {
-						prepared: 0,
-						delivered: 0,
-						superseded: 0,
-						suppressed: 0,
-						failed: 0,
-						unconfirmed: 1,
-					},
+					feedback: feedbackCounts(["UNCONFIRMED"]),
 				},
 			],
 		},
@@ -125,17 +122,18 @@ export const UnconfirmedConversationFeedback: Story = {
 };
 
 /**
- * The practice on a row does two things: it opens the practice, and it says what the practice is
- * without leaving the list. Both are checked, because the card is the half that goes quiet on its
- * own — a row that stops being handed its practice record still renders a perfectly good link.
+ * The practice on a row does two things: it opens the practice's level over the list, and it says
+ * what the practice is without leaving the list. Both are checked, because the card is the half that
+ * goes quiet on its own — a row that stops being handed its practice record still renders a
+ * perfectly good link.
  */
-export const PracticeOpensItsDefinition: Story = {
+export const PracticeOpensItsLevel: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
 	play: async ({ canvas, userEvent }) => {
-		// Several observations name this practice, and every one of them reaches the same definition.
+		// Several observations name this practice, and every one of them opens the same level.
 		const links = await canvas.findAllByRole("link", { name: /Thin controllers/u });
 		for (const link of links) {
-			await expect(link).toHaveAttribute("href", "/w/demo/admin/practices/thin-controllers");
+			await expect(levelsOpenedBy(link)).toEqual(["practice:thin-controllers"]);
 		}
 		// The card is a portal, so it is looked for on the whole screen rather than in the canvas.
 		const [firstLink] = links;
@@ -156,7 +154,7 @@ export const WithoutPracticeRecords: Story = {
 		if (!link) {
 			throw new Error("No row named the practice");
 		}
-		await expect(link).toHaveAttribute("href", "/w/demo/admin/practices/thin-controllers");
+		await expect(levelsOpenedBy(link)).toEqual(["practice:thin-controllers"]);
 		await userEvent.hover(link);
 		await expect(screen.queryByText(THIN_CONTROLLERS.whyItMatters ?? "")).not.toBeInTheDocument();
 	},

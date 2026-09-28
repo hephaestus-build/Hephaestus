@@ -125,12 +125,39 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             "SELECT f FROM Observation f WHERE f.agentJobId = :agentJobId AND f.workspaceId = :workspaceId ORDER BY f.id ASC")
     List<Observation> findByAgentJobId(@Param("agentJobId") UUID agentJobId, @Param("workspaceId") Long workspaceId);
 
-    @Query(value = """
-        SELECT o.agent_job_id AS "jobId",
-               COUNT(*) FILTER (WHERE ((o.presence = 'PRESENT') = (o.assessment = 'GOOD'))) AS "strengths",
-               COUNT(*) FILTER (WHERE ((o.presence = 'PRESENT') <> (o.assessment = 'GOOD'))) AS "problems",
+    /**
+     * {@link de.tum.cit.aet.hephaestus.practices.model.Outcome#of} over {@code o}: true for a positive outcome, false
+     * for a negative one, and null for an observation that was not assessed, which neither side then matches.
+     */
+    String POSITIVE_OUTCOME = "((o.presence = 'PRESENT') = (o.assessment = 'GOOD'))";
+
+    /** The negative side of {@link #POSITIVE_OUTCOME}, null in the same cases. */
+    String NEGATIVE_OUTCOME = "((o.presence = 'PRESENT') <> (o.assessment = 'GOOD'))";
+
+    /**
+     * The invalidation {@code oi} of {@code o} that an admin opened and has not restored; at most one is open per
+     * observation ({@code uk_observation_invalidation_active}).
+     */
+    String OPEN_INVALIDATION =
+            "oi.observation_id = o.id AND oi.workspace_id = o.workspace_id AND oi.restored_at IS NULL";
+
+    /** Whether an admin has marked {@code o} incorrect. */
+    String INVALIDATED = "EXISTS (SELECT 1 FROM observation_invalidation oi WHERE " + OPEN_INVALIDATION + ")";
+
+    /** Observations counted by assessment, as native select columns over {@code o}. */
+    String ASSESSMENT_COUNTS = "COUNT(*) FILTER (WHERE " + POSITIVE_OUTCOME + ") AS \"strengths\","
+            + " COUNT(*) FILTER (WHERE " + NEGATIVE_OUTCOME + ") AS \"problems\"," + """
                COUNT(*) FILTER (WHERE o.assessment_status = 'NOT_APPLICABLE') AS "notApplicable",
                COUNT(*) FILTER (WHERE o.assessment_status = 'UNDETERMINED') AS "undetermined"
+        """;
+
+    /** Observations recorded in {@code [from, to)}, the window the operator observation list filters by. */
+    String OBSERVED_IN_RANGE = """
+          AND o.observed_at >= :from
+          AND o.observed_at < :to
+        """;
+
+    @Query(value = "SELECT o.agent_job_id AS \"jobId\"," + ASSESSMENT_COUNTS + """
         FROM observation o
         WHERE o.workspace_id = :workspaceId
           AND o.agent_job_id IN :jobIds
@@ -139,9 +166,60 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     List<ReviewObservationCounts> summarizeReviewObservations(
             @Param("workspaceId") Long workspaceId, @Param("jobIds") Collection<UUID> jobIds);
 
-    interface ReviewObservationCounts {
-        UUID getJobId();
+    /**
+     * Observations recorded in {@code [from, to)} by practice, most observed first, then by name: one row for each
+     * practice with an observation in the range and for each of {@code practiceIds}, which may have none. A practice
+     * without observations joins one row without an observation, which is why observations are counted as
+     * {@code COUNT(o.id)}.
+     */
+    @Query(
+            value = """
+        SELECT p.id AS "practiceId",
+               p.slug AS "practiceSlug",
+               p.name AS "practiceName",
+               pa.slug AS "groupSlug",
+               pa.name AS "groupName",
+               pa.icon AS "groupIcon",
+               pa.color AS "groupColor",
+        """ + "COUNT(*) FILTER (WHERE " + INVALIDATED + ") AS \"invalidated\"," + ASSESSMENT_COUNTS + """
+        FROM practice p
+        LEFT JOIN practice_group pa ON pa.id = p.practice_group_id
+        LEFT JOIN observation o ON o.practice_id = p.id AND o.workspace_id = :workspaceId
+        """
+                    + OBSERVED_IN_RANGE + """
+        WHERE p.workspace_id = :workspaceId
+        GROUP BY p.id, pa.id
+        HAVING COUNT(o.id) > 0 OR p.id = ANY(CAST(:practiceIds AS bigint[]))
+        ORDER BY COUNT(o.id) DESC, p.name ASC, p.id ASC
+        """,
+            nativeQuery = true)
+    List<PracticeObservationCounts> summarizeObservationsByPractice(
+            @Param("workspaceId") Long workspaceId,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("practiceIds") Long[] practiceIds);
 
+    /**
+     * Observations recorded in {@code [from, to)} by the time bucket they were recorded in, numbered from 1 as
+     * {@link de.tum.cit.aet.hephaestus.core.time.TimeBuckets#epochSeconds()} describes; buckets without observations
+     * have no row.
+     */
+    @Query(value = """
+        SELECT width_bucket(extract(epoch from o.observed_at), CAST(:starts AS bigint[])) AS "bucket",
+               COUNT(*) AS "count"
+        FROM observation o
+        WHERE o.workspace_id = :workspaceId
+        """ + OBSERVED_IN_RANGE + """
+        GROUP BY 1
+        """, nativeQuery = true)
+    List<BucketCount> countObservationsByBucket(
+            @Param("workspaceId") Long workspaceId,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("starts") Long[] starts);
+
+    /** The columns of {@link #ASSESSMENT_COUNTS}. */
+    interface AssessmentCounts {
         Long getStrengths();
 
         Long getProblems();
@@ -149,6 +227,38 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         Long getNotApplicable();
 
         Long getUndetermined();
+    }
+
+    interface ReviewObservationCounts extends AssessmentCounts {
+        UUID getJobId();
+    }
+
+    interface PracticeObservationCounts extends AssessmentCounts {
+        Long getPracticeId();
+
+        String getPracticeSlug();
+
+        String getPracticeName();
+
+        @Nullable
+        String getGroupSlug();
+
+        @Nullable
+        String getGroupName();
+
+        @Nullable
+        String getGroupIcon();
+
+        @Nullable
+        String getGroupColor();
+
+        Long getInvalidated();
+    }
+
+    interface BucketCount {
+        Integer getBucket();
+
+        Long getCount();
     }
 
     /**
@@ -831,6 +941,14 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         Long getCount();
     }
 
+    /** Keeps the outcomes asked for, on the sides {@link #POSITIVE_OUTCOME} and {@link #NEGATIVE_OUTCOME} draw. */
+    String OUTCOME_FILTER = "AND (CAST(:#{#f.outcomeNames()} AS text[]) IS NULL"
+            + " OR ('POSITIVE' = ANY(CAST(:#{#f.outcomeNames()} AS text[])) AND " + POSITIVE_OUTCOME + ")"
+            + " OR ('NEGATIVE' = ANY(CAST(:#{#f.outcomeNames()} AS text[])) AND " + NEGATIVE_OUTCOME + "))\n";
+
+    String INVALIDATED_FILTER = "AND (CAST(:#{#f.invalidated()} AS boolean) IS NULL"
+            + " OR CAST(:#{#f.invalidated()} AS boolean) = " + INVALIDATED + ")\n";
+
     String OPERATOR_PREDICATES = """
           AND (CAST(:#{#f.assessmentStatusNames()} AS text[]) IS NULL OR o.assessment_status = ANY(CAST(:#{#f.assessmentStatusNames()} AS text[])))
           AND (CAST(:#{#f.practiceSlugArray()} AS text[]) IS NULL OR p.slug = ANY(CAST(:#{#f.practiceSlugArray()} AS text[])))
@@ -845,9 +963,28 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
           AND (CAST(:#{#f.originNames()} AS text[]) IS NULL OR o.origin = ANY(CAST(:#{#f.originNames()} AS text[])))
           AND (CAST(:#{#f.from()} AS timestamptz) IS NULL OR o.observed_at >= CAST(:#{#f.from()} AS timestamptz))
           AND (CAST(:#{#f.to()} AS timestamptz) IS NULL OR o.observed_at < CAST(:#{#f.to()} AS timestamptz))
-        """;
+        """ + OUTCOME_FILTER + INVALIDATED_FILTER;
 
-    @Query(value = """
+    /** When an admin marked {@code o} incorrect; null while it stands. */
+    String INVALIDATED_AT =
+            "(SELECT oi.invalidated_at FROM observation_invalidation oi WHERE " + OPEN_INVALIDATION + ")";
+
+    /**
+     * With {@code :prioritizeActionable}, problems first and the most severe of them first, then the other assessed
+     * observations; newest first within each.
+     */
+    String OPERATOR_ORDER = " ORDER BY"
+            + " CASE WHEN :prioritizeActionable THEN"
+            + " CASE WHEN " + NEGATIVE_OUTCOME + " THEN 0 WHEN o.assessment_status = 'ASSESSED' THEN 1 ELSE 2 END"
+            + " ELSE 0 END,"
+            + " CASE WHEN :prioritizeActionable AND " + NEGATIVE_OUTCOME + " THEN"
+            + " CASE o.severity WHEN 'CRITICAL' THEN 0 WHEN 'MAJOR' THEN 1 WHEN 'MINOR' THEN 2 WHEN 'INFO' THEN 3"
+            + " ELSE 4 END"
+            + " ELSE 0 END,"
+            + " o.observed_at DESC, o.id DESC";
+
+    @Query(
+            value = """
             SELECT o.id AS "id",
                    o.agent_job_id AS "agentJobId",
                    p.slug AS "practiceSlug",
@@ -870,8 +1007,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                    evaluated_revision.review_rule_fingerprint AS "practiceRevisionFingerprint",
                    current_revision.review_rule_fingerprint AS "currentPracticeRevisionFingerprint",
                    o.superseded_at AS "supersededAt",
-                   (SELECT oi.invalidated_at FROM observation_invalidation oi
-                    WHERE oi.observation_id = o.id AND oi.restored_at IS NULL) AS "invalidatedAt",
+            """ + INVALIDATED_AT + " AS \"invalidatedAt\"," + """
                    o.observed_at AS "observedAt"
             FROM observation o
             JOIN practice p ON p.id = o.practice_id
@@ -879,29 +1015,15 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             LEFT JOIN practice_revision current_revision ON current_revision.id = p.current_revision_id
             LEFT JOIN practice_group pa ON pa.id = p.practice_group_id
             WHERE o.workspace_id = :workspaceId
-            """ + OPERATOR_PREDICATES + """
-             ORDER BY
-               CASE WHEN :prioritizeActionable THEN
-                 CASE WHEN ((o.presence = 'PRESENT') <> (o.assessment = 'GOOD')) THEN 0 WHEN o.assessment_status = 'ASSESSED' THEN 1 ELSE 2 END
-               ELSE 0 END,
-               CASE WHEN :prioritizeActionable AND ((o.presence = 'PRESENT') <> (o.assessment = 'GOOD')) THEN
-                 CASE o.severity
-                   WHEN 'CRITICAL' THEN 0
-                   WHEN 'MAJOR' THEN 1
-                   WHEN 'MINOR' THEN 2
-                   WHEN 'INFO' THEN 3
-                   ELSE 4
-                 END
-               ELSE 0 END,
-               o.observed_at DESC,
-               o.id DESC
-            """, countQuery = """
+            """ + OPERATOR_PREDICATES + OPERATOR_ORDER,
+            countQuery = """
             SELECT count(*)
             FROM observation o
             JOIN practice p ON p.id = o.practice_id
             LEFT JOIN practice_group pa ON pa.id = p.practice_group_id
             WHERE o.workspace_id = :workspaceId
-            """ + OPERATOR_PREDICATES, nativeQuery = true)
+            """ + OPERATOR_PREDICATES,
+            nativeQuery = true)
     Page<OperatorObservationRow> findForWorkspace(
             @Param("workspaceId") Long workspaceId,
             @Param("f") ObservationQueryFilter filter,
@@ -977,41 +1099,6 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         Instant getInvalidatedAt();
 
         Instant getObservedAt();
-    }
-
-    @Query(value = """
-        SELECT fo.observation_id AS "observationId",
-               COUNT(*) FILTER (WHERE f.delivery_state = 'PREPARED' OR
-                   (f.delivery_state = 'PARTIALLY_DELIVERED' AND f.suppression_reason IS NULL)) AS "prepared",
-               COUNT(*) FILTER (WHERE f.delivery_state = 'DELIVERED') AS "delivered",
-               COUNT(*) FILTER (WHERE f.delivery_state = 'SUPERSEDED') AS "superseded",
-               COUNT(*) FILTER (WHERE f.delivery_state = 'SUPPRESSED' OR
-                   (f.delivery_state = 'PARTIALLY_DELIVERED' AND f.suppression_reason IS NOT NULL)) AS "suppressed",
-               COUNT(*) FILTER (WHERE f.delivery_state IN ('FAILED', 'PARTIALLY_FAILED')) AS "failed",
-               COUNT(*) FILTER (WHERE f.delivery_state = 'UNCONFIRMED') AS "unconfirmed"
-        FROM feedback_observation fo
-        JOIN feedback f ON f.id = fo.feedback_id
-        WHERE fo.observation_id IN :observationIds
-          AND f.workspace_id = :workspaceId
-        GROUP BY fo.observation_id
-        """, nativeQuery = true)
-    List<ObservationFeedbackDisposition> findFeedbackDispositions(
-            @Param("workspaceId") Long workspaceId, @Param("observationIds") Collection<UUID> observationIds);
-
-    interface ObservationFeedbackDisposition {
-        UUID getObservationId();
-
-        Long getPrepared();
-
-        Long getDelivered();
-
-        Long getSuperseded();
-
-        Long getSuppressed();
-
-        Long getFailed();
-
-        Long getUnconfirmed();
     }
 
     @Query("""

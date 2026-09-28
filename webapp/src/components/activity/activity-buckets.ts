@@ -61,19 +61,6 @@ export function startLabel(start: Date, size: BucketSize, nowMs: number): string
 	return isSameYear(start, nowMs) ? tick : `${tick} ${format(start, "yyyy")}`;
 }
 
-/**
- * The edges of a chart's time frame: its first bucket, and "Today" — every range ends now, at
- * every bucket size.
- */
-export function edgeLabels(
-	buckets: readonly ActivityBucket[],
-	size: BucketSize,
-	nowMs: number,
-): [string, string] | undefined {
-	const first = buckets.at(0);
-	return first === undefined ? undefined : [startLabel(first.start, size, nowMs), "Today"];
-}
-
 /** The span an overview's bucket labels may be clipped to: none while it is stale. */
 export function readSpan(
 	state: { stale: false; span: DateSpan } | { stale: true },

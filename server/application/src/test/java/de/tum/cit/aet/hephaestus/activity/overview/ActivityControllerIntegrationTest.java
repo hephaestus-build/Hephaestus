@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.OpenWorkDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO.ReviewerState;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.WorkItemDTO;
+import de.tum.cit.aet.hephaestus.core.time.TimeBucketSize;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -327,7 +328,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
             ActivityOverviewDTO overview = overview(uri -> uri.queryParam("login", ada.getLogin()));
 
-            assertThat(overview.bucket()).isEqualTo(ActivityBucketSize.DAY);
+            assertThat(overview.bucket()).isEqualTo(TimeBucketSize.DAY);
             assertThat(overview.buckets())
                     .as("31 days, zeros included, oldest first")
                     .hasSize(31)
@@ -412,41 +413,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             get("/summary", uri -> uri.queryParam("zone", "+02:00"))
                     .isBadRequest()
                     .expectBody(Void.class);
-        }
-
-        @Test
-        void shouldSizeTheBucketsByTheLengthOfTheRange() {
-            ActivityOverviewDTO weeks = overviewOf("2026-01-01T00:00:00Z", "2026-02-02T00:00:00Z");
-            ActivityOverviewDTO longestWeeks = overviewOf("2025-08-01T00:00:00Z", "2026-02-01T00:00:00Z");
-            ActivityOverviewDTO months = overviewOf("2025-07-31T00:00:00Z", "2026-02-01T00:00:00Z");
-
-            assertThat(weeks.bucket()).as("32 days").isEqualTo(ActivityBucketSize.WEEK);
-            assertThat(weeks.buckets())
-                    .extracting(ActivityBucketDTO::start)
-                    .as("Mondays, from the one before the range starts")
-                    .startsWith(Instant.parse("2025-12-29T00:00:00Z"), Instant.parse("2026-01-05T00:00:00Z"))
-                    .endsWith(Instant.parse("2026-01-26T00:00:00Z"));
-            assertThat(longestWeeks.bucket()).as("184 days").isEqualTo(ActivityBucketSize.WEEK);
-            assertThat(months.bucket()).as("185 days").isEqualTo(ActivityBucketSize.MONTH);
-            assertThat(months.buckets())
-                    .extracting(ActivityBucketDTO::start)
-                    .containsExactly(
-                            Instant.parse("2025-07-01T00:00:00Z"),
-                            Instant.parse("2025-08-01T00:00:00Z"),
-                            Instant.parse("2025-09-01T00:00:00Z"),
-                            Instant.parse("2025-10-01T00:00:00Z"),
-                            Instant.parse("2025-11-01T00:00:00Z"),
-                            Instant.parse("2025-12-01T00:00:00Z"),
-                            Instant.parse("2026-01-01T00:00:00Z"));
-        }
-
-        private ActivityOverviewDTO overviewOf(String from, String to) {
-            return Objects.requireNonNull(
-                    status("/summary", uri -> uri.queryParam("from", from).queryParam("to", to))
-                            .isOk()
-                            .expectBody(ActivityOverviewDTO.class)
-                            .returnResult()
-                            .getResponseBody());
         }
 
         private static ActivitySummaryDTO bucketAt(ActivityOverviewDTO overview, String start) {

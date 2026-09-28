@@ -5,6 +5,7 @@ import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-def
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { FILTERABLE_PLACES } from "@/components/practice-vocabulary/delivery-place-defs";
+import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
 import { REVIEW_STATUS_DEFS } from "@/components/practice-vocabulary/review-status-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
@@ -24,10 +25,29 @@ import { hasText } from "@/lib/text";
 export const REVIEW_PAGE_SIZE = 25;
 
 /**
+ * How many of each a section shows before it links to the full list. Exported because the caller's
+ * query has to request this many and the skeleton has to draw this many.
+ */
+export const REVIEW_PREVIEW_SIZE = 5;
+
+/**
  * How often a queued or running review is re-asked for, on every screen that watches one. Applied
  * through TanStack Query's `refetchInterval`, which stops on its own at a terminal status.
  */
 export const ACTIVE_REVIEW_POLL_MS = 5000;
+
+/**
+ * Every admin read of what reviews produced, which a change to one review, observation or piece of
+ * feedback can move: its row in any list, and every count.
+ */
+export const PRACTICE_REVIEW_READS: ReadonlySet<string> = new Set([
+	"getPracticeReviewOverview",
+	"listPracticeReviews",
+	"listPracticeReviewObservations",
+	"getPracticeReviewObservation",
+	"listPracticeReviewFeedback",
+	"getPracticeReviewFeedback",
+]);
 
 /**
  * Ordering names the server understands. `ACTIONABILITY` puts shortfalls first, worst severity down
@@ -87,6 +107,8 @@ export const observationsSearchSchema = z
 		groupSlug: multiValue,
 		practiceSlug: multiValue,
 		assessmentStatus: enumValues(statusValues(ASSESSMENT_STATUS_DEFS)).optional(),
+		outcome: enumValues(statusValues(OUTCOME_DEFS)),
+		invalidated: z.boolean().optional().catch(undefined),
 		presence: enumValues(statusValues(PRESENCE_DEFS)),
 		assessment: enumValues(statusValues(ASSESSMENT_DEFS)),
 		severity: enumValues(statusValues(SEVERITY_DEFS)),
@@ -107,7 +129,7 @@ export const observationsSearchSchema = z
 export const runsSearchSchema = z
 	.object({
 		page,
-		status: z.enum(statusValues(REVIEW_STATUS_DEFS)).optional().catch(undefined),
+		status: enumValues(statusValues(REVIEW_STATUS_DEFS)),
 		from: day,
 		to: day,
 	})
@@ -157,7 +179,7 @@ function scopeQuery(search: ReviewScopeSearch) {
 	};
 }
 
-export function runsQuery(search: RunsSearch, size: number) {
+export function runsQuery(search: Partial<RunsSearch>, size: number) {
 	return {
 		...dateWindowQuery(search),
 		page: search.page ?? 0,
@@ -166,7 +188,7 @@ export function runsQuery(search: RunsSearch, size: number) {
 	};
 }
 
-export function feedbackQuery(search: FeedbackSearch, size: number) {
+export function feedbackQuery(search: Partial<FeedbackSearch>, size: number) {
 	return {
 		...scopeQuery(search),
 		page: search.page ?? 0,
@@ -181,7 +203,7 @@ export function feedbackQuery(search: FeedbackSearch, size: number) {
 	};
 }
 
-export function observationsQuery(search: ObservationsSearch, size: number) {
+export function observationsQuery(search: Partial<ObservationsSearch>, size: number) {
 	return {
 		...scopeQuery(search),
 		page: search.page ?? 0,
@@ -193,6 +215,8 @@ export function observationsQuery(search: ObservationsSearch, size: number) {
 				? search.practiceSlug
 				: undefined,
 		assessmentStatus: search.assessmentStatus,
+		outcome: search.outcome,
+		invalidated: search.invalidated,
 		presence: search.presence,
 		assessment: search.assessment,
 		severity: search.severity,

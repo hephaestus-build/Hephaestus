@@ -28,6 +28,13 @@ export const GUARDED_LEVEL_KINDS = ["practice-edit", "practice-new"] as const;
 /** A stack id is always a slug; a practice that does not exist yet has none, so it is a draft. */
 const NEW_PRACTICE_ID = "draft";
 
+/** A workspace practice, read-only: what a link from elsewhere in the console opens. */
+export function practiceSetupLevel(
+	practiceSlug: string,
+): DetailStackEntry<(typeof DETAIL_LEVEL_KINDS)[number]> {
+	return { kind: "practice", id: practiceSlug };
+}
+
 /** The editor level for `practiceSlug`, or for a practice about to be written. */
 export function practiceFormLevel(
 	practiceSlug?: string,

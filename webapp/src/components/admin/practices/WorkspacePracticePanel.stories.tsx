@@ -30,7 +30,7 @@ const meta = {
 	component: WorkspacePracticePanel,
 	parameters: { layout: "fullscreen" },
 	decorators: [withPageBehind],
-	args: { state: ready() },
+	args: { workspaceSlug: "demo", state: ready() },
 	argTypes: { state: { control: false } },
 	render: (args) => (
 		<Stateful initial={[{ kind: "practice", id: practice.slug }]}>

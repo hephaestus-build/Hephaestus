@@ -513,7 +513,13 @@ function PracticeCatalogRoute() {
 								)?.name,
 							};
 						}
-						return <WorkspacePracticePanel nested={level.nested} state={state} />;
+						return (
+							<WorkspacePracticePanel
+								workspaceSlug={workspaceSlug}
+								nested={level.nested}
+								state={state}
+							/>
+						);
 					}
 					if (entry.kind === "practice-edit" || entry.kind === "practice-new") {
 						const creating = entry.kind === "practice-new";

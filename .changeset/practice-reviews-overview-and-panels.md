@@ -1,0 +1,5 @@
+---
+"hephaestus": minor
+---
+
+Practice reviews opens on an overview. Feedback that waits for your approval and anything that failed come first. Then you see what the reviews did over the last 7 days, 30 days, 90 days or 12 months, stage by stage, and how each practice turned out. Each count under a stage opens the list of exactly the rows it counts. Reviews, observations, feedback, reviewed work and practices open as panels over the list you are on, and links in a panel open the next record, so you keep your place. Feedback counts on reviews and observations now include every delivery state, so feedback that waits for approval no longer reads as "No feedback composed". Under **Practices**, **Practice reviews** is first and **Review** is now **Review settings**. The old addresses of the review, observation, feedback and reviewed-work pages, and of the old practice editor, catalog, autonomy, settings and past-work pages under **Practices**, no longer open; open the record from its list. The upgrade adds an index on observations, which speeds up the overview and the date filter on the Observations list.

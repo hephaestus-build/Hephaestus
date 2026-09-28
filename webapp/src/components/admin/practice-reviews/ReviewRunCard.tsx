@@ -8,7 +8,7 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { hasText } from "@/lib/text";
 import { modelLabel } from "./job-utils";
 
-import { ReviewFact, ReviewFactGrid } from "./ReviewDetailHeader";
+import { ReviewFact, ReviewFactGrid } from "./ReviewFactGrid";
 
 export interface ReviewRunCardProps {
 	job: AgentJob;

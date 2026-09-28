@@ -1,78 +1,56 @@
-import type { Meta, StoryContext, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 
-import { PageLayout } from "@/components/layout/PageLayout";
 import { withStandardPage } from "@/stories/decorators";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
-import { PracticeReviewsHeader } from "./PracticeReviewsLayout";
+import { PracticeReviewsLayout } from "./PracticeReviewsLayout";
 
-// `aria-current` draws the selected tab, and TanStack's `Link` also sets it on any link it considers
-// active — `...isActive && { "aria-current": "page" }` is spread *after* the caller's props in
-// `link.js`, so an explicit `aria-current={undefined}` cannot turn it off. Two mechanisms decide one
-// attribute, so the stories below assert the *count* of current tabs, not which one it is.
+/**
+ * The page's header and its four sections. Which section is current is the router's to decide, and
+ * which scope a section link carries is read from the URL, so both are proved by the route's tests.
+ */
 const meta = {
-	component: PracticeReviewsHeader,
+	component: PracticeReviewsLayout,
 	parameters: {
 		layout: "fullscreen",
 		chromatic: { viewports: [320, 1440] },
-		viewport: { defaultViewport: "reflow" },
 	},
 	args: {
 		workspaceSlug: "demo",
-		activeSection: "reviews",
+		children: <p className="text-sm text-muted-foreground">The section renders here.</p>,
 	},
-	decorators: [
-		(Story) => (
-			<PageLayout>
-				<Story />
-			</PageLayout>
-		),
-		withStandardPage,
-	],
+	argTypes: { children: { control: false } },
+	decorators: [withStandardPage],
 	tags: ["autodocs"],
-} satisfies Meta<typeof PracticeReviewsHeader>;
+} satisfies Meta<typeof PracticeReviewsLayout>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-async function expectOnlyCurrent(canvas: StoryContext["canvas"], name: string) {
-	const nav = canvas.getByRole("navigation", {
-		name: "Practice review sections",
-	});
-	await expect(within(nav).getAllByRole("link", { current: "page" })).toHaveLength(1);
-	within(nav).getByRole("link", { name, current: "page" });
-}
-
-export const Reviews: Story = {
+export const Default: Story = {
 	play: async ({ canvas }) => {
-		await expectOnlyCurrent(canvas, "Reviews");
+		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent("Practice reviews");
+		const sections = within(canvas.getByRole("navigation", { name: "Practice review sections" }));
+		await expect(sections.getAllByRole("link").map((link) => link.textContent)).toEqual([
+			"Overview",
+			"Reviews",
+			"Observations",
+			"Feedback",
+		]);
+		await expect(sections.getByRole("link", { name: "Reviews" })).toHaveAttribute(
+			"href",
+			"/w/demo/admin/practices/reviews/runs",
+		);
+		canvas.getByText("The section renders here.");
 	},
 };
 
-export const Observations: Story = {
-	args: { activeSection: "observations" },
+/** Four sections share the track at 320px rather than pushing the page sideways. */
+export const Reflow: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvas }) => {
-		await expectOnlyCurrent(canvas, "Observations");
-	},
-};
-
-export const Delivery: Story = {
-	args: { activeSection: "delivery" },
-	play: async ({ canvas }) => {
-		await expectOnlyCurrent(canvas, "Delivery");
-	},
-};
-
-/**
- * Reviewed work is reached from any of the three sections, so it claims none of them: marking one
- * would tell the reader they had navigated somewhere they had not.
- */
-export const ReviewedWork: Story = {
-	args: { activeSection: undefined },
-	play: async ({ canvas }) => {
-		const nav = canvas.getByRole("navigation", {
-			name: "Practice review sections",
-		});
-		await expect(within(nav).queryAllByRole("link", { current: "page" })).toHaveLength(0);
+		canvas.getByRole("navigation", { name: "Practice review sections" });
+		await expectNoPageOverflow();
 	},
 };

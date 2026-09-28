@@ -35,7 +35,6 @@ const WITHHELD_FAMILY_OPTIONS = statusFacetOptions(WITHHOLDING_FAMILY_DEFS);
  */
 export function clearedFeedbackFilters(): Partial<FeedbackSearch> {
 	return {
-		page: 0,
 		deliveryState: undefined,
 		withheldFamily: undefined,
 		channel: undefined,

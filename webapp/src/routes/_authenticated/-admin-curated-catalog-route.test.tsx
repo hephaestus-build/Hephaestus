@@ -296,7 +296,7 @@ describe("instance catalog routes", () => {
 				});
 			}),
 		);
-		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
+		renderRouteAt("/admin/catalog?detail=practice-edit:describe-what-and-why");
 
 		fireEvent.click(await screen.findByRole("button", { name: "Cancel" }, ROUTE_RENDER_WAIT));
 		fireEvent.click(
@@ -465,7 +465,7 @@ describe("instance catalog routes", () => {
 				});
 			}),
 		);
-		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
+		renderRouteAt("/admin/catalog?detail=practice-edit:describe-what-and-why");
 
 		fireEvent.click(await screen.findByRole("button", { name: "Cancel" }, ROUTE_RENDER_WAIT));
 		fireEvent.click(
@@ -501,7 +501,7 @@ describe("instance catalog routes", () => {
 				HttpResponse.json(release),
 			),
 		);
-		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
+		renderRouteAt("/admin/catalog?detail=practice-edit:describe-what-and-why");
 
 		await screen.findByText("The definition Hephaestus ships now", undefined, ROUTE_RENDER_WAIT);
 		screen.getByText("Conflict");
@@ -533,7 +533,7 @@ describe("instance catalog routes", () => {
 				});
 			}),
 		);
-		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
+		renderRouteAt("/admin/catalog?detail=practice-edit:describe-what-and-why");
 
 		const radioGroup = await screen.findByRole(
 			"radiogroup",
@@ -578,7 +578,7 @@ describe("instance catalog routes", () => {
 				return HttpResponse.json({ status: 412, title: "Stale" }, { status: 412 });
 			}),
 		);
-		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
+		renderRouteAt("/admin/catalog?detail=practice-edit:describe-what-and-why");
 
 		const radioGroup = await screen.findByRole(
 			"radiogroup",
@@ -618,7 +618,7 @@ describe("instance catalog routes", () => {
 				});
 			}),
 		);
-		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
+		renderRouteAt("/admin/catalog?detail=practice-edit:describe-what-and-why");
 		const name = await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT);
 		fireEvent.change(name, { target: { value: "Unsaved draft name" } });
 
@@ -654,7 +654,7 @@ describe("instance catalog routes", () => {
 				},
 			),
 		);
-		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
+		renderRouteAt("/admin/catalog?detail=practice-edit:describe-what-and-why");
 
 		fireEvent.click(
 			await screen.findByRole(
@@ -700,7 +700,7 @@ describe("instance catalog routes", () => {
 				});
 			}),
 		);
-		renderRouteAt("/admin/catalog/practices/describe-what-and-why");
+		renderRouteAt("/admin/catalog?detail=practice-edit:describe-what-and-why");
 
 		const name = await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT);
 		fireEvent.change(name, { target: { value: "My unsaved draft" } });
@@ -760,7 +760,7 @@ describe("instance catalog routes", () => {
 					},
 				),
 			);
-			renderRouteAt("/admin/catalog/practices/describe-what-and-why");
+			renderRouteAt("/admin/catalog?detail=practice-edit:describe-what-and-why");
 
 			await screen.findByRole("button", { name: "Save changes" }, ROUTE_RENDER_WAIT);
 			await chooseArtifact();

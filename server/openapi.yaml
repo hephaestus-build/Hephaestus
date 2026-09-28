@@ -6431,18 +6431,21 @@ paths:
           default: 20
           maximum: 100
           minimum: 1
-      - in: query
+      - description: Statuses to list (repeatable); omit for every status
+        in: query
         name: status
         required: false
         schema:
-          type: string
-          enum:
-          - QUEUED
-          - RUNNING
-          - COMPLETED
-          - FAILED
-          - TIMED_OUT
-          - CANCELLED
+          type: array
+          items:
+            type: string
+            enum:
+            - QUEUED
+            - RUNNING
+            - COMPLETED
+            - FAILED
+            - TIMED_OUT
+            - CANCELLED
       - description: Inclusive lower bound on when the review was requested
         in: query
         name: from
@@ -6825,6 +6828,26 @@ paths:
             enum:
             - GOOD
             - BAD
+      - description: "Outcomes to list (repeatable): POSITIVE where a desirable behavior\
+          \ was present or an undesirable one absent, NEGATIVE the other way round.\
+          \ Only assessed observations have an outcome."
+        in: query
+        name: outcome
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - POSITIVE
+            - NEGATIVE
+      - description: "true for only the observations an admin has marked incorrect\
+          \ and not restored, false for only the others; omit for both"
+        in: query
+        name: invalidated
+        required: false
+        schema:
+          type: boolean
       - in: query
         name: severity
         required: false
@@ -6986,6 +7009,61 @@ paths:
           description: The observation is already in the requested state
       summary: "Invalidate an observation that was wrong when recorded, or restore\
         \ it"
+      tags:
+      - Practice reviews
+  /workspaces/{workspaceSlug}/practices/reviews/overview:
+    get:
+      description: "In total, over time and by practice. Reviews count by when they\
+        \ were created, observations by when they were recorded and feedback by when\
+        \ it was created, as the review, observation and feedback lists filter them.\
+        \ The range is split into days, weeks or months, by its length, in the given\
+        \ time zone."
+      operationId: getPracticeReviewOverview
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - description: Inclusive lower bound; defaults to seven days before to. A range
+          spans at most 400 days.
+        in: query
+        name: from
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - description: Exclusive upper bound; defaults to now
+        in: query
+        name: to
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - description: "The IANA time zone whose midnights start the buckets, such as\
+          \ Europe/Berlin"
+        in: query
+        name: zone
+        required: false
+        schema:
+          type: string
+          default: UTC
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeReviewOverview"
+          description: Practice reviews counted
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Invalid range or time zone
+      summary: "Count practice reviews, observations and feedback in a time range"
       tags:
       - Practice reviews
   /workspaces/{workspaceSlug}/practices/standings:
@@ -8586,13 +8664,8 @@ components:
       description: "Activity in a time range, in total and over time"
       properties:
         bucket:
-          type: string
-          description: "How long each bucket is: a day for ranges up to 31 days, a\
-            \ week for ranges up to 184 days, a month for longer ones"
-          enum:
-          - DAY
-          - WEEK
-          - MONTH
+          $ref: "#/components/schemas/TimeBucketSize"
+          description: How long each bucket is
         buckets:
           type: array
           description: "Every bucket the range touches, oldest first, including those\
@@ -14110,6 +14183,66 @@ components:
       - offered
       - offeredDigest
       - slug
+    PracticeReviewBucket:
+      type: object
+      description: "Practice reviews, observations and feedback in one time bucket\
+        \ of a range"
+      properties:
+        feedback:
+          type: integer
+          format: int64
+          description: "Feedback created in the bucket within the range, in any delivery\
+            \ state"
+        observations:
+          type: integer
+          format: int64
+          description: Observations recorded in the bucket within the range
+        reviews:
+          type: integer
+          format: int64
+          description: "Practice reviews created in the bucket within the range, in\
+            \ any status"
+        start:
+          type: string
+          format: date-time
+          description: "When the bucket starts: midnight of its day, of its week's\
+            \ Monday or of its month's first day, in the requested time zone. The\
+            \ first bucket may start before the range."
+      required:
+      - feedback
+      - observations
+      - reviews
+      - start
+    PracticeReviewCounts:
+      type: object
+      description: What practice reviews recorded for one practice in a time range
+      properties:
+        feedback:
+          $ref: "#/components/schemas/ReviewFeedbackCounts"
+          description: "Feedback created in the range that is bound to an observation\
+            \ of this practice, whenever that observation was recorded; one piece\
+            \ of feedback bound to several practices counts for each"
+        group:
+          $ref: "#/components/schemas/ReviewPracticeGroup"
+          description: Practice group; null when the practice is Unassigned
+        observations:
+          $ref: "#/components/schemas/ReviewObservationCounts"
+          description: Observations of this practice recorded in the range
+        observationsInvalidated:
+          type: integer
+          format: int64
+          description: "Of those observations, the ones an admin has marked incorrect\
+            \ and not restored"
+        practiceName:
+          type: string
+        practiceSlug:
+          type: string
+      required:
+      - feedback
+      - observations
+      - observationsInvalidated
+      - practiceName
+      - practiceSlug
     PracticeReviewCoveragePreview:
       type: object
       properties:
@@ -14163,6 +14296,61 @@ components:
       - estimateWindowDays
       - monitoredRepositories
       - recentReviewVolume
+    PracticeReviewOverview:
+      type: object
+      description: "Practice reviews, observations and feedback in a time range, in\
+        \ total, over time and by practice"
+      properties:
+        bucket:
+          $ref: "#/components/schemas/TimeBucketSize"
+          description: How long each bucket is
+        buckets:
+          type: array
+          description: "Every bucket the range touches, oldest first, including empty\
+            \ ones"
+          items:
+            $ref: "#/components/schemas/PracticeReviewBucket"
+        feedback:
+          $ref: "#/components/schemas/ReviewFeedbackCounts"
+          description: Feedback created in the range
+        from:
+          type: string
+          format: date-time
+          description: "Inclusive lower bound of the range counted, with its default\
+            \ filled in"
+        observations:
+          $ref: "#/components/schemas/ReviewObservationCounts"
+          description: Observations recorded in the range
+        observationsInvalidated:
+          type: integer
+          format: int64
+          description: "Of those observations, the ones an admin has marked incorrect\
+            \ and not restored"
+        practices:
+          type: array
+          description: "Each practice with an observation recorded in the range or\
+            \ feedback created in the range on one of its observations, the most observed\
+            \ first, then by name"
+          items:
+            $ref: "#/components/schemas/PracticeReviewCounts"
+        reviews:
+          $ref: "#/components/schemas/ReviewRunCounts"
+          description: Practice reviews created in the range
+        to:
+          type: string
+          format: date-time
+          description: "Exclusive upper bound of the range counted, with its default\
+            \ filled in"
+      required:
+      - bucket
+      - buckets
+      - feedback
+      - from
+      - observations
+      - observationsInvalidated
+      - practices
+      - reviews
+      - to
     PracticeReviewSettings:
       type: object
       description: "A workspace's practice-review policy: effective values plus raw\
@@ -15398,29 +15586,61 @@ components:
       - observationCount
     ReviewFeedbackCounts:
       type: object
-      description: Counts of feedback by delivery state
+      description: "Counts of feedback, one per delivery state"
       properties:
+        awaitingApproval:
+          type: integer
+          format: int64
+          description: "AWAITING_APPROVAL: waiting for an admin to approve or reject\
+            \ it"
         delivered:
           type: integer
           format: int64
+          description: "DELIVERED: delivered where it was meant to appear"
+        discarded:
+          type: integer
+          format: int64
+          description: "DISCARDED: an admin rejected it instead of approving it; it\
+            \ is never delivered"
         failed:
           type: integer
           format: int64
+          description: "FAILED: delivery failed"
+        partiallyDelivered:
+          type: integer
+          format: int64
+          description: "PARTIALLY_DELIVERED: some of its placements delivered, the\
+            \ rest still to deliver or suppressed"
+        partiallyFailed:
+          type: integer
+          format: int64
+          description: "PARTIALLY_FAILED: delivery failed after some of its placements\
+            \ were delivered"
         prepared:
           type: integer
           format: int64
+          description: "PREPARED: ready to deliver and not delivered yet"
         superseded:
           type: integer
           format: int64
+          description: "SUPERSEDED: replaced by newer feedback"
         suppressed:
           type: integer
           format: int64
+          description: "SUPPRESSED: Hephaestus refused to deliver it, with a suppression\
+            \ reason"
         unconfirmed:
           type: integer
           format: int64
+          description: "UNCONFIRMED: a conversation linked it with no record that\
+            \ it was shown, so it counts as neither delivered nor suppressed"
       required:
+      - awaitingApproval
       - delivered
+      - discarded
       - failed
+      - partiallyDelivered
+      - partiallyFailed
       - prepared
       - superseded
       - suppressed
@@ -15550,42 +15770,6 @@ components:
       - observations
       - placements
       - proposedPlacements
-    ReviewFeedbackDisposition:
-      type: object
-      description: Counts of feedback by delivery state
-      properties:
-        delivered:
-          type: integer
-          format: int64
-          description: Linked feedback delivered
-        failed:
-          type: integer
-          format: int64
-          description: Linked feedback whose delivery failed
-        prepared:
-          type: integer
-          format: int64
-          description: Linked feedback awaiting delivery
-        superseded:
-          type: integer
-          format: int64
-          description: Linked feedback delivered and later replaced
-        suppressed:
-          type: integer
-          format: int64
-          description: Linked feedback withheld by policy
-        unconfirmed:
-          type: integer
-          format: int64
-          description: Linked feedback a conversation linked without a record that
-            it was shown
-      required:
-      - delivered
-      - failed
-      - prepared
-      - superseded
-      - suppressed
-      - unconfirmed
     ReviewObservation:
       type: object
       description: A practice review observation with its linked feedback outcomes
@@ -15614,8 +15798,8 @@ components:
           - CURRENT
           - STALE
           - UNVERIFIABLE
-        feedbackDisposition:
-          $ref: "#/components/schemas/ReviewFeedbackDisposition"
+        feedback:
+          $ref: "#/components/schemas/ReviewFeedbackCounts"
           description: Counts of linked feedback by delivery state
         group:
           $ref: "#/components/schemas/ReviewPracticeGroup"
@@ -15680,7 +15864,7 @@ components:
       - agentJobId
       - assessmentStatus
       - claimCurrentness
-      - feedbackDisposition
+      - feedback
       - id
       - observedAt
       - origin
@@ -15971,6 +16155,35 @@ components:
           - REFUSED
       required:
       - status
+    ReviewRunCounts:
+      type: object
+      description: Counts of practice reviews by status
+      properties:
+        cancelled:
+          type: integer
+          format: int64
+        completed:
+          type: integer
+          format: int64
+        failed:
+          type: integer
+          format: int64
+        queued:
+          type: integer
+          format: int64
+        running:
+          type: integer
+          format: int64
+        timedOut:
+          type: integer
+          format: int64
+      required:
+      - cancelled
+      - completed
+      - failed
+      - queued
+      - running
+      - timedOut
     ReviewRunRef:
       type: object
       description: One review run on the developer's work
@@ -16874,6 +17087,14 @@ components:
       - hidden
       - id
       - name
+    TimeBucketSize:
+      type: string
+      description: "How long each bucket of a range is: a day for ranges up to 31\
+        \ days, a week from Monday for ranges up to 184 days, a month for longer ones"
+      enum:
+      - DAY
+      - WEEK
+      - MONTH
     TracedArtifact:
       type: object
       description: "An artifact this workspace recorded something about, and how much\

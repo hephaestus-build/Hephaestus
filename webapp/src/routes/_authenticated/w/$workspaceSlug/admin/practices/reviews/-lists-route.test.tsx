@@ -83,6 +83,23 @@ describe("practice review list routes", () => {
 	});
 
 	/**
+	 * The overview's counts link here as outcome and marked-incorrect filters, so a count that opens a
+	 * list which forgot either shows more rows than the number the reader clicked.
+	 */
+	it("sends the outcome and marked-incorrect filters to the endpoint", async () => {
+		const { observationUrls } = recordRequests();
+
+		renderRouteAtWithRouter(
+			'/w/acme/admin/practices/reviews/observations?outcome=["NEGATIVE"]&invalidated=true',
+		);
+		await screen.findByText("No observations match these filters", undefined, ROUTE_RENDER_WAIT);
+
+		const requested = observationUrls.at(-1);
+		expect(values(requested, "outcome")).toStrictEqual(["NEGATIVE"]);
+		expect(requested?.searchParams.get("invalidated")).toBe("true");
+	});
+
+	/**
 	 * The URL carries withholding *families*, which is the question an operator asks; the endpoint
 	 * filters on individual reasons. The expansion happens on the way to the request, so a family that
 	 * stopped expanding would return everything and read as a filter that simply matched a lot.
@@ -91,7 +108,7 @@ describe("practice review list routes", () => {
 		const { feedbackUrls } = recordRequests();
 
 		renderRouteAtWithRouter(
-			'/w/acme/admin/practices/reviews/delivery?withheldFamily=["HOUSEKEEPING"]',
+			'/w/acme/admin/practices/reviews/feedback?withheldFamily=["HOUSEKEEPING"]',
 		);
 		await screen.findByText("No feedback matches these filters", undefined, ROUTE_RENDER_WAIT);
 

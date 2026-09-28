@@ -431,8 +431,11 @@ Related trap: `useBlocker`'s `shouldBlockFn` sees `routeId`/`pathname`/`search`,
 navigation on one surface shares a route. A guard written as `() => isDirty` will block navigations
 that do **not** unmount the form, so "Discard changes" discards nothing.
 
-Paths that predate a level are kept as `beforeLoad` redirects into the stack — they were linked and
-bookmarked. `admin/practices/new.tsx` is the shortest example.
+A page that becomes a level is deleted, not redirected: before 1.0 an address only the app links to
+is not a contract, and a redirect kept for a bookmark is a route nobody can remove later. An address
+people share outside the app — a member's profile — keeps a `beforeLoad` redirect into the stack.
+Links in the app open a level with `DetailStackLink`, or with `detailSearch(entry)` from another
+route.
 
 ## Loading and errors
 

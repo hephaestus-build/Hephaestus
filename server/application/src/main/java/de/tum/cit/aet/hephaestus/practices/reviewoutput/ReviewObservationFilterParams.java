@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationQueryFilter;
@@ -25,6 +26,22 @@ public record ReviewObservationFilterParams(
         @RequestParam(required = false) @Nullable List<AssessmentStatus> assessmentStatus,
         @RequestParam(required = false) @Nullable List<Presence> presence,
         @RequestParam(required = false) @Nullable List<Assessment> assessment,
+
+        @Parameter(
+                description = "Outcomes to list (repeatable): POSITIVE where a desirable behavior was present or an"
+                        + " undesirable one absent, NEGATIVE the other way round. Only assessed observations have an"
+                        + " outcome.")
+        @RequestParam(required = false)
+        @Nullable
+        List<Outcome> outcome,
+
+        @Parameter(
+                description = "true for only the observations an admin has marked incorrect and not restored, false"
+                        + " for only the others; omit for both")
+        @RequestParam(required = false)
+        @Nullable
+        Boolean invalidated,
+
         @RequestParam(required = false) @Nullable List<Severity> severity,
         @RequestParam(required = false) @Nullable UUID agentJobId,
         /**
@@ -78,6 +95,8 @@ public record ReviewObservationFilterParams(
                 assessmentStatus,
                 presence,
                 assessment,
+                outcome,
+                invalidated,
                 severity,
                 agentJobId,
                 kind,

@@ -1,9 +1,9 @@
-import { Link } from "@tanstack/react-router";
 import { ScanSearchIcon } from "lucide-react";
 
 import type { Practice, ReviewObservation } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { ClaimCurrentnessBadge } from "@/components/practice-vocabulary/ClaimCurrentness";
 import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
 import { observationResult } from "@/components/practice-vocabulary/observation-result";
@@ -17,7 +17,8 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 
-import { REVIEW_PAGE_SIZE, type ReviewScopeSearch } from "./review-search";
+import { observationLevel } from "./review-levels";
+import { REVIEW_PAGE_SIZE } from "./review-search";
 import { ReviewArtifactLabel } from "./ReviewArtifact";
 import {
 	FeedbackCountsSummary,
@@ -36,12 +37,11 @@ export type ObservationResultsState =
 	| { status: "ready"; observations: ReviewObservation[] };
 
 export interface ObservationResultsProps {
-	workspaceSlug: string;
 	state: ObservationResultsState;
 	practices?: Practice[];
 }
 
-export function ObservationResults({ workspaceSlug, state, practices }: ObservationResultsProps) {
+export function ObservationResults({ state, practices }: ObservationResultsProps) {
 	if (state.status === "loading") {
 		return <ReviewResultsSkeleton label="Loading observations" rows={REVIEW_PAGE_SIZE} />;
 	}
@@ -77,7 +77,6 @@ export function ObservationResults({ workspaceSlug, state, practices }: Observat
 			{state.observations.map((observation) => (
 				<ObservationRow
 					key={observation.id}
-					workspaceSlug={workspaceSlug}
 					observation={observation}
 					practice={practices?.find((practice) => practice.slug === observation.practiceSlug)}
 				/>
@@ -87,29 +86,18 @@ export function ObservationResults({ workspaceSlug, state, practices }: Observat
 }
 
 export interface ObservationRowProps {
-	workspaceSlug: string;
 	observation: ReviewObservation;
 	practice?: Practice;
-	scope?: ReviewScopeSearch;
 }
 
-export function ObservationRow({
-	workspaceSlug,
-	observation,
-	practice,
-	scope,
-}: ObservationRowProps) {
+export function ObservationRow({ observation, practice }: ObservationRowProps) {
 	return (
 		<ReviewRow
 			status={observationResult(observation)}
 			title={
-				<Link
-					to="/w/$workspaceSlug/admin/practices/reviews/observations/$observationId"
-					params={{ workspaceSlug, observationId: observation.id }}
-					search={scope ?? ((previous) => previous)}
-				>
+				<DetailStackLink entry={observationLevel(observation.id)}>
 					{observation.summary}
-				</Link>
+				</DetailStackLink>
 			}
 			meta={
 				<>
@@ -117,7 +105,6 @@ export function ObservationRow({
 						items={[
 							<ReviewPracticeLink
 								key="practice"
-								workspaceSlug={workspaceSlug}
 								practiceSlug={observation.practiceSlug}
 								practiceName={observation.practiceName}
 								group={observation.group}
@@ -128,7 +115,7 @@ export function ObservationRow({
 						]}
 					/>
 					<p>
-						<FeedbackCountsSummary counts={observation.feedbackDisposition} prefix="Feedback:" />
+						<FeedbackCountsSummary counts={observation.feedback} prefix="Feedback:" />
 					</p>
 				</>
 			}

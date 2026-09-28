@@ -1,7 +1,9 @@
-import { Pencil } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ClipboardCheck, Pencil } from "lucide-react";
 
 import { cn } from "cn";
 import type { Practice, PracticeDefinitionOptions } from "@/api/types.gen";
+import { practiceLevel } from "@/components/admin/practice-reviews/review-levels";
 import { CatalogOriginBadge } from "@/components/admin/practices/CatalogOriginBadge";
 import { practiceFormLevel } from "@/components/admin/practices/practice-search";
 import { PracticeDefinitionPreview } from "@/components/admin/practices/PracticeDefinitionPreview";
@@ -9,6 +11,7 @@ import { PracticeDefinitionSkeleton } from "@/components/admin/practices/Practic
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { AUTONOMY_DEFS } from "@/components/practice-vocabulary/autonomy-defs";
@@ -29,6 +32,7 @@ export type WorkspacePracticeState = PanelState<{
 }>;
 
 export interface WorkspacePracticePanelProps {
+	workspaceSlug: string;
 	state: WorkspacePracticeState;
 	nested?: boolean;
 }
@@ -41,7 +45,11 @@ export interface WorkspacePracticePanelProps {
  * the catalog or in the workspace's own tree. Editing stays a route: a form that must ask before
  * discarding work is not a dismissible surface.
  */
-export function WorkspacePracticePanel({ state, nested }: WorkspacePracticePanelProps) {
+export function WorkspacePracticePanel({
+	workspaceSlug,
+	state,
+	nested,
+}: WorkspacePracticePanelProps) {
 	if (state.status !== "ready") {
 		return (
 			<>
@@ -104,6 +112,14 @@ export function WorkspacePracticePanel({ state, nested }: WorkspacePracticePanel
 			</DrawerBody>
 
 			<DrawerFooter>
+				<Link
+					to="/w/$workspaceSlug/admin/practices/reviews"
+					params={{ workspaceSlug }}
+					search={detailSearch(practiceLevel(practice.slug))}
+					className={cn(buttonVariants({ variant: "outline" }), "w-full sm:w-auto")}
+				>
+					<ClipboardCheck /> See review outcomes
+				</Link>
 				<DetailStackLink
 					entry={practiceFormLevel(practice.slug)}
 					className={cn(buttonVariants(), "w-full sm:w-auto")}

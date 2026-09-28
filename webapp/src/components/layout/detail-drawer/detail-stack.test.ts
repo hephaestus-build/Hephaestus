@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { detailStackSchema, encodeDetailStack, parseDetailStack } from "./detail-stack";
+import {
+	detailStackSchema,
+	encodeDetailStack,
+	openInStack,
+	parseDetailStack,
+} from "./detail-stack";
 
 const KINDS = ["group", "practice"] as const;
 const parse = (detail: unknown) => detailStackSchema(KINDS).parse({ detail }).detail;
@@ -35,6 +40,29 @@ describe("detailStackSchema", () => {
 
 	it("reads an absent param as a closed stack", () => {
 		expect(parseDetailStack(parse(undefined), KINDS)).toStrictEqual([]);
+	});
+});
+
+describe("openInStack", () => {
+	it("appends a level that is not open, as a push", () => {
+		expect(openInStack(["feedback:f"], "observation:o")).toStrictEqual({
+			detail: ["feedback:f", "observation:o"],
+			pushed: true,
+		});
+	});
+
+	it("closes down to a level that is already open, rather than repeating it", () => {
+		expect(openInStack(["feedback:f", "observation:o", "review:r"], "observation:o")).toStrictEqual(
+			{ detail: ["feedback:f", "observation:o"], pushed: false },
+		);
+	});
+
+	it("swaps the top level of a full stack, so the link still opens what it names", () => {
+		const full = ["practice:p", "observation:o", "feedback:f", "review:r"];
+		expect(openInStack(full, "work:pull-request:1")).toStrictEqual({
+			detail: ["practice:p", "observation:o", "feedback:f", "work:pull-request:1"],
+			pushed: false,
+		});
 	});
 });
 

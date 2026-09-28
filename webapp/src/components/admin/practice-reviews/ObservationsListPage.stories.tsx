@@ -119,7 +119,7 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		workspaceSlug: "demo",
-		search: { presence: undefined, assessment: undefined, severity: undefined },
+		search: { outcome: undefined, presence: undefined, assessment: undefined, severity: undefined },
 		onSearchChange: fn(),
 		observations: pool(reviewObservations),
 		isLoading: false,
@@ -177,7 +177,8 @@ export const Default: Story = {
 		for (const name of [
 			"Group",
 			"Practice",
-			"Result",
+			"Outcome",
+			"Behaviour",
 			"Severity",
 			"Assessment status",
 			"Presence",
@@ -323,7 +324,13 @@ export const MoreThanOnePage: Story = {
 	// router rather than `onSearchChange`. Storybook mounts this screen under a single bare route, so
 	// a click would go nowhere and the page has to be set in `args`.
 	args: {
-		search: { page: 1, presence: undefined, assessment: undefined, severity: undefined },
+		search: {
+			page: 1,
+			outcome: undefined,
+			presence: undefined,
+			assessment: undefined,
+			severity: undefined,
+		},
 		observations: pool(manyObservations(64)),
 	},
 	parameters: { chromatic: { viewports: [1440] } },

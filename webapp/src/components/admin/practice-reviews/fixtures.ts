@@ -1,22 +1,34 @@
+import { addDays } from "date-fns";
 import type {
 	AgentJob,
 	AutonomyAssignment,
 	EvidenceCitation,
 	Practice,
+	PracticeReviewBucket,
+	PracticeReviewCounts,
+	PracticeReviewOverview,
 	ReviewedWorkRef,
 	ReviewFeedback,
+	ReviewFeedbackCounts,
 	ReviewFeedbackDetail,
 	ReviewObservation,
+	ReviewObservationCounts,
 	ReviewObservationDetail,
 	ReviewRunSummary,
 	ReviewRunTarget,
 	ReviewSubject,
 	WorkspaceMembership,
 } from "@/api/types.gen";
-import { ARTIFACT_KIND, type KnownArtifactKind } from "@/lib/artifact-kinds";
 
+import { ACTIVITY_RANGE_DEFS, rangeStart } from "@/components/activity/activity-range";
+import { derivedOutcome } from "@/components/practice-vocabulary/outcome-defs";
+import { ARTIFACT_KIND, type KnownArtifactKind } from "@/lib/artifact-kinds";
+import { toDayParam } from "@/lib/date-range-search";
 import { hasText } from "@/lib/text";
-import { minutesAfter } from "@/stories/story-clock";
+import { minutesAfter, STORY_NOW } from "@/stories/story-clock";
+
+import type { OutcomeScope } from "./review-outcomes";
+import type { OverviewRegionState } from "./review-states";
 
 // The only thing written by hand is REVIEW_FIXTURE: reviews, their observations and the feedback
 // those drove. Every count, preview, truncation flag and summary is computed from it below, so a
@@ -919,40 +931,43 @@ function feedbackFor(observationId: string) {
 		.sort((a, b) => b.item.composedAt.localeCompare(a.item.composedAt));
 }
 
-type Disposition =
-	| "delivered"
-	| "failed"
-	| "prepared"
-	| "superseded"
-	| "suppressed"
-	| "unconfirmed";
-
-const DISPOSITION_OF: Record<ReviewFeedback["deliveryState"], Disposition> = {
-	AWAITING_APPROVAL: "prepared",
+/** One count per delivery state, as the server reports a review's or an observation's feedback. */
+const COUNT_OF: Record<ReviewFeedback["deliveryState"], keyof ReviewFeedbackCounts> = {
+	AWAITING_APPROVAL: "awaitingApproval",
 	DELIVERED: "delivered",
-	DISCARDED: "suppressed",
+	DISCARDED: "discarded",
 	FAILED: "failed",
-	PARTIALLY_DELIVERED: "prepared",
-	PARTIALLY_FAILED: "failed",
+	PARTIALLY_DELIVERED: "partiallyDelivered",
+	PARTIALLY_FAILED: "partiallyFailed",
 	PREPARED: "prepared",
 	SUPERSEDED: "superseded",
 	SUPPRESSED: "suppressed",
 	UNCONFIRMED: "unconfirmed",
 };
 
-function disposition(observationId: string): Record<Disposition, number> {
-	const counts: Record<Disposition, number> = {
+export function feedbackCounts(
+	states: readonly ReviewFeedback["deliveryState"][],
+): ReviewFeedbackCounts {
+	const counts: ReviewFeedbackCounts = {
+		awaitingApproval: 0,
 		delivered: 0,
+		discarded: 0,
 		failed: 0,
+		partiallyDelivered: 0,
+		partiallyFailed: 0,
 		prepared: 0,
 		superseded: 0,
 		suppressed: 0,
 		unconfirmed: 0,
 	};
-	for (const { item } of feedbackFor(observationId)) {
-		counts[DISPOSITION_OF[item.outcome]] += 1;
+	for (const state of states) {
+		counts[COUNT_OF[state]] += 1;
 	}
 	return counts;
+}
+
+function disposition(observationId: string): ReviewFeedbackCounts {
+	return feedbackCounts(feedbackFor(observationId).map(({ item }) => item.outcome));
 }
 
 function toObservation(run: RunSpec, spec: ObservationSpec): ReviewObservation {
@@ -967,7 +982,11 @@ function toObservation(run: RunSpec, spec: ObservationSpec): ReviewObservation {
 		group: group(spec.group),
 		assessment: spec.assessment,
 		claimCurrentness: spec.claimCurrentness ?? "CURRENT",
-		feedbackDisposition: disposition(spec.id),
+		outcome:
+			spec.assessmentStatus === "ASSESSED" && spec.presence && spec.assessment
+				? derivedOutcome(spec.presence, spec.assessment)
+				: undefined,
+		feedback: disposition(spec.id),
 		observedAt: new Date(spec.observedAt),
 		origin: run.origin ?? "LIVE",
 		practiceName: practice.name,
@@ -1034,14 +1053,7 @@ export const reviewRuns: ReviewRunSummary[] = allRuns
 			notApplicable: run.observations.filter((o) => o.assessmentStatus === "NOT_APPLICABLE").length,
 			undetermined: run.observations.filter((o) => o.assessmentStatus === "UNDETERMINED").length,
 		},
-		feedback: {
-			delivered: run.feedback.filter((f) => f.outcome === "DELIVERED").length,
-			failed: run.feedback.filter((f) => f.outcome === "FAILED").length,
-			prepared: run.feedback.filter((f) => f.outcome === "PREPARED").length,
-			superseded: run.feedback.filter((f) => f.outcome === "SUPERSEDED").length,
-			suppressed: run.feedback.filter((f) => f.outcome === "SUPPRESSED").length,
-			unconfirmed: run.feedback.filter((f) => f.outcome === "UNCONFIRMED").length,
-		},
+		feedback: feedbackCounts(run.feedback.map((f) => f.outcome)),
 	}))
 	.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
@@ -1098,7 +1110,7 @@ export function observationDetail(observationId: string): ReviewObservationDetai
 	}
 	const { run, observation } = found;
 	// The detail replaces the tally with the feedback records the tally was counting.
-	const { feedbackDisposition: _tally, ...shared } = toObservation(run, observation);
+	const { feedback: _tally, ...shared } = toObservation(run, observation);
 	return {
 		...shared,
 		evidence: observation.evidence ? { citations: observation.evidence } : undefined,
@@ -1459,3 +1471,175 @@ export function selects(selected: string[] | undefined, actual: string | undefin
 		(actual !== undefined && selected.includes(actual))
 	);
 }
+
+// ---------------------------------------------------------------------------------------------
+// The overview: thirty days of reviews, counted
+// ---------------------------------------------------------------------------------------------
+
+const ZERO_FEEDBACK = feedbackCounts([]);
+
+const observationCounts = (
+	strengths: number,
+	problems: number,
+	notApplicable: number,
+	undetermined: number,
+): ReviewObservationCounts => ({ strengths, problems, notApplicable, undetermined });
+
+const countsOf = (
+	practiceSlug: string,
+	observations: ReviewObservationCounts,
+	feedback: Partial<ReviewFeedbackCounts>,
+	observationsInvalidated = 0,
+): PracticeReviewCounts => {
+	const practice = workspacePractices.find((entry) => entry.slug === practiceSlug);
+	const practiceGroup = practiceGroups.find((entry) => entry.slug === practice?.groupSlug);
+	if (!practice || !practiceGroup) {
+		throw new Error(`No grouped practice named ${practiceSlug} in the fixture catalogue`);
+	}
+	return {
+		practiceSlug,
+		practiceName: practice.name,
+		group: { slug: practiceGroup.slug, name: practiceGroup.name },
+		observations,
+		feedback: { ...ZERO_FEEDBACK, ...feedback },
+		observationsInvalidated,
+	};
+};
+
+/**
+ * Skewed the way a real workspace is: one practice carries most of the volume and most of the
+ * strengths, one is mostly problems, one fires twice and says nothing useful, and "Decisions are
+ * written down" is not checked at all — so the busiest-first ranking and the not-checked level both
+ * have something to show.
+ */
+export const practiceCounts: PracticeReviewCounts[] = [
+	countsOf(
+		"thin-controllers",
+		observationCounts(18, 9, 4, 2),
+		{ delivered: 7, awaitingApproval: 2, suppressed: 2, failed: 1 },
+		1,
+	),
+	countsOf(
+		"errors-carry-context",
+		observationCounts(6, 11, 1, 3),
+		{ delivered: 6, prepared: 1, discarded: 1, superseded: 1 },
+		2,
+	),
+	countsOf("tests-name-the-behaviour", observationCounts(9, 2, 3, 0), { delivered: 2 }),
+	countsOf("the-change-explains-itself", observationCounts(2, 4, 1, 1), {
+		delivered: 1,
+		awaitingApproval: 1,
+		suppressed: 1,
+	}),
+	countsOf("product-language", observationCounts(0, 1, 1, 0), {}),
+];
+
+const OVERVIEW_DAYS = ACTIVITY_RANGE_DEFS["30d"].days;
+const OVERVIEW_FROM = rangeStart(STORY_NOW, "30d");
+
+/**
+ * Day by day, oldest first, with quiet weekends and a busy stretch so the bars look like a team's.
+ * Each row adds up to its stage's total below, as the server's buckets do.
+ */
+const PER_DAY = {
+	reviews: [
+		0, 2, 0, 3, 2, 0, 0, 3, 0, 2, 1, 3, 0, 0, 2, 3, 0, 1, 4, 0, 2, 0, 0, 1, 3, 1, 0, 3, 0, 2,
+	],
+	observations: [
+		0, 5, 3, 0, 0, 6, 1, 4, 3, 7, 0, 0, 4, 5, 0, 2, 8, 1, 4, 0, 0, 2, 6, 2, 1, 5, 0, 4, 1, 4,
+	],
+	feedback: [
+		0, 1, 0, 2, 1, 0, 0, 2, 1, 1, 1, 2, 0, 0, 1, 2, 0, 1, 2, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1,
+	],
+} as const;
+
+function overviewBuckets(perDay: Record<keyof typeof PER_DAY, readonly number[]>) {
+	return Array.from({ length: OVERVIEW_DAYS }, (_, day): PracticeReviewBucket => ({
+		start: addDays(OVERVIEW_FROM, day),
+		reviews: perDay.reviews[day] ?? 0,
+		observations: perDay.observations[day] ?? 0,
+		feedback: perDay.feedback[day] ?? 0,
+	}));
+}
+
+const NOTHING_PER_DAY = Array.from({ length: OVERVIEW_DAYS }, () => 0);
+
+/** Thirty days of a busy workspace, day by day, as `GET …/practices/reviews/overview` returns it. */
+export const practiceReviewOverview: PracticeReviewOverview = {
+	from: OVERVIEW_FROM,
+	to: new Date(STORY_NOW),
+	bucket: "DAY",
+	buckets: overviewBuckets(PER_DAY),
+	reviews: { completed: 31, failed: 2, timedOut: 1, cancelled: 1, running: 1, queued: 2 },
+	// Every observation is of one practice, so the practices' counts add up to these.
+	observations: observationCounts(35, 27, 10, 6),
+	observationsInvalidated: 3,
+	// One piece of feedback citing two practices counts for each, so these are not the practices' sum.
+	feedback: {
+		...ZERO_FEEDBACK,
+		delivered: 14,
+		awaitingApproval: 3,
+		suppressed: 3,
+		failed: 1,
+		prepared: 1,
+		discarded: 1,
+		superseded: 1,
+	},
+	practices: practiceCounts,
+};
+
+/** Thirty days in which nothing was reviewed: every bucket present, and every one of them zero. */
+export const quietPracticeReviewOverview: PracticeReviewOverview = {
+	...practiceReviewOverview,
+	buckets: overviewBuckets({
+		reviews: NOTHING_PER_DAY,
+		observations: NOTHING_PER_DAY,
+		feedback: NOTHING_PER_DAY,
+	}),
+	reviews: { completed: 0, failed: 0, timedOut: 0, cancelled: 0, running: 0, queued: 0 },
+	observations: observationCounts(0, 0, 0, 0),
+	observationsInvalidated: 0,
+	feedback: ZERO_FEEDBACK,
+	practices: [],
+};
+
+/** The overview once it is in and current. */
+export function readyReviewOverview(
+	overview: PracticeReviewOverview = practiceReviewOverview,
+): OverviewRegionState {
+	return { status: "ready", overview, stale: false };
+}
+
+/** The same thirty days as the lists' day filters, so a count's link can be read in a story. */
+export const reviewOverviewScope: OutcomeScope = {
+	from: toDayParam(OVERVIEW_FROM),
+	to: toDayParam(new Date(STORY_NOW)),
+};
+
+// ---------------------------------------------------------------------------------------------
+// What the overview says needs an admin
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Feedback held for a decision. Restated from delivered and withheld rows rather than written
+ * afresh, so each one still names a real review, work and developer.
+ */
+export const awaitingApprovalFeedback: ReviewFeedback[] = reviewFeedback
+	.filter((item) => item.deliveryState === "DELIVERED" || item.deliveryState === "SUPPRESSED")
+	.slice(0, 3)
+	.map((item) => ({
+		...item,
+		deliveryState: "AWAITING_APPROVAL",
+		deliveredAt: undefined,
+		suppressionReason: undefined,
+	}));
+
+/** Feedback whose delivery failed. */
+export const failedFeedback: ReviewFeedback[] = reviewFeedback.filter(
+	(item) => item.deliveryState === "FAILED",
+);
+
+/** Reviews that ended in failure. */
+export const failedReviewRuns: ReviewRunSummary[] = reviewRuns.filter(
+	(review) => review.status === "FAILED",
+);

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, retainSearchParams, stripSearchParams } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { getAllTeamsOptions } from "@/api/@tanstack/react-query.gen";
@@ -31,18 +31,18 @@ import {
 } from "@/hooks/use-activity";
 import { workspaceHead } from "@/lib/page-title";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
-import { useSearchState } from "@/lib/search-params";
+import { useSearchState, carriedSearchParams } from "@/lib/search-params";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/workspace-activity")({
 	component: WorkspaceActivity,
 	head: workspaceHead("Workspace activity"),
 	validateSearch: workspaceActivitySearchSchema,
 	search: {
-		middlewares: [
-			// The team is this workspace's; only the range carries over to another workspace.
-			retainSearchParams(["range"] satisfies (keyof WorkspaceActivitySearch)[]),
-			stripSearchParams(WORKSPACE_ACTIVITY_SEARCH_DEFAULTS),
-		],
+		// The team is this workspace's; only the range carries over to another workspace.
+		middlewares: carriedSearchParams<WorkspaceActivitySearch>(
+			["range"],
+			WORKSPACE_ACTIVITY_SEARCH_DEFAULTS,
+		),
 	},
 });
 

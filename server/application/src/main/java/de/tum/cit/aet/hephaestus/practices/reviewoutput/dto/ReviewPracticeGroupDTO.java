@@ -4,7 +4,9 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.modulith.NamedInterface;
 
+@NamedInterface("review-output")
 public record ReviewPracticeGroupDTO(
         @NonNull String slug,
         @NonNull String name,

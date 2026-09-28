@@ -1,29 +1,33 @@
-import { Link, type LinkComponentProps } from "@tanstack/react-router";
+import { Link, type LinkComponentProps, useSearch } from "@tanstack/react-router";
 
-import { type DetailStackEntry, detailStackKey } from "./detail-stack";
+import { type DetailStackEntry, detailStackKey, openInStack } from "./detail-stack";
 
 export interface DetailStackLinkProps extends Omit<
 	LinkComponentProps,
-	"to" | "search" | "resetScroll"
+	"to" | "search" | "resetScroll" | "state" | "replace"
 > {
 	entry: DetailStackEntry;
 }
 
 /**
  * A real link to the current route with one more `detail` param, which is what makes this shallow
- * routing rather than hidden state: the row opens in a new tab, copies and reloads. Appending to
- * `previous` rather than to a captured stack is what lets one component work at every depth.
+ * routing rather than hidden state: the row opens in a new tab, copies and reloads. Opening over the
+ * current stack rather than a captured one is what lets one component work at every depth; a level
+ * already open is closed down to rather than repeated (`openInStack`).
  */
 export function DetailStackLink({ entry, ...props }: DetailStackLinkProps) {
+	const current = useSearch({ strict: false, select: (search) => toStack(search.detail) });
+	const key = detailStackKey(entry);
+	const { detail, pushed } = openInStack(current, key);
+	// A link to the level already in front changes nothing, so it must not rewrite that entry's mark.
+	const inFront = current.at(-1) === key;
 	return (
 		<Link
 			to="."
-			search={(previous: Record<string, unknown>) => ({
-				...previous,
-				detail: [...toStack(previous.detail), detailStackKey(entry)],
-			})}
-			// See `useDetailStack`: marks the entry as this visit's, so a dismiss can go back.
-			state={(previous) => ({ ...previous, detailPush: true })}
+			search={(previous: Record<string, unknown>) => ({ ...previous, detail })}
+			// See `useDetailStack`: marks a level this visit pushed, so its dismiss can go back.
+			state={(previous) => (inFront ? previous : { ...previous, detailPush: pushed })}
+			replace={inFront}
 			// Omitted from the props above too: opening a panel must never move the page underneath it,
 			// and a caller that could pass this could reintroduce that.
 			resetScroll={false}

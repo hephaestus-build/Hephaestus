@@ -11,6 +11,8 @@ import { ResultCount } from "@/components/common/ResultCount";
 import { statusFacetOptions } from "@/components/common/status-def";
 import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
+import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
+import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import { fromDateRange, toDateRange } from "@/lib/date-range-search";
@@ -24,6 +26,7 @@ import { reviewArtifactScopeLabel } from "./ReviewArtifact";
 import { type ReviewPeople, ReviewPersonFacet } from "./ReviewPersonFacet";
 
 /** Every option wears the badge its rows wear; see the note on `FeedbackFilters`' facets. */
+const OUTCOME_OPTIONS = statusFacetOptions(OUTCOME_DEFS);
 const ASSESSMENT_OPTIONS = statusFacetOptions(ASSESSMENT_DEFS);
 const ASSESSMENT_STATUS_OPTIONS = statusFacetOptions(ASSESSMENT_STATUS_DEFS);
 const PRESENCE_OPTIONS = statusFacetOptions(PRESENCE_DEFS);
@@ -36,10 +39,11 @@ const SEVERITY_OPTIONS = statusFacetOptions(SEVERITY_DEFS);
  */
 export function clearedObservationFilters(): Partial<ObservationsSearch> {
 	return {
-		page: 0,
 		groupSlug: undefined,
 		practiceSlug: undefined,
 		assessmentStatus: undefined,
+		outcome: undefined,
+		invalidated: undefined,
 		presence: undefined,
 		assessment: undefined,
 		severity: undefined,
@@ -57,6 +61,8 @@ export function hasObservationFilter(search: ObservationsSearch): boolean {
 		(search.groupSlug?.length ?? 0) > 0 ||
 		(search.practiceSlug?.length ?? 0) > 0 ||
 		(search.assessmentStatus?.length ?? 0) > 0 ||
+		(search.outcome?.length ?? 0) > 0 ||
+		search.invalidated !== undefined ||
 		(search.presence?.length ?? 0) > 0 ||
 		(search.assessment?.length ?? 0) > 0 ||
 		(search.severity?.length ?? 0) > 0 ||
@@ -152,8 +158,15 @@ export function ObservationFilters({
 					disabled={practices.isLoading}
 					emptyLabel={practices.isError ? "Could not load practices" : "No practices available"}
 				/>
+				{/* Outcome is what every row's badge says; Behaviour is the practice's framing of it. */}
 				<FacetMultiSelect
-					title="Result"
+					title="Outcome"
+					options={OUTCOME_OPTIONS}
+					selected={search.outcome ?? []}
+					onChange={(values) => onPatch({ outcome: nonEmpty(values) })}
+				/>
+				<FacetMultiSelect
+					title="Behaviour"
 					options={ASSESSMENT_OPTIONS}
 					selected={search.assessment ?? []}
 					onChange={(values) => onPatch({ assessment: nonEmpty(values) })}
@@ -199,7 +212,10 @@ export function ObservationFilters({
 					...facetPills("Practice", practices.options, search.practiceSlug, (values) =>
 						onPatch({ practiceSlug: nonEmpty(values) }),
 					),
-					...facetPills("Result", ASSESSMENT_OPTIONS, search.assessment, (values) =>
+					...facetPills("Outcome", OUTCOME_OPTIONS, search.outcome, (values) =>
+						onPatch({ outcome: nonEmpty(values) }),
+					),
+					...facetPills("Behaviour", ASSESSMENT_OPTIONS, search.assessment, (values) =>
 						onPatch({ assessment: nonEmpty(values) }),
 					),
 					...facetPills("Severity", SEVERITY_OPTIONS, search.severity, (values) =>
@@ -216,6 +232,13 @@ export function ObservationFilters({
 					),
 				]}
 			/>
+			{search.invalidated !== undefined && (
+				<ReferenceFilterPill
+					label={MARKED_INCORRECT_DEF.label}
+					value={search.invalidated ? "Only" : "Excluded"}
+					onClear={() => onPatch({ invalidated: undefined })}
+				/>
+			)}
 			{hasText(search.agentJobId) && (
 				<ReferenceFilterPill
 					label="Review"

@@ -74,13 +74,12 @@ export function ObservationsListPage({
 	const filteredSubject = search.subjectUserId == null ? undefined : rows[0]?.subject;
 	const hasFilter = hasObservationFilter(search);
 	const reset = () => onSearchChange(clearedObservationFilters());
-	const patchFilter = (patch: Partial<ObservationsSearch>) => onSearchChange({ ...patch, page: 0 });
 
 	return (
 		<section aria-label="Practice review observations" className="space-y-4">
 			<ObservationFilters
 				search={search}
-				onPatch={patchFilter}
+				onPatch={onSearchChange}
 				onReset={reset}
 				groups={groups}
 				practices={practices}
@@ -91,7 +90,6 @@ export function ObservationsListPage({
 			/>
 			{error == null ? (
 				<ObservationResults
-					workspaceSlug={workspaceSlug}
 					practices={practiceRecords}
 					state={resultsState(isLoading, rows, hasFilter ? reset : undefined)}
 				/>

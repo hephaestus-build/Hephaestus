@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { levelsOpenedBy } from "@/test/detail-stack";
 
 import { FeedbackResults } from "./FeedbackResults";
 import { reviewFeedback } from "./fixtures";
@@ -21,7 +22,7 @@ const meta = {
 		chromatic: { viewports: [320, 768, 1440] },
 	},
 	tags: ["autodocs"],
-	args: { workspaceSlug: "demo", state: { status: "ready", feedback: reviewFeedback } },
+	args: { state: { status: "ready", feedback: reviewFeedback } },
 } satisfies Meta<typeof FeedbackResults>;
 
 export default meta;
@@ -42,6 +43,10 @@ export const Default: Story = {
 		canvas.getByText("Found while reviewing past work, which is measured but never sent.");
 		canvas.getByText("Nearly the same as other feedback from the same review.");
 		await expect(canvas.queryAllByText(/Feedback for/u)).toHaveLength(0);
+		// A row opens its feedback over the list rather than navigating away from it.
+		await expect(canvas.getAllByRole("link").map(levelsOpenedBy)).toContainEqual([
+			`feedback:${firstFeedback.id}`,
+		]);
 	},
 };
 

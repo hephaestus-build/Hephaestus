@@ -64,9 +64,9 @@ export type ActivityBucket = {
  */
 export type ActivityOverview = {
   /**
-   * How long each bucket is: a day for ranges up to 31 days, a week for ranges up to 184 days, a month for longer ones
+   * How long each bucket is
    */
-  bucket: 'DAY' | 'WEEK' | 'MONTH';
+  bucket: TimeBucketSize;
   /**
    * Every bucket the range touches, oldest first, including those without activity
    */
@@ -3601,6 +3601,52 @@ export type PracticeReleaseProposal = {
   slug: string;
 };
 
+/**
+ * Practice reviews, observations and feedback in one time bucket of a range
+ */
+export type PracticeReviewBucket = {
+  /**
+   * Feedback created in the bucket within the range, in any delivery state
+   */
+  feedback: number;
+  /**
+   * Observations recorded in the bucket within the range
+   */
+  observations: number;
+  /**
+   * Practice reviews created in the bucket within the range, in any status
+   */
+  reviews: number;
+  /**
+   * When the bucket starts: midnight of its day, of its week's Monday or of its month's first day, in the requested time zone. The first bucket may start before the range.
+   */
+  start: Date;
+};
+
+/**
+ * What practice reviews recorded for one practice in a time range
+ */
+export type PracticeReviewCounts = {
+  /**
+   * Feedback created in the range that is bound to an observation of this practice, whenever that observation was recorded; one piece of feedback bound to several practices counts for each
+   */
+  feedback: ReviewFeedbackCounts;
+  /**
+   * Practice group; null when the practice is Unassigned
+   */
+  group?: ReviewPracticeGroup;
+  /**
+   * Observations of this practice recorded in the range
+   */
+  observations: ReviewObservationCounts;
+  /**
+   * Of those observations, the ones an admin has marked incorrect and not restored
+   */
+  observationsInvalidated: number;
+  practiceName: string;
+  practiceSlug: string;
+};
+
 export type PracticeReviewCoveragePreview = {
   /**
    * Effective coverage before the proposed change
@@ -3641,6 +3687,48 @@ export type PracticeReviewCoverageSummary = {
    * Workspace-wide practice-review jobs created during the estimate window
    */
   recentReviewVolume: number;
+};
+
+/**
+ * Practice reviews, observations and feedback in a time range, in total, over time and by practice
+ */
+export type PracticeReviewOverview = {
+  /**
+   * How long each bucket is
+   */
+  bucket: TimeBucketSize;
+  /**
+   * Every bucket the range touches, oldest first, including empty ones
+   */
+  buckets: Array<PracticeReviewBucket>;
+  /**
+   * Feedback created in the range
+   */
+  feedback: ReviewFeedbackCounts;
+  /**
+   * Inclusive lower bound of the range counted, with its default filled in
+   */
+  from: Date;
+  /**
+   * Observations recorded in the range
+   */
+  observations: ReviewObservationCounts;
+  /**
+   * Of those observations, the ones an admin has marked incorrect and not restored
+   */
+  observationsInvalidated: number;
+  /**
+   * Each practice with an observation recorded in the range or feedback created in the range on one of its observations, the most observed first, then by name
+   */
+  practices: Array<PracticeReviewCounts>;
+  /**
+   * Practice reviews created in the range
+   */
+  reviews: ReviewRunCounts;
+  /**
+   * Exclusive upper bound of the range counted, with its default filled in
+   */
+  to: Date;
 };
 
 /**
@@ -4352,14 +4440,48 @@ export type ReviewFeedback = {
 };
 
 /**
- * Counts of feedback by delivery state
+ * Counts of feedback, one per delivery state
  */
 export type ReviewFeedbackCounts = {
+  /**
+   * AWAITING_APPROVAL: waiting for an admin to approve or reject it
+   */
+  awaitingApproval: number;
+  /**
+   * DELIVERED: delivered where it was meant to appear
+   */
   delivered: number;
+  /**
+   * DISCARDED: an admin rejected it instead of approving it; it is never delivered
+   */
+  discarded: number;
+  /**
+   * FAILED: delivery failed
+   */
   failed: number;
+  /**
+   * PARTIALLY_DELIVERED: some of its placements delivered, the rest still to deliver or suppressed
+   */
+  partiallyDelivered: number;
+  /**
+   * PARTIALLY_FAILED: delivery failed after some of its placements were delivered
+   */
+  partiallyFailed: number;
+  /**
+   * PREPARED: ready to deliver and not delivered yet
+   */
   prepared: number;
+  /**
+   * SUPERSEDED: replaced by newer feedback
+   */
   superseded: number;
+  /**
+   * SUPPRESSED: Hephaestus refused to deliver it, with a suppression reason
+   */
   suppressed: number;
+  /**
+   * UNCONFIRMED: a conversation linked it with no record that it was shown, so it counts as neither delivered nor suppressed
+   */
   unconfirmed: number;
 };
 
@@ -4431,36 +4553,6 @@ export type ReviewFeedbackDetail = {
 };
 
 /**
- * Counts of feedback by delivery state
- */
-export type ReviewFeedbackDisposition = {
-  /**
-   * Linked feedback delivered
-   */
-  delivered: number;
-  /**
-   * Linked feedback whose delivery failed
-   */
-  failed: number;
-  /**
-   * Linked feedback awaiting delivery
-   */
-  prepared: number;
-  /**
-   * Linked feedback delivered and later replaced
-   */
-  superseded: number;
-  /**
-   * Linked feedback withheld by policy
-   */
-  suppressed: number;
-  /**
-   * Linked feedback a conversation linked without a record that it was shown
-   */
-  unconfirmed: number;
-};
-
-/**
  * A practice review observation with its linked feedback outcomes
  */
 export type ReviewObservation = {
@@ -4477,7 +4569,7 @@ export type ReviewObservation = {
   /**
    * Counts of linked feedback by delivery state
    */
-  feedbackDisposition: ReviewFeedbackDisposition;
+  feedback: ReviewFeedbackCounts;
   /**
    * Practice group; null when the practice is Unassigned
    */
@@ -4688,6 +4780,18 @@ export type ReviewRequestOutcome = {
    * Whether a review is now running, or nothing was started
    */
   status: 'SUBMITTED' | 'REFUSED';
+};
+
+/**
+ * Counts of practice reviews by status
+ */
+export type ReviewRunCounts = {
+  cancelled: number;
+  completed: number;
+  failed: number;
+  queued: number;
+  running: number;
+  timedOut: number;
 };
 
 /**
@@ -5310,6 +5414,11 @@ export type TeamSummary = {
    */
   privacy?: 'SECRET' | 'VISIBLE';
 };
+
+/**
+ * How long each bucket of a range is: a day for ranges up to 31 days, a week from Monday for ranges up to 184 days, a month for longer ones
+ */
+export type TimeBucketSize = 'DAY' | 'WEEK' | 'MONTH';
 
 /**
  * An artifact this workspace recorded something about, and how much of it turned into review
@@ -7081,7 +7190,7 @@ export type ReviewObservationWritable = {
   /**
    * Counts of linked feedback by delivery state
    */
-  feedbackDisposition: ReviewFeedbackDisposition;
+  feedback: ReviewFeedbackCounts;
   /**
    * Practice group; null when the practice is Unassigned
    */
@@ -12409,7 +12518,10 @@ export type ListPracticeReviewsData = {
   query?: {
     page?: number;
     size?: number;
-    status?: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'TIMED_OUT' | 'CANCELLED';
+    /**
+     * Statuses to list (repeatable); omit for every status
+     */
+    status?: Array<'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'TIMED_OUT' | 'CANCELLED'>;
     /**
      * Inclusive lower bound on when the review was requested
      */
@@ -12610,6 +12722,14 @@ export type ListPracticeReviewObservationsData = {
     assessmentStatus?: Array<'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED'>;
     presence?: Array<'PRESENT' | 'ABSENT'>;
     assessment?: Array<'GOOD' | 'BAD'>;
+    /**
+     * Outcomes to list (repeatable): POSITIVE where a desirable behavior was present or an undesirable one absent, NEGATIVE the other way round. Only assessed observations have an outcome.
+     */
+    outcome?: Array<'POSITIVE' | 'NEGATIVE'>;
+    /**
+     * true for only the observations an admin has marked incorrect and not restored, false for only the others; omit for both
+     */
+    invalidated?: boolean;
     severity?: Array<'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO'>;
     agentJobId?: string;
     /**
@@ -12720,6 +12840,49 @@ export type UpdatePracticeReviewObservationValidityResponses = {
 };
 
 export type UpdatePracticeReviewObservationValidityResponse = UpdatePracticeReviewObservationValidityResponses[keyof UpdatePracticeReviewObservationValidityResponses];
+
+export type GetPracticeReviewOverviewData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: {
+    /**
+     * Inclusive lower bound; defaults to seven days before to. A range spans at most 400 days.
+     */
+    from?: Date;
+    /**
+     * Exclusive upper bound; defaults to now
+     */
+    to?: Date;
+    /**
+     * The IANA time zone whose midnights start the buckets, such as Europe/Berlin
+     */
+    zone?: string;
+  };
+  url: '/workspaces/{workspaceSlug}/practices/reviews/overview';
+};
+
+export type GetPracticeReviewOverviewErrors = {
+  /**
+   * Invalid range or time zone
+   */
+  400: ProblemDetail;
+};
+
+export type GetPracticeReviewOverviewError = GetPracticeReviewOverviewErrors[keyof GetPracticeReviewOverviewErrors];
+
+export type GetPracticeReviewOverviewResponses = {
+  /**
+   * Practice reviews counted
+   */
+  200: PracticeReviewOverview;
+};
+
+export type GetPracticeReviewOverviewResponse = GetPracticeReviewOverviewResponses[keyof GetPracticeReviewOverviewResponses];
 
 export type ListPracticeStandingsData = {
   body?: never;
