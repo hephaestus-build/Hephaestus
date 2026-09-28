@@ -208,7 +208,7 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 .findByNameWithOwner("HephaestusTest/TestRepository")
                 .orElseThrow());
         PullRequest stored = pullRequestRepository.save(asking);
-        stored.replaceRequestedTeams(Set.of(team));
+        stored.replaceRequestedTeams(Set.of(team), Instant.now());
         Long askingId = pullRequestRepository.save(stored).getId();
 
         handler.handleEvent(loadPayload("team.org.deleted"));

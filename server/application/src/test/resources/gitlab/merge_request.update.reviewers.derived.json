@@ -164,47 +164,6 @@
           "email": "[REDACTED]"
         }
       ]
-    },
-    "reviewers": {
-      "previous": [],
-      "current": [
-        {
-          "id": 6,
-          "name": "User1",
-          "username": "user1",
-          "state": "approved",
-          "re_requested": false,
-          "avatar_url": "https://www.gravatar.com/avatar/user1?s=80&d=identicon",
-          "email": "[REDACTED]"
-        },
-        {
-          "id": 25,
-          "name": "Sidney Jones",
-          "username": "sjones",
-          "state": "requested_changes",
-          "re_requested": false,
-          "avatar_url": "https://www.gravatar.com/avatar/sjones?s=80&d=identicon",
-          "email": "[REDACTED]"
-        },
-        {
-          "id": 7,
-          "name": "User2",
-          "username": "user2",
-          "state": "reviewed",
-          "re_requested": false,
-          "avatar_url": "https://www.gravatar.com/avatar/user2?s=80&d=identicon",
-          "email": "[REDACTED]"
-        },
-        {
-          "id": 8,
-          "name": "User3",
-          "username": "user3",
-          "state": "unreviewed",
-          "re_requested": false,
-          "avatar_url": "https://www.gravatar.com/avatar/user3?s=80&d=identicon",
-          "email": "[REDACTED]"
-        }
-      ]
     }
   },
   "repository": {

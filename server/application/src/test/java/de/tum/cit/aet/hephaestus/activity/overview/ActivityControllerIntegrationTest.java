@@ -71,6 +71,8 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.test.web.reactive.server.StatusAssertions;
@@ -986,43 +988,83 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .doesNotContain(asking.getId());
         }
 
+        /** A pull request asking Zoe's team, and whether Zoe's open work lists it as a team request. */
+        enum TeamRequest {
+            ASKED_DIRECTLY(false),
+            AUTHORED(false),
+            APPROVED(false),
+            CHANGES_REQUESTED(false),
+            DRAFT(false),
+            UNMONITORED(false),
+            COMMENTED(true),
+            APPROVAL_DISMISSED(true);
+
+            private final boolean listedAsTeamRequest;
+
+            TeamRequest(boolean listedAsTeamRequest) {
+                this.listedAsTeamRequest = listedAsTeamRequest;
+            }
+        }
+
+        /** A comment is not a verdict, and a dismissed approval no longer stands. */
+        @ParameterizedTest
+        @EnumSource(TeamRequest.class)
+        void shouldListATeamRequestOnlyWhenNothingElseAsksTheMemberOrAnswersIt(TeamRequest given) {
+            PullRequest asking =
+                    switch (given) {
+                        case ASKED_DIRECTLY ->
+                            pullRequest(ada, monitored, requestingTeam(web).andThen(requesting(zoe)));
+                        case AUTHORED -> pullRequest(zoe, monitored, requestingTeam(web));
+                        case DRAFT ->
+                            pullRequest(ada, monitored, requestingTeam(web).andThen(work -> {
+                                work.setDraft(true);
+                                return work;
+                            }));
+                        case UNMONITORED -> pullRequest(ada, unmonitored, requestingTeam(web));
+                        case APPROVED, CHANGES_REQUESTED, COMMENTED, APPROVAL_DISMISSED ->
+                            pullRequest(ada, monitored, requestingTeam(web));
+                    };
+            switch (given) {
+                case APPROVED -> review(asking, zoe, PullRequestReview.State.APPROVED);
+                case CHANGES_REQUESTED -> review(asking, zoe, PullRequestReview.State.CHANGES_REQUESTED);
+                case COMMENTED -> review(asking, zoe, PullRequestReview.State.COMMENTED);
+                case APPROVAL_DISMISSED -> {
+                    PullRequestReview withdrawn = review(asking, zoe, PullRequestReview.State.APPROVED);
+                    withdrawn.setDismissed(true);
+                    reviewRepository.save(withdrawn);
+                }
+                default -> {}
+            }
+
+            List<Long> teamRequests = openWork(zoe).teamReviewRequests().content().stream()
+                    .map(WorkItemDTO::id)
+                    .toList();
+
+            if (given.listedAsTeamRequest) {
+                assertThat(teamRequests).contains(asking.getId());
+            } else {
+                assertThat(teamRequests).doesNotContain(asking.getId());
+            }
+        }
+
         @Test
-        void shouldLeaveOutATeamRequestWhenTheMemberIsAskedDirectlyAuthoredItOrGaveAVerdict() {
+        void shouldListADirectRequestAmongTheReviewRequestsWhenTheTeamIsAskedToo() {
             PullRequest direct = pullRequest(ada, monitored, requestingTeam(web).andThen(requesting(zoe)));
-            PullRequest own = pullRequest(zoe, monitored, requestingTeam(web));
-            PullRequest approved = pullRequest(ada, monitored, requestingTeam(web));
-            review(approved, zoe, PullRequestReview.State.APPROVED);
-            PullRequest sentBack = pullRequest(ada, monitored, requestingTeam(web));
-            review(sentBack, zoe, PullRequestReview.State.CHANGES_REQUESTED);
-            PullRequest commented = pullRequest(ada, monitored, requestingTeam(web));
-            review(commented, zoe, PullRequestReview.State.COMMENTED);
-            PullRequest dismissed = pullRequest(ada, monitored, requestingTeam(web));
-            PullRequestReview withdrawn = review(dismissed, zoe, PullRequestReview.State.APPROVED);
-            withdrawn.setDismissed(true);
-            reviewRepository.save(withdrawn);
-            PullRequest drafted =
-                    pullRequest(ada, monitored, requestingTeam(web).andThen(work -> {
-                        work.setDraft(true);
-                        return work;
-                    }));
-            PullRequest elsewhere = pullRequest(ada, unmonitored, requestingTeam(web));
 
-            OpenWorkDTO zoes = openWork(zoe);
-
-            assertThat(zoes.teamReviewRequests().content())
-                    .extracting(WorkItemDTO::id)
-                    .as("a comment is not a verdict, and a dismissed approval no longer stands")
-                    .contains(commented.getId(), dismissed.getId())
-                    .doesNotContain(
-                            direct.getId(),
-                            own.getId(),
-                            approved.getId(),
-                            sentBack.getId(),
-                            drafted.getId(),
-                            elsewhere.getId());
-            assertThat(zoes.reviewRequests().content())
+            assertThat(openWork(zoe).reviewRequests().content())
                     .extracting(WorkItemDTO::id)
                     .contains(direct.getId());
+        }
+
+        @Test
+        void shouldLeaveOutATeamRequestWhenTheMemberLeavesTheTeam() {
+            PullRequest asking = pullRequest(ada, monitored, requestingTeam(web));
+
+            teamMembershipRepository.deleteById(new TeamMembership.Id(web.getId(), zoe.getId()));
+
+            assertThat(openWork(zoe).teamReviewRequests().content())
+                    .extracting(WorkItemDTO::id)
+                    .doesNotContain(asking.getId());
         }
 
         @Test
@@ -1414,7 +1456,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             Map<User, @Nullable ReviewState> reviewers = new HashMap<>();
             work.getRequestedReviewers().forEach(listed -> reviewers.put(listed.getUser(), listed.getReviewState()));
             reviewers.put(reviewer, state);
-            work.replaceRequestedReviewers(reviewers, null);
+            work.replaceRequestedReviewers(reviewers, DAY);
             return work;
         };
     }
@@ -1424,7 +1466,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             Set<Team> teams = new HashSet<>();
             work.getRequestedTeams().forEach(listed -> teams.add(listed.getTeam()));
             teams.add(team);
-            work.replaceRequestedTeams(teams);
+            work.replaceRequestedTeams(teams, DAY);
             return work;
         };
     }

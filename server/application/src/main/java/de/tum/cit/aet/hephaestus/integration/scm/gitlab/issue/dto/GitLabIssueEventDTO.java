@@ -42,7 +42,7 @@ public record GitLabIssueEventDTO(
      * The assignees now. GitLab leaves the key out of every issue hook when there are none, so an absent list is an
      * empty one.
      *
-     * @see <a href="https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/data_builder/issuable.rb">GitLab's issuable hook data builder</a>
+     * @see <a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/lib/gitlab/data_builder/issuable.rb#L28">GitLab's issuable hook data builder</a>
      */
     public List<GitLabWebhookUser> currentAssignees() {
         return assignees == null ? List.of() : assignees;

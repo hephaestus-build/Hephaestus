@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.label.dto.GitHubLabelDTO
 import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.dto.GitHubMilestoneDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -307,7 +308,7 @@ public abstract class BaseGitHubProcessor {
      * @return true if reviewers changed, false otherwise
      */
     protected boolean updateRequestedReviewers(
-            @Nullable List<GitHubUserDTO> reviewerDtos, PullRequest pullRequest, Long providerId) {
+            @Nullable List<GitHubUserDTO> reviewerDtos, PullRequest pullRequest, Long providerId, Instant observedAt) {
         if (reviewerDtos == null) {
             return false;
         }
@@ -321,6 +322,6 @@ public abstract class BaseGitHubProcessor {
                 reviewers.put(reviewer, null);
             }
         }
-        return pullRequest.replaceRequestedReviewers(reviewers, null);
+        return pullRequest.replaceRequestedReviewers(reviewers, observedAt);
     }
 }

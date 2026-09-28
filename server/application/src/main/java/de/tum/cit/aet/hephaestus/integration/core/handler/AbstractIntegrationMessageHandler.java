@@ -110,7 +110,7 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
 
         try {
             T eventPayload = deserializer.deserialize(msg, payloadType);
-            WebhookDelivery.during(arrivedAt(msg), () -> dispatchEvent(eventPayload));
+            dispatchEvent(eventPayload, arrivedAt(msg));
         } catch (IOException e) {
             log.error("Failed to parse payload: subject={}", safeSubject, e);
             throw new PayloadParsingException("Payload parsing failed for subject: " + safeSubject, e);
@@ -120,12 +120,23 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
         // duplicate logging.
     }
 
-    /** Override when external preparation must run before short persistence transactions. */
-    /** When JetStream stored the message; a redelivery keeps the first time. Now for a plain NATS message. */
+    /**
+     * When JetStream stored the message, on the NATS server's clock; a JetStream redelivery keeps it. A core NATS
+     * message has no stored time and arrives now.
+     */
     private static Instant arrivedAt(Message msg) {
         return msg.isJetStream() ? msg.metaData().timestamp().toInstant() : Instant.now();
     }
 
+    /**
+     * Override when the handling compares when Hephaestus received the payload: {@code arrivedAt} is when JetStream
+     * stored it, however long it then waited in the stream.
+     */
+    protected void dispatchEvent(T eventPayload, Instant arrivedAt) {
+        dispatchEvent(eventPayload);
+    }
+
+    /** Override when external preparation must run before short persistence transactions. */
     protected void dispatchEvent(T eventPayload) {
         transactionTemplate.executeWithoutResult(status -> handleEvent(eventPayload));
     }

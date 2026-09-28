@@ -215,8 +215,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     /**
      * Process a GitLab merge request webhook event (open/update).
      * <p>
-     * Returns the existing entity unchanged if the webhook is stale (event's
-     * {@code updatedAt} is not newer than the stored value). This allows callers
+     * Returns the existing entity if the webhook is stale (event's {@code updatedAt}
+     * is not newer than the stored value), changing at most its reviewers. This allows callers
      * to still publish lifecycle events while preventing stale data from
      * overwriting newer sync data or M:N relationships.
      * <p>
@@ -251,7 +251,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         Boolean wasDraft = null;
         String previousHead = null;
         if (attrs.iid() != null) {
-            Optional<PullRequest> existingOpt = pullRequestRepository.findByRepositoryIdAndNumber(
+            Optional<PullRequest> existingOpt = pullRequestRepository.findForUpdateByRepositoryIdAndNumber(
                     Objects.requireNonNull(context.repository()).getId(), attrs.iid());
             if (existingOpt.isPresent()) {
                 isNew = false;
@@ -262,8 +262,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 if (existing.getUpdatedAt() != null
                         && eventUpdatedAt != null
                         && !eventUpdatedAt.isAfter(existing.getUpdatedAt())) {
-                    // An approval can arrive with the merge request's updated_at unchanged, so the reviewer list
-                    // still applies unless the payload is older; its arrival time decides against the sync's.
+                    // The reviewer list still applies unless the payload is older, as sync-lifecycle.md § Reviewer
+                    // lists are dated snapshots explains.
                     if (!eventUpdatedAt.isBefore(existing.getUpdatedAt())
                             && updateRequestedReviewers(event.currentReviewers(), existing, context)) {
                         existing = pullRequestRepository.save(existing);
@@ -565,7 +565,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             return null;
         }
         return pullRequestRepository
-                .findByRepositoryIdAndNumber(
+                .findForUpdateByRepositoryIdAndNumber(
                         Objects.requireNonNull(context.repository()).getId(),
                         event.objectAttributes().iid())
                 .map(PullRequest::getState)
@@ -573,37 +573,15 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * Applies a merge request's reviewer list as a sync read it, without touching the rest of the merge request.
-     * A merge request Hephaestus has not stored yet is left to the merge request sync.
-     *
-     * @param fetchedAt when the sync asked for the page the list came from; the list is as of then
-     * @return whether the stored reviewers changed
-     */
-    @Transactional
-    public boolean applySyncedReviewers(
-            Repository repository, int iid, List<SyncReviewerData> reviewers, Instant fetchedAt) {
-        Long providerId = Objects.requireNonNull(repository.getProvider().getId());
-        return pullRequestRepository
-                .findByRepositoryIdAndNumber(repository.getId(), iid)
-                .map(pr -> {
-                    boolean changed = updateSyncReviewers(reviewers, pr, providerId, fetchedAt);
-                    if (changed) {
-                        pullRequestRepository.save(pr);
-                    }
-                    return changed;
-                })
-                .orElse(false);
-    }
-
-    /**
      * Process a GitLab merge request from GraphQL sync.
      *
-     * @param fetchedAt when the sync asked for the page the merge request came from; its reviewer list is as of then
+     * @param context the sync of {@code context.repository()}, observed when it asked for the page the merge request
+     *     came from
      */
     @Transactional
     @Nullable
-    public PullRequest processFromSync(
-            SyncMergeRequestData data, Repository repository, @Nullable Long scopeId, Instant fetchedAt) {
+    public PullRequest processFromSync(SyncMergeRequestData data, ProcessingContext context) {
+        Repository repository = Objects.requireNonNull(context.repository());
         if (data.globalId() == null || data.iid() == null || data.title() == null || data.state() == null) {
             log.warn("Skipped merge request processing: reason=missingRequiredData");
             return null;
@@ -626,8 +604,9 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
         Long providerId = Objects.requireNonNull(repository.getProvider().getId());
 
+        // Locked before the users below, in the order the webhook path takes the same locks.
         Optional<PullRequest> existingOpt =
-                pullRequestRepository.findByRepositoryIdAndNumber(repository.getId(), mrNumber);
+                pullRequestRepository.findForUpdateByRepositoryIdAndNumber(repository.getId(), mrNumber);
         boolean isNew = existingOpt.isEmpty();
         // Read before the upsert below overwrites the row; it's the only place the prior draft state survives.
         Boolean wasDraft = existingOpt.map(PullRequest::isDraft).orElse(null);
@@ -735,7 +714,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
         boolean changed = updateSyncLabels(data.syncLabels(), pr.getLabels(), repository);
         changed |= updateSyncAssignees(data.syncAssignees(), pr.getAssignees(), providerId);
-        changed |= updateSyncReviewers(data.syncReviewers(), pr, providerId, fetchedAt);
+        changed |= updateSyncReviewers(data.syncReviewers(), pr, providerId, context);
         // The head pipeline is read on every sync: a head with none has no checks, for that head.
         if (data.diffHeadSha() != null || data.headPipelineSha() != null) {
             String checkedSha = data.headPipelineSha() != null ? data.headPipelineSha() : data.diffHeadSha();
@@ -750,10 +729,9 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         }
 
         // Reconcile approvals (needs ctx for activity event emission)
-        ProcessingContext ctx = ProcessingContext.forSync(scopeId, repository);
-        reconcileApprovals(data.syncApprovers(), pr, providerId, ctx);
+        reconcileApprovals(data.syncApprovers(), pr, providerId, context);
         var prData = ScmEventPayload.PullRequestData.from(pr);
-        var eventCtx = EventContext.from(ctx);
+        var eventCtx = EventContext.from(context);
 
         if (isNew) {
             eventPublisher.publishEvent(new ScmDomainEvent.PullRequestCreated(prData, eventCtx));
@@ -1171,13 +1149,13 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         }
     }
 
-    /** The payload's reviewer list, as it stood when the webhook arrived. */
+    /** The payload's reviewer list, dated by when Hephaestus received the webhook. */
     private boolean updateRequestedReviewers(
             List<GitLabMergeRequestReviewerDTO> reviewerDtos, PullRequest pr, ProcessingContext context) {
         Map<User, RequestedReviewer.@Nullable ReviewState> reviewers = new HashMap<>();
         for (var dto : reviewerDtos) {
             User user = findOrCreateUser(dto.user(), Objects.requireNonNull(context.providerId()));
-            if (user != null) reviewers.put(user, RequestedReviewer.ReviewState.of(dto.state()));
+            if (user != null) reviewers.put(user, reviewState(dto.state(), pr, user));
         }
         return pr.replaceRequestedReviewers(reviewers, context.observedAt());
     }
@@ -1227,7 +1205,10 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     private boolean updateSyncReviewers(
-            @Nullable List<SyncReviewerData> syncReviewers, PullRequest pr, Long providerId, Instant fetchedAt) {
+            @Nullable List<SyncReviewerData> syncReviewers,
+            PullRequest pr,
+            Long providerId,
+            ProcessingContext context) {
         if (syncReviewers == null) return false;
 
         Map<User, RequestedReviewer.@Nullable ReviewState> reviewers = new HashMap<>();
@@ -1242,8 +1223,26 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                             data.webUrl(),
                             data.publicEmail()),
                     providerId);
-            if (user != null) reviewers.put(user, RequestedReviewer.ReviewState.of(reviewer.reviewState()));
+            if (user != null) reviewers.put(user, reviewState(reviewer.reviewState(), pr, user));
         }
-        return pr.replaceRequestedReviewers(reviewers, fetchedAt);
+        return pr.replaceRequestedReviewers(reviewers, context.observedAt());
+    }
+
+    /**
+     * Where GitLab says {@code user}'s review stands. Where it sent no state, the stored one stands: see
+     * {@link GitLabMergeRequestReviewerDTO} for when a hook sends none, and a reviewer who lost access to the merge
+     * request has none in GraphQL. A state Hephaestus does not know clears the stored one.
+     */
+    private static RequestedReviewer.@Nullable ReviewState reviewState(
+            @Nullable String sent, PullRequest pr, User user) {
+        if (sent != null) {
+            return GitLabMergeRequestReviewerDTO.reviewState(sent);
+        }
+        for (RequestedReviewer listed : pr.getRequestedReviewers()) {
+            if (listed.getUser().getId().equals(user.getId())) {
+                return listed.getReviewState();
+            }
+        }
+        return null;
     }
 }

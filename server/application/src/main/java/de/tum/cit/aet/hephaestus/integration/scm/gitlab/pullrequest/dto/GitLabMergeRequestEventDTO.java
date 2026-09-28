@@ -31,7 +31,7 @@ public record GitLabMergeRequestEventDTO(
      * The assignees now. GitLab leaves the key out of every merge request hook when there are none, so an absent
      * list is an empty one.
      *
-     * @see <a href="https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/data_builder/issuable.rb">GitLab's issuable hook data builder</a>
+     * @see <a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/lib/gitlab/data_builder/issuable.rb#L28">GitLab's issuable hook data builder</a>
      */
     public List<GitLabWebhookUser> currentAssignees() {
         return assignees == null ? List.of() : assignees;
@@ -41,7 +41,7 @@ public record GitLabMergeRequestEventDTO(
      * The reviewers now, each with their review state. GitLab leaves the key out of every merge request hook when
      * there are none, so an absent list is an empty one: the last reviewer was removed.
      *
-     * @see <a href="https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/data_builder/issuable.rb">GitLab's issuable hook data builder</a>
+     * @see <a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/lib/gitlab/data_builder/issuable.rb#L30-31">GitLab's issuable hook data builder</a>
      */
     public List<GitLabMergeRequestReviewerDTO> currentReviewers() {
         return reviewers == null ? List.of() : reviewers;

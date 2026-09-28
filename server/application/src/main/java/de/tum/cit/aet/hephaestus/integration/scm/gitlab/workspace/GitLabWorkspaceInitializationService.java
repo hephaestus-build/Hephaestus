@@ -722,18 +722,6 @@ public class GitLabWorkspaceInitializationService {
                     syncTargetProvider.updateSyncTimestamp(rtmId, SyncType.FULL_REPOSITORY, Instant.now());
                 }
             }
-            // After the watermarks, as the scheduled sync runs it.
-            if (mrSyncService != null && mrsDone && updatedAfter != null) {
-                try {
-                    mrSyncService.refreshOpenMergeRequestReviewers(workspace.getId(), repo);
-                } catch (Exception e) {
-                    log.warn(
-                            "Failed MR reviewer refresh: workspaceId={}, repo={}",
-                            workspace.getId(),
-                            repo.getNameWithOwner(),
-                            e);
-                }
-            }
         }
 
         log.info(

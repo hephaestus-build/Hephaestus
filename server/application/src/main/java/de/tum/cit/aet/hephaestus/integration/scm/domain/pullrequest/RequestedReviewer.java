@@ -16,10 +16,7 @@ import jakarta.persistence.MapsId;
 import jakarta.persistence.Table;
 import java.io.Serial;
 import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Locale;
-import java.util.Set;
-import java.util.stream.Collectors;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -42,13 +39,18 @@ import org.jspecify.annotations.Nullable;
 public class RequestedReviewer {
 
     /**
-     * HQL: the request {@code request} on the pull request {@code work} still awaits its reviewer's verdict. A
-     * comment is not one, so a reviewer who only commented is still asked. Where GitLab stated the review, the
-     * stated state decides ({@link ReviewState#isVerdict()}); GitHub lists only the reviewers it is waiting for; a
-     * GitLab request stored without a state waits until the reviewer has a standing verdict.
+     * HQL: the request {@code request} on the pull request {@code work} still awaits its reviewer's verdict, an
+     * approval or a request for changes. A comment is not one, so a reviewer who only commented is still asked.
+     * Where GitLab stated the review, the stated state decides; GitHub lists only the reviewers it is waiting for; a
+     * GitLab request stored without a state waits until the reviewer has a standing verdict. The review's
+     * {@code pullRequest.deletedAt} check repeats {@code work}'s because {@code MirrorQueryPredicateGuardTest} requires
+     * it on every review a query reads.
      */
     public static final String AWAITING_REVIEW = """
-            (request.reviewState NOT IN :#{T(de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer$ReviewState).verdicts()}
+            (request.reviewState NOT IN (
+                de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer$ReviewState.APPROVED,
+                de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer$ReviewState.REQUESTED_CHANGES
+            )
             OR (request.reviewState IS NULL AND (
                 work.provider.type <> de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.GITLAB
                 OR NOT EXISTS (
@@ -81,7 +83,7 @@ public class RequestedReviewer {
     private User user;
 
     /** The provider's statement of this reviewer's review; null where the provider makes none. */
-    @Setter
+    @Setter(AccessLevel.PACKAGE)
     @Enumerated(EnumType.STRING)
     @Column(name = "review_state", length = 32)
     private @Nullable ReviewState reviewState;
@@ -106,33 +108,7 @@ public class RequestedReviewer {
         REVIEWED,
         REQUESTED_CHANGES,
         APPROVED,
-        UNAPPROVED;
-
-        /** Whether the reviewer has not reviewed yet: not begun, begun but not submitted, or withdrawn. */
-        public boolean awaitsReview() {
-            return this == UNREVIEWED || this == REVIEW_STARTED || this == UNAPPROVED;
-        }
-
-        /** Whether the reviewer approved or asked for changes; a comment is not a verdict. */
-        public boolean isVerdict() {
-            return this == APPROVED || this == REQUESTED_CHANGES;
-        }
-
-        public static Set<ReviewState> verdicts() {
-            return Arrays.stream(values()).filter(ReviewState::isVerdict).collect(Collectors.toUnmodifiableSet());
-        }
-
-        /** A state as GitLab spells it, in a webhook ({@code approved}) or in GraphQL ({@code APPROVED}). */
-        public static @Nullable ReviewState of(@Nullable String value) {
-            if (value == null) {
-                return null;
-            }
-            try {
-                return valueOf(value.toUpperCase(Locale.ROOT));
-            } catch (IllegalArgumentException unknown) {
-                return null;
-            }
-        }
+        UNAPPROVED
     }
 
     /** Fields are populated by {@code @MapsId} from the entity relationships. */

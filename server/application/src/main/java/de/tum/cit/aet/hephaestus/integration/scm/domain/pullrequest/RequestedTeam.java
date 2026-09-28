@@ -24,8 +24,7 @@ import org.hibernate.annotations.OnDeleteAction;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A team a GitHub pull request asks for a review, as far as Hephaestus knows the team. GitLab has no team
- * reviewers. The request goes with the team or the pull request, whichever is deleted first.
+ * A team a GitHub pull request asks for a review. GitLab has no team reviewers.
  *
  * @see <a href="https://docs.github.com/en/graphql/reference/unions#requestedreviewer">GitHub RequestedReviewer</a>
  */
@@ -49,7 +48,6 @@ public class RequestedTeam {
             name = "pull_request_id",
             nullable = false,
             foreignKey = @ForeignKey(name = "fk_pull_request_requested_team_pull_request"))
-    @OnDelete(action = OnDeleteAction.CASCADE)
     @ToString.Exclude
     private PullRequest pullRequest;
 
@@ -59,6 +57,8 @@ public class RequestedTeam {
             name = "team_id",
             nullable = false,
             foreignKey = @ForeignKey(name = "fk_pull_request_requested_team_team"))
+    // Teams are deleted through their repository and Team maps no collection of these, so only the database
+    // can remove a deleted team's requests; the pull request's own collection removes them with it.
     @OnDelete(action = OnDeleteAction.CASCADE)
     @ToString.Exclude
     private Team team;

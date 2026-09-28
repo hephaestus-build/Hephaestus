@@ -122,14 +122,6 @@ public final class GitLabSyncConstants {
     public static final int LINK_COMMITS_PAGE_SIZE = 20;
 
     /**
-     * Page size for the open merge request reviewer refresh ({@code GetProjectOpenMergeRequestReviewers}).
-     * <p>
-     * Each merge request node carries {@code reviewers(first: 20)} only; outer 20 keeps the query as light as the
-     * commit linker's, well under GitLab's complexity cap.
-     */
-    public static final int OPEN_MERGE_REQUEST_REVIEWERS_PAGE_SIZE = 20;
-
-    /**
      * Large page size for simple entity queries (labels, milestones).
      */
     public static final int LARGE_PAGE_SIZE = 100;

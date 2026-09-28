@@ -25,9 +25,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlTestMapper;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHActor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestState;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHReviewRequestConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.dto.GitHubLabelDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.dto.GitHubMilestoneDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
@@ -39,6 +41,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigInteger;
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -46,6 +49,8 @@ import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -549,28 +554,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldStoreOnlyTheSyncedTeamsWhenTheSyncReadsTeamsAmongTheReviewRequests() {
-            Team synced = new Team();
-            synced.setNativeId(13459148L);
-            synced.setName("Hephaetus");
-            synced.setSlug("hephaetus");
-            synced.setOrganization(FIXTURE_ORG_LOGIN);
-            synced.setHtmlUrl("https://github.com/orgs/" + FIXTURE_ORG_LOGIN + "/teams/hephaetus");
-            synced.setPrivacy(Team.Privacy.VISIBLE);
-            synced.setProvider(githubProvider);
-            Long syncedId = teamRepository.save(synced).getId();
-            GHPullRequest read = GitHubPullRequestDTORequestedTeamsTest.pullRequestAskingForReviews(27);
-            read.setFullDatabaseId(BigInteger.valueOf(FIXTURE_PR_ID + 1));
-            read.setId("PR_kwDOO4CKW86_synced");
-            read.setTitle("Asks a team, a bot and a mannequin");
-            read.setState(GHPullRequestState.OPEN);
-            read.setUrl(URI.create("https://github.com/" + FIXTURE_REPO_FULL_NAME + "/pull/27"));
-            read.setCreatedAt(OffsetDateTime.parse("2025-11-01T21:42:45Z"));
-            read.setUpdatedAt(OffsetDateTime.parse("2025-11-01T21:42:45Z"));
-            read.setAuthor(
-                    GitHubPullRequestDTORequestedTeamsTest.productionMapper().readValue("""
-                            {"__typename": "User", "id": "U_kgDOAFoAsQ", "databaseId": 5898705,
-                             "login": "FelixTJDietrich"}
-                            """, GHActor.class));
+            Long syncedId = saveSyncedTeam();
+            GHPullRequest read = readBySync(27, 0);
 
             PullRequest result = processor.process(
                     Objects.requireNonNull(GitHubPullRequestDTO.fromPullRequest(read)), createContext());
@@ -592,22 +577,16 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldKeepTheStoredReviewRequestsWhenASyncCannotReadThemWhole() {
-            Team synced = new Team();
-            synced.setNativeId(13459148L);
-            synced.setName("Hephaetus");
-            synced.setSlug("hephaetus");
-            synced.setOrganization(FIXTURE_ORG_LOGIN);
-            synced.setHtmlUrl("https://github.com/orgs/" + FIXTURE_ORG_LOGIN + "/teams/hephaetus");
-            synced.setPrivacy(Team.Privacy.VISIBLE);
-            synced.setProvider(githubProvider);
-            Long syncedId = teamRepository.save(synced).getId();
+            Long syncedId = saveSyncedTeam();
             processor.process(
-                    Objects.requireNonNull(GitHubPullRequestDTO.fromPullRequest(readBySync(28, 5, 0))),
-                    createContext());
+                    Objects.requireNonNull(GitHubPullRequestDTO.fromPullRequest(readBySync(28, 0))), createContext());
+            GHPullRequest truncated = readBySync(28, 60);
+            GHReviewRequestConnection requests = truncated.getReviewRequests();
+            requests.setNodes(requests.getNodes().subList(2, 4));
+            requests.setTotalCount(101);
 
             PullRequest result = processor.process(
-                    Objects.requireNonNull(GitHubPullRequestDTO.fromPullRequest(readBySync(28, 101, 60))),
-                    createContext());
+                    Objects.requireNonNull(GitHubPullRequestDTO.fromPullRequest(truncated)), createContext());
 
             assertNotNull(result);
             transactionTemplate.executeWithoutResult(status -> {
@@ -622,10 +601,76 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             });
         }
 
-        /** Pull request {@code number} as a sync reads it, GitHub counting {@code totalCount} review requests. */
-        private GHPullRequest readBySync(int number, int totalCount, int minutesLater) {
-            GHPullRequest read = GitHubPullRequestDTORequestedTeamsTest.pullRequestAskingForReviews(number);
-            read.getReviewRequests().setTotalCount(totalCount);
+        /** When a sync page was asked for, against the stored review requests' {@code STORED_AT}. */
+        enum Page {
+            OLDER(Duration.ofMinutes(-1)),
+            EQUAL(Duration.ZERO),
+            NEWER(Duration.ofSeconds(1));
+
+            private final Duration offset;
+
+            Page(Duration offset) {
+                this.offset = offset;
+            }
+        }
+
+        /**
+         * A webhook stored the review requests, people and teams; a sync page carrying the same {@code updated_at}
+         * applies unless it was asked for before the webhook arrived, and applying it twice changes nothing.
+         */
+        @ParameterizedTest
+        @EnumSource(Page.class)
+        void shouldApplyASyncPagesReviewRequestsUnlessItWasReadBeforeTheStoredWebhook(Page page) {
+            Instant storedAt = Instant.parse("2025-11-01T21:43:00Z");
+            Long syncedId = saveSyncedTeam();
+            processor.process(
+                    Objects.requireNonNull(GitHubPullRequestDTO.fromPullRequest(readBySync(29, 0))),
+                    ProcessingContext.forWebhook(testWorkspace.getId(), testRepository, "review_requested")
+                            .withObservedAt(storedAt));
+            GHPullRequest fewer = readBySync(29, 0);
+            GHReviewRequestConnection requests = fewer.getReviewRequests();
+            requests.setNodes(requests.getNodes().subList(2, 4));
+            requests.setTotalCount(2);
+            GitHubPullRequestDTO read = Objects.requireNonNull(GitHubPullRequestDTO.fromPullRequest(fewer));
+            ProcessingContext sync = createContext().withObservedAt(storedAt.plus(page.offset));
+
+            processor.process(read, sync);
+            PullRequest result = processor.process(read, sync);
+
+            assertNotNull(result);
+            transactionTemplate.executeWithoutResult(status -> {
+                PullRequest stored =
+                        pullRequestRepository.findById(result.getId()).orElseThrow();
+                if (page == Page.OLDER) {
+                    assertThat(stored.getRequestedTeams())
+                            .extracting(request -> request.getTeam().getId())
+                            .containsExactly(syncedId);
+                    assertThat(stored.getRequestedReviewers())
+                            .extracting(request -> request.getUser().getLogin())
+                            .containsExactly("FelixTJDietrich");
+                } else {
+                    assertThat(stored.getRequestedTeams()).isEmpty();
+                    assertThat(stored.getRequestedReviewers()).isEmpty();
+                }
+            });
+        }
+
+        /** The team {@code Hephaetus} among the review requests, as the team sync stores it. */
+        private Long saveSyncedTeam() {
+            Team synced = new Team();
+            synced.setNativeId(13459148L);
+            synced.setName("Hephaetus");
+            synced.setSlug("hephaetus");
+            synced.setOrganization(FIXTURE_ORG_LOGIN);
+            synced.setHtmlUrl("https://github.com/orgs/" + FIXTURE_ORG_LOGIN + "/teams/hephaetus");
+            synced.setPrivacy(Team.Privacy.VISIBLE);
+            synced.setProvider(githubProvider);
+            return teamRepository.save(synced).getId();
+        }
+
+        /** Pull request {@code number} as a sync reads it, asking for the reviews the DTO test lists. */
+        private GHPullRequest readBySync(int number, int minutesLater) {
+            GHPullRequest read = GitHubPullRequestDTOReviewRequestsTest.pullRequestAskingForReviews(number);
             read.setFullDatabaseId(BigInteger.valueOf(FIXTURE_PR_ID + number));
             read.setId("PR_kwDOO4CKW86_" + number);
             read.setTitle("Asks for reviews");
@@ -633,8 +678,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             read.setUrl(URI.create("https://github.com/" + FIXTURE_REPO_FULL_NAME + "/pull/" + number));
             read.setCreatedAt(OffsetDateTime.parse("2025-11-01T21:42:45Z"));
             read.setUpdatedAt(OffsetDateTime.parse("2025-11-01T21:42:45Z").plusMinutes(minutesLater));
-            read.setAuthor(
-                    GitHubPullRequestDTORequestedTeamsTest.productionMapper().readValue("""
+            read.setAuthor(GitHubGraphQlTestMapper.create().readValue("""
                             {"__typename": "User", "id": "U_kgDOAAB5Fw", "databaseId": 31031,
                              "login": "pull-request-author"}
                             """, GHActor.class));

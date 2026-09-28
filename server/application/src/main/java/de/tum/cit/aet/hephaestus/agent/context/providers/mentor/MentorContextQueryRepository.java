@@ -149,8 +149,9 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
     List<Issue> findAssignedOpenIssues(@Param("workspaceId") Long workspaceId, @Param("userId") Long userId);
 
     /**
-     * Open, ready PRs whose review the user still owes ({@link RequestedReviewer#AWAITING_REVIEW}), as open work lists
-     * review requests; author + repo fetched.
+     * Open, ready PRs that ask the user directly for a review they still owe ({@link RequestedReviewer#AWAITING_REVIEW}),
+     * including those Activity shows as covered by other reviewers; a request to one of the user's teams is not one.
+     * Author and repository fetched.
      */
     @Query("""
         SELECT work

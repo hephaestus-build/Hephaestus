@@ -78,7 +78,6 @@ public class OpenWorkService {
                 list(workItems.findAssignedIssues(workspaceId, userId, first), Map.of(), Map.of()));
     }
 
-    /** Which of the member's teams each pull request asks, by name. */
     private Map<Long, List<TeamRefDTO>> requestedTeams(List<PullRequest> pullRequests, Set<Long> teamIds) {
         if (pullRequests.isEmpty()) {
             return Map.of();
@@ -104,8 +103,8 @@ public class OpenWorkService {
      * <ul>
      *   <li>GitHub lists only the reviewers it is waiting for, so a listed reviewer is REQUESTED.
      *   <li>GitLab keeps every reviewer listed and says where each review stands; asking a reviewer again sets
-     *       them back to unreviewed, so that state is the reviewer's. A reviewer synced before GitLab's state was
-     *       stored has none, and there a standing review is taken over the request.
+     *       them back to unreviewed, so that state is the reviewer's. Where GitLab stated none, a standing review
+     *       is taken over the request.
      *   <li>Anyone else reviewing stands where their latest verdict left them, or their latest comment when they
      *       gave no verdict.
      * </ul>
@@ -149,15 +148,13 @@ public class OpenWorkService {
         return new ReviewerDTO(Objects.requireNonNull(UserInfoDTO.fromUser(user)), state);
     }
 
-    /** Where GitLab says a reviewer stands; a review still owed is requested, as Heph counts it pending. */
+    /** Where GitLab says a reviewer stands: not begun, begun but not submitted, or withdrawn is still requested. */
     private static ReviewerState state(ReviewState stated) {
-        if (stated.awaitsReview()) {
-            return ReviewerState.REQUESTED;
-        }
         return switch (stated) {
+            case UNREVIEWED, REVIEW_STARTED, UNAPPROVED -> ReviewerState.REQUESTED;
+            case REVIEWED -> ReviewerState.COMMENTED;
             case APPROVED -> ReviewerState.APPROVED;
             case REQUESTED_CHANGES -> ReviewerState.CHANGES_REQUESTED;
-            default -> ReviewerState.COMMENTED;
         };
     }
 

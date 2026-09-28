@@ -113,23 +113,54 @@ connection by the sync-job pruner. Global identity rows (`user`, `organization`,
 
 ### Reviewer lists are dated snapshots
 
-A pull or merge request's reviewers, and GitLab's per-reviewer review state, arrive whole from both a
-webhook and a sync. Each list is stored with when the provider stated it — a webhook's arrival in
-JetStream, which a redelivery keeps, or the moment a sync asked for the page — and a list stated
-earlier than the stored one changes nothing, so a backlogged webhook or an old sync page cannot remove,
-re-add or restate a reviewer. A list that was not read whole is not applied: GitLab's nested
-`reviewers` connection is completed by `GetMergeRequestReviewers`, and GitHub's single
-`reviewRequests(first: 100)` page is left unused when GitHub counts more.
+A pull or merge request's review requests (the people asked, with GitLab's per-reviewer review state,
+and GitHub's teams) arrive whole from both a webhook and a sync. A payload's `updated_at` can only rule
+out an older payload, not order two within the same second: GitHub asks each reviewer in a
+[`review_requested` event](https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request)
+of its own, often within one second, and an approval's GitLab hook can carry the `updated_at` from before
+the approval (below). So each list is stored with when Hephaestus received it, and a list received
+earlier than the stored one changes nothing: a backlogged webhook or an old sync page cannot remove,
+re-add or restate a request. A list received at the same instant as the stored one applies, so a
+redelivery restates what it said. A writer reads the pull request with its row locked before it compares
+(`PullRequestRepository.findForUpdateByRepositoryIdAndNumber`). A list that was not read whole is not
+applied: GitLab's nested `reviewers` connection is completed by `GetMergeRequestReviewers`, and GitHub's
+single `reviewRequests(first: 100)` page is left unused when GitHub counts more.
 
-GitLab approvals, requests for changes and re-requests change a reviewer's state without being known to
-advance the merge request's `updatedAt`, so the `updatedAfter` watermark alone would never read a
-missed one again. Once an incremental sync has stamped a project's watermark, `GetProjectOpenMergeRequestReviewers`
-re-reads the reviewers of its open merge requests, 20 per request; running after the stamp keeps the
-refresh's own time out of the window the next incremental sync overlaps. A refresh that cannot finish
-shows as the project's sync error and is retried on the next cycle; it never holds the watermark back. On GitHub a review
-request or its removal advances the pull request's `updatedAt`, as the recorded
-`pull_request.review_requested` and `review_request_removed` fixtures show, so the incremental sync
-reads it.
+The two dates come from two clocks. A webhook's is the time JetStream stored it, on the NATS server's
+clock, and a JetStream redelivery keeps it; a sync page's is the time Hephaestus asked for it, on the
+application's clock. Comparing them assumes both hosts keep time by NTP, so their skew is far below
+the seconds between a reviewer change and the next read. Two gaps remain. A provider that delivers a
+webhook late, or retries a failed delivery, dates it by its arrival, not by when the provider sent
+it. And a provider's redelivery that reaches the receiver after `hephaestus.webhook.stream.duplicate-window`
+(10 minutes by default) is a new message with a new date. Either can restate an old list over a sync
+page read in between, until the next sync reads the list again.
+
+GitLab's webhooks state each reviewer's review from 18.6
+([`reviewers_hook_attrs`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/app/models/concerns/issuable.rb#L589-597)); before, they name
+the reviewers only ([`issuable.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/lib/gitlab/data_builder/issuable.rb#L31)). A reviewer
+named without a state keeps the state stored, so on GitLab before 18.6 who is asked follows the
+webhooks and where each review stands follows the sync. A state Hephaestus does not know clears the
+stored one, so a newer GitLab's states cannot leave an old verdict standing. From 18.6 a re-request runs a merge request
+hook of its own
+([`request_review_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/app/services/merge_requests/request_review_service.rb#L10-28)),
+and from 19.3 so does a submitted review
+([`update_reviewer_state_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.0-ee/app/services/merge_requests/update_reviewer_state_service.rb#L67-75)).
+
+On GitLab, every change to or from a verdict, every submitted review and every re-request writes a
+system note on the merge request: approving, unapproving, requesting changes and submitting a review
+([`system_notes/merge_requests_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/app/services/system_notes/merge_requests_service.rb#L172-194)),
+and re-requesting a review
+([`request_review_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/app/services/merge_requests/request_review_service.rb#L18)).
+Starting a review writes none, which is harmless: a started review is still requested, as an
+unreviewed one is. Saving a note touches its merge request
+([`note.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/app/models/note.rb#L210), `after_save :touch_noteable`), so the merge
+request's `updatedAt` moves and the incremental sync's `updatedAfter` watermark reads the new state even
+when its webhook was missed. The approval's webhook itself can carry the old `updated_at`: GitLab writes
+the approval note and runs the approval hooks in separate background jobs
+([`event_store.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/lib/gitlab/event_store.rb#L52-54)), so the hook can be built before
+the note touches the merge request. On GitHub a review request or its removal advances the pull
+request's `updatedAt`, as the recorded `pull_request.review_requested` and `review_request_removed`
+fixtures show, so the incremental sync reads a missed one.
 
 ## Documented asymmetries and residuals
 

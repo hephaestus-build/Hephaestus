@@ -541,18 +541,33 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
             assertThat(requestedTeamIds()).isEmpty();
         }
 
+        /** sync-lifecycle.md § Reviewer lists are dated snapshots: review requests can arrive within one second. */
+        @Test
+        void shouldStoreTheLaterReviewRequestWhenItArrivesWithinTheSameSecond() throws Exception {
+            Team team = team(FIXTURE_TEAM_ID, "hephaetus");
+            handler.handleEvent(loadPayload("pull_request.review_requested"));
+
+            handler.handleEvent(loadPayload("pull_request.review_requested.reviewer.derived"));
+
+            assertThat(requestedTeamIds()).containsExactly(team.getId());
+            assertThat(requestedLogins()).containsExactly("octocat");
+        }
+
         @Test
         void shouldStoreThePersonButNotTheBotWhenBothAreAskedToReview() throws Exception {
             handler.handleEvent(loadPayload("pull_request.review_requested.reviewer.derived"));
 
-            Set<String> logins = required(transactionTemplate.execute(status -> pullRequestRepository
+            assertThat(requestedLogins()).containsExactly("octocat");
+        }
+
+        private Set<String> requestedLogins() {
+            return required(transactionTemplate.execute(status -> pullRequestRepository
                     .findByRepositoryIdAndNumber(testRepository.getId(), PR_26_NUMBER)
                     .orElseThrow()
                     .getRequestedReviewers()
                     .stream()
                     .map(request -> request.getUser().getLogin())
                     .collect(Collectors.toSet())));
-            assertThat(logins).containsExactly("octocat");
         }
 
         private Set<Long> requestedTeamIds() {

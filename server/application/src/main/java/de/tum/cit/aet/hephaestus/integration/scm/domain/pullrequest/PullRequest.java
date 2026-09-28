@@ -20,6 +20,7 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -154,15 +155,14 @@ public class PullRequest extends Issue {
     private Set<RequestedReviewer> requestedReviewers = new HashSet<>();
 
     /**
-     * When the provider stated the stored {@link #requestedReviewers}: a webhook's arrival, or the moment a sync
-     * asked for the page. A statement observed earlier is out of date and does not replace it. Null until a
-     * timed statement was stored.
+     * When Hephaestus received the stored {@link #requestedReviewers} and {@link #requestedTeams}
+     * ({@link #replaceRequestedReviewers}); null until one was stored.
      */
     @Nullable
     @Column(name = "reviewers_observed_at")
     private Instant reviewersObservedAt;
 
-    /** Teams asked to review, as far as Hephaestus knows the team; GitHub only. */
+    /** Teams asked to review; GitHub only. */
     @OneToMany(mappedBy = "pullRequest", cascade = CascadeType.ALL, orphanRemoval = true)
     @BatchSize(size = 50)
     @ToString.Exclude
@@ -311,20 +311,22 @@ public class PullRequest extends Issue {
     }
 
     /**
-     * Replaces the requested reviewers with the provider's list as it stood at {@code observedAt}, each with the state
-     * the provider gives them. The list is a snapshot: one observed before the stored snapshot changes nothing, so a
-     * late or backlogged statement cannot remove, re-add or restate a reviewer. A statement with no time applies
-     * without the check. A reviewer already listed keeps their row, so a state change is an update, not a new row.
+     * Replaces the requested reviewers with the provider's list, received at {@code observedAt}, each with the state
+     * the provider gives them. A reviewer already listed keeps their row, so a state change is an update, not a new
+     * row.
+     *
+     * <p>The review requests, people and teams, are a dated snapshot: a list received before the stored one changes
+     * nothing, so a late or backlogged payload cannot remove, re-add or restate a request, and a list received at the
+     * same instant applies, so a redelivery restates what it said. Instants compare to the microsecond PostgreSQL
+     * stores, so a stored one compares the same before and after it is read back. A writer that races another reads
+     * the pull request through {@link PullRequestRepository#findForUpdateByRepositoryIdAndNumber} first.
      *
      * @return whether anything changed
      */
     public boolean replaceRequestedReviewers(
-            Map<User, RequestedReviewer.@Nullable ReviewState> reviewers, @Nullable Instant observedAt) {
-        if (observedAt != null && reviewersObservedAt != null && observedAt.isBefore(reviewersObservedAt)) {
+            Map<User, RequestedReviewer.@Nullable ReviewState> reviewers, Instant observedAt) {
+        if (!takesListObservedAt(observedAt)) {
             return false;
-        }
-        if (observedAt != null) {
-            reviewersObservedAt = observedAt;
         }
         Map<Long, RequestedReviewer.@Nullable ReviewState> wanted = new HashMap<>();
         reviewers.forEach((user, state) -> wanted.put(user.getId(), state));
@@ -346,11 +348,15 @@ public class PullRequest extends Issue {
     }
 
     /**
-     * Replaces the requested teams with the provider's current list.
+     * Replaces the requested teams with the provider's list, received at {@code observedAt} and dated as
+     * {@link #replaceRequestedReviewers} describes.
      *
      * @return whether the set changed
      */
-    public boolean replaceRequestedTeams(Set<Team> teams) {
+    public boolean replaceRequestedTeams(Set<Team> teams, Instant observedAt) {
+        if (!takesListObservedAt(observedAt)) {
+            return false;
+        }
         Set<Long> wanted = teams.stream().map(Team::getId).collect(Collectors.toSet());
         boolean changed = requestedTeams.removeIf(
                 request -> !wanted.contains(request.getTeam().getId()));
@@ -364,6 +370,16 @@ public class PullRequest extends Issue {
             }
         }
         return changed;
+    }
+
+    /** Whether review requests received at {@code observedAt} are not older than the stored ones; if so, dates them. */
+    private boolean takesListObservedAt(Instant observedAt) {
+        Instant stored = observedAt.truncatedTo(ChronoUnit.MICROS);
+        if (reviewersObservedAt != null && stored.isBefore(reviewersObservedAt)) {
+            return false;
+        }
+        reviewersObservedAt = stored;
+        return true;
     }
 
     /**

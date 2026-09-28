@@ -68,7 +68,25 @@
         "site_admin": false
       }
     ],
-    "requested_teams": [],
+    "requested_teams": [
+      {
+        "name": "Hephaetus",
+        "id": 13459148,
+        "node_id": "T_kwDODNYmp84AzV7M",
+        "slug": "hephaetus",
+        "description": "Test team",
+        "privacy": "closed",
+        "notification_setting": "notifications_enabled",
+        "url": "https://api.github.com/organizations/215361191/team/13459148",
+        "html_url": "https://github.com/orgs/HephaestusTest/teams/hephaetus",
+        "members_url": "https://api.github.com/organizations/215361191/team/13459148/members{/member}",
+        "repositories_url": "https://api.github.com/organizations/215361191/team/13459148/repos",
+        "type": "organization",
+        "organization_id": 215361191,
+        "permission": "pull",
+        "parent": null
+      }
+    ],
     "labels": [],
     "milestone": null,
     "draft": false,

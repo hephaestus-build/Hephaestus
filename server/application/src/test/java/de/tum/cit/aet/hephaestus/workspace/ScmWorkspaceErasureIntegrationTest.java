@@ -317,7 +317,7 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
         asking.setRepository(
                 repositoryRepository.findByNameWithOwner(SHARED_REPO).orElseThrow());
         PullRequest stored = pullRequestRepository.save(asking);
-        stored.replaceRequestedTeams(Set.of(team));
+        stored.replaceRequestedTeams(Set.of(team), Instant.now());
         pullRequestRepository.save(stored);
 
         eraser.eraseWorkspaceScmMirror(tenantA.getId());
@@ -326,7 +326,11 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(pullRequestRepository.findById(stored.getId()))
                 .as("tenant B still monitors the repository")
                 .isPresent();
-        assertThat(countRows("pull_request_requested_team")).isZero();
+        assertThat(jdbcTemplate.queryForList(
+                        "SELECT team_id FROM pull_request_requested_team WHERE pull_request_id = ?",
+                        Long.class,
+                        stored.getId()))
+                .isEmpty();
     }
 
     /**

@@ -53,7 +53,7 @@
     "target_project_id": 246765,
     "time_estimate": 0,
     "title": "Implement OAuth authentication",
-    "updated_at": "2026-01-31 19:08:00 +0100",
+    "updated_at": "2026-01-31 19:06:00 +0100",
     "updated_by_id": 18024,
     "prepared_at": "2026-01-31 19:03:56 +0100",
     "assignee_ids": [],
@@ -149,14 +149,16 @@
     }
   ],
   "changes": {
+    "updated_at": {
+      "previous": "2026-01-31 19:05:00 +0100",
+      "current": "2026-01-31 19:06:00 +0100"
+    },
     "reviewers": {
       "previous": [
         {
           "id": 6,
           "name": "User1",
           "username": "user1",
-          "state": "approved",
-          "re_requested": false,
           "avatar_url": "https://www.gravatar.com/avatar/user1?s=80&d=identicon",
           "email": "[REDACTED]"
         },
@@ -164,8 +166,6 @@
           "id": 25,
           "name": "Sidney Jones",
           "username": "sjones",
-          "state": "requested_changes",
-          "re_requested": false,
           "avatar_url": "https://www.gravatar.com/avatar/sjones?s=80&d=identicon",
           "email": "[REDACTED]"
         },
@@ -173,8 +173,6 @@
           "id": 7,
           "name": "User2",
           "username": "user2",
-          "state": "reviewed",
-          "re_requested": false,
           "avatar_url": "https://www.gravatar.com/avatar/user2?s=80&d=identicon",
           "email": "[REDACTED]"
         },
@@ -182,8 +180,6 @@
           "id": 8,
           "name": "User3",
           "username": "user3",
-          "state": "unreviewed",
-          "re_requested": false,
           "avatar_url": "https://www.gravatar.com/avatar/user3?s=80&d=identicon",
           "email": "[REDACTED]"
         }
@@ -193,8 +189,6 @@
           "id": 6,
           "name": "User1",
           "username": "user1",
-          "state": "unreviewed",
-          "re_requested": true,
           "avatar_url": "https://www.gravatar.com/avatar/user1?s=80&d=identicon",
           "email": "[REDACTED]"
         },
@@ -202,8 +196,6 @@
           "id": 25,
           "name": "Sidney Jones",
           "username": "sjones",
-          "state": "requested_changes",
-          "re_requested": false,
           "avatar_url": "https://www.gravatar.com/avatar/sjones?s=80&d=identicon",
           "email": "[REDACTED]"
         },
@@ -211,18 +203,7 @@
           "id": 7,
           "name": "User2",
           "username": "user2",
-          "state": "reviewed",
-          "re_requested": false,
           "avatar_url": "https://www.gravatar.com/avatar/user2?s=80&d=identicon",
-          "email": "[REDACTED]"
-        },
-        {
-          "id": 8,
-          "name": "User3",
-          "username": "user3",
-          "state": "unreviewed",
-          "re_requested": false,
-          "avatar_url": "https://www.gravatar.com/avatar/user3?s=80&d=identicon",
           "email": "[REDACTED]"
         }
       ]
@@ -248,8 +229,6 @@
       "id": 6,
       "name": "User1",
       "username": "user1",
-      "state": "unreviewed",
-      "re_requested": true,
       "avatar_url": "https://www.gravatar.com/avatar/user1?s=80&d=identicon",
       "email": "[REDACTED]"
     },
@@ -257,8 +236,6 @@
       "id": 25,
       "name": "Sidney Jones",
       "username": "sjones",
-      "state": "requested_changes",
-      "re_requested": false,
       "avatar_url": "https://www.gravatar.com/avatar/sjones?s=80&d=identicon",
       "email": "[REDACTED]"
     },
@@ -266,18 +243,7 @@
       "id": 7,
       "name": "User2",
       "username": "user2",
-      "state": "reviewed",
-      "re_requested": false,
       "avatar_url": "https://www.gravatar.com/avatar/user2?s=80&d=identicon",
-      "email": "[REDACTED]"
-    },
-    {
-      "id": 8,
-      "name": "User3",
-      "username": "user3",
-      "state": "unreviewed",
-      "re_requested": false,
-      "avatar_url": "https://www.gravatar.com/avatar/user3?s=80&d=identicon",
       "email": "[REDACTED]"
     }
   ]

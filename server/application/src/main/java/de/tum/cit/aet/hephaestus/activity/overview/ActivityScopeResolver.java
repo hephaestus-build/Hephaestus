@@ -96,8 +96,10 @@ class ActivityScopeResolver {
 
     /**
      * The workspace's teams {@code member} is in, hidden or not: hiding a team shapes workspace activity, not what
-     * the member is asked to do. A sub-team's members are its parent team's members too, as the synced memberships
-     * already say.
+     * the member is asked to do. On GitHub a sub-team's members are its parent's members too: {@code Team.members}
+     * defaults to {@code membership: ALL}, and the team sync stores what it lists.
+     *
+     * @see <a href="https://docs.github.com/en/graphql/reference/objects#team">GitHub Team.members</a>
      */
     @Transactional(readOnly = true)
     public List<Team> memberTeams(long workspaceId, User member) {

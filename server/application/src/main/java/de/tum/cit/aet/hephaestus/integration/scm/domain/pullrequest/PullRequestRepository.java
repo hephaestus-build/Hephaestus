@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
 import java.time.Instant;
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
@@ -36,6 +38,20 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
         WHERE p.repository.id = :repositoryId AND p.number = :number
         """)
     Optional<PullRequest> findByRepositoryIdAndNumber(
+            @Param("repositoryId") long repositoryId, @Param("number") int number);
+
+    /**
+     * The pull request, with its row locked until the transaction ends. A webhook or a sync compares what it read
+     * against the stored review requests before it replaces them, so this must be the transaction's first read of the
+     * pull request: a query hands back an instance the transaction already loaded without reading it again. A
+     * concurrent writer then commits before the read, not between the read and the replacement. Once the pull request
+     * exists, {@link #upsertCore}'s {@code ON CONFLICT DO UPDATE} takes the same lock, so a writer that finds nothing
+     * here still compares under it. The wait is at most one sync transaction: a page of pull requests on GitHub, one
+     * merge request on GitLab.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM PullRequest p WHERE p.repository.id = :repositoryId AND p.number = :number")
+    Optional<PullRequest> findForUpdateByRepositoryIdAndNumber(
             @Param("repositoryId") long repositoryId, @Param("number") int number);
 
     /** Pull request by id with assignees eagerly fetched, for access after the Hibernate session closes. */
