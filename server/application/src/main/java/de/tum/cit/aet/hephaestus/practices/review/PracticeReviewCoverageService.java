@@ -4,8 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipService;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewPersonTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewPersonTargetRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewRepositoryTarget;
@@ -33,7 +32,7 @@ public class PracticeReviewCoverageService {
     static final int ESTIMATE_WINDOW_DAYS = 30;
 
     private final RepositoryToMonitorRepository monitorRepository;
-    private final WorkspaceMembershipRepository membershipRepository;
+    private final WorkspaceMembershipService membershipService;
     private final PracticeReviewRepositoryTargetRepository repositoryTargetRepository;
     private final PracticeReviewPersonTargetRepository personTargetRepository;
 
@@ -87,7 +86,9 @@ public class PracticeReviewCoverageService {
     private PracticeReviewCoverageSummaryDTO summary(
             Workspace workspace, WorkspaceReviewScope scope, int recentReviewVolume) {
         int monitored = monitorRepository.findByWorkspaceId(workspace.getId()).size();
-        int eligible = eligibleMemberships(workspace.getId()).size();
+        int eligible = membershipService
+                .practiceReviewEligibleUserIds(workspace.getId())
+                .size();
         int coveredRepositories = scope.repositoryMode() == ReviewRepositoryMode.ALL_MONITORED
                 ? monitored
                 : scope.repositories().size();
@@ -108,9 +109,7 @@ public class PracticeReviewCoverageService {
                         "Repository is not monitored by this workspace: " + repository.nameWithOwner());
             }
         }
-        Set<Long> eligible = eligibleMemberships(workspaceId).stream()
-                .map(WorkspaceMembership::getUserId)
-                .collect(Collectors.toSet());
+        Set<Long> eligible = membershipService.practiceReviewEligibleUserIds(workspaceId);
         if (!eligible.containsAll(requested.personUserIds())) {
             throw new InvalidReviewCoverageException(
                     "Every selected person must be an eligible linked workspace member");
@@ -138,8 +137,7 @@ public class PracticeReviewCoverageService {
                     && !afterBranches.isEmpty()
                     && afterBranches.stream().anyMatch(branch -> !beforeBranches.contains(branch))) return true;
         }
-        for (WorkspaceMembership membership : eligibleMemberships(workspaceId)) {
-            Long userId = membership.getUserId();
+        for (Long userId : membershipService.practiceReviewEligibleUserIds(workspaceId)) {
             if (proposed.admitsPerson(userId) && !current.admitsPerson(userId)) return true;
         }
         return false;
@@ -239,9 +237,7 @@ public class PracticeReviewCoverageService {
     private ReviewSubjectStatus subjectStatus(Workspace workspace, @Nullable ReviewSubject subject) {
         if (subject == null || subject.actorId() == null) return ReviewSubjectStatus.MISSING;
         if (!subject.human()) return ReviewSubjectStatus.NON_HUMAN;
-        return membershipRepository
-                        .findByWorkspace_IdAndUser_Id(workspace.getId(), subject.actorId())
-                        .isPresent()
+        return membershipService.isPracticeReviewEligible(workspace.getId(), subject.actorId())
                 ? ReviewSubjectStatus.RESOLVED_LINKED_HUMAN
                 : ReviewSubjectStatus.UNLINKED;
     }
@@ -296,11 +292,5 @@ public class PracticeReviewCoverageService {
                 .toList());
 
         workspace.getReviewSettings().applyRollout(requested.repositoryMode(), requested.personMode(), null);
-    }
-
-    private List<WorkspaceMembership> eligibleMemberships(long workspaceId) {
-        return membershipRepository.findAllWithUserByWorkspaceId(workspaceId).stream()
-                .filter(WorkspaceMembership::hasHumanUser)
-                .toList();
     }
 }

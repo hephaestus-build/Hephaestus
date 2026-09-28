@@ -17,10 +17,13 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -50,18 +53,24 @@ public class WorkspaceMembershipService {
 
     private final ConfigAuditPort configAudit;
     private final WorkspaceAccessService accessService;
+    private final HiddenFormerMemberRepository hiddenFormerMemberRepository;
+    private final WorkspaceActorSelector actorSelector;
 
     public WorkspaceMembershipService(
             WorkspaceMembershipRepository workspaceMembershipRepository,
             WorkspaceRepository workspaceRepository,
             EntityManager entityManager,
             ConfigAuditPort configAudit,
-            WorkspaceAccessService accessService) {
+            WorkspaceAccessService accessService,
+            HiddenFormerMemberRepository hiddenFormerMemberRepository,
+            WorkspaceActorSelector actorSelector) {
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceRepository = workspaceRepository;
         this.entityManager = entityManager;
         this.configAudit = configAudit;
         this.accessService = accessService;
+        this.hiddenFormerMemberRepository = hiddenFormerMemberRepository;
+        this.actorSelector = actorSelector;
     }
 
     @Transactional(readOnly = true)
@@ -125,7 +134,10 @@ public class WorkspaceMembershipService {
                 continue;
             }
             inserted += workspaceMembershipRepository.insertIfAbsent(
-                    workspaceId, userId, WorkspaceMembership.WorkspaceRole.MEMBER.name());
+                    workspaceId,
+                    userId,
+                    WorkspaceMembership.WorkspaceRole.MEMBER.name(),
+                    takeBackHiddenPreference(workspaceId, userId));
         }
 
         if (inserted > 0) {
@@ -179,20 +191,8 @@ public class WorkspaceMembershipService {
                 WorkspaceMembership member = createMembershipInternal(workspace, user, desiredRole);
                 toCreate.add(member);
             } else if (existing.getRole() != desiredRole) {
-                var beforeSync = new WorkspaceAuditSnapshots.RoleSnapshot(
-                        existing.getRole() == null ? null : existing.getRole().name(), existing.isHidden());
-                existing.setRole(desiredRole);
+                changeSyncedRole(existing, desiredRole, workspace.getId(), userId);
                 toUpdate.add(existing);
-                // Recorded with a SYSTEM actor: a role can change without an admin ever touching this
-                // instance, and "when did X become ADMIN" must not answer confidently from the
-                // admin-initiated rows alone. Creates and deletions are deliberately not recorded —
-                // see ConfigAuditEntityType.WORKSPACE_ROLE for that boundary.
-                configAudit.record(ConfigAuditEntry.updated(
-                        ConfigAuditEntityType.WORKSPACE_ROLE,
-                        userId,
-                        workspace.getId(),
-                        beforeSync,
-                        new WorkspaceAuditSnapshots.RoleSnapshot(desiredRole.name(), existing.isHidden())));
             }
         }
 
@@ -201,17 +201,7 @@ public class WorkspaceMembershipService {
             if (memberUserId == null || desiredUserIds.contains(memberUserId)) {
                 continue;
             }
-            // Preserve memberships an admin has explicitly hidden from workspace activity.
-            // `hidden=true` is a sticky, admin-authored signal that must survive org-sync
-            // churn (transient API gaps, webhook reorder, remove-then-re-add). Deleting
-            // the row would lose that signal on re-creation and silently un-hide the user.
-            if (member.isHidden()) {
-                log.debug(
-                        "Preserved hidden workspace membership during sync: workspaceId={}, userId={}",
-                        workspace.getId(),
-                        memberUserId);
-                continue;
-            }
+            parkHiddenPreference(member, workspace.getId(), memberUserId);
             toDelete.add(member);
         }
 
@@ -223,6 +213,68 @@ public class WorkspaceMembershipService {
         }
         if (!toDelete.isEmpty()) {
             workspaceMembershipRepository.deleteAll(toDelete);
+        }
+    }
+
+    /**
+     * Applies what the provider now grants one person, without reading anyone else: {@code role} creates or updates
+     * their membership, {@code null} removes it. An OWNER is left as is.
+     */
+    @Transactional
+    public void applyProviderGrant(Workspace workspace, Long userId, WorkspaceMembership.@Nullable WorkspaceRole role) {
+        Optional<WorkspaceMembership> existing =
+                workspaceMembershipRepository.findByWorkspace_IdAndUser_Id(workspace.getId(), userId);
+        if (existing.map(member -> member.getRole() == WorkspaceMembership.WorkspaceRole.OWNER)
+                .orElse(false)) {
+            return;
+        }
+        if (role == null) {
+            existing.ifPresent(member -> {
+                parkHiddenPreference(member, workspace.getId(), userId);
+                workspaceMembershipRepository.delete(member);
+            });
+            return;
+        }
+        if (existing.isPresent()) {
+            if (existing.get().getRole() != role) {
+                changeSyncedRole(existing.get(), role, workspace.getId(), userId);
+                workspaceMembershipRepository.save(existing.get());
+            }
+            return;
+        }
+        User user = entityManager.find(User.class, userId);
+        if (user == null) {
+            return;
+        }
+        WorkspaceMembership member = createMembershipInternal(workspace, user, role);
+        workspaceMembershipRepository.save(member);
+    }
+
+    private void changeSyncedRole(
+            WorkspaceMembership existing, WorkspaceMembership.WorkspaceRole role, Long workspaceId, Long userId) {
+        var before = new WorkspaceAuditSnapshots.RoleSnapshot(
+                existing.getRole() == null ? null : existing.getRole().name(), existing.isHidden());
+        existing.setRole(role);
+        // Recorded with a SYSTEM actor: a role can change without an admin ever touching this
+        // instance, and "when did X become ADMIN" must not answer confidently from the
+        // admin-initiated rows alone. Creates and deletions are deliberately not recorded —
+        // see ConfigAuditEntityType.WORKSPACE_ROLE for that boundary.
+        configAudit.record(ConfigAuditEntry.updated(
+                ConfigAuditEntityType.WORKSPACE_ROLE,
+                userId,
+                workspaceId,
+                before,
+                new WorkspaceAuditSnapshots.RoleSnapshot(role.name(), existing.isHidden())));
+    }
+
+    /**
+     * Hiding someone from workspace activity is not a grant: a hidden member the provider no longer grants loses the
+     * workspace like anyone else. The admin-authored preference must survive remove-then-re-add without silently
+     * un-hiding the user, so it is parked and taken back by the next membership created for them.
+     */
+    private void parkHiddenPreference(WorkspaceMembership member, Long workspaceId, Long userId) {
+        if (member.isHidden()) {
+            hiddenFormerMemberRepository.save(new HiddenFormerMember(workspaceId, userId));
         }
     }
 
@@ -253,6 +305,7 @@ public class WorkspaceMembershipService {
         membership.setWorkspace(workspace);
         membership.setUser(userReference);
         membership.setRole(role);
+        membership.setHidden(takeBackHiddenPreference(workspace.getId(), userId));
         membership.setId(new WorkspaceMembership.Id(workspace.getId(), userId));
 
         return workspaceMembershipRepository.save(membership);
@@ -322,8 +375,14 @@ public class WorkspaceMembershipService {
         member.setWorkspace(workspace);
         member.setUser(user);
         member.setRole(role);
+        member.setHidden(takeBackHiddenPreference(workspace.getId(), user.getId()));
         member.setId(new WorkspaceMembership.Id(workspace.getId(), user.getId()));
         return member;
+    }
+
+    /** Every path that creates a membership asks this, so a returning member keeps being hidden. */
+    private boolean takeBackHiddenPreference(Long workspaceId, Long userId) {
+        return hiddenFormerMemberRepository.deleteByWorkspaceIdAndUserId(workspaceId, userId) > 0;
     }
 
     // Hidden member methods
@@ -344,8 +403,6 @@ public class WorkspaceMembershipService {
         var before = new WorkspaceAuditSnapshots.RoleSnapshot(
                 membership.getRole() == null ? null : membership.getRole().name(), membership.isHidden());
         membership.setHidden(hidden);
-        // Not cosmetic: syncWorkspaceMembers deliberately preserves hidden memberships, so this flag
-        // decides whether a member keeps workspace access after leaving the upstream org.
         configAudit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.WORKSPACE_ROLE,
                 userId,
@@ -409,6 +466,41 @@ public class WorkspaceMembershipService {
     @Transactional(readOnly = true)
     public Page<WorkspaceMembership> listMembers(Long workspaceId, Pageable pageable) {
         return workspaceMembershipRepository.findAllByWorkspace_Id(workspaceId, pageable);
+    }
+
+    /**
+     * The members practice review can take as its subject: linked humans whose identity is on the instance of the
+     * workspace's active connection, since only that identity authors the work it reviews. The account that created
+     * a GitLab workspace through its GitHub identity is a member, but never an author there. Without an active
+     * connection nothing tells which instance that is, and every human member counts. Who is a member at all is the
+     * provider's roster's answer, which reconciliation keeps the membership rows to.
+     */
+    @Transactional(readOnly = true)
+    public Set<Long> practiceReviewEligibleUserIds(Long workspaceId) {
+        Predicate<WorkspaceMembership> eligible = practiceReviewEligibility(workspaceId);
+        return workspaceMembershipRepository.findAllWithUserByWorkspaceId(workspaceId).stream()
+                .filter(eligible)
+                .map(WorkspaceMembership::getUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    /** One member of {@link #practiceReviewEligibleUserIds}, without reading the whole roster. */
+    @Transactional(readOnly = true)
+    public boolean isPracticeReviewEligible(Long workspaceId, Long userId) {
+        return workspaceMembershipRepository
+                .findByWorkspace_IdAndUser_Id(workspaceId, userId)
+                .filter(practiceReviewEligibility(workspaceId))
+                .isPresent();
+    }
+
+    private Predicate<WorkspaceMembership> practiceReviewEligibility(Long workspaceId) {
+        Optional<Long> connectedProvider = actorSelector.connectedProviderId(workspaceId);
+        return membership -> membership.hasHumanUser()
+                && connectedProvider
+                        .map(providerId -> providerId.equals(
+                                membership.getUser().getProvider().getId()))
+                        .orElse(true);
     }
 
     private Workspace lockForMembershipChange(Long workspaceId) {

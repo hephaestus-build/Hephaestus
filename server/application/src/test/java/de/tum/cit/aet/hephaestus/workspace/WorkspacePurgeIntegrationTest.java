@@ -83,6 +83,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
+    private HiddenFormerMemberRepository hiddenFormerMemberRepository;
+
+    @Autowired
     private LateFailingWorkspacePurgeContributor lateFailingContributor;
 
     @Autowired
@@ -360,6 +363,8 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     "pull_request",
                     1L);
 
+            hiddenFormerMemberRepository.save(new HiddenFormerMember(workspaceId, owner.getId()));
+
             // Purge
             workspaceLifecycleService.purgeWorkspace(workspace.getWorkspaceSlug());
 
@@ -375,6 +380,8 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             assertThat(workspaceMembershipRepository.findByWorkspace_Id(workspaceId))
                     .isEmpty();
             assertThat(activityEventRepository.countByWorkspaceId(workspaceId)).isZero();
+            assertThat(hiddenFormerMemberRepository.existsById(new HiddenFormerMember.Key(workspaceId, owner.getId())))
+                    .isFalse();
         }
     }
 

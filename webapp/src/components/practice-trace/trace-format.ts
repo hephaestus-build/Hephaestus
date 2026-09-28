@@ -43,7 +43,7 @@ export const SIGNAL_STATE_REASON_LABELS: Record<SignalStateReason, string> = {
 	REVIEW_MODEL_UNBOUND: "No AI model is set up to run reviews",
 	PRACTICE_AUTONOMY_OFF: "Every practice watching this is turned off; raising one lets it run",
 	BUDGET_EXHAUSTED: "The workspace's AI budget was used up; it refills",
-	SUBJECT_UNLINKED: "Hephaestus could not tell whose work this is",
+	SUBJECT_UNLINKED: "The author is unknown or not a workspace member yet",
 	MODEL_UNAVAILABLE: "The AI model set for reviews is no longer available",
 	ARTIFACT_NOT_VISIBLE:
 		"This work is not showing on the provider right now; it will be checked again",

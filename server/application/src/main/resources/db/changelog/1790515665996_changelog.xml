@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790515665996-1" author="hephaestus">
+        <createTable tableName="workspace_hidden_former_member">
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="workspace_hidden_former_memberPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="workspace_hidden_former_memberPK"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="workspace_hidden_former_member" baseColumnNames="workspace_id"
+                                 constraintName="sfk_workspace_hidden_former_member_workspace"
+                                 referencedTableName="workspace" referencedColumnNames="id" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="workspace_hidden_former_member" baseColumnNames="user_id"
+                                 constraintName="sfk_workspace_hidden_former_member_user"
+                                 referencedTableName="user" referencedColumnNames="id" onDelete="CASCADE"/>
+    </changeSet>
+</databaseChangeLog>

@@ -333,9 +333,10 @@ in [When a workspace goes quiet](/admin/practice-review#when-a-workspace-goes-qu
 
 - **Review coverage**, checked first. The repository/base-branch axis and the person axis are intersected,
   and both must admit the work. A repository or base branch outside the selection, a selected list left
-  empty, or an author who is not a member of the workspace is refused with terminal `OUT_OF_REVIEW_SCOPE`.
-  Work with no identifiable author is refused with retryable `SUBJECT_UNLINKED` instead, because an
-  identity can still arrive later.
+  empty, a member the person selection leaves out, or a bot author is refused with terminal
+  `OUT_OF_REVIEW_SCOPE`. Work with no identifiable author, or whose author is not a member the workspace
+  reviews, is refused with retryable `SUBJECT_UNLINKED` instead, because an identity or a membership can still
+  arrive with the next link or member sync.
 - **Practice autonomy.** A practice at `OFF` admits no review; `HUMAN_APPROVAL` and `AUTOMATIC` both run it
   and differ only in whether a person must authorize release onto the work. When every practice bound to a signal sits at
   `OFF`, the signal is refused with retryable `PRACTICE_AUTONOMY_OFF`, so turning a practice back on lets
