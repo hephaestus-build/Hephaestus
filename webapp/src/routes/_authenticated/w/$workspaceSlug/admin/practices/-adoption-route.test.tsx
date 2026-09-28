@@ -108,10 +108,6 @@ describe("catalog adoption over practice setup", () => {
 						providerType: "GITHUB",
 						status: "ACTIVE",
 						practicesEnabled: false,
-						mentorEnabled: false,
-						leaderboardEnabled: false,
-						progressionEnabled: false,
-						leaguesEnabled: false,
 					},
 				]),
 			),
@@ -335,24 +331,6 @@ describe("catalog adoption over practice setup", () => {
 			() => expect(router.state.location.search.detail).toBeUndefined(),
 			ROUTE_RENDER_WAIT,
 		);
-	});
-
-	it("turns the retired editor paths into the level they became", async () => {
-		const { router } = renderRouteAtWithRouter("/w/acme/admin/practices/new");
-		await waitFor(
-			() => expect(router.state.location.pathname).toBe("/w/acme/admin/practices"),
-			ROUTE_RENDER_WAIT,
-		);
-		expect(router.state.location.search.detail).toStrictEqual(["practice-new:draft"]);
-
-		const edited = renderRouteAtWithRouter("/w/acme/admin/practices/already-mine");
-		await waitFor(
-			() => expect(edited.router.state.location.pathname).toBe("/w/acme/admin/practices"),
-			ROUTE_RENDER_WAIT,
-		);
-		expect(edited.router.state.location.search.detail).toStrictEqual([
-			"practice-edit:already-mine",
-		]);
 	});
 
 	it("creates a practice from the editor level and lands back on the tree", async () => {

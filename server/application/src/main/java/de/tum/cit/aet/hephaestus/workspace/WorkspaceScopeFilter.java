@@ -117,7 +117,12 @@ public class WorkspaceScopeFilter {
      * its root segment; the repository filter still has to name the repository exactly.
      */
     public boolean isRepositoryAllowed(Workspace workspace, String nameWithOwner) {
-        return isWorkspaceAllowed(workspace)
+        return isGroupRepositoryAllowed(workspace.getAccountLogin(), nameWithOwner);
+    }
+
+    /** {@link #isRepositoryAllowed(Workspace, String)} for a caller that holds the workspace's group, not the entity. */
+    public boolean isGroupRepositoryAllowed(String group, String nameWithOwner) {
+        return isOrganizationAllowed(group)
                 && (allowedRepositories.isEmpty() || allowedRepositories.contains(normalize(nameWithOwner)));
     }
 

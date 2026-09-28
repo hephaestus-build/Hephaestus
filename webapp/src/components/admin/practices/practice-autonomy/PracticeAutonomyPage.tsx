@@ -4,6 +4,8 @@ import { useState } from "react";
 import type { AutonomyRollup, Practice, PracticeReviewSettings } from "@/api/types.gen";
 import { automatedReviewLimitationLabel } from "@/components/admin/practice-editor/evidence-presentation";
 import { PracticeDetailHoverCard } from "@/components/admin/practice-editor/PracticeDetailHoverCard";
+import { practiceSetupLevel } from "@/components/admin/practices/practice-search";
+import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { AUTONOMY_DEFS } from "@/components/practice-vocabulary/autonomy-defs";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
 import {
@@ -641,8 +643,9 @@ function PracticeAutonomyRow({
 				<ItemTitle className="line-clamp-none w-full min-w-0">
 					<PracticeDetailHoverCard practice={practice}>
 						<Link
-							to="/w/$workspaceSlug/admin/practices/$practiceSlug"
-							params={{ workspaceSlug, practiceSlug: practice.slug }}
+							to="/w/$workspaceSlug/admin/practices"
+							params={{ workspaceSlug }}
+							search={detailSearch(practiceSetupLevel(practice.slug))}
 							className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 						>
 							{practice.name}

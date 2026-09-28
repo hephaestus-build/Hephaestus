@@ -39,6 +39,13 @@ public record ReviewFeedbackFilterParams(
 
         @RequestParam(required = false) @Positive @Nullable Long recipientUserId,
 
+        @Parameter(
+                description = "Practices whose feedback to list (repeatable): feedback bound to an observation of any"
+                        + " of them, in any role")
+        @RequestParam(required = false)
+        @Nullable
+        List<String> practiceSlug,
+
         @Parameter(description = "Inclusive lower bound")
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
@@ -59,6 +66,15 @@ public record ReviewFeedbackFilterParams(
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must not be after to");
         }
         return new FeedbackQueryFilter(
-                deliveryState, suppressionReason, channel, agentJobId, kind, artifactId, recipientUserId, from, to);
+                deliveryState,
+                suppressionReason,
+                channel,
+                agentJobId,
+                kind,
+                artifactId,
+                recipientUserId,
+                practiceSlug,
+                from,
+                to);
     }
 }

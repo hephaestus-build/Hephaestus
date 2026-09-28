@@ -57,7 +57,7 @@ class SlackMessageServiceLiveTest {
                 workspace,
                 IntegrationKind.SLACK,
                 "T-live-e2e",
-                new ConnectionConfig.SlackConfig("T-live-e2e", "hephaestus-test", channelId, null, null, Set.of()));
+                new ConnectionConfig.SlackConfig("T-live-e2e", "hephaestus-test", null, Set.of()));
         connection.setState(IntegrationState.ACTIVE);
         connection.setCredentials(new BearerToken(botToken, null), converter);
         // Prove the round-trip before we ever hit Slack: the stored blob decrypts back to the token.

@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
-import static de.tum.cit.aet.hephaestus.leaderboard.LeaguePointsConstants.POINTS_DEFAULT;
-
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
@@ -18,7 +16,6 @@ import de.tum.cit.aet.hephaestus.workspace.exception.InsufficientWorkspacePermis
 import de.tum.cit.aet.hephaestus.workspace.exception.LastOwnerRemovalException;
 import jakarta.persistence.EntityManager;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -45,7 +42,6 @@ import org.springframework.transaction.annotation.Transactional;
  * <li>Creating and removing memberships</li>
  * <li>Updating member roles</li>
  * <li>Syncing GitHub organization members with workspace memberships</li>
- * <li>Managing league points snapshots</li>
  * </ul>
  */
 @Service
@@ -86,55 +82,6 @@ public class WorkspaceMembershipService {
         this.teamMembershipRepository = teamMembershipRepository;
     }
 
-    /**
-     * League points of workspace members, and the default for anyone who is not one. Reading points never makes
-     * anyone a member: membership comes from workspace administration or the provider's roster only.
-     */
-    @Transactional(readOnly = true)
-    public Map<Long, Integer> getLeaguePointsSnapshot(Collection<User> users, Long workspaceId) {
-        if (users == null || users.isEmpty()) {
-            return Collections.emptyMap();
-        }
-
-        Set<Long> userIds =
-                users.stream().map(User::getId).filter(Objects::nonNull).collect(Collectors.toSet());
-
-        if (userIds.isEmpty()) {
-            return Collections.emptyMap();
-        }
-
-        if (workspaceId == null) {
-            return userIds.stream().collect(Collectors.toMap(id -> id, id -> POINTS_DEFAULT));
-        }
-
-        Map<Long, Integer> leaguePointsByUserId =
-                workspaceMembershipRepository.findAllByWorkspace_IdAndUser_IdIn(workspaceId, userIds).stream()
-                        .collect(Collectors.toMap(
-                                member -> member.getUser().getId(), WorkspaceMembership::getLeaguePoints));
-
-        for (Long userId : userIds) {
-            leaguePointsByUserId.putIfAbsent(userId, POINTS_DEFAULT);
-        }
-
-        return leaguePointsByUserId;
-    }
-
-    /** A member's league points, and the default for anyone who is not one; reading never creates a membership. */
-    @Transactional(readOnly = true)
-    public int getCurrentLeaguePoints(Long workspaceId, User user) {
-        if (user == null || user.getId() == null) {
-            return POINTS_DEFAULT;
-        }
-        if (workspaceId == null) {
-            return POINTS_DEFAULT;
-        }
-
-        return workspaceMembershipRepository
-                .findByWorkspace_IdAndUser_Id(workspaceId, user.getId())
-                .map(WorkspaceMembership::getLeaguePoints)
-                .orElse(POINTS_DEFAULT);
-    }
-
     @Transactional(readOnly = true)
     public Optional<User> findMemberByLogin(Long workspaceId, String login) {
         // A login is not unique across providers; the request's own actor is the one it means.
@@ -151,49 +98,10 @@ public class WorkspaceMembershipService {
                 .map(WorkspaceMembership::getUser);
     }
 
-    @Transactional
-    public void updateLeaguePoints(Long workspaceId, User user, int newPoints) {
-        if (user == null || user.getId() == null) {
-            return;
-        }
-        if (workspaceId == null) {
-            log.debug("Skipped league point update: reason=noWorkspaceConfigured, userLogin={}", user.getLogin());
-            return;
-        }
-
-        // A user who is not a member has no points to update, and updating them must not make them one.
-        workspaceMembershipRepository
-                .findByWorkspace_IdAndUser_Id(workspaceId, user.getId())
-                .ifPresentOrElse(
-                        member -> {
-                            member.setLeaguePoints(newPoints);
-                            workspaceMembershipRepository.save(member);
-                        },
-                        () -> log.debug(
-                                "Skipped league point update: reason=notAMember, workspaceId={}, userId={}",
-                                workspaceId,
-                                user.getId()));
-    }
-
-    @Transactional
-    public void resetLeaguePoints(Long workspaceId, int points) {
-        if (workspaceId == null) {
-            log.debug("Skipped league point reset: reason=noWorkspaceConfigured");
-            return;
-        }
-
-        List<WorkspaceMembership> members = workspaceMembershipRepository.findByWorkspace_Id(workspaceId);
-        if (members.isEmpty()) {
-            return;
-        }
-        members.forEach(member -> member.setLeaguePoints(points));
-        workspaceMembershipRepository.saveAll(members);
-    }
-
     /**
-     * Human members of the workspace, team memberships fetched — the roster used to pad zero-activity
-     * leaderboard entries. Scoped by {@code workspace_id}, not by the org-login string, so it cannot
-     * leak members between workspaces that share an {@code account_login}. Empty for a null id.
+     * Human members of the workspace, team memberships fetched — the roster of workspace activity. Scoped by
+     * {@code workspace_id}, not by the org-login string, so it cannot leak members between workspaces that share
+     * an {@code account_login}. Empty for a null id.
      */
     @Transactional(readOnly = true)
     public List<User> getHumanMembersWithTeams(Long workspaceId) {
@@ -209,9 +117,8 @@ public class WorkspaceMembershipService {
      * <p>
      * Uses the race-safe native upsert in
      * {@link WorkspaceMembershipRepository#insertIfAbsent}: if a membership already
-     * exists for the user, it is left untouched (role, league points, hidden flag all
-     * preserved). Only missing memberships are created with role {@code MEMBER} and
-     * default league points.
+     * exists for the user, it is left untouched (role and hidden flag preserved). Only missing
+     * memberships are created, with role {@code MEMBER}.
      * <p>
      * Intended for reconciliation paths that discover users via the team graph or
      * other side channels and must never downgrade existing OWNER/ADMIN roles.
@@ -239,7 +146,6 @@ public class WorkspaceMembershipService {
                     workspaceId,
                     userId,
                     WorkspaceMembership.WorkspaceRole.MEMBER.name(),
-                    POINTS_DEFAULT,
                     takeBackHiddenPreference(workspaceId, userId));
         }
 
@@ -292,7 +198,6 @@ public class WorkspaceMembershipService {
                     continue;
                 }
                 WorkspaceMembership member = createMembershipInternal(workspace, user, desiredRole);
-                member.setLeaguePoints(POINTS_DEFAULT);
                 toCreate.add(member);
             } else if (existing.getRole() != desiredRole) {
                 changeSyncedRole(existing, desiredRole, workspace.getId(), userId);
@@ -351,7 +256,6 @@ public class WorkspaceMembershipService {
             return;
         }
         WorkspaceMembership member = createMembershipInternal(workspace, user, role);
-        member.setLeaguePoints(POINTS_DEFAULT);
         workspaceMembershipRepository.save(member);
     }
 
@@ -373,7 +277,7 @@ public class WorkspaceMembershipService {
     }
 
     /**
-     * Hiding someone from the leaderboard is not a grant: a hidden member the provider no longer grants loses the
+     * Hiding someone from workspace activity is not a grant: a hidden member the provider no longer grants loses the
      * workspace like anyone else. The admin-authored preference must survive remove-then-re-add without silently
      * un-hiding the user, so it is parked and taken back by the next membership created for them.
      */
@@ -410,7 +314,6 @@ public class WorkspaceMembershipService {
         membership.setWorkspace(workspace);
         membership.setUser(userReference);
         membership.setRole(role);
-        membership.setLeaguePoints(POINTS_DEFAULT);
         membership.setHidden(takeBackHiddenPreference(workspace.getId(), userId));
         membership.setId(new WorkspaceMembership.Id(workspace.getId(), userId));
 
@@ -448,7 +351,6 @@ public class WorkspaceMembershipService {
             }
 
             WorkspaceMembership membership = createMembershipInternal(workspace, user, role);
-            membership.setLeaguePoints(POINTS_DEFAULT);
             configAudit.record(ConfigAuditEntry.created(
                     ConfigAuditEntityType.WORKSPACE_ROLE,
                     userId,

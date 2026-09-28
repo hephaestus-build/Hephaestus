@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepositor
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.ObservationFeedback;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.DeveloperPracticeSummaryProjection;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationDetailDTO;
@@ -46,6 +47,7 @@ public class ObservationService {
     private final ReviewRunTargetLookup reviewRunTargetLookup;
     private final ReviewRunNarrativeLookup reviewRunNarrativeLookup;
     private final EvidenceAuthorization evidenceAuthorization;
+    private final ObservationInvalidationRepository invalidationRepository;
 
     /** Feed ordering: by observation time or by severity (direction applies to both). */
     public enum ObservationSort {
@@ -175,6 +177,9 @@ public class ObservationService {
         List<UUID> observationIds =
                 observations.stream().map(Observation::getId).toList();
         Map<UUID, ObservationFeedback> feedback = feedbackByObservation(workspaceId, developerId, observationIds);
+        Map<UUID, ObservationInvalidation> invalidations =
+                invalidationRepository.findActiveFor(workspaceId, observationIds).stream()
+                        .collect(Collectors.toMap(ObservationInvalidation::getObservationId, Function.identity()));
         return observations.stream()
                 .map(observation -> {
                     ReviewRunTargetLookup.Target target = targets.get(observation.getAgentJobId());
@@ -184,7 +189,8 @@ public class ObservationService {
                             feedback.get(observation.getId()),
                             narrative == null ? null : narrative.nextStepFor(observation.getId()),
                             target == null ? null : target.url(),
-                            evidencePermitted.contains(observation.getId()));
+                            evidencePermitted.contains(observation.getId()),
+                            invalidations.get(observation.getId()));
                 })
                 .toList();
     }
@@ -195,15 +201,5 @@ public class ObservationService {
                 .findLatestFeedbackByObservationIds(workspaceId, recipientUserId, observationIds, FEEDBACK_CHANNELS)
                 .stream()
                 .collect(Collectors.toMap(ObservationFeedback::getObservationId, Function.identity()));
-    }
-
-    /**
-     * All observations for a specific pull request within a workspace.
-     * Any workspace member can view PR observations (not restricted to the PR author).
-     */
-    @Transactional(readOnly = true)
-    public List<Observation> getObservationsForPullRequest(Long workspaceId, Long pullRequestId) {
-        return observationRepository.findByPullRequestAndWorkspace(
-                ArtifactKinds.PULL_REQUEST, pullRequestId, workspaceId);
     }
 }

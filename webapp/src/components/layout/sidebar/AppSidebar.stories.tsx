@@ -16,10 +16,6 @@ const mockWorkspace = {
 	providerType: "GITHUB",
 	createdAt: new Date("2025-01-15T00:00:00Z"),
 	practicesEnabled: true,
-	mentorEnabled: true,
-	leaderboardEnabled: true,
-	progressionEnabled: false,
-	leaguesEnabled: false,
 } as const;
 
 const meta = {
@@ -29,7 +25,6 @@ const meta = {
 	},
 	tags: ["autodocs"],
 	args: {
-		username: "johnDoe",
 		isAdmin: false,
 		isAppAdmin: false,
 		isMember: true,
@@ -52,7 +47,6 @@ type Story = StoryObj<typeof meta>;
 
 export const RegularUser: Story = {
 	args: {
-		username: "johndoe",
 		isAdmin: false,
 		context: "main",
 		activeWorkspace: mockWorkspace,
@@ -65,7 +59,6 @@ export const RegularUser: Story = {
 
 export const WorkspaceAdminUser: Story = {
 	args: {
-		username: "admin",
 		isAdmin: true,
 		isAppAdmin: false,
 		context: "main",
@@ -79,7 +72,6 @@ export const WorkspaceAdminUser: Story = {
 
 export const AdminUser: Story = {
 	args: {
-		username: "admin",
 		isAdmin: true,
 		isAppAdmin: true,
 		context: "main",
@@ -92,7 +84,6 @@ export const AdminUser: Story = {
 
 export const ReadOnlyUserView: Story = {
 	args: {
-		username: "alex",
 		isAdmin: false,
 		isAppAdmin: false,
 		readOnly: true,
@@ -111,7 +102,6 @@ export const ReadOnlyUserView: Story = {
 
 export const AdminContext: Story = {
 	args: {
-		username: "admin",
 		isAppAdmin: true,
 		context: "admin",
 		activeWorkspace: mockWorkspace,
@@ -128,7 +118,6 @@ export const AdminContext: Story = {
 
 export const AdminContextNoWorkspace: Story = {
 	args: {
-		username: "admin",
 		isAppAdmin: true,
 		context: "admin",
 		workspaces: [],
@@ -143,7 +132,6 @@ export const AdminContextNoWorkspace: Story = {
 
 export const MentorContext: Story = {
 	args: {
-		username: "mentor",
 		isAdmin: false,
 		context: "mentor",
 		mentorThreads: [
@@ -169,25 +157,16 @@ export const MentorContext: Story = {
 
 export const MentorLoading: Story = {
 	args: {
-		username: "mentor",
 		isAdmin: false,
 		context: "mentor",
 		mentorThreadsLoading: true,
 	},
 };
 
-export const AllFeaturesDisabled: Story = {
+export const PracticeReviewsOff: Story = {
 	args: {
-		activeWorkspace: {
-			...mockWorkspace,
-			leaderboardEnabled: false,
-		},
-		workspaces: [
-			{
-				...mockWorkspace,
-				leaderboardEnabled: false,
-			},
-		],
+		activeWorkspace: { ...mockWorkspace, practicesEnabled: false },
+		workspaces: [{ ...mockWorkspace, practicesEnabled: false }],
 	},
 };
 
@@ -209,16 +188,6 @@ export const LoadingWorkspaces: Story = {
 export const HephHiddenFromNonMember: Story = {
 	args: {
 		isMember: false,
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("link", { name: /AI mentor/u })).not.toBeInTheDocument();
-	},
-};
-
-export const HephOffInWorkspace: Story = {
-	args: {
-		activeWorkspace: { ...mockWorkspace, mentorEnabled: false },
-		workspaces: [{ ...mockWorkspace, mentorEnabled: false }],
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("link", { name: /AI mentor/u })).not.toBeInTheDocument();

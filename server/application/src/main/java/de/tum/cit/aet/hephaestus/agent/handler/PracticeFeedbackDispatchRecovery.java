@@ -91,11 +91,7 @@ class PracticeFeedbackDispatchRecovery {
                 }
                 var result = dispatchService.recover(dispatch, job);
                 if (isAutomaticPackage(dispatch)) {
-                    if (result.status() == PracticeFeedbackDispatchService.Result.Status.SENT
-                            || result.status() == PracticeFeedbackDispatchService.Result.Status.SUPPRESSED
-                            || result.status() == PracticeFeedbackDispatchService.Result.Status.FAILED) {
-                        feedbackDeliveryService.projectAutomaticPackage(job, dispatchService.automaticPackage(job));
-                    }
+                    feedbackDeliveryService.recordAutomaticPackage(job, dispatchService.automaticPackage(job));
                     continue;
                 }
                 if (result.status() == PracticeFeedbackDispatchService.Result.Status.SENT

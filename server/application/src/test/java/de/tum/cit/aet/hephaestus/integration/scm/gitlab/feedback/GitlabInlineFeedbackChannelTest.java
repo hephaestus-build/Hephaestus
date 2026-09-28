@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -440,6 +441,50 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
         assertThat(result.signals())
                 .singleElement()
                 .satisfies(s -> assertThat(s.deliveryKey()).isEqualTo("ck-dup"));
+    }
+
+    @Test
+    void findPostedIsInconclusiveWhenThePageBudgetEndsWithMorePages() {
+        when(gitLabProvider.forScope(1L)).thenReturn(client);
+        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        when(client.documentName("GetMergeRequestDiscussions")).thenReturn(spec);
+        when(spec.variable(any(), any())).thenReturn(spec);
+        ClientGraphQlResponse response = discussionsResponse(List.of(), new GitLabPageInfo(true, "next"));
+        when(spec.execute()).thenReturn(Mono.just(response));
+
+        assertThat(channel.findPosted(gitlabTarget(), List.of(lookedUp()), false))
+                .isNull();
+        verify(spec, times(50)).execute();
+    }
+
+    @Test
+    void findPostedIsInconclusiveWhenADiscussionHasMoreNotesThanOneLookupReads() {
+        when(gitLabProvider.forScope(1L)).thenReturn(client);
+        Map<String, Object> crowded = discussion("gid://gitlab/Discussion/1", List.of());
+        crowded.put("notes", Map.of("nodes", List.of(), "pageInfo", Map.of("hasNextPage", true)));
+        stubDiscussionsReturning(List.of(crowded));
+
+        assertThat(channel.findPosted(gitlabTarget(), List.of(lookedUp()), false))
+                .isNull();
+    }
+
+    @Test
+    void findPostedReportsANoteItFindsOnACompleteScan() {
+        when(gitLabProvider.forScope(1L)).thenReturn(client);
+        stubDiscussionsReturning(List.of(discussion(
+                "gid://gitlab/Discussion/1",
+                List.of(note("gid://gitlab/Note/7", "fix\n\n" + MARKER + ckTag("observation:key"), false)))));
+
+        assertThat(channel.findPosted(gitlabTarget(), List.of(lookedUp()), false))
+                .singleElement()
+                .satisfies(signal -> {
+                    assertThat(signal.disposition()).isEqualTo(Disposition.PRESERVED_EXISTING);
+                    assertThat(signal.externalRef()).isEqualTo("gid://gitlab/Note/7");
+                });
+    }
+
+    private static InlineFeedback lookedUp() {
+        return new InlineFeedback(new DiffAnchor("src/Foo.java", 10, null), "fix", MARKER, "observation:key");
     }
 
     // --- stubbing helpers ----------------------------------------------------------------------------------

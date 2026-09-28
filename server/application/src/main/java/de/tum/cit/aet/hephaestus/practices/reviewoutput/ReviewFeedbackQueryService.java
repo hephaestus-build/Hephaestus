@@ -48,8 +48,10 @@ class ReviewFeedbackQueryService {
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
-    public Page<ReviewFeedbackDTO> list(Long workspaceId, FeedbackQueryFilter filter, Pageable pageable) {
-        Page<OperatorFeedbackRow> rows = feedbackRepository.findForWorkspace(workspaceId, filter, pageable);
+    public Page<ReviewFeedbackDTO> list(
+            Long workspaceId, FeedbackQueryFilter filter, ReviewFeedbackSort sort, Pageable pageable) {
+        Page<OperatorFeedbackRow> rows =
+                feedbackRepository.findForWorkspace(workspaceId, filter, sort == ReviewFeedbackSort.OLDEST, pageable);
         List<Long> userIds = new ArrayList<>(rows.getNumberOfElements() * 2);
         for (OperatorFeedbackRow row : rows) {
             userIds.add(row.getRecipientUserId());

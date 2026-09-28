@@ -10,21 +10,18 @@ Heph is one part of the Hephaestus platform. Automated practice feedback on pull
 
 ## Who can use Heph
 
-Heph is available to every member of a workspace where a workspace admin has turned on **Chat with
-Heph** under **Administration → Settings**. You don't need to request access or sign in again once
-it is on. In each workspace:
+Heph is offered to every member of a workspace where a workspace admin has set up a model for Heph,
+and answers only within [your AI choice](./workspace#your-ai-choice). You don't need to request
+access or sign in again. In each workspace:
 
-- **Heph is not in the navigation, or a link to it says Heph is off in this workspace:** ask a
-  workspace admin to turn it on.
 - **Heph says it is off for you:** you chose **No AI**. Change **Your AI choice** to use Heph again.
 - **Heph asks you to choose which AI may handle your work:** this workspace needs your AI choice
   first.
 - **Heph says it isn't set up for your AI choice yet:** no Heph model in this workspace is within your
-  choice. Ask a workspace owner to add one, or change your choice.
+  choice. Ask a workspace admin to add one, or change your choice.
 
-Slack direct messages follow the same rules. When Heph is off in the workspace, it does not reply.
-In the other three cases it replies with the same reason and starts no conversation. See
-[Your AI choice](./workspace#your-ai-choice).
+Slack direct messages follow the same rules. Where no model is set up for Heph, it does not reply;
+in the three cases above it replies with the same reason and starts no conversation.
 
 ## Start a chat
 
@@ -70,7 +67,7 @@ Depending on your workspace configuration, Heph can use:
 
 Heph uses this context to answer your question. It does not have an unrestricted checkout of every connected repository, and it may ask for a specific snippet when the available context is not enough.
 
-Heph does not use work that was deleted on GitHub or GitLab. Your leaderboard score, profile counts, and the practice feedback you already received are unaffected: they record what happened at the time.
+Heph does not use work that was deleted on GitHub or GitLab. Your activity counts and the practice feedback you already received are unaffected: they record what happened at the time.
 
 A practice review can also prepare a private coaching brief for Heph. The brief contains a situation,
 the capability to explore, an evidence summary, and something that can be observed in the conversation.

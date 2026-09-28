@@ -73,13 +73,30 @@ The `hephaestus.tenancy.enforcement: throw` setting in `application-test.yml` fa
 
 ## Webhook fixtures and tooling
 
-Reusable webhook JSON lives in `server/application/src/test/resources/github`, named after the event it records. Load one with a `ClassPathResource`, or extract new samples with:
+Reusable webhook JSON lives in `server/application/src/test/resources/github` and `…/gitlab`, named after the event it records. Load one with a `ClassPathResource`, or extract new samples with:
 
 ```bash
 vp run schema:nats
 ```
 
 Available examples include `label.created`, `repository.created`, `create`, `push`, and more – consult the folder before recording new payloads.
+
+A fixture ending in `.derived.json` is not a recording: it is a recorded payload with the fields the
+test organization had no event to record filled in from the provider's documented payload. Replace it
+with a recording when one exists.
+
+Each row lists every field the fixture adds, changes or removes against its recorded base.
+
+| Fixture | Recorded base | Fields that differ |
+|---|---|---|
+| `github/pull_request.review_requested.reviewer.derived.json` | `pull_request.review_requested`, a team request | `requested_team` replaced by `requested_reviewer`, a user, since GitHub sends one or the other ([octokit/webhooks example](https://github.com/octokit/webhooks/blob/main/payload-examples/api.github.com/pull_request/review_requested.payload.json)); `pull_request.requested_reviewers` lists that user and the Copilot reviewer bot as [`/users/copilot-pull-request-reviewer[bot]`](https://api.github.com/users/copilot-pull-request-reviewer%5Bbot%5D) reports it. `pull_request.requested_teams` is as recorded. |
+| `gitlab/merge_request.update.reviewers.derived.json` | `merge_request.update` | Adds `reviewers` with each `state` (`approved`, `requested_changes`, `reviewed`, `unreviewed`) and `re_requested: false`, `assignees`, and `changes.assignees` (none before); removes `changes.labels` and `changes.updated_by_id`; moves `object_attributes.updated_at` and `changes.updated_at` on to 19:05:00. No `changes.reviewers`: nobody's state changes in this hook, which carries all four states because before 19.3 a review or a request for changes runs no merge request hook of its own. |
+| `gitlab/merge_request.update.review_rerequested.derived.json` | `merge_request.update` | The re-request's own hook: adds `reviewers` as in `reviewers.derived` but with `user1` `unreviewed` and `re_requested: true`, `assignees`, and `changes.reviewers` from the `reviewers.derived` list to this one, as the only `changes` entry; moves `object_attributes.updated_at` on to 19:08:00, which the re-request's system note touches before the hook runs ([`request_review_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/app/services/merge_requests/request_review_service.rb#L10-28)). |
+| `gitlab/merge_request.update.reviewers_removed.derived.json` | `merge_request.update` | Adds `changes.reviewers` from the `review_rerequested` list to none and `changes.assignees` from `ga84xah` to none, with no `reviewers` or `assignees` key, as GitLab leaves them out when there are none ([`issuable.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/lib/gitlab/data_builder/issuable.rb#L28-34)); removes `changes.labels` and `changes.updated_by_id`; moves `object_attributes.updated_at` on to 19:15:00, `changes.updated_at` from 19:08:00. |
+| `gitlab/merge_request.update.reviewers_stateless.derived.json` | `merge_request.update` | A hook from GitLab before 18.6, whose reviewers carry `User#hook_attrs` only ([`issuable.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/lib/gitlab/data_builder/issuable.rb#L31)): adds `reviewers` as in `reviewers.derived` without `state` and `re_requested` and without `user3`, `assignees`, and `changes.reviewers` from the four to the three; removes `changes.labels` and `changes.updated_by_id`; moves `object_attributes.updated_at` on to 19:06:00 and `changes.updated_at` from 19:05:00 to 19:06:00. |
+
+The GitLab fixtures other than `reviewers_stateless` follow GitLab 18.6 and later, which states each reviewer's `state` and `re_requested` ([`reviewers_hook_attrs`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/app/models/concerns/issuable.rb#L589-597)) and lists `changes.reviewers` whenever those attributes change ([`hook_reviewer_changes`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/app/models/concerns/issuable.rb#L599-609)). From 19.3 a submitted review runs merge request hooks of its own as well ([`update_reviewer_state_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.0-ee/app/services/merge_requests/update_reviewer_state_service.rb#L67-75)).
+The GitLab fields follow [merge request events](https://docs.gitlab.com/user/project/integrations/webhook_events/#merge-request-events).
 
 ## Gradle recipes
 

@@ -1,15 +1,17 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { isRecord } from "@/lib/is-record";
 import { hasText } from "@/lib/text";
 import type { WorkspaceRole } from "@/lib/workspace-roles";
+import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 
-const WORKSPACE_HOME = "/w/acme";
+// The workspace reviews practices, so its home is the Practice profile.
+const WORKSPACE_HOME = "/w/acme/practice-profile";
 
 // `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
 vi.setConfig({ testTimeout: 15_000 });
@@ -55,6 +57,14 @@ async function land(url: string) {
 
 /** Guards the bypass a route file cannot show: an /admin URL that does not nest under the gate. */
 describe("workspace-admin route gate", () => {
+	beforeEach(() => {
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]),
+			),
+		);
+	});
+
 	it("enumerates the admin routes rather than trusting a hand-written list", () => {
 		// A filter that matched nothing would leave every case below vacuously green.
 		expect(adminUrls.length).toBeGreaterThanOrEqual(19);

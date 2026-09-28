@@ -172,7 +172,6 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
         workspace.setAccountLogin("support");
         workspace.setAccountType(AccountType.USER);
         workspace.setRepositorySelection(RepositorySelection.ALL);
-        workspace.setLeaderboardNotificationEnabled(false);
         workspaceRepository.save(workspace);
 
         webTestClient

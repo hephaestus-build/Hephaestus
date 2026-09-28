@@ -12,9 +12,11 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -56,6 +58,71 @@ class DiffNotePoster {
 
     DiffNoteResult reconcileApprovedInlineNotes(AgentJob job, UUID feedbackId, List<DiffNote> diffNotes) {
         return reconcileInlineNotes(job, diffNotes, feedbackId);
+    }
+
+    /**
+     * The notes an earlier attempt may have posted without its result being recorded, looked up on the provider
+     * without writing. Complete only when every such note is found: a note that is not there yet may still arrive,
+     * and a lookup that cannot answer proves nothing either. The notes it did find are kept either way.
+     */
+    InlineLookup findUnacknowledged(
+            AgentJob job,
+            List<DiffNote> diffNotes,
+            @Nullable UUID packageId,
+            List<InlineFeedbackChannel.DeliveredSignal> acknowledged) {
+        Set<String> known = acknowledgedKeys(acknowledged);
+        List<InlineFeedbackChannel.InlineFeedback> unacknowledged = mapObservations(diffNotes, packageId).stream()
+                .filter(item -> !known.contains(item.deliveryKey()))
+                .toList();
+        if (unacknowledged.isEmpty()) {
+            return new InlineLookup(List.of(), true);
+        }
+        IntegrationKind kind = job.getIntegrationKind();
+        if (kind == null) {
+            return InlineLookup.INCONCLUSIVE;
+        }
+        InlineFeedbackChannel channel = channels.get(kind);
+        if (channel == null) {
+            return InlineLookup.INCONCLUSIVE;
+        }
+        @Nullable List<InlineFeedbackChannel.DeliveredSignal> found;
+        try {
+            found = channel.findPosted(
+                    commentPoster.buildTarget(job, kind, job.getWorkspace().getId()),
+                    unacknowledged,
+                    packageId != null);
+        } catch (RuntimeException e) {
+            return InlineLookup.INCONCLUSIVE;
+        }
+        if (found == null) {
+            return InlineLookup.INCONCLUSIVE;
+        }
+        return new InlineLookup(found, found.size() == unacknowledged.size());
+    }
+
+    /** Whether every note has been acknowledged by a posted signal; a missing note list never has. */
+    static boolean acknowledgesAll(
+            @Nullable List<DiffNote> diffNotes, List<InlineFeedbackChannel.DeliveredSignal> acknowledged) {
+        if (diffNotes == null) {
+            return false;
+        }
+        Set<String> known = acknowledgedKeys(acknowledged);
+        return diffNotes.stream().allMatch(note -> note.deliveryKey() != null && known.contains(note.deliveryKey()));
+    }
+
+    private static Set<String> acknowledgedKeys(List<InlineFeedbackChannel.DeliveredSignal> acknowledged) {
+        Set<String> known = new HashSet<>();
+        for (InlineFeedbackChannel.DeliveredSignal signal : acknowledged) {
+            // An adapter reports FAILED for a write whose response was lost, too, so only a posted note is known.
+            if (signal.deliveryKey() != null && signal.disposition() != InlineFeedbackChannel.Disposition.FAILED) {
+                known.add(signal.deliveryKey());
+            }
+        }
+        return known;
+    }
+
+    record InlineLookup(List<InlineFeedbackChannel.DeliveredSignal> found, boolean complete) {
+        static final InlineLookup INCONCLUSIVE = new InlineLookup(List.of(), false);
     }
 
     private DiffNoteResult reconcileInlineNotes(AgentJob job, List<DiffNote> diffNotes, @Nullable UUID packageId) {

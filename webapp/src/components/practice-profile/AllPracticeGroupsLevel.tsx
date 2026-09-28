@@ -1,6 +1,6 @@
-import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
-import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
-import { DrawerBody, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
+import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
+import { DrawerBody } from "@/components/ui/drawer";
 
 import { AllPracticeGroupsTable, type AllPracticeGroupsTableProps } from "./AllPracticeGroupsTable";
 import { ALL_PRACTICE_GROUPS } from "./practice-profile-search";
@@ -22,18 +22,17 @@ export interface AllPracticeGroupsLevelProps extends AllPracticeGroupsTableProps
 export function AllPracticeGroupsLevel({ nested, path, ...table }: AllPracticeGroupsLevelProps) {
 	return (
 		<>
-			<DetailDrawerHeader nested={nested}>
-				<div className="flex min-w-0 flex-1 flex-col gap-2">
-					<DetailPath {...path} current={ALL_PRACTICE_GROUPS} />
-					<DrawerTitle className="text-2xl font-semibold tracking-tight break-words">
-						{ALL_PRACTICE_GROUPS}
-					</DrawerTitle>
-					<DrawerDescription className="max-w-2xl">
+			<LevelHeader
+				nested={nested}
+				path={path}
+				current={ALL_PRACTICE_GROUPS}
+				description={
+					<p className="max-w-2xl">
 						Every practice this workspace reviews, in its group. What needs you is named; the rest
 						is counted. Open a group for the work behind it.
-					</DrawerDescription>
-				</div>
-			</DetailDrawerHeader>
+					</p>
+				}
+			/>
 			<DrawerBody className="pt-2">
 				<AllPracticeGroupsTable {...table} />
 			</DrawerBody>

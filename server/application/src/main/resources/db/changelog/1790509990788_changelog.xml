@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+        Heph is offered wherever a Heph model binding is enabled. A workspace whose mentor_enabled flag is
+        false keeps Heph off: its Heph bindings are disabled, and an admin turns them back on under AI models.
+    -->
+    <changeSet id="1790509990788-1" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="workspace.mentor_enabled and workspace_agent_binding are required to carry the Heph setting over">
+            <columnExists tableName="workspace" columnName="mentor_enabled"/>
+            <columnExists tableName="workspace_agent_binding" columnName="purpose"/>
+            <columnExists tableName="workspace_agent_binding" columnName="enabled"/>
+            <columnExists tableName="workspace_agent_binding" columnName="updated_at"/>
+        </preConditions>
+        <sql>
+            UPDATE workspace_agent_binding
+            SET enabled = false, updated_at = now()
+            WHERE purpose = 'MENTOR'
+              AND enabled = true
+              AND workspace_id IN (SELECT id FROM workspace WHERE mentor_enabled = false)
+        </sql>
+        <rollback>
+            <stop>Which Heph bindings were on before the upgrade is not recorded; restore a pre-upgrade database backup.</stop>
+        </rollback>
+    </changeSet>
+    <!--
+        A merge counts for the pull request's author, as opening and closing do; a merge whose author is unknown
+        counts for nobody.
+    -->
+    <changeSet id="1790509990788-2" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="activity_event and issue.author_id are required to attribute merges">
+            <columnExists tableName="activity_event" columnName="actor_id"/>
+            <columnExists tableName="activity_event" columnName="event_type"/>
+            <columnExists tableName="activity_event" columnName="target_type"/>
+            <columnExists tableName="activity_event" columnName="target_id"/>
+            <columnExists tableName="issue" columnName="author_id"/>
+        </preConditions>
+        <sql>
+            UPDATE activity_event
+            SET actor_id = issue.author_id
+            FROM issue
+            WHERE activity_event.event_type = 'PULL_REQUEST_MERGED'
+              AND activity_event.target_type = 'pull_request'
+              AND activity_event.target_id = issue.id
+              AND issue.author_id IS NOT NULL
+              AND activity_event.actor_id IS DISTINCT FROM issue.author_id
+        </sql>
+        <sql>
+            UPDATE activity_event
+            SET actor_id = NULL
+            FROM issue
+            WHERE activity_event.event_type = 'PULL_REQUEST_MERGED'
+              AND activity_event.target_type = 'pull_request'
+              AND activity_event.target_id = issue.id
+              AND issue.author_id IS NULL
+              AND activity_event.actor_id IS NOT NULL
+        </sql>
+        <rollback>
+            <stop>Who merged each pull request is not recorded on the event; restore a pre-upgrade database backup.</stop>
+        </rollback>
+    </changeSet>
+    <!-- Same columns as idx_activity_event_workspace_actor_occurred. -->
+    <changeSet id="1790509990788-4" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <indexExists tableName="activity_event" indexName="idx_activity_event_leaderboard"/>
+        </preConditions>
+        <dropIndex tableName="activity_event" indexName="idx_activity_event_leaderboard"/>
+        <rollback>
+            <createIndex tableName="activity_event" indexName="idx_activity_event_leaderboard">
+                <column name="workspace_id"/>
+                <column name="actor_id"/>
+                <column name="occurred_at"/>
+            </createIndex>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790509990788-5" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="idx_activity_event_xp_lookup is required to become idx_activity_event_workspace_target">
+            <indexExists tableName="activity_event" indexName="idx_activity_event_xp_lookup"/>
+            <not>
+                <indexExists tableName="activity_event" indexName="idx_activity_event_workspace_target"/>
+            </not>
+        </preConditions>
+        <sql>ALTER INDEX idx_activity_event_xp_lookup RENAME TO idx_activity_event_workspace_target</sql>
+        <rollback>
+            <sql>ALTER INDEX idx_activity_event_workspace_target RENAME TO idx_activity_event_xp_lookup</sql>
+        </rollback>
+    </changeSet>
+    <!--
+        The leaderboard, league, XP and Heph flag columns are dropped with their data, after the changesets above
+        have carried over what the new release keeps; the migration guide has the export to take first. A rollback
+        recreates each column as the previous release had it, so that release boots again, but empty: required
+        numbers read 0, switches read false and the rest NULL.
+    -->
+    <changeSet id="1790509990788-6" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <indexExists tableName="activity_event" indexName="idx_activity_event_leaderboard_covering"/>
+        </preConditions>
+        <dropIndex tableName="activity_event" indexName="idx_activity_event_leaderboard_covering"/>
+        <rollback>
+            <createIndex tableName="activity_event" indexName="idx_activity_event_leaderboard_covering">
+                <column name="workspace_id"/>
+                <column name="occurred_at" descending="true"/>
+                <column name="actor_id"/>
+                <column name="xp"/>
+            </createIndex>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790509990788-7" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT count(*) FROM pg_constraint
+                WHERE conrelid = 'public.activity_event'::regclass AND conname = 'chk_activity_event_xp_non_negative'
+            </sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE activity_event DROP CONSTRAINT chk_activity_event_xp_non_negative</sql>
+        <rollback>
+            <sql>ALTER TABLE activity_event ADD CONSTRAINT chk_activity_event_xp_non_negative CHECK (xp &gt;= 0)</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790509990788-8" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="activity_event" columnName="xp"/>
+        </preConditions>
+        <dropColumn tableName="activity_event" columnName="xp"/>
+        <rollback>
+            <addColumn tableName="activity_event">
+                <column name="xp" type="DOUBLE PRECISION" defaultValueNumeric="0">
+                    <constraints nullable="false"/>
+                </column>
+            </addColumn>
+            <dropDefaultValue tableName="activity_event" columnName="xp" columnDataType="DOUBLE PRECISION"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790509990788-9" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="workspace_membership" columnName="league_points"/>
+        </preConditions>
+        <dropColumn tableName="workspace_membership" columnName="league_points"/>
+        <rollback>
+            <addColumn tableName="workspace_membership">
+                <column name="league_points" type="INTEGER" defaultValueNumeric="0">
+                    <constraints nullable="false"/>
+                </column>
+            </addColumn>
+            <dropDefaultValue tableName="workspace_membership" columnName="league_points" columnDataType="INTEGER"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790509990788-10" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="workspace" columnName="leaderboard_notification_enabled"/>
+        </preConditions>
+        <dropColumn tableName="workspace" columnName="leaderboard_notification_enabled"/>
+        <rollback>
+            <addColumn tableName="workspace">
+                <column name="leaderboard_notification_enabled" type="BOOLEAN"/>
+            </addColumn>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790509990788-11" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="workspace" columnName="leaderboard_schedule_day"/>
+        </preConditions>
+        <dropColumn tableName="workspace" columnName="leaderboard_schedule_day"/>
+        <rollback>
+            <addColumn tableName="workspace">
+                <column name="leaderboard_schedule_day" type="INTEGER"/>
+            </addColumn>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790509990788-12" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="workspace" columnName="leaderboard_schedule_time"/>
+        </preConditions>
+        <dropColumn tableName="workspace" columnName="leaderboard_schedule_time"/>
+        <rollback>
+            <addColumn tableName="workspace">
+                <column name="leaderboard_schedule_time" type="VARCHAR(10)"/>
+            </addColumn>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790509990788-13" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="workspace" columnName="leaderboard_enabled"/>
+        </preConditions>
+        <dropColumn tableName="workspace" columnName="leaderboard_enabled"/>
+        <rollback>
+            <addColumn tableName="workspace">
+                <column name="leaderboard_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                    <constraints nullable="false"/>
+                </column>
+            </addColumn>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790509990788-14" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="workspace" columnName="progression_enabled"/>
+        </preConditions>
+        <dropColumn tableName="workspace" columnName="progression_enabled"/>
+        <rollback>
+            <addColumn tableName="workspace">
+                <column name="progression_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                    <constraints nullable="false"/>
+                </column>
+            </addColumn>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790509990788-15" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="workspace" columnName="leagues_enabled"/>
+        </preConditions>
+        <dropColumn tableName="workspace" columnName="leagues_enabled"/>
+        <rollback>
+            <addColumn tableName="workspace">
+                <column name="leagues_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                    <constraints nullable="false"/>
+                </column>
+            </addColumn>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790509990788-16" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="workspace" columnName="mentor_enabled"/>
+        </preConditions>
+        <dropColumn tableName="workspace" columnName="mentor_enabled"/>
+        <rollback>
+            <addColumn tableName="workspace">
+                <column name="mentor_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                    <constraints nullable="false"/>
+                </column>
+            </addColumn>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790509990788-17" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="workspace" columnName="leaderboard_league_cycle_at"/>
+        </preConditions>
+        <dropColumn tableName="workspace" columnName="leaderboard_league_cycle_at"/>
+        <rollback>
+            <addColumn tableName="workspace">
+                <column name="leaderboard_league_cycle_at" type="TIMESTAMP WITH TIME ZONE"/>
+            </addColumn>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

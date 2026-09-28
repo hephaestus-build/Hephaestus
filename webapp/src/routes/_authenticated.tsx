@@ -30,8 +30,8 @@ export const Route = createFileRoute("/_authenticated")({
 				location.pathname === `${workspacePath}/onboarding`
 			) {
 				throw redirect({
-					to: "/w/$workspaceSlug/user/$username",
-					params: { workspaceSlug: viewed.workspaceSlug, username: viewed.login },
+					to: "/w/$workspaceSlug",
+					params: { workspaceSlug: viewed.workspaceSlug },
 					replace: true,
 				});
 			}

@@ -134,7 +134,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .uri("/workspaces/{slug}/features", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("mentorEnabled", true))
+                .bodyValue(Map.of("practicesEnabled", true))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -145,8 +145,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .findFirst()
                 .orElseThrow();
         assertThat(row.getWorkspaceId()).isEqualTo(workspace.getId());
-        assertThat(row.changedKeyList()).contains("mentorEnabled");
-        assertThat(row.getNewValue()).contains("\"mentorEnabled\":true");
+        assertThat(row.changedKeyList()).contains("practicesEnabled");
+        assertThat(row.getNewValue()).contains("\"practicesEnabled\":true");
     }
 
     @Test

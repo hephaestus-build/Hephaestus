@@ -31,6 +31,7 @@ import {
 import {
 	CURATED_CATALOG_SEARCH_PARAMS,
 	CURATED_LEVEL_KINDS,
+	CURATED_LEVEL_LABELS,
 	type CuratedCatalogSearch,
 	curatedCatalogSearchSchema,
 	curatedGroupLevel,
@@ -43,6 +44,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { parseDetailStack } from "@/components/layout/detail-drawer/detail-stack";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import { levelPathAt } from "@/components/layout/detail-drawer/level-path";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -101,6 +103,11 @@ function AdminCuratedCatalogPage() {
 	const queryClient = useQueryClient();
 	const detailStack = parseDetailStack(detail, CURATED_LEVEL_KINDS);
 	const stackControls = useDetailStack(detailStack);
+	const pathAt = levelPathAt(detailStack, {
+		pageLabel: "Practice catalog",
+		labelOf: (entry) => CURATED_LEVEL_LABELS[entry.kind],
+		onClose: stackControls.close,
+	});
 	const catalogQuery = useQuery({ ...adminGetCuratedCatalogOptions() });
 
 	const invalidateCatalog = () => {
@@ -395,22 +402,17 @@ function AdminCuratedCatalogPage() {
 			>
 				{(entry, level) => {
 					const done = () => stackControls.close(level.depth);
+					const placement = { nested: level.nested, path: pathAt(level.depth), onDone: done };
 					if (entry.kind === "practice-new") {
-						return <CuratedPracticeCreateLevel nested={level.nested} onDone={done} />;
+						return <CuratedPracticeCreateLevel {...placement} />;
 					}
 					if (entry.kind === "practice-edit") {
-						return (
-							<CuratedPracticeEditLevel
-								practiceSlug={entry.id}
-								nested={level.nested}
-								onDone={done}
-							/>
-						);
+						return <CuratedPracticeEditLevel practiceSlug={entry.id} {...placement} />;
 					}
 					if (entry.kind === "group-new") {
-						return <CuratedGroupCreateLevel nested={level.nested} onDone={done} />;
+						return <CuratedGroupCreateLevel {...placement} />;
 					}
-					return <CuratedGroupEditLevel groupSlug={entry.id} nested={level.nested} onDone={done} />;
+					return <CuratedGroupEditLevel groupSlug={entry.id} {...placement} />;
 				}}
 			</DetailDrawerStack>
 		</PageLayout>

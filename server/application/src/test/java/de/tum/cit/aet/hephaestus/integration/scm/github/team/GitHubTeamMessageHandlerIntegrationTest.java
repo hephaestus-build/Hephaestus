@@ -6,10 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubTeamEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -19,11 +23,13 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -53,6 +59,12 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private PullRequestRepository pullRequestRepository;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     private IdentityProvider gitProvider;
     private Organization testOrganization;
@@ -176,6 +188,38 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
         assertThat(teamRepository.findByNativeIdAndProviderId(
                         required(deleteEvent.team().id()), gitProviderId()))
                 .isEmpty();
+    }
+
+    @Test
+    void shouldTakeTheTeamOffPullRequestsThatAskItWhenTheTeamIsDeleted() throws Exception {
+        GitHubTeamEventDTO createEvent = loadPayload("team.org.created");
+        handler.handleEvent(createEvent);
+        Team team = teamRepository
+                .findByNativeIdAndProviderId(required(createEvent.team().id()), gitProviderId())
+                .orElseThrow();
+        PullRequest asking = new PullRequest();
+        asking.setNativeId(990_001L);
+        asking.setProvider(gitProvider);
+        asking.setNumber(990);
+        asking.setTitle("Asks the team");
+        asking.setState(Issue.State.OPEN);
+        asking.setHtmlUrl("https://github.com/HephaestusTest/TestRepository/pull/990");
+        asking.setRepository(repositoryRepository
+                .findByNameWithOwner("HephaestusTest/TestRepository")
+                .orElseThrow());
+        PullRequest stored = pullRequestRepository.save(asking);
+        stored.replaceRequestedTeams(Set.of(team), Instant.now());
+        Long askingId = pullRequestRepository.save(stored).getId();
+
+        handler.handleEvent(loadPayload("team.org.deleted"));
+
+        assertThat(teamRepository.findById(required(team.getId()))).isEmpty();
+        Boolean stillAsked = transactionTemplate.execute(status -> !pullRequestRepository
+                .findById(required(askingId))
+                .orElseThrow()
+                .getRequestedTeams()
+                .isEmpty());
+        assertThat(stillAsked).isFalse();
     }
 
     private GitHubTeamEventDTO loadPayload(String filename) throws IOException {

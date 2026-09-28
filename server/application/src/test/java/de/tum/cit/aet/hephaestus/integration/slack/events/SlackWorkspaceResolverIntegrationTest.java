@@ -66,10 +66,7 @@ class SlackWorkspaceResolverIntegrationTest extends AbstractWorkspaceIntegration
 
     private void connectSlack(Workspace workspace, String team, IntegrationState state) {
         Connection connection = new Connection(
-                workspace,
-                IntegrationKind.SLACK,
-                team,
-                new ConnectionConfig.SlackConfig(team, null, null, null, null, Set.of()));
+                workspace, IntegrationKind.SLACK, team, new ConnectionConfig.SlackConfig(team, null, null, Set.of()));
         connection.setState(state);
         connectionRepository.save(connection);
     }

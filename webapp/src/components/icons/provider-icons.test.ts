@@ -3,16 +3,24 @@ import {
 	GitPullRequestClosedIcon,
 	GitPullRequestDraftIcon,
 	GitPullRequestIcon,
+	IssueClosedIcon,
+	IssueOpenedIcon,
 } from "@primer/octicons-react";
 import { describe, expect, it } from "vitest";
 
 import {
+	GitLabIssueClosedIcon,
+	GitLabIssueOpenIcon,
 	GitLabMergeIcon,
 	GitLabMergeRequestClosedIcon,
 	GitLabMergeRequestDraftIcon,
 	GitLabMergeRequestIcon,
 } from "@/components/icons/gitlab-icons";
-import { getPullRequestStateIcon, type PullRequestState } from "@/components/icons/provider-icons";
+import {
+	getIssueStateIcon,
+	getPullRequestStateIcon,
+	type PullRequestState,
+} from "@/components/icons/provider-icons";
 
 const ALL_STATES: PullRequestState[] = ["OPEN", "CLOSED", "MERGED"];
 
@@ -103,5 +111,29 @@ describe("getPullRequestStateIcon", () => {
 		const result = getPullRequestStateIcon("GITHUB", "OPEN");
 		expect(result.icon).toBeDefined();
 		expect(result.colorClass).toMatch(/^text-provider-/u);
+	});
+});
+
+describe("getIssueStateIcon", () => {
+	it("draws an open issue open and a closed one done", () => {
+		expect(getIssueStateIcon("GITHUB", "OPEN")).toStrictEqual({
+			icon: IssueOpenedIcon,
+			colorClass: "text-provider-open-foreground",
+		});
+		expect(getIssueStateIcon("GITHUB", "CLOSED")).toStrictEqual({
+			icon: IssueClosedIcon,
+			colorClass: "text-provider-done-foreground",
+		});
+	});
+
+	it("draws a GitLab issue in GitLab's own icons", () => {
+		expect(getIssueStateIcon("GITLAB", "OPEN")).toStrictEqual({
+			icon: GitLabIssueOpenIcon,
+			colorClass: "text-provider-open-foreground",
+		});
+		expect(getIssueStateIcon("GITLAB", "CLOSED")).toStrictEqual({
+			icon: GitLabIssueClosedIcon,
+			colorClass: "text-provider-done-foreground",
+		});
 	});
 });

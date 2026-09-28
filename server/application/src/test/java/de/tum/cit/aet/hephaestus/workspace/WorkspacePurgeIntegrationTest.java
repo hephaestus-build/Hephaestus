@@ -218,8 +218,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 workspace.getId(),
                 null,
                 "pull_request",
-                1L,
-                1.5);
+                1L);
 
         // Link organization
         IdentityProvider provider = ensureGitLabProvider();
@@ -362,8 +361,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     workspaceId,
                     null,
                     "pull_request",
-                    1L,
-                    1.0);
+                    1L);
 
             hiddenFormerMemberRepository.save(new HiddenFormerMember(workspaceId, owner.getId()));
 

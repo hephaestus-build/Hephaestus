@@ -1,14 +1,11 @@
 package de.tum.cit.aet.hephaestus.activity;
 
 import de.tum.cit.aet.hephaestus.activity.metrics.ActivityMetrics;
-import de.tum.cit.aet.hephaestus.activity.scoring.ExperiencePointProperties;
-import de.tum.cit.aet.hephaestus.activity.scoring.XpPrecision;
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityRecorder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.observation.annotation.Observed;
@@ -31,11 +28,9 @@ public class ActivityEventService implements ActivityRecorder {
 
     private final ActivityEventRepository eventRepository;
     private final WorkspaceRepository workspaceRepository;
-    private final ExperiencePointProperties xpProperties;
     private final Counter eventsRecordedCounter;
     private final Counter eventsDuplicateCounter;
     private final Counter eventsFailedCounter;
-    private final DistributionSummary xpDistribution;
     private final MeterRegistry meterRegistry;
 
     private final ConcurrentHashMap<ActivityEventType, Timer> eventTypeTimers = new ConcurrentHashMap<>();
@@ -43,11 +38,9 @@ public class ActivityEventService implements ActivityRecorder {
     public ActivityEventService(
             ActivityEventRepository eventRepository,
             WorkspaceRepository workspaceRepository,
-            ExperiencePointProperties xpProperties,
             MeterRegistry meterRegistry) {
         this.eventRepository = eventRepository;
         this.workspaceRepository = workspaceRepository;
-        this.xpProperties = xpProperties;
         this.eventsRecordedCounter = Counter.builder(ActivityMetrics.ACTIVITY_EVENTS_RECORDED)
                 .description("Number of activity events recorded")
                 .register(meterRegistry);
@@ -56,10 +49,6 @@ public class ActivityEventService implements ActivityRecorder {
                 .register(meterRegistry);
         this.eventsFailedCounter = Counter.builder(ActivityMetrics.ACTIVITY_EVENTS_FAILED)
                 .description("Number of activity events that failed to record after retries")
-                .register(meterRegistry);
-        this.xpDistribution = DistributionSummary.builder(ActivityMetrics.ACTIVITY_XP_DISTRIBUTION)
-                .description("Distribution of XP values recorded")
-                .publishPercentiles(0.5, 0.95, 0.99)
                 .register(meterRegistry);
         this.meterRegistry = meterRegistry;
     }
@@ -87,9 +76,8 @@ public class ActivityEventService implements ActivityRecorder {
             @Nullable User actor,
             @Nullable Repository repository,
             ActivityTargetType targetType,
-            Long targetId,
-            double xp) {
-        return persist(workspaceId, eventType, occurredAt, actor, repository, targetType, targetId, xp);
+            Long targetId) {
+        return persist(workspaceId, eventType, occurredAt, actor, repository, targetType, targetId);
     }
 
     private boolean persist(
@@ -99,8 +87,7 @@ public class ActivityEventService implements ActivityRecorder {
             @Nullable User actor,
             @Nullable Repository repository,
             ActivityTargetType targetType,
-            Long targetId,
-            double xp) {
+            Long targetId) {
         if (!workspaceRepository.existsById(workspaceId)) {
             eventsFailedCounter.increment();
             log.warn(
@@ -110,14 +97,6 @@ public class ActivityEventService implements ActivityRecorder {
                     targetId);
             return false;
         }
-
-        double maxXp = xpProperties.maxXpPerEvent();
-        double clampedXp = Math.max(0.0, Math.min(xp, maxXp));
-        if (clampedXp != xp) {
-            log.debug("Clamped XP value: originalXp={}, clampedXp={}, eventType={}", xp, clampedXp, eventType);
-        }
-
-        double roundedXp = XpPrecision.round(clampedXp);
 
         String eventKey = ActivityEvent.buildKey(eventType, targetId, occurredAt);
 
@@ -133,8 +112,7 @@ public class ActivityEventService implements ActivityRecorder {
                 workspaceId,
                 repository != null ? repository.getId() : null,
                 targetType.getValue(),
-                targetId,
-                roundedXp);
+                targetId);
         eventTimer.record(System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
 
         if (rowsInserted == 0) {
@@ -144,20 +122,18 @@ public class ActivityEventService implements ActivityRecorder {
         }
 
         eventsRecordedCounter.increment();
-        xpDistribution.record(roundedXp);
 
         // Per-event details stay at DEBUG; metrics and sync rollups report volume.
         log.debug(
-                "Recorded activity event: eventType={}, targetId={}, xp={}, scopeId={}, actorId={}",
+                "Recorded activity event: eventType={}, targetId={}, scopeId={}, actorId={}",
                 eventType,
                 targetId,
-                roundedXp,
                 workspaceId,
                 actor != null ? actor.getId() : null);
         return true;
     }
 
-    /** Records deletions without actor/repository context or XP; the target may no longer exist. */
+    /** Records deletions without actor or repository context; the target may be gone. */
     @Override
     @Transactional
     @Observed(name = "activity.record.deleted", contextualName = "record-deleted-activity-event")
@@ -167,6 +143,6 @@ public class ActivityEventService implements ActivityRecorder {
             Instant occurredAt,
             ActivityTargetType targetType,
             Long targetId) {
-        return persist(workspaceId, eventType, occurredAt, null, null, targetType, targetId, 0.0);
+        return persist(workspaceId, eventType, occurredAt, null, null, targetType, targetId);
     }
 }

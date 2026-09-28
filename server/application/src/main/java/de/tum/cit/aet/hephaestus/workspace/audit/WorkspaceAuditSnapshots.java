@@ -16,20 +16,12 @@ public final class WorkspaceAuditSnapshots {
 
     public record FeaturesSnapshot(
             @Nullable Boolean practicesEnabled,
-            @Nullable Boolean mentorEnabled,
-            @Nullable Boolean leaderboardEnabled,
-            @Nullable Boolean progressionEnabled,
-            @Nullable Boolean leaguesEnabled,
             @Nullable Boolean practiceReviewAutoTriggerEnabled,
             @Nullable Boolean practiceReviewManualTriggerEnabled)
             implements ConfigAuditSnapshot {
         public static FeaturesSnapshot of(WorkspaceFeatures f) {
             return new FeaturesSnapshot(
                     f.getPracticesEnabled(),
-                    f.getMentorEnabled(),
-                    f.getLeaderboardEnabled(),
-                    f.getProgressionEnabled(),
-                    f.getLeaguesEnabled(),
                     f.getPracticeReviewAutoTriggerEnabled(),
                     f.getPracticeReviewManualTriggerEnabled());
         }

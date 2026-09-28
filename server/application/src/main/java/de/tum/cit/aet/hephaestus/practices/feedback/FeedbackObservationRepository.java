@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -10,7 +11,10 @@ import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository.CurrentResponseProjection;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
@@ -37,6 +41,12 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
             @Param("evidenceRole") String evidenceRole,
             @Param("ordinal") int ordinal);
 
+    @Query("""
+        SELECT COUNT(fo) FROM FeedbackObservation fo
+        WHERE fo.feedback.id = :feedbackId AND fo.feedback.workspaceId = :workspaceId
+        """)
+    int countForFeedback(@Param("workspaceId") Long workspaceId, @Param("feedbackId") UUID feedbackId);
+
     /**
      * The observations behind a batch of delivered feedback, carrying what decides their visibility.
      *
@@ -62,6 +72,31 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
         UUID getFeedbackId();
 
         Observation getObservation();
+
+        /**
+         * The feedback rows every bound observation of which is {@code visible}, each with the currentness of that
+         * evidence: {@code CURRENT} only when every bound observation still is. A row bound to nothing is absent.
+         */
+        static Map<UUID, ReviewClaimCurrentness> shown(
+                Collection<FeedbackObservationVisibility> bindings, Set<UUID> visible) {
+            Map<UUID, Boolean> permitted = new HashMap<>();
+            Map<UUID, ReviewClaimCurrentness> currentness = new HashMap<>();
+            for (FeedbackObservationVisibility binding : bindings) {
+                Observation observation = binding.getObservation();
+                permitted.merge(binding.getFeedbackId(), visible.contains(observation.getId()), Boolean::logicalAnd);
+                boolean current = ReviewClaimCurrentness.of(
+                                observation.getPracticeRevision(),
+                                observation.getPractice(),
+                                observation.getSupersededAt())
+                        == ReviewClaimCurrentness.CURRENT;
+                currentness.merge(
+                        binding.getFeedbackId(),
+                        current ? ReviewClaimCurrentness.CURRENT : ReviewClaimCurrentness.STALE,
+                        (a, b) -> a == ReviewClaimCurrentness.CURRENT ? b : a);
+            }
+            currentness.keySet().removeIf(feedbackId -> !Boolean.TRUE.equals(permitted.get(feedbackId)));
+            return currentness;
+        }
     }
 
     /**

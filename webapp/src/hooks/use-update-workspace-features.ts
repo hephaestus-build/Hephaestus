@@ -99,9 +99,6 @@ function selectWorkspaceFeatures(
 	request: UpdateWorkspaceFeaturesRequest = source,
 ): UpdateWorkspaceFeaturesRequest {
 	return {
-		...("leaderboardEnabled" in request ? { leaderboardEnabled: source.leaderboardEnabled } : {}),
-		...("leaguesEnabled" in request ? { leaguesEnabled: source.leaguesEnabled } : {}),
-		...("mentorEnabled" in request ? { mentorEnabled: source.mentorEnabled } : {}),
 		...("practiceReviewAutoTriggerEnabled" in request
 			? { practiceReviewAutoTriggerEnabled: source.practiceReviewAutoTriggerEnabled }
 			: {}),
@@ -109,7 +106,6 @@ function selectWorkspaceFeatures(
 			? { practiceReviewManualTriggerEnabled: source.practiceReviewManualTriggerEnabled }
 			: {}),
 		...("practicesEnabled" in request ? { practicesEnabled: source.practicesEnabled } : {}),
-		...("progressionEnabled" in request ? { progressionEnabled: source.progressionEnabled } : {}),
 	};
 }
 
@@ -117,11 +113,5 @@ function selectWorkspaceListFeatures(
 	source: UpdateWorkspaceFeaturesRequest | Workspace | WorkspaceListItem,
 	request: UpdateWorkspaceFeaturesRequest = source,
 ): Partial<WorkspaceListItem> {
-	return {
-		...("leaderboardEnabled" in request ? { leaderboardEnabled: source.leaderboardEnabled } : {}),
-		...("leaguesEnabled" in request ? { leaguesEnabled: source.leaguesEnabled } : {}),
-		...("mentorEnabled" in request ? { mentorEnabled: source.mentorEnabled } : {}),
-		...("practicesEnabled" in request ? { practicesEnabled: source.practicesEnabled } : {}),
-		...("progressionEnabled" in request ? { progressionEnabled: source.progressionEnabled } : {}),
-	};
+	return "practicesEnabled" in request ? { practicesEnabled: source.practicesEnabled } : {};
 }

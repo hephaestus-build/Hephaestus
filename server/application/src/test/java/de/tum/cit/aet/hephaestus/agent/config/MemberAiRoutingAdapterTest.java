@@ -170,9 +170,8 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldOfferTheTwoAiChoicesWithReadinessHonouringTheCeilingAndFeatureFlags() {
+    void shouldOfferTheTwoAiChoicesWithReadinessHonouringTheCeilingAndReviewSwitch() {
         var workspace = new Workspace();
-        workspace.getFeatures().setMentorEnabled(true);
         workspace.getFeatures().setPracticesEnabled(false);
         when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
         var cloud = ready(DataHandlingTier.CLOUD);
@@ -182,7 +181,7 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
                 .containsExactly(
                         new WorkspaceAiAvailability.Option(MemberAiChoice.IN_HOUSE_ONLY, false, false, List.of()),
                         new WorkspaceAiAvailability.Option(MemberAiChoice.CLOUD, false, true, List.of()));
-        // One query per enabled purpose, shared by both choices; a disabled purpose loads nothing.
+        // One query per purpose, shared by both choices; reviews that are off load nothing.
         verify(bindings, times(1)).findByWorkspaceIdAndPurpose(1L, AgentPurpose.MENTOR);
         verify(bindings, never()).findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW);
     }
@@ -190,7 +189,6 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
     @Test
     void shouldNotSuggestModelsExistWhenNothingIsSetUp() {
         var workspace = new Workspace();
-        workspace.getFeatures().setMentorEnabled(false);
         workspace.getFeatures().setPracticesEnabled(false);
         when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
         assertThat(routing.options(1L)).allSatisfy(option -> {
@@ -202,7 +200,6 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
     @Test
     void shouldUseDeclaredBrandWithoutInferringHost() {
         var workspace = new Workspace();
-        workspace.getFeatures().setMentorEnabled(true);
         workspace.getFeatures().setPracticesEnabled(true);
         when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
         var inHouse = ready(DataHandlingTier.IN_HOUSE);
@@ -238,7 +235,6 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
     @Test
     void shouldLeaveBrandUnknownWhenAdminDidNotDeclareIt() {
         var workspace = new Workspace();
-        workspace.getFeatures().setMentorEnabled(true);
         when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
         var cloud = ready(DataHandlingTier.CLOUD);
         var cloudModel = model("Custom model", "gpt-5", "https://api.openai.com/v1", null);

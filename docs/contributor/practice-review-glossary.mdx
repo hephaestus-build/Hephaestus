@@ -50,6 +50,7 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Review coverage**                 | Which repositories' and which workspace members' work may be reviewed. Repository and person modes are independent; effective coverage is their intersection.                                                                                      | filter, audience, pilot allowlist, review scope                   |
 | **Sandbox gateway**                 | The only listener a review's sandbox may reach on a worker. Defined for operators in [runtime roles](/admin/runtime-roles).                                                                                                            | LLM proxy port, internal API, agent gateway                       |
 | **Delivery status**                 | Whether new external practice feedback may leave a workspace (`ACTIVE` or `PAUSED`). Pausing does not stop review or erase coverage.                                                                                                       | review status, practice autonomy, Silent Mode                     |
+| **Delivery family**                 | Defined in the [practice feedback language](./practice-feedback-language.md).                                                                                                                                                              | delivery status, delivery state                                   |
 
 A practice author defines requirements. That definition is not proof that the evidence is sufficient or that a
 review is accurate, and the product says so rather than implying otherwise: every shipped policy is its
@@ -330,8 +331,9 @@ What each `FeedbackChannel` value is and where it lands is defined in the
 "what capability could this conversation support?" — and the level is **derived from the channel and
 never stored**: there is no `level` column, and a stored copy would be a second truth that can disagree.
 
-Two exact names are close enough to be tempting and are still wrong. **Profile** is the
-workspace-readable page at `/w/{workspaceSlug}/user/{username}`, not `IN_APP`; and
+Two exact names are close enough to be tempting and are still wrong.
+[**Activity**](./practice-feedback-language.md) is the member-readable page of counted work at
+`/w/{workspaceSlug}/activity`, not `IN_APP`; and
 `chat.conversation_thread` is a kind of work Hephaestus *reviews*, not the place `IN_CHAT` delivers to.
 
 ### Thread key and supersession
@@ -361,6 +363,46 @@ A location groups observations about the same piece of work; it does not establi
 between their behaviors. Comparing outcomes at a shared location or omitting a prior observation does
 not establish that a concern was resolved or regressed. Responses apply to the specific observations
 bound to the feedback the developer received.
+
+### Invalidated observations
+
+A workspace admin **invalidates** an observation that was wrong when it was recorded, with a reason; the
+reverse is **restore**, with its own reason. Neither changes the observation: each correction is an
+`observation_invalidation` row keeping both actors, reasons and times, and at most one is in force per
+observation. While one is in force:
+
+- Every current read treats the claim as never made: the standing, the Practice profile, Heph's context,
+  composition history and new feedback. The latest-run rule skips it too, so an earlier valid review of
+  the same work speaks again unless the same run left another valid observation of that practice there.
+- Review history keeps it, labelled with the reason; the developer sees the reason, not who gave it.
+- Feedback citing it that has not reached anyone is suppressed as a whole with `OBSERVATION_INVALIDATED`.
+  A Practice profile card citing it is hidden, however many other observations it cites.
+- A correction and a delivery citing the same observation never overlap. A delivery attempt, automatic,
+  approved or retried, is admitted only while its claim is live and a short transaction share-locking the
+  observations it cites finds none invalidated. The correction takes its observation `FOR UPDATE` and is
+  refused with a conflict while a claim citing it is live. An automatic package cites the observations it was
+  written from, or its whole run if it predates recording them; an approved one, those bound to it. No connection is
+  held across provider calls. A claim whose lease expired mid-write is no longer counted, which is the one
+  window this leaves.
+- Before an invalidated delivery is withheld, every write an earlier attempt started is accounted for by
+  lookup, never by re-posting: the summary by its marker, inline notes by delivery key, including notes an
+  adapter reported `FAILED`, since a lost response reads that way too. Only positive evidence settles a started
+  write, because a POST may still land after its lease expired; a lookup that finds nothing, or cannot finish
+  its scan, keeps the delivery uncertain and never terminal. Its correction reads `PENDING` for a day from when
+  the write began, then `UNRESOLVED`; both keep being checked, every six hours after that day, and change to
+  the real outcome once the copy is found.
+- Delivered feedback keeps its state and stored text. Its posted copies get a durable **provider copy**
+  outcome on the correction: a summary comment is edited in place to open with a correction notice naming
+  the practice, never the reason. `INLINE_REMAINS` means inline comments are still there, since they have
+  no edit path; `UNRESOLVED` means a summary could not be edited, or the provider confirmed a comment without returning its id, so nothing can find it again; that copy is kept on the ledger rather than read as absent. A delivery still settling records each
+  copy it has confirmed on its one feedback unit as it goes, so a known summary is corrected at once while
+  the rest stays unknown. `PENDING` lasts while a delivery citing it is unsettled or an edit must be retried; each retry moves the correction behind every other due one, with
+  a backoff of half its time pending, from a minute to six hours.
+
+Restoring makes the observation count again from then on and removes the notice it added. Feedback the
+invalidation stopped stays stopped.
+Say **invalidated** or **marked incorrect**, never *deleted*, *retracted* or *superseded*: superseded is
+the word for [feedback replaced on its thread](#thread-key-and-supersession).
 
 ### How feedback resolves
 

@@ -96,6 +96,7 @@ public class GitLabWorkspaceInitializationService {
 
     // Authoritative source for per-workspace integration config (server URL, PAT presence).
     private final ConnectionService connectionService;
+    private final GitLabRepositoryMonitors repositoryMonitors;
     private final GitLabWorkspaceLinkService workspaceLinkService;
     private final WorkspaceActorSelector actorSelector;
 
@@ -117,6 +118,7 @@ public class GitLabWorkspaceInitializationService {
             ObjectProvider<GitLabWorkspaceDataSyncTrigger> dataSyncTriggerProvider,
             ConnectionService connectionService,
             GitLabWorkspaceLinkService workspaceLinkService,
+            GitLabRepositoryMonitors repositoryMonitors,
             WorkspaceActorSelector actorSelector,
             @Qualifier("monitoringExecutor") AsyncTaskExecutor monitoringExecutor) {
         this.workspaceRepository = workspaceRepository;
@@ -133,6 +135,7 @@ public class GitLabWorkspaceInitializationService {
         this.dataSyncTriggerProvider = dataSyncTriggerProvider;
         this.connectionService = connectionService;
         this.workspaceLinkService = workspaceLinkService;
+        this.repositoryMonitors = repositoryMonitors;
         this.actorSelector = actorSelector;
         this.monitoringExecutor = monitoringExecutor;
     }
@@ -227,7 +230,7 @@ public class GitLabWorkspaceInitializationService {
             // Phase 2: Link organization + create monitors
             if (!syncedRepos.isEmpty()) {
                 linkWorkspaceToOrganization(workspace);
-                ensureRepositoryMonitors(workspace, syncedRepos);
+                repositoryMonitors.monitorAll(workspace, syncedRepos);
             }
 
             // Phase 3: Consume every monitored repository, then let GitLab deliver. Without NATS no
@@ -387,40 +390,6 @@ public class GitLabWorkspaceInitializationService {
 
     public void linkWorkspaceToOrganization(Workspace workspace) {
         workspaceLinkService.link(workspace);
-    }
-
-    /**
-     * Creates {@link RepositoryToMonitor} entries for each synced repository.
-     * Existing monitors are not duplicated.
-     *
-     * @return number of newly created monitors
-     */
-    public int ensureRepositoryMonitors(Workspace workspace, List<Repository> syncedRepos) {
-        Set<String> existing = repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()).stream()
-                .map(RepositoryToMonitor::getNameWithOwner)
-                .collect(Collectors.toSet());
-
-        int created = 0;
-        for (Repository repo : syncedRepos) {
-            String nwo = repo.getNameWithOwner();
-            if (nwo == null || existing.contains(nwo)) {
-                continue;
-            }
-            RepositoryToMonitor monitor = new RepositoryToMonitor();
-            monitor.setNameWithOwner(nwo);
-            monitor.setNativeId(repo.getNativeId());
-            monitor.setWorkspace(workspace);
-            repositoryToMonitorRepository.save(monitor);
-            created++;
-        }
-        if (created > 0) {
-            log.info(
-                    "Created repository monitors: workspaceId={}, created={}, total={}",
-                    workspace.getId(),
-                    created,
-                    syncedRepos.size());
-        }
-        return created;
     }
 
     // Full data sync: memberships, issue types, per-repo data, teams

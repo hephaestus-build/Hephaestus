@@ -113,7 +113,7 @@ or on "the only" result, and never write cleanup that another test depends on ha
   (`WorkspaceMembershipService`, `GitHubUserProcessor`). Everything else is constructor injection via
   `@RequiredArgsConstructor`.
 - **A bean that exists in one runtime role only is gated on that role** (`@ConditionalOnProperty` on
-  a `RuntimeRole` property, as in `LeaderboardTaskScheduler`), and a consumer that must survive its
+  a `RuntimeRole` property, as in `ShedLockConfig`), and a consumer that must survive its
   absence takes `ObjectProvider` (`WorkspaceSyncTargetProvider`). An ungated consumer crash-loops the
   `worker` and `webhook` runtimes, which start a different slice of the context.
 - **A test-tree `package-info.java` shadows the main one.** Test classes sit first on the classpath,

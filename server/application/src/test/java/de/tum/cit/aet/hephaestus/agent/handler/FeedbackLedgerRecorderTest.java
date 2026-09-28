@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository.ProviderPlacement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
@@ -75,6 +76,9 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         when(feedbackRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(feedbackObservationRepository.findObservationIdsSuppressedForJob(any()))
                 .thenReturn(List.of());
+        lenient()
+                .when(feedbackObservationRepository.insertIfAbsent(any(), any(), any(), anyInt()))
+                .thenReturn(1);
         when(feedbackPlacementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(feedbackPlacementRepository.findLatestDeliveredSummary(any())).thenReturn(Optional.empty());
         return new FeedbackLedgerRecorder(
@@ -104,7 +108,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 .insertProviderPlacementIfAbsent(
                         argThat(placement -> placement.feedbackId().equals(feedback.getId())
                                 && placement.placementType().equals("SUMMARY")
-                                && placement.postedCommentRef().equals("summary-ref")));
+                                && "summary-ref".equals(placement.postedCommentRef())));
         verify(feedbackPlacementRepository)
                 .insertProviderPlacementIfAbsent(
                         argThat(placement -> placement.feedbackId().equals(feedback.getId())
@@ -114,7 +118,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                                 && Integer.valueOf(9).equals(placement.anchorStartLine())
                                 && Integer.valueOf(12).equals(placement.anchorEndLine())
                                 && "NEW".equals(placement.anchorSide())
-                                && placement.postedCommentRef().equals("inline-ref")));
+                                && "inline-ref".equals(placement.postedCommentRef())));
     }
 
     @Test
@@ -203,13 +207,14 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         "summary-ref",
                         true);
 
-        var placements = ArgumentCaptor.forClass(FeedbackPlacement.class);
-        verify(feedbackPlacementRepository, org.mockito.Mockito.atLeastOnce()).save(placements.capture());
-        FeedbackPlacement inline = placements.getAllValues().stream()
-                .filter(p -> p.getPlacementType() == PlacementType.INLINE)
+        var placements = ArgumentCaptor.forClass(ProviderPlacement.class);
+        verify(feedbackPlacementRepository, org.mockito.Mockito.atLeastOnce())
+                .insertProviderPlacementIfAbsent(placements.capture());
+        ProviderPlacement inline = placements.getAllValues().stream()
+                .filter(p -> p.placementType().equals(PlacementType.INLINE.name()))
                 .findFirst()
                 .orElseThrow();
-        assertThat(inline.getPostedCommentRef()).isEqualTo("note-gid-42");
+        assertThat(inline.postedCommentRef()).isEqualTo("note-gid-42");
     }
 
     @Test
@@ -235,7 +240,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         null,
                         false);
 
-        verify(feedbackPlacementRepository, org.mockito.Mockito.never()).save(any());
+        verify(feedbackPlacementRepository, org.mockito.Mockito.never()).insertProviderPlacementIfAbsent(any());
     }
 
     @Test
@@ -485,10 +490,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         assertThat(savedFeedback.getValue().getReplacesId()).isNull();
         verify(feedbackRepository, org.mockito.Mockito.never()).supersedeDelivered(any(), any());
 
-        var savedPlacement = ArgumentCaptor.forClass(FeedbackPlacement.class);
-        verify(feedbackPlacementRepository).save(savedPlacement.capture());
-        assertThat(savedPlacement.getValue().getPlacementType()).isEqualTo(PlacementType.INLINE);
-        assertThat(savedPlacement.getValue().getPostedCommentRef()).isEqualTo("note-1");
+        var savedPlacement = ArgumentCaptor.forClass(ProviderPlacement.class);
+        verify(feedbackPlacementRepository).insertProviderPlacementIfAbsent(savedPlacement.capture());
+        assertThat(savedPlacement.getValue().placementType()).isEqualTo(PlacementType.INLINE.name());
+        assertThat(savedPlacement.getValue().postedCommentRef()).isEqualTo("note-1");
         verify(feedbackPlacementRepository, org.mockito.Mockito.never()).findLatestDeliveredSummary(any());
     }
 
@@ -766,9 +771,9 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         recorder.recordSuppressedRemainder(
                 job, delivery, FeedbackSuppressionReason.INSTANCE_SILENCED, List.of("observation:key-2"));
 
-        ArgumentCaptor<FeedbackPlacement> placement = ArgumentCaptor.forClass(FeedbackPlacement.class);
-        verify(feedbackPlacementRepository).save(placement.capture());
-        assertThat(placement.getValue().getAnchorPath()).isEqualTo("src/Foo.java");
+        ArgumentCaptor<ProviderPlacement> placement = ArgumentCaptor.forClass(ProviderPlacement.class);
+        verify(feedbackPlacementRepository).insertProviderPlacementIfAbsent(placement.capture());
+        assertThat(placement.getValue().anchorPath()).isEqualTo("src/Foo.java");
 
         ArgumentCaptor<Feedback> feedback = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository, org.mockito.Mockito.times(2)).save(feedback.capture());
@@ -818,7 +823,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         null,
                         false);
 
-        verify(feedbackPlacementRepository, org.mockito.Mockito.never()).save(any());
+        verify(feedbackPlacementRepository, org.mockito.Mockito.never()).insertProviderPlacementIfAbsent(any());
     }
 
     @Test
@@ -838,10 +843,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         "dispatch-ref",
                         false);
 
-        var placement = ArgumentCaptor.forClass(FeedbackPlacement.class);
-        verify(feedbackPlacementRepository).save(placement.capture());
-        assertThat(placement.getValue().getPlacementType()).isEqualTo(PlacementType.SUMMARY);
-        assertThat(placement.getValue().getPostedCommentRef()).isEqualTo("dispatch-ref");
+        var placement = ArgumentCaptor.forClass(ProviderPlacement.class);
+        verify(feedbackPlacementRepository).insertProviderPlacementIfAbsent(placement.capture());
+        assertThat(placement.getValue().placementType()).isEqualTo(PlacementType.SUMMARY.name());
+        assertThat(placement.getValue().postedCommentRef()).isEqualTo("dispatch-ref");
     }
 
     private AgentJob job() {

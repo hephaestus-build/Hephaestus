@@ -125,6 +125,37 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
         return reconcileInlineFeedback(target, feedbackItems);
     }
 
+    @Override
+    public @Nullable List<DeliveredSignal> findPosted(
+            SummaryChannel.FeedbackTarget target, List<InlineFeedback> feedbackItems, boolean immutablePackage) {
+        long scopeId = target.ref().workspaceId();
+        if (feedbackItems.isEmpty()
+                || gitLabProvider.isRateLimitCritical(scopeId)
+                || feedbackItems.stream().anyMatch(item -> item.deliveryKey() == null)) {
+            return feedbackItems.isEmpty() ? List.of() : null;
+        }
+        try {
+            MrCoordinates mr = GitlabMrResolver.parseSubjectExternalId(target.subjectExternalId());
+            Map<String, PriorThread> priorByKey = indexPriorThreads(
+                    scopeId, mr.projectPath(), mr.iid(), feedbackItems.get(0).marker(), true);
+            List<DeliveredSignal> found = new ArrayList<>();
+            for (InlineFeedback item : feedbackItems) {
+                PriorThread prior = priorByKey.get(item.deliveryKey());
+                if (prior != null) {
+                    found.add(new DeliveredSignal(
+                            item.deliveryKey(),
+                            item.anchor(),
+                            Disposition.PRESERVED_EXISTING,
+                            prior.noteId(),
+                            prior.discussionId()));
+                }
+            }
+            return found;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     private InlineResult reconcileInlineFeedback(
             SummaryChannel.FeedbackTarget target, List<InlineFeedback> feedbackItems) {
         if (feedbackItems == null || feedbackItems.isEmpty()) {
@@ -150,7 +181,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
         }
 
         String marker = feedbackItems.get(0).marker();
-        Map<String, PriorThread> priorByKey = indexPriorThreads(scopeId, mr.projectPath(), mr.iid(), marker);
+        Map<String, PriorThread> priorByKey = indexPriorThreads(scopeId, mr.projectPath(), mr.iid(), marker, false);
 
         int posted = 0;
         int failed = 0;
@@ -351,13 +382,21 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
         }
     }
 
-    private Map<String, PriorThread> indexPriorThreads(long scopeId, String projectPath, int mrIid, String marker) {
+    /**
+     * {@code requireComplete} fails a scan the page budget or a discussion's own notes page cuts short, so it
+     * cannot pass for proof of absence.
+     */
+    private Map<String, PriorThread> indexPriorThreads(
+            long scopeId, String projectPath, int mrIid, String marker, boolean requireComplete) {
         Map<String, PriorThread> byKey = new LinkedHashMap<>();
         if (marker == null || marker.isBlank()) {
             return byKey;
         }
         try {
-            for (Map<String, Object> discussion : fetchAllDiscussions(scopeId, projectPath, mrIid)) {
+            for (Map<String, Object> discussion : fetchAllDiscussions(scopeId, projectPath, mrIid, requireComplete)) {
+                if (requireComplete && hasMoreNotes(discussion)) {
+                    throw new FeedbackDeliveryException("A GitLab discussion has more notes than one lookup reads");
+                }
                 indexDiscussion(discussion, marker, byKey);
             }
         } catch (OutboundEgressSuppressedException e) {
@@ -370,7 +409,8 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
         return byKey;
     }
 
-    private List<Map<String, Object>> fetchAllDiscussions(long scopeId, String projectPath, int mrIid) {
+    private List<Map<String, Object>> fetchAllDiscussions(
+            long scopeId, String projectPath, int mrIid, boolean requireComplete) {
         List<Map<String, Object>> all = new ArrayList<>();
         String cursor = null;
         int page = 0;
@@ -406,6 +446,9 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
             }
             if (!pageInfo.hasNextPage()) {
                 break;
+            }
+            if (requireComplete && page == MAX_DISCUSSION_PAGES) {
+                throw new FeedbackDeliveryException("GitLab discussions exceed the lookup page budget");
             }
             if (pageInfo.endCursor() == null) {
                 throw new FeedbackDeliveryException("GitLab discussion pagination lost its cursor");
@@ -544,7 +587,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
             return;
         }
         try {
-            List<Map<String, Object>> discussions = fetchAllDiscussions(scopeId, projectPath, mrIid);
+            List<Map<String, Object>> discussions = fetchAllDiscussions(scopeId, projectPath, mrIid, false);
             if (discussions.isEmpty()) {
                 return;
             }
@@ -605,6 +648,12 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
         } catch (Exception e) {
             throw new FeedbackDeliveryException("GitLab stale-note reconciliation was inconclusive", e);
         }
+    }
+
+    private static boolean hasMoreNotes(Map<String, Object> discussion) {
+        return discussion.get("notes") instanceof Map<?, ?> notes
+                && notes.get("pageInfo") instanceof Map<?, ?> pageInfo
+                && Boolean.TRUE.equals(pageInfo.get("hasNextPage"));
     }
 
     /** Safely pulls a discussion's {@code notes.nodes} list, tolerating nulls in the GraphQL map. */

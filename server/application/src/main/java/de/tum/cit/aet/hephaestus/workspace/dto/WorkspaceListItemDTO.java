@@ -32,20 +32,8 @@ public record WorkspaceListItemDTO(
         @NonNull @Schema(description = "Timestamp when the workspace was created")
         Instant createdAt,
 
-        @NonNull @Schema(description = "Whether the practice review feature is enabled")
-        Boolean practicesEnabled,
-
-        @NonNull @Schema(description = "Whether the Pi mentor chat feature is enabled")
-        Boolean mentorEnabled,
-
-        @NonNull @Schema(description = "Whether the leaderboard is enabled")
-        Boolean leaderboardEnabled,
-
-        @NonNull @Schema(description = "Whether the league/progression system is enabled")
-        Boolean progressionEnabled,
-
-        @NonNull @Schema(description = "Whether league tiers and rankings are enabled")
-        Boolean leaguesEnabled) {
+        @NonNull @Schema(description = "Whether practice reviews are on")
+        Boolean practicesEnabled) {
     public static WorkspaceListItemDTO from(Workspace workspace, ConnectionService connectionService) {
         IdentityProviderType providerType = connectionService
                 .findActiveProviderKind(workspace.getId())
@@ -59,10 +47,6 @@ public record WorkspaceListItemDTO(
                 workspace.getAccountLogin(),
                 providerType,
                 workspace.getCreatedAt(),
-                workspace.getFeatures().getPracticesEnabled(),
-                workspace.getFeatures().getMentorEnabled(),
-                workspace.getFeatures().getLeaderboardEnabled(),
-                workspace.getFeatures().getProgressionEnabled(),
-                workspace.getFeatures().getLeaguesEnabled());
+                workspace.getFeatures().getPracticesEnabled());
     }
 }

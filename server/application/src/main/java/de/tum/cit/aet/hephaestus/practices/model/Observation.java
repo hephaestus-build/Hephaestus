@@ -43,12 +43,15 @@ import tools.jackson.databind.JsonNode;
         uniqueConstraints = {
             @UniqueConstraint(
                     name = "uk_observation_occurrence",
-                    columnNames = {"occurrence_key"})
+                    columnNames = {"occurrence_key"}),
+            @UniqueConstraint(
+                    name = "uk_observation_workspace_id",
+                    columnNames = {"id", "workspace_id"}),
         },
         indexes = {
             @Index(name = "idx_observation_practice_observed", columnList = "practice_id, observed_at DESC"),
             @Index(name = "idx_observation_agent_job", columnList = "agent_job_id"),
-            @Index(name = "idx_observation_workspace", columnList = "workspace_id"),
+            @Index(name = "idx_observation_workspace_observed", columnList = "workspace_id, observed_at"),
             @Index(name = "idx_observation_target", columnList = "artifact_kind, artifact_id"),
             @Index(
                     name = "idx_observation_target_run",

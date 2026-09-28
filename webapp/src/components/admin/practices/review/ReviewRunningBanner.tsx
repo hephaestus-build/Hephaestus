@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { BadgeVariant } from "@/components/common/status-def";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -24,6 +26,8 @@ const ALERT_VARIANTS: Record<BadgeVariant, "default" | "destructive" | "success"
 
 export interface ReviewRunningBannerProps {
 	running: ReviewRunningState;
+	/** Where to fix it, on a page that is not the settings themselves. */
+	children?: ReactNode;
 }
 
 /**
@@ -41,14 +45,17 @@ export interface ReviewRunningBannerProps {
  * anything the reader just did, and an assertive announcement on every visit would interrupt them
  * mid-sentence.
  */
-export function ReviewRunningBanner({ running }: ReviewRunningBannerProps) {
+export function ReviewRunningBanner({ running, children }: ReviewRunningBannerProps) {
 	const { label, icon: ToneIcon, badgeVariant } = REVIEW_RUNNING_DEFS[reviewRunningTone(running)];
 
 	return (
 		<Alert variant={ALERT_VARIANTS[badgeVariant]} role="status">
 			<ToneIcon />
 			<AlertTitle>{label}</AlertTitle>
-			<AlertDescription>{reviewRunningDescription(running)}</AlertDescription>
+			<AlertDescription>
+				<p>{reviewRunningDescription(running)}</p>
+				{children}
+			</AlertDescription>
 		</Alert>
 	);
 }

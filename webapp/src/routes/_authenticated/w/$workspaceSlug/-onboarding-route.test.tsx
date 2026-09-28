@@ -237,9 +237,9 @@ describe("workspace member onboarding route", () => {
 		);
 		await screen.findByRole("radio", { name: /^In-house /u }, ROUTE_RENDER_WAIT);
 		fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-		// With leaderboards disabled, workspace home opens the member’s own page.
+		// The workspace home: Activity, since this workspace does not review practices.
 		await waitFor(
-			() => expect(router.state.location.pathname).toBe("/w/acme/user/ada"),
+			() => expect(router.state.location.pathname).toBe("/w/acme/activity"),
 			ROUTE_RENDER_WAIT,
 		);
 	});
@@ -327,7 +327,7 @@ describe("workspace member onboarding route", () => {
 		fireEvent.click(screen.getByRole("radio", { name: /^No AI /u }));
 		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await waitFor(
-			() => expect(router.state.location.pathname).toBe("/w/acme/user/ada"),
+			() => expect(router.state.location.pathname).toBe("/w/acme/activity"),
 			ROUTE_RENDER_WAIT,
 		);
 		expect(savedWorkspace).toBe("acme");

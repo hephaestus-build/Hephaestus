@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventAction
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
@@ -68,8 +69,8 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
      * later compares against, so the sync would not read them for this change.
      */
     @Override
-    protected void dispatchEvent(GitLabMergeRequestEventDTO event) {
-        ProcessingContext context = transactionTemplate.execute(status -> handleEventAndReturnContext(event));
+    protected void dispatchEvent(GitLabMergeRequestEventDTO event, Instant arrivedAt) {
+        ProcessingContext context = transactionTemplate.execute(status -> handle(event, arrivedAt));
         Repository repository = context == null ? null : context.repository();
         Long scopeId = context == null ? null : context.scopeId();
         var attributes = event.objectAttributes();
@@ -98,10 +99,12 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
 
     @Override
     protected void handleEvent(GitLabMergeRequestEventDTO event) {
-        handleEventAndReturnContext(event);
+        handle(event, Instant.now());
     }
 
-    private @Nullable ProcessingContext handleEventAndReturnContext(GitLabMergeRequestEventDTO event) {
+    /** Stores the event Hephaestus received at {@code arrivedAt}. */
+    @Nullable
+    ProcessingContext handle(GitLabMergeRequestEventDTO event, Instant arrivedAt) {
         if (event.objectAttributes() == null) {
             log.warn("Received merge request event with missing object_attributes");
             return null;
@@ -133,10 +136,11 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
                 event.objectAttributes().iid(),
                 action);
 
-        ProcessingContext context = contextResolver.resolve(projectPath, action.getValue(), "merge request");
-        if (context == null) {
+        ProcessingContext resolved = contextResolver.resolve(projectPath, action.getValue(), "merge request");
+        if (resolved == null) {
             return null;
         }
+        ProcessingContext context = resolved.withObservedAt(arrivedAt);
 
         switch (action) {
             case OPEN, UPDATE -> mergeRequestProcessor.process(event, context);

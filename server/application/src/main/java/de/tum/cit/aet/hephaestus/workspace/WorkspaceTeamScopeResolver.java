@@ -6,7 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Resolves the {@link WorkspaceTeamScope} of a workspace — the single source of truth for team
- * scoping across the team, settings, and leaderboard read paths.
+ * scoping across the team, settings, and workspace activity read paths.
  * <p>
  * Empty when the workspace has no synced organization (user-type workspace, or before first org
  * sync). Callers MUST fail closed on empty and treat the workspace as having no teams: teams only

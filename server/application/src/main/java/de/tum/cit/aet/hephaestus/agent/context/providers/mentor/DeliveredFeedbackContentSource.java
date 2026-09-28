@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepositor
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.RecipientFeedbackRow;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -24,7 +23,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
@@ -178,22 +176,7 @@ public class DeliveredFeedbackContentSource implements ContentSource {
                         .map(FeedbackObservationVisibility::getObservation)
                         .toList(),
                 SourceUsePurpose.CONVERSATIONAL_MENTORING);
-        Map<UUID, Boolean> permitted = bindings.stream()
-                .collect(Collectors.toMap(
-                        FeedbackObservationVisibility::getFeedbackId,
-                        binding -> visible.contains(binding.getObservation().getId()),
-                        Boolean::logicalAnd));
-        Set<UUID> stale = bindings.stream()
-                .filter(binding -> {
-                    Observation observation = binding.getObservation();
-                    return ReviewClaimCurrentness.of(
-                                    observation.getPracticeRevision(),
-                                    observation.getPractice(),
-                                    observation.getSupersededAt())
-                            != ReviewClaimCurrentness.CURRENT;
-                })
-                .map(FeedbackObservationVisibility::getFeedbackId)
-                .collect(Collectors.toSet());
+        Map<UUID, ReviewClaimCurrentness> shown = FeedbackObservationVisibility.shown(bindings, visible);
         Set<Long> activeThreadIds = conversationConsentGate.activeThreadIds(
                 workspaceId,
                 rows.stream()
@@ -202,12 +185,10 @@ public class DeliveredFeedbackContentSource implements ContentSource {
                         .filter(Objects::nonNull)
                         .toList());
         return rows.stream()
-                .filter(row -> permitted.getOrDefault(row.getId(), false))
+                .filter(row -> shown.containsKey(row.getId()))
                 .filter(row -> !ArtifactKinds.CONVERSATION_THREAD.equals(row.getArtifactKind())
                         || (row.getArtifactId() != null && activeThreadIds.contains(row.getArtifactId())))
-                .map(row -> new Usable(
-                        row,
-                        stale.contains(row.getId()) ? ReviewClaimCurrentness.STALE : ReviewClaimCurrentness.CURRENT))
+                .map(row -> new Usable(row, Objects.requireNonNull(shown.get(row.getId()))))
                 .toList();
     }
 

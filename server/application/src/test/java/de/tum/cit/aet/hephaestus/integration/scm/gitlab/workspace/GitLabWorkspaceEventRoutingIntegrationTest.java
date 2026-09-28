@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -68,6 +69,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabConnectionWebhookController;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabSubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -77,6 +79,13 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActivationService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepositoryMonitorService;
+import de.tum.cit.aet.hephaestus.workspace.exception.RepositoryAlreadyMonitoredException;
+import de.tum.cit.aet.hephaestus.workspace.exception.RepositoryProviderNotConnectedException;
+import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewRepositoryTarget;
+import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewRepositoryTargetRepository;
+import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode;
+import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryTarget;
 import io.nats.client.JetStreamApiException;
 import io.nats.client.JetStreamManagement;
 import io.nats.client.Nats;
@@ -94,8 +103,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -233,6 +247,18 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private GitLabRepositoryMonitors repositoryMonitors;
+
+    @Autowired
+    private PracticeReviewRepositoryTargetRepository practiceReviewRepositoryTargetRepository;
+
+    @Autowired
+    private WorkspaceRepositoryMonitorService workspaceRepositoryMonitorService;
+
+    @Autowired
+    private PracticeReviewCoverageService practiceReviewCoverageService;
 
     @Autowired
     private GitLabRouteCredential routeCredential;
@@ -679,6 +705,308 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldKeepOneMonitorWhenWorkAtTheNewPathArrivesBeforeTheRename() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        long workspaceId = connected.getId();
+        Repository project = discoveredRepository();
+        long projectId = project.getNativeId();
+        long original = repositoryToMonitorRepository
+                .findByWorkspaceIdAndNameWithOwner(workspaceId, REPOSITORY)
+                .orElseThrow()
+                .getId();
+        Workspace selecting = workspaceRepository.findById(workspaceId).orElseThrow();
+        selecting.getReviewSettings().setRepositoryCoverageMode(ReviewRepositoryMode.SELECTED);
+        workspaceRepository.save(selecting);
+        practiceReviewRepositoryTargetRepository.save(
+                new PracticeReviewRepositoryTarget(workspaceId, original, List.of()));
+        String renamed = GROUP + "/renamed-repository";
+        doReturn(Optional.of(reported(projectId, renamed)))
+                .when(projectSyncService)
+                .fetchProject(workspaceId, renamed);
+        doReturn(Optional.of(reported(projectId, renamed)))
+                .when(projectSyncService)
+                .fetchProjectById(workspaceId, projectId);
+
+        deliver(connected, onProject(fixture("gitlab/issue.open.json"), renamed, projectId), "work-at-new-path");
+        awaitAcknowledged();
+
+        // Before the rename event: the work event alone must have moved the original monitor and its review target.
+        assertThat(repositoryToMonitorRepository.findByWorkspaceIdAndNativeId(workspaceId, projectId))
+                .singleElement()
+                .satisfies(monitor -> {
+                    assertThat(monitor.getId()).isEqualTo(original);
+                    assertThat(monitor.getNameWithOwner()).isEqualTo(renamed);
+                });
+        assertThat(issueRepository.findAll()).anyMatch(issue -> NATIVE_ISSUE_ID.equals(issue.getNativeId()));
+        Workspace reviewed = workspaceRepository.findById(workspaceId).orElseThrow();
+        assertThat(practiceReviewCoverageService.scope(reviewed).repositories())
+                .extracting(ReviewRepositoryTarget::nameWithOwner)
+                .containsExactly(renamed);
+        assertThat(practiceReviewCoverageService
+                        .assess(reviewed, renamed, "main", null, true)
+                        .repositoryMatched())
+                .isTrue();
+        assertThat(practiceReviewCoverageService
+                        .assess(reviewed, REPOSITORY, "main", null, true)
+                        .repositoryMatched())
+                .isFalse();
+
+        ObjectNode rename = (ObjectNode) projectCreate(renamed, projectId);
+        rename.put("event_name", "project_rename");
+        deliver(connected, rename, "rename-after-work");
+        awaitAcknowledged();
+
+        assertThat(repositoryToMonitorRepository.findByWorkspaceIdAndNativeId(workspaceId, projectId))
+                .singleElement()
+                .satisfies(monitor -> {
+                    assertThat(monitor.getId()).isEqualTo(original);
+                    assertThat(monitor.getNameWithOwner()).isEqualTo(renamed);
+                });
+    }
+
+    @Test
+    void shouldFollowARenameADiscoveryListsWithTheExistingMonitor() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        long workspaceId = connected.getId();
+        Repository project = discoveredRepository();
+        long original = repositoryToMonitorRepository
+                .findByWorkspaceIdAndNameWithOwner(workspaceId, REPOSITORY)
+                .orElseThrow()
+                .getId();
+        String renamed = GROUP + "/renamed-repository";
+        project.setNameWithOwner(renamed);
+        Repository listed = repositoryRepository.save(project);
+
+        assertThat(repositoryMonitors.monitorAllowed(
+                        workspaceRepository.findById(workspaceId).orElseThrow(), List.of(listed)))
+                .isZero();
+
+        assertThat(repositoryToMonitorRepository.findByWorkspaceIdAndNativeId(workspaceId, project.getNativeId()))
+                .singleElement()
+                .satisfies(monitor -> {
+                    assertThat(monitor.getId()).isEqualTo(original);
+                    assertThat(monitor.getNameWithOwner()).isEqualTo(renamed);
+                });
+    }
+
+    @Test
+    void shouldMergeThisWorkspacesDuplicateMonitorsIntoTheFirstOnTheNextReport() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        long workspaceId = connected.getId();
+        Repository project = discoveredRepository();
+        long projectId = project.getNativeId();
+        String renamed = GROUP + "/renamed-repository";
+        RepositoryToMonitor original = repositoryToMonitorRepository
+                .findByWorkspaceIdAndNameWithOwner(workspaceId, REPOSITORY)
+                .orElseThrow();
+        original.setIssueSyncCursor("original-cursor");
+        repositoryToMonitorRepository.save(original);
+        RepositoryToMonitor duplicate = WorkspaceTestFixtures.repositoryMonitor(connected, renamed);
+        duplicate.setNativeId(projectId);
+        repositoryToMonitorRepository.save(duplicate);
+        Workspace other = WorkspaceTestFixtures.persistGitLabWorkspace(
+                workspaceRepository,
+                connectionRepository,
+                WorkspaceTestFixtures.gitLabPatWorkspace("othergroup"),
+                SERVER_URL);
+        RepositoryToMonitor foreign = WorkspaceTestFixtures.repositoryMonitor(other, REPOSITORY);
+        foreign.setNativeId(projectId);
+        repositoryToMonitorRepository.save(foreign);
+        practiceReviewRepositoryTargetRepository.save(
+                new PracticeReviewRepositoryTarget(workspaceId, duplicate.getId(), List.of("main")));
+        practiceReviewRepositoryTargetRepository.save(
+                new PracticeReviewRepositoryTarget(other.getId(), foreign.getId(), List.of("develop")));
+        project.setNameWithOwner(renamed);
+        Repository listed = repositoryRepository.save(project);
+
+        repositoryMonitors.monitorAllowed(
+                workspaceRepository.findById(workspaceId).orElseThrow(), List.of(listed));
+
+        // The review selection that lived only on the duplicate now applies to the kept monitor.
+        assertThat(practiceReviewRepositoryTargetRepository.findByWorkspaceId(workspaceId))
+                .singleElement()
+                .satisfies(target -> {
+                    assertThat(target.getRepositoryMonitorId()).isEqualTo(original.getId());
+                    assertThat(target.getBaseBranches()).containsExactly("main");
+                });
+        assertThat(practiceReviewRepositoryTargetRepository.findByWorkspaceId(other.getId()))
+                .singleElement()
+                .satisfies(target -> assertThat(target.getBaseBranches()).containsExactly("develop"));
+        assertThat(repositoryToMonitorRepository.findByWorkspaceIdAndNativeId(workspaceId, projectId))
+                .singleElement()
+                .satisfies(monitor -> {
+                    assertThat(monitor.getId()).isEqualTo(original.getId());
+                    assertThat(monitor.getNameWithOwner()).isEqualTo(renamed);
+                    assertThat(monitor.getIssueSyncCursor()).isEqualTo("original-cursor");
+                });
+        assertThat(repositoryToMonitorRepository.findById(foreign.getId()))
+                .hasValueSatisfying(
+                        monitor -> assertThat(monitor.getNameWithOwner()).isEqualTo(REPOSITORY));
+    }
+
+    @Test
+    void shouldWriteNoMonitorForAProjectTheCurrentConnectionDoesNotCover() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        long workspaceId = connected.getId();
+        long connectionId = connectionId(connected);
+        IdentityProvider otherInstance = identityProviderRepository
+                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, "https://gitlab.example.com")
+                .orElseGet(() -> identityProviderRepository.save(
+                        new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.example.com")));
+        Repository samePathElsewhere = foreignRepository(GROUP + "/on-another-instance", 901L);
+        samePathElsewhere.setProvider(otherInstance);
+        samePathElsewhere = repositoryRepository.save(samePathElsewhere);
+        Repository outsideGroup = foreignRepository("othergroup/outside", 902L);
+        Workspace loaded = workspaceRepository.findById(workspaceId).orElseThrow();
+
+        assertThat(repositoryMonitors.monitorAllowed(loaded, List.of(samePathElsewhere, outsideGroup)))
+                .isZero();
+
+        // The selection stored when the lock is held decides, not a Workspace the transaction loaded before.
+        Repository project = foreignRepository(NESTED_PROJECT, NESTED_PROJECT_ID);
+        ExecutorService committer = Executors.newSingleThreadExecutor();
+        try {
+            Integer created = transactionTemplate.execute(status -> {
+                Workspace managed = workspaceRepository.findById(workspaceId).orElseThrow();
+                CompletableFuture.runAsync(
+                                () -> transactionTemplate.executeWithoutResult(inner -> workspaceRepository
+                                        .findById(workspaceId)
+                                        .orElseThrow()
+                                        .setRepositorySelection(RepositorySelection.SELECTED)),
+                                committer)
+                        .orTimeout(20, SECONDS)
+                        .join();
+                return repositoryMonitors.monitorAllowed(managed, List.of(project));
+            });
+            assertThat(created).isZero();
+        } finally {
+            committer.shutdownNow();
+        }
+
+        // A creator that saw the connection active waits for a disconnect holding the lock, then writes nothing.
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService threads = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> disconnect = threads.submit(() -> transactionTemplate.executeWithoutResult(status -> {
+                connectionRepository.acquireLifecycleLock(connectionId, workspaceId);
+                Connection connection =
+                        connectionRepository.findById(connectionId).orElseThrow();
+                ReflectionTestUtils.setField(connection, "state", IntegrationState.SUSPENDED);
+                connectionRepository.save(connection);
+                locked.countDown();
+                awaitUninterruptibly(release);
+            }));
+            assertThat(locked.await(20, SECONDS)).isTrue();
+            Future<Integer> creator = threads.submit(() -> repositoryMonitors.monitorAll(loaded, List.of(project)));
+            assertThatThrownBy(() -> creator.get(1, SECONDS)).isInstanceOf(TimeoutException.class);
+            release.countDown();
+            disconnect.get(20, SECONDS);
+
+            assertThat(creator.get(20, SECONDS)).isZero();
+        } finally {
+            release.countDown();
+            threads.shutdownNow();
+        }
+        assertThatThrownBy(() -> workspaceRepositoryMonitorService.addRepositoryToMonitor(
+                        connected.getWorkspaceSlug(), NESTED_PROJECT))
+                .isInstanceOf(RepositoryProviderNotConnectedException.class);
+        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(workspaceId, NESTED_PROJECT))
+                .isFalse();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspaceId))
+                .extracting(RepositoryToMonitor::getNativeId)
+                .doesNotContain(901L, 902L, NESTED_PROJECT_ID);
+    }
+
+    @Test
+    void shouldNotAddByHandAProjectTheWorkspaceMonitorsUnderAnotherPath() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        long workspaceId = connected.getId();
+        long connectionId = connectionId(connected);
+        Repository project = discoveredRepository();
+        String renamed = GROUP + "/renamed-repository";
+        project.setNameWithOwner(renamed);
+        repositoryRepository.save(project);
+
+        assertThatThrownBy(() ->
+                        workspaceRepositoryMonitorService.addRepositoryToMonitor(connected.getWorkspaceSlug(), renamed))
+                .isInstanceOf(RepositoryAlreadyMonitoredException.class);
+        assertThat(repositoryToMonitorRepository.findByWorkspaceIdAndNativeId(workspaceId, project.getNativeId()))
+                .hasSize(1);
+
+        // Adding by hand waits on the same lifecycle lock as every automatic creator.
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService threads = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> holder = threads.submit(() -> transactionTemplate.executeWithoutResult(status -> {
+                connectionRepository.acquireLifecycleLock(connectionId, workspaceId);
+                locked.countDown();
+                awaitUninterruptibly(release);
+            }));
+            assertThat(locked.await(20, SECONDS)).isTrue();
+            Future<?> manual = threads.submit(() -> workspaceRepositoryMonitorService.addRepositoryToMonitor(
+                    connected.getWorkspaceSlug(), NESTED_PROJECT));
+            assertThatThrownBy(() -> manual.get(1, SECONDS)).isInstanceOf(TimeoutException.class);
+            release.countDown();
+            holder.get(20, SECONDS);
+            manual.get(20, SECONDS);
+        } finally {
+            release.countDown();
+            threads.shutdownNow();
+        }
+        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(workspaceId, NESTED_PROJECT))
+                .isTrue();
+    }
+
+    @Test
+    void shouldCreateOneMonitorWhenCreatorsWaitOnTheConnectionLifecycleLock() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        long workspaceId = connected.getId();
+        long connectionId = connectionId(connected);
+        Repository project = foreignRepository(NESTED_PROJECT, NESTED_PROJECT_ID);
+        Workspace loaded = workspaceRepository.findById(workspaceId).orElseThrow();
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService threads = Executors.newFixedThreadPool(3);
+        try {
+            Future<?> holder = threads.submit(() -> transactionTemplate.executeWithoutResult(status -> {
+                connectionRepository.acquireLifecycleLock(connectionId, workspaceId);
+                locked.countDown();
+                awaitUninterruptibly(release);
+            }));
+            assertThat(locked.await(20, SECONDS)).isTrue();
+            Future<Integer> first = threads.submit(() -> repositoryMonitors.monitorAllowed(loaded, List.of(project)));
+            Future<Integer> second = threads.submit(() -> repositoryMonitors.monitorAllowed(loaded, List.of(project)));
+
+            // Neither creator may decide while the lifecycle lock is held elsewhere.
+            assertThatThrownBy(() -> first.get(1, SECONDS)).isInstanceOf(TimeoutException.class);
+            release.countDown();
+            holder.get(20, SECONDS);
+
+            assertThat(first.get(20, SECONDS) + second.get(20, SECONDS)).isEqualTo(1);
+        } finally {
+            release.countDown();
+            threads.shutdownNow();
+        }
+        assertThat(repositoryToMonitorRepository.findByWorkspaceIdAndNativeId(workspaceId, NESTED_PROJECT_ID))
+                .singleElement()
+                .satisfies(monitor -> assertThat(monitor.getNameWithOwner()).isEqualTo(NESTED_PROJECT));
+    }
+
+    @Test
     void shouldNotResumeMonitoringWhenTheMonitorIsRemovedWhileADeliveryIsPrepared() throws Exception {
         createStream();
         Workspace connected = connectGroup();
@@ -834,6 +1162,14 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     private static String routeOf(GitLabRouteCredential.Issued issued) {
         return issued.keyId() + "/" + issued.routeId();
+    }
+
+    private static void awaitUninterruptibly(CountDownLatch latch) {
+        try {
+            latch.await(20, SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private long connectionId(Workspace target) {

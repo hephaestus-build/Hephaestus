@@ -125,9 +125,8 @@ class WorkspaceNatsSubscriptionProviderTest extends BaseUnitTest {
     void slackConnectedWorkspaceEmitsAPerTeamSlackFilter() {
         when(connectionService.findActiveProviderKind(WS)).thenReturn(Optional.empty());
         when(connectionService.findActiveOutlineConfig(WS)).thenReturn(Optional.empty());
-        when(connectionService.findSlackNotificationConfig(WS))
-                .thenReturn(
-                        Optional.of(new ConnectionConfig.SlackConfig("T0ABC123", "Acme", null, null, null, Set.of())));
+        when(connectionService.findSlackConfig(WS))
+                .thenReturn(Optional.of(new ConnectionConfig.SlackConfig("T0ABC123", "Acme", null, Set.of())));
 
         NatsSubscriptionInfo info = provider.getSubscriptionInfo(WS).orElseThrow();
 
@@ -145,7 +144,7 @@ class WorkspaceNatsSubscriptionProviderTest extends BaseUnitTest {
     void outlineArmIsInertWhenTheOutlineIntegrationIsDisabled() {
         provider = providerWithFlags(/* outlineEnabled */ false, /* slackEnabled */ true);
         when(connectionService.findActiveProviderKind(WS)).thenReturn(Optional.empty());
-        when(connectionService.findSlackNotificationConfig(WS)).thenReturn(Optional.empty());
+        when(connectionService.findSlackConfig(WS)).thenReturn(Optional.empty());
 
         NatsSubscriptionInfo info = provider.getSubscriptionInfo(WS).orElseThrow();
 
@@ -165,15 +164,15 @@ class WorkspaceNatsSubscriptionProviderTest extends BaseUnitTest {
 
         assertThat(info.hasSubscriptions()).isFalse();
         org.mockito.Mockito.verify(connectionService, org.mockito.Mockito.never())
-                .findSlackNotificationConfig(WS);
+                .findSlackConfig(WS);
     }
 
     @Test
     void slackConnectionWithoutTeamIdIsSkipped() {
         when(connectionService.findActiveProviderKind(WS)).thenReturn(Optional.empty());
         when(connectionService.findActiveOutlineConfig(WS)).thenReturn(Optional.empty());
-        when(connectionService.findSlackNotificationConfig(WS))
-                .thenReturn(Optional.of(new ConnectionConfig.SlackConfig(null, "Acme", null, null, null, Set.of())));
+        when(connectionService.findSlackConfig(WS))
+                .thenReturn(Optional.of(new ConnectionConfig.SlackConfig(null, "Acme", null, Set.of())));
 
         NatsSubscriptionInfo info = provider.getSubscriptionInfo(WS).orElseThrow();
 

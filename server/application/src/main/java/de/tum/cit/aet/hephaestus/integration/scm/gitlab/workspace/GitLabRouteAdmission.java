@@ -247,35 +247,30 @@ public class GitLabRouteAdmission implements RouteAdmission {
     }
 
     /**
-     * Monitors {@code repository}, which GitLab has just reported inside the connected group, when the monitoring policy
-     * allows it; called in the transaction that stored it, holding the lifecycle lock.
+     * Brings this workspace's monitor of {@code repository}, which GitLab has just reported inside the connected group,
+     * in line with it, and monitors it when the policy allows and no monitor exists; called in the transaction that
+     * stored it, holding the lifecycle lock.
      */
     private void monitorIfAllowed(AdmittedRoute route, Repository repository) {
-        Workspace workspace = workspace(route);
-        String path = repository.getNameWithOwner();
-        if (!repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(route.workspaceId(), path)
-                && repositoryMonitors.isAllowed(workspace, path)) {
-            repositoryMonitors.monitorAllowed(workspace, List.of(repository));
-        }
+        repositoryMonitors.monitorAllowed(workspace(route), List.of(repository));
     }
 
     /**
-     * This workspace's monitor of project {@code nativeId}: the one stored with that id, or else one stored without an
+     * This workspace's monitors of project {@code nativeId}: those stored with that id, or else one stored without an
      * id at {@code knownPath}, the path of the stored row for that very project, inside the connected group. A monitor
      * without an id anywhere else is not provably this project's and is left unchanged.
      */
-    private Optional<RepositoryToMonitor> ownMonitor(AdmittedRoute route, long nativeId, @Nullable String knownPath) {
+    private List<RepositoryToMonitor> ownMonitors(AdmittedRoute route, long nativeId, @Nullable String knownPath) {
         List<RepositoryToMonitor> byId =
                 repositoryToMonitorRepository.findByWorkspaceIdAndNativeId(route.workspaceId(), nativeId);
-        if (!byId.isEmpty()) {
-            return Optional.of(byId.getFirst());
-        }
-        if (knownPath == null || !route.contains(knownPath)) {
-            return Optional.empty();
+        if (!byId.isEmpty() || knownPath == null || !route.contains(knownPath)) {
+            return byId;
         }
         return repositoryToMonitorRepository
                 .findByWorkspaceIdAndNameWithOwner(route.workspaceId(), knownPath)
-                .filter(monitor -> monitor.getNativeId() == null);
+                .filter(monitor -> monitor.getNativeId() == null)
+                .map(monitor -> List.of(monitor))
+                .orElse(List.of());
     }
 
     private Workspace workspace(AdmittedRoute route) {
@@ -412,21 +407,22 @@ public class GitLabRouteAdmission implements RouteAdmission {
                     .findByNativeIdAndProviderId(nativeId, route.providerId())
                     .map(Repository::getNameWithOwner)
                     .orElse(null);
-            Optional<RepositoryToMonitor> own = ownMonitor(route, nativeId, knownPath);
+            List<RepositoryToMonitor> own = ownMonitors(route, nativeId, knownPath);
             Repository stored = inside && reported != null
                     ? projectSyncService.persistProject(reported).orElse(null)
                     : null;
-            own.ifPresent(monitor -> {
-                if (stored != null) {
-                    syncTargetProvider.reconcileSyncTargetIdentity(
-                            monitor.getId(), stored.getNativeId(), stored.getNameWithOwner());
-                } else if (!inside) {
-                    syncTargetProvider.removeSyncTarget(monitor.getId());
-                }
-            });
+            if (!inside) {
+                own.forEach(monitor -> syncTargetProvider.removeSyncTarget(monitor.getId()));
+            }
             if (stored == null) {
                 return false;
             }
+            // A monitor from before native ids learns this project's id where it is; the shared monitor boundary
+            // then merges any other monitor of the project into the first and moves that one to the reported path.
+            own.stream()
+                    .filter(monitor -> monitor.getNativeId() == null)
+                    .forEach(monitor -> syncTargetProvider.reconcileSyncTargetIdentity(
+                            monitor.getId(), nativeId, monitor.getNameWithOwner()));
             monitorIfAllowed(route, stored);
             return true;
         });

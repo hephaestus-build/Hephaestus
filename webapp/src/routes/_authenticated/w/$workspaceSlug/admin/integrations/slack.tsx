@@ -6,7 +6,7 @@ import { JobHistoryCard } from "@/components/admin/integrations/JobHistoryCard";
 import { SyncResourcesTable } from "@/components/admin/integrations/SyncResourcesTable";
 import { SyncStatusHeader } from "@/components/admin/integrations/SyncStatusHeader";
 import { WorkspaceSlackChannelsSettings } from "@/components/admin/integrations/WorkspaceSlackChannelsSettings";
-import { WorkspaceSlackNotificationSettings } from "@/components/admin/integrations/WorkspaceSlackNotificationSettings";
+import { WorkspaceSlackConnectionSettings } from "@/components/admin/integrations/WorkspaceSlackConnectionSettings";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { SlackIcon } from "@/components/icons/brand";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -33,7 +33,7 @@ function SlackIntegrationPage() {
 			<PageHeader
 				icon={<SlackIcon className="size-6" />}
 				title="Slack"
-				description="Connection, weekly digest, monitored channels and sync activity for this workspace's Slack app."
+				description="Connection, monitored channels and sync activity for this workspace's Slack app."
 			/>
 
 			{slack.isLoading && <Skeleton className="h-48 w-full" />}
@@ -70,12 +70,7 @@ function SlackIntegrationPage() {
 				</Card>
 			)}
 
-			{ready && (
-				<WorkspaceSlackNotificationSettings
-					key={slack.notificationSettingsKey}
-					{...slack.notificationSettingsProps}
-				/>
-			)}
+			{ready && <WorkspaceSlackConnectionSettings {...slack.connectionSettingsProps} />}
 
 			{ready && <WorkspaceSlackChannelsSettings {...slack.channelsSettingsProps} />}
 

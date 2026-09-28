@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -14,12 +15,14 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceContribution;
 import de.tum.cit.aet.hephaestus.agent.context.StagedArtifactNames;
+import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -28,12 +31,15 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
@@ -42,6 +48,8 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -81,7 +89,16 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     private FeedbackRepository feedbackRepository;
 
     @Mock
+    private FeedbackObservationRepository feedbackObservationRepository;
+
+    @Mock
     private ObservationVisibilityPolicy visibilityPolicy;
+
+    @Mock
+    private ConversationSourceLiveness conversationLiveness;
+
+    /** Threads whose channel no longer consents; every other thread asked about is live. */
+    private final Set<Long> inactiveThreads = new HashSet<>();
 
     @Mock
     private PullRequestRepository pullRequestRepository;
@@ -91,16 +108,26 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     private ReviewHistoryContentSource provider;
 
+    private final Map<UUID, List<Observation>> boundTo = new HashMap<>();
+
     @BeforeEach
     void setUp() {
         provider = new ReviewHistoryContentSource(
                 observationRepository,
                 feedbackRepository,
+                feedbackObservationRepository,
                 visibilityPolicy,
+                conversationLiveness,
                 pullRequestRepository,
                 issueRepository,
                 new StagedArtifactNames(ReviewHistoryContentSourceTest::identitiesOf),
                 objectMapper);
+        lenient().when(conversationLiveness.activeThreadIds(anyLong(), any())).thenAnswer(invocation -> {
+            Collection<Long> threads = invocation.getArgument(1);
+            return threads.stream()
+                    .filter(thread -> !inactiveThreads.contains(thread))
+                    .collect(Collectors.toSet());
+        });
         lenient()
                 .when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
                 .thenReturn(List.of());
@@ -110,6 +137,22 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         lenient()
                 .when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
                 .thenReturn(List.of());
+        // Unless a test binds it, each row is bound to one current observation this review may read.
+        lenient()
+                .when(feedbackObservationRepository.findForVisibility(anyLong(), any()))
+                .thenAnswer(invocation -> {
+                    Collection<UUID> ids = invocation.getArgument(1);
+                    return ids.stream()
+                            .flatMap(id -> boundTo.getOrDefault(id, List.of(boundObservation(false))).stream()
+                                    .map(o -> (FeedbackObservationVisibility) new Binding(id, o)))
+                            .toList();
+                });
+        lenient()
+                .when(visibilityPolicy.permitsShown(anyLong(), any(), eq(SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW)))
+                .thenAnswer(invocation -> {
+                    Collection<Observation> batch = invocation.getArgument(1);
+                    return batch.stream().map(Observation::getId).collect(Collectors.toSet());
+                });
         lenient().when(visibilityPolicy.permitsAll(anyLong(), any(), any())).thenAnswer(invocation -> {
             Collection<Observation> batch = invocation.getArgument(1);
             return batch.stream().map(Observation::getId).collect(Collectors.toSet());
@@ -212,12 +255,14 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 .thenReturn(List.of(observationWithRationale(rationale)));
         when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
                 .thenReturn(List.of(Feedback.builder()
+                        .id(UUID.randomUUID())
                         .channel(FeedbackChannel.IN_CONTEXT)
                         .body(body)
                         .deliveredAt(Instant.parse("2026-07-01T09:00:00Z"))
                         .build()));
         when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
                 .thenReturn(List.of(Feedback.builder()
+                        .id(UUID.randomUUID())
                         .channel(FeedbackChannel.IN_APP)
                         .threadKey("in-app:99:swallows-errors")
                         .body(body)
@@ -300,6 +345,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     void stagesFeedbackThatWasAlreadyDeliveredWithItsChannel() {
         when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
                 .thenReturn(List.of(Feedback.builder()
+                        .id(UUID.randomUUID())
                         .channel(FeedbackChannel.IN_CONTEXT)
                         .body("Consider handling this error rather than logging it.")
                         .deliveredAt(Instant.parse("2026-07-01T09:00:00Z"))
@@ -320,6 +366,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     void stagesWhatIsQueuedAndUnreadWithTheKeyThatIdentifiesIt() {
         when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
                 .thenReturn(List.of(Feedback.builder()
+                        .id(UUID.randomUUID())
                         .channel(FeedbackChannel.IN_APP)
                         .threadKey("in-app:99:swallows-errors")
                         .body("A way of working nobody has read yet.")
@@ -475,6 +522,232 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         return provider.capture(prRequest(), Set.of(ReviewHistoryContentSource.OBSERVATION_HISTORY));
     }
 
+    @Nested
+    class FeedbackWhoseEvidenceHasMovedOn {
+
+        @Test
+        void keepsTheRecordOfWhatWasSaidButNotItsWords() {
+            Feedback note = deliveredAgainst(ArtifactKinds.ISSUE, DELIVERED_ARTIFACT_ROW_ID);
+            Feedback brief = queued("in-chat:7:subtasks", "None of the four issues has a task list.");
+            boundTo.put(note.getId(), List.of(boundObservation(true)));
+            boundTo.put(brief.getId(), List.of(boundObservation(true)));
+            when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
+                    .thenReturn(List.of(note));
+            when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
+                    .thenReturn(List.of(brief));
+
+            var captured = captureFeedbackHistory();
+            JsonNode said = read(captured.files().get("inputs/history/feedback.json"))
+                    .get("feedback")
+                    .get(0);
+            JsonNode waiting = read(captured.files().get("inputs/history/prepared.json"))
+                    .get("prepared")
+                    .get(0);
+
+            assertThat(said.get("evidenceCurrentness").asString()).isEqualTo("STALE");
+            assertThat(said.has("body")).isFalse();
+            assertThat(said.get("channel").asString()).isEqualTo("IN_CONTEXT");
+            assertThat(said.get("deliveredAt").asString()).isNotBlank();
+            assertThat(waiting.get("evidenceCurrentness").asString()).isEqualTo("STALE");
+            assertThat(waiting.get("threadKey").asString()).isEqualTo("in-chat:7:subtasks");
+            assertThat(waiting.has("body")).isFalse();
+            assertThat(captured.contentStates())
+                    .containsEntry(ReviewHistoryContentSource.FEEDBACK_HISTORY, SourceContentState.NON_EMPTY);
+        }
+
+        @Test
+        void oneStaleObservationBehindAPieceOfFeedbackMakesItsWordsStale() {
+            Feedback card = queued("in-app:99:subtasks", "#7 and #6 still lack checkable units.");
+            boundTo.put(card.getId(), List.of(boundObservation(false), boundObservation(true)));
+            when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
+                    .thenReturn(List.of(card));
+
+            JsonNode entry = read(captureFeedbackHistory().files().get("inputs/history/prepared.json"))
+                    .get("prepared")
+                    .get(0);
+
+            assertThat(entry.get("evidenceCurrentness").asString()).isEqualTo("STALE");
+            assertThat(entry.has("body")).isFalse();
+        }
+
+        @Test
+        void keepsTheWordsWhileEveryObservationBehindThemIsCurrent() {
+            Feedback card = queued("in-app:99:subtasks", "#9 and #10 open as one block.");
+            boundTo.put(card.getId(), List.of(boundObservation(false), boundObservation(false)));
+            when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
+                    .thenReturn(List.of(card));
+
+            JsonNode entry = read(captureFeedbackHistory().files().get("inputs/history/prepared.json"))
+                    .get("prepared")
+                    .get(0);
+
+            assertThat(entry.get("evidenceCurrentness").asString()).isEqualTo("CURRENT");
+            assertThat(entry.get("body").asString()).isEqualTo("#9 and #10 open as one block.");
+        }
+
+        @Test
+        void stagesNothingAboutFeedbackWhoseEvidenceThisReviewMayNotRead() {
+            Feedback note = deliveredAgainst(ArtifactKinds.ISSUE, DELIVERED_ARTIFACT_ROW_ID);
+            Feedback brief = queued("in-chat:7:subtasks", "A brief on withheld evidence.");
+            Observation readable = boundObservation(false);
+            boundTo.put(note.getId(), List.of(readable, boundObservation(false)));
+            boundTo.put(brief.getId(), List.of(boundObservation(false)));
+            when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
+                    .thenReturn(List.of(note));
+            when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
+                    .thenReturn(List.of(brief));
+            when(visibilityPolicy.permitsShown(anyLong(), any(), eq(SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW)))
+                    .thenReturn(Set.of(readable.getId()));
+
+            var captured = captureFeedbackHistory();
+
+            assertThat(read(captured.files().get("inputs/history/feedback.json"))
+                            .get("feedback"))
+                    .isEmpty();
+            assertThat(read(captured.files().get("inputs/history/prepared.json"))
+                            .get("prepared"))
+                    .isEmpty();
+            assertThat(captured.contentStates())
+                    .containsEntry(ReviewHistoryContentSource.FEEDBACK_HISTORY, SourceContentState.EMPTY);
+        }
+    }
+
+    @Nested
+    class ConversationsWhoseChannelNoLongerConsents {
+
+        private static final long PAUSED_THREAD = 41L;
+        private static final long ACTIVE_THREAD = 42L;
+
+        @Test
+        void stagesNoObservationFromAConversationWhoseChannelNoLongerConsents() {
+            inactiveThreads.add(PAUSED_THREAD);
+            when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
+                    .thenReturn(List.of(
+                            observation(
+                                    "paused-practice",
+                                    "rec-1",
+                                    "From the paused channel",
+                                    ArtifactKinds.CONVERSATION_THREAD,
+                                    PAUSED_THREAD),
+                            observation(
+                                    "active-practice",
+                                    "rec-2",
+                                    "From the active channel",
+                                    ArtifactKinds.CONVERSATION_THREAD,
+                                    ACTIVE_THREAD),
+                            observation(
+                                    "code-practice",
+                                    "rec-3",
+                                    "From the pull request",
+                                    ArtifactKinds.PULL_REQUEST,
+                                    OBSERVED_ARTIFACT_ROW_ID)));
+
+            JsonNode staged = read(captureObservationHistory().files().get("inputs/history/observations.json"));
+
+            assertThat(staged.get("observations"))
+                    .extracting(o -> o.get("summary").asString())
+                    .containsExactly("From the active channel", "From the pull request");
+            assertThat(staged.toString()).doesNotContain("paused-practice", "From the paused channel");
+        }
+
+        @Test
+        void stagesNoFeedbackBoundToOrAboutAConversationWhoseChannelNoLongerConsents() {
+            inactiveThreads.add(PAUSED_THREAD);
+            Feedback mixed = queued("in-app:1:mixed", "Bound to code and to the paused conversation.");
+            boundTo.put(mixed.getId(), List.of(boundObservation(false), boundConversation(PAUSED_THREAD)));
+            Feedback aboutPaused = Feedback.builder()
+                    .id(UUID.randomUUID())
+                    .channel(FeedbackChannel.IN_CHAT)
+                    .artifactKind(ArtifactKinds.CONVERSATION_THREAD)
+                    .artifactId(PAUSED_THREAD)
+                    .threadKey("in-chat:1:paused")
+                    .body("About the paused conversation.")
+                    .createdAt(Instant.parse("2026-07-02T09:00:00Z"))
+                    .build();
+            Feedback threadless = Feedback.builder()
+                    .id(UUID.randomUUID())
+                    .channel(FeedbackChannel.IN_CHAT)
+                    .artifactKind(ArtifactKinds.CONVERSATION_THREAD)
+                    .threadKey("in-chat:1:threadless")
+                    .body("About a conversation with no thread recorded.")
+                    .createdAt(Instant.parse("2026-07-02T09:00:00Z"))
+                    .build();
+            Feedback unanchored = queued("in-app:1:unanchored", "Not tied to any one piece of work.");
+            Feedback onCode = deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID);
+            Feedback onActive = queued("in-chat:1:active", "From the active conversation.");
+            boundTo.put(onActive.getId(), List.of(boundConversation(ACTIVE_THREAD)));
+            when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
+                    .thenReturn(List.of(onCode));
+            when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
+                    .thenReturn(List.of(mixed, aboutPaused, threadless, unanchored, onActive));
+
+            var captured = captureFeedbackHistory();
+            JsonNode said = read(captured.files().get("inputs/history/feedback.json"));
+            JsonNode waiting = read(captured.files().get("inputs/history/prepared.json"));
+
+            assertThat(said.get("feedback"))
+                    .extracting(f -> f.get("body").asString())
+                    .containsExactly("Consider handling this error rather than logging it.");
+            assertThat(waiting.get("prepared"))
+                    .extracting(
+                            f -> f.get("threadKey").asString(),
+                            f -> f.get("body").asString())
+                    .containsExactly(
+                            tuple("in-app:1:unanchored", "Not tied to any one piece of work."),
+                            tuple("in-chat:1:active", "From the active conversation."));
+            assertThat(waiting.toString())
+                    .doesNotContain(
+                            "in-app:1:mixed", "in-chat:1:paused", "paused conversation", "in-chat:1:threadless");
+        }
+
+        private static Observation boundConversation(long threadId) {
+            Observation current = boundObservation(false);
+            return Observation.builder()
+                    .id(current.getId())
+                    .practice(current.getPractice())
+                    .practiceRevision(current.getPracticeRevision())
+                    .artifactKind(ArtifactKinds.CONVERSATION_THREAD)
+                    .artifactId(threadId)
+                    .build();
+        }
+    }
+
+    private static Feedback queued(String threadKey, String body) {
+        return Feedback.builder()
+                .id(UUID.randomUUID())
+                .channel(FeedbackChannel.IN_CHAT)
+                .threadKey(threadKey)
+                .body(body)
+                .createdAt(Instant.parse("2026-07-02T09:00:00Z"))
+                .build();
+    }
+
+    /** An observation measured under the practice's current review rules; {@code retired} marks it superseded. */
+    private static Observation boundObservation(boolean retired) {
+        PracticeRevision revision = org.mockito.Mockito.mock(PracticeRevision.class);
+        lenient().when(revision.getReviewRuleFingerprint()).thenReturn("rules");
+        Practice practice = new Practice();
+        practice.setCurrentRevision(revision);
+        return Observation.builder()
+                .id(UUID.randomUUID())
+                .practice(practice)
+                .practiceRevision(revision)
+                .supersededAt(retired ? Instant.parse("2026-07-01T10:00:00Z") : null)
+                .build();
+    }
+
+    private record Binding(UUID feedbackId, Observation observation) implements FeedbackObservationVisibility {
+        @Override
+        public UUID getFeedbackId() {
+            return feedbackId;
+        }
+
+        @Override
+        public Observation getObservation() {
+            return observation;
+        }
+    }
+
     private EvidenceContribution captureFeedbackHistory() {
         return provider.capture(prRequest(), Set.of(ReviewHistoryContentSource.FEEDBACK_HISTORY));
     }
@@ -553,6 +826,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     private static Feedback deliveredAgainst(ArtifactKind kind, long artifactId) {
         return Feedback.builder()
+                .id(UUID.randomUUID())
                 .channel(FeedbackChannel.IN_CONTEXT)
                 .artifactKind(kind)
                 .artifactId(artifactId)

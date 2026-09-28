@@ -77,7 +77,7 @@ public class FeedbackLedgerRecorder {
                     summaryRef));
         }
         for (DeliveredSignal signal : inlineSignals) {
-            if (signal.disposition() == Disposition.FAILED || signal.externalRef() == null) continue;
+            if (signal.disposition() == Disposition.FAILED) continue;
             DiffAnchor anchor = (DiffAnchor) signal.anchor();
             feedbackPlacementRepository.insertProviderPlacementIfAbsent(new ProviderPlacement(
                     UUID.randomUUID(),
@@ -202,46 +202,46 @@ public class FeedbackLedgerRecorder {
         if (observations.isEmpty()) {
             return;
         }
-        if (feedbackRepository.existsByAgentJobIdAndPosition(job.getId(), IN_CONTEXT_UNIT_ORDINAL)) {
-            return; // already recorded (job retry)
-        }
-
-        Observation any = observations.get(0);
-        long recipientUserId = any.getAboutUserId();
-        ArtifactKind artifactKind = any.getArtifactKind();
-        Long artifactId = any.getArtifactId();
-        String feedbackThreadKey = feedbackThreadKeyFor(any);
-
-        UUID supersedesId = summaryDelivered
-                ? feedbackPlacementRepository
-                        .findLatestDeliveredSummary(feedbackThreadKey)
-                        .map(FeedbackPlacement::getFeedbackId)
-                        .orElse(null)
-                : null;
-
+        // A package still settling records the copies it has placed so far, so a correction can reach them; a
+        // later record of the same package adds what became known since, and never a second unit.
+        Long workspaceId = job.getWorkspace().getId();
+        Feedback feedback = feedbackRepository
+                .findByAgentJobIdAndPositionAndWorkspaceId(job.getId(), IN_CONTEXT_UNIT_ORDINAL, workspaceId)
+                .orElse(null);
+        boolean created = feedback == null;
         Instant now = Instant.now();
-        Feedback feedback = feedbackRepository.save(Feedback.builder()
-                .agentJobId(job.getId())
-                .workspaceId(job.getWorkspace().getId())
-                .artifactKind(artifactKind)
-                .artifactId(artifactId)
-                // recipient == about for the author-side catalogue (single source); they diverge only for
-                // reviewer-audience practices (ADR 0021).
-                .recipientUserId(recipientUserId)
-                .aboutUserId(recipientUserId)
-                .channel(FeedbackChannel.IN_CONTEXT)
-                .position(IN_CONTEXT_UNIT_ORDINAL)
-                .deliveryState(FeedbackDeliveryState.DELIVERED)
-                .body(summaryDelivered ? delivery.mrNote() : null)
-                .source(FeedbackSource.AGENT)
-                .threadKey(feedbackThreadKey)
-                .replacesId(supersedesId)
-                .createdAt(now)
-                .deliveredAt(now)
-                .build());
-
-        if (supersedesId != null) {
-            feedbackRepository.supersedeDelivered(job.getWorkspace().getId(), supersedesId);
+        if (feedback == null) {
+            Observation any = observations.get(0);
+            long recipientUserId = any.getAboutUserId();
+            String feedbackThreadKey = feedbackThreadKeyFor(any);
+            UUID supersedesId = summaryDelivered
+                    ? feedbackPlacementRepository
+                            .findLatestDeliveredSummary(feedbackThreadKey)
+                            .map(FeedbackPlacement::getFeedbackId)
+                            .orElse(null)
+                    : null;
+            feedback = feedbackRepository.save(Feedback.builder()
+                    .agentJobId(job.getId())
+                    .workspaceId(workspaceId)
+                    .artifactKind(any.getArtifactKind())
+                    .artifactId(any.getArtifactId())
+                    // recipient == about for the author-side catalogue (single source); they diverge only for
+                    // reviewer-audience practices (ADR 0021).
+                    .recipientUserId(recipientUserId)
+                    .aboutUserId(recipientUserId)
+                    .channel(FeedbackChannel.IN_CONTEXT)
+                    .position(IN_CONTEXT_UNIT_ORDINAL)
+                    .deliveryState(FeedbackDeliveryState.DELIVERED)
+                    .body(summaryDelivered ? delivery.mrNote() : null)
+                    .source(FeedbackSource.AGENT)
+                    .threadKey(feedbackThreadKey)
+                    .replacesId(supersedesId)
+                    .createdAt(now)
+                    .deliveredAt(now)
+                    .build());
+            if (supersedesId != null) {
+                feedbackRepository.supersedeDelivered(workspaceId, supersedesId);
+            }
         }
 
         // Reaction suppression already wrote its REACTED_* units before this runs and does NOT delete the
@@ -285,19 +285,23 @@ public class FeedbackLedgerRecorder {
                 // with the repository's findByAgentJobId iteration order.
                 .sorted(ObservationOrder.worstFirst())
                 .toList();
-        int ordinal = 0;
+        int ordinal = created ? 0 : feedbackObservationRepository.countForFeedback(workspaceId, feedback.getId());
         for (Observation f : assessed) {
             EvidenceRole role = f.getOutcome() == Outcome.NEGATIVE ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
-            feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal++);
+            ordinal += feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal);
         }
 
         if (summaryExternalRef != null) {
-            feedbackPlacementRepository.save(FeedbackPlacement.builder()
-                    .feedback(feedback)
-                    .placementType(PlacementType.SUMMARY)
-                    .postedCommentRef(summaryExternalRef)
-                    .createdAt(now)
-                    .build());
+            feedbackPlacementRepository.insertProviderPlacementIfAbsent(new ProviderPlacement(
+                    UUID.randomUUID(),
+                    feedback.getId(),
+                    PlacementType.SUMMARY.name(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    summaryExternalRef));
         }
 
         int inlinePlacementCount = 0;
@@ -307,18 +311,17 @@ public class FeedbackLedgerRecorder {
                 if (signal == null || signal.disposition() == Disposition.FAILED) {
                     continue;
                 }
-                feedbackPlacementRepository.save(FeedbackPlacement.builder()
-                        .feedback(feedback)
-                        .placementType(PlacementType.INLINE)
-                        .anchorKind(note.endLine() != null ? PlacementAnchorKind.RANGE : PlacementAnchorKind.LINE)
-                        .anchorPath(note.filePath())
-                        .anchorStartLine(note.startLine())
-                        .anchorEndLine(note.endLine())
-                        .anchorSide(PlacementAnchorSide.NEW)
-                        .postedCommentRef(signal.externalRef())
-                        .createdAt(now)
-                        .build());
-                inlinePlacementCount++;
+                inlinePlacementCount +=
+                        feedbackPlacementRepository.insertProviderPlacementIfAbsent(new ProviderPlacement(
+                                UUID.randomUUID(),
+                                feedback.getId(),
+                                PlacementType.INLINE.name(),
+                                (note.endLine() != null ? PlacementAnchorKind.RANGE : PlacementAnchorKind.LINE).name(),
+                                note.filePath(),
+                                note.startLine(),
+                                note.endLine(),
+                                PlacementAnchorSide.NEW.name(),
+                                signal.externalRef()));
             }
         }
 
@@ -332,7 +335,7 @@ public class FeedbackLedgerRecorder {
                 feedback.getId(),
                 assessed.size(),
                 inlinePlacementCount,
-                feedbackThreadKey);
+                feedback.getThreadKey());
     }
 
     /** The summary's evidence plus the evidence of every line note named by {@code noteKeys}. */
@@ -461,16 +464,19 @@ public class FeedbackLedgerRecorder {
      * (ordinal {@link #GATE_SUPPRESSED_UNIT_ORDINAL}) binding its assessed observations, with the composed body
      * kept for audit. Without it, a gate-withheld review reads exactly like one that was delivered and ignored.
      *
-     * <p>Publishes the lane trigger for exactly one reason, {@link FeedbackSuppressionReason#INSTANCE_SILENCED}:
-     * silence stops what leaves the instance and nothing else, so the developer's own pages must still get
-     * their card now rather than when the hourly sweeper next passes. Every other gate decision (closed PR,
-     * opted-out author) applies to every channel, so those loci must not resurface anywhere. No-ops when a
-     * DELIVERED feedback already exists for the job or on retry. REQUIRES_NEW, best-effort: callers wrap in try/catch.
+     * <p>Publishes the lane trigger when the reason concerns only the note on the work:
+     * {@link FeedbackSuppressionReason#INSTANCE_SILENCED}, which stops what leaves the instance, and
+     * {@link FeedbackSuppressionReason#REPEATS_DELIVERED_NOTE}, whose words are already there. The developer's
+     * own pages and conversations are then prepared now rather than when the hourly sweeper next passes, each
+     * under its own policy. Every other gate decision (closed PR, opted-out author) applies to every channel, so
+     * those loci must not resurface anywhere. No-ops when a DELIVERED feedback already exists for the job or on
+     * retry. REQUIRES_NEW, best-effort: callers wrap in try/catch.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSuppressedUnit(AgentJob job, DeliveryContent delivery, FeedbackSuppressionReason reason) {
         recordSuppressedUnitInCurrentTransaction(job, delivery, reason);
-        if (reason == FeedbackSuppressionReason.INSTANCE_SILENCED) {
+        if (reason == FeedbackSuppressionReason.INSTANCE_SILENCED
+                || reason == FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE) {
             publishFeedbackLaneTrigger(job);
         }
     }

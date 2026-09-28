@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.reviewoutput;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -28,9 +30,11 @@ import de.tum.cit.aet.hephaestus.practices.feedback.PlacementAnchorKind;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementAnchorSide;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
@@ -41,9 +45,14 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,6 +63,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
@@ -88,6 +98,9 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
 
     @Autowired
     private DeliveryPolicyEvaluationRepository deliveryPolicyEvaluationRepository;
+
+    @Autowired
+    private ObservationInvalidationRepository invalidationRepository;
 
     private Workspace workspace;
     private Workspace otherWorkspace;
@@ -598,16 +611,166 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     observationId);
 
             getOk(OBSERVATIONS, workspace.getWorkspaceSlug())
-                    .jsonPath("$.content[0].feedbackDisposition.prepared")
+                    .jsonPath("$.content[0].feedback.prepared")
                     .isEqualTo(1)
-                    .jsonPath("$.content[0].feedbackDisposition.delivered")
+                    .jsonPath("$.content[0].feedback.delivered")
                     .isEqualTo(1)
-                    .jsonPath("$.content[0].feedbackDisposition.superseded")
+                    .jsonPath("$.content[0].feedback.superseded")
                     .isEqualTo(1)
-                    .jsonPath("$.content[0].feedbackDisposition.suppressed")
+                    .jsonPath("$.content[0].feedback.suppressed")
                     .isEqualTo(1)
-                    .jsonPath("$.content[0].feedbackDisposition.failed")
+                    .jsonPath("$.content[0].feedback.failed")
                     .isEqualTo(1);
+        }
+
+        /** Feedback waiting on an admin, or rejected by one, was still composed from the observation. */
+        @Test
+        @WithAdminUser
+        void shouldCountFeedbackAwaitingApprovalAndDiscardedWhenBoundToTheObservation() {
+            UUID observationId = insertProblem(practiceA, job, alice, "Needs approval", "MAJOR");
+            bind(
+                    persistUnit(workspace, job, alice, 0, FeedbackDeliveryState.AWAITING_APPROVAL, null, "Proposed"),
+                    observationId);
+            bind(
+                    persistUnit(workspace, job, alice, 1, FeedbackDeliveryState.DISCARDED, null, "Rejected"),
+                    observationId);
+
+            getOk(OBSERVATIONS, workspace.getWorkspaceSlug())
+                    .jsonPath("$.content[0].id")
+                    .isEqualTo(observationId.toString())
+                    .jsonPath("$.content[0].feedback.awaitingApproval")
+                    .isEqualTo(1)
+                    .jsonPath("$.content[0].feedback.discarded")
+                    .isEqualTo(1)
+                    .jsonPath("$.content[0].feedback.prepared")
+                    .isEqualTo(0)
+                    .jsonPath("$.content[0].feedback.suppressed")
+                    .isEqualTo(0);
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldListOnlyObservationsWithThatOutcomeWhenFilteredByOutcome() {
+            Instant now = Instant.now();
+            UUID presentAndGood =
+                    insertObservation(practiceA, job, alice, "Good present", "PRESENT", "GOOD", null, 0.8f, 7L, now);
+            UUID absentAndBad =
+                    insertObservation(practiceA, job, alice, "Bad absent", "ABSENT", "BAD", null, 0.8f, 7L, now);
+            UUID absentAndGood = insertProblem(practiceA, job, alice, "Good absent", "MAJOR");
+            UUID presentAndBad =
+                    insertObservation(practiceB, job, bob, "Bad present", "PRESENT", "BAD", "MINOR", 0.8f, 7L, now);
+            insertObservation(practiceA, job, alice, "Not applicable", "NOT_APPLICABLE", null, null, 0.8f, 7L, now);
+
+            expectListed("?outcome=POSITIVE", presentAndGood, absentAndBad);
+            expectListed("?outcome=NEGATIVE", absentAndGood, presentAndBad);
+            expectListed(
+                    "?outcome=POSITIVE&outcome=NEGATIVE", presentAndGood, absentAndBad, absentAndGood, presentAndBad);
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldListOnlyObservationsMarkedIncorrectWhenFilteredByInvalidated() {
+            UUID markedIncorrect = insertProblem(practiceA, job, alice, "Marked incorrect", "MAJOR");
+            UUID restored = insertProblem(practiceA, job, alice, "Restored", "MAJOR");
+            UUID standing = insertProblem(practiceB, job, bob, "Standing", "MINOR");
+            invalidate(markedIncorrect);
+            ObservationInvalidation correction = invalidate(restored);
+            correction.restore(1L, "It was right", Instant.now());
+            invalidationRepository.save(correction);
+
+            expectListed("?invalidated=true", markedIncorrect);
+            expectListed("?invalidated=false", restored, standing);
+            expectListed("", markedIncorrect, restored, standing);
+        }
+
+        /** Each overview count opens the observation list on exactly the rows it counted. */
+        @Test
+        @WithAdminUser
+        void shouldListAsManyObservationsAsTheOverviewCountsWhenFilteredToTheSameRange() {
+            Instant inside = Instant.parse("2026-02-03T12:00:00Z");
+            insertObservation(practiceA, job, alice, "Strength", "PRESENT", "GOOD", null, 0.8f, 7L, inside);
+            insertObservation(practiceB, job, bob, "Another strength", "ABSENT", "BAD", null, 0.8f, 7L, inside);
+            invalidate(
+                    insertObservation(practiceA, job, alice, "Problem", "ABSENT", "GOOD", "MAJOR", 0.8f, 7L, inside));
+            insertObservation(practiceB, job, bob, "Not applicable", "NOT_APPLICABLE", null, null, 0.8f, 7L, inside);
+            // On the exclusive upper bound and just before the lower one: counted by neither.
+            invalidate(insertObservation(
+                    practiceA,
+                    job,
+                    alice,
+                    "Late",
+                    "PRESENT",
+                    "GOOD",
+                    null,
+                    0.8f,
+                    7L,
+                    Instant.parse("2026-02-08T00:00:00Z")));
+            insertObservation(
+                    practiceA,
+                    job,
+                    alice,
+                    "Early",
+                    "ABSENT",
+                    "GOOD",
+                    "MAJOR",
+                    0.8f,
+                    7L,
+                    Instant.parse("2026-01-31T23:59:59Z"));
+            String range = "from=2026-02-01T00:00:00Z&to=2026-02-08T00:00:00Z";
+
+            WebTestClient.BodyContentSpec overview =
+                    getOk("/workspaces/{slug}/practices/reviews/overview?" + range, workspace.getWorkspaceSlug());
+            overview.jsonPath("$.observations.strengths")
+                    .isEqualTo(2)
+                    .jsonPath("$.observations.problems")
+                    .isEqualTo(1)
+                    .jsonPath("$.observationsInvalidated")
+                    .isEqualTo(1)
+                    .jsonPath("$.practices[0].practiceSlug")
+                    .isEqualTo(practiceA.getSlug())
+                    .jsonPath("$.practices[0].observations.strengths")
+                    .isEqualTo(1)
+                    .jsonPath("$.practices[0].observations.problems")
+                    .isEqualTo(1)
+                    .jsonPath("$.practices[0].observationsInvalidated")
+                    .isEqualTo(1)
+                    .jsonPath("$.practices[1].practiceSlug")
+                    .isEqualTo(practiceB.getSlug())
+                    .jsonPath("$.practices[1].observations.strengths")
+                    .isEqualTo(1);
+            expectTotal("?outcome=POSITIVE&" + range, 2);
+            expectTotal("?outcome=NEGATIVE&" + range, 1);
+            expectTotal("?invalidated=true&" + range, 1);
+            String practiceARange = "practiceSlug=" + practiceA.getSlug() + "&" + range;
+            expectTotal("?outcome=POSITIVE&" + practiceARange, 1);
+            expectTotal("?outcome=NEGATIVE&" + practiceARange, 1);
+            expectTotal("?invalidated=true&" + practiceARange, 1);
+            expectTotal("?outcome=POSITIVE&practiceSlug=" + practiceB.getSlug() + "&" + range, 1);
+        }
+
+        private void expectListed(String query, UUID... ids) {
+            getOk(OBSERVATIONS + query, workspace.getWorkspaceSlug())
+                    .jsonPath("$.content[*].id")
+                    .value(listed -> assertThat(listed)
+                            .asInstanceOf(InstanceOfAssertFactories.LIST)
+                            .containsExactlyInAnyOrder(
+                                    Arrays.stream(ids).map(UUID::toString).toArray()));
+        }
+
+        private void expectTotal(String query, int total) {
+            getOk(OBSERVATIONS + query, workspace.getWorkspaceSlug())
+                    .jsonPath("$.page.totalElements")
+                    .isEqualTo(total);
+        }
+
+        private ObservationInvalidation invalidate(UUID observationId) {
+            return invalidationRepository.save(new ObservationInvalidation(
+                    observationRepository
+                            .findByIdAndWorkspaceId(observationId, workspace.getId())
+                            .orElseThrow(),
+                    1L,
+                    "Wrong when made",
+                    Instant.now()));
         }
 
         @Test
@@ -616,15 +779,15 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
             insertProblem(practiceA, job, alice, "Orphan", "MAJOR");
 
             getOk(OBSERVATIONS, workspace.getWorkspaceSlug())
-                    .jsonPath("$.content[0].feedbackDisposition.prepared")
+                    .jsonPath("$.content[0].feedback.prepared")
                     .isEqualTo(0)
-                    .jsonPath("$.content[0].feedbackDisposition.delivered")
+                    .jsonPath("$.content[0].feedback.delivered")
                     .isEqualTo(0)
-                    .jsonPath("$.content[0].feedbackDisposition.superseded")
+                    .jsonPath("$.content[0].feedback.superseded")
                     .isEqualTo(0)
-                    .jsonPath("$.content[0].feedbackDisposition.suppressed")
+                    .jsonPath("$.content[0].feedback.suppressed")
                     .isEqualTo(0)
-                    .jsonPath("$.content[0].feedbackDisposition.failed")
+                    .jsonPath("$.content[0].feedback.failed")
                     .isEqualTo(0);
         }
 
@@ -637,7 +800,7 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
             bind(foreignUnit, observationId);
 
             getOk(OBSERVATIONS, workspace.getWorkspaceSlug())
-                    .jsonPath("$.content[0].feedbackDisposition.delivered")
+                    .jsonPath("$.content[0].feedback.delivered")
                     .isEqualTo(0);
 
             getOk(OBSERVATIONS + "/{id}", workspace.getWorkspaceSlug(), observationId)
@@ -819,6 +982,160 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
     @Nested
     @DisplayName("Feedback ledger")
     class Ledger {
+
+        /** Each overview feedback count opens the feedback list, filtered to its one delivery state, on the same rows. */
+        @Test
+        @WithAdminUser
+        void shouldListAsMuchFeedbackAsTheOverviewCountsWhenFilteredToTheSameStateAndRange() {
+            Instant inside = Instant.parse("2026-02-03T12:00:00Z");
+            persistUnit(workspace, job, alice, 0, FeedbackDeliveryState.PARTIALLY_DELIVERED, null, "Half", inside);
+            persistUnit(
+                    workspace,
+                    job,
+                    alice,
+                    1,
+                    FeedbackDeliveryState.PARTIALLY_DELIVERED,
+                    FeedbackSuppressionReason.VOLUME_CAPPED,
+                    "Half, rest suppressed",
+                    inside);
+            persistUnit(workspace, job, alice, 2, FeedbackDeliveryState.PARTIALLY_FAILED, null, "Half failed", inside);
+            persistUnit(workspace, job, alice, 3, FeedbackDeliveryState.PREPARED, null, "Ready", inside);
+            // On the exclusive upper bound and just before the lower one: counted by neither.
+            persistUnit(
+                    workspace,
+                    job,
+                    alice,
+                    4,
+                    FeedbackDeliveryState.PARTIALLY_DELIVERED,
+                    null,
+                    "Late",
+                    Instant.parse("2026-02-08T00:00:00Z"));
+            persistUnit(
+                    workspace,
+                    job,
+                    alice,
+                    5,
+                    FeedbackDeliveryState.PARTIALLY_FAILED,
+                    null,
+                    "Early",
+                    Instant.parse("2026-01-31T23:59:59Z"));
+            String range = "from=2026-02-01T00:00:00Z&to=2026-02-08T00:00:00Z";
+
+            getOk("/workspaces/{slug}/practices/reviews/overview?" + range, workspace.getWorkspaceSlug())
+                    .jsonPath("$.feedback.partiallyDelivered")
+                    .isEqualTo(2)
+                    .jsonPath("$.feedback.partiallyFailed")
+                    .isEqualTo(1)
+                    .jsonPath("$.feedback.prepared")
+                    .isEqualTo(1)
+                    .jsonPath("$.feedback.suppressed")
+                    .isEqualTo(0)
+                    .jsonPath("$.feedback.failed")
+                    .isEqualTo(0);
+            expectFeedbackTotal("?deliveryState=PARTIALLY_DELIVERED&" + range, 2);
+            expectFeedbackTotal("?deliveryState=PARTIALLY_FAILED&" + range, 1);
+            expectFeedbackTotal("?deliveryState=PREPARED&" + range, 1);
+            expectFeedbackTotal("?deliveryState=SUPPRESSED&" + range, 0);
+            expectFeedbackTotal("?deliveryState=FAILED&" + range, 0);
+        }
+
+        /**
+         * A practice's overview feedback counts open the feedback list filtered to that practice, the same range and
+         * one delivery state, on the same rows.
+         */
+        @Test
+        @WithAdminUser
+        void shouldListAsMuchFeedbackAsEachPracticeCountsWhenFilteredToThePracticeStateAndRange() {
+            Instant inside = Instant.parse("2026-02-03T12:00:00Z");
+            UUID firstA = insertProblem(practiceA, job, alice, "First A", "MAJOR");
+            UUID secondA = insertProblem(practiceA, job, alice, "Second A", "MAJOR");
+            UUID onlyB = insertProblem(practiceB, job, bob, "Only B", "MAJOR");
+            Feedback fusedA =
+                    persistUnit(workspace, job, alice, 0, FeedbackDeliveryState.PARTIALLY_DELIVERED, null, "A", inside);
+            bind(fusedA, firstA);
+            bind(fusedA, secondA);
+            Feedback acrossBoth =
+                    persistUnit(workspace, job, alice, 1, FeedbackDeliveryState.DELIVERED, null, "A and B", inside);
+            bind(acrossBoth, firstA);
+            bind(acrossBoth, onlyB);
+            bind(persistUnit(workspace, job, bob, 2, FeedbackDeliveryState.PREPARED, null, "B", inside), onlyB);
+            persistUnit(workspace, job, bob, 3, FeedbackDeliveryState.SUPPRESSED, null, "Unbound", inside);
+            bind(
+                    persistUnit(
+                            workspace,
+                            job,
+                            alice,
+                            4,
+                            FeedbackDeliveryState.DELIVERED,
+                            null,
+                            "Late",
+                            Instant.parse("2026-02-08T00:00:00Z")),
+                    firstA);
+            String range = "from=2026-02-01T00:00:00Z&to=2026-02-08T00:00:00Z";
+
+            JsonNode practices = OBJECT_MAPPER
+                    .readTree(Objects.requireNonNull(getOk(
+                                    "/workspaces/{slug}/practices/reviews/overview?" + range,
+                                    workspace.getWorkspaceSlug())
+                            .returnResult()
+                            .getResponseBody()))
+                    .get("practices");
+            Map<String, JsonNode> feedbackBySlug = new HashMap<>();
+            practices.forEach(
+                    practice -> feedbackBySlug.put(practice.get("practiceSlug").asString(), practice.get("feedback")));
+            JsonNode countsA = Objects.requireNonNull(feedbackBySlug.get(practiceA.getSlug()));
+            JsonNode countsB = Objects.requireNonNull(feedbackBySlug.get(practiceB.getSlug()));
+            assertThat(countsA.path("partiallyDelivered").asLong()).isEqualTo(1);
+            assertThat(countsA.path("delivered").asLong()).isEqualTo(1);
+            assertThat(countsB.path("delivered").asLong()).isEqualTo(1);
+            assertThat(countsB.path("prepared").asLong()).isEqualTo(1);
+            feedbackBySlug.forEach((slug, counts) -> {
+                for (FeedbackDeliveryState state : FeedbackDeliveryState.values()) {
+                    expectFeedbackTotal(
+                            "?practiceSlug=" + slug + "&deliveryState=" + state + "&" + range,
+                            counts.path(camelCase(state.name())).asInt());
+                }
+            });
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldListFeedbackOldestFirstWhenSortedOldest() {
+            Instant at = Instant.parse("2026-02-03T12:00:00Z");
+            Feedback middle = persistUnit(workspace, job, alice, 0, FeedbackDeliveryState.PREPARED, null, "Middle", at);
+            Feedback oldest = persistUnit(
+                    workspace, job, alice, 1, FeedbackDeliveryState.PREPARED, null, "Oldest", at.minusSeconds(60));
+            Feedback newest = persistUnit(
+                    workspace, job, alice, 2, FeedbackDeliveryState.PREPARED, null, "Newest", at.plusSeconds(60));
+
+            getOk(FEEDBACK, workspace.getWorkspaceSlug())
+                    .jsonPath("$.content[*].id")
+                    .isEqualTo(List.of(
+                            newest.getId().toString(),
+                            middle.getId().toString(),
+                            oldest.getId().toString()));
+            getOk(FEEDBACK + "?sort=OLDEST", workspace.getWorkspaceSlug())
+                    .jsonPath("$.content[*].id")
+                    .isEqualTo(List.of(
+                            oldest.getId().toString(),
+                            middle.getId().toString(),
+                            newest.getId().toString()));
+        }
+
+        private static String camelCase(String constant) {
+            String[] words = constant.toLowerCase(Locale.ROOT).split("_");
+            StringBuilder result = new StringBuilder(words[0]);
+            for (int i = 1; i < words.length; i++) {
+                result.append(words[i].substring(0, 1).toUpperCase(Locale.ROOT)).append(words[i].substring(1));
+            }
+            return result.toString();
+        }
+
+        private void expectFeedbackTotal(String query, int total) {
+            getOk(FEEDBACK + query, workspace.getWorkspaceSlug())
+                    .jsonPath("$.page.totalElements")
+                    .isEqualTo(total);
+        }
 
         @Test
         @WithAdminUser
@@ -1285,6 +1602,179 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     .isEqualTo(1)
                     .jsonPath("$.content[0].deliveryState")
                     .isEqualTo("DELIVERED");
+        }
+    }
+
+    @Nested
+    @DisplayName("Observation validity")
+    class ObservationValidity {
+
+        private static final String VALIDITY = OBSERVATIONS + "/{id}/validity";
+
+        private WebTestClient.ResponseSpec patchValidity(
+                Workspace ws, UUID observationId, boolean valid, String reason) {
+            return webTestClient
+                    .patch()
+                    .uri(VALIDITY, ws.getWorkspaceSlug(), observationId)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(Map.of("valid", valid, "reason", reason))
+                    .exchange();
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldInvalidateOnlyTheSelectedObservationWithItsActorAndReason() {
+            UUID wrong = insertProblem(practiceA, job, alice, "Closed issue #1 already", "MINOR");
+            UUID sibling = insertProblem(practiceB, job, alice, "Sibling claim", "MINOR");
+
+            patchValidity(workspace, wrong, false, "  Issue #1 was still open  ")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.summary")
+                    .isEqualTo("Closed issue #1 already")
+                    .jsonPath("$.invalidations.length()")
+                    .isEqualTo(1)
+                    .jsonPath("$.invalidations[0].reason")
+                    .isEqualTo("Issue #1 was still open")
+                    .jsonPath("$.invalidations[0].invalidatedBy")
+                    .isEqualTo("admin")
+                    .jsonPath("$.invalidations[0].restoredAt")
+                    .doesNotExist();
+
+            ObservationInvalidation recorded =
+                    invalidationRepository.findActive(workspace.getId(), wrong).orElseThrow();
+            assertThat(recorded.getInvalidatedByAccountId()).isNotNull();
+            assertThat(invalidationRepository.findHistory(workspace.getId(), sibling))
+                    .isEmpty();
+            assertThat(observationRepository
+                            .findByIdAndWorkspaceId(wrong, workspace.getId())
+                            .orElseThrow()
+                            .getSummary())
+                    .isEqualTo("Closed issue #1 already");
+            getOk(OBSERVATIONS + "?agentJobId=" + job.getId(), workspace.getWorkspaceSlug())
+                    .jsonPath("$.content[?(@.id == '%s')].invalidatedAt".formatted(wrong))
+                    .isNotEmpty()
+                    .jsonPath("$.content[?(@.id == '%s')].invalidatedAt".formatted(sibling))
+                    .doesNotExist();
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldStopFeedbackNobodyHasReceivedAndKeepTheDeliveredRecord() {
+            UUID wrong = insertProblem(practiceA, job, alice, "Wrong claim", "MINOR");
+            UUID other = insertProblem(practiceB, job, alice, "Other claim", "MINOR");
+            Feedback proposal =
+                    persistUnit(workspace, job, alice, 1, FeedbackDeliveryState.AWAITING_APPROVAL, null, "Proposal");
+            Feedback prepared = persistUnit(workspace, job, alice, 2, FeedbackDeliveryState.PREPARED, null, "Prepared");
+            Feedback delivered =
+                    persistUnit(workspace, job, alice, 3, FeedbackDeliveryState.DELIVERED, null, "Delivered");
+            Feedback unrelated =
+                    persistUnit(workspace, job, alice, 4, FeedbackDeliveryState.PREPARED, null, "Unrelated");
+            bind(proposal, wrong);
+            bind(prepared, wrong);
+            bind(delivered, wrong);
+            bind(unrelated, other);
+
+            patchValidity(workspace, wrong, false, "Wrong when made")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+
+            for (Feedback stopped : List.of(proposal, prepared)) {
+                Feedback reread = feedbackRepository
+                        .findByIdAndWorkspaceId(stopped.getId(), workspace.getId())
+                        .orElseThrow();
+                assertThat(reread.getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
+                assertThat(reread.getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.OBSERVATION_INVALIDATED);
+            }
+            assertThat(feedbackRepository
+                            .findByIdAndWorkspaceId(delivered.getId(), workspace.getId())
+                            .orElseThrow()
+                            .getDeliveryState())
+                    .isEqualTo(FeedbackDeliveryState.DELIVERED);
+            assertThat(feedbackRepository
+                            .findByIdAndWorkspaceId(unrelated.getId(), workspace.getId())
+                            .orElseThrow()
+                            .getDeliveryState())
+                    .isEqualTo(FeedbackDeliveryState.PREPARED);
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldRefuseRepeatedTransitionsAndKeepEveryCorrectionInTheHistory() {
+            UUID observation = insertProblem(practiceA, job, alice, "Contested claim", "MINOR");
+
+            patchValidity(workspace, observation, false, "First look")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+            patchValidity(workspace, observation, false, "Again")
+                    .expectStatus()
+                    .isEqualTo(409)
+                    .expectBody(Void.class);
+            patchValidity(workspace, observation, true, "The claim was right after all")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.invalidations[0].restorationReason")
+                    .isEqualTo("The claim was right after all")
+                    .jsonPath("$.invalidations[0].restoredBy")
+                    .isEqualTo("admin");
+            patchValidity(workspace, observation, true, "Again")
+                    .expectStatus()
+                    .isEqualTo(409)
+                    .expectBody(Void.class);
+            patchValidity(workspace, observation, false, "Second look")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.invalidations.length()")
+                    .isEqualTo(2)
+                    .jsonPath("$.invalidations[0].reason")
+                    .isEqualTo("Second look")
+                    .jsonPath("$.invalidations[1].reason")
+                    .isEqualTo("First look");
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldNotFindOrChangeAnotherWorkspacesObservation() {
+            UUID foreign = insertProblem(otherPractice, otherJob, alice, "Other tenant claim", "MINOR");
+
+            patchValidity(workspace, foreign, false, "Not yours")
+                    .expectStatus()
+                    .isNotFound()
+                    .expectBody(Void.class);
+
+            assertThat(invalidationRepository.findHistory(otherWorkspace.getId(), foreign))
+                    .isEmpty();
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldRequireAReason() {
+            UUID observation = insertProblem(practiceA, job, alice, "Claim", "MINOR");
+
+            patchValidity(workspace, observation, false, "   ")
+                    .expectStatus()
+                    .isBadRequest()
+                    .expectBody(Void.class);
+
+            assertThat(invalidationRepository.findHistory(workspace.getId(), observation))
+                    .isEmpty();
+        }
+
+        @Test
+        @WithUser
+        void shouldForbidAWorkspaceMember() {
+            UUID observation = insertProblem(practiceA, job, alice, "Claim", "MINOR");
+
+            patchValidity(workspace, observation, false, "Members cannot correct")
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
         }
     }
 

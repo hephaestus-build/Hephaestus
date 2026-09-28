@@ -20,12 +20,15 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationProjector;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
 import de.tum.cit.aet.hephaestus.testconfig.TestCacheConfiguration;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -42,6 +45,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -50,6 +54,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -326,8 +331,8 @@ class ProductionSchemaContractIntegrationTest {
                 providerId,
                 "member-" + UUID.randomUUID());
         jdbcTemplate.update(
-                "INSERT INTO workspace_membership (workspace_id, user_id, role, league_points, hidden, created_at) "
-                        + "VALUES (?, ?, 'MEMBER', 0, false, now())",
+                "INSERT INTO workspace_membership (workspace_id, user_id, role, hidden, created_at) "
+                        + "VALUES (?, ?, 'MEMBER', false, now())",
                 ownerWorkspace,
                 userId);
 
@@ -362,6 +367,60 @@ class ProductionSchemaContractIntegrationTest {
                         "suppression_reason = 'WORKSPACE_DELIVERY_PAUSED'", "chk_feedback_dispatch_suppression"));
     }
 
+    /**
+     * Foreign-key triggers are off for this one rolled-back insert, so only the row's own checks decide it: a
+     * restoration carries its time, actor and reason together, or none of them.
+     */
+    @ParameterizedTest(name = "{argumentSetName}")
+    @MethodSource("restorationStates")
+    void observationCorrectionRecordsARestorationWhole(
+            @Nullable Instant restoredAt,
+            @Nullable Long restoredBy,
+            @Nullable String restorationReason,
+            boolean accepted) {
+        Boolean inserted = jdbcTemplate.execute((ConnectionCallback<Boolean>) connection -> {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try (var statement = connection.createStatement();
+                    var insert = connection.prepareStatement("""
+                            INSERT INTO observation_invalidation (id, workspace_id, observation_id, reason,
+                                invalidated_by_account_id, invalidated_at, restoration_reason, restored_by_account_id,
+                                restored_at, provider_copy, provider_copy_retry_at)
+                            VALUES (?, 1, ?, 'Wrong when made', 1, now(), ?, ?, ?, 'PENDING', now())
+                            """)) {
+                statement.execute("SET LOCAL session_replication_role = replica");
+                insert.setObject(1, UUID.randomUUID());
+                insert.setObject(2, UUID.randomUUID());
+                insert.setObject(3, restorationReason);
+                insert.setObject(4, restoredBy);
+                insert.setObject(5, restoredAt == null ? null : Timestamp.from(restoredAt));
+                insert.executeUpdate();
+                return true;
+            } catch (SQLException rejected) {
+                assertThat(rejected.getMessage()).contains("ck_observation_invalidation_restoration");
+                return false;
+            } finally {
+                connection.rollback();
+                connection.setAutoCommit(autoCommit);
+            }
+        });
+
+        assertThat(inserted).isEqualTo(accepted);
+    }
+
+    static Stream<org.junit.jupiter.params.provider.Arguments> restorationStates() {
+        Instant now = Instant.now();
+        return Stream.of(
+                org.junit.jupiter.params.provider.Arguments.argumentSet("active", null, null, null, true),
+                org.junit.jupiter.params.provider.Arguments.argumentSet("restored", now, 1L, "Right after all", true),
+                org.junit.jupiter.params.provider.Arguments.argumentSet(
+                        "missing time", null, 1L, "Right after all", false),
+                org.junit.jupiter.params.provider.Arguments.argumentSet(
+                        "missing actor", now, null, "Right after all", false),
+                org.junit.jupiter.params.provider.Arguments.argumentSet("missing reason", now, 1L, null, false),
+                org.junit.jupiter.params.provider.Arguments.argumentSet("blank reason", now, 1L, "   ", false));
+    }
+
     @Test
     void feedbackDispatchAcceptsCompleteTerminalStates() {
         UUID sent = insertDispatch("valid-sent");
@@ -375,6 +434,21 @@ class ProductionSchemaContractIntegrationTest {
                         "UPDATE feedback_dispatch SET state = 'SUPPRESSED', suppression_reason = "
                                 + "'WORKSPACE_DELIVERY_PAUSED' WHERE id = ?",
                         suppressed))
+                .isEqualTo(1);
+    }
+
+    /** The migrated constraint and the enum the server records must admit the same reasons. */
+    @ParameterizedTest
+    @EnumSource(FeedbackSuppressionReason.class)
+    void feedbackAcceptsEverySuppressionReasonTheServerRecords(FeedbackSuppressionReason reason) {
+        String key = "reason-" + reason.ordinal() + "-"
+                + UUID.randomUUID().toString().substring(0, 8);
+        UUID feedbackId = insertFeedback(insertDispatchOwner(key), key);
+
+        assertThat(jdbcTemplate.update(
+                        "UPDATE feedback SET delivery_state = 'SUPPRESSED', suppression_reason = ? WHERE id = ?",
+                        reason.name(),
+                        feedbackId))
                 .isEqualTo(1);
     }
 

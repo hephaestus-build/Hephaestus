@@ -50,8 +50,64 @@ export function parseDetailStack<TKind extends string>(
 	});
 }
 
+export interface OpenInStackOptions {
+	/**
+	 * Replace the level in front instead of opening one over it — for stepping through a queue of
+	 * records, where the next one takes the place of the one just handled. A swap is written over
+	 * the current history entry and keeps its mark, so dismissing the level still goes back to where
+	 * it was first opened from, and Back does not walk through every record already handled.
+	 */
+	swap?: boolean;
+}
+
+/**
+ * The stack after opening `key` over `stack`, both in wire form, and whether it grew by one level.
+ *
+ * A surface whose levels link to each other — feedback to its observation and back — is a graph, so
+ * a level can link to one already open below it. Appending would be a repeat the schema drops, and the
+ * link would do nothing; closing down to that level is what the reader meant. A full stack swaps its
+ * top level instead, so the link still opens what it names.
+ *
+ * Only a level that grew the stack is a push: {@link import("./use-detail-stack").useDetailStack}
+ * dismisses a pushed level by going back, and going back from a shortened or swapped stack would
+ * re-open what the link just closed.
+ */
+export function openInStack(
+	stack: readonly string[],
+	key: string,
+	{ swap = false }: OpenInStackOptions = {},
+): { detail: string[]; pushed: boolean } {
+	const open = stack.indexOf(key);
+	if (open !== -1) {
+		return { detail: stack.slice(0, open + 1), pushed: false };
+	}
+	if (swap && stack.length > 0) {
+		return { detail: [...stack.slice(0, -1), key], pushed: false };
+	}
+	if (stack.length >= DETAIL_STACK_MAX_DEPTH) {
+		return { detail: [...stack.slice(0, DETAIL_STACK_MAX_DEPTH - 1), key], pushed: false };
+	}
+	return { detail: [...stack, key], pushed: true };
+}
+
+/**
+ * The stack in wire form from a search read without the route's schema — `useSearch({ strict: false })`
+ * — where a one-level stack is still the bare string the URL carries and a deeper one an array.
+ */
+export function stackInSearch(detail: unknown): string[] {
+	if (Array.isArray(detail)) {
+		return detail.filter((value) => typeof value === "string");
+	}
+	return typeof detail === "string" ? [detail] : [];
+}
+
 export function encodeDetailStack(entries: DetailStackEntry[]): string[] | undefined {
 	return entries.length > 0 ? entries.map(detailStackKey) : undefined;
+}
+
+/** The search that opens `entry` alone, for a link from another route. */
+export function detailSearch(entry: DetailStackEntry): { detail: string[] } {
+	return { detail: [detailStackKey(entry)] };
 }
 
 export function detailStackKey(entry: DetailStackEntry): string {

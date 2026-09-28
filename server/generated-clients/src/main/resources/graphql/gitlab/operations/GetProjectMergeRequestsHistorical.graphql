@@ -81,6 +81,9 @@ query GetProjectMergeRequestsHistorical($fullPath: ID!, $first: Int!, $after: St
                     }
                     nodes {
                         ...GitLabUserFields
+                        mergeRequestInteraction {
+                            reviewState
+                        }
                     }
                 }
                 approvedBy(first: 20) {

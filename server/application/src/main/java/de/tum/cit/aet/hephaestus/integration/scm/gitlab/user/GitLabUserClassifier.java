@@ -10,8 +10,8 @@ import org.jspecify.annotations.Nullable;
  * GitLab group and project access tokens materialise as users with deterministic
  * logins of the form {@code group_<id>_bot_<hash>} or {@code project_<id>_bot_<hash>}
  * (hex-encoded). These are service identities, not humans — marking them as
- * {@link User.Type#BOT} so that downstream filters (team rosters, league points,
- * leaderboard) can exclude them uniformly.
+ * {@link User.Type#BOT} so that downstream filters (team rosters,
+ * activity) can exclude them uniformly.
  */
 public final class GitLabUserClassifier {
 

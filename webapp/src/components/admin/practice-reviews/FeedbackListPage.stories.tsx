@@ -2,12 +2,21 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, within } from "storybook/test";
 
 import type { ListPracticeReviewFeedbackResponse, ReviewFeedback } from "@/api/types.gen";
+import type { FacetSource } from "@/components/common/FacetMultiSelect";
 import { withStandardPage, withWidePage } from "@/stories/decorators";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
 
 import { FeedbackListPage } from "./FeedbackListPage";
-import { manyFeedback, reviewFeedback, selects, workspaceMembers } from "./fixtures";
+import {
+	manyFeedback,
+	practiceGroups,
+	reviewFeedback,
+	selects,
+	workspaceMembers,
+	workspacePractices,
+} from "./fixtures";
+import { practiceFacetOptions } from "./ObservationFilters";
 import { type FeedbackSearch, feedbackQuery, REVIEW_PAGE_SIZE } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
 
@@ -20,6 +29,11 @@ const PEOPLE: ReviewPeople = {
 			secondary: member.userLogin,
 		})),
 	capped: false,
+	isLoading: false,
+	isError: false,
+};
+const PRACTICES: FacetSource = {
+	options: practiceFacetOptions(workspacePractices, practiceGroups),
 	isLoading: false,
 	isError: false,
 };
@@ -47,6 +61,9 @@ function pool(rows: ReviewFeedback[]): ListPracticeReviewFeedbackResponse {
  * would actually send. That is what keeps the "Why withheld" facet honest: the URL carries families
  * and `feedbackQuery` expands them to the individual reasons rows actually carry, so a story that
  * filtered on the family name would pass while the real request returned nothing.
+ *
+ * A row does not say which practices it belongs to, so the Practice facet narrows nothing here; that
+ * it reaches the request is pinned by `-lists-route.test.tsx`.
  */
 function feedbackPage(
 	candidates: ReviewFeedback[],
@@ -90,6 +107,7 @@ const meta = {
 		isLoading: false,
 		error: undefined,
 		onRetry: fn(),
+		practices: PRACTICES,
 		people: PEOPLE,
 	},
 	// The screen is controlled: with a frozen `search` prop every facet reads as dead. The rows are
@@ -100,7 +118,10 @@ const meta = {
 				<FeedbackListPage
 					{...args}
 					search={search}
-					onSearchChange={onSearchChange}
+					onSearchChange={(patch) => {
+						args.onSearchChange(patch);
+						onSearchChange(patch);
+					}}
 					feedback={args.feedback && feedbackPage(args.feedback.content ?? [], search)}
 				/>
 			)}
@@ -118,7 +139,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("11 pieces of feedback.");
-		for (const name of ["Outcome", "Place", "Why withheld", "Recipient"]) {
+		for (const name of ["Practice", "Outcome", "Place", "Why withheld", "Recipient"]) {
 			canvas.getByRole("combobox", { name });
 		}
 		// "Composed" is neither when the feedback was delivered nor when the observation was made.
@@ -195,6 +216,22 @@ export const FilterToOneWithholdingFamily: Story = {
 		await canvas.findByText("No feedback matches these filters");
 		await userEvent.click(canvas.getByRole("button", { name: "Clear all filters" }));
 		await canvas.findByText("11 pieces of feedback.");
+	},
+};
+
+/**
+ * Composed order is the server's, like every other: the control only puts the choice in the search
+ * the route turns into a request, and `-lists-route.test.tsx` pins that the endpoint spells it `sort`.
+ */
+export const SortOldestFirst: Story = {
+	parameters: { chromatic: { viewports: [1440] } },
+	play: async ({ args, canvas, userEvent }) => {
+		await canvas.findByText("11 pieces of feedback.");
+		await userEvent.click(canvas.getByRole("combobox", { name: /Sort/u }));
+		await userEvent.click(await screen.findByRole("option", { name: "Oldest first" }));
+		await expect(args.onSearchChange).toHaveBeenLastCalledWith(
+			expect.objectContaining({ order: "OLDEST" }),
+		);
 	},
 };
 

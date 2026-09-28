@@ -1,11 +1,13 @@
 import { ChevronRight, CircleAlert } from "lucide-react";
 
 import type { CatalogGroupAdoptionPreview } from "@/api/types.gen";
+import { PRACTICE_SETUP_LEVEL_LABELS } from "@/components/admin/practices/practice-search";
 import { PracticeListSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
+import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import {
 	CATALOG_GROUP_ACTION_DEFS,
 	CATALOG_GROUP_CHANGE_ACTIONS,
@@ -13,7 +15,7 @@ import {
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { DrawerBody, DrawerDescription, DrawerFooter, DrawerTitle } from "@/components/ui/drawer";
+import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
 import {
 	Item,
 	ItemActions,
@@ -35,6 +37,8 @@ export interface GroupAdoptionPanelProps {
 	onConfirm: () => void;
 	onOpenPractice: (catalogSlug: string) => void;
 	nested?: boolean;
+	/** Where the level sits, from the drawer. */
+	path: LevelPath;
 }
 
 export function GroupAdoptionPanel({
@@ -42,6 +46,7 @@ export function GroupAdoptionPanel({
 	onConfirm,
 	onOpenPractice,
 	nested,
+	path,
 }: GroupAdoptionPanelProps) {
 	const preview = state.status === "ready" ? state.preview : undefined;
 	const changes =
@@ -56,29 +61,30 @@ export function GroupAdoptionPanel({
 
 	return (
 		<>
-			<DetailDrawerHeader nested={nested}>
-				{preview && (
-					<GroupPill
-						size="lg"
-						slug={preview.slug}
-						name={preview.definition.name}
-						icon={preview.definition.icon}
-						color={preview.definition.color}
-					/>
-				)}
-				<div className="min-w-0 flex-1 space-y-0.5">
-					<DrawerTitle className="break-words">
-						{preview?.definition.name ?? "Practice group"}
-					</DrawerTitle>
-					{preview && (
-						<DrawerDescription>
-							{preview.disposition === "CREATE_CATALOG_GROUP"
-								? "Creates this group in the workspace."
-								: "Uses the existing workspace group without changing it."}
-						</DrawerDescription>
-					)}
-				</div>
-			</DetailDrawerHeader>
+			<LevelHeader
+				nested={nested}
+				path={path}
+				current={PRACTICE_SETUP_LEVEL_LABELS["catalog-group"]}
+				loading={state.status === "loading"}
+				mark={
+					preview && (
+						<GroupPill
+							size="lg"
+							slug={preview.slug}
+							name={preview.definition.name}
+							icon={preview.definition.icon}
+							color={preview.definition.color}
+						/>
+					)
+				}
+				title={preview?.definition.name}
+				description={
+					preview &&
+					(preview.disposition === "CREATE_CATALOG_GROUP"
+						? "Creates this group in the workspace."
+						: "Uses the existing workspace group without changing it.")
+				}
+			/>
 
 			<DrawerBody className="space-y-6">
 				{state.status === "ready" && state.action === "stale" && (

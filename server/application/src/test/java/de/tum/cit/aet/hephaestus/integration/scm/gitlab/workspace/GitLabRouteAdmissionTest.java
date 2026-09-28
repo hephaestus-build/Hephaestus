@@ -235,7 +235,6 @@ class GitLabRouteAdmissionTest {
             Repository stored = repository(PROJECT_A, GROUP + "/sub/new");
             when(projectSync.fetchProject(WORKSPACE_ID, GROUP + "/sub/new")).thenReturn(Optional.of(nested));
             when(projectSync.persistProject(nested)).thenReturn(Optional.of(stored));
-            when(repositoryMonitors.isAllowed(workspace, GROUP + "/sub/new")).thenReturn(true);
 
             assertProjectAdmitted(workEvent(PROJECT_A, GROUP + "/sub/new"));
             verify(repositoryMonitors).monitorAllowed(workspace, List.of(stored));
@@ -264,13 +263,32 @@ class GitLabRouteAdmissionTest {
                     .thenReturn(Optional.of(repository(PROJECT_A, GROUP + "/old")));
             GitLabProjectResponse current = reported(PROJECT_A, GROUP + "/sub/current");
             when(projectSync.fetchProjectById(WORKSPACE_ID, PROJECT_A)).thenReturn(Optional.of(current));
-            when(projectSync.persistProject(current))
-                    .thenReturn(Optional.of(repository(PROJECT_A, GROUP + "/sub/current")));
+            Repository stored = repository(PROJECT_A, GROUP + "/sub/current");
+            when(projectSync.persistProject(current)).thenReturn(Optional.of(stored));
+            RepositoryToMonitor legacy = monitor(55L);
+            legacy.setNameWithOwner(GROUP + "/old");
             when(monitors.findByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, GROUP + "/old"))
-                    .thenReturn(Optional.of(monitor(55L)));
+                    .thenReturn(Optional.of(legacy));
 
             assertProjectAdmitted(projectEvent("project_rename", PROJECT_A, GROUP + "/stale"));
-            verify(syncTargets).reconcileSyncTargetIdentity(55L, PROJECT_A, GROUP + "/sub/current");
+            // The monitor learns the project's id where it is; the shared boundary moves it to the reported path.
+            verify(syncTargets).reconcileSyncTargetIdentity(55L, PROJECT_A, GROUP + "/old");
+            verify(repositoryMonitors).monitorAllowed(workspace, List.of(stored));
+        }
+
+        @Test
+        void shouldRetireEveryMonitorOfAProjectMovedOutOfTheGroup() {
+            RepositoryToMonitor first = monitor(60L);
+            first.setNativeId(PROJECT_A);
+            RepositoryToMonitor second = monitor(61L);
+            second.setNativeId(PROJECT_A);
+            when(monitors.findByWorkspaceIdAndNativeId(WORKSPACE_ID, PROJECT_A)).thenReturn(List.of(first, second));
+            when(projectSync.fetchProjectById(WORKSPACE_ID, PROJECT_A))
+                    .thenReturn(Optional.of(reported(PROJECT_A, "elsewhere/a")));
+
+            assertProjectNotAdmitted(projectEvent("project_transfer", PROJECT_A, "elsewhere/a"));
+            verify(syncTargets).removeSyncTarget(60L);
+            verify(syncTargets).removeSyncTarget(61L);
         }
 
         @Test
@@ -399,9 +417,6 @@ class GitLabRouteAdmissionTest {
 
         @Test
         void shouldHandleWorkOnlyOnARepositoryOfTheInstanceThisWorkspaceMonitorsInsideTheGroup() {
-            when(repositoryMonitors.isAllowed(workspace, GROUP + "/sub/unmonitored"))
-                    .thenReturn(true);
-
             assertThat(admission.admitRepository(route, repository(PROJECT_A, "hephaestustest/introcourse-other/p")))
                     .isFalse();
             Repository elsewhere = repository(PROJECT_A, GROUP + "/sub/unmonitored");

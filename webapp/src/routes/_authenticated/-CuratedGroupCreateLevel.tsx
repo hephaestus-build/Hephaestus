@@ -7,15 +7,18 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import { CuratedFormLevel } from "@/components/admin/curated-catalog/CuratedFormLevel";
 import { CuratedGroupForm } from "@/components/admin/curated-catalog/CuratedGroupForm";
+import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { problemDetailOf } from "@/lib/problem-detail";
 
 export interface CuratedGroupCreateLevelProps {
 	nested?: boolean;
+	/** Where the level sits, from the host's `levelPathAt`. */
+	path: LevelPath;
 	onDone: () => void;
 }
 
-export function CuratedGroupCreateLevel({ nested, onDone }: CuratedGroupCreateLevelProps) {
+export function CuratedGroupCreateLevel({ nested, path, onDone }: CuratedGroupCreateLevelProps) {
 	const queryClient = useQueryClient();
 	const createGroup = useMutation({
 		...adminCreateCuratedGroupMutation(),
@@ -29,7 +32,7 @@ export function CuratedGroupCreateLevel({ nested, onDone }: CuratedGroupCreateLe
 	});
 
 	return (
-		<CuratedFormLevel kind="group-new" nested={nested}>
+		<CuratedFormLevel kind="group-new" nested={nested} path={path}>
 			<CuratedGroupForm
 				mode="create"
 				cancel={<LevelCancel />}

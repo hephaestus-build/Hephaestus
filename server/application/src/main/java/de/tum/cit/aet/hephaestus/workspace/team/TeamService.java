@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Handles team-related business logic including:
  * <ul>
  *   <li>Retrieving teams for a workspace</li>
- *   <li>Updating team visibility in leaderboard (via workspace-scoped settings)</li>
+ *   <li>Updating team visibility in workspace activity (via workspace-scoped settings)</li>
  *   <li>Updating repository visibility for teams (via workspace-scoped settings)</li>
  * </ul>
  *
@@ -89,12 +89,12 @@ public class TeamService {
     }
 
     /**
-     * Updates the visibility of a team in leaderboard calculations.
+     * Updates the visibility of a team in workspace activity.
      * Uses workspace-scoped settings for multi-workspace support.
      *
      * @param workspace the workspace the team belongs to
      * @param teamId the ID of the team to update
-     * @param hidden whether to hide the team from leaderboard
+     * @param hidden whether to hide the team from workspace activity
      * @return true if the team was updated, false if not found or not in workspace
      */
     @Transactional

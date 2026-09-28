@@ -163,13 +163,12 @@ version number promises.
 
 **Feature scopes** (domain-specific):
 
+- `activity`: Activity and Workspace activity
 - `auth`: Authentication / identity (Account, IdentityLink, JWT, oauth2Login)
 - `integration`: Cross-cutting integration framework (webhook, oauth, registry, SPI)
 - `scm`: Source-control management (GitHub, GitLab)
-- `leaderboard`: Leaderboard and rankings
 - `mentor`: AI mentor (Heph)
 - `notifications`: Email/notification system
-- `profile`: User profiles
 - `teams`: Team and membership management
 - `workspace`: Workspace management
 
@@ -177,10 +176,10 @@ version number promises.
 
 **Valid pull request titles:**
 
-- `fix(profile): correct avatar upload logic`
-- `feat(leaderboard): add sorting functionality`
+- `fix(activity): keep the time range when switching workspaces`
+- `feat(teams): show sub-teams under their parent`
 - `feat(mentor): add conversation history`
-- `feat(server): add user profile endpoint`
+- `feat(server): add an open-work endpoint`
 - `docs: update installation instructions`
 - `refactor(mentor): improve code analysis performance`
 - `fix(deps): update vulnerable dependency`

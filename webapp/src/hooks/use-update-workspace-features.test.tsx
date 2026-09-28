@@ -23,11 +23,7 @@ const workspace: WorkspaceListItem = {
 	createdAt: new Date("2026-01-01"),
 	displayName: "Acme",
 	id: 1,
-	leaderboardEnabled: true,
-	leaguesEnabled: false,
-	mentorEnabled: false,
 	practicesEnabled: false,
-	progressionEnabled: true,
 	status: "ACTIVE",
 	workspaceSlug: "acme",
 };

@@ -28,6 +28,7 @@ area*, `PracticeArea`, `areaSlug`, and `/practice-areas` are retired names, not 
 | **Practice group**                   | A named collection of related practices                                                                                                                               | category, goal, learning objective                                   |
 | **Unassigned**                      | Practices that are not in a practice group                                                                                                                  | ungrouped, unbound                                                   |
 | **Observation**                     | One recorded result of reviewing one practice against one piece of reviewed work                                                                           | finding, detection, verdict                                          |
+| **Marked incorrect**                | An observation a workspace admin [invalidated](./practice-review-glossary.mdx#invalidated-observations) because it was wrong when made; it stays in history  | deleted, retracted, superseded                                       |
 | **Practice feedback**               | Guidance written from observations and addressed to a developer — both the whole and the countable unit                                                    | message, AI feedback, feedback item, ledger unit                     |
 | **Delivery**                        | Whether one piece of feedback was prepared, delivered, withheld, failed, or replaced                                                                       | placement, surface                                                   |
 | **Channel**                         | Where one piece of feedback is intended to appear — a fact about that piece, not a workspace setting; the destinations are the `FeedbackChannel` constants | destination, surface, reach                                          |
@@ -38,6 +39,13 @@ area*, `PracticeArea`, `areaSlug`, and `/practice-areas` are retired names, not 
 | **Heph**                            | The conversational assistant                                                                                                                               | agent, bot                                                           |
 | **Mentor**                          | The product area for conversations with Heph                                                                                                               |                                                                      |
 | **Practice profile**                | The developer's own page: how their reviewed work stands across practice groups, how it developed, and one next step from Heph. A surface, not a channel   | practice dashboard, standings page                                   |
+| **Activity**                        | The developer's own page: what needs them, what they did over a time range, and the pull or merge requests and issues they did it on. Counts work, never scores it | profile, stats, contributions                                        |
+| **Workspace activity**              | The same counts and lists for everyone in a workspace or one team, with members listed by name                                                             | leaderboard, ranking, standings                                      |
+| **Open work**                       | Pull or merge requests awaiting someone's review, their own open pull or merge requests, and open issues assigned to them                                  | backlog, inbox, to-do                                                |
+| **Needs you**                       | The open work that asks something of the developer now: review requests nobody has settled, and their own pull or merge requests returned to them or approved | inbox, to-do, action items                                           |
+| **Covered**                         | A review request another reviewer's verdict settles for now: they requested changes, so the author acts first, or they approved and the provider counts the pull request as approved. The developer's own review never covers their own request. It waits with the rest of what waits on someone else; [Activity](/user/activity#needs-you) states the rule's limits | dismissed, done, resolved                                            |
+| **Reviewed by you**                 | A review request the developer already approved or requested changes on, which the provider still lists — GitLab keeps a reviewer listed after their verdict, and the author asking again resets the reviewer's state. It waits with the rest of what waits on someone else | done, completed, handled                                             |
+| **Requested from your team**        | A GitHub review request to a team the developer is in, and not to them; it names the team and waits with the rest of what waits on someone else | team inbox, shared queue                                             |
 | **Holds as**                        | The one present-tense sentence a bundled practice reads as when it holds — what the developer keeps doing — shown on the Practice profile beside a practice that is going well, and written by [the catalogue rules](./practice-catalogue.md#changing-bundled-defaults) | strength summary, praise, positive feedback |
 | **Hephaestus**                      | The application, named only where the application itself is the subject — installing it, an account linked to it, a release of it                          | agent                                                                |
 | **Hephaestus default**              | A practice or group bundled with the running Hephaestus release                                                                                             | shipped entry                                                        |
@@ -51,6 +59,10 @@ area*, `PracticeArea`, `areaSlug`, and `/practice-areas` are retired names, not 
 
 Use provider-specific names such as **pull request** or **merge request** when the provider is known;
 otherwise write **pull or merge request**.
+
+*Leaderboard*, *league*, *league points*, *XP*, *level*, *score*, *rank* and *streak* are retired for
+activity and do not describe anything in the product
+([ADR 0045](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0045-activity-counts-work-and-never-ranks-people.md)).
 
 **Feedback is the countable unit, and there is no other word for it.** Do not reach for *message*, *item*,
 *note*, or *entry* to get a noun that pluralises; *feedback* is uncountable, so the fix is to phrase the
@@ -105,18 +117,34 @@ renders them in the app and in Slack. The label is **Prepared for conversation**
 **Unconfirmed** (`UNCONFIRMED`) is conversation feedback a completed turn linked with no record that the feedback
 was shown. Its visibility is unknown, so it counts as neither delivered nor withheld, and it is never prepared again.
 
+A **delivery family** is how a count of feedback groups the ten stored delivery states, so a summary
+answers what an admin asks at a glance. There are six, and every state is in exactly one:
+
+| Delivery family       | Delivery states it holds                                                      |
+| --------------------- | ----------------------------------------------------------------------------- |
+| **Awaiting approval** | Awaiting approval (`AWAITING_APPROVAL`)                                       |
+| **Prepared**          | Prepared (`PREPARED`)                                                         |
+| **Delivered**         | Delivered (`DELIVERED`), Partially delivered (`PARTIALLY_DELIVERED`)          |
+| **Unconfirmed**       | Unconfirmed (`UNCONFIRMED`)                                                   |
+| **Withheld**          | Withheld (`SUPPRESSED`), Rejected (`DISCARDED`), Replaced by newer (`SUPERSEDED`) |
+| **Failed to deliver** | Failed to deliver (`FAILED`), Partially delivered · retries exhausted (`PARTIALLY_FAILED`) |
+
+A family is a count's word and nothing else. Rejected and replaced feedback count as **Withheld**,
+but a row, its badge and a list filter keep each delivery state's own word, and a count opens its list
+filtered to exactly the states its family holds. Unconfirmed is a family of its own because counting
+it as prepared would promise a delivery that will not happen.
+
 **Observation, not finding**, for the measurement — in copy, URLs, API schema, field names, and Java.
 Delivery uses `FeedbackAnchor` and `InlineFeedbackChannel`; the mentor uses `link_observation` and
-`data-observation`. The schema and wire protocol have no aliases for the retired vocabulary. The only
-compatibility surface is an HTTP redirect from the former reviews URL so existing bookmarks do not break;
-it carries no data contract and new links never use it.
+`data-observation`. The schema, wire protocol and web routes have no aliases for the retired
+vocabulary: the former reviews URL no longer opens, and nothing redirects from it.
 
 Everything else is an observation, including the read APIs and the reviews UI — the surfaces an operator
 actually reads are exactly where the banned word does the most damage. Those names are
 `ReviewObservation`, `ReviewObservationDetail`, `ReviewBoundObservation`, `observationId`, and the
 workspace-admin route `/workspaces/{workspaceSlug}/practices/reviews/observations`. Developer-scoped
-reads live under `/workspaces/{workspaceSlug}/practices/observations`. Apart from the web-route redirect, a
-*finding* in this subsystem is a bug.
+reads live under `/workspaces/{workspaceSlug}/practices/observations`. A *finding* in this subsystem is
+a bug.
 
 **Practice autonomy** and **effective autonomy** are the glossary's
 ([Practice autonomy](./practice-review-glossary.mdx#practice-autonomy),

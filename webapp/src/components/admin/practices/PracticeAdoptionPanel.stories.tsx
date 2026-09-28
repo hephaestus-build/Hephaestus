@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { CatalogPracticePreview } from "@/api/types.gen";
-import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
@@ -10,9 +9,9 @@ import {
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
+import { InLevelStack } from "@/stories/level-stack";
 import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
 import { expectNoPanelOverflow } from "@/stories/reflow";
-import { Stateful } from "@/stories/stateful";
 import { expectGenuinelyDisabled } from "@/test/controls";
 
 import { PracticeAdoptionPanel, type PracticeAdoptionState } from "./PracticeAdoptionPanel";
@@ -63,21 +62,19 @@ const meta = {
 	args: {
 		state: ready(),
 		onAdopt: fn(),
+		path: { behind: [{ label: "Practice setup", depth: 0 }], onClose: fn() },
 	},
 	argTypes: {
 		// A discriminated union renders as a free-text box, which cannot produce a valid value.
 		state: { control: false },
+		path: { control: false },
 	},
-	// Stateful, so Escape, an outside press and the header control really close the panel instead
+	// A real stack, so Escape, an outside press and the header control really close the panel instead
 	// of firing an inert spy.
 	render: (args) => (
-		<Stateful initial={[{ kind: "practice", id: preview.slug }]}>
-			{(stack, setStack) => (
-				<DetailDrawerStack stack={stack} onClose={(depth) => setStack(stack.slice(0, depth))}>
-					{(_entry, level) => <PracticeAdoptionPanel {...args} nested={level.nested} />}
-				</DetailDrawerStack>
-			)}
-		</Stateful>
+		<InLevelStack entry={{ kind: "catalog-practice", id: preview.slug }} path={args.path}>
+			{(level) => <PracticeAdoptionPanel {...args} {...level} />}
+		</InLevelStack>
 	),
 	tags: ["autodocs"],
 } satisfies Meta<typeof PracticeAdoptionPanel>;
@@ -167,6 +164,9 @@ export const Loading: Story = {
 		const panel = await settledDrawerPanel();
 		await expect(panel.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
 		await expect(screen.queryByRole("status")).not.toBeInTheDocument();
+		await expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"Loading catalog practice",
+		);
 	},
 };
 
