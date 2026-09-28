@@ -4,6 +4,7 @@ import type { Practice, ReviewObservation } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ClaimCurrentnessBadge } from "@/components/practice-vocabulary/ClaimCurrentness";
+import { DEVELOPER_RESPONSE_DEFS } from "@/components/practice-vocabulary/observation-dispute-defs";
 import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
 import { observationResult } from "@/components/practice-vocabulary/observation-result";
 import { Button } from "@/components/ui/button";
@@ -127,6 +128,9 @@ export function ObservationRow({ observation, practice }: ObservationRowProps) {
 							<ClaimCurrentnessBadge currentness={observation.claimCurrentness} />
 							{observation.invalidatedAt !== undefined && (
 								<StatusBadge def={MARKED_INCORRECT_DEF} />
+							)}
+							{observation.disputedAt !== undefined && (
+								<StatusBadge def={DEVELOPER_RESPONSE_DEFS.DISPUTED} />
 							)}
 							<ObservationOriginBadge origin={observation.origin} />
 						</>

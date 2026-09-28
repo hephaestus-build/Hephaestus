@@ -130,6 +130,36 @@ export const SupportsAnotherObservation: Story = {
 };
 
 /** Historical feedback stays visible, but the level does not present it as a current claim. */
+/**
+ * The developer disputes feedback written from the observation: their explanation leads the panel,
+ * opens the disputed feedback over it, and the decision stays the footer's.
+ */
+export const Disputed: Story = {
+	args: {
+		observation: ready({
+			...reviewObservationDetail,
+			disputes: [
+				{
+					feedbackId: "dddddddd-2222-2222-2222-222222222222",
+					channel: "IN_APP",
+					explanation: "The retry is the caller's job here; this service only reports the failure.",
+					disputedAt: hoursBefore(3),
+				},
+			],
+		}),
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		panel.getAllByText("Disputed");
+		await expect(panel.getByText("The developer disputes this")).toBeVisible();
+		panel.getByText("The retry is the caller's job here; this service only reports the failure.");
+		await expect(
+			levelsOpenedBy(panel.getByRole("link", { name: "Feedback on their practice pages" })),
+		).toEqual(["feedback:dddddddd-2222-2222-2222-222222222222"]);
+		panel.getByRole("button", { name: "Mark as incorrect" });
+	},
+};
+
 export const FeedbackWasWithheld: Story = {
 	args: { observation: ready(observationDetail("bbbbbbbb-2222-2222-2222-222222222222")) },
 	play: async () => {

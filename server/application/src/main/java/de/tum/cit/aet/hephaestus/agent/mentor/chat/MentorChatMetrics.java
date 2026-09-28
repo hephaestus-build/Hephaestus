@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import java.time.Duration;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
@@ -21,7 +22,8 @@ import org.springframework.stereotype.Component;
  * <p>Wired up in {@link MentorChatService}. {@code mentor.turn.started} fires on inbound
  * start before executor submission (so rejected submissions still increment);
  * {@code mentor.turn.completed} fires at every terminal branch with a single
- * {@link Outcome} label.
+ * {@link Outcome} label. {@code mentor.turn.first_token} runs from the turn being accepted to its
+ * first text chunk, tagged by whether the turn found its sandbox warm or had to wait for one to start.
  */
 @Component
 public class MentorChatMetrics {
@@ -56,6 +58,8 @@ public class MentorChatMetrics {
     private final Counter started;
     private final Map<Outcome, Counter> completedByOutcome;
     private final Timer duration;
+    private final Timer firstTokenWarm;
+    private final Timer firstTokenCold;
     private final DistributionSummary costUsd;
 
     public MentorChatMetrics(MeterRegistry registry) {
@@ -68,6 +72,8 @@ public class MentorChatMetrics {
                 .description("Mentor chat turn wall-clock duration including sandbox attach + Pi RPC.")
                 .publishPercentileHistogram()
                 .register(registry);
+        this.firstTokenWarm = firstTokenTimer(registry, "warm");
+        this.firstTokenCold = firstTokenTimer(registry, "cold");
         this.costUsd = DistributionSummary.builder(AgentMetrics.MENTOR_TURN_COST_USD)
                 .description("Per-turn LLM cost in USD (skipped for turns where cost is unresolvable).")
                 .baseUnit("USD")
@@ -100,6 +106,18 @@ public class MentorChatMetrics {
 
     public void stopTimer(Timer.Sample sample) {
         sample.stop(duration);
+    }
+
+    public void recordFirstToken(boolean coldSandbox, Duration sinceAccepted) {
+        (coldSandbox ? firstTokenCold : firstTokenWarm).record(sinceAccepted);
+    }
+
+    private static Timer firstTokenTimer(MeterRegistry registry, String sandbox) {
+        return Timer.builder(AgentMetrics.MENTOR_TURN_FIRST_TOKEN)
+                .description("Time from a mentor turn being accepted to its first text chunk.")
+                .tag("sandbox", sandbox)
+                .publishPercentileHistogram()
+                .register(registry);
     }
 
     public void recordCostUsd(double usd) {

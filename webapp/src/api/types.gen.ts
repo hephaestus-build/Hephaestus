@@ -1728,6 +1728,19 @@ export type FeedbackApproval = {
   rejectionReason?: 'INCORRECT' | 'MISSING_CONTEXT' | 'UNHELPFUL' | 'DUPLICATE' | 'INAPPROPRIATE_PLACEMENT' | 'OTHER';
 };
 
+/**
+ * A developer's standing dispute of feedback written for them. The explanation is theirs, written to the workspace's administrators; the feedback's own text stays as private as its channel keeps it.
+ */
+export type FeedbackDispute = {
+  channel: 'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP';
+  disputedAt: Date;
+  /**
+   * Why the developer thinks the feedback is wrong, in their words
+   */
+  explanation: string;
+  feedbackId: string;
+};
+
 export type FeedbackItem = {
   account?: FeedbackAccountRef;
   appVersion?: string;
@@ -1803,6 +1816,28 @@ export type FeedbackSourceCount = {
 
 export type FeedbackTriage = {
   resolved: boolean;
+};
+
+/**
+ * One withdrawal of a card from a developer's practice page, and its restoration if any
+ */
+export type FeedbackWithdrawal = {
+  id: string;
+  reason: string;
+  /**
+   * Why it was restored; null while the withdrawal is in force
+   */
+  restorationReason?: string;
+  restoredAt?: Date;
+  /**
+   * Who restored it; null while in force or once that account is erased
+   */
+  restoredBy?: string;
+  withdrawnAt: Date;
+  /**
+   * Who withdrew it; null once that account is erased
+   */
+  withdrawnBy?: string;
 };
 
 /**
@@ -2065,9 +2100,9 @@ export type InAppEvidence = {
  */
 export type InAppFeedback = {
   /**
-   * The message, as Markdown, without the headline and the next step
+   * The message, as Markdown, without the headline and the next step; null once a workspace admin withdrew it
    */
-  body: string;
+  body?: string;
   /**
    * Clean pieces of work in a row on the practice that resolve this feedback
    */
@@ -2130,6 +2165,10 @@ export type InAppFeedback = {
    * Why this practice matters, in the developer's framing
    */
   whyItMatters?: string;
+  /**
+   * When a workspace admin withdrew it because what it said was wrong; the card then carries only its practice, whose name is the headline, and no message, next step, evidence, progress or closure
+   */
+  withdrawnAt?: Date;
 };
 
 /**
@@ -4513,6 +4552,10 @@ export type ReviewFeedbackDetail = {
    */
   deliveryPolicy: Array<DeliveryPolicyTrace>;
   deliveryState: 'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED' | 'UNCONFIRMED';
+  /**
+   * The developer's standing dispute of this feedback; null while they do not dispute it
+   */
+  dispute?: FeedbackDispute;
   id: string;
   /**
    * Source observations in render order
@@ -4554,6 +4597,10 @@ export type ReviewFeedbackDetail = {
    * Cross-run continuity key tying successive deliveries together
    */
   threadKey?: string;
+  /**
+   * Every withdrawal of this card from the developer's practice page, newest first; empty when none
+   */
+  withdrawals: Array<FeedbackWithdrawal>;
 };
 
 /**
@@ -4570,6 +4617,10 @@ export type ReviewObservation = {
    * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * When the developer last disputed feedback written from this observation; null while nothing about it is disputed
+   */
+  disputedAt?: Date;
   /**
    * Counts of linked feedback by delivery state
    */
@@ -4641,6 +4692,10 @@ export type ReviewObservationDetail = {
    * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * The developer's standing disputes of feedback written from this observation, newest first; empty when nothing about it is disputed
+   */
+  disputes: Array<FeedbackDispute>;
   evidence?: ObservationEvidence;
   evidenceRationale?: string;
   /**
@@ -5571,6 +5626,20 @@ export type UpdateConnectionStatusRequest = {
  */
 export type UpdateCuratedStatusRequest = {
   status: 'AVAILABLE' | 'RETIRED';
+};
+
+/**
+ * Withdraw a card from a developer's practice page, or restore it
+ */
+export type UpdateFeedbackWithdrawalRequest = {
+  /**
+   * Why, kept with the withdrawal for the workspace's administrators
+   */
+  reason: string;
+  /**
+   * true withdraws the card; false restores it
+   */
+  withdrawn: boolean;
 };
 
 /**
@@ -7156,6 +7225,10 @@ export type ReviewFeedbackDetailWritable = {
    */
   deliveryPolicy: Array<DeliveryPolicyTrace>;
   deliveryState: 'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED' | 'UNCONFIRMED';
+  /**
+   * The developer's standing dispute of this feedback; null while they do not dispute it
+   */
+  dispute?: FeedbackDispute;
   id: string;
   /**
    * Source observations in render order
@@ -7197,6 +7270,10 @@ export type ReviewFeedbackDetailWritable = {
    * Cross-run continuity key tying successive deliveries together
    */
   threadKey?: string;
+  /**
+   * Every withdrawal of this card from the developer's practice page, newest first; empty when none
+   */
+  withdrawals: Array<FeedbackWithdrawal>;
 };
 
 /**
@@ -7213,6 +7290,10 @@ export type ReviewObservationWritable = {
    * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * When the developer last disputed feedback written from this observation; null while nothing about it is disputed
+   */
+  disputedAt?: Date;
   /**
    * Counts of linked feedback by delivery state
    */
@@ -7264,6 +7345,10 @@ export type ReviewObservationDetailWritable = {
    * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * The developer's standing disputes of feedback written from this observation, newest first; empty when nothing about it is disputed
+   */
+  disputes: Array<FeedbackDispute>;
   evidence?: ObservationEvidence;
   evidenceRationale?: string;
   /**
@@ -10833,6 +10918,25 @@ export type UpdateMemberVisibilityResponses = {
 
 export type UpdateMemberVisibilityResponse = UpdateMemberVisibilityResponses[keyof UpdateMemberVisibilityResponses];
 
+export type PrepareMentorSandboxData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/mentor/sandbox';
+};
+
+export type PrepareMentorSandboxResponses = {
+  /**
+   * Accepted; the sandbox starts unless it is already warm or Heph could not answer anyway
+   */
+  202: unknown;
+};
+
 export type ListThreadsData = {
   body?: never;
   path: {
@@ -12139,6 +12243,10 @@ export type ReplaceFeedbackResponseErrors = {
    * Delivered feedback not found for the current recipient
    */
   404: unknown;
+  /**
+   * A workspace admin withdrew this feedback
+   */
+  409: unknown;
 };
 
 export type ReplaceFeedbackResponseResponses = {
@@ -12511,6 +12619,50 @@ export type ListReviewedPracticesResponses = {
 
 export type ListReviewedPracticesResponse = ListReviewedPracticesResponses[keyof ListReviewedPracticesResponses];
 
+export type ListReviewedWorkReviewRunsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    /**
+     * Kind of reviewed work, e.g. scm.pull_request
+     */
+    artifactKind: string;
+    artifactId: number;
+  };
+  query?: {
+    /**
+     * Zero-based page, at most 100
+     */
+    page?: number;
+    /**
+     * Page size from 1 to 50
+     */
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/practices/reviewed-work/{artifactKind}/{artifactId}/review-runs';
+};
+
+export type ListReviewedWorkReviewRunsErrors = {
+  /**
+   * Unknown kind of work or invalid pagination
+   */
+  400: ProblemDetail;
+};
+
+export type ListReviewedWorkReviewRunsError = ListReviewedWorkReviewRunsErrors[keyof ListReviewedWorkReviewRunsErrors];
+
+export type ListReviewedWorkReviewRunsResponses = {
+  /**
+   * Paginated review runs returned
+   */
+  200: PracticeGroupReviewRunsPage;
+};
+
+export type ListReviewedWorkReviewRunsResponse = ListReviewedWorkReviewRunsResponses[keyof ListReviewedWorkReviewRunsResponses];
+
 export type ListPracticeReviewsData = {
   body?: never;
   path: {
@@ -12718,6 +12870,41 @@ export type DecideFeedbackProposalResponses = {
 
 export type DecideFeedbackProposalResponse = DecideFeedbackProposalResponses[keyof DecideFeedbackProposalResponses];
 
+export type UpdatePracticeReviewFeedbackWithdrawalData = {
+  body: UpdateFeedbackWithdrawalRequest;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    feedbackId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/withdrawal';
+};
+
+export type UpdatePracticeReviewFeedbackWithdrawalErrors = {
+  /**
+   * Feedback not found in this workspace
+   */
+  404: ProblemDetail;
+  /**
+   * The feedback is not on a practice page, or is not waiting to be read or shown there
+   */
+  409: ProblemDetail;
+};
+
+export type UpdatePracticeReviewFeedbackWithdrawalError = UpdatePracticeReviewFeedbackWithdrawalErrors[keyof UpdatePracticeReviewFeedbackWithdrawalErrors];
+
+export type UpdatePracticeReviewFeedbackWithdrawalResponses = {
+  /**
+   * Feedback detail after the change
+   */
+  200: ReviewFeedbackDetail;
+};
+
+export type UpdatePracticeReviewFeedbackWithdrawalResponse = UpdatePracticeReviewFeedbackWithdrawalResponses[keyof UpdatePracticeReviewFeedbackWithdrawalResponses];
+
 export type ListPracticeReviewObservationsData = {
   body?: never;
   path: {
@@ -12746,6 +12933,10 @@ export type ListPracticeReviewObservationsData = {
      * true for only the observations an admin has marked incorrect and not restored, false for only the others; omit for both
      */
     invalidated?: boolean;
+    /**
+     * true for only the observations the developer disputes feedback about, false for only the others; omit for both
+     */
+    disputed?: boolean;
     severity?: Array<'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO'>;
     agentJobId?: string;
     /**

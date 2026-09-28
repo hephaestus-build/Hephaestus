@@ -90,6 +90,8 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
 
     Optional<Workspace> findByOrganization_Login(String login);
 
+    Optional<Workspace> findByOrganization_Id(Long organizationId);
+
     /**
      * The provider id of the workspace's synced {@code Organization} — the {@code provider_id} its
      * teams are stamped with at sync time (see {@link WorkspaceTeamScopeResolver}). Empty when there

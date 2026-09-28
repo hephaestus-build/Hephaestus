@@ -36,6 +36,11 @@ interface AdminUserPatch {
 }
 
 export const handlers = [
+	// Opening Heph prepares the member's sandbox; the server accepts and answers with no body.
+	http.post(
+		"*/workspaces/:workspaceSlug/mentor/sandbox",
+		() => new HttpResponse(null, { status: 202 }),
+	),
 	http.get("*/workspaces/:workspaceSlug/onboarding/me", () =>
 		HttpResponse.json(workspaceOnboarding()),
 	),

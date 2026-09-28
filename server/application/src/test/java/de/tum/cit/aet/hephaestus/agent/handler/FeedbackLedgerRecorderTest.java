@@ -339,7 +339,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         when(feedbackRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         AgentJob job = job();
         when(commentFormatter.appendDisclosure("proposed body", job)).thenReturn("proposed body\n\nAI disclosure");
-        when(commentFormatter.appendInlineFeedbackPrompt("inline body")).thenReturn("inline body\n\nAI disclosure");
+        when(commentFormatter.appendInlineFeedbackPrompt(eq("inline body"), any()))
+                .thenReturn("inline body\n\nAI disclosure");
         var metadata = tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
         metadata.put("commit_sha", "abc123");
         job.setMetadata(metadata);

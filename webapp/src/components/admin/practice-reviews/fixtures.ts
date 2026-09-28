@@ -1126,6 +1126,7 @@ export function observationDetail(observationId: string): ReviewObservationDetai
 		})),
 		evidenceRationale: observation.evidenceRationale,
 		invalidations: [],
+		disputes: [],
 	};
 }
 
@@ -1209,6 +1210,7 @@ export function feedbackDetail(feedbackId: string): ReviewFeedbackDetail {
 		subject: run.developer,
 		suppressionReason: item.withheldFor,
 		deliveryPolicy: [],
+		withdrawals: [],
 	};
 }
 

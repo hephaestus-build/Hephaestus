@@ -67,6 +67,28 @@ Delivery is optional. Jobs that do not complete successfully may have no deliver
 labels. See [Practice Review Operations](./practice-review-operations.mdx) for queue health and the
 existing execution metric.
 
+## Heph turn metrics
+
+| Prometheus name                   | Type      | Labels    | Meaning                                                         |
+| --------------------------------- | --------- | --------- | --------------------------------------------------------------- |
+| `mentor_turn_first_token_seconds` | Histogram | `sandbox` | From a message being accepted to the first text of Heph's reply |
+| `mentor_turn_duration_seconds`    | Histogram | none      | A whole turn, from starting to run to its last chunk            |
+
+`sandbox` is `warm` when the turn found the developer's sandbox running, and `cold` when it had to
+wait for one to start — its own, or one that opening Heph had started moments before. Web and Slack
+turns both count; a turn that ends before any text records no first-token time. The share of cold
+turns is the ratio of the two `_count` series:
+
+```promql
+sum(rate(mentor_turn_first_token_seconds_count{sandbox="cold"}[1h]))
+  / sum(rate(mentor_turn_first_token_seconds_count[1h]))
+```
+
+`mentor_attach_duration_seconds` times the start of one sandbox alone, up to the runner's first
+frame. A high cold share means sandboxes are gone before developers write: the idle TTL, a restart or
+deploy (which removes every Heph sandbox), or the session caps. See
+[Runtime Roles](./runtime-roles.mdx#interactive-mentor-turns) for how a sandbox is prepared and how long it stays warm.
+
 ## Privacy-job metrics
 
 Account erasure, export generation, export expiry and LLM usage retention each report one terminal

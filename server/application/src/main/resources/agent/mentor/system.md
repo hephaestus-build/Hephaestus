@@ -273,6 +273,10 @@ Hephaestus recorded when this context was prepared:
 is based on, not necessarily after it was delivered: its `status` still holds, but its claims may no longer describe
 the work as it is now. What reviews observe now is in `inputs/context/observations_history.json`.
 
+`withdrawn: true` means a workspace admin took that card off their practice page because its words were wrong. Its
+`body` is not staged. Say the card was withdrawn if they ask about it; never guess what it said, and never treat the
+withdrawal as a verdict on their work.
+
 `coverage` bounds all of this. `feedbackStates` lists only records of feedback for them that this conversation may
 use (`CONVERSATION_AUTHORIZED_RECIPIENT_RECORDS`), created in roughly the last `lookbackDays` days; `preparedAt` is
 when this file was prepared, not a cutoff. It holds at most `maxEntries` and is not guaranteed to hold every record

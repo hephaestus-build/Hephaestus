@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
 	decideFeedbackProposalMutation,
 	getPracticeReviewFeedbackOptions,
+	updatePracticeReviewFeedbackWithdrawalMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { GetPracticeReviewFeedbackResponse } from "@/api/types.gen";
 import type { ProposalRejectionReason } from "@/components/admin/practice-reviews/proposal-rejection-vocabulary";
@@ -19,11 +20,23 @@ import { awaitingApprovalOptions } from "./use-feedback-awaiting-approval";
 /** How often feedback still on its way out is re-read, until it lands or stops. */
 const DELIVERY_POLL_MS = 2000;
 
+/**
+ * Every read a withdrawal moves: the admin's, and the developer's own reads that show a
+ * practice-page card or count it.
+ */
+const READS_OF_FEEDBACK_WITHDRAWAL: ReadonlySet<string> = new Set([
+	...PRACTICE_REVIEW_READS,
+	"getPracticeProfileOverview",
+	"getInAppFeedback",
+]);
+
 interface FeedbackController {
 	feedback: PanelState<{ feedback: GetPracticeReviewFeedbackResponse }>;
 	isDeciding: boolean;
 	onApprove: () => void;
 	onReject: (reason: ProposalRejectionReason, note?: string) => void;
+	onChangeWithdrawal: (withdrawn: boolean, reason: string) => Promise<unknown>;
+	isChangingWithdrawal: boolean;
 }
 
 interface FeedbackControllerOptions {
@@ -69,6 +82,19 @@ export function useFeedbackController(
 		},
 	});
 
+	const withdrawal = useMutation({
+		...updatePracticeReviewFeedbackWithdrawalMutation(),
+		onSuccess: (updated, variables) => {
+			queryClient.setQueryData(feedbackOptions.queryKey, updated);
+			void invalidateWorkspaceReads(queryClient, workspaceSlug, READS_OF_FEEDBACK_WITHDRAWAL);
+			toast.success(variables.body.withdrawn ? "Feedback withdrawn" : "Feedback restored");
+		},
+		onError: (error) => {
+			void feedbackQuery.refetch();
+			toast.error("Couldn't change this feedback", { description: problemDetailOf(error) });
+		},
+	});
+
 	const decided = {
 		onSuccess: onDecided,
 		// A refusal is read by what it left behind, not by its status: "already decided" and "no
@@ -97,6 +123,9 @@ export function useFeedbackController(
 				},
 				decided,
 			),
+		isChangingWithdrawal: withdrawal.isPending,
+		onChangeWithdrawal: async (withdrawn, reason) =>
+			withdrawal.mutateAsync({ path: { workspaceSlug, feedbackId }, body: { withdrawn, reason } }),
 	};
 }
 

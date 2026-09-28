@@ -17,8 +17,6 @@ import org.springframework.validation.annotation.Validated;
  * @param cooldownMinutes     minimum minutes between reviews for the same PR. 0 disables cooldown.
  * @param maxRequestsPerRequesterPerHour
  *                            manual review requests per person, workspace and hour. 0 disables the limit.
- * @param reactionSuppression avoid redelivering an observation the developer disputed or marked not applicable.
- *                            Off by default; responses apply to the exact observations bound to feedback.
  * @param samplingTemperature requested model sampling temperature, or null for the provider default.
  */
 @Validated
@@ -27,5 +25,4 @@ public record PracticeReviewProperties(
         @DefaultValue("false") boolean deliverToMerged,
         @Min(0) @DefaultValue("15") int cooldownMinutes,
         @Min(0) @DefaultValue("5") int maxRequestsPerRequesterPerHour,
-        @DefaultValue("false") boolean reactionSuppression,
         @Nullable @DecimalMin("0.0") @DecimalMax("2.0") Double samplingTemperature) {}

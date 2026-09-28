@@ -15,8 +15,10 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @Transactional
@@ -28,12 +30,20 @@ public class FeedbackResponseService {
     private final ReactionRepository reactionRepository;
     private final FeedbackRepository feedbackRepository;
     private final CurrentDeveloperLookup currentDeveloperLookup;
+    private final FeedbackWithdrawalRepository withdrawalRepository;
 
     public FeedbackResponseDTO replaceResponse(
             WorkspaceContext workspaceContext, UUID feedbackId, FeedbackResponseRequestDTO request) {
         long recipientId = currentDeveloperLookup.currentDeveloperIdElseThrow();
+        // A withdrawn card takes no new answer, whatever a stale page still shows; the answers given before stay
+        // readable and removable. The row lock is the one the withdrawal takes, so the two cannot interleave. It is
+        // the first load of the row: Hibernate refuses to lock a read-only entity already in the session.
+        feedbackRepository.lockByIdAndWorkspaceId(feedbackId, workspaceContext.id());
         Feedback feedback = requireDeliveredFeedback(workspaceContext.id(), feedbackId, recipientId);
         validate(request);
+        if (withdrawalRepository.findActive(workspaceContext.id(), feedbackId).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This feedback was withdrawn");
+        }
 
         Optional<FeedbackResponseDTO> current = currentResponse(feedbackId, recipientId);
         if (current.filter(response -> sameResponse(response, request)).isPresent()) {

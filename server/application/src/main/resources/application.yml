@@ -522,9 +522,6 @@ hephaestus:
         # catches somebody asking for one review each on twenty colleagues' merge requests. The cooldown
         # above will not: those are twenty different PRs.
         max-requests-per-requester-per-hour: ${PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR:5}
-        # Stop redelivering an observation the developer disputed or marked not-applicable.
-        # Responses apply only to the exact observations bound to the feedback.
-        reaction-suppression: ${PRACTICE_REVIEW_REACTION_SUPPRESSION:false}
         # The sampling temperature of every model call in a practice review; unset means the model's
         # own default. A review classifies work against fixed criteria, so a low value keeps the same
         # work landing in the same cell run after run.

@@ -162,6 +162,35 @@ the note touches the merge request. On GitHub a review request or its removal ad
 request's `updatedAt`, as the recorded `pull_request.review_requested` and `review_request_removed`
 fixtures show, so the incremental sync reads a missed one.
 
+### A GitLab merge request's review decision comes from its reviewers
+
+GitLab's `approved` says only that the approval rules are met
+([`approval_state.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/models/approval_state.rb)), and a
+project that requires no approval meets them with nobody approving. So the sync
+(`GitLabMergeRequestProcessor#reviewDecision`) derives the decision from what people did:
+
+- `CHANGES_REQUESTED` while a request for changes stands: the `REQUESTED_CHANGES` merge status where the project
+  blocks merging on one (Premium), or any reviewer's `REQUESTED_CHANGES` review state on every tier.
+- `APPROVED` when someone approved and `approved` is true.
+- `REVIEW_REQUIRED` otherwise, including an approval that leaves required approvals missing.
+- None when the reviewer or approver list was not read whole: either could hide a decision.
+
+`approvalsRequired` is not read, because the Community Edition schema has no such field. A request for changes is
+attributed to a person only from the system note "requested changes" that names them
+(`GitLabReviewReconciler#recordSystemNote`). The `detailed_merge_status` embedded in a note hook belongs to the merge
+request and is repeated on every note while anyone's request stands. A live note of that kind also dismisses its
+author's approval, because GitLab withdraws a reviewer's approval without a note or hook of its own
+([`update_reviewer_state_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/app/services/merge_requests/update_reviewer_state_service.rb)).
+
+A webhook names one person's act, not the whole decision:
+
+- `approved`/`approval` and `unapproved`/`unapproval` differ only in whether the rules were met afterwards
+  ([`execute_approval_hooks_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/services/ee/merge_requests/execute_approval_hooks_service.rb),
+  [`remove_approval_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/services/ee/merge_requests/remove_approval_service.rb)).
+- A hook or live system note that changes where someone's review stands leaves the stored decision unknown, until the
+  sync reads the merge request again. The note touches the merge request, so the incremental sync does read it.
+- A redelivery changes no one's review, so it leaves a decision the sync has since read in place.
+
 ## Documented asymmetries and residuals
 
 - **Slack has no deletion *sweep* at all.** Its content model is append-plus-watermark and a message

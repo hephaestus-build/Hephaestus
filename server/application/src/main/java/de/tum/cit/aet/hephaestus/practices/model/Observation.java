@@ -148,8 +148,10 @@ public class Observation {
     /**
      * Cross-run location grouping (practice, artifact, subject and file), computed by
      * {@link de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint}. Several different
-     * behaviors can share it. Row identity and reactions use the observation itself; this grouping
-     * establishes neither semantic recurrence nor resolution. NULL means no grouping was recorded.
+     * behaviors can share it, so row identity uses the observation itself. A developer's dispute or "not
+     * applicable" carries to a later review's observation with this key and the same presence and assessment
+     * (ADR 0022, update of 2026-09-28); within one review it binds only the observations its feedback was written
+     * from. NULL means no grouping was recorded.
      */
     @Column(name = "recurrence_key", length = 64)
     private String recurrenceKey;

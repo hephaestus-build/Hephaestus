@@ -32,17 +32,22 @@ public class PreviousInAppFeedback {
     private final FeedbackRepository feedbackRepository;
     private final InAppFeedbackEvidence feedbackEvidence;
     private final ReactionRepository reactionRepository;
+    private final FeedbackWithdrawalRepository withdrawalRepository;
 
     /**
      * The newest readable card about one practice.
      *
      * @param closedAt when it stopped being open, or {@code null} while it is
+     * @param withdrawn whether a workspace admin withdrew it; it still marks where the next card's evidence starts
      */
     public record Previous(
-            UUID id, Instant preparedAt, @Nullable Instant closedAt) {
-        /** Still on the developer's page as something to work on — what a newer card about the practice replaces. */
+            UUID id, Instant preparedAt, @Nullable Instant closedAt, boolean withdrawn) {
+        /**
+         * Still on the developer's page as something to work on — what a newer card about the practice replaces. A
+         * withdrawn card is not: nothing it said is to be worked on, and replacing it would bring it back as advice.
+         */
         public boolean isOpen() {
-            return closedAt == null;
+            return closedAt == null && !withdrawn;
         }
 
         /**
@@ -77,7 +82,10 @@ public class PreviousInAppFeedback {
                 .map(response -> FeedbackResponseDTO.from(feedback.getId(), response))
                 .orElse(null));
         FeedbackClosure closure = FeedbackClosure.of(byWork, byDeveloper, practiceChangedAt.get(feedback.getId()));
-        return Optional.of(
-                new Previous(feedback.getId(), feedback.getCreatedAt(), closure == null ? null : closure.at()));
+        return Optional.of(new Previous(
+                feedback.getId(),
+                feedback.getCreatedAt(),
+                closure == null ? null : closure.at(),
+                withdrawalRepository.findActive(workspaceId, feedback.getId()).isPresent()));
     }
 }

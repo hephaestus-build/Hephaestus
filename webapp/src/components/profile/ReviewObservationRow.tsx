@@ -65,6 +65,10 @@ function DetailSection({ label, labelId, className, children }: DetailSectionPro
 	);
 }
 
+/** A dispute is the one answer the developer writes for somebody else to read. */
+const DISPUTE_AUDIENCE =
+	"Workspace admins read this on the observation, and can mark it incorrect or withdraw the feedback.";
+
 export interface ReviewObservationRowProps {
 	observation: ObservationDetail;
 	/** Open on arrival; a closed row waits for a press. The card placing the row decides which. */
@@ -356,6 +360,7 @@ function ObservationResponse({
 					label="What was missed?"
 					placeholder="One or two sentences on what is off"
 					required
+					audience={() => DISPUTE_AUDIENCE}
 					isPending={isPending}
 					onSend={({ comment }) => {
 						const sentence = comment.trim();

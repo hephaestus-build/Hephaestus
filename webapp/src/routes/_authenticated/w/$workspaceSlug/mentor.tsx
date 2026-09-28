@@ -1,7 +1,11 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { focusManager, useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Outlet, useLocation, useMatchRoute } from "@tanstack/react-router";
+import { useEffect } from "react";
 
-import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
+import {
+	getMemberOnboardingOptions,
+	prepareMentorSandboxMutation,
+} from "@/api/@tanstack/react-query.gen";
 import { WorkspaceMentorPreferenceNotice } from "@/components/onboarding/WorkspaceMentorPreferenceNotice";
 import { mentorPreferenceReason } from "@/lib/mentor-preference";
 import { useAuth } from "@/runtime/auth/AuthContext";
@@ -35,6 +39,7 @@ function MentorPreferenceGate({ workspaceSlug }: { workspaceSlug: string }) {
 	// than hiding a readable conversation behind an alert.
 	const preference = useSuspenseQuery(getMemberOnboardingOptions({ path: { workspaceSlug } }));
 	const notice = mentorPreferenceReason(preference.data);
+	usePrepareHeph(workspaceSlug, notice === undefined);
 	if (notice) {
 		return (
 			<div className="flex min-h-0 flex-1 flex-col">
@@ -48,4 +53,24 @@ function MentorPreferenceGate({ workspaceSlug }: { workspaceSlug: string }) {
 		);
 	}
 	return <Outlet />;
+}
+
+/**
+ * Starts the member's Heph sandbox while they type, and again when they come back to the tab after it may have
+ * gone idle. The server returns at once and does nothing when the sandbox is warm or Heph could not answer.
+ */
+function usePrepareHeph(workspaceSlug: string, enabled: boolean) {
+	const { mutate } = useMutation(prepareMentorSandboxMutation());
+	useEffect(() => {
+		if (!enabled) {
+			return;
+		}
+		const prepare = () => mutate({ path: { workspaceSlug } });
+		prepare();
+		return focusManager.subscribe((focused) => {
+			if (focused) {
+				prepare();
+			}
+		});
+	}, [enabled, mutate, workspaceSlug]);
 }

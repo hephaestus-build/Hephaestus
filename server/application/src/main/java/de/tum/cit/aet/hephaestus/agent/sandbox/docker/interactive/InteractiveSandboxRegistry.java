@@ -119,6 +119,13 @@ public class InteractiveSandboxRegistry {
         return RegistrationOutcome.REGISTERED;
     }
 
+    /** Whether one more sandbox for this user fits under both caps now; {@link #tryRegister} decides for good. */
+    boolean hasCapacity(String userId) {
+        AtomicInteger userCount = sessionsPerUser.get(userId);
+        return (userCount == null || userCount.get() < properties.maxSessionsPerUser())
+                && sessions.size() < properties.maxSessionsTotal();
+    }
+
     /** Identity-based remove avoids races with re-register. */
     void onSandboxClosed(DockerAttachedSandboxAdapter sandbox) {
         var id = sandbox.identity();

@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -625,68 +626,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
         private void sync(Instant fetchedAt, GitLabMergeRequestProcessor.SyncReviewerData... reviewers) {
             mergeRequestProcessor.processFromSync(
-                    syncedMergeRequest(List.of(reviewers)),
+                    syncedMergeRequest(false, null, List.of(reviewers), null),
                     ProcessingContext.forSync(null, savedRepo).withObservedAt(fetchedAt));
-        }
-
-        private GitLabMergeRequestProcessor.SyncReviewerData syncedReviewer(
-                long id, String username, @Nullable String state) {
-            return new GitLabMergeRequestProcessor.SyncReviewerData(
-                    new GitLabMergeRequestProcessor.SyncUserData(
-                            "gid://gitlab/User/" + id, username, username, null, null, null),
-                    state);
-        }
-
-        /** MR !2 as a sync reads it, with only what these tests need. */
-        private GitLabMergeRequestProcessor.SyncMergeRequestData syncedMergeRequest(
-                List<GitLabMergeRequestProcessor.SyncReviewerData> reviewers) {
-            return new GitLabMergeRequestProcessor.SyncMergeRequestData(
-                    "gid://gitlab/MergeRequest/" + NATIVE_MR2_ID,
-                    String.valueOf(MR2_IID),
-                    MR2_TITLE,
-                    null, // description
-                    "opened",
-                    false, // draft
-                    null, // mergeable
-                    null, // detailedMergeStatus
-                    false, // approved
-                    "https://gitlab.lrz.de/" + FIXTURE_REPO_FULL_NAME + "/-/merge_requests/" + MR2_IID,
-                    "2026-01-31T18:00:00Z",
-                    "2026-01-31T18:10:00Z",
-                    null, // closedAt
-                    null, // mergedAt
-                    1, // commitCount
-                    0, // additions
-                    0, // deletions
-                    0, // fileCount
-                    "feature/oauth",
-                    "main",
-                    null, // diffHeadSha
-                    null, // baseSha
-                    null, // mergeCommitSha
-                    false, // discussionLocked
-                    0, // commentsCount
-                    "gid://gitlab/User/" + NATIVE_AUTHOR_ID,
-                    FIXTURE_AUTHOR_LOGIN,
-                    FIXTURE_AUTHOR_LOGIN,
-                    null, // authorAvatarUrl
-                    null, // authorWebUrl
-                    null, // authorPublicEmail
-                    null, // mergeUserGlobalId
-                    null, // mergeUserUsername
-                    null, // mergeUserName
-                    null, // mergeUserAvatarUrl
-                    null, // mergeUserWebUrl
-                    null, // mergeUserPublicEmail
-                    null, // syncLabels
-                    null, // syncAssignees
-                    reviewers,
-                    null, // syncApprovers
-                    null, // syncParticipants
-                    null, // milestoneIid
-                    null, // headPipelineStatus
-                    null, // headPipelineSha
-                    null); // closingIssueNumbers
         }
 
         /** A recorded payload at another {@code updated_at}, for a test about the order payloads arrive in. */
@@ -705,6 +646,168 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                         .orElseThrow()
                         .getRequestedReviewers()
                         .forEach(request -> states.put(request.getUser().getLogin(), request.getReviewState()));
+                return states;
+            }));
+        }
+    }
+
+    /**
+     * What the merge request's review decision says, from what the sync read about its reviewers. GitLab's
+     * {@code approved} means the approval rules are met, which a project requiring no approval meets with nobody
+     * approving.
+     */
+    @Nested
+    class ReviewDecisions {
+
+        private static final long APPROVER_ID = 900010L;
+        private static final long REQUESTER_ID = 900011L;
+
+        @Test
+        void shouldNotCallAMergeRequestApprovedWhenNobodyApprovedAndNoneIsRequired() {
+            sync(syncedMergeRequest(true, "MERGEABLE", List.of(), List.of()));
+
+            assertThat(reviewDecision()).isEqualTo(ReviewDecision.REVIEW_REQUIRED);
+            assertThat(reviewStates()).isEmpty();
+        }
+
+        @Test
+        void shouldCallAMergeRequestApprovedWhenSomeoneApprovedAndTheRulesAreMet() {
+            sync(syncedMergeRequest(
+                    true,
+                    "MERGEABLE",
+                    List.of(syncedReviewer(APPROVER_ID, "approver", "APPROVED")),
+                    List.of(syncedUser(APPROVER_ID, "approver"))));
+
+            assertThat(reviewDecision()).isEqualTo(ReviewDecision.APPROVED);
+            assertThat(reviewStates()).containsExactly(Map.entry("approver", PullRequestReview.State.APPROVED));
+        }
+
+        @Test
+        void shouldNotCallAMergeRequestApprovedWhileRequiredApprovalsAreMissing() {
+            sync(syncedMergeRequest(
+                    false,
+                    "NOT_APPROVED",
+                    List.of(syncedReviewer(APPROVER_ID, "approver", "APPROVED")),
+                    List.of(syncedUser(APPROVER_ID, "approver"))));
+
+            assertThat(reviewDecision()).isEqualTo(ReviewDecision.REVIEW_REQUIRED);
+            assertThat(reviewStates())
+                    .as("the approval given still stands")
+                    .containsExactly(Map.entry("approver", PullRequestReview.State.APPROVED));
+        }
+
+        /** Premium blocks merging on a request for changes; the approval rules can still be met. */
+        @Test
+        void shouldReportAStandingRequestForChangesOverApprovalsThatMeetTheRules() {
+            sync(syncedMergeRequest(
+                    true,
+                    "REQUESTED_CHANGES",
+                    List.of(
+                            syncedReviewer(REQUESTER_ID, "requester", "REQUESTED_CHANGES"),
+                            syncedReviewer(APPROVER_ID, "approver", "APPROVED")),
+                    List.of(syncedUser(APPROVER_ID, "approver"))));
+
+            assertThat(reviewDecision()).isEqualTo(ReviewDecision.CHANGES_REQUESTED);
+            assertThat(reviewStates())
+                    .as(
+                            "the approver's approval is theirs, and the request for changes is the requester's system note's")
+                    .containsExactly(Map.entry("approver", PullRequestReview.State.APPROVED));
+        }
+
+        /** Without Premium a request for changes blocks nothing, but the reviewer's state still says it stands. */
+        @Test
+        void shouldReportAReviewersRequestForChangesWhereItDoesNotBlockMerging() {
+            sync(syncedMergeRequest(
+                    true,
+                    "MERGEABLE",
+                    List.of(syncedReviewer(REQUESTER_ID, "requester", "REQUESTED_CHANGES")),
+                    List.of(syncedUser(APPROVER_ID, "approver"))));
+
+            assertThat(reviewDecision()).isEqualTo(ReviewDecision.CHANGES_REQUESTED);
+        }
+
+        @Test
+        void shouldLeaveTheDecisionUnknownWhenTheApproversWereNotReadWhole() {
+            sync(syncedMergeRequest(true, "MERGEABLE", List.of(), List.of(syncedUser(APPROVER_ID, "approver"))));
+
+            sync(syncedMergeRequest(true, "MERGEABLE", List.of(), null));
+
+            assertThat(reviewDecision()).isNull();
+            assertThat(reviewStates())
+                    .as("an approval the incomplete list did not name is not taken away either")
+                    .containsExactly(Map.entry("approver", PullRequestReview.State.APPROVED));
+        }
+
+        @Test
+        void shouldLeaveTheDecisionUnknownWhenTheReviewersWereNotReadWhole() {
+            sync(syncedMergeRequest(true, "MERGEABLE", null, List.of(syncedUser(APPROVER_ID, "approver"))));
+
+            assertThat(reviewDecision()).isNull();
+        }
+
+        /**
+         * GitLab sends {@code approval} and {@code unapproval} where the approval rules are not met, or stay met: each is
+         * one person's act, and the stored decision no longer stands after it.
+         */
+        @Test
+        void shouldRecordEachApproversActAndForgetTheDecisionItChanged() throws Exception {
+            receive(loadPayload("merge_request.approval"));
+            assertThat(approvalState()).isEqualTo(PullRequestReview.State.APPROVED);
+
+            setReviewDecision(MR4_IID, ReviewDecision.APPROVED);
+            receive(loadPayload("merge_request.unapproval"));
+
+            assertThat(approvalState()).isEqualTo(PullRequestReview.State.DISMISSED);
+            assertThat(reviewDecision(MR4_IID)).isNull();
+
+            setReviewDecision(MR4_IID, ReviewDecision.REVIEW_REQUIRED);
+            receive(loadPayload("merge_request.unapproval"));
+
+            assertThat(reviewDecision(MR4_IID))
+                    .as("a redelivered hook changes no one's review, so it leaves a newer sync's decision standing")
+                    .isEqualTo(ReviewDecision.REVIEW_REQUIRED);
+        }
+
+        private void sync(GitLabMergeRequestProcessor.SyncMergeRequestData data) {
+            mergeRequestProcessor.processFromSync(data, ProcessingContext.forSync(null, savedRepo));
+        }
+
+        private PullRequestReview.@Nullable State approvalState() {
+            long nativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(NATIVE_MR4_ID, NATIVE_APPROVER_ID);
+            return reviewRepository
+                    .findByNativeIdAndProviderId(nativeId, persistedId(savedProvider))
+                    .map(PullRequestReview::getState)
+                    .orElse(null);
+        }
+
+        private @Nullable ReviewDecision reviewDecision() {
+            return reviewDecision(MR2_IID);
+        }
+
+        private @Nullable ReviewDecision reviewDecision(int iid) {
+            return pullRequestRepository
+                    .findByRepositoryIdAndNumber(savedRepo.getId(), iid)
+                    .orElseThrow()
+                    .getReviewDecision();
+        }
+
+        private void setReviewDecision(int iid, ReviewDecision decision) {
+            transactionTemplate.executeWithoutResult(status -> pullRequestRepository
+                    .findByRepositoryIdAndNumber(savedRepo.getId(), iid)
+                    .orElseThrow()
+                    .setReviewDecision(decision));
+        }
+
+        /** Each review of MR !2 by its author's login. */
+        private Map<String, PullRequestReview.State> reviewStates() {
+            return Objects.requireNonNull(transactionTemplate.execute(status -> {
+                Map<String, PullRequestReview.State> states = new HashMap<>();
+                pullRequestRepository
+                        .findByRepositoryIdAndNumber(savedRepo.getId(), MR2_IID)
+                        .orElseThrow()
+                        .getReviews()
+                        .forEach(review -> states.put(
+                                Objects.requireNonNull(review.getAuthor()).getLogin(), review.getState()));
                 return states;
             }));
         }
@@ -1040,6 +1143,71 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
     }
 
     // Helpers
+
+    private GitLabMergeRequestProcessor.SyncReviewerData syncedReviewer(
+            long id, String username, @Nullable String state) {
+        return new GitLabMergeRequestProcessor.SyncReviewerData(syncedUser(id, username), state);
+    }
+
+    private GitLabMergeRequestProcessor.SyncUserData syncedUser(long id, String username) {
+        return new GitLabMergeRequestProcessor.SyncUserData(
+                "gid://gitlab/User/" + id, username, username, null, null, null);
+    }
+
+    /** MR !2 as a sync reads it, with only what these tests need; a list the sync did not read whole is null. */
+    private GitLabMergeRequestProcessor.SyncMergeRequestData syncedMergeRequest(
+            boolean approved,
+            @Nullable String detailedMergeStatus,
+            @Nullable List<GitLabMergeRequestProcessor.SyncReviewerData> reviewers,
+            @Nullable List<GitLabMergeRequestProcessor.SyncUserData> approvers) {
+        return new GitLabMergeRequestProcessor.SyncMergeRequestData(
+                "gid://gitlab/MergeRequest/" + NATIVE_MR2_ID,
+                String.valueOf(MR2_IID),
+                MR2_TITLE,
+                null, // description
+                "opened",
+                false, // draft
+                null, // mergeable
+                detailedMergeStatus,
+                approved,
+                "https://gitlab.lrz.de/" + FIXTURE_REPO_FULL_NAME + "/-/merge_requests/" + MR2_IID,
+                "2026-01-31T18:00:00Z",
+                "2026-01-31T18:10:00Z",
+                null, // closedAt
+                null, // mergedAt
+                1, // commitCount
+                0, // additions
+                0, // deletions
+                0, // fileCount
+                "feature/oauth",
+                "main",
+                null, // diffHeadSha
+                null, // baseSha
+                null, // mergeCommitSha
+                false, // discussionLocked
+                0, // commentsCount
+                "gid://gitlab/User/" + NATIVE_AUTHOR_ID,
+                FIXTURE_AUTHOR_LOGIN,
+                FIXTURE_AUTHOR_LOGIN,
+                null, // authorAvatarUrl
+                null, // authorWebUrl
+                null, // authorPublicEmail
+                null, // mergeUserGlobalId
+                null, // mergeUserUsername
+                null, // mergeUserName
+                null, // mergeUserAvatarUrl
+                null, // mergeUserWebUrl
+                null, // mergeUserPublicEmail
+                null, // syncLabels
+                null, // syncAssignees
+                reviewers,
+                approvers,
+                null, // syncParticipants
+                null, // milestoneIid
+                null, // headPipelineStatus
+                null, // headPipelineSha
+                null); // closingIssueNumbers
+    }
 
     /** Handles {@code event} as a delivery that reached the stream now. */
     private void receive(GitLabMergeRequestEventDTO event) {

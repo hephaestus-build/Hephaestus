@@ -11,6 +11,10 @@ import { ResultCount } from "@/components/common/ResultCount";
 import { statusFacetOptions } from "@/components/common/status-def";
 import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
+import {
+	DEVELOPER_RESPONSE_DEFS,
+	type DeveloperResponse,
+} from "@/components/practice-vocabulary/observation-dispute-defs";
 import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
 import { OBSERVATION_ORIGIN_DEFS } from "@/components/practice-vocabulary/observation-origin-defs";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
@@ -33,6 +37,19 @@ const ASSESSMENT_STATUS_OPTIONS = statusFacetOptions(ASSESSMENT_STATUS_DEFS);
 const PRESENCE_OPTIONS = statusFacetOptions(PRESENCE_DEFS);
 const SEVERITY_OPTIONS = statusFacetOptions(SEVERITY_DEFS);
 const ORIGIN_OPTIONS = statusFacetOptions(OBSERVATION_ORIGIN_DEFS);
+const RESPONSE_OPTIONS = statusFacetOptions(DEVELOPER_RESPONSE_DEFS);
+
+/** The one boolean the server filters by, as the facet's selection: both or neither is no filter. */
+function responseSelection(disputed: boolean | undefined): DeveloperResponse[] {
+	if (disputed === undefined) {
+		return [];
+	}
+	return [disputed ? "DISPUTED" : "UNDISPUTED"];
+}
+
+function disputedFrom(values: DeveloperResponse[]): boolean | undefined {
+	return values.length === 1 ? values[0] === "DISPUTED" : undefined;
+}
 
 const SORT_ITEMS: [ReviewSortItem<ObservationSort>, ...ReviewSortItem<ObservationSort>[]] = [
 	{ value: "NEWEST", label: "Newest first" },
@@ -51,6 +68,7 @@ export function clearedObservationFilters(): Partial<ObservationsSearch> {
 		assessmentStatus: undefined,
 		outcome: undefined,
 		invalidated: undefined,
+		disputed: undefined,
 		presence: undefined,
 		assessment: undefined,
 		severity: undefined,
@@ -71,6 +89,7 @@ export function hasObservationFilter(search: ObservationsSearch): boolean {
 		(search.assessmentStatus?.length ?? 0) > 0 ||
 		(search.outcome?.length ?? 0) > 0 ||
 		search.invalidated !== undefined ||
+		search.disputed !== undefined ||
 		(search.presence?.length ?? 0) > 0 ||
 		(search.assessment?.length ?? 0) > 0 ||
 		(search.severity?.length ?? 0) > 0 ||
@@ -202,6 +221,12 @@ export function ObservationFilters({
 					selected={search.presence ?? []}
 					onChange={(values) => onPatch({ presence: nonEmpty(values) })}
 				/>
+				<FacetMultiSelect
+					title="Developer response"
+					options={RESPONSE_OPTIONS}
+					selected={responseSelection(search.disputed)}
+					onChange={(values) => onPatch({ disputed: disputedFrom(values) })}
+				/>
 				{/* Every origin is offered, live included, though a row badges only the other two: a
 				    reader comparing live reviews with requested ones has to be able to pick either. */}
 				<FacetMultiSelect
@@ -253,6 +278,12 @@ export function ObservationFilters({
 					),
 					...facetPills("Origin", ORIGIN_OPTIONS, search.origin, (values) =>
 						onPatch({ origin: nonEmpty(values) }),
+					),
+					...facetPills(
+						"Developer response",
+						RESPONSE_OPTIONS,
+						responseSelection(search.disputed),
+						(values) => onPatch({ disputed: disputedFrom(values) }),
 					),
 				]}
 			/>

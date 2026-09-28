@@ -5,13 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipService;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewPersonTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewPersonTargetRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewRepositoryTarget;
@@ -21,7 +19,7 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
 import java.util.List;
-import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -32,7 +30,7 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
     private RepositoryToMonitorRepository monitors;
 
     @Mock
-    private WorkspaceMembershipRepository memberships;
+    private WorkspaceMembershipService membershipService;
 
     @Mock
     private PracticeReviewRepositoryTargetRepository repositoryTargets;
@@ -45,7 +43,7 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        service = new PracticeReviewCoverageService(monitors, memberships, repositoryTargets, people);
+        service = new PracticeReviewCoverageService(monitors, membershipService, repositoryTargets, people);
         workspace = new Workspace();
         workspace.setId(1L);
     }
@@ -67,7 +65,7 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
     @Test
     void selectedPersonWithoutThisWorkspaceMembershipIsRejected() {
         when(monitors.findByWorkspaceId(1L)).thenReturn(List.of());
-        when(memberships.findAllWithUserByWorkspaceId(1L)).thenReturn(List.of(membership(7L, User.Type.USER)));
+        when(membershipService.practiceReviewEligibleUserIds(1L)).thenReturn(Set.of(7L));
         WorkspaceReviewScope crossTenant = new WorkspaceReviewScope(
                 ReviewRepositoryMode.ALL_MONITORED, ReviewPersonMode.SELECTED, List.of(), List.of(8L));
 
@@ -80,7 +78,6 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
     void missingBotAndNonMemberSubjectsFailClosed() {
         ReviewSubject human = new ReviewSubject(7L, true);
         ReviewSubject bot = new ReviewSubject(8L, false);
-        when(memberships.findByWorkspace_IdAndUser_Id(1L, 7L)).thenReturn(Optional.empty());
 
         assertThat(service.admits(workspace, "owner/repo", "main", null)).isFalse();
         assertThat(service.admits(workspace, "owner/repo", "main", bot)).isFalse();
@@ -91,7 +88,7 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
     void repositorylessWorkRequiresAllRepositoriesAndASelectedLinkedPerson() {
         workspace.getReviewSettings().applyRollout(ReviewRepositoryMode.ALL_MONITORED, ReviewPersonMode.SELECTED, null);
         when(people.findByWorkspaceId(1L)).thenReturn(List.of(new PracticeReviewPersonTarget(1L, 7L)));
-        when(memberships.findByWorkspace_IdAndUser_Id(1L, 7L)).thenReturn(Optional.of(membership(7L, User.Type.USER)));
+        when(membershipService.isPracticeReviewEligible(1L, 7L)).thenReturn(true);
 
         var assessment = service.assessRepositoryless(workspace, new ReviewSubject(7L, true));
 
@@ -103,7 +100,7 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
     @Test
     void selectedRepositoriesFailClosedForRepositorylessWork() {
         workspace.getReviewSettings().applyRollout(ReviewRepositoryMode.SELECTED, ReviewPersonMode.ALL_ELIGIBLE, null);
-        when(memberships.findByWorkspace_IdAndUser_Id(1L, 7L)).thenReturn(Optional.of(membership(7L, User.Type.USER)));
+        when(membershipService.isPracticeReviewEligible(1L, 7L)).thenReturn(true);
 
         var assessment = service.assessRepositoryless(workspace, new ReviewSubject(7L, true));
 
@@ -117,8 +114,7 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
         workspace.getReviewSettings().applyRollout(ReviewRepositoryMode.SELECTED, ReviewPersonMode.SELECTED, null);
         when(monitors.findByWorkspaceId(1L))
                 .thenReturn(List.of(monitor(11L, "owner/first"), monitor(12L, "owner/second")));
-        when(memberships.findAllWithUserByWorkspaceId(1L))
-                .thenReturn(List.of(membership(7L, User.Type.USER), membership(8L, User.Type.USER)));
+        when(membershipService.practiceReviewEligibleUserIds(1L)).thenReturn(Set.of(7L, 8L));
         when(repositoryTargets.findByWorkspaceId(1L))
                 .thenReturn(List.of(new PracticeReviewRepositoryTarget(1L, 11L, List.of("main"))));
         when(people.findByWorkspaceId(1L)).thenReturn(List.of(new PracticeReviewPersonTarget(1L, 7L)));
@@ -151,18 +147,5 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
         monitor.setId(id);
         monitor.setNameWithOwner(name);
         return monitor;
-    }
-
-    private static WorkspaceMembership membership(long userId, User.Type type) {
-        WorkspaceMembership membership = new WorkspaceMembership();
-        membership.setUser(user(userId, type));
-        return membership;
-    }
-
-    private static User user(long id, User.Type type) {
-        User user = new User();
-        user.setId(id);
-        user.setType(type);
-        return user;
     }
 }

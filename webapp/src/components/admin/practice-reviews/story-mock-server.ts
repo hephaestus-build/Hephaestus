@@ -88,6 +88,7 @@ function page(rows: unknown[], url: URL) {
 function filterObservations(rows: ReviewObservation[], url: URL) {
 	const subjectUserId = single(url, "subjectUserId");
 	const invalidated = single(url, "invalidated");
+	const disputed = single(url, "disputed");
 	return rows.filter(
 		(row) =>
 			withinScope(url, row) &&
@@ -96,6 +97,7 @@ function filterObservations(rows: ReviewObservation[], url: URL) {
 			matches(values(url, "practiceSlug"), row.practiceSlug) &&
 			matches(values(url, "outcome"), row.outcome) &&
 			(invalidated === undefined || invalidated === String(row.invalidatedAt !== undefined)) &&
+			(disputed === undefined || disputed === String(row.disputedAt !== undefined)) &&
 			matches(values(url, "assessmentStatus"), row.assessmentStatus) &&
 			matches(values(url, "presence"), row.presence) &&
 			matches(values(url, "assessment"), row.assessment) &&

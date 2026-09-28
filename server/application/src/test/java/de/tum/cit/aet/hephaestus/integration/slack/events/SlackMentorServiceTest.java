@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorSandboxPreparer;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRunner;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
@@ -58,6 +59,9 @@ class SlackMentorServiceTest extends BaseUnitTest {
     @Mock
     private MentorReadinessQuery mentorReadinessQuery;
 
+    @Mock
+    private MentorSandboxPreparer sandboxPreparer;
+
     private SlackMentorService service() {
         when(mentorReadinessQuery.isReady(WORKSPACE)).thenReturn(true);
         return new SlackMentorService(
@@ -68,7 +72,8 @@ class SlackMentorServiceTest extends BaseUnitTest {
                 identityResolver,
                 new KeywordSlackMentorInputGuard(),
                 onboardingService,
-                mentorReadinessQuery);
+                mentorReadinessQuery,
+                sandboxPreparer);
     }
 
     @ParameterizedTest
@@ -84,6 +89,39 @@ class SlackMentorServiceTest extends BaseUnitTest {
         verify(slackMessageService, never()).setStatus(anyLong(), anyString(), anyString(), anyString());
         verify(mentorTurnRunner, never()).run(any(), any(), anyLong());
         verifyNoInteractions(threadLinker);
+    }
+
+    @Test
+    void shouldPrepareTheSandboxOfALinkedDeveloperWhoOpensTheApp() {
+        when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
+        when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.of(314L));
+
+        service().prepare(TEAM, USER);
+
+        verify(sandboxPreparer).prepare(WORKSPACE, 314L);
+        verifyNoInteractions(slackMessageService, threadLinker);
+    }
+
+    @Test
+    void shouldPrepareNothingForAnUnlinkedSlackUser() {
+        when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
+        when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.empty());
+
+        service().prepare(TEAM, USER);
+
+        verify(sandboxPreparer, never()).prepare(anyLong(), anyLong());
+        verifyNoInteractions(slackMessageService, threadLinker);
+    }
+
+    @Test
+    void shouldPrepareNothingWhenHephIsNotReady() {
+        when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
+        SlackMentorService service = service();
+        when(mentorReadinessQuery.isReady(WORKSPACE)).thenReturn(false);
+
+        service.prepare(TEAM, USER);
+
+        verifyNoInteractions(identityResolver, sandboxPreparer, slackMessageService);
     }
 
     @Test

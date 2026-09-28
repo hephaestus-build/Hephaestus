@@ -267,6 +267,13 @@ mentor sandboxes are request-affine and run there, and add a dedicated `applicat
 review capacity. And `NATS_ENABLED` gates webhook-driven sync consumption and must stay on for that; it is
 not part of the practice-review bundle.
 
+Heph starts a developer's sandbox when they open Heph in the webapp or open the Hephaestus app in Slack,
+so their first message rarely waits for one, and keeps it warm for `hephaestus.mentor.idle-ttl-seconds`
+(default `900`) after its last frame; the Traefik sticky cookie's `maxAge` in `docker/compose.app.yaml`
+follows that value. Size the application server for `hephaestus.mentor.max-sessions-total` idle runners
+of about 165 MB each. [Runtime Roles](./runtime-roles#interactive-mentor-turns) has the details and when a
+prepare does nothing.
+
 ### Rollout tiers
 
 Use the same variables differently across environments:

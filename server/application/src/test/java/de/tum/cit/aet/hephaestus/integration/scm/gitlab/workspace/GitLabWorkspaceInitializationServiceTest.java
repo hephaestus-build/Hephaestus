@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -14,7 +15,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
@@ -27,11 +28,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupMemberSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncResult;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.time.Duration;
@@ -108,6 +111,11 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
     @Mock
     private ConnectionService connectionService;
 
+    private static final long CONNECTED_PROVIDER_ID = 100L;
+
+    /** The workspace's active connection is on one GitLab instance, whose group row linking picks. */
+    private final WorkspaceActorSelector actorSelector = mock(WorkspaceActorSelector.class);
+
     @Mock
     private GitLabRepositoryMonitors repositoryMonitors;
 
@@ -116,6 +124,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(actorSelector.connectedProviderId(anyLong())).thenReturn(Optional.of(CONNECTED_PROVIDER_ID));
         NatsConnectionProperties natsProperties = new NatsConnectionProperties(
                 true, "nats://localhost:4222", null, new NatsConnectionProperties.Consumer(Duration.ofSeconds(60)));
         SyncSchedulerProperties syncProps = new SyncSchedulerProperties(
@@ -145,8 +154,14 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                 rateLimitTrackerProvider,
                 dataSyncTriggerProvider,
                 connectionService,
-                new GitLabWorkspaceLinkService(workspaceRepository, organizationRepository),
+                new GitLabWorkspaceLinkService(
+                        workspaceRepository,
+                        organizationRepository,
+                        actorSelector,
+                        mock(IdentityProviderRepository.class),
+                        repositoryToMonitorRepository),
                 repositoryMonitors,
+                actorSelector,
                 monitoringExecutor);
 
         workspace = new Workspace();
@@ -196,8 +211,14 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                 rateLimitTrackerProvider,
                 dataSyncTriggerProvider,
                 connectionService,
-                new GitLabWorkspaceLinkService(workspaceRepository, organizationRepository),
+                new GitLabWorkspaceLinkService(
+                        workspaceRepository,
+                        organizationRepository,
+                        actorSelector,
+                        mock(IdentityProviderRepository.class),
+                        repositoryToMonitorRepository),
                 repositoryMonitors,
+                actorSelector,
                 monitoringExecutor);
     }
 
@@ -224,8 +245,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         when(gitLabSyncServiceHolder.getGroupSyncService()).thenReturn(gitLabGroupSyncService);
         when(gitLabGroupSyncService.syncGroupProjects(eq(1L), eq("my-group/subgroup"), any()))
                 .thenReturn(syncResult);
-        when(organizationRepository.findByLoginIgnoreCaseAndProvider_Type(
-                        "my-group/subgroup", IdentityProviderType.GITLAB))
+        when(organizationRepository.findByLoginIgnoreCaseAndProviderId("my-group/subgroup", CONNECTED_PROVIDER_ID))
                 .thenReturn(Optional.empty());
         when(repositoryToMonitorRepository.findByWorkspaceId(1L)).thenReturn(List.of());
     }
@@ -478,8 +498,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             Organization organization = new Organization();
             ReflectionTestUtils.setField(organization, "id", 10L);
             organization.setLogin("my-group/subgroup");
-            when(organizationRepository.findByLoginIgnoreCaseAndProvider_Type(
-                            "my-group/subgroup", IdentityProviderType.GITLAB))
+            when(organizationRepository.findByLoginIgnoreCaseAndProviderId("my-group/subgroup", CONNECTED_PROVIDER_ID))
                     .thenReturn(Optional.of(organization));
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
 
@@ -505,7 +524,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             initService.initialize(workspace);
 
             verify(repositoryMonitors, never()).monitorAll(any(), any());
-            verify(organizationRepository, never()).findByLoginIgnoreCaseAndProvider_Type(any(), any());
+            verify(organizationRepository, never()).findByLoginIgnoreCaseAndProviderId(any(), any());
         }
 
         @Test
@@ -548,7 +567,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
             initService.initialize(workspace);
 
-            verify(organizationRepository, never()).findByLoginIgnoreCaseAndProvider_Type(any(), any());
+            verify(organizationRepository, never()).findByLoginIgnoreCaseAndProviderId(any(), any());
         }
     }
 
@@ -593,7 +612,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
             initService.linkWorkspaceToOrganization(workspace);
 
-            verify(organizationRepository, never()).findByLoginIgnoreCaseAndProvider_Type(any(), any());
+            verify(organizationRepository, never()).findByLoginIgnoreCaseAndProviderId(any(), any());
         }
 
         @Test
@@ -602,7 +621,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
             initService.linkWorkspaceToOrganization(workspace);
 
-            verify(organizationRepository, never()).findByLoginIgnoreCaseAndProvider_Type(any(), any());
+            verify(organizationRepository, never()).findByLoginIgnoreCaseAndProviderId(any(), any());
         }
 
         @Test
@@ -610,8 +629,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             Organization organization = new Organization();
             ReflectionTestUtils.setField(organization, "id", 10L);
 
-            when(organizationRepository.findByLoginIgnoreCaseAndProvider_Type(
-                            "my-group/subgroup", IdentityProviderType.GITLAB))
+            when(organizationRepository.findByLoginIgnoreCaseAndProviderId("my-group/subgroup", CONNECTED_PROVIDER_ID))
                     .thenReturn(Optional.of(organization));
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
 
@@ -627,8 +645,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
         @Test
         void shouldNotLinkWhenNotFound() {
-            when(organizationRepository.findByLoginIgnoreCaseAndProvider_Type(
-                            "my-group/subgroup", IdentityProviderType.GITLAB))
+            when(organizationRepository.findByLoginIgnoreCaseAndProviderId("my-group/subgroup", CONNECTED_PROVIDER_ID))
                     .thenReturn(Optional.empty());
 
             initService.linkWorkspaceToOrganization(workspace);
@@ -639,14 +656,31 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         @Test
         void shouldNotLinkWhenWorkspaceDeleted() {
             Organization organization = new Organization();
-            when(organizationRepository.findByLoginIgnoreCaseAndProvider_Type(
-                            "my-group/subgroup", IdentityProviderType.GITLAB))
+            when(organizationRepository.findByLoginIgnoreCaseAndProviderId("my-group/subgroup", CONNECTED_PROVIDER_ID))
                     .thenReturn(Optional.of(organization));
             when(workspaceRepository.findById(1L)).thenReturn(Optional.empty());
 
             initService.linkWorkspaceToOrganization(workspace);
 
             verify(workspaceRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    class SyncFullData {
+
+        @Test
+        void shouldSyncTheRosterOfTheGroupOnTheConnectedInstanceWhenAnotherHasTheSamePath() {
+            Organization onConnectedInstance = new Organization();
+            GitLabGroupMemberSyncService memberSync = mock(GitLabGroupMemberSyncService.class);
+            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
+            when(gitLabSyncServiceHolder.getGroupMemberSyncService()).thenReturn(memberSync);
+            when(organizationRepository.findByLoginIgnoreCaseAndProviderId("my-group/subgroup", CONNECTED_PROVIDER_ID))
+                    .thenReturn(Optional.of(onConnectedInstance));
+
+            initService.syncFullData(workspace, () -> false);
+
+            verify(memberSync).syncGroupMemberships(1L, "my-group/subgroup", onConnectedInstance);
         }
     }
 }

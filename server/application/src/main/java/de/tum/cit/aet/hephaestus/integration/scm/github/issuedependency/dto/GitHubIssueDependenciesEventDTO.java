@@ -5,26 +5,21 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubWebhookEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueDTO;
-import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependenciesMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
+import org.jspecify.annotations.Nullable;
 
 /**
- * DTO for GitHub issue_dependencies webhook events.
- * <p>
- * <b>Note:</b> This DTO is defined based on GitHub's webhook documentation, but the
- * {@code issue_dependencies} event cannot currently be subscribed to via GitHub App
- * settings (as of January 2026). No real webhook payloads have been captured.
- * <p>
- * Structure is based on: https://docs.github.com/en/webhooks/webhook-events-and-payloads#issue_dependencies
- *
- * @see GitHubIssueDependenciesMessageHandler for full documentation on this limitation
+ * DTO for GitHub issue_dependencies webhook events. {@code repository} is the reporting side's repository;
+ * the other side's is {@code blocking_issue_repo} or {@code blocked_issue_repo}.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record GitHubIssueDependenciesEventDTO(
         @JsonProperty("action") String action,
         @JsonProperty("blocked_issue") GitHubIssueDTO blockedIssue,
+        @JsonProperty("blocked_issue_repo") @Nullable GitHubRepositoryRefDTO blockedIssueRepo,
         @JsonProperty("blocking_issue") GitHubIssueDTO blockingIssue,
+        @JsonProperty("blocking_issue_repo") @Nullable GitHubRepositoryRefDTO blockingIssueRepo,
         @JsonProperty("repository") GitHubRepositoryRefDTO repository,
         @JsonProperty("sender") GitHubUserDTO sender)
         implements GitHubWebhookEvent {

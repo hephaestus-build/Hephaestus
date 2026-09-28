@@ -192,7 +192,6 @@ public class SandboxWorkspaceManager {
     private static boolean isWritableRegion(String path) {
         return (path.startsWith(SandboxLayout.WORK_PREFIX)
                 || path.startsWith(SandboxLayout.PI_AGENT_PREFIX)
-                || path.startsWith(SandboxLayout.SESSIONS_DIR_PREFIX)
                 || path.startsWith(SandboxLayout.OUTPUT_PREFIX));
     }
 

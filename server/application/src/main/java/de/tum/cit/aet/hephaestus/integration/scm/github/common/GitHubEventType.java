@@ -3,17 +3,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Enum representing GitHub webhook event types.
- * Each value corresponds to the X-GitHub-Event header value.
+ * The GitHub webhook events Hephaestus consumes, each named by its X-GitHub-Event header value.
  * <p>
- * <b>Webhook Availability Notes (as of January 2026):</b>
- * <ul>
- *   <li><b>SUB_ISSUES</b>: Available - can be subscribed to via GitHub App settings.
- *       Test fixtures exist in {@code src/test/resources/github/sub_issues.*.json}</li>
- *   <li><b>ISSUE_DEPENDENCIES</b>: <b>NOT AVAILABLE</b> - documented in GitHub webhook reference
- *       but cannot be subscribed to via GitHub App settings. No test fixtures exist because
- *       webhooks cannot be received. Use GraphQL sync as workaround.</li>
- * </ul>
+ * Adding a value means adding its handler ({@code WebhookFixtureHandlerResolutionTest}) and its subscription in
+ * the GitHub App guide's manifest ({@code scripts/github-app-manifest.test.ts}).
  *
  * @see <a href="https://docs.github.com/en/webhooks/webhook-events-and-payloads">
  *      GitHub Webhook Events Reference</a>
@@ -41,12 +34,7 @@ public enum GitHubEventType {
     DISCUSSION_COMMENT("discussion_comment"),
 
     // Issue hierarchy events
-    /** Available for subscription - test fixtures exist. */
     SUB_ISSUES("sub_issues"),
-    /**
-     * NOT available for subscription (as of Jan 2026) - documented but not selectable
-     * in GitHub App settings. Use GraphQL sync via GitHubIssueDependencySyncService.
-     */
     ISSUE_DEPENDENCIES("issue_dependencies"),
 
     // Organization events

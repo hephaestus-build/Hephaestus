@@ -60,6 +60,12 @@ public record ReviewObservationDTO(
         @Schema(description = "When a workspace admin invalidated this observation; null while it stands") @Nullable
         Instant invalidatedAt,
 
+        @Schema(
+                description = "When the developer last disputed feedback written from this observation; null while"
+                        + " nothing about it is disputed")
+        @Nullable
+        Instant disputedAt,
+
         @NonNull Instant observedAt,
 
         @NonNull @Schema(description = "Counts of linked feedback by delivery state")
@@ -98,6 +104,7 @@ public record ReviewObservationDTO(
                         row.getCurrentPracticeRevisionFingerprint(),
                         row.getSupersededAt()),
                 row.getInvalidatedAt(),
+                row.getDisputedAt(),
                 row.getObservedAt(),
                 ReviewFeedbackCountsDTO.from(feedback));
     }

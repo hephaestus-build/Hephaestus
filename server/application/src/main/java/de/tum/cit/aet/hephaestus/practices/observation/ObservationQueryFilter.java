@@ -20,6 +20,7 @@ public record ObservationQueryFilter(
         @Nullable List<Assessment> assessments,
         @Nullable List<Outcome> outcomes,
         @Nullable Boolean invalidated,
+        @Nullable Boolean disputed,
         @Nullable List<Severity> severities,
         @Nullable UUID agentJobId,
         @Nullable ArtifactKind artifactKind,

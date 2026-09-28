@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { declarations, enclosingDeclaration } from "./declarations.ts";
+import { codeLines, declarations, enclosingDeclaration } from "./declarations.ts";
 import { isTestPath, languageOf } from "./languages.ts";
 
 const swift = `import SwiftUI
@@ -100,5 +100,40 @@ export interface Loader {
 		assert.equal(isTestPath("AppTests/EventListTests.swift"), true);
 		assert.equal(isTestPath("src/store.test.ts"), true);
 		assert.equal(isTestPath("App/Views/EventList.swift"), false);
+	});
+});
+
+void describe("codeLines", () => {
+	void it("blanks string text and trailing comments but keeps an interpolation's code", () => {
+		const code = codeLines(
+			"swift",
+			new Map([
+				[1, 'let url = "https://api.example.com/v1/items" // a/b'],
+				[2, String.raw`Text("Hi! \(tuple[2].description) n/a")`],
+				[3, "let ratio = done / total"],
+			]),
+		);
+		assert.doesNotMatch(code.get(1) ?? "", /\/v1|a\/b/u);
+		assert.match(code.get(2) ?? "", /tuple\[2\]\.description/u);
+		assert.doesNotMatch(code.get(2) ?? "", /Hi!|n\/a/u);
+		assert.equal(code.get(3), "let ratio = done / total");
+	});
+
+	void it("carries a multi-line literal into the next consecutive line only", () => {
+		const code = codeLines(
+			"swift",
+			new Map([
+				[10, 'let prompt = """'],
+				[11, "use the word/phrase once!"],
+				[12, '"""'],
+				[20, "let x = items[i]"],
+			]),
+		);
+		assert.doesNotMatch(code.get(11) ?? "", /word|!/u);
+		assert.equal(code.get(20), "let x = items[i]");
+	});
+
+	void it("leaves a language without a syntax row as it is", () => {
+		assert.equal(codeLines("python", new Map([[1, 'x = "a/b"']])).get(1), 'x = "a/b"');
 	});
 });

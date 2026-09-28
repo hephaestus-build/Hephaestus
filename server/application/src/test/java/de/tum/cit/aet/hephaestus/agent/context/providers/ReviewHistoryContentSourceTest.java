@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
@@ -92,6 +93,9 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     private FeedbackObservationRepository feedbackObservationRepository;
 
     @Mock
+    private FeedbackWithdrawalRepository withdrawalRepository;
+
+    @Mock
     private ObservationVisibilityPolicy visibilityPolicy;
 
     @Mock
@@ -116,6 +120,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 observationRepository,
                 feedbackRepository,
                 feedbackObservationRepository,
+                withdrawalRepository,
                 visibilityPolicy,
                 conversationLiveness,
                 pullRequestRepository,
@@ -583,6 +588,23 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
             assertThat(entry.get("evidenceCurrentness").asString()).isEqualTo("CURRENT");
             assertThat(entry.get("body").asString()).isEqualTo("#9 and #10 open as one block.");
+        }
+
+        @Test
+        void keepsAWithdrawnCardsRecordButNotItsWordsWhileItsEvidenceIsCurrent() {
+            Feedback card = queued("in-app:99:subtasks", "Wrong words about older issues.");
+            boundTo.put(card.getId(), List.of(boundObservation(false)));
+            when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
+                    .thenReturn(List.of(card));
+            when(withdrawalRepository.withdrawnAmong(anyLong(), any())).thenReturn(Set.of(card.getId()));
+
+            JsonNode entry = read(captureFeedbackHistory().files().get("inputs/history/prepared.json"))
+                    .get("prepared")
+                    .get(0);
+
+            assertThat(entry.get("evidenceCurrentness").asString()).isEqualTo("CURRENT");
+            assertThat(entry.get("withdrawn").asBoolean()).isTrue();
+            assertThat(entry.has("body")).isFalse();
         }
 
         @Test

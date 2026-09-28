@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.mentor;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -18,10 +17,8 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,8 +28,8 @@ import org.mockito.Mock;
 
 /**
  * Unit coverage for {@link MentorPiAdapter#buildSandboxSpec}: the genuinely error-prone branches the
- * orchestration-level {@code MentorChatServiceTest} stubs over — context-key validation, resolved routing,
- * session-restore injection, and the always-present system prompt. {@link PiRuntimeFactory} is mocked so the
+ * orchestration-level {@code MentorChatServiceTest} stubs over — resolved routing, the turn budget, and a
+ * spec that carries the system prompt and nothing of a turn. {@link PiRuntimeFactory} is mocked so the
  * captured {@link PiPlanSpec} can be asserted on directly.
  */
 class MentorPiAdapterTest extends BaseUnitTest {
@@ -89,9 +86,8 @@ class MentorPiAdapterTest extends BaseUnitTest {
                 timeoutSeconds);
     }
 
-    private PiPlanSpec capturePlanSpec(
-            MentorLlmConfig config, Map<String, byte[]> contexts, @Nullable SessionRestore restore) {
-        adapter.buildSandboxSpec(REQUEST, config, contexts, restore);
+    private PiPlanSpec capturePlanSpec(MentorLlmConfig config) {
+        adapter.buildSandboxSpec(REQUEST, config);
         ArgumentCaptor<PiPlanSpec> captor = ArgumentCaptor.forClass(PiPlanSpec.class);
         verify(runtimeFactory).build(captor.capture());
         return captor.getValue();
@@ -104,32 +100,9 @@ class MentorPiAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("only whitelisted mentor context keys pass")
-    void contextKeyValidation() {
-        Map<String, byte[]> ok = Map.of(
-                MentorPiAdapter.CONTEXT_INPUT_PREFIX + "recent_authored_work.json",
-                "{}".getBytes(StandardCharsets.UTF_8));
-        // does not throw
-        adapter.buildSandboxSpec(REQUEST, llmConfig(null), ok, null);
-
-        Map<String, byte[]> stray = Map.of("out/leak.json", "{}".getBytes(StandardCharsets.UTF_8));
-        assertThatThrownBy(() -> adapter.buildSandboxSpec(REQUEST, llmConfig(null), stray, null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining(MentorPiAdapter.CONTEXT_INPUT_PREFIX);
-
-        Map<String, byte[]> unsupported = Map.of(
-                MentorPiAdapter.CONTEXT_INPUT_PREFIX + "future_unreviewed_context.json",
-                "{}".getBytes(StandardCharsets.UTF_8));
-        assertThatThrownBy(() -> adapter.buildSandboxSpec(REQUEST, llmConfig(null), unsupported, null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("unsupported mentor context input key");
-    }
-
-    @Test
     @DisplayName("a binding stored above the ceiling still produces a turn bounded by the ceiling")
     void turnBudgetIsClampedDownToTheConfigurableCeiling() {
-        PiPlanSpec spec =
-                capturePlanSpec(llmConfig(null, false, AgentBindingLimits.MAX_TIMEOUT_SECONDS * 2), Map.of(), null);
+        PiPlanSpec spec = capturePlanSpec(llmConfig(null, false, AgentBindingLimits.MAX_TIMEOUT_SECONDS * 2));
 
         assertThat(spec.timeoutSeconds()).isEqualTo(AgentBindingLimits.MAX_TIMEOUT_SECONDS);
     }
@@ -141,8 +114,7 @@ class MentorPiAdapterTest extends BaseUnitTest {
     @Test
     @DisplayName("a binding at the configurable floor still yields a buildable sandbox")
     void turnBudgetIsClampedUpToTheSmallestBuildableBudget() {
-        PiPlanSpec spec =
-                capturePlanSpec(llmConfig(null, false, AgentBindingLimits.MIN_TIMEOUT_SECONDS), Map.of(), null);
+        PiPlanSpec spec = capturePlanSpec(llmConfig(null, false, AgentBindingLimits.MIN_TIMEOUT_SECONDS));
 
         assertThat(spec.timeoutSeconds()).isEqualTo(PiRuntimeFactory.TIMEOUT_BUFFER_SECONDS + 1);
     }
@@ -150,21 +122,21 @@ class MentorPiAdapterTest extends BaseUnitTest {
     @Test
     @DisplayName("the resolved catalog base URL is carried into proxy routing")
     void resolvedCatalogBaseUrlIsUsed() {
-        PiPlanSpec spec = capturePlanSpec(llmConfig("https://config.example"), Map.of(), null);
+        PiPlanSpec spec = capturePlanSpec(llmConfig("https://config.example"));
         assertThat(routingFor(spec).baseUrl()).isEqualTo("https://config.example");
     }
 
     @Test
     @DisplayName("a blank instance base URL property yields the resolver default when the config has none")
     void blankPropertyYieldsResolverDefault() {
-        PiPlanSpec spec = capturePlanSpec(llmConfig(null), Map.of(), null);
+        PiPlanSpec spec = capturePlanSpec(llmConfig(null));
         assertThat(routingFor(spec).baseUrl()).isEqualTo("https://api.openai.com");
     }
 
     @Test
     @DisplayName("every sandbox build mints a fresh, non-blank proxy token")
     void mintsProxyToken() {
-        PiPlanSpec spec = capturePlanSpec(llmConfig(null), Map.of(), null);
+        PiPlanSpec spec = capturePlanSpec(llmConfig(null));
         String jobToken = spec.jobToken();
         org.junit.jupiter.api.Assertions.assertNotNull(jobToken);
         assertThat(jobToken).isNotBlank();
@@ -173,8 +145,8 @@ class MentorPiAdapterTest extends BaseUnitTest {
 
     @Test
     void carriesConfiguredInternetPolicyIntoTheRuntimePlan() {
-        adapter.buildSandboxSpec(REQUEST, llmConfig(null, true), Map.of(), null);
-        adapter.buildSandboxSpec(REQUEST, llmConfig(null, false), Map.of(), null);
+        adapter.buildSandboxSpec(REQUEST, llmConfig(null, true));
+        adapter.buildSandboxSpec(REQUEST, llmConfig(null, false));
 
         ArgumentCaptor<PiPlanSpec> captor = ArgumentCaptor.forClass(PiPlanSpec.class);
         verify(runtimeFactory, times(2)).build(captor.capture());
@@ -182,28 +154,16 @@ class MentorPiAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("sessionRestore injects exactly .sessions/<threadId>.jsonl with the supplied bytes")
-    void sessionRestoreInjectsJsonl() {
-        UUID threadId = UUID.randomUUID();
-        byte[] bytes = "{\"replay\":true}".getBytes(StandardCharsets.UTF_8);
-        PiPlanSpec spec = capturePlanSpec(llmConfig(null), Map.of(), new SessionRestore(threadId, bytes));
-
-        String expectedKey = MentorPiAdapter.SESSIONS_DIR_PREFIX + threadId + ".jsonl";
-        assertThat(spec.extraInputs()).containsKey(expectedKey);
-        assertThat(spec.extraInputs().get(expectedKey)).isEqualTo(bytes);
-    }
-
-    @Test
-    @DisplayName("no sessionRestore adds no .sessions entry")
-    void noSessionRestoreAddsNoSessionsEntry() {
-        PiPlanSpec spec = capturePlanSpec(llmConfig(null), Map.of(), null);
-        assertThat(spec.extraInputs().keySet()).noneMatch(k -> k.startsWith(MentorPiAdapter.SESSIONS_DIR_PREFIX));
+    @DisplayName("the spec carries only the system prompt, so a prepared sandbox serves any thread")
+    void specCarriesNothingOfATurn() {
+        PiPlanSpec spec = capturePlanSpec(llmConfig(null));
+        assertThat(spec.extraInputs()).containsOnlyKeys(MentorPiAdapter.SYSTEM_PROMPT_PATH);
     }
 
     @Test
     @DisplayName("the mentor system prompt is always injected at SYSTEM_PROMPT_PATH")
     void systemPromptAlwaysInjected() {
-        PiPlanSpec spec = capturePlanSpec(llmConfig(null), Map.of(), null);
+        PiPlanSpec spec = capturePlanSpec(llmConfig(null));
         assertThat(spec.extraInputs()).containsKey(MentorPiAdapter.SYSTEM_PROMPT_PATH);
         assertThat(spec.extraInputs().get(MentorPiAdapter.SYSTEM_PROMPT_PATH)).isNotEmpty();
     }
@@ -211,7 +171,7 @@ class MentorPiAdapterTest extends BaseUnitTest {
     @Test
     @DisplayName("the sandbox spec carries the routing identity from the request")
     void specCarriesRoutingIdentity() {
-        InteractiveSandboxSpec spec = adapter.buildSandboxSpec(REQUEST, llmConfig(null), Map.of(), null);
+        InteractiveSandboxSpec spec = adapter.buildSandboxSpec(REQUEST, llmConfig(null));
         assertThat(spec.userId()).isEqualTo("42");
         assertThat(spec.workspaceId()).isEqualTo("7");
         assertThat(spec.image()).isEqualTo("test-image:latest");
