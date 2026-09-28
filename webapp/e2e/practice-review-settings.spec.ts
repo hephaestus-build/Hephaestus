@@ -14,7 +14,7 @@ test("practice review settings can be updated", async ({ page }) => {
 	await loginAsDevAdmin(page);
 
 	await page.goto("/w/e2e/admin/practices/review?section=when-and-where");
-	await expect(page.getByRole("heading", { name: "Review", exact: true })).toBeVisible();
+	await expect(page.getByRole("heading", { name: "Review settings", exact: true })).toBeVisible();
 	await expect(page.getByRole("heading", { name: "Practice reviews" })).toBeVisible();
 	await expect(page.getByText("How reviews start", { exact: true })).toBeVisible();
 
