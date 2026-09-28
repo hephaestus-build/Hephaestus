@@ -911,18 +911,19 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             @Param("since") Instant since);
 
     /**
-     * Takes the row lock a withdrawal takes on each of {@code ids} still PREPARED on the practice page, in id order.
-     * Called in the transaction that then runs {@link #markInAppDelivered}: that UPDATE, as a statement issued after
-     * the locks are held, judges withdrawals by a snapshot taken after any withdrawal it waited on committed.
+     * Takes the row lock a withdrawal takes ({@link #lockByIdAndWorkspaceId}) on every card still waiting on the
+     * recipient's practice page, in id order. A page read takes it before it reads anything, so a withdrawal either
+     * commits first and the read sees it, or waits until the cards the read shows are recorded as delivered.
      */
     @Query(value = """
                     SELECT f.id FROM feedback f
-                    WHERE f.id IN (:ids) AND f.workspace_id = :workspaceId AND f.channel = 'IN_APP'
-                      AND f.delivery_state = 'PREPARED'
+                    WHERE f.workspace_id = :workspaceId AND f.recipient_user_id = :recipientUserId
+                      AND f.channel = 'IN_APP' AND f.delivery_state = 'PREPARED'
                     ORDER BY f.id
                     FOR UPDATE
                     """, nativeQuery = true)
-    List<UUID> lockPreparedInApp(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
+    List<UUID> lockPreparedInAppForRecipient(
+            @Param("workspaceId") Long workspaceId, @Param("recipientUserId") Long recipientUserId);
 
     /**
      * Flips PREPARED in-app feedback to DELIVERED at the moment its recipient actually reads it — one

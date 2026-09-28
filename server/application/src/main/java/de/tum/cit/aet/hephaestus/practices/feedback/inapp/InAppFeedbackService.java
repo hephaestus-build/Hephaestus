@@ -94,6 +94,11 @@ public class InAppFeedbackService {
         }
         Long recipientUserId = currentUser.get().getId();
         Instant now = clock.instant();
+        boolean delivering = UserViewContextHolder.get() == null;
+        if (delivering) {
+            // First, so what this read shows and what it records as delivered agree with any withdrawal.
+            feedbackRepository.lockPreparedInAppForRecipient(workspaceId, recipientUserId);
+        }
         // Every readable row, not a page of them: a run of closed cards must not crowd an older open one off it.
         // A withdrawn card nobody was shown is not on the page at all; one already shown says it was withdrawn.
         List<Feedback> readable = feedbackRepository.findReadableInAppForRecipient(workspaceId, recipientUserId);
@@ -113,8 +118,7 @@ public class InAppFeedbackService {
                 .limit(MAX_CARDS)
                 .toList();
         Set<UUID> prepared = rows.stream()
-                .filter(feedback -> UserViewContextHolder.get() == null
-                        && feedback.getDeliveryState() == FeedbackDeliveryState.PREPARED)
+                .filter(feedback -> delivering && feedback.getDeliveryState() == FeedbackDeliveryState.PREPARED)
                 .map(Feedback::getId)
                 .collect(Collectors.toSet());
         List<UUID> toMarkDelivered = onThePage.stream()
@@ -122,9 +126,6 @@ public class InAppFeedbackService {
                 .filter(prepared::contains)
                 .toList();
         if (!toMarkDelivered.isEmpty()) {
-            // Locked first, in a statement of its own, so a withdrawal committed while this read waited keeps
-            // the card from being marked as seen.
-            feedbackRepository.lockPreparedInApp(workspaceId, toMarkDelivered);
             feedbackRepository.markInAppDelivered(workspaceId, toMarkDelivered, now);
         }
         return onThePage;

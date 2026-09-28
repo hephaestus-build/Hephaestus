@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppCompositionListener;
 import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppFeedbackPreparer;
 import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppFeedbackRouter;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -26,6 +27,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.feedback.PreviousInAppFeedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.inapp.dto.InAppFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
@@ -42,12 +44,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
@@ -97,6 +104,12 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
 
     @Autowired
     private Clock clock;
+
+    @Autowired
+    private InAppFeedbackService inAppFeedbackService;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private InAppCompositionListener inAppLane;
     private Workspace workspace;
@@ -457,6 +470,117 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
                 // The rest newest first; the oldest of the newer cards is the one the limit leaves out.
                 .jsonPath("$[1:].id")
                 .isEqualTo(new java.util.ArrayList<>(newer.reversed().subList(0, InAppFeedbackService.MAX_CARDS - 1)));
+    }
+
+    /**
+     * A withdrawal that holds the card's lock when the page is read: the read waits, then sees the withdrawal, so
+     * the card is neither shown with its words nor recorded as delivered.
+     */
+    @Test
+    @WithUser
+    @DisplayName("a page read waiting on a withdrawal neither shows nor delivers the card")
+    void shouldNeitherShowNorDeliverACardWithdrawnWhileThePageWasRead() throws Exception {
+        Feedback waiting = card(NOW.minus(Duration.ofDays(1)), 10, FeedbackDeliveryState.PREPARED);
+        long admin = withdrawingAdmin();
+        Holder withdrawal = holdIn(
+                () -> withdrawalService.setWithdrawn(workspace.getId(), waiting.getId(), admin, true, "Wrong words"));
+
+        CompletableFuture<List<InAppFeedbackDTO>> read = readConcurrently();
+        awaitBlockedBy(withdrawal);
+        withdrawal.commit();
+
+        assertThat(read.get(PATIENCE_SECONDS, TimeUnit.SECONDS)).isEmpty();
+        assertThat(state(waiting)).isEqualTo(FeedbackDeliveryState.PREPARED);
+    }
+
+    /**
+     * A page read that holds the card's lock when an admin withdraws it: the withdrawal waits until the card is
+     * recorded as delivered, so the developer, who saw it, is shown the notice that it was withdrawn.
+     */
+    @Test
+    @WithUser
+    @DisplayName("a withdrawal waiting on a page read lets the card be delivered, then withdraws it")
+    void shouldDeliverACardReadBeforeItsWithdrawalAndThenShowItWithdrawn() throws Exception {
+        Feedback waiting = card(NOW.minus(Duration.ofDays(1)), 10, FeedbackDeliveryState.PREPARED);
+        long admin = withdrawingAdmin();
+        java.util.concurrent.atomic.AtomicReference<List<InAppFeedbackDTO>> shown =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        Holder read = holdIn(() -> shown.set(readAsDeveloper()));
+
+        CompletableFuture<Void> withdrawal = CompletableFuture.runAsync(
+                () -> transactionTemplate.executeWithoutResult(status -> withdrawalService.setWithdrawn(
+                        workspace.getId(), waiting.getId(), admin, true, "Wrong words")));
+        awaitBlockedBy(read);
+        read.commit();
+        withdrawal.get(PATIENCE_SECONDS, TimeUnit.SECONDS);
+
+        assertThat(shown.get()).singleElement().satisfies(card -> {
+            assertThat(card.id()).isEqualTo(waiting.getId());
+            assertThat(card.body()).isNotBlank();
+        });
+        assertThat(state(waiting)).isEqualTo(FeedbackDeliveryState.DELIVERED);
+        readInAppPage(workspace)
+                .jsonPath("$[0].withdrawnAt")
+                .isNotEmpty()
+                .jsonPath("$[0].body")
+                .doesNotExist();
+    }
+
+    private static final int PATIENCE_SECONDS = 20;
+
+    /** A transaction running {@code work} on another thread and holding its locks until {@link #commit}. */
+    private record Holder(int backendPid, CountDownLatch release, CompletableFuture<Void> done) {
+        void commit() throws Exception {
+            release.countDown();
+            done.get(PATIENCE_SECONDS, TimeUnit.SECONDS);
+        }
+    }
+
+    private Holder holdIn(Runnable work) throws InterruptedException {
+        CountDownLatch holding = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger pid = new java.util.concurrent.atomic.AtomicInteger();
+        CompletableFuture<Void> done =
+                CompletableFuture.runAsync(() -> transactionTemplate.executeWithoutResult(status -> {
+                    work.run();
+                    pid.set(Objects.requireNonNull(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class)));
+                    holding.countDown();
+                    try {
+                        assertThat(release.await(PATIENCE_SECONDS, TimeUnit.SECONDS))
+                                .isTrue();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(e);
+                    }
+                }));
+        assertThat(holding.await(PATIENCE_SECONDS, TimeUnit.SECONDS)).isTrue();
+        return new Holder(pid.get(), release, done);
+    }
+
+    /** The developer's page read, on another thread, as the recipient. */
+    private CompletableFuture<List<InAppFeedbackDTO>> readConcurrently() {
+        return CompletableFuture.supplyAsync(this::readAsDeveloper);
+    }
+
+    /** The page read on this thread, as the developer the request filter would name. */
+    private List<InAppFeedbackDTO> readAsDeveloper() {
+        CurrentScmIdentityHolder.set(developer.getId(), developer.getLogin(), java.util.Set.of(developer.getId()));
+        try {
+            return inAppFeedbackService.getInAppFeedback(workspace.getId());
+        } finally {
+            CurrentScmIdentityHolder.clear();
+        }
+    }
+
+    /** Until another backend waits on a lock {@code holder} holds. */
+    private void awaitBlockedBy(Holder holder) {
+        Awaitility.await().atMost(PATIENCE_SECONDS, TimeUnit.SECONDS).until(() -> {
+            jdbc.execute("SELECT pg_stat_clear_snapshot()");
+            return Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT EXISTS (SELECT FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid)))",
+                    Boolean.class,
+                    holder.backendPid()));
+        });
     }
 
     private long withdrawingAdmin() {
