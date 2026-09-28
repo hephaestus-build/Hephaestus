@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A member who was hidden from the leaderboard when the provider's roster stopped granting them the workspace.
+ * A member who was hidden from workspace activity when the provider's roster stopped granting them the workspace.
  * Hiding is a preference, not access, so the membership goes; this row keeps the preference until a membership
  * for the same actor is created again, which takes it back.
  */

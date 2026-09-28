@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** Purge is a soft delete of the workspace row, so its remembered leaderboard preferences go explicitly. */
+/** Purge is a soft delete of the workspace row, so its remembered activity visibility preferences go explicitly. */
 @Component
 @RequiredArgsConstructor
 class HiddenFormerMemberPurgeContributor implements WorkspacePurgeContributor {

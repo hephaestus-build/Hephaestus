@@ -303,9 +303,10 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
 
         // The event names one direct grant; an inherited one may be higher, so it never lowers the stored role.
         OrganizationMemberRole role = mapGroupAccess(event.groupAccess());
-        boolean storedAdmin = membershipRepository.findByOrganizationId(org.getId()).stream()
-                .anyMatch(membership -> user.getId().equals(membership.getUserId())
-                        && membership.getRole() == OrganizationMemberRole.ADMIN);
+        boolean storedAdmin = membershipRepository
+                .findByOrganizationIdAndUserId(org.getId(), user.getId())
+                .filter(membership -> membership.getRole() == OrganizationMemberRole.ADMIN)
+                .isPresent();
         if (storedAdmin) {
             role = OrganizationMemberRole.ADMIN;
         }

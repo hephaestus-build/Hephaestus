@@ -143,11 +143,9 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
 
     /** The role the organization's roster or one of its teams grants {@code userId} now, if any. */
     private WorkspaceMembership.@Nullable WorkspaceRole currentGrant(Organization organization, Long userId) {
-        Optional<WorkspaceMembership.WorkspaceRole> rosterRole =
-                organizationMembershipRepository.findByOrganizationId(organization.getId()).stream()
-                        .filter(membership -> userId.equals(membership.getUserId()))
-                        .map(membership -> mapOrgRoleToWorkspaceRole(membership.getRole()))
-                        .findFirst();
+        Optional<WorkspaceMembership.WorkspaceRole> rosterRole = organizationMembershipRepository
+                .findByOrganizationIdAndUserId(organization.getId(), userId)
+                .map(membership -> mapOrgRoleToWorkspaceRole(membership.getRole()));
         if (rosterRole.isPresent()) {
             return rosterRole.get();
         }
