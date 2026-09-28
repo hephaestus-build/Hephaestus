@@ -139,6 +139,27 @@ class GitLabOpenMergeRequestReviewerRefreshTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldLeaveAMergeRequestsReviewersAloneWhenTheirFollowUpPagesRepeatACursor() {
+        scriptedResponses.add(Mono.just(
+                openMergeRequests(List.of(mergeRequest("3", List.of(reviewer(6, "user1", "APPROVED")), true)))));
+        scriptedResponses.add(Mono.just(page(
+                List.of(Map.of(
+                        "reviewers",
+                        Map.of(
+                                "pageInfo",
+                                Map.of("hasNextPage", true, "endCursor", "next"),
+                                "nodes",
+                                List.of(reviewer(8, "user3", "UNREVIEWED"))))),
+                false)));
+        when(responseHandler.isPaginationLoop(any(), any(), anyString(), any())).thenReturn(true);
+
+        SyncResult result = service.refreshOpenMergeRequestReviewers(SCOPE_ID, repository());
+
+        assertThat(result.status()).isEqualTo(SyncResult.Status.COMPLETED_WITH_WARNINGS);
+        verify(mergeRequestProcessor, never()).applySyncedReviewers(any(), anyInt(), anyList(), any());
+    }
+
+    @Test
     void shouldReadEveryPageWhenMoreMergeRequestsAreOpenThanOnePageHolds() {
         scriptedResponses.add(Mono.just(openMergeRequests(
                 List.of(mergeRequest("3", List.of(reviewer(6, "user1", "APPROVED")), false)), true)));

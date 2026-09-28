@@ -124,6 +124,12 @@ describe("workspace route gate", () => {
 		expect(location.search).toMatchObject({ survey: "welcome" });
 	});
 
+	it("opens Activity when the workspace list cannot be fetched", async () => {
+		server.use(http.get("*/workspaces", () => HttpResponse.error()));
+		const location = await land("/w/acme");
+		expect(location.pathname).toBe(WORKSPACE_HOME);
+	});
+
 	it("opens a just-created workspace the cache carries before the server lists it", async () => {
 		listWorkspaces("acme");
 		// The app's own `staleTime` (`integrations/tanstack-query/root-provider.tsx`), so the gate

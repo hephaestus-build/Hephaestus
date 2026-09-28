@@ -4,11 +4,11 @@ import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
 
 /**
  * The workspace home is the Practice profile, and Activity where the workspace does not review
- * practices. Only a definite "off" picks Activity: the Practice profile sends that answer back here,
- * so this route must never send it there. The workspace list is the one the parent route has
- * already loaded; a list that cannot be fetched is not an answer, so the home stays the Practice
- * profile. The search travels with the redirect, since the app chrome reads its own params (a survey
- * link) from whatever page the home lands on.
+ * practices. The Practice profile sends a definite "off" back here, so this route never sends that
+ * answer there. The workspace list is the one the parent route has already loaded; when it cannot be
+ * fetched, the Practice profile could only show that error, so the home is Activity, which does not
+ * need the list. The search travels with the redirect, since the app chrome reads its own params (a
+ * survey link) from whatever page the home lands on.
  */
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/")({
 	beforeLoad: async ({ context, params, location }) => {
@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/")({
 		);
 		throw redirect({
 			to:
-				workspace?.practicesEnabled === false
+				workspaces === undefined || workspace?.practicesEnabled === false
 					? "/w/$workspaceSlug/activity"
 					: "/w/$workspaceSlug/practice-profile",
 			params,

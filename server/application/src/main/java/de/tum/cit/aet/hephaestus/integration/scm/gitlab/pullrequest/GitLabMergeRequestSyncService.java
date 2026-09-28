@@ -1146,6 +1146,8 @@ public class GitLabMergeRequestSyncService {
         String cursor = afterCursor;
         String previousReviewerCursor = null;
         int followUpPages = 0;
+        // Only the list's own end makes it whole: a page limit or a repeating cursor stops early.
+        boolean reachedEnd = false;
 
         try {
             while (cursor != null && followUpPages < GitLabSyncConstants.MAX_PAGINATION_PAGES) {
@@ -1179,21 +1181,33 @@ public class GitLabMergeRequestSyncService {
                         .toEntityList(Map.class);
                 List<Map<String, Object>> mrNodes = (List<Map<String, Object>>) mrNodesRaw;
 
-                if (mrNodes == null || mrNodes.isEmpty()) break;
+                if (mrNodes == null || mrNodes.isEmpty()) {
+                    reachedEnd = true;
+                    break;
+                }
 
                 Map<String, Object> reviewersMap =
                         (Map<String, Object>) mrNodes.get(0).get("reviewers");
-                if (reviewersMap == null) break;
+                if (reviewersMap == null) {
+                    reachedEnd = true;
+                    break;
+                }
 
                 List<Map<String, Object>> reviewerNodes = (List<Map<String, Object>>) reviewersMap.get("nodes");
-                if (reviewerNodes == null || reviewerNodes.isEmpty()) break;
+                if (reviewerNodes == null || reviewerNodes.isEmpty()) {
+                    reachedEnd = true;
+                    break;
+                }
 
                 for (Map<String, Object> r : reviewerNodes) {
                     allRemaining.add(toSyncReviewerData(r));
                 }
 
                 Map<String, Object> pageInfo = (Map<String, Object>) reviewersMap.get("pageInfo");
-                if (pageInfo == null || !Boolean.TRUE.equals(pageInfo.get("hasNextPage"))) break;
+                if (pageInfo == null || !Boolean.TRUE.equals(pageInfo.get("hasNextPage"))) {
+                    reachedEnd = true;
+                    break;
+                }
                 cursor = (String) pageInfo.get("endCursor");
                 if (responseHandler.isPaginationLoop(
                         cursor, previousReviewerCursor, "remaining MR reviewers for " + context, log)) {
@@ -1210,6 +1224,13 @@ public class GitLabMergeRequestSyncService {
                     "Error during reviewer follow-up pagination, aborting to prevent data loss: context={}",
                     context,
                     e);
+            return null;
+        }
+
+        if (!reachedEnd) {
+            log.warn(
+                    "Reviewer follow-up pagination stopped before the list ended, keeping the stored reviewers: context={}",
+                    context);
             return null;
         }
 
