@@ -43,7 +43,6 @@ function renderPage(overrides: Partial<AgentBindingsPageProps> = {}) {
 			bindings={[inHouseBinding]}
 			availableModels={[inHouseModel, cloudModel]}
 			practicesEnabled
-			mentorEnabled
 			aiChoiceRequired={false}
 			isLoading={false}
 			isError={false}

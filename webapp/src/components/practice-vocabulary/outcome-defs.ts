@@ -18,6 +18,20 @@ export const OUTCOME_DEFS: StatusDefs<Outcome> = {
 	},
 };
 
+/**
+ * The outcomes as a count names them: "1 positive outcome", "27 negative outcomes". The label with
+ * a number in front, so a count and the badge on the rows it opens read as the same word.
+ */
+export const OUTCOME_COUNT_NOUNS = {
+	POSITIVE: { one: "positive outcome", other: "positive outcomes" },
+	NEGATIVE: { one: "negative outcome", other: "negative outcomes" },
+} as const satisfies Record<Outcome, { one: string; other: string }>;
+
+export function outcomeCountNoun(outcome: Outcome, count: number): string {
+	const noun = OUTCOME_COUNT_NOUNS[outcome];
+	return count === 1 ? noun.one : noun.other;
+}
+
 export function derivedOutcome(
 	presence: "PRESENT" | "ABSENT",
 	assessment: "GOOD" | "BAD",

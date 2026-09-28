@@ -8,56 +8,11 @@ import { PageLayout } from "@/components/layout/PageLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import { visibleTeamTree } from "./visible-team-tree";
+
 export interface TeamsPageProps {
 	teams: TeamInfo[];
 	isLoading: boolean;
-}
-
-/**
- * The forest as a reader sees it. A hidden team is spliced out rather than taking its subtree with
- * it: its children re-parent onto the nearest visible ancestor, and only a team with no visible
- * ancestor at all becomes a root. `guard` makes a cycle in `parentId` read as "no parent" instead of
- * hanging the render on server data nothing in the client validates.
- */
-function buildVisibleTree(visibleTeams: TeamInfo[], allTeamsById: Map<number, TeamInfo>) {
-	const getVisibleAncestorParentId = (team: TeamInfo): number | undefined => {
-		let pid = team.parentId;
-		const guard = new Set<number>();
-		while (pid !== undefined) {
-			if (guard.has(pid)) {
-				return undefined;
-			}
-			guard.add(pid);
-			const parent = allTeamsById.get(pid);
-			if (!parent) {
-				return undefined;
-			}
-			if (!parent.hidden) {
-				return parent.id;
-			}
-			pid = parent.parentId;
-		}
-		return undefined;
-	};
-
-	const childrenMap = new Map<number, TeamInfo[]>();
-	for (const team of visibleTeams) {
-		const effectiveParentId = getVisibleAncestorParentId(team);
-		if (effectiveParentId !== undefined) {
-			const siblings = childrenMap.get(effectiveParentId) ?? [];
-			siblings.push(team);
-			childrenMap.set(effectiveParentId, siblings);
-		}
-	}
-	for (const siblings of childrenMap.values()) {
-		siblings.sort((a, b) => a.name.localeCompare(b.name));
-	}
-
-	const roots = visibleTeams
-		.filter((t) => getVisibleAncestorParentId(t) === undefined)
-		.sort((a, b) => a.name.localeCompare(b.name));
-
-	return { roots, childrenMap };
 }
 
 /**
@@ -102,9 +57,7 @@ function sortMembers(team: TeamInfo) {
 
 export function TeamsPage({ teams, isLoading }: TeamsPageProps) {
 	const visibleTeams = teams.filter((t) => !t.hidden);
-
-	const allTeamsById = new Map(teams.map((t) => [t.id, t]));
-	const { roots, childrenMap } = buildVisibleTree(visibleTeams, allTeamsById);
+	const { roots, childrenOf: childrenMap } = visibleTeamTree(teams);
 	const membersByTeamId = new Map(
 		visibleTeams.map((t) => [t.id, new Set(t.members.map((member) => member.id))]),
 	);

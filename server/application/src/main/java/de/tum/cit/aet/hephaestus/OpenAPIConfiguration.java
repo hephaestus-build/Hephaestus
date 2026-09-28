@@ -136,7 +136,8 @@ public class OpenAPIConfiguration {
             "ReviewRepositoryTarget",
             "DeliveryPolicyFactsSnapshot",
             "PracticeFact",
-            "SubjectStatus");
+            "SubjectStatus",
+            "TimeBucketSize");
 
     /**
      * Zalando's non-standard-but-conventional {@code format} for an exact decimal, which stops a client

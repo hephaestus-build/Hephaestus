@@ -33,13 +33,12 @@ const SCOPES = [
 	"scripts",
 	"release",
 
+	"activity",
 	"auth",
 	"integration",
 	"scm",
-	"leaderboard",
 	"mentor",
 	"notifications",
-	"profile",
 	"teams",
 	"workspace",
 ];

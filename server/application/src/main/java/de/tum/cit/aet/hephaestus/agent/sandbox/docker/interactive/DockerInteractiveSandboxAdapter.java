@@ -106,8 +106,8 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     }
 
     private AttachedSandbox attachLocked(InteractiveSandboxSpec spec) {
-        // Per-workspace gating happens upstream in MentorChatController via
-        // WorkspaceFeatures.mentorEnabled — there is no deployment-wide mentor enable flag.
+        // Mentor admission (an enabled Heph model within the member's AI choice) is decided upstream by
+        // MentorChatService before a sandbox is attached.
 
         InteractiveSandboxRuntimeKey runtimeKey = runtimeKey(spec);
         DockerAttachedSandboxAdapter existing = registry.findLive(spec.userId(), spec.workspaceId());

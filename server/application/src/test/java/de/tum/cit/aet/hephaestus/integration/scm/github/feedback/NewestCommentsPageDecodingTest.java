@@ -2,12 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.feedback;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlConfig;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlTestMapper;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueCommentConnection;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Every other test of {@code GithubSummaryChannel.findExistingSummary} stubs
@@ -31,18 +29,10 @@ class NewestCommentsPageDecodingTest extends BaseUnitTest {
         }
         """;
 
-    /** Mirrors the {@code spring.jackson.deserialization.*} settings the GitHub codecs inherit. */
-    private static JsonMapper productionMapper() {
-        JsonMapper base = JsonMapper.builder()
-                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
-                .build();
-        return GitHubGraphQlConfig.gitHubGraphQlObjectMapper(base);
-    }
-
     @Test
     void backwardsPageInfoDecodesIntoTheGeneratedModel() {
-        GHIssueCommentConnection connection = productionMapper().readValue(LIVE_PAGE, GHIssueCommentConnection.class);
+        GHIssueCommentConnection connection =
+                GitHubGraphQlTestMapper.create().readValue(LIVE_PAGE, GHIssueCommentConnection.class);
 
         assertThat(connection.getPageInfo()).isNotNull();
         assertThat(connection.getPageInfo().getHasPreviousPage()).isTrue();

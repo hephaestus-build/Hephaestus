@@ -1,7 +1,6 @@
 import { cn } from "cn";
 import type { ReviewSubject } from "@/api/types.gen";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getInitials } from "@/lib/avatar";
+import { MemberAvatar } from "@/components/activity/MemberAvatar";
 import { hasText } from "@/lib/text";
 
 import { subjectLabel } from "./review-format";
@@ -17,21 +16,19 @@ export interface ReviewPersonProps {
 	className?: string;
 }
 
-/** One person, as a chip: avatar and name, sized to sit in a row of badges. */
+/** One person as Activity names a member: their face, then their name in plain text. */
 export function ReviewPerson({ person, prefix, className }: ReviewPersonProps) {
 	return (
-		<span
-			className={cn(
-				"inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-xs",
-				className,
-			)}
-		>
-			<Avatar className="size-4 shrink-0">
-				<AvatarImage src={person?.avatarUrl} alt="" />
-				<AvatarFallback className="text-2xs">
-					{getInitials(person?.name, person?.login)}
-				</AvatarFallback>
-			</Avatar>
+		<span className={cn("inline-flex max-w-full min-w-0 items-center gap-1.5 text-xs", className)}>
+			{/* A person the review could not name still gets the placeholder face rather than a gap. */}
+			<MemberAvatar
+				size="sm"
+				user={{
+					avatarUrl: person?.avatarUrl ?? "",
+					name: person?.name ?? "",
+					login: person?.login ?? "",
+				}}
+			/>
 			<span className="min-w-0 break-words">
 				{hasText(prefix) && <span className="text-muted-foreground">{prefix} </span>}
 				{subjectLabel(person)}

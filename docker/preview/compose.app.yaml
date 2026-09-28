@@ -331,7 +331,6 @@ services:
       MONITORING_RUN_ON_STARTUP: "false"
       MONITORING_SYNC_CRON: "-"
       MONITORING_BACKFILL_ENABLED: "false"
-      LEADERBOARD_NOTIFICATION_ENABLED: "false"
       SENTRY_DSN: ""
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:?Set WEBHOOK_SECRET to at least 32 printable ASCII characters}
       WEBHOOK_ROUTING_SECRET: ${WEBHOOK_ROUTING_SECRET:?Set WEBHOOK_ROUTING_SECRET to at least 32 printable ASCII characters, different from WEBHOOK_SECRET}

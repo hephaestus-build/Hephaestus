@@ -68,8 +68,8 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
         workspace = new Workspace();
         workspace.setId(1L);
         workspace.setWorkspaceSlug("test-workspace");
-        workspaceContext = new WorkspaceContext(
-                1L, "test-workspace", "Test Workspace", AccountType.ORG, null, false, false, Set.of());
+        workspaceContext =
+                new WorkspaceContext(1L, "test-workspace", "Test Workspace", AccountType.ORG, null, false, Set.of());
     }
 
     private void byoEnabled(boolean enabled) {

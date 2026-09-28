@@ -57,8 +57,6 @@ public interface WorkspaceMembershipRepository extends JpaRepository<WorkspaceMe
     Optional<WorkspaceMembership> findFirstByWorkspace_IdAndUser_LoginIgnoreCaseOrderByUser_Id(
             Long workspaceId, String login);
 
-    List<WorkspaceMembership> findAllByWorkspace_IdAndUser_IdIn(Long workspaceId, Collection<Long> userIds);
-
     @Query("""
             SELECT DISTINCT u
             FROM WorkspaceMembership wm
@@ -119,15 +117,12 @@ public interface WorkspaceMembershipRepository extends JpaRepository<WorkspaceMe
     @Modifying
     @Transactional
     @Query(value = """
-        INSERT INTO workspace_membership (workspace_id, user_id, role, league_points, hidden, created_at)
-        VALUES (:workspaceId, :userId, :role, :leaguePoints, false, CURRENT_TIMESTAMP)
+        INSERT INTO workspace_membership (workspace_id, user_id, role, hidden, created_at)
+        VALUES (:workspaceId, :userId, :role, false, CURRENT_TIMESTAMP)
         ON CONFLICT (workspace_id, user_id) DO NOTHING
         """, nativeQuery = true)
     int insertIfAbsent(
-            @Param("workspaceId") Long workspaceId,
-            @Param("userId") Long userId,
-            @Param("role") String role,
-            @Param("leaguePoints") int leaguePoints);
+            @Param("workspaceId") Long workspaceId, @Param("userId") Long userId, @Param("role") String role);
 
     @Modifying
     @Transactional

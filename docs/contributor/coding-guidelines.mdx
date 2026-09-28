@@ -59,8 +59,8 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 
 ### Structure
 
-- Feature packages sit directly under `de.tum.cit.aet.hephaestus` — `practices/`, `evidence/`, `agent/`, `integration/`, `mentor/`, `workspace/`, `leaderboard/` and the rest. Shared wiring sits in `config/` and `core/`. Cross-cutting integration traits (webhook ingress, oauth ingress, SPI, registry) live under `integration/` directly. `ls` the package root rather than trusting a list here.
-- Controllers return DTOs located near the controller. `LeaderboardEntryDTO` is the reference example.
+- Feature packages sit directly under `de.tum.cit.aet.hephaestus` — `practices/`, `evidence/`, `agent/`, `integration/`, `mentor/`, `workspace/`, `activity/` and the rest. Shared wiring sits in `config/` and `core/`. Cross-cutting integration traits (webhook ingress, oauth ingress, SPI, registry) live under `integration/` directly. `ls` the package root rather than trusting a list here.
+- Controllers return DTOs located near the controller. `ActivitySummaryDTO` in `activity/overview/dto/` is the reference example.
 - Repositories return `Optional<T>` instead of `null`.
 - Services take their collaborators through the constructor, over `private final` fields; field injection with `@Autowired` is not used. If a service depends on many collaborators, split the responsibility.
 - Set up loggers with `LoggerFactory.getLogger`. Use structured log messages.

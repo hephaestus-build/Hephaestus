@@ -159,10 +159,7 @@ class ConnectionServiceTest extends BaseUnitTest {
     @Test
     void transition_slackOAuthReconnectFromUninstalled_writesAuditRowAndReactivates() {
         Connection connection = new Connection(
-                workspace,
-                IntegrationKind.SLACK,
-                "T1",
-                new ConnectionConfig.SlackConfig("T1", "Acme", null, null, null, Set.of()));
+                workspace, IntegrationKind.SLACK, "T1", new ConnectionConfig.SlackConfig("T1", "Acme", null, Set.of()));
         setId(connection, 55L);
         connection.setState(IntegrationState.UNINSTALLED);
         when(connectionRepository.findByIdAndWorkspaceId(connection.getId(), workspace.getId()))
@@ -292,8 +289,8 @@ class ConnectionServiceTest extends BaseUnitTest {
 
     @Test
     void findReferenced_resolvesAnExplicitSuspendedConnection() {
-        Connection connection = connection(
-                IntegrationKind.SLACK, new ConnectionConfig.SlackConfig("team-1", "Acme", null, null, null, Set.of()));
+        Connection connection =
+                connection(IntegrationKind.SLACK, new ConnectionConfig.SlackConfig("team-1", "Acme", null, Set.of()));
         connection.setState(IntegrationState.SUSPENDED);
         IntegrationRef ref = new IntegrationRef(
                 IntegrationKind.SLACK, workspace.getId(), connection.getInstanceKey(), connection.getId());

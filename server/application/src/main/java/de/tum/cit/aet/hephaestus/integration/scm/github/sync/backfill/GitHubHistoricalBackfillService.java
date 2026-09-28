@@ -807,6 +807,7 @@ public class GitHubHistoricalBackfillService {
                 // Use Mono.defer() to wrap the entire execute() call so retries cover body streaming.
                 final String currentCursor = cursor;
                 final int prPageSize = resolveBackfillPrPageSize(scopeId, syncTargetId);
+                final Instant fetchedAt = Instant.now();
                 ClientGraphQlResponse response = Mono.defer(() -> client.documentName(PRS_HISTORICAL_QUERY)
                                 .variable("owner", ownerAndName.owner())
                                 .variable("name", ownerAndName.name())
@@ -884,7 +885,7 @@ public class GitHubHistoricalBackfillService {
                 // both are rolled back together, preventing duplicate processing on restart.
                 // Pass repositoryId, not the entity, to avoid LazyInitializationException.
                 PullRequestPageResult pageResult = processPullRequestsPage(
-                        connection, scopeId, repositoryId, syncTargetId, hasMore ? nextCursor : null);
+                        connection, scopeId, repositoryId, syncTargetId, hasMore ? nextCursor : null, fetchedAt);
                 totalPRsSynced += pageResult.prCount();
                 totalReviewsSynced += pageResult.reviewCount();
                 totalReviewCommentsSynced += pageResult.reviewCommentCount();
@@ -1105,6 +1106,7 @@ public class GitHubHistoricalBackfillService {
      * @param repositoryId the repository ID (NOT the entity, to avoid detached entity issues)
      * @param syncTargetId the sync target ID for cursor persistence
      * @param nextCursor   the cursor to persist (null to clear cursor when page is complete)
+     * @param fetchedAt    when the page was asked for
      * @return result containing counts of PRs, reviews, and review comments processed
      */
     private PullRequestPageResult processPullRequestsPage(
@@ -1112,7 +1114,8 @@ public class GitHubHistoricalBackfillService {
             Long scopeId,
             Long repositoryId,
             Long syncTargetId,
-            @Nullable String nextCursor) {
+            @Nullable String nextCursor,
+            Instant fetchedAt) {
         PullRequestPageResult result = transactionTemplate.execute(status -> {
             // Fetch repository INSIDE the transaction with organization eagerly loaded.
             // This ensures the entity is attached and lazy associations can be accessed.
@@ -1121,7 +1124,8 @@ public class GitHubHistoricalBackfillService {
                     .orElseThrow(() -> new IllegalStateException(
                             "Repository not found during backfill processing: id=" + repositoryId));
 
-            ProcessingContext context = ProcessingContext.forSync(scopeId, repository);
+            ProcessingContext context =
+                    ProcessingContext.forSync(scopeId, repository).withObservedAt(fetchedAt);
             int prCount = 0;
             int reviewCount = 0;
             int reviewCommentCount = 0;

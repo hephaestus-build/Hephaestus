@@ -1,5 +1,5 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
-import { Compass, Radar, Trophy, User, Users } from "lucide-react";
+import { Activity, Building2, Compass, Radar, Users } from "lucide-react";
 
 import {
 	SidebarGroup,
@@ -10,22 +10,20 @@ import {
 } from "@/components/ui/sidebar";
 
 export function NavDashboards({
-	username,
 	workspaceSlug,
-	leaderboardEnabled,
 	practicesEnabled,
 }: {
-	username: string;
 	workspaceSlug: string;
-	leaderboardEnabled: boolean;
 	practicesEnabled: boolean;
 }) {
 	const matchRoute = useMatchRoute();
+	const onActivity = Boolean(matchRoute({ to: "/w/$workspaceSlug/activity", fuzzy: true }));
 	const onPracticeProfile = Boolean(
 		matchRoute({ to: "/w/$workspaceSlug/practice-profile", fuzzy: true }),
 	);
-	const onProfile = Boolean(matchRoute({ to: "/w/$workspaceSlug/user/$username", fuzzy: true }));
-	const onLeaderboard = Boolean(matchRoute({ to: "/w/$workspaceSlug", fuzzy: false }));
+	const onWorkspaceActivity = Boolean(
+		matchRoute({ to: "/w/$workspaceSlug/workspace-activity", fuzzy: true }),
+	);
 	const onTeams = Boolean(matchRoute({ to: "/w/$workspaceSlug/teams", fuzzy: true }));
 	const onReviews = Boolean(matchRoute({ to: "/w/$workspaceSlug/reviews", fuzzy: true }));
 
@@ -47,28 +45,24 @@ export function NavDashboards({
 				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton
-						tooltip="Profile"
-						isActive={onProfile}
-						render={
-							<Link to="/w/$workspaceSlug/user/$username" params={{ username, workspaceSlug }} />
-						}
+						tooltip="Activity"
+						isActive={onActivity}
+						render={<Link to="/w/$workspaceSlug/activity" params={{ workspaceSlug }} />}
 					>
-						<User />
-						<span>Profile</span>
+						<Activity />
+						<span>Activity</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
-				{leaderboardEnabled && (
-					<SidebarMenuItem>
-						<SidebarMenuButton
-							tooltip="Leaderboard"
-							isActive={onLeaderboard}
-							render={<Link to="/w/$workspaceSlug" params={{ workspaceSlug }} />}
-						>
-							<Trophy />
-							<span>Leaderboard</span>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
-				)}
+				<SidebarMenuItem>
+					<SidebarMenuButton
+						tooltip="Workspace activity"
+						isActive={onWorkspaceActivity}
+						render={<Link to="/w/$workspaceSlug/workspace-activity" params={{ workspaceSlug }} />}
+					>
+						<Building2 />
+						<span>Workspace activity</span>
+					</SidebarMenuButton>
+				</SidebarMenuItem>
 				{practicesEnabled && (
 					<SidebarMenuItem>
 						<SidebarMenuButton

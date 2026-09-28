@@ -24,12 +24,14 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepositor
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -48,18 +50,33 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Integration tests for GitLabMergeRequestMessageHandler.
@@ -113,6 +130,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
     private GitLabMergeRequestMessageHandler handler;
 
     @Autowired
+    private GitLabMergeRequestProcessor mergeRequestProcessor;
+
+    @Autowired
     private PullRequestRepository pullRequestRepository;
 
     @Autowired
@@ -141,6 +161,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Autowired
     private RecordingScmEventListener eventListener;
@@ -185,7 +208,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         void openMergeRequest_createsPullRequest() throws Exception {
             GitLabMergeRequestEventDTO event = loadPayload("merge_request.open");
 
-            handler.handleEvent(event);
+            receive(event);
 
             transactionTemplate.executeWithoutResult(status -> {
                 PullRequest pr = pullRequestRepository
@@ -232,11 +255,11 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @Test
         void closeMergeRequest_setsStateToClosed() throws Exception {
             // Create MR !3 first
-            handler.handleEvent(loadPayload("merge_request.open"));
+            receive(loadPayload("merge_request.open"));
             eventListener.clear();
 
             // Close MR !3
-            handler.handleEvent(loadPayload("merge_request.close"));
+            receive(loadPayload("merge_request.close"));
 
             transactionTemplate.executeWithoutResult(status -> {
                 PullRequest pr = pullRequestRepository
@@ -259,11 +282,11 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @Test
         void mergeMergeRequest_setsStateToMerged() throws Exception {
             // Create MR !2 via update event first
-            handler.handleEvent(loadPayload("merge_request.update"));
+            receive(loadPayload("merge_request.update"));
             eventListener.clear();
 
             // Merge MR !2
-            handler.handleEvent(loadPayload("merge_request.merge"));
+            receive(loadPayload("merge_request.merge"));
 
             transactionTemplate.executeWithoutResult(status -> {
                 PullRequest pr = pullRequestRepository
@@ -289,12 +312,12 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @Test
         void reopenMergeRequest_setsStateToOpen() throws Exception {
             // Create MR !3 and close it
-            handler.handleEvent(loadPayload("merge_request.open"));
-            handler.handleEvent(loadPayload("merge_request.close"));
+            receive(loadPayload("merge_request.open"));
+            receive(loadPayload("merge_request.close"));
             eventListener.clear();
 
             // Reopen MR !3
-            handler.handleEvent(loadPayload("merge_request.reopen"));
+            receive(loadPayload("merge_request.reopen"));
 
             transactionTemplate.executeWithoutResult(status -> {
                 PullRequest pr = pullRequestRepository
@@ -316,7 +339,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @Test
         void approveMergeRequest_createsReview() throws Exception {
             // Approved event creates MR !4 via internal process() call
-            handler.handleEvent(loadPayload("merge_request.approved"));
+            receive(loadPayload("merge_request.approved"));
 
             transactionTemplate.executeWithoutResult(status -> {
                 PullRequest pr = pullRequestRepository
@@ -346,11 +369,11 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @DisplayName("deletes review on 'unapproved' event")
         void unapproveMergeRequest_dismissesReview() throws Exception {
             // Create MR !4 and approve it
-            handler.handleEvent(loadPayload("merge_request.approved"));
+            receive(loadPayload("merge_request.approved"));
             eventListener.clear();
 
             // Unapprove MR !4 — should dismiss the review (not delete, not CHANGES_REQUESTED)
-            handler.handleEvent(loadPayload("merge_request.unapproved"));
+            receive(loadPayload("merge_request.unapproved"));
 
             transactionTemplate.executeWithoutResult(status -> {
                 long nativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(NATIVE_MR4_ID, NATIVE_APPROVER_ID);
@@ -361,6 +384,329 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewDismissed.class))
                     .hasSize(1);
+        }
+    }
+
+    @Nested
+    class ReviewerStates {
+
+        /** The reviewers after their reviews, as {@code merge_request.update.reviewers} lists them. */
+        private static final Map<String, RequestedReviewer.ReviewState> REVIEWED = Map.of(
+                "user1", RequestedReviewer.ReviewState.APPROVED,
+                "sjones", RequestedReviewer.ReviewState.REQUESTED_CHANGES,
+                "user2", RequestedReviewer.ReviewState.REVIEWED,
+                "user3", RequestedReviewer.ReviewState.UNREVIEWED);
+
+        /** The list a sync reads in the snapshot tests: {@code user1} asked again, and no one else. */
+        private static final Map<String, RequestedReviewer.ReviewState> SYNCED =
+                Map.of("user1", RequestedReviewer.ReviewState.UNREVIEWED);
+
+        private static final Instant STORED_AT = Instant.parse("2026-01-31T18:20:00Z");
+
+        /** The {@code updated_at} of the merge request {@link #syncedMergeRequest} stores, as a hook states it. */
+        private static final String SYNCED_UPDATED_AT = "2026-01-31 19:10:00 +0100";
+
+        /** When the second list was stated, against the stored one's {@link #STORED_AT}. */
+        enum Order {
+            OLDER(Duration.ofMinutes(-1)),
+            EQUAL(Duration.ZERO),
+            NEWER(Duration.ofSeconds(1));
+
+            private final Duration offset;
+
+            Order(Duration offset) {
+                this.offset = offset;
+            }
+
+            Instant observedAt() {
+                return STORED_AT.plus(offset);
+            }
+        }
+
+        @Test
+        void shouldStoreEachReviewersStateWhenTheMergeRequestListsReviewers() throws Exception {
+            receive(loadPayload("merge_request.update.reviewers.derived"));
+
+            assertThat(reviewerStates()).containsExactlyInAnyOrderEntriesOf(REVIEWED);
+        }
+
+        @Test
+        void shouldSetTheReviewerBackToUnreviewedWhenTheirReviewIsRequestedAgain() throws Exception {
+            receive(loadPayload("merge_request.update.reviewers.derived"));
+
+            receive(loadPayload("merge_request.update.review_rerequested.derived"));
+
+            assertThat(reviewerStates())
+                    .containsEntry("user1", RequestedReviewer.ReviewState.UNREVIEWED)
+                    .containsEntry("sjones", RequestedReviewer.ReviewState.REQUESTED_CHANGES)
+                    .hasSize(4);
+        }
+
+        @Test
+        void shouldApplyTheReviewersOfAPayloadWhoseUpdateTimeEqualsTheStoredOne() throws Exception {
+            receive(loadPayload("merge_request.update.reviewers.derived"));
+
+            receive(at("merge_request.update.review_rerequested.derived", "2026-01-31 19:05:00 +0100"));
+
+            assertThat(reviewerStates()).containsEntry("user1", RequestedReviewer.ReviewState.UNREVIEWED);
+        }
+
+        @Test
+        void shouldKeepTheNewerStateWhenAnOlderPayloadArrivesLate() throws Exception {
+            receive(loadPayload("merge_request.update.review_rerequested.derived"));
+
+            receive(loadPayload("merge_request.update.reviewers.derived"));
+
+            assertThat(reviewerStates()).containsEntry("user1", RequestedReviewer.ReviewState.UNREVIEWED);
+        }
+
+        /** GitLab before 18.6 lists reviewers without their state, so only the sync states them; who is listed changes. */
+        @Test
+        void shouldKeepEachStoredStateWhenAHookListsTheReviewersWithoutOne() throws Exception {
+            sync(
+                    Instant.now().minus(Duration.ofMinutes(1)),
+                    syncedReviewer(6L, "user1", "APPROVED"),
+                    syncedReviewer(25L, "sjones", "REQUESTED_CHANGES"),
+                    syncedReviewer(7L, "user2", "REVIEWED"),
+                    syncedReviewer(8L, "user3", "UNREVIEWED"));
+
+            receive(at("merge_request.update.reviewers_stateless.derived", SYNCED_UPDATED_AT));
+
+            assertThat(reviewerStates())
+                    .containsExactlyInAnyOrderEntriesOf(Map.of(
+                            "user1", RequestedReviewer.ReviewState.APPROVED,
+                            "sjones", RequestedReviewer.ReviewState.REQUESTED_CHANGES,
+                            "user2", RequestedReviewer.ReviewState.REVIEWED));
+        }
+
+        /** A state from a GitLab newer than Hephaestus must not leave the verdict it replaced standing. */
+        @Test
+        void shouldStoreNoStateWhenTheHookStatesOneHephaestusDoesNotKnow() throws Exception {
+            receive(loadPayload("merge_request.update.reviewers.derived"));
+            ObjectNode payload = (ObjectNode)
+                    objectMapper.readTree(new ClassPathResource("gitlab/merge_request.update.reviewers.derived.json")
+                            .getContentAsString(StandardCharsets.UTF_8));
+            ((ObjectNode) payload.get("object_attributes")).put("updated_at", "2026-01-31 19:06:00 +0100");
+            ((ObjectNode) payload.get("reviewers").get(0)).put("state", "review_withdrawn");
+
+            receive(objectMapper.treeToValue(payload, GitLabMergeRequestEventDTO.class));
+
+            assertThat(reviewerStates()).containsEntry("user1", null);
+        }
+
+        /** GitLab leaves {@code reviewers} and {@code assignees} out of a hook when there are none. */
+        @Test
+        void shouldRemoveTheLastReviewersAndAssigneesWhenTheHookLeavesTheListsOut() throws Exception {
+            receive(loadPayload("merge_request.update.reviewers.derived"));
+
+            receive(loadPayload("merge_request.update.reviewers_removed.derived"));
+
+            assertThat(reviewerStates()).isEmpty();
+            Boolean assigned = transactionTemplate.execute(status -> !pullRequestRepository
+                    .findByRepositoryIdAndNumber(savedRepo.getId(), MR2_IID)
+                    .orElseThrow()
+                    .getAssignees()
+                    .isEmpty());
+            assertThat(assigned)
+                    .as("the assignee the first hook listed is gone")
+                    .isFalse();
+        }
+
+        @Test
+        void shouldStoreEachReviewersStateWhenTheSyncReadsThem() {
+            sync(
+                    Instant.now(),
+                    syncedReviewer(900003L, "synced-approver", "APPROVED"),
+                    syncedReviewer(900004L, "synced-waiting", "UNREVIEWED"),
+                    syncedReviewer(900005L, "stateless-reviewer", null));
+
+            Map<String, RequestedReviewer.@Nullable ReviewState> expected = new HashMap<>();
+            expected.put("synced-approver", RequestedReviewer.ReviewState.APPROVED);
+            expected.put("synced-waiting", RequestedReviewer.ReviewState.UNREVIEWED);
+            expected.put("stateless-reviewer", null);
+            assertThat(reviewerStates()).containsExactlyInAnyOrderEntriesOf(expected);
+        }
+
+        /** A sync page applies unless it was asked for before the webhook arrived; applying it twice changes nothing. */
+        @ParameterizedTest
+        @EnumSource(Order.class)
+        void shouldApplyASyncPageUnlessItWasReadBeforeTheStoredWebhook(Order page) throws Exception {
+            handler.handle(loadPayload("merge_request.update.reviewers.derived"), STORED_AT);
+
+            sync(page.observedAt(), syncedReviewer(6L, "user1", "UNREVIEWED"));
+            sync(page.observedAt(), syncedReviewer(6L, "user1", "UNREVIEWED"));
+
+            assertThat(reviewerStates()).containsExactlyInAnyOrderEntriesOf(page == Order.OLDER ? REVIEWED : SYNCED);
+        }
+
+        /**
+         * A webhook applies unless it arrived before the stored sync page was asked for, even when it waited in the
+         * stream until after; its payload is as new as the merge request the sync stored, so only its arrival dates it.
+         */
+        @ParameterizedTest
+        @EnumSource(Order.class)
+        void shouldApplyAWebhookUnlessItArrivedBeforeTheStoredSyncPageWasRead(Order arrival) throws Exception {
+            sync(STORED_AT, syncedReviewer(6L, "user1", "UNREVIEWED"));
+            GitLabMergeRequestEventDTO webhook = at("merge_request.update.reviewers.derived", SYNCED_UPDATED_AT);
+
+            handler.handle(webhook, arrival.observedAt());
+            handler.handle(webhook, arrival.observedAt());
+
+            assertThat(reviewerStates()).containsExactlyInAnyOrderEntriesOf(arrival == Order.OLDER ? SYNCED : REVIEWED);
+        }
+
+        /**
+         * A sync page read after the webhook arrived is written while the webhook is handled. The webhook reads the
+         * merge request under its row lock, so it waits for the sync to commit and compares against the sync's list,
+         * not against the one stored before.
+         */
+        @Test
+        void shouldCompareAgainstTheListAConcurrentSyncCommittedWhileTheWebhookWaited() throws Exception {
+            Instant syncedAt = STORED_AT.plus(Duration.ofMinutes(2));
+            sync(STORED_AT.minus(Duration.ofMinutes(1)), syncedReviewer(6L, "user1", "APPROVED"));
+            GitLabMergeRequestEventDTO webhookPayload = at("merge_request.update.reviewers.derived", SYNCED_UPDATED_AT);
+            CountDownLatch syncWritten = new CountDownLatch(1);
+            CountDownLatch releaseSync = new CountDownLatch(1);
+            ExecutorService threads = Executors.newFixedThreadPool(2);
+            try {
+                Future<?> sync = threads.submit(() -> transactionTemplate.executeWithoutResult(status -> {
+                    sync(syncedAt, syncedReviewer(6L, "user1", "UNREVIEWED"));
+                    syncWritten.countDown();
+                    awaitUninterruptibly(releaseSync);
+                }));
+                assertThat(syncWritten.await(30, TimeUnit.SECONDS)).isTrue();
+
+                Future<?> webhook = threads.submit(() -> handler.handle(webhookPayload, STORED_AT));
+                String waitingStatement = statementWaitingOnALock();
+                releaseSync.countDown();
+                sync.get(30, TimeUnit.SECONDS);
+                webhook.get(30, TimeUnit.SECONDS);
+
+                assertThat(reviewerStates()).containsExactlyInAnyOrderEntriesOf(SYNCED);
+                assertThat(reviewersObservedAt()).isEqualTo(syncedAt);
+                assertThat(waitingStatement.toLowerCase(Locale.ROOT)).containsPattern("for (no key )?update");
+            } finally {
+                releaseSync.countDown();
+                threads.shutdownNow();
+            }
+        }
+
+        /** The statement of the one other backend waiting on a lock in this database, once there is one. */
+        private String statementWaitingOnALock() throws InterruptedException {
+            Instant deadline = Instant.now().plus(Duration.ofSeconds(30));
+            while (Instant.now().isBefore(deadline)) {
+                List<@Nullable String> waiting = jdbcTemplate.queryForList("""
+                        SELECT query FROM pg_stat_activity
+                        WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()
+                        """, String.class);
+                if (!waiting.isEmpty()) {
+                    return String.valueOf(waiting.getFirst());
+                }
+                Thread.sleep(20);
+            }
+            throw new AssertionError("no backend waited on a lock within 30 seconds");
+        }
+
+        private @Nullable Instant reviewersObservedAt() {
+            return transactionTemplate.execute(status -> pullRequestRepository
+                    .findByRepositoryIdAndNumber(savedRepo.getId(), MR2_IID)
+                    .orElseThrow()
+                    .getReviewersObservedAt());
+        }
+
+        private void awaitUninterruptibly(CountDownLatch latch) {
+            try {
+                assertThat(latch.await(30, TimeUnit.SECONDS)).isTrue();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
+
+        private void sync(Instant fetchedAt, GitLabMergeRequestProcessor.SyncReviewerData... reviewers) {
+            mergeRequestProcessor.processFromSync(
+                    syncedMergeRequest(List.of(reviewers)),
+                    ProcessingContext.forSync(null, savedRepo).withObservedAt(fetchedAt));
+        }
+
+        private GitLabMergeRequestProcessor.SyncReviewerData syncedReviewer(
+                long id, String username, @Nullable String state) {
+            return new GitLabMergeRequestProcessor.SyncReviewerData(
+                    new GitLabMergeRequestProcessor.SyncUserData(
+                            "gid://gitlab/User/" + id, username, username, null, null, null),
+                    state);
+        }
+
+        /** MR !2 as a sync reads it, with only what these tests need. */
+        private GitLabMergeRequestProcessor.SyncMergeRequestData syncedMergeRequest(
+                List<GitLabMergeRequestProcessor.SyncReviewerData> reviewers) {
+            return new GitLabMergeRequestProcessor.SyncMergeRequestData(
+                    "gid://gitlab/MergeRequest/" + NATIVE_MR2_ID,
+                    String.valueOf(MR2_IID),
+                    MR2_TITLE,
+                    null, // description
+                    "opened",
+                    false, // draft
+                    null, // mergeable
+                    null, // detailedMergeStatus
+                    false, // approved
+                    "https://gitlab.lrz.de/" + FIXTURE_REPO_FULL_NAME + "/-/merge_requests/" + MR2_IID,
+                    "2026-01-31T18:00:00Z",
+                    "2026-01-31T18:10:00Z",
+                    null, // closedAt
+                    null, // mergedAt
+                    1, // commitCount
+                    0, // additions
+                    0, // deletions
+                    0, // fileCount
+                    "feature/oauth",
+                    "main",
+                    null, // diffHeadSha
+                    null, // baseSha
+                    null, // mergeCommitSha
+                    false, // discussionLocked
+                    0, // commentsCount
+                    "gid://gitlab/User/" + NATIVE_AUTHOR_ID,
+                    FIXTURE_AUTHOR_LOGIN,
+                    FIXTURE_AUTHOR_LOGIN,
+                    null, // authorAvatarUrl
+                    null, // authorWebUrl
+                    null, // authorPublicEmail
+                    null, // mergeUserGlobalId
+                    null, // mergeUserUsername
+                    null, // mergeUserName
+                    null, // mergeUserAvatarUrl
+                    null, // mergeUserWebUrl
+                    null, // mergeUserPublicEmail
+                    null, // syncLabels
+                    null, // syncAssignees
+                    reviewers,
+                    null, // syncApprovers
+                    null, // syncParticipants
+                    null, // milestoneIid
+                    null, // headPipelineStatus
+                    null, // headPipelineSha
+                    null); // closingIssueNumbers
+        }
+
+        /** A recorded payload at another {@code updated_at}, for a test about the order payloads arrive in. */
+        private GitLabMergeRequestEventDTO at(String filename, String updatedAt) throws IOException {
+            ObjectNode payload = (ObjectNode) objectMapper.readTree(
+                    new ClassPathResource("gitlab/" + filename + ".json").getContentAsString(StandardCharsets.UTF_8));
+            ((ObjectNode) payload.get("object_attributes")).put("updated_at", updatedAt);
+            return objectMapper.treeToValue(payload, GitLabMergeRequestEventDTO.class);
+        }
+
+        private Map<String, RequestedReviewer.@Nullable ReviewState> reviewerStates() {
+            return Objects.requireNonNull(transactionTemplate.execute(status -> {
+                Map<String, RequestedReviewer.@Nullable ReviewState> states = new HashMap<>();
+                pullRequestRepository
+                        .findByRepositoryIdAndNumber(savedRepo.getId(), MR2_IID)
+                        .orElseThrow()
+                        .getRequestedReviewers()
+                        .forEach(request -> states.put(request.getUser().getLogin(), request.getReviewState()));
+                return states;
+            }));
         }
     }
 
@@ -375,7 +721,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
             GitLabMergeRequestEventDTO event = loadPayload("merge_request.open");
 
-            assertThatCode(() -> handler.handleEvent(event)).doesNotThrowAnyException();
+            assertThatCode(() -> receive(event)).doesNotThrowAnyException();
             assertThat(pullRequestRepository.count()).isZero();
         }
 
@@ -383,10 +729,10 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         void idempotency_processSameEventTwice() throws Exception {
             GitLabMergeRequestEventDTO event = loadPayload("merge_request.open");
 
-            handler.handleEvent(event);
+            receive(event);
             long countAfterFirst = pullRequestRepository.count();
 
-            handler.handleEvent(event);
+            receive(event);
 
             assertThat(pullRequestRepository.count()).isEqualTo(countAfterFirst);
         }
@@ -394,7 +740,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @Test
         void fullLifecycle_openCloseReopen() throws Exception {
             // Open MR !3
-            handler.handleEvent(loadPayload("merge_request.open"));
+            receive(loadPayload("merge_request.open"));
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestCreated.class))
                     .hasSize(1);
 
@@ -406,7 +752,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             });
 
             // Close MR !3
-            handler.handleEvent(loadPayload("merge_request.close"));
+            receive(loadPayload("merge_request.close"));
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
                     .hasSize(1);
             assertThat(eventListener
@@ -423,7 +769,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             });
 
             // Reopen MR !3
-            handler.handleEvent(loadPayload("merge_request.reopen"));
+            receive(loadPayload("merge_request.reopen"));
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestReopened.class))
                     .hasSize(1);
 
@@ -438,7 +784,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @Test
         void fullLifecycle_approveUnapprove() throws Exception {
             // Approve MR !4 (also creates it)
-            handler.handleEvent(loadPayload("merge_request.approved"));
+            receive(loadPayload("merge_request.approved"));
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
                     .hasSize(1);
 
@@ -449,7 +795,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             });
 
             // Unapprove MR !4 — should dismiss the review (not delete, not CHANGES_REQUESTED)
-            handler.handleEvent(loadPayload("merge_request.unapproved"));
+            receive(loadPayload("merge_request.unapproved"));
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewDismissed.class))
                     .hasSize(1);
 
@@ -464,12 +810,12 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @Test
         void fullLifecycle_updateMerge() throws Exception {
             // Create MR !2 via update
-            handler.handleEvent(loadPayload("merge_request.update"));
+            receive(loadPayload("merge_request.update"));
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestCreated.class))
                     .hasSize(1);
 
             // Merge MR !2
-            handler.handleEvent(loadPayload("merge_request.merge"));
+            receive(loadPayload("merge_request.merge"));
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestMerged.class))
                     .hasSize(1);
 
@@ -513,7 +859,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             });
 
             // Now create MR !3
-            handler.handleEvent(loadPayload("merge_request.open"));
+            receive(loadPayload("merge_request.open"));
 
             // Both should exist independently
             transactionTemplate.executeWithoutResult(status -> {
@@ -544,12 +890,12 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @Test
         void domainEvents_mr3Lifecycle() throws Exception {
             // Open -> PullRequestCreated
-            handler.handleEvent(loadPayload("merge_request.open"));
+            receive(loadPayload("merge_request.open"));
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestCreated.class))
                     .hasSize(1);
 
             // Close -> PullRequestClosed(wasMerged=false)
-            handler.handleEvent(loadPayload("merge_request.close"));
+            receive(loadPayload("merge_request.close"));
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
                     .hasSize(1);
             assertThat(eventListener
@@ -561,7 +907,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             eventListener.clear();
 
             // Reopen -> PullRequestReopened
-            handler.handleEvent(loadPayload("merge_request.reopen"));
+            receive(loadPayload("merge_request.reopen"));
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestReopened.class))
                     .hasSize(1);
         }
@@ -569,11 +915,11 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @Test
         void domainEvents_mr2Merge() throws Exception {
             // Create via update
-            handler.handleEvent(loadPayload("merge_request.update"));
+            receive(loadPayload("merge_request.update"));
             eventListener.clear();
 
             // Merge -> PullRequestClosed(wasMerged=true) + PullRequestMerged
-            handler.handleEvent(loadPayload("merge_request.merge"));
+            receive(loadPayload("merge_request.merge"));
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
                     .hasSize(1);
             assertThat(eventListener
@@ -588,14 +934,14 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @Test
         void domainEvents_mr4Approval() throws Exception {
             // Approve -> ReviewSubmitted
-            handler.handleEvent(loadPayload("merge_request.approved"));
+            receive(loadPayload("merge_request.approved"));
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
                     .hasSize(1);
 
             eventListener.clear();
 
             // Unapprove -> ReviewDismissed (not CHANGES_REQUESTED — unapproval is a distinct action)
-            handler.handleEvent(loadPayload("merge_request.unapproved"));
+            receive(loadPayload("merge_request.unapproved"));
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewDismissed.class))
                     .hasSize(1);
         }
@@ -611,7 +957,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         void shouldCreateAuthorWithCorrectFields() throws Exception {
             assertThat(userRepository.count()).isZero();
 
-            handler.handleEvent(loadPayload("merge_request.open"));
+            receive(loadPayload("merge_request.open"));
 
             transactionTemplate.executeWithoutResult(status -> {
                 var author = userRepository
@@ -639,7 +985,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
          */
         @Test
         void tombstonedMergeRequestHoldsItsOccasionUntilAFurtherDeliveryRestoresIt() throws Exception {
-            handler.handleEvent(loadPayload("merge_request.open"));
+            receive(loadPayload("merge_request.open"));
             ScmDomainEvent.PullRequestCreated created = eventListener
                     .ofType(ScmDomainEvent.PullRequestCreated.class)
                     .getFirst();
@@ -664,7 +1010,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(held.getStateReason()).isEqualTo(SignalStateReason.ARTIFACT_NOT_VISIBLE);
             verifyNoInteractions(jobs, gate);
 
-            handler.handleEvent(loadPayload("merge_request.reopen"));
+            receive(loadPayload("merge_request.reopen"));
             assertThat(pullRequestRepository
                             .findById(pullRequestId)
                             .orElseThrow()
@@ -694,6 +1040,11 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
     }
 
     // Helpers
+
+    /** Handles {@code event} as a delivery that reached the stream now. */
+    private void receive(GitLabMergeRequestEventDTO event) {
+        handler.handle(event, Instant.now());
+    }
 
     private GitLabMergeRequestEventDTO loadPayload(String filename) throws IOException {
         ClassPathResource resource = new ClassPathResource("gitlab/" + filename + ".json");

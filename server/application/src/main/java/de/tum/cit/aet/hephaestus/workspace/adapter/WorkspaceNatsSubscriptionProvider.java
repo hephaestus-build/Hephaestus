@@ -129,7 +129,7 @@ public class WorkspaceNatsSubscriptionProvider implements NatsSubscriptionProvid
             return;
         }
         connectionService
-                .findSlackNotificationConfig(workspace.getId())
+                .findSlackConfig(workspace.getId())
                 .map(ConnectionConfig.SlackConfig::teamId)
                 .filter(teamId -> teamId != null && !teamId.isBlank())
                 .ifPresent(teamId -> out.add(

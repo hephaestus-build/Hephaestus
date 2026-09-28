@@ -355,6 +355,56 @@ export const DismissedLevelDoesNotComeBack: Story = {
 	},
 };
 
+/**
+ * A caller may swap the level in front while it is closing — a queue whose decision lands after the
+ * reader pressed Escape. The level swapped in is a level of its own and opens, rather than mounting
+ * into a close it never took part in, where it stayed shut and the close never finished.
+ */
+export const LevelSwappedInWhileClosingOpens: Story = {
+	parameters: { chromatic: { disableSnapshot: true } },
+	render: (args) => (
+		<Stateful initial={args.stack}>
+			{(stack, setStack) => (
+				<DetailDrawerStack
+					{...args}
+					stack={stack}
+					onClose={(depth) => {
+						args.onClose(depth);
+						setStack(stack.slice(0, depth));
+					}}
+				>
+					{(entry, level) => (
+						<>
+							<DetailDrawerHeader nested={level.nested}>
+								<DrawerTitle>{`${entry.kind} · ${entry.id}`}</DrawerTitle>
+							</DetailDrawerHeader>
+							<DrawerFooter>
+								{/* Answered later, as a request is: after the Escape below, inside the exit. */}
+								<Button
+									onClick={() => {
+										setTimeout(() => setStack([{ kind: entry.kind, id: "review-ready-work" }]), 80);
+									}}
+								>
+									Decide
+								</Button>
+							</DrawerFooter>
+						</>
+					)}
+				</DetailDrawerStack>
+			)}
+		</Stateful>
+	),
+	play: async ({ args }) => {
+		await expectSettledVisible(await screen.findByText("practice · describe-what-and-why"));
+		await userEvent.click(screen.getByRole("button", { name: "Decide" }));
+		await userEvent.keyboard("{Escape}");
+
+		await expectSettledVisible(await screen.findByText("practice · review-ready-work"));
+		await expect(popups()).toHaveLength(1);
+		await expect(args.onClose).not.toHaveBeenCalled();
+	},
+};
+
 /** A press at a point of the page, on whatever is drawn there. */
 async function pressAt(clientX: number, clientY: number) {
 	const target = document.elementFromPoint(clientX, clientY);

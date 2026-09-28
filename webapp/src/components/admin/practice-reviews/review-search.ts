@@ -5,8 +5,13 @@ import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-def
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { FILTERABLE_PLACES } from "@/components/practice-vocabulary/delivery-place-defs";
+import { OBSERVATION_ORIGIN_DEFS } from "@/components/practice-vocabulary/observation-origin-defs";
+import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
-import { REVIEW_STATUS_DEFS } from "@/components/practice-vocabulary/review-status-defs";
+import {
+	RESULT_PROCESSING_DEFS,
+	REVIEW_STATUS_DEFS,
+} from "@/components/practice-vocabulary/review-status-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import {
 	reasonsInFamilies,
@@ -24,17 +29,42 @@ import { hasText } from "@/lib/text";
 export const REVIEW_PAGE_SIZE = 25;
 
 /**
+ * How many of each a section shows before it links to the full list. Exported because the caller's
+ * query has to request this many and the skeleton has to draw this many.
+ */
+export const REVIEW_PREVIEW_SIZE = 5;
+
+/**
  * How often a queued or running review is re-asked for, on every screen that watches one. Applied
  * through TanStack Query's `refetchInterval`, which stops on its own at a terminal status.
  */
 export const ACTIVE_REVIEW_POLL_MS = 5000;
 
 /**
- * Ordering names the server understands. `ACTIONABILITY` puts shortfalls first, worst severity down
- * to informational, then strengths, then the observations that judged nothing.
+ * Every admin read of what reviews produced, which a change to one review, observation or piece of
+ * feedback can move: its row in any list, and every count.
+ */
+export const PRACTICE_REVIEW_READS: ReadonlySet<string> = new Set([
+	"getPracticeReviewOverview",
+	"listPracticeReviews",
+	"listPracticeReviewObservations",
+	"getPracticeReviewObservation",
+	"listPracticeReviewFeedback",
+	"getPracticeReviewFeedback",
+]);
+
+/**
+ * Ordering names the server understands. `ACTIONABILITY` puts negative outcomes first, worst
+ * severity down to informational, then positive outcomes, then the observations that judged nothing.
  */
 export const OBSERVATION_SORTS = ["NEWEST", "ACTIONABILITY"] as const;
+
 export type ObservationSort = (typeof OBSERVATION_SORTS)[number];
+
+/** Ordering names the server understands for feedback: when it was composed, either way round. */
+export const FEEDBACK_SORTS = ["NEWEST", "OLDEST"] as const;
+
+export type FeedbackSort = (typeof FEEDBACK_SORTS)[number];
 
 const uuidParam = z.uuid().optional().catch(undefined);
 const positiveId = z.coerce.number().int().positive().optional().catch(undefined);
@@ -77,6 +107,12 @@ export const feedbackSearchSchema = z
 		withheldFamily: enumValues(statusValues(WITHHOLDING_FAMILY_DEFS)),
 		channel: enumValues(FILTERABLE_PLACES),
 		recipientUserId: positiveId,
+		practiceSlug: multiValue,
+		// The endpoint's `sort`. The observations list declares `order` too, with other values. A link
+		// without `from` types `previous` in `search={(previous) => …}` as every route's search, where
+		// a param two sibling routes declare with different types holds both, so returning it to either
+		// list stops compiling: a relative link on either list names its `from`.
+		order: z.enum(FEEDBACK_SORTS).optional().catch(undefined),
 	})
 	.transform(canonicalDateRange);
 
@@ -87,14 +123,14 @@ export const observationsSearchSchema = z
 		groupSlug: multiValue,
 		practiceSlug: multiValue,
 		assessmentStatus: enumValues(statusValues(ASSESSMENT_STATUS_DEFS)).optional(),
+		outcome: enumValues(statusValues(OUTCOME_DEFS)),
+		invalidated: z.boolean().optional().catch(undefined),
 		presence: enumValues(statusValues(PRESENCE_DEFS)),
 		assessment: enumValues(statusValues(ASSESSMENT_DEFS)),
 		severity: enumValues(statusValues(SEVERITY_DEFS)),
 		subjectUserId: positiveId,
-		// Spelled `order`, not `sort`, which is what the endpoint calls it: other routes already put a
-		// `sort` in the URL with entirely different values, and TanStack's search params are one
-		// namespace — another meaning of the word makes `search={(previous) => previous}`, the idiom
-		// every link on this screen uses to carry the reader's filters forward, stop compiling.
+		origin: enumValues(statusValues(OBSERVATION_ORIGIN_DEFS)),
+		// The endpoint's `sort`; the feedback list's `order` says what sharing the word costs.
 		order: z.enum(OBSERVATION_SORTS).optional().catch(undefined),
 	})
 	.transform(canonicalDateRange);
@@ -107,7 +143,8 @@ export const observationsSearchSchema = z
 export const runsSearchSchema = z
 	.object({
 		page,
-		status: z.enum(statusValues(REVIEW_STATUS_DEFS)).optional().catch(undefined),
+		status: enumValues(statusValues(REVIEW_STATUS_DEFS)),
+		resultProcessing: enumValues(statusValues(RESULT_PROCESSING_DEFS)),
 		from: day,
 		to: day,
 	})
@@ -157,16 +194,17 @@ function scopeQuery(search: ReviewScopeSearch) {
 	};
 }
 
-export function runsQuery(search: RunsSearch, size: number) {
+export function runsQuery(search: Partial<RunsSearch>, size: number) {
 	return {
 		...dateWindowQuery(search),
 		page: search.page ?? 0,
 		size,
 		status: search.status,
+		resultProcessing: search.resultProcessing,
 	};
 }
 
-export function feedbackQuery(search: FeedbackSearch, size: number) {
+export function feedbackQuery(search: Partial<FeedbackSearch>, size: number) {
 	return {
 		...scopeQuery(search),
 		page: search.page ?? 0,
@@ -178,10 +216,15 @@ export function feedbackQuery(search: FeedbackSearch, size: number) {
 				: undefined,
 		channel: search.channel,
 		recipientUserId: search.recipientUserId,
+		practiceSlug:
+			search.practiceSlug !== undefined && search.practiceSlug.length > 0
+				? search.practiceSlug
+				: undefined,
+		sort: search.order,
 	};
 }
 
-export function observationsQuery(search: ObservationsSearch, size: number) {
+export function observationsQuery(search: Partial<ObservationsSearch>, size: number) {
 	return {
 		...scopeQuery(search),
 		page: search.page ?? 0,
@@ -193,10 +236,13 @@ export function observationsQuery(search: ObservationsSearch, size: number) {
 				? search.practiceSlug
 				: undefined,
 		assessmentStatus: search.assessmentStatus,
+		outcome: search.outcome,
+		invalidated: search.invalidated,
 		presence: search.presence,
 		assessment: search.assessment,
 		severity: search.severity,
 		subjectUserId: search.subjectUserId,
+		origin: search.origin,
 		sort: search.order,
 	};
 }

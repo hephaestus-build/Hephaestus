@@ -1,19 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
-import type { WorkspaceListItem } from "@/api/types.gen";
 import { useAuth } from "@/runtime/auth/AuthContext";
 
-export interface WorkspaceFeatures {
-	practicesEnabled: boolean;
-	mentorEnabled: boolean;
-	leaderboardEnabled: boolean;
-	progressionEnabled: boolean;
-	leaguesEnabled: boolean;
-}
-
 export interface WorkspaceFeaturesResult {
-	features?: WorkspaceFeatures;
+	/** Undefined until the workspace list names this workspace. */
+	practicesEnabled?: boolean;
 	isLoading: boolean;
 	isError: boolean;
 	error: unknown;
@@ -34,22 +26,12 @@ export function useWorkspaceFeatures(workspaceSlug: string | undefined): Workspa
 		Boolean(workspaceSlug) && query.isSuccess && !activeWorkspace && !authLoading;
 
 	return {
-		features: activeWorkspace ? workspaceFeaturesOf(activeWorkspace) : undefined,
+		practicesEnabled: activeWorkspace?.practicesEnabled,
 		isLoading: authLoading || query.isLoading,
 		isError: query.isError || workspaceMissing,
 		error: query.error ?? (workspaceMissing ? new Error("Workspace not found") : undefined),
 		refetch: () => {
 			void query.refetch();
 		},
-	};
-}
-
-function workspaceFeaturesOf(workspace: WorkspaceListItem): WorkspaceFeatures {
-	return {
-		practicesEnabled: workspace.practicesEnabled,
-		mentorEnabled: workspace.mentorEnabled,
-		leaderboardEnabled: workspace.leaderboardEnabled,
-		progressionEnabled: workspace.progressionEnabled,
-		leaguesEnabled: workspace.leaguesEnabled,
 	};
 }

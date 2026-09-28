@@ -9,7 +9,6 @@ import { Chat } from "@/components/mentor/Chat";
 import { Copilot } from "@/components/mentor/Copilot";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useMentorChat } from "@/hooks/use-mentor-chat";
-import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { mentorPreferenceReason } from "@/lib/mentor-preference";
 
 /**
@@ -19,7 +18,6 @@ import { mentorPreferenceReason } from "@/lib/mentor-preference";
 export default function GlobalCopilot() {
 	const { workspaceSlug } = useActiveWorkspaceSlug();
 	const { isAuthenticated, isLoading } = useAuth();
-	const { features, isLoading: featuresLoading } = useWorkspaceFeatures(workspaceSlug);
 	const preference = useQuery({
 		...getMemberOnboardingOptions({ path: { workspaceSlug: workspaceSlug ?? "" } }),
 		enabled: Boolean(workspaceSlug),
@@ -28,8 +26,6 @@ export default function GlobalCopilot() {
 		!hasText(workspaceSlug) ||
 		isLoading ||
 		!isAuthenticated ||
-		featuresLoading ||
-		features?.mentorEnabled !== true ||
 		!preference.isSuccess ||
 		mentorPreferenceReason(preference.data)
 	) {

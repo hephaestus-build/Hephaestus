@@ -1,13 +1,13 @@
 package de.tum.cit.aet.hephaestus.practices.reviewoutput.dto;
 
 import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.FeedbackStateCounts;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
-import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.ObservationFeedbackDisposition;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.OperatorObservationRow;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -63,7 +63,7 @@ public record ReviewObservationDTO(
         @NonNull Instant observedAt,
 
         @NonNull @Schema(description = "Counts of linked feedback by delivery state")
-        ReviewFeedbackDispositionDTO feedbackDisposition) {
+        ReviewFeedbackCountsDTO feedback) {
     @com.fasterxml.jackson.annotation.JsonProperty("outcome")
     @Schema(
             description = "Derived from presence and contextual behavior assessment; null unless assessed",
@@ -74,7 +74,7 @@ public record ReviewObservationDTO(
 
     public static ReviewObservationDTO from(
             OperatorObservationRow row,
-            @Nullable ObservationFeedbackDisposition disposition,
+            @Nullable FeedbackStateCounts feedback,
             ReviewedWorkRefDTO reviewedWork,
             Map<Long, ReviewSubjectDTO> subjects) {
         return new ReviewObservationDTO(
@@ -99,8 +99,6 @@ public record ReviewObservationDTO(
                         row.getSupersededAt()),
                 row.getInvalidatedAt(),
                 row.getObservedAt(),
-                disposition == null
-                        ? ReviewFeedbackDispositionDTO.empty()
-                        : ReviewFeedbackDispositionDTO.from(disposition));
+                ReviewFeedbackCountsDTO.from(feedback));
     }
 }

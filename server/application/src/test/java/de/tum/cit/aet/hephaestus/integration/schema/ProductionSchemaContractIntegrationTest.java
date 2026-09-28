@@ -331,8 +331,8 @@ class ProductionSchemaContractIntegrationTest {
                 providerId,
                 "member-" + UUID.randomUUID());
         jdbcTemplate.update(
-                "INSERT INTO workspace_membership (workspace_id, user_id, role, league_points, hidden, created_at) "
-                        + "VALUES (?, ?, 'MEMBER', 0, false, now())",
+                "INSERT INTO workspace_membership (workspace_id, user_id, role, hidden, created_at) "
+                        + "VALUES (?, ?, 'MEMBER', false, now())",
                 ownerWorkspace,
                 userId);
 

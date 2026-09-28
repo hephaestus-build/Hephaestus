@@ -35,7 +35,7 @@ export function ReviewPage({ section, onSectionChange, running, sections }: Revi
 
 	return (
 		<PageLayout>
-			<PageHeader icon={<ScanEye />} title="Review" description={active?.description} />
+			<PageHeader icon={<ScanEye />} title="Review settings" description={active?.description} />
 			{running && <ReviewRunningBanner running={running} />}
 			<Tabs
 				value={section}

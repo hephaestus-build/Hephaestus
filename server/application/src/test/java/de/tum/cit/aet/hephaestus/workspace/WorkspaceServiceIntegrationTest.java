@@ -4,24 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener.AccountKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
 import java.util.Objects;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.server.ResponseStatusException;
 
 class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
@@ -120,62 +114,6 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .findByWorkspace_IdAndUser_Id(workspace.getId(), owner.getId())
                 .orElseThrow();
         assertThat(membership.getRole()).isEqualTo(WorkspaceMembership.WorkspaceRole.OWNER);
-    }
-
-    @Test
-    void updateNotificationsPersistsStateAndValidatesChannel() {
-        User owner = persistUser("notification-owner");
-        Workspace workspace =
-                createWorkspace("notification-space", "Notification Space", "notification", AccountType.ORG, owner);
-
-        // team + channelId live on the Slack Connection's config now,
-        // so updateNotifications requires an ACTIVE Slack Connection to exist.
-        // Seed one ourselves — the OAuth callback path normally provisions it; here we
-        // shortcut for the test.
-        persistSlackConnection(workspace);
-
-        workspaceService.updateNotifications(workspace.getWorkspaceSlug(), true, "core-team", "C12345678");
-
-        Workspace updated = workspaceRepository.findById(workspace.getId()).orElseThrow();
-        assertThat(updated.getLeaderboardNotificationEnabled()).isTrue();
-
-        // team + channel are read back from the Slack Connection config.
-        var slack =
-                connectionService.findSlackNotificationConfig(workspace.getId()).orElseThrow();
-        assertThat(slack.teamLabel()).isEqualTo("core-team");
-        assertThat(slack.notificationChannelId()).isEqualTo("C12345678");
-
-        assertThatThrownBy(
-                        () -> workspaceService.updateNotifications(workspace.getWorkspaceSlug(), true, null, "invalid"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Slack channel ID");
-    }
-
-    @Test
-    void updateNotificationsWithoutSlackConnectionRejectsChannelChange() {
-        User owner = persistUser("no-slack-owner");
-        Workspace workspace = createWorkspace("no-slack", "No Slack", "no-slack", AccountType.ORG, owner);
-
-        // No Slack Connection seeded — supplying channelId must 409, not silently no-op.
-        assertThatThrownBy(() ->
-                        workspaceService.updateNotifications(workspace.getWorkspaceSlug(), null, null, "C12345678"))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("No active Slack Connection");
-
-        // But toggling enabled-only without a Slack Connection is fine — independent meaning.
-        workspaceService.updateNotifications(workspace.getWorkspaceSlug(), true, null, null);
-        Workspace updated = workspaceRepository.findById(workspace.getId()).orElseThrow();
-        assertThat(updated.getLeaderboardNotificationEnabled()).isTrue();
-    }
-
-    private void persistSlackConnection(Workspace workspace) {
-        Connection conn = new Connection(
-                workspace,
-                IntegrationKind.SLACK,
-                "test-team-id",
-                new ConnectionConfig.SlackConfig("test-team-id", "Test Team", null, null, null, Set.of()));
-        ReflectionTestUtils.setField(conn, "state", IntegrationState.ACTIVE);
-        connectionRepository.save(conn);
     }
 
     @Autowired

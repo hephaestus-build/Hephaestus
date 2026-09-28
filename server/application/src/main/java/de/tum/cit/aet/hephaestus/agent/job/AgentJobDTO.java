@@ -52,10 +52,7 @@ public record AgentJobDTO(
         @Schema(description = "Human-readable error message") @Nullable
         String errorMessage,
 
-        @Schema(
-                description =
-                        "Result-processing status: null = not applicable, PENDING = awaiting processing, DELIVERED = processing finished, FAILED = processing error. Processing may include delivery; this status alone does not establish feedback publication.")
-        @Nullable
+        @Schema(description = DeliveryStatus.DESCRIPTION) @Nullable
         DeliveryStatus deliveryStatus,
 
         @Schema(description = "Git provider comment/note ID for posted feedback") @Nullable

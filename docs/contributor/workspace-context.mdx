@@ -49,6 +49,9 @@ Elevation does not grant OWNER; an explicit OWNER membership still permits owner
 It does not make them a member either: what a workspace offers its own members, such as Heph, is
 declared with `@PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")`, which a user view
 still satisfies as the viewed member.
+`@PreAuthorize("@workspaceSecure.isMember()")` admits any effective role, elevation included, but never
+a public read: the Activity endpoints use it, so a publicly viewable workspace does not open them to
+non-members.
 The privilege and audit policy lives in [Instance administration](./instance-admin.md#who-is-an-instance-admin).
 
 Check roles via the context:

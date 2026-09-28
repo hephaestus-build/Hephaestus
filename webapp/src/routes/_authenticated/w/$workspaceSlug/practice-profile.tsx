@@ -82,7 +82,7 @@ function PracticeProfile() {
 	const feedback = useInAppFeedback({
 		workspaceSlug,
 		groups,
-		enabled: featureState.features?.practicesEnabled === true,
+		enabled: featureState.practicesEnabled === true,
 	});
 	const detail = usePracticeGroupDetail({
 		workspaceSlug,
@@ -103,7 +103,7 @@ function PracticeProfile() {
 
 	// Only a definite "off" redirects: the surface exists only where practices review the work, and
 	// sending someone away before the answer arrives would bounce them out of a workspace that does.
-	if (featureState.features?.practicesEnabled === false) {
+	if (featureState.practicesEnabled === false) {
 		return <Navigate to="/w/$workspaceSlug" params={{ workspaceSlug }} replace />;
 	}
 

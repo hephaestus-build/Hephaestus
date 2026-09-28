@@ -35,7 +35,6 @@ import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 export type SidebarContext = "main" | "mentor" | "admin";
 
 export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-	username: string;
 	isAdmin: boolean;
 	isOwner?: boolean;
 	isAppAdmin: boolean;
@@ -43,6 +42,8 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	isMember: boolean;
 	readOnly?: boolean;
 	integrationKinds: readonly IntegrationCatalogEntry["kind"][];
+	/** Feedback awaiting approval in the active workspace, for an admin; undefined while unknown. */
+	awaitingApproval?: number;
 	context: SidebarContext;
 	workspaces: WorkspaceListItem[];
 	activeWorkspace?: WorkspaceListItem;
@@ -55,13 +56,13 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 }
 
 export function AppSidebar({
-	username,
 	isAdmin,
 	isOwner = false,
 	isAppAdmin,
 	isMember,
 	readOnly = false,
 	integrationKinds,
+	awaitingApproval,
 	context,
 	workspaces,
 	activeWorkspace,
@@ -139,19 +140,16 @@ export function AppSidebar({
 		sidebarContent = (
 			<>
 				<NavDashboards
-					username={username}
 					workspaceSlug={activeWorkspace.workspaceSlug}
-					leaderboardEnabled={activeWorkspace.leaderboardEnabled}
 					practicesEnabled={activeWorkspace.practicesEnabled}
 				/>
-				{isMember && activeWorkspace.mentorEnabled && (
-					<NavMentor workspaceSlug={activeWorkspace.workspaceSlug} />
-				)}
+				{isMember && <NavMentor workspaceSlug={activeWorkspace.workspaceSlug} />}
 				{isAdmin && (
 					<NavAdmin
 						isOwner={isOwner}
 						workspaceSlug={activeWorkspace.workspaceSlug}
 						integrationKinds={integrationKinds}
+						awaitingApproval={awaitingApproval}
 						scmProviderType={activeWorkspace.providerType === "GITLAB" ? "GITLAB" : "GITHUB"}
 					/>
 				)}

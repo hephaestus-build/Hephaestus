@@ -6,13 +6,17 @@ import type { StatusDef } from "@/components/common/status-def";
 
 export type ProviderCopy = ObservationInvalidation["providerCopy"];
 
-/** The mark on an observation a workspace admin found wrong when it was made. */
-export const MARKED_INCORRECT_DEF: StatusDef = {
+/**
+ * The mark on an observation a workspace admin found wrong when it was made. `note` is what a count
+ * of marked observations does and does not say, for every surface that shows one.
+ */
+export const MARKED_INCORRECT_DEF: StatusDef & { note: string } = {
 	label: "Marked incorrect",
 	icon: CircleSlashIcon,
 	badgeVariant: "destructive",
 	description:
 		"A workspace admin marked this observation as incorrect. It counts toward nothing current.",
+	note: "Only observations an admin found wrong are marked; an unmarked one is not confirmed correct.",
 };
 
 /** What became of the comments already on the work while a correction is in force. */

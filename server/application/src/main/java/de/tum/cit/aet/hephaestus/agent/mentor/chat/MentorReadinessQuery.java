@@ -2,10 +2,12 @@ package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 
 import org.springframework.modulith.NamedInterface;
 
-/** Evaluates workspace mentor admission and operational readiness. Implementations fail closed. */
+/**
+ * Whether Heph can answer in a workspace: the workspace is active and one of its enabled Heph model
+ * bindings resolves to an available model. Admins turn Heph on and off through those bindings.
+ * Implementations fail closed.
+ */
 @NamedInterface(name = "mentor-chat")
 public interface MentorReadinessQuery {
-    boolean isEnabled(long workspaceId);
-
     boolean isReady(long workspaceId);
 }

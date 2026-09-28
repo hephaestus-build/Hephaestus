@@ -11,9 +11,7 @@ const meta = {
 	},
 	tags: ["autodocs"],
 	args: {
-		username: "johnDoe",
 		workspaceSlug: "aet",
-		leaderboardEnabled: true,
 		practicesEnabled: true,
 	},
 	decorators: [withSidebarFrame],
@@ -22,36 +20,27 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
-
-export const DifferentUser: Story = {
-	args: {
-		username: "janeDoe",
-		workspaceSlug: "aet",
-	},
-};
-
-export const AllFeaturesDisabled: Story = {
-	args: {
-		leaderboardEnabled: false,
-		practicesEnabled: false,
-	},
+export const Default: Story = {
 	play: async ({ canvas }) => {
-		// Profile and Teams are not workspace capabilities, so they stay whatever else is off.
-		await expect(await canvas.findByRole("link", { name: "Profile" })).toBeVisible();
-		await expect(canvas.getByRole("link", { name: "Teams" })).toBeVisible();
-		for (const gated of ["Leaderboard", "Review activity"]) {
-			await expect(canvas.queryByRole("link", { name: gated })).toBeNull();
-		}
+		// The Practice profile is the workspace home, so it leads; Activity follows it.
+		const links = canvas.getAllByRole("link").map((link) => link.textContent);
+		await expect(links).toEqual([
+			"Practice profile",
+			"Activity",
+			"Workspace activity",
+			"Review activity",
+			"Teams",
+		]);
 	},
 };
 
 export const PracticeReviewsOff: Story = {
 	args: { practicesEnabled: false },
 	play: async ({ canvas }) => {
-		// A workspace that does not review practices has no review activity to show, so the entry is
-		// gone rather than leading to a page that could only explain itself.
-		await expect(await canvas.findByRole("link", { name: "Leaderboard" })).toBeVisible();
-		await expect(canvas.queryByRole("link", { name: "Review activity" })).toBeNull();
+		// Activity is always on, and leads — it is the home of a workspace that does not review
+		// practices. The practice pages are gone rather than leading to a page that could only explain
+		// itself.
+		const links = canvas.getAllByRole("link").map((link) => link.textContent);
+		await expect(links).toEqual(["Activity", "Workspace activity", "Teams"]);
 	},
 };

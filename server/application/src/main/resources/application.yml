@@ -464,18 +464,6 @@ hephaestus:
         from-name: ${HEPHAESTUS_EMAIL_FROM_NAME:Hephaestus}
         reply-to: ${HEPHAESTUS_EMAIL_REPLY_TO:}
 
-    leaderboard:
-        schedule:
-            day: 2
-            time: "9:00"
-        notification:
-            # Global on/off for the weekly Slack post; per-workspace channel + team filter
-            # live on the Slack Connection's SlackConfig (set via the connection admin API).
-            enabled: false
-        # PR authors whose assignee-reviewers don't earn points (e.g., AI bots)
-        self-review-author-logins:
-            - Copilot
-
     # PAT-mode bootstrap for local dev. init-default only gates PAT workspace creation;
     # GitHub App installations are always processed regardless. Mode docs + cross-field
     # validation live on WorkspaceProperties (IDE-surfaced via spring-configuration-processor).
@@ -505,9 +493,6 @@ hephaestus:
         contributors:
             # Eviction rate in milliseconds (1 hour)
             evict-rate: 3600000
-        leaderboard-xp:
-            # Eviction rate in milliseconds (60 seconds - leaderboard data is moderately hot)
-            evict-rate: 60000
 
     # ═══════════════════════════════════════════════════════════════════════════
     # FEATURE FLAGS (operational / development toggles)
@@ -593,7 +578,7 @@ hephaestus:
             pids-limit: ${SANDBOX_PIDS_LIMIT:256}
 
     # Mentor sandbox resource knobs (idleTtlSeconds, maxFrameChars, queue capacities, …) bind
-    # to hephaestus.mentor.* via InteractiveSandboxProperties. Per-workspace enable is in DB.
+    # to hephaestus.mentor.* via InteractiveSandboxProperties. Per-workspace readiness is the Heph model binding.
 
     # Dev-only actuator for manually triggering PR reviews (never enable in production).
     # Layered safety: (1) this flag, (2) not in endpoint exposure list, (3) Spring Security auth.

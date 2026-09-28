@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.RepositoryItemCountProjection;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -20,8 +19,6 @@ import org.springframework.stereotype.Repository;
  * {@code pull_request_id -> pull_request.repository_id -> repository.workspace_id}.
  * Provider-domain lookups (by native ID + provider ID, by pull-request ID) run during
  * sync flows; workspace context is established by the caller.
- *
- * @see de.tum.cit.aet.hephaestus.leaderboard.LeaderboardReviewQueryRepository
  */
 @Repository
 @WorkspaceAgnostic("Reviews scoped through pull_request_id -> repository.workspace_id")
@@ -81,56 +78,14 @@ public interface PullRequestReviewRepository extends JpaRepository<PullRequestRe
             @Param("excludedStates") Collection<PullRequestReview.State> excludedStates,
             Pageable pageable);
 
-    /**
-     * Batch fetch reviews by IDs with all related entities eagerly loaded.
-     *
-     * <p>Used by the profile module to hydrate ActivityEvent target entities.
-     * Fetches author, pullRequest, repository, and comments in one query to avoid N+1.
-     *
-     * @param ids the review IDs to fetch
-     * @return reviews with related entities eagerly loaded
-     */
+    /** Reviews by id, each with its pull request, that pull request's author and its repository. */
     @Query("""
         SELECT prr
         FROM PullRequestReview prr
-        LEFT JOIN FETCH prr.author
         LEFT JOIN FETCH prr.pullRequest pr
+        LEFT JOIN FETCH pr.author
         LEFT JOIN FETCH pr.repository
-        LEFT JOIN FETCH prr.comments
         WHERE prr.id IN :ids
         """)
     List<PullRequestReview> findAllByIdWithRelations(@Param("ids") Collection<Long> ids);
-
-    /**
-     * Find all reviews by a specific author within a time range, scoped to a workspace.
-     *
-     * <p>Used by the profile module to show all review activity directly from the source,
-     * independent of ActivityEvent records.
-     *
-     * @param authorLogin the login of the review author
-     * @param after start of time range (inclusive)
-     * @param before end of time range (exclusive)
-     * @param workspaceId the workspace to scope the query to
-     * @return reviews with related entities eagerly loaded, ordered by submittedAt descending
-     */
-    @Query("""
-        SELECT prr
-        FROM PullRequestReview prr
-        LEFT JOIN FETCH prr.author
-        LEFT JOIN FETCH prr.pullRequest pr
-        LEFT JOIN FETCH pr.repository repo
-        LEFT JOIN FETCH prr.comments
-        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = repo.nameWithOwner
-        WHERE prr.author.login = :authorLogin
-            AND prr.submittedAt >= :after
-            AND prr.submittedAt < :before
-            AND prr.author.type = 'USER'
-            AND rtm.workspace.id = :workspaceId
-        ORDER BY prr.submittedAt DESC
-        """)
-    List<PullRequestReview> findAllByAuthorLoginInTimeframe(
-            @Param("authorLogin") String authorLogin,
-            @Param("after") Instant after,
-            @Param("before") Instant before,
-            @Param("workspaceId") Long workspaceId);
 }

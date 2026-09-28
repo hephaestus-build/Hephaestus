@@ -7,6 +7,7 @@ import {
 	feedbackDetail,
 	observationDetail,
 	practiceGroups,
+	practiceReviewOverview,
 	reviewFeedback,
 	reviewJob,
 	reviewObservations,
@@ -86,12 +87,15 @@ function page(rows: unknown[], url: URL) {
 
 function filterObservations(rows: ReviewObservation[], url: URL) {
 	const subjectUserId = single(url, "subjectUserId");
+	const invalidated = single(url, "invalidated");
 	return rows.filter(
 		(row) =>
 			withinScope(url, row) &&
 			withinDates(url, row.observedAt) &&
 			matches(values(url, "groupSlug"), row.group?.slug) &&
 			matches(values(url, "practiceSlug"), row.practiceSlug) &&
+			matches(values(url, "outcome"), row.outcome) &&
+			(invalidated === undefined || invalidated === String(row.invalidatedAt !== undefined)) &&
 			matches(values(url, "assessmentStatus"), row.assessmentStatus) &&
 			matches(values(url, "presence"), row.presence) &&
 			matches(values(url, "assessment"), row.assessment) &&
@@ -121,13 +125,17 @@ function filterFeedback(rows: ReviewFeedback[], url: URL) {
 const ACTIONABILITY_RANK: Record<string, number> = { CRITICAL: 0, MAJOR: 1, MINOR: 2, INFO: 3 };
 
 function actionability(row: ReviewObservation): number {
-	if (row.assessmentStatus !== "ASSESSED" || !row.presence || !row.assessment) {
-		return 6;
+	switch (row.outcome) {
+		case "NEGATIVE": {
+			return ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4;
+		}
+		case "POSITIVE": {
+			return 5;
+		}
+		case undefined: {
+			return 6;
+		}
 	}
-	if ((row.presence === "PRESENT") !== (row.assessment === "GOOD")) {
-		return ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4;
-	}
-	return 5;
 }
 
 function sortObservations(rows: ReviewObservation[], url: URL) {
@@ -165,6 +173,11 @@ export function reviewHandlers({
 	const observationRows = observations ?? reviewObservations;
 	const feedbackRows = feedback ?? reviewFeedback;
 	return [
+		// One fixed range whatever `from` and `zone` asked for: the overview's counts are the server's
+		// arithmetic, and a story reads them rather than proving them.
+		http.get("*/workspaces/:workspaceSlug/practices/reviews/overview", () =>
+			HttpResponse.json(practiceReviewOverview),
+		),
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/observations", ({ request }) => {
 			const url = new URL(request.url);
 			if (hasText(requireObservationSort) && single(url, "sort") !== requireObservationSort) {
@@ -179,20 +192,25 @@ export function reviewHandlers({
 			"*/workspaces/:workspaceSlug/practices/reviews/observations/:observationId",
 			({ params }) => HttpResponse.json(observationDetail(String(params.observationId))),
 		),
-		http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback", ({ request }) =>
-			page(filterFeedback(feedbackRows, new URL(request.url)), new URL(request.url)),
-		),
+		http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback", ({ request }) => {
+			const url = new URL(request.url);
+			const rows = filterFeedback(feedbackRows, url);
+			// The fixture is newest first, as the endpoint's default order is.
+			return page(single(url, "sort") === "OLDEST" ? [...rows].reverse() : rows, url);
+		}),
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback/:feedbackId", ({ params }) =>
 			HttpResponse.json(feedbackDetail(String(params.feedbackId))),
 		),
 		http.get("*/workspaces/:workspaceSlug/practices/reviews", ({ request }) => {
 			const url = new URL(request.url);
-			const status = single(url, "status");
 			return page(
-				// Both filters, intersected, exactly as the endpoint applies them. Honouring only
+				// Every filter, intersected, exactly as the endpoint applies them. Honouring only
 				// `status` here would let a story "prove" a date range that the screen never sent.
 				reviewRuns.filter(
-					(run) => (!hasText(status) || run.status === status) && withinDates(url, run.createdAt),
+					(run) =>
+						matches(values(url, "status"), run.status) &&
+						matches(values(url, "resultProcessing"), run.resultProcessing) &&
+						withinDates(url, run.createdAt),
 				),
 				url,
 			);

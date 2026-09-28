@@ -58,7 +58,7 @@ class PracticeGroupServiceTest extends BaseUnitTest {
     private Workspace workspace;
 
     private static final WorkspaceContext CTX =
-            new WorkspaceContext(1L, "acme", "Acme", AccountType.ORG, null, false, false, Set.of());
+            new WorkspaceContext(1L, "acme", "Acme", AccountType.ORG, null, false, Set.of());
 
     @BeforeEach
     void mockWorkspaceLock() {

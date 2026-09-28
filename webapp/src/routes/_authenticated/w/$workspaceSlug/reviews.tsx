@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/reviews")
 function ReviewActivityLayout() {
 	const { workspaceSlug } = Route.useParams();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
-	const practicesEnabled = featureState.features?.practicesEnabled;
+	const { practicesEnabled } = featureState;
 
 	if (featureState.isError) {
 		return (

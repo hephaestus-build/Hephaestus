@@ -316,11 +316,13 @@ The practice surfaces — the Practice profile, the levels over it and the feedb
 ground. **30, structure**: `border` and `text-muted-foreground` carry the lines, pills, rails and
 secondary text. **10, the accent**: `mentor` marks only what the eye should land on — at most one
 `variant="mentor"` button per surface, what is new, the current selection or sort — and a link on
-hover or focus; a link is plain text at rest. Status colours (`success`, `warning`, `destructive`)
-are semantic, not accent: they reach a surface only through the registries — their badges and
-icons, and the rings, meters and pressed responses drawn from them — never as coloured prose. A
-card wears a wash in exactly two states: new, in the accent, and resolved, in `success` — the one
-status colour that paints a surface.
+hover or focus; a link is plain text at rest, except a count that opens its list, which is
+`InlineLink tone="count"`: a faint `decoration-border` underline at rest, so a row of figures shows
+which ones open. Status colours (`success`, `warning`, `destructive`) are semantic, not accent: they
+reach a surface only through the registries — their badges and icons, and the rings, meters and
+pressed responses drawn from them — never as coloured prose. A card wears a wash in exactly two
+states: new, in the accent, and resolved, in `success` — the one status colour that paints a
+surface.
 
 ## Testing
 
@@ -431,8 +433,11 @@ Related trap: `useBlocker`'s `shouldBlockFn` sees `routeId`/`pathname`/`search`,
 navigation on one surface shares a route. A guard written as `() => isDirty` will block navigations
 that do **not** unmount the form, so "Discard changes" discards nothing.
 
-Paths that predate a level are kept as `beforeLoad` redirects into the stack — they were linked and
-bookmarked. `admin/practices/new.tsx` is the shortest example.
+A page that becomes a level is deleted, not redirected: before 1.0 an address only the app links to
+is not a contract, and a redirect kept for a bookmark is a route nobody can remove later. An address
+people share outside the app — a member's profile — keeps a `beforeLoad` redirect into the stack.
+Links in the app open a level with `DetailStackLink`, or with `detailSearch(entry)` from another
+route.
 
 ## Loading and errors
 

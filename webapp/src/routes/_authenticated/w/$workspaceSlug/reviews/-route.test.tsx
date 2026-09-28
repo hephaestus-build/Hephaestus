@@ -46,7 +46,10 @@ describe("review activity routes", () => {
 
 		// With practices off the surface does not exist here, so the reader ends up on the workspace
 		// home rather than on a page whose only content could be an explanation of its own emptiness.
-		await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme"), ROUTE_RENDER_WAIT);
+		await waitFor(
+			() => expect(router.state.location.pathname).toBe("/w/acme/activity"),
+			ROUTE_RENDER_WAIT,
+		);
 	});
 
 	it("lists recorded work for a member", async () => {

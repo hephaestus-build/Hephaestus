@@ -6,7 +6,7 @@
 
 This site is built with [Docusaurus 3](https://docusaurus.io/); `docusaurus.config.ts` is its configuration. The content is split into three guides:
 
-- **User Guide** (`user/`) – End-user workflows (mentor sessions, leaderboard, workspace management)
+- **User Guide** (`user/`) – End-user workflows (practice feedback, activity, Heph, workspace management)
 - **Contributor Guide** (`contributor/`) – Engineering guides, the generated ERD, and local development setup
 - **Admin Guide** (`admin/`) – Install, integrations, and production operations
 

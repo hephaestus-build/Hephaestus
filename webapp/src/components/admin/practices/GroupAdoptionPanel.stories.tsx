@@ -2,16 +2,15 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { CatalogGroupAdoptionPreview } from "@/api/types.gen";
-import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPullRequestBinding,
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
+import { InLevelStack } from "@/stories/level-stack";
 import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
 import { expectNoPanelOverflow } from "@/stories/reflow";
-import { Stateful } from "@/stories/stateful";
 import { expectGenuinelyDisabled } from "@/test/controls";
 
 import { GroupAdoptionPanel } from "./GroupAdoptionPanel";
@@ -78,19 +77,17 @@ const meta = {
 		state: ready(),
 		onConfirm: fn(),
 		onOpenPractice: fn(),
+		path: { behind: [{ label: "Practice setup", depth: 0 }], onClose: fn() },
 	},
 	argTypes: {
 		// A discriminated union renders as a free-text box, which cannot produce a valid value.
 		state: { control: false },
+		path: { control: false },
 	},
 	render: (args) => (
-		<Stateful initial={[{ kind: "group", id: preview.slug }]}>
-			{(stack, setStack) => (
-				<DetailDrawerStack stack={stack} onClose={(depth) => setStack(stack.slice(0, depth))}>
-					{(_entry, level) => <GroupAdoptionPanel {...args} nested={level.nested} />}
-				</DetailDrawerStack>
-			)}
-		</Stateful>
+		<InLevelStack entry={{ kind: "catalog-group", id: preview.slug }} path={args.path}>
+			{(level) => <GroupAdoptionPanel {...args} {...level} />}
+		</InLevelStack>
 	),
 	tags: ["autodocs"],
 } satisfies Meta<typeof GroupAdoptionPanel>;
@@ -146,7 +143,10 @@ export const Loading: Story = {
 	play: async () => {
 		const panel = await settledDrawerPanel();
 		await expect(panel.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
-		await expect(screen.getByRole("heading", { name: "Practice group" })).toBeVisible();
+		// The drawer is named by what is loading while its title's shape stands in.
+		await expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+			"Loading catalog group",
+		);
 	},
 };
 

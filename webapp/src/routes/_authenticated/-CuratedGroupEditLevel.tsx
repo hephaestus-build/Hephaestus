@@ -15,6 +15,7 @@ import { CuratedFormLevel } from "@/components/admin/curated-catalog/CuratedForm
 import { CuratedGroupForm } from "@/components/admin/curated-catalog/CuratedGroupForm";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { DrawerBody } from "@/components/ui/drawer";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
@@ -22,10 +23,17 @@ import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 export interface CuratedGroupEditLevelProps {
 	groupSlug: string;
 	nested?: boolean;
+	/** Where the level sits, from the host's `levelPathAt`. */
+	path: LevelPath;
 	onDone: () => void;
 }
 
-export function CuratedGroupEditLevel({ groupSlug, nested, onDone }: CuratedGroupEditLevelProps) {
+export function CuratedGroupEditLevel({
+	groupSlug,
+	nested,
+	path,
+	onDone,
+}: CuratedGroupEditLevelProps) {
 	const groupQuery = useQuery({ ...adminGetCuratedGroupOptions({ path: { slug: groupSlug } }) });
 
 	let body: ReactNode;
@@ -59,7 +67,7 @@ export function CuratedGroupEditLevel({ groupSlug, nested, onDone }: CuratedGrou
 	}
 
 	return (
-		<CuratedFormLevel kind="group-edit" nested={nested}>
+		<CuratedFormLevel kind="group-edit" nested={nested} path={path}>
 			{body}
 		</CuratedFormLevel>
 	);

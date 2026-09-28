@@ -205,8 +205,6 @@ describe("Slack credential recovery", () => {
 					...workspace,
 					hasSlackToken: true,
 					slackConnectionId: 7,
-					leaderboardNotificationChannelId: "C0974LJBPBK",
-					leaderboardNotificationEnabled: true,
 				}),
 			),
 			http.get("*/workspaces/:workspaceSlug/connections/catalog", () =>
@@ -230,30 +228,17 @@ describe("Slack credential recovery", () => {
 		expect(screen.queryByText(/can post as the app/u)).toBeNull();
 		screen.getByText(/restore the original server key or reconnect slack/iu);
 		expect(
-			screen.getByRole<HTMLButtonElement>("switch", { name: /send weekly digest/iu }).ariaChecked,
-		).toBe("true");
-		screen.getByText(/nothing posts until the stored token/iu);
-		expect(screen.queryByText(/posts on the schedule below/iu)).toBeNull();
-		expect(screen.queryByText(/posted to one slack channel/iu)).toBeNull();
-		expect(screen.queryByText(/the digest posts/iu)).toBeNull();
-		expect(
-			screen.getByRole<HTMLButtonElement>("button", { name: /send test message/iu }).disabled,
-		).toBe(true);
-		expect(
 			screen.getByRole<HTMLButtonElement>("button", { name: /disconnect slack/iu }).disabled,
 		).toBe(false);
 	});
 
-	it("offers test posting again once the bot token reads", async () => {
+	it("shows the bot token as connected again once it reads", async () => {
 		mockSlackConnection();
 		renderRouteAt("/w/acme/admin/integrations/slack");
 
 		await screen.findByText("Connected", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.queryByText("Token unreadable")).toBeNull();
-		screen.getByText(/posts on the schedule below/iu);
-		expect(
-			screen.getByRole<HTMLButtonElement>("button", { name: /send test message/iu }).disabled,
-		).toBe(false);
+		screen.getByText(/can post as the app/iu);
 	});
 });
 

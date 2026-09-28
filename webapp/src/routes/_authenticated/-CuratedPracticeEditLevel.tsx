@@ -25,6 +25,7 @@ import { soleBinding } from "@/components/admin/practice-editor/bindings";
 import { PracticeReleaseReview } from "@/components/admin/practices/PracticeReleaseReview";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { DrawerBody } from "@/components/ui/drawer";
 import { Spinner } from "@/components/ui/spinner";
@@ -33,12 +34,15 @@ import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 export interface CuratedPracticeEditLevelProps {
 	practiceSlug: string;
 	nested?: boolean;
+	/** Where the level sits, from the host's `levelPathAt`. */
+	path: LevelPath;
 	onDone: () => void;
 }
 
 export function CuratedPracticeEditLevel({
 	practiceSlug,
 	nested,
+	path,
 	onDone,
 }: CuratedPracticeEditLevelProps) {
 	const practiceQuery = useQuery({
@@ -82,7 +86,7 @@ export function CuratedPracticeEditLevel({
 	}
 
 	return (
-		<CuratedFormLevel kind="practice-edit" nested={nested}>
+		<CuratedFormLevel kind="practice-edit" nested={nested} path={path}>
 			{body}
 		</CuratedFormLevel>
 	);

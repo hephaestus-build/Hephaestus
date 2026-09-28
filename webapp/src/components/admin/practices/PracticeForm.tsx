@@ -16,6 +16,8 @@ import {
 	type PracticeDefinitionValue,
 } from "@/components/admin/practice-editor/PracticeDefinitionForm";
 import { PracticeAutomatedReviewValidationSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
+import { practiceLevel } from "@/components/admin/practice-reviews/review-levels";
+import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -148,16 +150,17 @@ export function PracticeForm(props: PracticeFormProps) {
 					<div>
 						<h2 className="text-lg font-semibold">What the reviews observed</h2>
 						<p className="text-sm text-muted-foreground">
-							Every observation recorded for this practice across the workspace.
+							How its observations turned out and what feedback cited them, with the observations
+							most worth acting on.
 						</p>
 					</div>
 					<Link
-						to="/w/$workspaceSlug/admin/practices/reviews/observations"
+						to="/w/$workspaceSlug/admin/practices/reviews"
 						params={{ workspaceSlug }}
-						search={{ practiceSlug: [initialData.slug] }}
+						search={detailSearch(practiceLevel(initialData.slug))}
 						className={cn(buttonVariants({ variant: "outline" }), "w-full sm:w-auto")}
 					>
-						View observations
+						See review outcomes
 					</Link>
 				</section>
 			</>

@@ -1,7 +1,6 @@
-import { ExternalLinkIcon } from "lucide-react";
-
 import { cn } from "cn";
 import type { ReviewedWorkRef } from "@/api/types.gen";
+import { InlineLink } from "@/components/common/InlineLink";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import {
 	ARTIFACT_KIND,
@@ -92,23 +91,13 @@ export function ReviewArtifactLink({ reviewedWork, className }: ReviewArtifactPr
 	}
 	const Icon = reviewedWorkIcon(reviewedWork.kind, reviewedWork.provider);
 	return (
-		<a
+		<InlineLink
 			href={reviewedWork.url}
-			target="_blank"
-			rel="noopener noreferrer"
-			className={cn(
-				"group relative inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-sm",
-				className,
-			)}
+			external
+			className={cn("relative inline-flex max-w-full min-w-0 items-center gap-1.5", className)}
 		>
 			<Icon className="size-3.5 shrink-0" aria-hidden />
-			{/* `group-hover`, not `hover`, so the affordance answers the whole link — and it is on the
-			    label alone, so it can never reach a title rendered beside it. */}
-			<span className="min-w-0 break-words group-hover:underline">
-				{qualifiedLabel(reviewedWork)}
-			</span>
-			<ExternalLinkIcon className="size-3 shrink-0 text-muted-foreground" aria-hidden />
-			<span className="sr-only"> (opens in a new tab)</span>
-		</a>
+			<span className="min-w-0 break-words">{qualifiedLabel(reviewedWork)}</span>
+		</InlineLink>
 	);
 }

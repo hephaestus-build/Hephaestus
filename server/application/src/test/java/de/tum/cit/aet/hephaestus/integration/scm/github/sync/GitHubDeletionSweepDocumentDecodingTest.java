@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.sync;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlConfig;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlTestMapper;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestConnection;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -18,7 +18,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
-import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -38,10 +37,9 @@ import tools.jackson.databind.json.JsonMapper;
  * The failure lives in exactly that seam — between the committed document text and the mixin config.
  *
  * <p>The JSON is not hand-maintained: it is derived from the committed document's own node selection
- * set and decoded with {@link GitHubGraphQlConfig#gitHubGraphQlObjectMapper}, the same factory the
- * production WebClient uses. Drop {@code __typename} from either document and the derived JSON loses it
- * too, and these tests go red with the production exception — coupling runs document → JSON → mixins
- * with nothing restated by hand.
+ * set and decoded with the GitHub GraphQL mixins through {@link GitHubGraphQlTestMapper}. Drop
+ * {@code __typename} from either document and the derived JSON loses it too, and these tests go red with
+ * the production exception — coupling runs document → JSON → mixins with nothing restated by hand.
  */
 class GitHubDeletionSweepDocumentDecodingTest extends BaseUnitTest {
 
@@ -64,23 +62,12 @@ class GitHubDeletionSweepDocumentDecodingTest extends BaseUnitTest {
         };
     }
 
-    /**
-     * Mirrors the two {@code spring.jackson.deserialization.*} settings from {@code application.yml}
-     * that the GitHub codecs inherit through the application-wide mapper.
-     */
-    private static JsonMapper productionMapper() {
-        JsonMapper base = JsonMapper.builder()
-                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
-                .build();
-        return GitHubGraphQlConfig.gitHubGraphQlObjectMapper(base);
-    }
-
     @Test
     void shouldDecodePullRequestNumbersDocumentSelectionIntoPullRequestConnection() {
         String json = responseJsonForDocument("GetRepositoryPullRequestNumbers", "PullRequest");
 
-        GHPullRequestConnection connection = productionMapper().readValue(json, GHPullRequestConnection.class);
+        GHPullRequestConnection connection =
+                GitHubGraphQlTestMapper.create().readValue(json, GHPullRequestConnection.class);
 
         assertThat(connection.getNodes()).extracting("number").containsExactly(42);
     }
@@ -89,7 +76,7 @@ class GitHubDeletionSweepDocumentDecodingTest extends BaseUnitTest {
     void shouldDecodeIssueNumbersDocumentSelectionIntoIssueConnection() {
         String json = responseJsonForDocument("GetRepositoryIssueNumbers", "Issue");
 
-        GHIssueConnection connection = productionMapper().readValue(json, GHIssueConnection.class);
+        GHIssueConnection connection = GitHubGraphQlTestMapper.create().readValue(json, GHIssueConnection.class);
 
         assertThat(connection.getNodes()).extracting("number").containsExactly(42);
     }
@@ -101,7 +88,8 @@ class GitHubDeletionSweepDocumentDecodingTest extends BaseUnitTest {
         // decode failure — silently, and while reporting success.
         String json = responseJsonForDocument("GetRepositoryPullRequestNumbers", "PullRequest");
 
-        GHPullRequestConnection connection = productionMapper().readValue(json, GHPullRequestConnection.class);
+        GHPullRequestConnection connection =
+                GitHubGraphQlTestMapper.create().readValue(json, GHPullRequestConnection.class);
 
         assertThat(connection.getTotalCount()).isEqualTo(connection.getNodes().size());
         assertThat(connection.getPageInfo().getHasNextPage()).isFalse();

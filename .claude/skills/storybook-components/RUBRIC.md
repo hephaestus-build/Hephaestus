@@ -34,7 +34,7 @@ Then ask of each hit: *how many of the 2^n combinations does the render actually
 
 The tree carries dozens of `isLoading` props and **that is not dozens of defects** — a list shell whose
 toolbar renders through every branch legitimately takes the triple. Exemplar:
-`webapp/src/components/admin/practice-reviews/ReviewOutputSections.tsx`, whose `ReviewSectionState` is a
+`webapp/src/components/admin/practice-reviews/review-states.ts`, whose `ReviewSectionState` is a
 discriminated union over the states a section can be in rather than parallel flags.
 
 ## Dimension 2 — Composition: was the cheap rung tried before the expensive one?

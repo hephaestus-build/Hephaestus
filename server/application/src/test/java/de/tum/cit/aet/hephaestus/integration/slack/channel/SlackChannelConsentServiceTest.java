@@ -364,8 +364,8 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
     void register_new_landsInPending_created() {
         when(monitoredChannelRepository.findByWorkspaceIdAndSlackChannelId(WS, CHANNEL))
                 .thenReturn(Optional.empty());
-        when(connectionService.findSlackNotificationConfig(WS))
-                .thenReturn(Optional.of(new ConnectionConfig.SlackConfig("T1", null, null, null, null, Set.of())));
+        when(connectionService.findSlackConfig(WS))
+                .thenReturn(Optional.of(new ConnectionConfig.SlackConfig("T1", null, null, Set.of())));
         when(monitoredChannelRepository.save(ArgumentMatchers.any())).thenAnswer(inv -> inv.getArgument(0));
 
         SlackChannelConsentService.RegistrationOutcome outcome = service().register(WS, CHANNEL, "general");
@@ -415,7 +415,7 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
         // absence is a 404.
         when(monitoredChannelRepository.findByWorkspaceIdAndSlackChannelId(WS, CHANNEL))
                 .thenReturn(Optional.empty());
-        when(connectionService.findSlackNotificationConfig(WS)).thenReturn(Optional.empty());
+        when(connectionService.findSlackConfig(WS)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service().register(WS, CHANNEL, "general"))
                 .isInstanceOf(EntityNotFoundException.class);

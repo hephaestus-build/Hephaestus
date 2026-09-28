@@ -185,6 +185,6 @@ class ReviewBackfillServiceTest extends BaseUnitTest {
     }
 
     private WorkspaceContext context() {
-        return new WorkspaceContext(WORKSPACE_ID, "acme", "Acme", null, null, false, false, Set.of());
+        return new WorkspaceContext(WORKSPACE_ID, "acme", "Acme", null, null, false, Set.of());
     }
 }

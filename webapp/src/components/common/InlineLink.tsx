@@ -18,6 +18,8 @@ export interface InlineLinkProps extends Omit<
 	href?: string;
 	/** Another site: the link opens in a new tab, says so, and carries the outbound icon. */
 	external?: boolean;
+	/** `count`: a figure that opens the rows it counts, underlined at rest (§ Practice surfaces palette). */
+	tone?: "default" | "count";
 	onClick?: () => void;
 	children: ReactNode;
 }
@@ -32,6 +34,7 @@ export interface InlineLinkProps extends Omit<
 export function InlineLink({
 	href,
 	external = false,
+	tone = "default",
 	onClick,
 	className,
 	children,
@@ -50,6 +53,11 @@ export function InlineLink({
 			interactive && [
 				"cursor-pointer rounded-sm text-left decoration-1 underline-offset-3 hover:text-mentor hover:underline focus-visible:text-mentor focus-visible:underline",
 				FOCUS_RING,
+			],
+			tone === "count" && [
+				"text-muted-foreground",
+				interactive &&
+					"underline decoration-border underline-offset-4 hover:decoration-current focus-visible:decoration-current",
 			],
 			outbound && "inline-flex items-center gap-0.5",
 			className,

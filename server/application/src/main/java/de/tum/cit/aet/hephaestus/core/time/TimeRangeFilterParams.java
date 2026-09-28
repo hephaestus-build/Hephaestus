@@ -1,0 +1,48 @@
+package de.tum.cit.aet.hephaestus.core.time;
+
+import io.swagger.v3.oas.annotations.Parameter;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import org.jspecify.annotations.Nullable;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.server.ResponseStatusException;
+
+public record TimeRangeFilterParams(
+        @Parameter(description = TimeRangeFilterParams.FROM_DESCRIPTION)
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+        @Nullable
+        Instant from,
+
+        @Parameter(description = TimeRangeFilterParams.TO_DESCRIPTION)
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+        @Nullable
+        Instant to) {
+
+    static final int MAX_DAYS = 400;
+    static final String FROM_DESCRIPTION =
+            "Inclusive lower bound; defaults to seven days before to. A range spans at most " + MAX_DAYS + " days.";
+    static final String TO_DESCRIPTION = "Exclusive upper bound; defaults to now";
+    private static final Duration DEFAULT_WIDTH = Duration.ofDays(7);
+
+    public TimeRangeFilterParams endingAt(Instant end) {
+        return new TimeRangeFilterParams(from, end);
+    }
+
+    /** The range with its defaults filled in; a backwards or too wide range is rejected. */
+    public TimeRange toRange(Clock clock) {
+        Instant end = to != null ? to : clock.instant();
+        Instant start = from != null ? from : end.minus(DEFAULT_WIDTH);
+        if (start.isAfter(end)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must not be after to");
+        }
+        if (Duration.between(start, end).compareTo(Duration.ofDays(MAX_DAYS)) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A range spans at most " + MAX_DAYS + " days");
+        }
+        return new TimeRange(start, end);
+    }
+}

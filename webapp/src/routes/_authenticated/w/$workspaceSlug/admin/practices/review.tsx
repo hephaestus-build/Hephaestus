@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { InfoIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -20,7 +20,6 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type {
 	CreateReviewBackfillRunRequest,
-	ListAgentsResponse,
 	UpdatePracticeReviewSettingsRequest,
 } from "@/api/types.gen";
 import { PracticeAutonomyPage } from "@/components/admin/practices/practice-autonomy/PracticeAutonomyPage";
@@ -40,11 +39,6 @@ import {
 	ReviewSettingsSkeleton,
 } from "@/components/admin/practices/PracticeSkeletons";
 import {
-	availableReviewBinding,
-	type ReviewModelState,
-	type ReviewRunningState,
-} from "@/components/admin/practices/review/review-readiness";
-import {
 	DEFAULT_REVIEW_SECTION,
 	reviewSearchSchema,
 } from "@/components/admin/practices/review/review-sections";
@@ -54,6 +48,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import environment from "@/environment";
 import { usePracticeAutonomyMutations } from "@/hooks/use-practice-autonomy-mutations";
 import { usePracticeReviewSettingsMutation } from "@/hooks/use-practice-review-settings";
+import { reviewModelOf, useReviewRunning } from "@/hooks/use-review-running";
 import { useSweepScheduleMutations } from "@/hooks/use-sweep-schedule-mutations";
 import { useUpdateWorkspaceFeatures } from "@/hooks/use-update-workspace-features";
 import { workspaceAdminHead } from "@/lib/page-title";
@@ -62,24 +57,10 @@ import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/practices/review")({
-	head: workspaceAdminHead("Review"),
+	head: workspaceAdminHead("Review settings"),
 	validateSearch: reviewSearchSchema,
 	component: ReviewRoute,
 });
-
-/** The review model's readiness, read off the workspace's agent bindings. */
-function reviewModelOf(bindingsQuery: UseQueryResult<ListAgentsResponse>): ReviewModelState {
-	if (bindingsQuery.isPending) {
-		return { status: "loading" };
-	}
-	if (bindingsQuery.isError) {
-		return { status: "error" };
-	}
-	return {
-		status: "ready",
-		binding: availableReviewBinding(bindingsQuery.data),
-	};
-}
 
 function ReviewRoute() {
 	const { workspaceSlug } = Route.useParams();
@@ -87,14 +68,7 @@ function ReviewRoute() {
 	const navigate = useNavigate({ from: Route.fullPath });
 	const setSearch = useSearchState();
 
-	const workspaceQuery = useQuery({ ...getWorkspaceOptions({ path: { workspaceSlug } }) });
-	const bindingsQuery = useQuery({ ...listAgentsOptions({ path: { workspaceSlug } }) });
-	const reviewModel = reviewModelOf(bindingsQuery);
-
-	const running: ReviewRunningState | undefined = workspaceQuery.data && {
-		enabled: workspaceQuery.data.practicesEnabled,
-		model: reviewModel,
-	};
+	const running = useReviewRunning(workspaceSlug);
 
 	return (
 		<ReviewPage

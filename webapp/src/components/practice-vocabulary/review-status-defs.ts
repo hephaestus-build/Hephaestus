@@ -58,8 +58,10 @@ export const REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 };
 
 /**
- * Processing the review's results is independent of publishing feedback. The job's wire field is
- * `deliveryStatus`; individual feedback records establish whether anything reached a developer.
+ * Processing a review's results includes delivering its feedback automatically, so a failed
+ * delivery fails processing too; processing that finished still does not establish publication. The
+ * job's wire field is `deliveryStatus`; individual feedback records establish whether anything
+ * reached a developer.
  */
 export const RESULT_PROCESSING_DEFS: StatusDefs<ResultProcessingStatus> = {
 	DELIVERED: {
@@ -78,6 +80,7 @@ export const RESULT_PROCESSING_DEFS: StatusDefs<ResultProcessingStatus> = {
 		label: "Result processing failed",
 		icon: CircleAlertIcon,
 		badgeVariant: "destructive",
-		description: "Processing the review results did not succeed.",
+		description:
+			"Processing the review results, or delivering the feedback they produced, did not succeed.",
 	},
 };

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -21,7 +22,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhook
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.nats.client.Message;
+import io.nats.client.impl.NatsJetStreamMetaData;
 import java.io.IOException;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
@@ -106,6 +109,23 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             verify(mergeRequestProcessor, never()).processMerged(any(), any());
             verify(mergeRequestProcessor, never()).processApproved(any(), any());
             verify(mergeRequestProcessor, never()).processUnapproved(any(), any());
+        }
+
+        @Test
+        void shouldDateTheEventByWhenJetStreamStoredItWhenItArrivesThroughTheStream() throws IOException {
+            GitLabMergeRequestEventDTO event = createEvent("update", "opened", false);
+            setupRepository();
+            ZonedDateTime storedAt = ZonedDateTime.parse("2026-01-31T18:05:00Z");
+            Message msg = mockMessage(event);
+            NatsJetStreamMetaData metaData = mock(NatsJetStreamMetaData.class);
+            when(metaData.timestamp()).thenReturn(storedAt);
+            when(msg.isJetStream()).thenReturn(true);
+            when(msg.metaData()).thenReturn(metaData);
+
+            handler.onMessage(msg);
+
+            verify(mergeRequestProcessor)
+                    .process(eq(event), argThat(context -> storedAt.toInstant().equals(context.observedAt())));
         }
 
         @Test

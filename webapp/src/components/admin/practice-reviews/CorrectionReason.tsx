@@ -53,7 +53,7 @@ export function CorrectionReasonPopover({
 			setReason("");
 			setOpen(false);
 		} catch {
-			// The route reports the failure; the reason stays for another try.
+			// The controller reports the failure; the reason stays for another try.
 		}
 	};
 	return (
@@ -62,7 +62,7 @@ export function CorrectionReasonPopover({
 				{disabled ? <Spinner /> : <Icon />}
 				{copy.trigger}
 			</PopoverTrigger>
-			<PopoverContent align="end" className="w-[min(24rem,calc(100vw-2rem))] gap-4 p-4">
+			<PopoverContent align="end" side="top" className="w-[min(24rem,calc(100vw-2rem))] gap-4 p-4">
 				<PopoverHeader>
 					<PopoverTitle>{copy.title}</PopoverTitle>
 					<PopoverDescription>{copy.description}</PopoverDescription>

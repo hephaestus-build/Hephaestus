@@ -4,45 +4,24 @@ import { toast } from "sonner";
 import {
 	getIntegrationCatalogOptions,
 	getWorkspaceOptions,
+	initiateMutation,
 	listSlackChannelCandidatesOptions,
 	listSlackChannelConsentEventsQueryKey,
 	listSlackChannelsOptions,
 	registerSlackChannelMutation,
+	updateConnectionStatusMutation,
 	updateSlackChannelConsentMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { Workspace } from "@/api/types.gen";
 import { syncPollInterval } from "@/components/admin/integrations/sync-format";
 import type {
 	WorkspaceSlackChannelsSettingsProps,
 	SlackConsentState,
 } from "@/components/admin/integrations/WorkspaceSlackChannelsSettings";
-import type { WorkspaceSlackNotificationSettingsProps } from "@/components/admin/integrations/WorkspaceSlackNotificationSettings";
+import type { WorkspaceSlackConnectionSettingsProps } from "@/components/admin/integrations/WorkspaceSlackConnectionSettings";
 import { useConnectionSync } from "@/hooks/use-connection-sync";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
-
-/**
- * The digest form's seed, read off the workspace. The `key` remounts the form whenever any seeded
- * value changes, so a save never leaves the fields showing the values from before it.
- */
-function digestSettingsOf(workspace: Workspace | undefined) {
-	const slackConnectionId = workspace?.slackConnectionId ?? undefined;
-	const channelId = workspace?.leaderboardNotificationChannelId ?? undefined;
-	const teamLabel = workspace?.leaderboardNotificationTeam ?? undefined;
-	const enabled = workspace?.leaderboardNotificationEnabled ?? false;
-	const scheduleDay = workspace?.leaderboardScheduleDay ?? undefined;
-	const scheduleTime = workspace?.leaderboardScheduleTime ?? undefined;
-	return {
-		key: `slack:${slackConnectionId ?? "none"}:${channelId ?? ""}:${enabled}:${scheduleDay ?? ""}:${scheduleTime ?? ""}:${teamLabel ?? ""}`,
-		slackConnectionId,
-		channelId,
-		teamLabel,
-		enabled,
-		scheduleDay,
-		scheduleTime,
-	};
-}
 
 export function useSlackIntegration(workspaceSlug: string) {
 	const queryClient = useQueryClient();
@@ -147,6 +126,35 @@ export function useSlackIntegration(workspaceSlug: string) {
 		},
 	});
 
+	const connect = useMutation({
+		...initiateMutation(),
+		onSuccess: (initiation) => {
+			if (initiation.type === "REDIRECT" && hasText(initiation.vendorUrl)) {
+				window.location.assign(initiation.vendorUrl);
+				// The page is unloading.
+				return;
+			}
+			throw new Error(`Unexpected non-redirect Slack initiation: ${initiation.type}`);
+		},
+		onError: (e) => {
+			toast.error("Could not start Slack OAuth", { description: problemDetailOf(e) });
+		},
+	});
+
+	const disconnect = useMutation({
+		...updateConnectionStatusMutation(),
+		onSuccess: () => {
+			toast.success("Slack disconnected");
+			void queryClient.invalidateQueries({ queryKey: workspaceQueryOptions.queryKey });
+			void queryClient.invalidateQueries({ queryKey: catalogQueryOptions.queryKey });
+			invalidateSlackChannels();
+		},
+		onError: (e) => {
+			toast.error("Failed to disconnect Slack", { description: problemDetailOf(e) });
+		},
+	});
+	const slackConnectionId = workspaceData?.slackConnectionId;
+
 	const handleRegisterChannel = async ({
 		slackChannelId,
 		channelName,
@@ -192,8 +200,6 @@ export function useSlackIntegration(workspaceSlug: string) {
 		});
 	};
 
-	const { key: notificationSettingsKey, ...digestSettings } = digestSettingsOf(workspaceData);
-
 	return {
 		hasConnection,
 		connectionState: entry?.connectionState,
@@ -204,19 +210,30 @@ export function useSlackIntegration(workspaceSlug: string) {
 		syncStatusHeaderProps: sync.syncStatusHeaderProps,
 		syncResourcesProps: sync.syncResourcesProps,
 		jobHistoryProps: sync.jobHistoryProps,
-		notificationSettingsKey,
-		notificationSettingsProps: {
-			workspaceSlug,
-			hasSlackConnection: isConnectionActive,
-			credentialsUnreadableSince: entry?.credentialsUnreadableSince,
-			...digestSettings,
-			channelCandidates: slackChannelCandidates ?? [],
-			onSaved: () => {
-				void queryClient.invalidateQueries({ queryKey: workspaceQueryOptions.queryKey });
-				void queryClient.invalidateQueries({ queryKey: catalogQueryOptions.queryKey });
-				invalidateSlackChannels();
-			},
-		} satisfies WorkspaceSlackNotificationSettingsProps,
+		connectionSettingsProps: (isConnectionActive
+			? {
+					state: "connected",
+					credentialsUnreadableSince: entry.credentialsUnreadableSince,
+					onDisconnect:
+						slackConnectionId == null
+							? undefined
+							: async () => {
+									await disconnect.mutateAsync({
+										path: { workspaceSlug, id: slackConnectionId },
+										body: { state: "UNINSTALLED" },
+									});
+								},
+					isDisconnecting: disconnect.isPending,
+				}
+			: {
+					state: "disconnected",
+					onConnect: () => {
+						// The OAuth landing route reads the slug to route back here.
+						window.sessionStorage.setItem("slack-connect-return-slug", workspaceSlug);
+						connect.mutate({ path: { workspaceSlug }, body: { kind: "SLACK", userInput: {} } });
+					},
+					isConnecting: connect.isPending,
+				}) satisfies WorkspaceSlackConnectionSettingsProps,
 		channelsSettingsProps: {
 			workspaceSlug,
 			hasSlackConnection: isConnectionActive,

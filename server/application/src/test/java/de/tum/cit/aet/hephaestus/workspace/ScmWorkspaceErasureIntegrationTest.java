@@ -21,6 +21,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMemberRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
@@ -35,6 +37,7 @@ import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.adapter.ScmWorkspacePurgeAdapter;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -105,6 +108,9 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private TeamRepository teamRepository;
+
+    @Autowired
+    private PullRequestRepository pullRequestRepository;
 
     @Autowired
     private OrganizationMembershipRepository organizationMembershipRepository;
@@ -295,6 +301,38 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(repositoryRepository.findByNameWithOwner(SHARED_REPO)).isPresent();
     }
 
+    @Test
+    @DisplayName("erasing a team takes it off a kept pull request that asked it for a review")
+    void erase_takesAnErasedTeamOffAPullRequestOfAKeptRepository() {
+        Organization organization = persistOrganization(4244L, "acme");
+        bindOrganization(tenantA, organization);
+        Team team = persistTeam(organization, 7103L, "reviewers");
+        PullRequest asking = new PullRequest();
+        asking.setNativeId(9101L);
+        asking.setProvider(gitProvider);
+        asking.setNumber(2);
+        asking.setTitle("asks the reviewers team");
+        asking.setState(Issue.State.OPEN);
+        asking.setHtmlUrl("https://github.com/" + SHARED_REPO + "/pull/2");
+        asking.setRepository(
+                repositoryRepository.findByNameWithOwner(SHARED_REPO).orElseThrow());
+        PullRequest stored = pullRequestRepository.save(asking);
+        stored.replaceRequestedTeams(Set.of(team), Instant.now());
+        pullRequestRepository.save(stored);
+
+        eraser.eraseWorkspaceScmMirror(tenantA.getId());
+
+        assertThat(teamsFor(organization)).isEmpty();
+        assertThat(pullRequestRepository.findById(stored.getId()))
+                .as("tenant B still monitors the repository")
+                .isPresent();
+        assertThat(jdbcTemplate.queryForList(
+                        "SELECT team_id FROM pull_request_requested_team WHERE pull_request_id = ?",
+                        Long.class,
+                        stored.getId()))
+                .isEmpty();
+    }
+
     /**
      * A vendor-side {@code installation.deleted} must run the same purge chain an admin deletion runs,
      * not just write {@code status=PURGED}: writing the label directly skips every {@code
@@ -372,7 +410,7 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
         workspaceRepository.save(managed);
     }
 
-    private void persistTeam(Organization organization, long nativeId, String slug) {
+    private Team persistTeam(Organization organization, long nativeId, String slug) {
         Team team = new Team();
         team.setNativeId(nativeId);
         team.setProvider(gitProvider);
@@ -382,7 +420,7 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
         team.setHtmlUrl("https://github.com/orgs/" + organization.getLogin() + "/teams/" + slug);
         team.setCreatedAt(Instant.now());
         team.setUpdatedAt(Instant.now());
-        teamRepository.save(team);
+        return teamRepository.save(team);
     }
 
     /** The workspace's {@code organization_id} FK, read as a column so no lazy proxy is involved. */

@@ -327,7 +327,7 @@ public class SlackChannelHistorySyncService {
 
     private int retentionWindowDays(long workspaceId) {
         int configured = connectionService
-                .findSlackNotificationConfig(workspaceId)
+                .findSlackConfig(workspaceId)
                 .map(ConnectionConfig.SlackConfig::retentionDaysOrDefault)
                 .orElse(ConnectionConfig.SlackConfig.DEFAULT_RETENTION_DAYS);
         return Math.min(configured, SlackRetentionSweeper.MAX_RETENTION_DAYS);

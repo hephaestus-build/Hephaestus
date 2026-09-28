@@ -50,6 +50,7 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Review coverage**                 | Which repositories' and which workspace members' work may be reviewed. Repository and person modes are independent; effective coverage is their intersection.                                                                                      | filter, audience, pilot allowlist, review scope                   |
 | **Sandbox gateway**                 | The only listener a review's sandbox may reach on a worker. Defined for operators in [runtime roles](/admin/runtime-roles).                                                                                                            | LLM proxy port, internal API, agent gateway                       |
 | **Delivery status**                 | Whether new external practice feedback may leave a workspace (`ACTIVE` or `PAUSED`). Pausing does not stop review or erase coverage.                                                                                                       | review status, practice autonomy, Silent Mode                     |
+| **Delivery family**                 | Defined in the [practice feedback language](./practice-feedback-language.md).                                                                                                                                                              | delivery status, delivery state                                   |
 
 A practice author defines requirements. That definition is not proof that the evidence is sufficient or that a
 review is accurate, and the product says so rather than implying otherwise: every shipped policy is its
@@ -330,8 +331,9 @@ What each `FeedbackChannel` value is and where it lands is defined in the
 "what capability could this conversation support?" — and the level is **derived from the channel and
 never stored**: there is no `level` column, and a stored copy would be a second truth that can disagree.
 
-Two exact names are close enough to be tempting and are still wrong. **Profile** is the
-workspace-readable page at `/w/{workspaceSlug}/user/{username}`, not `IN_APP`; and
+Two exact names are close enough to be tempting and are still wrong.
+[**Activity**](./practice-feedback-language.md) is the member-readable page of counted work at
+`/w/{workspaceSlug}/activity`, not `IN_APP`; and
 `chat.conversation_thread` is a kind of work Hephaestus *reviews*, not the place `IN_CHAT` delivers to.
 
 ### Thread key and supersession

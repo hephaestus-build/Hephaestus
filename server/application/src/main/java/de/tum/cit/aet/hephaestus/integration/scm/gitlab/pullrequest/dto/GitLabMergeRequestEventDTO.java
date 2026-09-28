@@ -25,7 +25,28 @@ public record GitLabMergeRequestEventDTO(
         @JsonProperty("object_attributes") @Nullable ObjectAttributes objectAttributes,
         @Nullable List<GitLabWebhookLabel> labels,
         @Nullable List<GitLabWebhookUser> assignees,
-        @Nullable List<GitLabWebhookUser> reviewers) {
+        @Nullable List<GitLabMergeRequestReviewerDTO> reviewers) {
+
+    /**
+     * The assignees now. GitLab leaves the key out of every merge request hook when there are none, so an absent
+     * list is an empty one.
+     *
+     * @see <a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/lib/gitlab/data_builder/issuable.rb#L28">GitLab's issuable hook data builder</a>
+     */
+    public List<GitLabWebhookUser> currentAssignees() {
+        return assignees == null ? List.of() : assignees;
+    }
+
+    /**
+     * The reviewers now, each with their review state. GitLab leaves the key out of every merge request hook when
+     * there are none, so an absent list is an empty one: the last reviewer was removed.
+     *
+     * @see <a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/lib/gitlab/data_builder/issuable.rb#L30-31">GitLab's issuable hook data builder</a>
+     */
+    public List<GitLabMergeRequestReviewerDTO> currentReviewers() {
+        return reviewers == null ? List.of() : reviewers;
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ObjectAttributes(
             @Nullable Long id,

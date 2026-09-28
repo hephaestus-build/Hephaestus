@@ -36,7 +36,10 @@ import org.jspecify.annotations.Nullable;
  * @param scopeId        The scope this data belongs to
  * @param repository     The repository being processed (JPA entity - transaction required)
  * @param provider       The git provider instance (e.g., github.com, gitlab.lrz.de)
- * @param startedAt      When processing started
+ * @param observedAt     When Hephaestus received what is processed: when JetStream stored the webhook, or when a
+ *                       sync asked for the page. Pull and merge request processing sets it ({@link #withObservedAt})
+ *                       and compares it; a payload it handles outside a delivery is observed when it is handled, as
+ *                       a core NATS message is. Other contexts carry the time they were made, which nothing compares.
  * @param correlationId  Unique ID for distributed tracing - correlates all log
  *                       entries and events from a single webhook or sync operation
  * @param webhookAction  The webhook action (e.g. "opened", "closed") if from webhook
@@ -47,7 +50,7 @@ public record ProcessingContext(
         @Nullable Long scopeId,
         @Nullable Repository repository,
         @Nullable IdentityProvider provider,
-        Instant startedAt,
+        Instant observedAt,
         String correlationId,
         @Nullable String webhookAction,
         DataSource source,
@@ -56,17 +59,23 @@ public record ProcessingContext(
             @Nullable Long scopeId,
             @Nullable Repository repository,
             @Nullable IdentityProvider provider,
-            Instant startedAt,
+            Instant observedAt,
             String correlationId,
             @Nullable String webhookAction,
             DataSource source) {
-        this(scopeId, repository, provider, startedAt, correlationId, webhookAction, source, null);
+        this(scopeId, repository, provider, observedAt, correlationId, webhookAction, source, null);
+    }
+
+    /** The same processing, of what Hephaestus received at {@code observedAt}. */
+    public ProcessingContext withObservedAt(Instant observedAt) {
+        return new ProcessingContext(
+                scopeId, repository, provider, observedAt, correlationId, webhookAction, source, actorUserId);
     }
 
     /** The webhook sender is not necessarily the developer whose work is reviewed. */
     public ProcessingContext withActorUserId(@Nullable Long actorUserId) {
         return new ProcessingContext(
-                scopeId, repository, provider, startedAt, correlationId, webhookAction, source, actorUserId);
+                scopeId, repository, provider, observedAt, correlationId, webhookAction, source, actorUserId);
     }
     /**
      * Returns the provider's database ID for use in upsert queries.

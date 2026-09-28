@@ -6,7 +6,7 @@ import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest"
 import {
 	getConnectionSyncStatusQueryKey,
 	getIntegrationCatalogQueryKey,
-	getUserProfileQueryKey,
+	getOpenWorkQueryKey,
 	getWorkspaceQueryKey,
 	listConnectionSyncJobsQueryKey,
 	listConnectionSyncResourcesQueryKey,
@@ -160,7 +160,7 @@ describe("useSyncEvents", () => {
 			path: { workspaceSlug: "another-workspace", connectionId: CONNECTION_ID },
 		});
 		// Not an integration query: a workspace-wide predicate would sweep this in; the scoped predicate must not.
-		const unrelated = getUserProfileQueryKey({ path: { workspaceSlug: WORKSPACE, login: "ada" } });
+		const unrelated = getOpenWorkQueryKey({ path: { workspaceSlug: WORKSPACE, login: "ada" } });
 		for (const key of [included, otherWorkspace, unrelated]) {
 			queryClient.setQueryData(key, []);
 		}

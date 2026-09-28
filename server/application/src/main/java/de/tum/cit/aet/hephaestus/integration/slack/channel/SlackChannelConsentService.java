@@ -141,7 +141,7 @@ public class SlackChannelConsentService {
         }
 
         String teamId = connectionService
-                .findSlackNotificationConfig(workspaceId)
+                .findSlackConfig(workspaceId)
                 .map(ConnectionConfig.SlackConfig::teamId)
                 .filter(t -> t != null && !t.isBlank())
                 // Registration needs an ACTIVE Slack connection to know which Slack team this channel belongs to.

@@ -63,8 +63,10 @@ relationships stay with people.
   selected Slack channels and Outline collections.
 - **Puts admins in control.** They configure repositories, practices, members, integrations, the AI
   model through any OpenAI-compatible endpoint, and a monthly spending cap.
-- **Ships optional recognition features.** Leagues, a weekly leaderboard, and a Slack
-  digest of review activity, all separate from practice feedback.
+- **Shows what happened, without ranking anyone.** Activity shows what needs you, such as review
+  requests and pull requests returned to you, sums up your pull requests, reviews, comments and
+  issues over a time range, and keeps a timeline of the work. Workspace activity does the same for
+  everyone or one team, with members listed by name and never ranked.
 
 ## How feedback works
 

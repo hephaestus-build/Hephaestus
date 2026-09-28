@@ -38,7 +38,7 @@ Example:
 "hephaestus": minor
 ---
 
-Fixes duplicate leaderboard entries after a team rename.
+Workspace activity keeps its time range when you switch workspaces.
 ```
 
 Full flow and rules: [release management guide](https://docs.hephaestus.build/contributor/release-management).

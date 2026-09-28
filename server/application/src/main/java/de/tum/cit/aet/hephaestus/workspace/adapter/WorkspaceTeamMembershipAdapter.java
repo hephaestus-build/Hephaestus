@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  * single subgroup) populate {@code team_membership} via the team sync but never appear
  * in {@code organization_membership}, and are therefore missed by
  * {@link WorkspaceOrganizationMembershipAdapter}. Without this adapter they would have
- * leaderboard activity but no workspace membership row.
+ * activity but no workspace membership row.
  */
 @Component
 public class WorkspaceTeamMembershipAdapter implements TeamMembershipListener {

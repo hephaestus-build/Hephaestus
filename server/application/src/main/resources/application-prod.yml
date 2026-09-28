@@ -65,15 +65,6 @@ hephaestus:
     webapp:
         url: ${APPLICATION_HOST_URL}
 
-    leaderboard:
-        schedule:
-            day: ${LEADERBOARD_SCHEDULE_DAY:2}
-            time: ${LEADERBOARD_SCHEDULE_TIME:9}
-        notification:
-            # Per-workspace channel + team filter live on the Slack Connection's SlackConfig
-            # (set via the connection admin API); this flag is the global kill-switch.
-            enabled: ${LEADERBOARD_NOTIFICATION_ENABLED:true}
-
     workspace:
         init-default: false
         # NEVER auto-seed ADMIN membership in production — a first-visitor of an empty-membership

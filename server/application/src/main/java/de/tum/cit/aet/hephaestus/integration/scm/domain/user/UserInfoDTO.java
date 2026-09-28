@@ -5,18 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-/**
- * Information about a user from the git provider.
- *
- * <h2>ETL Extraction Note</h2>
- * <p>
- * The {@code leaguePoints} field is a business concept from the leaderboard module
- * and does not belong in the integration.scm domain. During ETL extraction, this field
- * should be moved to a scope-specific DTO in the leaderboard module:
- * <pre>
- * public record LeaderboardUserDTO(UserInfoDTO user, int leaguePoints) {}
- * </pre>
- */
+/** Information about a user from the git provider. */
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @Schema(description = "Information about a user from the git provider")
 public record UserInfoDTO(
@@ -36,22 +25,9 @@ public record UserInfoDTO(
         String name,
 
         @NonNull @Schema(description = "URL to the user's profile on the git provider")
-        String htmlUrl,
-        /**
-         * League points earned by the user in the current scope.
-         * <p>
-         * <b>Note:</b> This field is scope-specific business logic and should be moved
-         * to a leaderboard-specific DTO during ETL extraction.
-         */
-        @Schema(description = "League points earned by the user in the current scope", example = "150")
-        int leaguePoints) {
+        String htmlUrl) {
     @Nullable
     public static UserInfoDTO fromUser(@Nullable User user) {
-        return fromUser(user, 0);
-    }
-
-    @Nullable
-    public static UserInfoDTO fromUser(@Nullable User user, int leaguePoints) {
         if (user == null) {
             return null;
         }
@@ -61,7 +37,6 @@ public record UserInfoDTO(
                 user.getEmail(),
                 user.getAvatarUrl(),
                 user.getName() != null ? user.getName() : user.getLogin(),
-                user.getHtmlUrl(),
-                leaguePoints);
+                user.getHtmlUrl());
     }
 }

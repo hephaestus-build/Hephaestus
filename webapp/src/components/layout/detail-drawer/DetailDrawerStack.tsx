@@ -43,7 +43,7 @@ export interface DetailDrawerStackProps<TKind extends string = string> {
  *
  * A dismissal shuts the drawer first and navigates when the exit animation ends, so the URL lags it:
  * dropping the level first would render it with an entry the caller no longer has data for. Clearing
- * `closingDepth` before the stack catches up re-opens the level that just left.
+ * the close before the stack catches up re-opens the level that just left.
  */
 export function DetailDrawerStack<TKind extends string>({
 	stack,
@@ -52,12 +52,19 @@ export function DetailDrawerStack<TKind extends string>({
 	size = "detail",
 	children,
 }: DetailDrawerStackProps<TKind>) {
-	const [closingDepth, setClosingDepth] = useState<number | null>(null);
+	const [closing, setClosing] = useState<{ depth: number; key: string } | null>(null);
 
-	// Cleared when the stack catches up, not on the completion frame — see the JSDoc above.
-	if (closingDepth !== null && stack.length <= closingDepth) {
-		setClosingDepth(null);
+	// Cleared when the level that was closing leaves its depth, not on the completion frame — see the
+	// JSDoc above. Held by identity, not depth alone: a level the caller swaps in at that depth mid-close
+	// would otherwise mount shut and never open, and its unmounted predecessor never finishes the close.
+	if (closing !== null && keyAt(stack, closing.depth) !== closing.key) {
+		setClosing(null);
 	}
+	const closingDepth = closing?.depth ?? null;
+	const setClosingDepth = (depth: number) => {
+		const key = keyAt(stack, depth);
+		setClosing(key === undefined ? null : { depth, key });
+	};
 
 	// Mounting is the arrival `useArrived` needs; a component left mounted on `null` has already
 	// spent its first render.
@@ -82,7 +89,7 @@ export function DetailDrawerStack<TKind extends string>({
 interface DetailDrawerLevelViewProps<TKind extends string> extends DetailDrawerStackProps<TKind> {
 	depth: number;
 	closingDepth: number | null;
-	setClosingDepth: (depth: number | null) => void;
+	setClosingDepth: (depth: number) => void;
 }
 
 /** A component, not a loop, because it owns `useArrived` and each level mounts at a different time. */
@@ -153,6 +160,11 @@ function DetailDrawerLevelView<TKind extends string>({
 			</DrawerContent>
 		</Drawer>
 	);
+}
+
+function keyAt(stack: DetailStackEntry[], depth: number): string | undefined {
+	const entry = stack[depth];
+	return entry === undefined ? undefined : detailStackKey(entry);
 }
 
 /**

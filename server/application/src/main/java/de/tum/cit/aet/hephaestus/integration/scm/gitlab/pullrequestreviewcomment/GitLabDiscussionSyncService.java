@@ -513,9 +513,9 @@ public class GitLabDiscussionSyncService {
             });
         }
 
-        // Emit REVIEW_COMMENTED events during bulk GraphQL sync so the leaderboard's
-        // numberOfComments / numberOfReviewedPRs reflect COMMENTED reviews. Without a
-        // ProcessingContext the review reconciler silently skips event publication.
+        // Emit REVIEW_COMMENTED events during bulk GraphQL sync so the activity ledger records
+        // COMMENTED reviews. Without a ProcessingContext the review reconciler silently skips
+        // event publication.
         ProcessingContext ctx = repository != null ? ProcessingContext.forSync(scopeId, repository) : null;
 
         Map<Long, PullRequestReview> result = new HashMap<>();

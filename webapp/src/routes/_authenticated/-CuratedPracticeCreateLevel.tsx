@@ -15,16 +15,23 @@ import {
 } from "@/components/admin/curated-catalog/CuratedPracticeForm";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { DrawerBody } from "@/components/ui/drawer";
 import { problemDetailOf } from "@/lib/problem-detail";
 
 export interface CuratedPracticeCreateLevelProps {
 	nested?: boolean;
+	/** Where the level sits, from the host's `levelPathAt`. */
+	path: LevelPath;
 	onDone: () => void;
 }
 
-export function CuratedPracticeCreateLevel({ nested, onDone }: CuratedPracticeCreateLevelProps) {
+export function CuratedPracticeCreateLevel({
+	nested,
+	path,
+	onDone,
+}: CuratedPracticeCreateLevelProps) {
 	const queryClient = useQueryClient();
 	const catalogQuery = useQuery({ ...adminGetCuratedCatalogOptions() });
 	const definitionOptionsQuery = useQuery({ ...adminGetPracticeDefinitionOptionsOptions() });
@@ -80,7 +87,7 @@ export function CuratedPracticeCreateLevel({ nested, onDone }: CuratedPracticeCr
 	}
 
 	return (
-		<CuratedFormLevel kind="practice-new" nested={nested}>
+		<CuratedFormLevel kind="practice-new" nested={nested} path={path}>
 			{body}
 		</CuratedFormLevel>
 	);

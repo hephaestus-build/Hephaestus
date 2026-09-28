@@ -130,7 +130,7 @@
 					},
 					// A scroll region clips to the radius of what it sits in and pads what it scrolls.
 					{ "pattern": "^ScrollArea$", "allow": ["layout", "spacing", "shape"] },
-					// A meter's fill carries the meter's meaning — severity, league, level — in its tone,
+					// A meter's fill carries the meter's meaning — severity, standing, level — in its tone,
 					// gradient, shape and pace; the primitive draws it and does not decide it.
 					{
 						"pattern": "^(ProgressTrack|ProgressIndicator)$",

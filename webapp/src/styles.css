@@ -65,13 +65,6 @@ code {
 	--code: oklch(0.98 0.002 286.3);
 	--code-header: oklch(0.955 0.003 286.3);
 
-	/* League colors */
-	--league-bronze: oklch(0.69 0.1181 63.51);
-	--league-silver: oklch(0.81 0 0);
-	--league-gold: oklch(0.83 0.1694 90.75);
-	--league-diamond: oklch(0.52 0.206 265.51);
-	--league-master: oklch(0.73 0.1946 351.86);
-
 	--brand: oklch(0.546 0.245 262.881);
 	--brand-accent: oklch(0.546 0.245 262.881);
 	--mentor: oklch(0.546 0.245 262.881);
@@ -117,13 +110,6 @@ code {
 	--sidebar-ring: oklch(0.442 0.017 285.786);
 	--code: oklch(0.16 0.004 286);
 	--code-header: oklch(0.21 0.004 286);
-
-	/* League colors */
-	--league-bronze: oklch(0.69 0.1181 63.52);
-	--league-silver: oklch(0.81 0 0);
-	--league-gold: oklch(0.83 0.1694 90.75);
-	--league-diamond: oklch(0.52 0.206 265.51);
-	--league-master: oklch(0.73 0.1946 351.86);
 
 	--brand: oklch(0.546 0.245 262.881);
 	--brand-accent: oklch(0.707 0.165 254.624);
@@ -188,11 +174,30 @@ code {
 	--color-code: var(--code);
 	--color-code-header: var(--code-header);
 
-	/* * Provider-aware semantic colors.
-	* Default values use @primer/primitives (GitHub) which handles light/dark via data-color-mode.
-	 * GitLab overrides are defined below via [data-provider="gitlab"] selectors.
-	 * Brand-only tokens (github-white, github-black) remain for GitHubSignInButton.
-	 */
+	/* GitHub brand-only tokens (used by GitHubSignInButton) */
+	--color-github-white: var(--bgColor-white);
+	--color-github-white-foreground: var(--fgColor-white);
+	--color-github-black: var(--bgColor-black);
+	--color-github-black-foreground: var(--fgColor-black);
+
+	/* GitLab brand-only token (used by GitLabSignInButton). Source: design.gitlab.com */
+	--color-gitlab-orange: #fc6d26;
+
+	--color-mentor: var(--mentor);
+	--color-mentor-foreground: var(--mentor-foreground);
+}
+
+/*
+ * Provider-aware semantic colors.
+ * Default values use @primer/primitives (GitHub), which handles light/dark via data-color-mode on
+ * the root element. GitLab overrides are defined below via [data-provider="gitlab"] selectors.
+ *
+ * Not `inline`, unlike the block above: a utility such as `text-provider-done-foreground` has to
+ * read `var(--color-provider-done-foreground)` where it is used, so that a `[data-provider]` scope
+ * can repaint it. Inlined, every utility carries Primer's value and a GitLab workspace sees
+ * GitHub's colours on everything but what reads the variable directly.
+ */
+@theme {
 	--color-provider-foreground: var(--fgColor-default);
 	--color-provider-background: var(--bgColor-default);
 	--color-provider-muted: var(--bgColor-muted);
@@ -227,25 +232,6 @@ code {
 	--color-provider-upsell-foreground: var(--fgColor-upsell);
 	--color-provider-sponsors: var(--bgColor-sponsors);
 	--color-provider-sponsors-foreground: var(--fgColor-sponsors);
-
-	/* GitHub brand-only tokens (used by GitHubSignInButton) */
-	--color-github-white: var(--bgColor-white);
-	--color-github-white-foreground: var(--fgColor-white);
-	--color-github-black: var(--bgColor-black);
-	--color-github-black-foreground: var(--fgColor-black);
-
-	/* GitLab brand-only token (used by GitLabSignInButton). Source: design.gitlab.com */
-	--color-gitlab-orange: #fc6d26;
-
-	/* League colors */
-	--color-league-bronze: var(--league-bronze);
-	--color-league-silver: var(--league-silver);
-	--color-league-gold: var(--league-gold);
-	--color-league-diamond: var(--league-diamond);
-	--color-league-master: var(--league-master);
-
-	--color-mentor: var(--mentor);
-	--color-mentor-foreground: var(--mentor-foreground);
 }
 
 /*

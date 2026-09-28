@@ -3,7 +3,7 @@ import { expect, fn, screen, waitFor, within } from "storybook/test";
 
 import { StatefulPatch } from "@/stories/stateful";
 
-import { ReviewRunFilters } from "./ReviewRunFilters";
+import { clearedRunFilters, ReviewRunFilters } from "./ReviewRunFilters";
 
 /**
  * The toolbar above the Reviews list: a status, a requested-on window, and the count of what they
@@ -18,7 +18,7 @@ const meta = {
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],
 	args: {
-		search: {},
+		search: { status: undefined, resultProcessing: undefined },
 		onPatch: fn(),
 		onReset: fn(),
 		total: 7,
@@ -35,6 +35,10 @@ const meta = {
 					onPatch={(patch) => {
 						args.onPatch(patch);
 						onPatch(patch);
+					}}
+					onReset={() => {
+						args.onReset();
+						onPatch(clearedRunFilters());
 					}}
 				/>
 			)}
@@ -55,7 +59,15 @@ export const Unfiltered: Story = {
 
 /** Chosen: the count says what survived, and Reset appears to undo all of it at once. */
 export const Filtered: Story = {
-	args: { search: { status: "COMPLETED", from: "2026-07-28", to: "2026-07-29" }, total: 2 },
+	args: {
+		search: {
+			status: ["COMPLETED"],
+			resultProcessing: undefined,
+			from: "2026-07-28",
+			to: "2026-07-29",
+		},
+		total: 2,
+	},
 	play: async ({ canvas }) => {
 		canvas.getByText("2 reviews match your filters.");
 		canvas.getByRole("button", { name: "Requested: Jul 28 – Jul 29, 2026" });
@@ -65,7 +77,7 @@ export const Filtered: Story = {
 
 /** One row is still "matches", not "match": the verb agrees with the count, not with the noun. */
 export const OneMatch: Story = {
-	args: { search: { status: "FAILED" }, total: 1 },
+	args: { search: { status: ["FAILED"], resultProcessing: undefined }, total: 1 },
 	play: async ({ canvas }) => {
 		canvas.getByText("1 review matches your filters.");
 	},
@@ -83,18 +95,20 @@ export const CountNotInYet: Story = {
 };
 
 /**
- * Choosing a status reports the facet the reader changed, and only that. Sending them back to page
- * one is the screen's job — it owns the URL, and its two siblings already did it there, so a
- * `page: 0` folded in here would be one toolbar in three with a second contract.
+ * Choosing statuses reports the facet the reader changed, and only that: sending them back to page
+ * one is the route's job, because it owns the URL. Statuses add up — failed and timed out are both
+ * reviews that did not finish — rather than one replacing the other.
  */
-export const ChoosingAStatus: Story = {
+export const ChoosingStatuses: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("combobox"));
-		const listbox = await screen.findByRole("listbox");
+		const trigger = canvas.getByRole("combobox", { name: "Status" });
+		await userEvent.click(trigger);
+		const listbox = await screen.findByRole("listbox", { name: "Status options" });
 		await userEvent.click(within(listbox).getByRole("option", { name: /Failed/u }));
-
-		await expect(args.onPatch).toHaveBeenCalledWith({ status: "FAILED" });
-		await expect(canvas.getByRole("combobox")).toHaveTextContent("Failed");
+		await expect(args.onPatch).toHaveBeenLastCalledWith({ status: ["FAILED"] });
+		await userEvent.click(within(listbox).getByRole("option", { name: /Timed out/u }));
+		await expect(args.onPatch).toHaveBeenLastCalledWith({ status: ["FAILED", "TIMED_OUT"] });
+		await userEvent.click(trigger);
 		// Wait for the popup to finish leaving. The accessibility check runs when the play function
 		// returns, and a listbox caught mid-exit has already been detached from the label that names
 		// it — which under a loaded test pool is long enough to be audited.
@@ -108,9 +122,62 @@ export const ChoosingAStatus: Story = {
  * leave "clear all filters" quietly keeping one.
  */
 export const ResettingClearsEveryField: Story = {
-	args: { search: { status: "FAILED", from: "2026-07-28", to: "2026-07-29" }, total: 2 },
+	args: {
+		search: {
+			status: ["FAILED"],
+			resultProcessing: ["FAILED"],
+			from: "2026-07-28",
+			to: "2026-07-29",
+		},
+		total: 2,
+	},
 	play: async ({ args, canvas, userEvent }) => {
+		canvas.getByTitle("Status: Failed");
+		canvas.getByTitle("Result processing: Result processing failed");
 		await userEvent.click(canvas.getByRole("button", { name: /Reset/u }));
 		await expect(args.onReset).toHaveBeenCalledTimes(1);
+		await expect(canvas.queryByTitle("Status: Failed")).not.toBeInTheDocument();
+		await expect(
+			canvas.queryByTitle("Result processing: Result processing failed"),
+		).not.toBeInTheDocument();
+		await expect(canvas.getByRole("button", { name: "Requested" })).toBeVisible();
+		await expect(canvas.queryByRole("button", { name: /Reset/u })).not.toBeInTheDocument();
+		canvas.getByText("2 reviews.");
+	},
+};
+
+/**
+ * A review can complete and still fail to process what it produced, which its status alone reports
+ * as a success — so what happened to its results is a facet of its own, beside Status.
+ */
+export const ChoosingAResultProcessingState: Story = {
+	play: async ({ args, canvas, userEvent }) => {
+		const trigger = canvas.getByRole("combobox", { name: "Result processing" });
+		await userEvent.click(trigger);
+		const listbox = await screen.findByRole("listbox", { name: "Result processing options" });
+		await userEvent.click(
+			within(listbox).getByRole("option", { name: /Result processing failed/u }),
+		);
+		await expect(args.onPatch).toHaveBeenLastCalledWith({ resultProcessing: ["FAILED"] });
+		await userEvent.click(trigger);
+		// See `ChoosingStatuses`: the audit must not catch the listbox mid-exit.
+		await waitFor(async () => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+	},
+};
+
+/** Below `sm` the facet collapses to a count, so the applied state is a pill that clears itself. */
+export const AResultProcessingStateOnAPhone: Story = {
+	args: { search: { status: undefined, resultProcessing: ["FAILED"] }, total: 1 },
+	parameters: { chromatic: { viewports: [320] }, viewport: { defaultViewport: "reflow" } },
+	play: async ({ args, canvas, userEvent }) => {
+		canvas.getByText("1 review matches your filters.");
+		await canvas.findByTitle("Result processing: Result processing failed");
+		await userEvent.click(
+			canvas.getByLabelText("Clear result processing filter (Result processing failed)"),
+		);
+		await expect(args.onPatch).toHaveBeenCalledWith({ resultProcessing: undefined });
+		await expect(
+			canvas.queryByTitle("Result processing: Result processing failed"),
+		).not.toBeInTheDocument();
 	},
 };

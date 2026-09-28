@@ -1,14 +1,7 @@
 import { cn } from "cn";
-import type {
-	ReviewFeedbackCounts,
-	ReviewFeedbackDisposition,
-	ReviewObservation,
-	ReviewObservationCounts,
-} from "@/api/types.gen";
+import type { ReviewFeedbackCounts, ReviewObservation } from "@/api/types.gen";
 import type { StatusDef } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
-import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { OBSERVATION_ORIGIN_DEFS } from "@/components/practice-vocabulary/observation-origin-defs";
 import {
 	type ObservationResultFacts,
@@ -17,6 +10,8 @@ import {
 import { derivedOutcome } from "@/components/practice-vocabulary/outcome-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import { hasText } from "@/lib/text";
+
+import { feedbackSlots, type OutcomeSlot } from "./review-outcomes";
 
 export function ObservationResultBadge({
 	observation,
@@ -33,8 +28,8 @@ export function ObservationResultBadge({
 }
 
 /**
- * Severity is only ever read alongside a shortfall — a "Minor" beside a strength would be a cost for
- * something that cost nothing.
+ * Severity is only ever read alongside a shortfall — a "Minor" beside a positive outcome would be
+ * a cost for something that cost nothing.
  */
 export function observationSeverity(
 	observation: ObservationResultFacts & Pick<ReviewObservation, "severity">,
@@ -59,80 +54,18 @@ export function ObservationOriginBadge({ origin }: { origin: ReviewObservation["
 	return <StatusBadge def={OBSERVATION_ORIGIN_DEFS[origin]} />;
 }
 
-type FeedbackCounts = ReviewFeedbackCounts | ReviewFeedbackDisposition;
-
-export interface ReviewCountSlot {
-	key: string;
-	/** The registry's own word, lower-cased: a tally that renames what its badge calls the same value
-	 * is how one enum ends up with two names. */
-	label: string;
-	count: number;
-}
-
-/**
- * Every outcome is listed whether or not any occurred, and stays a word rather than a badge: badging
- * a count on every row colours the norm, which is what makes the exceptional row invisible.
- */
-export function feedbackCountSlots(counts: FeedbackCounts): ReviewCountSlot[] {
-	return (
-		[
-			["DELIVERED", counts.delivered],
-			["SUPERSEDED", counts.superseded],
-			["PREPARED", counts.prepared],
-			["SUPPRESSED", counts.suppressed],
-			["FAILED", counts.failed],
-			["UNCONFIRMED", counts.unconfirmed],
-		] as const
-	).map(([state, count]) => ({
-		key: state,
-		label: DELIVERY_STATE_DEFS[state].label.toLowerCase(),
-		count,
-	}));
-}
-
-/**
- * Every noun is the registry's own word for the value it counts, so an operator who filtered by a
- * badge's wording is not handed a summary in vocabulary they have never seen. The two assessment
- * counts are nominalised (`Strength` → strengths, `Needs improvement` → improvements) because a
- * count needs a noun, but they keep the stem.
- */
-export function observationCountSlots(counts: ReviewObservationCounts): ReviewCountSlot[] {
-	return [
-		{
-			key: "strengths",
-			label: counts.strengths === 1 ? "strength" : "strengths",
-			count: counts.strengths,
-		},
-		{
-			key: "problems",
-			label: counts.problems === 1 ? "improvement" : "improvements",
-			count: counts.problems,
-		},
-		{
-			key: "notApplicable",
-			label: ASSESSMENT_STATUS_DEFS.NOT_APPLICABLE.label.toLowerCase(),
-			count: counts.notApplicable,
-		},
-		{
-			key: "undetermined",
-			label: ASSESSMENT_STATUS_DEFS.UNDETERMINED.label.toLowerCase(),
-			count: counts.undetermined,
-		},
-	];
-}
-
 /**
  * Every slot is drawn, zeroes included, and the template is fixed at each width, so the strip's
  * width does not depend on the numbers in it: a tally that dropped its zeroes would put the same
  * count at a different x on every row, reflow under the reader as a poll refreshes, and make an
  * absent count indistinguishable from one this screen does not render at all.
  *
- * Each number keeps its word beside it, so a screen reader gets "0 improvements" rather than a bare
- * nought.
+ * Each number keeps its word beside it, so a screen reader gets "0 negative outcomes" rather than a
+ * bare nought.
  */
-export function ReviewCountStrip({ slots, label }: { slots: ReviewCountSlot[]; label: string }) {
+export function ReviewCountStrip({ slots, label }: { slots: OutcomeSlot[]; label: string }) {
 	return (
-		<ul aria-label={label} className="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-5">
+		<ul aria-label={label} className="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-4">
 			{slots.map((slot) => (
 				<li key={slot.key} className="flex min-w-0 items-baseline gap-1">
 					<span
@@ -144,9 +77,9 @@ export function ReviewCountStrip({ slots, label }: { slots: ReviewCountSlot[]; l
 						{slot.count}
 					</span>
 					{
-						// A real space, so the pair reads "0 improvements" to a screen reader and in a test.
-						// Flex drops whitespace-only children, so the visible gap is still the one `gap-1`
-						// sets and this adds nothing to the layout.
+						// A real space, so the pair reads "0 negative outcomes" to a screen reader and in a
+						// test. Flex drops whitespace-only children, so the visible gap is still the one
+						// `gap-1` sets and this adds nothing to the layout.
 						" "
 					}
 					<span className="min-w-0 break-words">{slot.label}</span>
@@ -160,12 +93,12 @@ export function FeedbackCountsSummary({
 	counts,
 	prefix,
 }: {
-	counts: FeedbackCounts;
+	counts: ReviewFeedbackCounts;
 	/** Names what the numbers count. Only worth passing where the surrounding heading does not
 	 * already say it — under one that does, it is noise. */
 	prefix?: string;
 }) {
-	const parts = feedbackCountSlots(counts)
+	const parts = feedbackSlots(counts)
 		.filter((slot) => slot.count > 0)
 		.map((slot) => `${slot.count} ${slot.label}`);
 	if (parts.length === 0) {

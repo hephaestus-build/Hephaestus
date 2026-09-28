@@ -741,7 +741,7 @@ public class GitLabTeamSyncService {
      * <p>
      * In GitLab iPraktikum, each tutor subgroup contains student repos. Students are direct
      * project members but not group members. This phase bridges the gap so they appear in the
-     * team on the leaderboard and profile views.
+     * team in workspace activity.
      */
     int addProjectCollaboratorsAsTeamMembers(Long teamId, String subgroupFullPath) {
         Integer result = transactionTemplate.execute(status -> {

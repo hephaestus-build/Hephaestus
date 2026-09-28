@@ -162,7 +162,7 @@ describe("workspace practice scope", () => {
 		await renderPractice({ ...mockPullRequestBinding, subject: "REVIEWER" }, onSubmit);
 		const user = userEvent.setup();
 		await user.click(screen.getByRole("combobox", { name: "Person this practice judges" }));
-		await user.click(screen.getByRole("option", { name: "author" }));
+		await user.click(await screen.findByRole("option", { name: "author" }));
 		await waitFor(() =>
 			expect(
 				screen.getByRole("combobox", { name: "Person this practice judges" }).textContent,

@@ -205,7 +205,7 @@ public class GitLabDiffNoteWebhookProcessor extends BaseGitLabProcessor {
                 : null;
 
         // Reconcile a synthetic COMMENTED review per (author, discussion) so the note links
-        // to a review row, matching GitHub parity and unblocking profile/leaderboard scoring.
+        // to a review row, as on GitHub, and activity counts the review.
         PullRequestReview review = null;
         if (author != null && attrs.discussionId() != null) {
             String discussionGid = "gid://gitlab/Discussion/" + attrs.discussionId();

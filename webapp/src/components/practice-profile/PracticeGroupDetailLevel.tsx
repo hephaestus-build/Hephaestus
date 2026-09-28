@@ -9,8 +9,8 @@ import {
 	PracticeTabsTrigger,
 } from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
-import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { Section } from "@/components/layout/Section";
 import { count, type FeedbackTextSegment } from "@/components/practice-vocabulary/feedback-text";
 import { FeedbackText } from "@/components/practice-vocabulary/FeedbackText";
@@ -36,7 +36,7 @@ import { countPracticeStandings } from "@/components/practice-vocabulary/standin
 import { StandingBadge, TrendNote } from "@/components/practice-vocabulary/StandingBadge";
 import { StandingSummaryBox } from "@/components/practice-vocabulary/StandingSummaryBox";
 import { WhereYouStand } from "@/components/practice-vocabulary/WhereYouStand";
-import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
+import { DrawerBody } from "@/components/ui/drawer";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableCell } from "@/components/ui/table";
@@ -302,43 +302,43 @@ export function PracticeGroupDetailLevel({
 
 	return (
 		<>
-			<DetailDrawerHeader nested={nested}>
-				<div className="flex min-w-0 flex-1 basis-56 flex-col gap-2">
-					<DetailPath {...path} current="Group" />
-					<div className="flex items-center gap-3">
-						<GroupPill
-							size="lg"
-							slug={group?.slug}
-							name={group?.name}
-							icon={group?.icon}
-							color={group?.color}
-						/>
-						<DrawerTitle className="text-2xl font-semibold tracking-tight break-words">
-							{group?.name ?? "Practice group"}
-						</DrawerTitle>
-					</div>
-					{group && (
-						<div className="flex flex-wrap items-center gap-3">
+			<LevelHeader
+				nested={nested}
+				path={path}
+				current="Group"
+				title={group?.name ?? "Practice group"}
+				mark={
+					<GroupPill
+						size="lg"
+						slug={group?.slug}
+						name={group?.name}
+						icon={group?.icon}
+						color={group?.color}
+					/>
+				}
+				chips={
+					group && (
+						<>
 							<StandingBadge standing={standing?.standing ?? "NOT_OBSERVED"} scope="group" />
 							<TrendNote
 								direction={standing?.direction}
 								support={standing?.trendSupport}
 								scope="group"
 							/>
-						</div>
-					)}
-				</div>
-				{/* The one second column a header allows beside its title (`webapp/AGENTS.md` § Panel
-				    regions): full width under the title below `sm`, beside it from there on. */}
-				{group && (isLoading || practiceCount > 0) && (
-					<StandingSummaryBox
-						label={practiceCountLabel(practiceCount)}
-						counts={counts}
-						isLoading={isLoading}
-						className="w-full sm:w-auto"
-					/>
-				)}
-			</DetailDrawerHeader>
+						</>
+					)
+				}
+				aside={
+					group && (isLoading || practiceCount > 0) ? (
+						<StandingSummaryBox
+							label={practiceCountLabel(practiceCount)}
+							counts={counts}
+							isLoading={isLoading}
+							className="w-full sm:w-auto"
+						/>
+					) : undefined
+				}
+			/>
 			<DrawerBody className="flex flex-col gap-4 pt-2">
 				{/* The line under the header, with room on both sides: the header, the line and Heph's
 				    card read as three things. */}

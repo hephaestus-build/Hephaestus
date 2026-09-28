@@ -41,7 +41,6 @@ const ALLOWLIST = {
 		"webapp/src/components/admin/workspace-llm/WorkspaceLlmProviderPanel.tsx",
 		"webapp/src/components/admin/audit/AuthAuditPanel.tsx",
 		"webapp/src/components/admin/audit/ConfigAuditPanel.tsx",
-		"webapp/src/components/admin/integrations/WorkspaceSlackNotificationSettings.tsx",
 		"webapp/src/components/admin/integrations/outline/AddCollectionDialog.tsx",
 		"webapp/src/components/admin/integrations/slack-channels/ChannelHistorySheet.tsx",
 		"webapp/src/components/settings/DangerZoneSection.tsx",

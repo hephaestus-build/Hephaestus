@@ -202,14 +202,4 @@ public class ObservationService {
                 .stream()
                 .collect(Collectors.toMap(ObservationFeedback::getObservationId, Function.identity()));
     }
-
-    /**
-     * All observations for a specific pull request within a workspace.
-     * Any workspace member can view PR observations (not restricted to the PR author).
-     */
-    @Transactional(readOnly = true)
-    public List<Observation> getObservationsForPullRequest(Long workspaceId, Long pullRequestId) {
-        return observationRepository.findByPullRequestAndWorkspace(
-                ArtifactKinds.PULL_REQUEST, pullRequestId, workspaceId);
-    }
 }

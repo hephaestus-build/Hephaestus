@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import java.time.Instant;
@@ -17,6 +18,8 @@ public record ObservationQueryFilter(
         @Nullable List<AssessmentStatus> assessmentStatuses,
         @Nullable List<Presence> presences,
         @Nullable List<Assessment> assessments,
+        @Nullable List<Outcome> outcomes,
+        @Nullable Boolean invalidated,
         @Nullable List<Severity> severities,
         @Nullable UUID agentJobId,
         @Nullable ArtifactKind artifactKind,
@@ -49,6 +52,10 @@ public record ObservationQueryFilter(
 
     public String @Nullable [] assessmentNames() {
         return names(assessments);
+    }
+
+    public String @Nullable [] outcomeNames() {
+        return names(outcomes);
     }
 
     public String @Nullable [] severityNames() {

@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import { ScanSearchIcon } from "lucide-react";
 
 import type { Practice, ReviewObservation } from "@/api/types.gen";
@@ -17,17 +16,14 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 
-import { REVIEW_PAGE_SIZE, type ReviewScopeSearch } from "./review-search";
+import { observationLevel } from "./review-levels";
+import { REVIEW_PAGE_SIZE } from "./review-search";
 import { ReviewArtifactLabel } from "./ReviewArtifact";
-import {
-	FeedbackCountsSummary,
-	ObservationOriginBadge,
-	ObservationResultBadge,
-} from "./ReviewBadges";
+import { FeedbackCountsSummary, ObservationOriginBadge, observationSeverity } from "./ReviewBadges";
 import { ReviewPerson } from "./ReviewPerson";
 import { ReviewPracticeLink } from "./ReviewPracticeLink";
 import { ReviewResultsSkeleton } from "./ReviewResultsSkeleton";
-import { ReviewRow, ReviewRowList, ReviewRowMeta } from "./ReviewRow";
+import { ReviewRow, ReviewRowLink, ReviewRowList, ReviewRowMeta } from "./ReviewRow";
 
 export type ObservationResultsState =
 	| { status: "loading" }
@@ -36,12 +32,11 @@ export type ObservationResultsState =
 	| { status: "ready"; observations: ReviewObservation[] };
 
 export interface ObservationResultsProps {
-	workspaceSlug: string;
 	state: ObservationResultsState;
 	practices?: Practice[];
 }
 
-export function ObservationResults({ workspaceSlug, state, practices }: ObservationResultsProps) {
+export function ObservationResults({ state, practices }: ObservationResultsProps) {
 	if (state.status === "loading") {
 		return <ReviewResultsSkeleton label="Loading observations" rows={REVIEW_PAGE_SIZE} />;
 	}
@@ -77,7 +72,6 @@ export function ObservationResults({ workspaceSlug, state, practices }: Observat
 			{state.observations.map((observation) => (
 				<ObservationRow
 					key={observation.id}
-					workspaceSlug={workspaceSlug}
 					observation={observation}
 					practice={practices?.find((practice) => practice.slug === observation.practiceSlug)}
 				/>
@@ -87,56 +81,49 @@ export function ObservationResults({ workspaceSlug, state, practices }: Observat
 }
 
 export interface ObservationRowProps {
-	workspaceSlug: string;
 	observation: ReviewObservation;
 	practice?: Practice;
-	scope?: ReviewScopeSearch;
 }
 
-export function ObservationRow({
-	workspaceSlug,
-	observation,
-	practice,
-	scope,
-}: ObservationRowProps) {
+/**
+ * The leading icon is the result; the trailing column holds only what qualifies that result — its
+ * severity, a claim that is no longer current, a correction, an origin other than live — and then
+ * names the developer.
+ */
+export function ObservationRow({ observation, practice }: ObservationRowProps) {
+	const entry = observationLevel(observation.id);
+	const severity = observationSeverity(observation);
 	return (
 		<ReviewRow
 			status={observationResult(observation)}
-			title={
-				<Link
-					to="/w/$workspaceSlug/admin/practices/reviews/observations/$observationId"
-					params={{ workspaceSlug, observationId: observation.id }}
-					search={scope ?? ((previous) => previous)}
-				>
-					{observation.summary}
-				</Link>
-			}
+			title={<ReviewRowLink entry={entry}>{observation.summary}</ReviewRowLink>}
 			meta={
 				<>
 					<ReviewRowMeta
 						items={[
 							<ReviewPracticeLink
 								key="practice"
-								workspaceSlug={workspaceSlug}
 								practiceSlug={observation.practiceSlug}
 								practiceName={observation.practiceName}
 								group={observation.group}
 								practice={practice}
 							/>,
 							<ReviewArtifactLabel key="work" reviewedWork={observation.reviewedWork} />,
+							// No hover target under a stretched row link, so the time carries no tooltip.
 							<RelativeTime key="observed" value={observation.observedAt} tooltip={false} />,
 						]}
 					/>
 					<p>
-						<FeedbackCountsSummary counts={observation.feedbackDisposition} prefix="Feedback:" />
+						<FeedbackCountsSummary counts={observation.feedback} prefix="Feedback:" />
 					</p>
 				</>
 			}
 			chips={[
 				{
-					key: "flags",
+					key: "qualifiers",
 					node: (
 						<>
+							{severity && <StatusBadge def={severity} />}
 							<ClaimCurrentnessBadge currentness={observation.claimCurrentness} />
 							{observation.invalidatedAt !== undefined && (
 								<StatusBadge def={MARKED_INCORRECT_DEF} />
@@ -145,12 +132,7 @@ export function ObservationRow({
 						</>
 					),
 				},
-				{ key: "person", width: "lg:w-36", node: <ReviewPerson person={observation.subject} /> },
-				{
-					key: "result",
-					width: "lg:w-44",
-					node: <ObservationResultBadge observation={observation} />,
-				},
+				{ key: "person", width: "lg:w-44", node: <ReviewPerson person={observation.subject} /> },
 			]}
 		/>
 	);

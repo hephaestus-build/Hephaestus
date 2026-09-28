@@ -1,4 +1,5 @@
 import { FileCode2Icon } from "lucide-react";
+
 import type { GetPracticeReviewFeedbackResponse } from "@/api/types.gen";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import {
@@ -7,6 +8,7 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
+
 import { FeedbackBody } from "./FeedbackBody";
 
 export function ReviewPackage({
@@ -18,14 +20,6 @@ export function ReviewPackage({
 }) {
 	const summary = feedback.proposedPlacements.find((placement) => placement.type === "SUMMARY");
 	const inline = feedback.proposedPlacements.filter((placement) => placement.type === "INLINE");
-
-	if (feedback.proposedPlacements.length === 0) {
-		return (
-			<p role="alert" className="rounded-lg border border-destructive/40 p-3 text-sm">
-				This review package is unavailable.
-			</p>
-		);
-	}
 
 	return (
 		<div className="min-w-0 space-y-3">

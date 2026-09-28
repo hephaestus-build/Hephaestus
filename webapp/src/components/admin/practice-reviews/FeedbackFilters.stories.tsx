@@ -1,11 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, within } from "storybook/test";
 
+import type { FacetSource } from "@/components/common/FacetMultiSelect";
 import { withStandardPage } from "@/stories/decorators";
 import { StatefulPatch } from "@/stories/stateful";
 
-import { FeedbackFilters } from "./FeedbackFilters";
-import { reviewArtifact, workspaceMembers } from "./fixtures";
+import { clearedFeedbackFilters, FeedbackFilters } from "./FeedbackFilters";
+import { practiceGroups, reviewArtifact, workspaceMembers, workspacePractices } from "./fixtures";
+import { practiceFacetOptions } from "./ObservationFilters";
 import type { FeedbackSearch } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
 
@@ -21,9 +23,14 @@ const PEOPLE: ReviewPeople = {
 	isLoading: false,
 	isError: false,
 };
+const PRACTICES: FacetSource = {
+	options: practiceFacetOptions(workspacePractices, practiceGroups),
+	isLoading: false,
+	isError: false,
+};
 
 /**
- * The Delivery list's toolbar, on its own. It reports a patch and renders what it is given; which
+ * The Feedback list's toolbar, on its own. It reports a patch and renders what it is given; which
  * rows come back is the route's business, so every state here is a `search` value rather than a
  * response.
  */
@@ -36,6 +43,7 @@ const meta = {
 		search: { deliveryState: undefined, withheldFamily: undefined, channel: undefined },
 		onPatch: fn(),
 		onReset: fn(),
+		practices: PRACTICES,
 		people: PEOPLE,
 		total: 11,
 	},
@@ -52,14 +60,7 @@ const meta = {
 						args.onPatch(next);
 					}}
 					onReset={() => {
-						patch({
-							deliveryState: undefined,
-							withheldFamily: undefined,
-							channel: undefined,
-							agentJobId: undefined,
-							artifactKind: undefined,
-							recipientUserId: undefined,
-						});
+						patch(clearedFeedbackFilters());
 						args.onReset();
 					}}
 				/>
@@ -181,5 +182,75 @@ export const Mobile: Story = {
 	parameters: { chromatic: { viewports: [320] }, viewport: { defaultViewport: "reflow" } },
 	play: async ({ canvas }) => {
 		await canvas.findByTitle("Outcome: Delivered");
+	},
+};
+
+/**
+ * A piece of feedback belongs to every practice one of its observations was about, so filtering by a
+ * practice finds the feedback a practice's count on the overview was counting.
+ */
+export const ReportsAChosenPractice: Story = {
+	play: async ({ args, canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("combobox", { name: "Practice" }));
+		const listbox = await screen.findByRole("listbox", { name: "Practice options" });
+		await userEvent.click(
+			await within(listbox).findByRole("option", { name: /Thin controllers/u }),
+		);
+		await expect(args.onPatch).toHaveBeenCalledWith({ practiceSlug: ["thin-controllers"] });
+	},
+};
+
+/** Arriving from a practice's count, the practice reads as a pill at every width and clears there. */
+export const APracticeOnAPhone: Story = {
+	args: {
+		search: {
+			deliveryState: undefined,
+			withheldFamily: undefined,
+			channel: undefined,
+			practiceSlug: ["thin-controllers"],
+		},
+		total: 3,
+	},
+	parameters: { chromatic: { viewports: [320] }, viewport: { defaultViewport: "reflow" } },
+	play: async ({ args, canvas, userEvent }) => {
+		canvas.getByText("3 pieces of feedback match your filters.");
+		await canvas.findByTitle("Practice: Thin controllers");
+		await userEvent.click(canvas.getByLabelText("Clear practice filter (Thin controllers)"));
+		await expect(args.onPatch).toHaveBeenCalledWith({ practiceSlug: undefined });
+		await expect(canvas.queryByTitle("Practice: Thin controllers")).not.toBeInTheDocument();
+	},
+};
+
+/** The practices are still on their way, so the facet is disabled rather than offering nothing. */
+export const WhileThePracticesLoad: Story = {
+	args: { practices: { options: [], isLoading: true, isError: false } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("combobox", { name: "Practice" })).toBeDisabled();
+	},
+};
+
+/**
+ * Sorting does not narrow anything, which is why it sits with the count rather than among the facets
+ * and why Reset leaves it alone — as on the observations list. Picking the default again clears it
+ * from the search rather than writing the server's own default into the URL.
+ */
+export const SortIsNotAFilter: Story = {
+	args: {
+		search: { deliveryState: ["AWAITING_APPROVAL"], withheldFamily: undefined, channel: undefined },
+		total: 3,
+	},
+	play: async ({ args, canvas, userEvent }) => {
+		const sort = canvas.getByRole("combobox", { name: /Sort/u });
+		await expect(sort).toHaveTextContent("Newest first");
+		await userEvent.click(sort);
+		await userEvent.click(await screen.findByRole("option", { name: "Oldest first" }));
+		await expect(args.onPatch).toHaveBeenCalledWith({ order: "OLDEST" });
+
+		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
+		await expect(sort).toHaveTextContent("Oldest first");
+
+		await userEvent.click(sort);
+		await userEvent.click(await screen.findByRole("option", { name: "Newest first" }));
+		await expect(args.onPatch).toHaveBeenLastCalledWith({ order: undefined });
 	},
 };

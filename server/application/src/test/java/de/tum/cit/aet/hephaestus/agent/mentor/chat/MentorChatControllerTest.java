@@ -1,14 +1,12 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorAgentProperties;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
-import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
@@ -113,18 +111,8 @@ class MentorChatControllerTest extends BaseUnitTest {
         assertThat(response.getHeader(UIMessageChunk.RESPONSE_HEADER)).isEqualTo(UIMessageChunk.PROTOCOL_VERSION);
     }
 
-    @Test
-    void workspaceWithMentorDisabled_returns404() {
-        WorkspaceContext disabledCtx = new WorkspaceContext(
-                1L, "test-ws", "Test", AccountType.ORG, null, false, false, Set.of(WorkspaceRole.MEMBER));
-        assertThatThrownBy(() -> controller.chat(disabledCtx, validBody(UUID.randomUUID(), "hi"), response))
-                .isInstanceOf(EntityNotFoundException.class);
-        verify(mentorChatService, never()).start(any(), any());
-    }
-
     private static WorkspaceContext stubContext() {
-        return new WorkspaceContext(
-                1L, "test-ws", "Test", AccountType.ORG, null, false, true, Set.of(WorkspaceRole.MEMBER));
+        return new WorkspaceContext(1L, "test-ws", "Test", AccountType.ORG, null, false, Set.of(WorkspaceRole.MEMBER));
     }
 
     private static MentorChatRequestBody validBody(UUID threadId, String text) {

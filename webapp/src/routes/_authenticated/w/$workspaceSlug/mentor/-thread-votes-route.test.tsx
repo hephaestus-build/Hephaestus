@@ -19,9 +19,7 @@ it("keeps the thumb a member chose on a reply when they reopen the conversation"
 	// The server's side of it: a vote is stored, and the thread read carries the stored votes.
 	const stored: Record<string, boolean> = {};
 	server.use(
-		http.get("*/workspaces", () =>
-			HttpResponse.json([workspaceListItem("acme", { mentorEnabled: true })]),
-		),
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
 		http.get("*/workspaces/acme/members/me", () =>
 			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),

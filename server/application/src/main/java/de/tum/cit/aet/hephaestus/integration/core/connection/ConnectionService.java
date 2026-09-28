@@ -129,7 +129,7 @@ public class ConnectionService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<ConnectionConfig.SlackConfig> findSlackNotificationConfig(long workspaceId) {
+    public Optional<ConnectionConfig.SlackConfig> findSlackConfig(long workspaceId) {
         return connectionRepository
                 .findActive(workspaceId, IntegrationKind.SLACK)
                 .map(Connection::getConfig)

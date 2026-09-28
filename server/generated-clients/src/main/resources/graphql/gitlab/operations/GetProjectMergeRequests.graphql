@@ -81,6 +81,9 @@ query GetProjectMergeRequests($fullPath: ID!, $first: Int!, $after: String, $upd
                     }
                     nodes {
                         ...GitLabUserFields
+                        mergeRequestInteraction {
+                            reviewState
+                        }
                     }
                 }
                 approvedBy(first: 20) {

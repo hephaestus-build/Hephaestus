@@ -100,27 +100,6 @@ public interface WorkspaceTeamRepositorySettingsRepository
             @Param("workspaceId") Long workspaceId, @Param("teamIds") Set<Long> teamIds);
 
     /**
-     * Finds all team repository settings where the repository is hidden from contributions
-     * for specific teams in a workspace.
-     *
-     * <p>This batch query retrieves all hidden repository settings for the specified teams
-     * in a single database query, avoiding N+1 query patterns when processing multiple teams.
-     * Results include both the team ID and repository ID for grouping by team.
-     *
-     * @param workspaceId the workspace ID
-     * @param teamIds the set of team IDs to check
-     * @return list of settings with hidden repositories for the specified teams
-     */
-    @Query("""
-        SELECT wtrs FROM WorkspaceTeamRepositorySettings wtrs
-        WHERE wtrs.workspace.id = :workspaceId
-          AND wtrs.team.id IN :teamIds
-          AND wtrs.hiddenFromContributions = true
-        """)
-    List<WorkspaceTeamRepositorySettings> findHiddenRepositorySettingsByWorkspaceAndTeams(
-            @Param("workspaceId") Long workspaceId, @Param("teamIds") Set<Long> teamIds);
-
-    /**
      * Deletes all team repository settings for a workspace.
      * Used during workspace purge to clean up settings data.
      *

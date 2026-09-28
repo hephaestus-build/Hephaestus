@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.ReviewFeedbackCounts;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.ReviewObservationCounts;
+import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackCountsDTO;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
@@ -28,7 +29,7 @@ class ReviewRunSummaryQueryService {
     @Transactional(readOnly = true)
     public Page<ReviewRunSummaryDTO> list(Long workspaceId, ReviewRunFilterParams filter, Pageable pageable) {
         Page<ReviewRunSummaryRow> reviews = agentJobRepository.findReviewRunSummaries(
-                workspaceId, AgentPurpose.PRACTICE_REVIEW, filter.status(), filter.from(), filter.to(), pageable);
+                workspaceId, AgentPurpose.PRACTICE_REVIEW, filter, filter.from(), filter.to(), pageable);
         if (reviews.isEmpty()) {
             return reviews.map(this::withoutCounts);
         }
@@ -49,22 +50,8 @@ class ReviewRunSummaryQueryService {
             @Nullable ReviewFeedbackCounts feedbackCounts) {
         return ReviewRunSummaryDTO.from(
                 review,
-                observationCounts == null
-                        ? ReviewObservationCountsDTO.empty()
-                        : new ReviewObservationCountsDTO(
-                                observationCounts.getStrengths(),
-                                observationCounts.getProblems(),
-                                observationCounts.getNotApplicable(),
-                                observationCounts.getUndetermined()),
-                feedbackCounts == null
-                        ? ReviewFeedbackCountsDTO.empty()
-                        : new ReviewFeedbackCountsDTO(
-                                feedbackCounts.getPrepared(),
-                                feedbackCounts.getDelivered(),
-                                feedbackCounts.getSuperseded(),
-                                feedbackCounts.getSuppressed(),
-                                feedbackCounts.getFailed(),
-                                feedbackCounts.getUnconfirmed()));
+                ReviewObservationCountsDTO.from(observationCounts),
+                ReviewFeedbackCountsDTO.from(feedbackCounts));
     }
 
     private ReviewRunSummaryDTO withoutCounts(ReviewRunSummaryRow review) {

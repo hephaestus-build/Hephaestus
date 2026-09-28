@@ -8,8 +8,8 @@ import {
 	PracticeTabsTrigger,
 } from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
-import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { Section } from "@/components/layout/Section";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
 import { isSettledStanding } from "@/components/practice-vocabulary/practice-group-standing-defs";
@@ -27,7 +27,7 @@ import {
 	type ReviewRunFeedState,
 } from "@/components/profile/review-runs";
 import { ReviewRunFeed, ReviewRunFeedSkeleton } from "@/components/profile/ReviewRunFeed";
-import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
+import { DrawerBody } from "@/components/ui/drawer";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";
 
@@ -281,24 +281,24 @@ export function PracticeDetailLevel({
 
 	return (
 		<>
-			<DetailDrawerHeader nested={nested}>
-				<div className="flex min-w-0 flex-1 flex-col gap-2">
-					<DetailPath {...path} current="Practice" />
-					<DrawerTitle className="text-2xl font-semibold tracking-tight break-words">
-						{practice?.name ?? "Practice"}
-					</DrawerTitle>
-					{practice && (
-						<div className="flex flex-wrap items-center gap-3">
+			<LevelHeader
+				nested={nested}
+				path={path}
+				current="Practice"
+				title={practice?.name ?? "Practice"}
+				chips={
+					practice && (
+						<>
 							<StandingBadge standing={practice.standing} scope="practice" />
 							<TrendNote
 								direction={practice.direction}
 								support={practice.trendSupport}
 								scope="practice"
 							/>
-						</div>
-					)}
-				</div>
-			</DetailDrawerHeader>
+						</>
+					)
+				}
+			/>
 			<DrawerBody className="flex flex-col gap-4 pt-2">{body}</DrawerBody>
 		</>
 	);

@@ -4,7 +4,6 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.*;
 import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.*;
 
 import com.tngtech.archunit.lang.ArchRule;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -13,8 +12,8 @@ import org.junit.jupiter.api.Test;
  *
  * <p>The activity module has a focused internal structure:
  * <ul>
- *   <li><b>activity root</b> - Core activity event handling and leaderboard cache</li>
- *   <li><b>activity.scoring</b> - XP/scoring calculations</li>
+ *   <li><b>activity root</b> - The activity event ledger and its write SPI</li>
+ *   <li><b>activity.overview</b> - The read model behind the Activity pages</li>
  * </ul>
  *
  * <p>Note: Code health analysis is in the separate <b>practices</b> module:
@@ -35,22 +34,6 @@ class ActivityModuleBoundaryTest extends HephaestusArchitectureTest {
 
     @Nested
     class ActivityModuleIsolationTests {
-
-        @Test
-        void activityDoesNotDependOnLeaderboardServices() {
-            ArchRule rule = noClasses()
-                    .that()
-                    .resideInAPackage("..activity..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAPackage("..leaderboard..service..")
-                    .orShould()
-                    .dependOnClassesThat()
-                    .resideInAPackage("..leaderboard..repository..")
-                    .because(
-                            "Activity should not depend on leaderboard - use domain events for cross-module communication");
-            rule.check(classes);
-        }
 
         @Test
         void activityDoesNotDependOnMentor() {
@@ -77,14 +60,14 @@ class ActivityModuleBoundaryTest extends HephaestusArchitectureTest {
         }
 
         @Test
-        void activityDoesNotDependOnProfile() {
+        void activityOverviewDoesNotDependOnPractices() {
             ArchRule rule = noClasses()
                     .that()
-                    .resideInAPackage("..activity..")
+                    .resideInAPackage("..activity.overview..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAPackage("..profile..")
-                    .because("Profile depends on activity, not vice versa");
+                    .resideInAPackage("..practices..")
+                    .because("Activity counts what people did; it never reads practice feedback or observations");
             rule.check(classes);
         }
 
@@ -115,37 +98,6 @@ class ActivityModuleBoundaryTest extends HephaestusArchitectureTest {
                     .dependOnClassesThat()
                     .resideInAPackage("..practices.review..")
                     .because("Model layer (practices.model) should not depend on review logic (practices.review)");
-            rule.check(classes);
-        }
-    }
-
-    // ACTIVITY SCORING ISOLATION
-
-    @Nested
-    @DisplayName("Activity Scoring Isolation")
-    class ScoringSubmoduleTests {
-
-        @Test
-        void scoringDoesNotDependOnControllers() {
-            ArchRule rule = noClasses()
-                    .that()
-                    .resideInAPackage("..activity.scoring..")
-                    .should()
-                    .dependOnClassesThat()
-                    .haveSimpleNameEndingWith("Controller")
-                    .because("Scoring logic should be independent of presentation layer");
-            rule.check(classes);
-        }
-
-        @Test
-        void scoringHasMinimalExternalDependencies() {
-            ArchRule rule = noClasses()
-                    .that()
-                    .resideInAPackage("..activity.scoring..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAnyPackage("..leaderboard..", "..mentor..", "..notification..", "..profile..")
-                    .because("Scoring should be a pure calculation module");
             rule.check(classes);
         }
     }

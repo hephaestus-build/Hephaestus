@@ -5,7 +5,7 @@ import { assert, describe, expect, it, vi } from "vitest";
 
 import { buildAutonomyFixture } from "@/components/admin/practices/practice-autonomy/fixtures";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 20_000 });
 
@@ -43,33 +43,12 @@ describe("review route", () => {
 
 		renderRouteAt("/w/acme/admin/practices/review");
 
-		await screen.findByRole("heading", { name: "Review" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: "Review settings" }, ROUTE_RENDER_WAIT);
 		await screen.findByRole("button", { name: /Hygiene/u }, ROUTE_RENDER_WAIT);
 
 		screen.getByText("2 practices: 1 off and 1 review before sending. 1 practice set by hand.");
 		screen.getByText("2 practices: 1 off and 1 review before sending.");
 		expect(screen.queryByText("States the motivation")).toBeNull();
-	});
-
-	/**
-	 * Three URLs that have been in the sidebar, in the admin docs and in people's bookmarks, so each
-	 * has to keep resolving to the section that holds its subject. The autonomy screen's overrides
-	 * filter travels too: it is the one deep link into these anybody had reason to save.
-	 */
-	it.each([
-		["/w/acme/admin/practices/autonomy", "/w/acme/admin/practices/review"],
-		[
-			"/w/acme/admin/practices/autonomy?overrides=true",
-			"/w/acme/admin/practices/review?overrides=true",
-		],
-		["/w/acme/admin/practices/settings", "/w/acme/admin/practices/review?section=when-and-where"],
-		["/w/acme/admin/practices/backfill", "/w/acme/admin/practices/review?section=past-work"],
-	])("redirects %s to %s", async (from, to) => {
-		stubWorkspace([]);
-
-		const { router } = renderRouteAtWithRouter(from);
-
-		await waitFor(() => expect(router.state.location.href).toBe(to), ROUTE_RENDER_WAIT);
 	});
 
 	/**

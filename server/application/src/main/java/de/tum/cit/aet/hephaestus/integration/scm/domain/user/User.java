@@ -6,7 +6,6 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.BaseGitServiceEntity;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaborator;
@@ -101,14 +100,6 @@ public class User extends BaseGitServiceEntity {
     @OneToMany(mappedBy = "author")
     @ToString.Exclude
     private Set<IssueComment> issueComments = new HashSet<>();
-
-    @OneToMany(mappedBy = "mergedBy")
-    @ToString.Exclude
-    private Set<PullRequest> mergedPullRequests = new HashSet<>();
-
-    @ManyToMany(mappedBy = "requestedReviewers")
-    @ToString.Exclude
-    private Set<PullRequest> requestedPullRequestReviews = new HashSet<>();
 
     @OneToMany(mappedBy = "author")
     @ToString.Exclude

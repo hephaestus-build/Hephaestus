@@ -6,12 +6,13 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.ObservationFeedbackCounts;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationQueryFilter;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
-import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.ObservationFeedbackDisposition;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.OperatorObservationRow;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ObservationInvalidationDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewBoundFeedbackDTO;
@@ -42,6 +43,7 @@ class ReviewObservationQueryService {
 
     private final ObservationRepository observationRepository;
     private final FeedbackObservationRepository feedbackObservationRepository;
+    private final FeedbackRepository feedbackRepository;
     private final ReviewSubjectResolver subjectResolver;
     private final ReviewRunTargetLookup reviewRunTargetLookup;
     private final EvidenceAuthorization evidenceAuthorization;
@@ -56,17 +58,16 @@ class ReviewObservationQueryService {
         Map<Long, ReviewSubjectDTO> subjects = subjectResolver.resolve(rows.getContent().stream()
                 .map(OperatorObservationRow::getAboutUserId)
                 .toList());
-        Map<UUID, ObservationFeedbackDisposition> dispositions = rows.isEmpty()
+        Map<UUID, ObservationFeedbackCounts> feedbackCounts = rows.isEmpty()
                 ? Map.of()
-                : observationRepository
-                        .findFeedbackDispositions(
+                : feedbackRepository
+                        .summarizeFeedbackByObservation(
                                 workspaceId,
                                 rows.getContent().stream()
                                         .map(OperatorObservationRow::getId)
                                         .toList())
                         .stream()
-                        .collect(Collectors.toMap(
-                                ObservationFeedbackDisposition::getObservationId, Function.identity()));
+                        .collect(Collectors.toMap(ObservationFeedbackCounts::getObservationId, Function.identity()));
         Map<UUID, Target> targets = reviewRunTargetLookup.findByJobIds(
                 workspaceId,
                 rows.getContent().stream()
@@ -74,7 +75,7 @@ class ReviewObservationQueryService {
                         .toList());
         return rows.map(row -> ReviewObservationDTO.from(
                 row,
-                dispositions.get(row.getId()),
+                feedbackCounts.get(row.getId()),
                 ReviewedWorkLabels.ref(
                         ArtifactKind.of(row.getArtifactKind()), row.getArtifactId(), targets.get(row.getAgentJobId())),
                 subjects));

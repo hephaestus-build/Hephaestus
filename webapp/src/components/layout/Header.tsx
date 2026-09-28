@@ -1,6 +1,6 @@
 import { TagIcon } from "@primer/octicons-react";
 import { Link } from "@tanstack/react-router";
-import { LogOut, Settings, User } from "lucide-react";
+import { Activity, LogOut, Settings } from "lucide-react";
 
 import { cn } from "cn";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
@@ -65,7 +65,6 @@ export default function Header({
 	onLogout,
 }: HeaderProps) {
 	const hasWorkspace = Boolean(workspaceSlug);
-	const hasUsername = Boolean(username);
 	const badge = resolveHeaderBadge(version, environmentName, isProduction, pullRequest);
 	const logo = (
 		<span className="inline-flex">
@@ -169,24 +168,21 @@ export default function Header({
 									{!readOnly && (
 										<>
 											<DropdownMenuGroup>
-												{hasWorkspace && hasUsername ? (
+												{hasWorkspace ? (
 													<Link
-														to="/w/$workspaceSlug/user/$username"
-														params={{
-															workspaceSlug: workspaceSlug ?? "",
-															username: username ?? "",
-														}}
+														to="/w/$workspaceSlug/activity"
+														params={{ workspaceSlug: workspaceSlug ?? "" }}
 														className="[&]:no-underline"
 													>
 														<DropdownMenuItem>
-															<User />
-															<span>My Profile</span>
+															<Activity />
+															<span>Activity</span>
 														</DropdownMenuItem>
 													</Link>
 												) : (
-													<DropdownMenuItem disabled title="Join a workspace to view your profile">
-														<User />
-														<span>My Profile</span>
+													<DropdownMenuItem disabled title="Join a workspace to see your activity">
+														<Activity />
+														<span>Activity</span>
 													</DropdownMenuItem>
 												)}
 												<Link to="/settings" className="[&]:no-underline">

@@ -15,10 +15,7 @@ vi.setConfig({ testTimeout: 30_000 });
 function mockCopilot(preference: WorkspaceOnboarding) {
 	server.use(
 		http.get("*/workspaces", () =>
-			HttpResponse.json([
-				workspaceListItem("acme", { mentorEnabled: true }),
-				workspaceListItem("other", { mentorEnabled: true }),
-			]),
+			HttpResponse.json([workspaceListItem("acme"), workspaceListItem("other")]),
 		),
 		// The account carries no flags: the copilot follows the workspace and the member's AI choice.
 		http.get("*/user/features", () => HttpResponse.json({})),
@@ -65,9 +62,27 @@ it("withholds the floating composer for No AI and after a failed preference refe
 	expect(screen.queryByRole("textbox")).toBeNull();
 });
 
+/** A member who has not chosen, in a workspace whose Heph model is ready. */
+function hephReady(): WorkspaceOnboarding {
+	return {
+		...workspaceOnboarding(),
+		aiOptions: [{ choice: "CLOUD", mentorReady: true, practiceReviewsReady: false, models: [] }],
+	};
+}
+
+it("withholds the floating composer where no Heph model is ready for any choice", async () => {
+	mockCopilot({
+		...workspaceOnboarding(),
+		aiOptions: [{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true, models: [] }],
+	});
+	renderRouteAtWithRouter("/w/acme/teams");
+	await screen.findByRole("heading", { name: "Teams" }, ROUTE_RENDER_WAIT);
+	expect(screen.queryByRole("button", { name: "Open Heph, AI mentor" })).toBeNull();
+});
+
 it("starts a separate floating conversation with the new workspace's transport", async () => {
 	const user = userEvent.setup();
-	mockCopilot(workspaceOnboarding());
+	mockCopilot(hephReady());
 	const requests: { workspace: unknown; id: string }[] = [];
 	server.use(
 		http.post<PathParams, { id: string }>(

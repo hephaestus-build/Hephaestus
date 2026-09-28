@@ -11,8 +11,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceTeamScopeResolver;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -207,34 +205,6 @@ public class WorkspaceTeamSettingsService {
             return Set.of();
         }
         return repositorySettingsRepository.findHiddenRepositoryIdsByWorkspaceAndTeams(workspaceId, teamIds);
-    }
-
-    /**
-     * Gets hidden repository IDs grouped by team for multiple teams in a workspace.
-     *
-     * <p>This batch method fetches all hidden repository settings for the specified teams
-     * in a single database query, avoiding N+1 query patterns when processing multiple teams.
-     *
-     * @param workspaceId the workspace ID
-     * @param teamIds the set of team IDs to check
-     * @return map of team ID to set of hidden repository IDs for that team
-     */
-    @Transactional(readOnly = true)
-    public Map<Long, Set<Long>> getHiddenRepositoryIdsByTeamsMap(Long workspaceId, Set<Long> teamIds) {
-        if (teamIds == null || teamIds.isEmpty()) {
-            return Map.of();
-        }
-
-        List<WorkspaceTeamRepositorySettings> settings =
-                repositorySettingsRepository.findHiddenRepositorySettingsByWorkspaceAndTeams(workspaceId, teamIds);
-
-        Map<Long, Set<Long>> result = new HashMap<>();
-        for (WorkspaceTeamRepositorySettings setting : settings) {
-            Long teamId = setting.getTeam().getId();
-            Long repoId = setting.getRepository().getId();
-            result.computeIfAbsent(teamId, k -> new HashSet<>()).add(repoId);
-        }
-        return result;
     }
 
     /**

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { levelsOpenedBy } from "@/test/detail-stack";
 
 import { FeedbackResults } from "./FeedbackResults";
 import { reviewFeedback } from "./fixtures";
@@ -21,7 +22,7 @@ const meta = {
 		chromatic: { viewports: [320, 768, 1440] },
 	},
 	tags: ["autodocs"],
-	args: { workspaceSlug: "demo", state: { status: "ready", feedback: reviewFeedback } },
+	args: { state: { status: "ready", feedback: reviewFeedback } },
 } satisfies Meta<typeof FeedbackResults>;
 
 export default meta;
@@ -30,12 +31,14 @@ type Story = StoryObj<typeof meta>;
 /** Every outcome, on both places feedback can go, with a withheld row from each reason family. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		// A conversation row's outcome is refined by its place, and still begins with the stem of the
-		// stored state so the Outcome facet remains findable from the row.
-		canvas.getByText("Prepared for conversation");
-		canvas.getByText("Delivered in conversation");
-		canvas.getByText("Failed to deliver");
-		canvas.getByText("Replaced by newer");
+		// The outcome is each row's leading icon, named by its label. A conversation row's outcome is
+		// refined by its place, and still begins with the stem of the stored state so the Outcome facet
+		// remains findable from the row.
+		canvas.getByRole("button", { name: "Prepared for conversation" });
+		canvas.getByRole("button", { name: "Delivered in conversation" });
+		canvas.getByRole("button", { name: "Failed to deliver" });
+		canvas.getByRole("button", { name: "Replaced by newer" });
+		await expect(canvas.queryByText("Replaced by newer")).not.toBeInTheDocument();
 		// A withheld row carries its own precise reason; the badge only says something stopped it.
 		canvas.getByText("The work was already merged, so a note on it would arrive too late.");
 		canvas.getByText("The developer has opted out of AI feedback.");
@@ -47,6 +50,10 @@ export const Default: Story = {
 			canvas.getAllByRole("link", { name: "Notes for the conversation are private" }),
 		).toHaveLength(2);
 		await expect(canvas.queryByText(/Before this thread scrolls away/u)).toBeNull();
+		// A row opens its feedback over the list rather than navigating away from it.
+		await expect(canvas.getAllByRole("link").map(levelsOpenedBy)).toContainEqual([
+			`feedback:${firstFeedback.id}`,
+		]);
 	},
 };
 
@@ -80,7 +87,7 @@ export const Mobile: Story = {
 		viewport: { defaultViewport: "reflow" },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByText("Withheld")).toHaveLength(4);
+		await expect(canvas.getAllByRole("button", { name: "Withheld" })).toHaveLength(4);
 		await expectNoPageOverflow();
 	},
 };
