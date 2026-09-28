@@ -69,9 +69,9 @@ token is used once and never stored. GitHub
 [documents](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-setup-url)
 that the `installation_id` it appends to the return URL can be forged, so it is never trusted alone.
 
-- **One workspace per installation.** An installation connected to a workspace, suspended there
-  included, cannot be connected to another until it is disconnected. The refusal names the other
-  workspace only to its administrators.
+- **One workspace per installation.** An installation connected to a workspace cannot be connected to
+  another until it is disconnected there, even while its connection is suspended. The refusal names the
+  other workspace only to that workspace's administrators.
 - **Disconnect uninstalls only what the workspace holds.** Disconnecting removes the installation from
   GitHub only when the connection recorded that installation.
 - **Installed from GitHub or the workspace wizard.** Such an installation returns without a workspace
