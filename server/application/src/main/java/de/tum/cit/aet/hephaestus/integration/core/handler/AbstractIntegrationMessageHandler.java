@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeseri
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.PayloadParsingException;
 import io.nats.client.Message;
 import java.io.IOException;
+import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -109,7 +110,7 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
 
         try {
             T eventPayload = deserializer.deserialize(msg, payloadType);
-            dispatchEvent(eventPayload);
+            dispatchEvent(eventPayload, arrivedAt(msg));
         } catch (IOException e) {
             log.error("Failed to parse payload: subject={}", safeSubject, e);
             throw new PayloadParsingException("Payload parsing failed for subject: " + safeSubject, e);
@@ -117,6 +118,22 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
         // Other exceptions intentionally propagate so the consumer dispatcher can
         // decide between ACK / NACK / dead-letter. We do not log them here to avoid
         // duplicate logging.
+    }
+
+    /**
+     * When JetStream stored the message, on the NATS server's clock; a JetStream redelivery keeps it. A core NATS
+     * message has no stored time and arrives now.
+     */
+    private static Instant arrivedAt(Message msg) {
+        return msg.isJetStream() ? msg.metaData().timestamp().toInstant() : Instant.now();
+    }
+
+    /**
+     * Override when the handling compares when Hephaestus received the payload: {@code arrivedAt} is when JetStream
+     * stored it, however long it then waited in the stream.
+     */
+    protected void dispatchEvent(T eventPayload, Instant arrivedAt) {
+        dispatchEvent(eventPayload);
     }
 
     /** Override when external preparation must run before short persistence transactions. */

@@ -43,6 +43,7 @@ const overview = {
 const nothing = { content: [], hasMore: false };
 const openWork = {
 	reviewRequests: nothing,
+	teamReviewRequests: nothing,
 	pullRequests: nothing,
 	issues: nothing,
 } satisfies OpenWork;
@@ -145,13 +146,9 @@ describe("Activity", () => {
 
 	const readsOf = (path: string) => reads.filter((url) => url.pathname.endsWith(path));
 
-	it("opens the workspace home on your Activity, read for the workspace identity", async () => {
-		const { router } = renderRouteAtWithRouter("/w/acme");
+	it("reads your Activity for the workspace identity", async () => {
+		renderRouteAtWithRouter("/w/acme/activity");
 
-		await waitFor(
-			() => expect(router.state.location.pathname).toBe("/w/acme/activity"),
-			ROUTE_RENDER_WAIT,
-		);
 		await screen.findByRole("heading", { name: "Needs you" }, ROUTE_RENDER_WAIT);
 		await waitFor(() => expect(readsOf("/activity/summary").length).toBeGreaterThan(0));
 		expect(readsOf("/activity/summary").map((url) => url.searchParams.get("login"))).toContain(

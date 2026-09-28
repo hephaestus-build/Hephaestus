@@ -371,6 +371,7 @@ public class GitHubPullRequestSyncService {
                 // not body consumption, and PrematureCloseException occurs during body streaming.
                 final String currentCursor = cursor;
                 final int currentPage = pageCount;
+                final Instant fetchedAt = Instant.now();
                 ClientGraphQlResponse response = Mono.defer(() -> client.documentName(QUERY_DOCUMENT)
                                 .variable("owner", ownerAndName.owner())
                                 .variable("name", ownerAndName.name())
@@ -455,7 +456,8 @@ public class GitHubPullRequestSyncService {
                     // Eagerly initialize the lazy provider proxy to prevent
                     // LazyInitializationException when EventContext.from() accesses provider.getType()
                     org.hibernate.Hibernate.initialize(repo.getProvider());
-                    ProcessingContext context = ProcessingContext.forSync(scopeId, repo);
+                    ProcessingContext context =
+                            ProcessingContext.forSync(scopeId, repo).withObservedAt(fetchedAt);
                     return processPullRequestPage(
                             connection,
                             context,
@@ -824,6 +826,7 @@ public class GitHubPullRequestSyncService {
         }
         try {
             HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
+            Instant fetchedAt = Instant.now();
             ClientGraphQlResponse response = client.documentName(SINGLE_PR_DOCUMENT)
                     .variable("owner", parsedName.get().owner())
                     .variable("name", parsedName.get().name())
@@ -856,7 +859,9 @@ public class GitHubPullRequestSyncService {
                     return false;
                 }
                 org.hibernate.Hibernate.initialize(repo.getProvider());
-                return pullRequestProcessor.process(dto, ProcessingContext.forSync(scopeId, repo)) != null;
+                return pullRequestProcessor.process(
+                                dto, ProcessingContext.forSync(scopeId, repo).withObservedAt(fetchedAt))
+                        != null;
             });
             return Boolean.TRUE.equals(processed);
         } catch (RuntimeException e) {

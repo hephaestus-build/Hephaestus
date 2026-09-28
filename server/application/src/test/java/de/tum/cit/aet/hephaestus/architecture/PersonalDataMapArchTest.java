@@ -80,6 +80,7 @@ class PersonalDataMapArchTest {
             "practice_revision",
             "project_field",
             "pull_request_closing_issue",
+            "pull_request_requested_team",
             "repository_to_monitor",
             "worker_registry",
             "worker_token_denylist",

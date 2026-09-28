@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContextFactory;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestEventDTO;
+import java.time.Instant;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,8 +55,9 @@ public class GitHubPullRequestMessageHandler extends AbstractIntegrationMessageH
      * no database connection.
      */
     @Override
-    protected void dispatchEvent(GitHubPullRequestEventDTO event) {
-        ProcessingContext context = transactionTemplate.execute(status -> handleEventAndReturnContext(event));
+    protected void dispatchEvent(GitHubPullRequestEventDTO event, Instant arrivedAt) {
+        ProcessingContext context =
+                transactionTemplate.execute(status -> handleEventAndReturnContext(event, arrivedAt));
         GitHubPullRequestDTO prDto = event.pullRequest();
         if (context != null && context.repository() != null && prDto != null && refreshesAfter(event.actionType())) {
             syncService.refreshPullRequest(context.scopeId(), context.repository(), prDto.number());
@@ -72,10 +74,11 @@ public class GitHubPullRequestMessageHandler extends AbstractIntegrationMessageH
 
     @Override
     protected void handleEvent(GitHubPullRequestEventDTO event) {
-        handleEventAndReturnContext(event);
+        handleEventAndReturnContext(event, Instant.now());
     }
 
-    private @Nullable ProcessingContext handleEventAndReturnContext(GitHubPullRequestEventDTO event) {
+    private @Nullable ProcessingContext handleEventAndReturnContext(
+            GitHubPullRequestEventDTO event, Instant arrivedAt) {
         GitHubPullRequestDTO prDto = event.pullRequest();
 
         if (prDto == null) {
@@ -89,7 +92,10 @@ public class GitHubPullRequestMessageHandler extends AbstractIntegrationMessageH
                 prDto.number(),
                 event.repository() != null ? sanitizeForLog(event.repository().fullName()) : "unknown");
 
-        ProcessingContext context = contextFactory.forWebhookEvent(event).orElse(null);
+        ProcessingContext context = contextFactory
+                .forWebhookEvent(event)
+                .map(resolved -> resolved.withObservedAt(arrivedAt))
+                .orElse(null);
         if (context == null) {
             return null;
         }

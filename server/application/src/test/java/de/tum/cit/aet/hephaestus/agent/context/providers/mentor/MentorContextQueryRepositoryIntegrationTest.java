@@ -7,20 +7,37 @@ import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnPersistence;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer.ReviewState;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.mentor.ChatThread;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -45,6 +62,18 @@ class MentorContextQueryRepositoryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IdentityProviderRepository gitProviderRepository;
+
+    @Autowired
+    private RepositoryRepository repositoryRepository;
+
+    @Autowired
+    private RepositoryToMonitorRepository repositoryToMonitorRepository;
+
+    @Autowired
+    private PullRequestRepository pullRequestRepository;
+
+    @Autowired
+    private PullRequestReviewRepository reviewRepository;
 
     private Workspace workspace;
     private User user;
@@ -122,5 +151,159 @@ class MentorContextQueryRepositoryIntegrationTest extends BaseIntegrationTest {
 
         assertThat(rows).hasSize(1);
         assertThat((UUID) rows.get(0)[0]).isEqualTo(mine.getId());
+    }
+
+    /** Heph counts a review request pending until its reviewer gives a verdict; a comment is not one. */
+    @Nested
+    class PendingReviewRequests {
+
+        /** One provider's side of the tests: a monitored repository, the reader asked to review and the author. */
+        private record Side(Repository repository, User reader, User author) {}
+
+        private final AtomicLong nativeIds = new AtomicLong(880_000);
+        private Side gitLab;
+        private Side gitHub;
+
+        @BeforeEach
+        void seedRepositories() {
+            gitLab = side(user.getProvider(), "https://gitlab.com", user);
+            IdentityProvider gitHubProvider = gitProviderRepository
+                    .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
+                    .orElseGet(() -> gitProviderRepository.save(
+                            new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+            gitHub = side(gitHubProvider, "https://github.com", person(gitHubProvider, "https://github.com", "reader"));
+        }
+
+        @Test
+        void shouldCountARequestPendingUntilGitLabSaysTheReviewerGaveAVerdict() {
+            PullRequest reRequested = asking(gitLab, ReviewState.UNREVIEWED);
+            review(gitLab, reRequested, PullRequestReview.State.APPROVED, false);
+            PullRequest started = asking(gitLab, ReviewState.REVIEW_STARTED);
+            PullRequest withdrawn = asking(gitLab, ReviewState.UNAPPROVED);
+            PullRequest approved = asking(gitLab, ReviewState.APPROVED);
+            PullRequest sentBack = asking(gitLab, ReviewState.REQUESTED_CHANGES);
+            PullRequest reviewed = asking(gitLab, ReviewState.REVIEWED);
+
+            assertPending(gitLab, Set.of(reRequested, started, withdrawn, reviewed), Set.of(approved, sentBack));
+        }
+
+        @Test
+        void shouldCountARequestPendingWhenGitLabStatedNothingAndTheReviewerGaveNoStandingVerdict() {
+            PullRequest untouched = asking(gitLab, null);
+            PullRequest commented = asking(gitLab, null);
+            review(gitLab, commented, PullRequestReview.State.COMMENTED, false);
+            PullRequest dismissed = asking(gitLab, null);
+            review(gitLab, dismissed, PullRequestReview.State.APPROVED, true);
+            PullRequest approved = asking(gitLab, null);
+            review(gitLab, approved, PullRequestReview.State.APPROVED, false);
+            PullRequest sentBack = asking(gitLab, null);
+            review(gitLab, sentBack, PullRequestReview.State.CHANGES_REQUESTED, false);
+
+            assertPending(gitLab, Set.of(untouched, commented, dismissed), Set.of(approved, sentBack));
+        }
+
+        @Test
+        void shouldCountAGitHubRequestPendingWhenTheReviewerApprovedBeforeBeingAskedAgain() {
+            PullRequest reRequested = asking(gitHub, null);
+            review(gitHub, reRequested, PullRequestReview.State.APPROVED, false);
+
+            assertPending(gitHub, Set.of(reRequested), Set.of());
+        }
+
+        @Test
+        void shouldLeaveOutADraftWhenItAsksForAReview() {
+            PullRequest ready = asking(gitLab, ReviewState.UNREVIEWED);
+            PullRequest drafted = asking(gitLab, ReviewState.UNREVIEWED);
+            drafted.setDraft(true);
+            pullRequestRepository.save(drafted);
+
+            assertPending(gitLab, Set.of(ready), Set.of(drafted));
+        }
+
+        private void assertPending(Side side, Set<PullRequest> pending, Set<PullRequest> notPending) {
+            Long readerId = side.reader().getId();
+            Set<Long> listed = queryRepository.findPendingReviewRequestPrs(workspace.getId(), readerId).stream()
+                    .map(PullRequest::getId)
+                    .collect(Collectors.toSet());
+            assertThat(listed)
+                    .containsAll(pending.stream().map(PullRequest::getId).toList());
+            assertThat(notPending).extracting(PullRequest::getId).noneMatch(listed::contains);
+            Instant now = Instant.now();
+            assertThat(queryRepository
+                            .fetchUserCounts(
+                                    workspace.getId(),
+                                    readerId,
+                                    now.minus(Duration.ofDays(14)),
+                                    now.minus(Duration.ofDays(7)),
+                                    now)
+                            .pendingReviewRequests())
+                    .as("the count agrees with the list")
+                    .isEqualTo(listed.size());
+        }
+
+        private Side side(IdentityProvider provider, String serverUrl, User reader) {
+            Repository repository = new Repository();
+            repository.setNativeId(nativeIds.incrementAndGet());
+            repository.setProvider(provider);
+            repository.setName("widgets");
+            repository.setNameWithOwner(
+                    "mentor-context-org/widgets-" + provider.getType().name().toLowerCase(Locale.ROOT));
+            repository.setHtmlUrl(serverUrl + "/" + repository.getNameWithOwner());
+            repository.setDefaultBranch("main");
+            repository = repositoryRepository.save(repository);
+            RepositoryToMonitor monitor = new RepositoryToMonitor();
+            monitor.setWorkspace(workspace);
+            monitor.setNameWithOwner(repository.getNameWithOwner());
+            repositoryToMonitorRepository.save(monitor);
+            return new Side(repository, reader, person(provider, serverUrl, "author"));
+        }
+
+        private User person(IdentityProvider provider, String serverUrl, String login) {
+            User person = new User();
+            person.setNativeId(nativeIds.incrementAndGet());
+            person.setLogin(login);
+            person.setName(login);
+            person.setAvatarUrl("https://example.com/" + login + ".png");
+            person.setHtmlUrl(serverUrl + "/" + login);
+            person.setType(User.Type.USER);
+            person.setProvider(provider);
+            return userRepository.save(person);
+        }
+
+        /** An open pull request by the side's author that lists its reader as reviewer in {@code state}. */
+        private PullRequest asking(Side side, @Nullable ReviewState state) {
+            Repository repository = side.repository();
+            long nativeId = nativeIds.incrementAndGet();
+            PullRequest work = new PullRequest();
+            work.setNativeId(nativeId);
+            work.setProvider(repository.getProvider());
+            work.setNumber((int) (nativeId % 100_000));
+            work.setTitle("Pull request " + nativeId);
+            work.setState(Issue.State.OPEN);
+            String path =
+                    repository.getProvider().getType() == IdentityProviderType.GITLAB ? "/-/merge_requests/" : "/pull/";
+            work.setHtmlUrl(repository.getHtmlUrl() + path + nativeId);
+            work.setRepository(repository);
+            work.setAuthor(side.author());
+            work.setCreatedAt(Instant.now());
+            PullRequest stored = pullRequestRepository.save(work);
+            Map<User, RequestedReviewer.@Nullable ReviewState> reviewers = new HashMap<>();
+            reviewers.put(side.reader(), state);
+            stored.replaceRequestedReviewers(reviewers, Instant.now());
+            return pullRequestRepository.save(stored);
+        }
+
+        private void review(Side side, PullRequest pullRequest, PullRequestReview.State state, boolean dismissed) {
+            PullRequestReview review = new PullRequestReview();
+            review.setNativeId(nativeIds.incrementAndGet());
+            review.setProvider(pullRequest.getProvider());
+            review.setState(state);
+            review.setDismissed(dismissed);
+            review.setPullRequest(pullRequest);
+            review.setAuthor(side.reader());
+            review.setSubmittedAt(Instant.now().minus(Duration.ofDays(1)));
+            review.setHtmlUrl(pullRequest.getHtmlUrl() + "#review");
+            reviewRepository.save(review);
+        }
     }
 }

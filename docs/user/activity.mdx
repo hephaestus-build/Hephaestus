@@ -10,7 +10,8 @@ never scores the work or ranks anyone.
 
 There are two pages, both in the sidebar under **Dashboards**:
 
-- **Activity** is your own page. It is also the page a workspace opens on.
+- **Activity** is your own page. A workspace that does not review practices opens on it; one that
+  does opens on your [Practice profile](./practice-profile.mdx).
 - **Workspace activity** shows everyone in the workspace, or one team.
 
 Every workspace has both pages; there is nothing to turn on. They show the work in the workspace's
@@ -40,14 +41,26 @@ else's:
 
 - **Waiting for review**: your pull requests that reviewers have not got to yet.
 - **Drafts**: your draft pull requests.
-- **Covered by other reviewers**: pull requests that still ask for your review, but where your review
-  would change nothing yet. Either another reviewer has already approved it, or someone requested
-  changes, so the author acts first. It moves back to **Review requested** once that approval or
-  request for changes no longer stands.
-- **Reviewed by you**: pull requests that still list you as a reviewer after you approved them or
-  requested changes, as GitLab does until the author asks for your review again. A review with
-  comments only leaves the request in **Review requested**. On GitHub, asking you again makes it a
-  review request once more, so it moves back by itself.
+- **Covered by other reviewers**: pull requests that still ask for your review, but where another
+  reviewer has already had their say. Either they requested changes, so the author acts first, or
+  they approved and GitHub or GitLab counts the pull request as approved. Your own review never
+  covers a request: when the author asks you again, it is under **Review requested** until another
+  reviewer settles it. On GitHub, and on GitLab before 16.11, an approval you gave earlier still
+  counts toward the pull request's decision; on GitLab 16.11 and later, asking you again removes it.
+  Without a decision, only a request for changes covers a pull request: GitHub gives none where a
+  branch needs no review, and GitLab none until Hephaestus has read the merge request's approvals.
+  It moves back to **Review requested** once that approval or request for changes no longer stands.
+- **Requested from your team**: pull requests that ask one of your teams for a review, but not you.
+  Each shows which of your teams it asks, such as *via payments*. Someone on the team picks it up,
+  so it never counts as yours. A request that asks you as well is under **Review requested**; one
+  you opened, one that is still a draft, and one you have already approved or requested changes on
+  are not listed. A review with comments only keeps it listed. Only GitHub has team reviewers; a
+  GitLab workspace never shows this group.
+- **Reviewed by you**: merge requests that still list you as a reviewer after you approved them or
+  requested changes, as GitLab keeps you listed. A review with comments only leaves the request in
+  **Review requested**. When the author asks for your review again, it moves back to **Review
+  requested** by itself; on GitLab before 18.6, that may take until Hephaestus next reads the merge
+  request.
 
 Open **Waiting on others** to see them; it closes again when you leave the page.
 
@@ -140,4 +153,6 @@ row.
 
 A workspace admin can hide a member or a team from workspace activity. A hidden member is left out
 of every count and list here. A hidden team is not offered in **Team** and does not count toward the
-team above it. Hiding someone does not change their own Activity page.
+team above it. Hiding changes only Workspace activity: a hidden member's own Activity page stays as
+it was, and review requests to a hidden team still appear under **Requested from your team** for
+the people on it.

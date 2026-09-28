@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -19,8 +20,14 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -37,7 +44,8 @@ import org.jspecify.annotations.Nullable;
  * <b>PR-specific Relationships:</b>
  * <ul>
  *   <li>{@link #mergedBy} – User who merged the PR (null if open/closed without merge)</li>
- *   <li>{@link #requestedReviewers} – Users requested to review (may not have reviewed yet)</li>
+ *   <li>{@link #requestedReviewers} – Users the provider lists as reviewers, with GitLab's review state</li>
+ *   <li>{@link #requestedTeams} – GitHub teams requested to review</li>
  *   <li>{@link #reviews} – Actual code review submissions</li>
  *   <li>{@link #reviewComments} – Line-level comments on the diff</li>
  *   <li>{@link #reviewThreads} – Threaded conversations on specific code ranges</li>
@@ -139,14 +147,28 @@ public class PullRequest extends Issue {
     @ToString.Exclude
     private User mergedBy;
 
-    @ManyToMany
-    @JoinTable(
-            name = "pull_request_requested_reviewers",
-            joinColumns = @JoinColumn(name = "pull_request_id"),
-            inverseJoinColumns = @JoinColumn(name = "user_id"))
+    @OneToMany(mappedBy = "pullRequest", cascade = CascadeType.ALL, orphanRemoval = true)
     @BatchSize(size = 50)
     @ToString.Exclude
-    private Set<User> requestedReviewers = new HashSet<>();
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private Set<RequestedReviewer> requestedReviewers = new HashSet<>();
+
+    /**
+     * When Hephaestus received the stored {@link #requestedReviewers} and {@link #requestedTeams}
+     * ({@link #replaceRequestedReviewers}); null until one was stored.
+     */
+    @Nullable
+    @Column(name = "reviewers_observed_at")
+    private Instant reviewersObservedAt;
+
+    /** Teams asked to review; GitHub only. */
+    @OneToMany(mappedBy = "pullRequest", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
+    @ToString.Exclude
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private Set<RequestedTeam> requestedTeams = new HashSet<>();
 
     /**
      * The provider's closing candidates for this pull request — GitHub's closing references, GitLab's
@@ -278,27 +300,88 @@ public class PullRequest extends Issue {
         }
     }
 
-    /**
-     * Adds a requested reviewer to this pull request.
-     *
-     * @param reviewer the user to request review from
-     */
-    public void addRequestedReviewer(User reviewer) {
-        if (reviewer != null) {
-            this.requestedReviewers.add(reviewer);
-        }
+    /** The requested reviewers, read-only: {@link #replaceRequestedReviewers} is the one way to change them. */
+    public Set<RequestedReviewer> getRequestedReviewers() {
+        return Collections.unmodifiableSet(requestedReviewers);
+    }
+
+    /** The requested teams, read-only: {@link #replaceRequestedTeams} is the one way to change them. */
+    public Set<RequestedTeam> getRequestedTeams() {
+        return Collections.unmodifiableSet(requestedTeams);
     }
 
     /**
-     * Removes a requested reviewer from this pull request.
+     * Replaces the requested reviewers with the provider's list, received at {@code observedAt}, each with the state
+     * the provider gives them. A reviewer already listed keeps their row, so a state change is an update, not a new
+     * row.
      *
-     * @param reviewer the user to remove from requested reviewers
+     * <p>The review requests, people and teams, are a dated snapshot: a list received before the stored one changes
+     * nothing, so a late or backlogged payload cannot remove, re-add or restate a request, and a list received at the
+     * same instant applies, so a redelivery restates what it said. Instants compare to the microsecond PostgreSQL
+     * stores, so a stored one compares the same before and after it is read back. A writer that races another reads
+     * the pull request through {@link PullRequestRepository#findForUpdateByRepositoryIdAndNumber} first.
+     *
+     * @return whether anything changed
      */
-    public void removeRequestedReviewer(User reviewer) {
-        if (reviewer != null) {
-            this.requestedReviewers.remove(reviewer);
+    public boolean replaceRequestedReviewers(
+            Map<User, RequestedReviewer.@Nullable ReviewState> reviewers, Instant observedAt) {
+        if (!takesListObservedAt(observedAt)) {
+            return false;
         }
+        Map<Long, RequestedReviewer.@Nullable ReviewState> wanted = new HashMap<>();
+        reviewers.forEach((user, state) -> wanted.put(user.getId(), state));
+        boolean changed = requestedReviewers.removeIf(
+                listed -> !wanted.containsKey(listed.getUser().getId()));
+        Map<Long, RequestedReviewer> listed = new HashMap<>();
+        requestedReviewers.forEach(reviewer -> listed.put(reviewer.getUser().getId(), reviewer));
+        for (Map.Entry<User, RequestedReviewer.@Nullable ReviewState> entry : reviewers.entrySet()) {
+            RequestedReviewer existing = listed.get(entry.getKey().getId());
+            if (existing == null) {
+                requestedReviewers.add(new RequestedReviewer(this, entry.getKey(), entry.getValue()));
+                changed = true;
+            } else if (existing.getReviewState() != entry.getValue()) {
+                existing.setReviewState(entry.getValue());
+                changed = true;
+            }
+        }
+        return changed;
     }
+
+    /**
+     * Replaces the requested teams with the provider's list, received at {@code observedAt} and dated as
+     * {@link #replaceRequestedReviewers} describes.
+     *
+     * @return whether the set changed
+     */
+    public boolean replaceRequestedTeams(Set<Team> teams, Instant observedAt) {
+        if (!takesListObservedAt(observedAt)) {
+            return false;
+        }
+        Set<Long> wanted = teams.stream().map(Team::getId).collect(Collectors.toSet());
+        boolean changed = requestedTeams.removeIf(
+                request -> !wanted.contains(request.getTeam().getId()));
+        Set<Long> listed = requestedTeams.stream()
+                .map(request -> request.getTeam().getId())
+                .collect(Collectors.toSet());
+        for (Team team : teams) {
+            if (!listed.contains(team.getId())) {
+                requestedTeams.add(new RequestedTeam(this, team));
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /** Whether review requests received at {@code observedAt} are not older than the stored ones; if so, dates them. */
+    private boolean takesListObservedAt(Instant observedAt) {
+        Instant stored = observedAt.truncatedTo(ChronoUnit.MICROS);
+        if (reviewersObservedAt != null && stored.isBefore(reviewersObservedAt)) {
+            return false;
+        }
+        reviewersObservedAt = stored;
+        return true;
+    }
+
     /**
      * Replaces the closing-issue set with the provider's current statement.
      *

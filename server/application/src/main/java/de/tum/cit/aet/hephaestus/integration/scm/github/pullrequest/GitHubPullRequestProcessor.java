@@ -15,6 +15,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepos
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.BaseGitHubProcessor;
@@ -60,6 +62,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
     private final CommitRepository commitRepository;
     private final CommitAuthorResolver commitAuthorResolver;
     private final ApplicationEventPublisher eventPublisher;
+    private final TeamRepository teamRepository;
 
     public GitHubPullRequestProcessor(
             PullRequestRepository pullRequestRepository,
@@ -70,8 +73,10 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
             MilestoneRepository milestoneRepository,
             UserRepository userRepository,
             GitHubUserProcessor gitHubUserProcessor,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            TeamRepository teamRepository) {
         super(userRepository, labelRepository, milestoneRepository, gitHubUserProcessor);
+        this.teamRepository = teamRepository;
         this.pullRequestRepository = pullRequestRepository;
         this.issueRepository = issueRepository;
         this.commitRepository = commitRepository;
@@ -122,7 +127,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
 
         // Check if this is an update (for event publishing purposes)
         Optional<PullRequest> existingOpt =
-                pullRequestRepository.findByRepositoryIdAndNumber(repository.getId(), dto.number());
+                pullRequestRepository.findForUpdateByRepositoryIdAndNumber(repository.getId(), dto.number());
         boolean isNew = existingOpt.isEmpty();
 
         // Detect issue_type mismatch: entity exists as ISSUE but we're processing it as a PR.
@@ -148,10 +153,13 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
             }
         }
 
+        Long providerId = Objects.requireNonNull(context.providerId(), "Pull request processing requires a provider");
+
         // Skip the core upsert if existing data is as new (prevents stale webhooks from overwriting).
         // Skip stale check for promotions — the entity needs all PR fields populated by the upsert.
         // The facts only the GraphQL sync carries still land: a webhook stored GitHub's updated_at
-        // first, and the sync row that follows carries the same moment with more in it.
+        // first, and the sync row that follows carries the same moment with more in it. So do review
+        // requests received within the same second (sync-lifecycle.md § Reviewer lists are dated snapshots).
         if (!isNew && !promotedFromIssue) {
             PullRequest existing = existingOpt.get();
             if (existing.getUpdatedAt() != null
@@ -162,11 +170,13 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                         existing.getId(),
                         existing.getUpdatedAt(),
                         dto.updatedAt());
-                return applySyncOnlyFacts(dto, existing, repository) ? pullRequestRepository.save(existing) : existing;
+                boolean changed = !dto.updatedAt().isBefore(existing.getUpdatedAt())
+                        && updateReviewRequests(dto, existing, providerId, context.observedAt());
+                changed |= applySyncOnlyFacts(dto, existing, repository);
+                return changed ? pullRequestRepository.save(existing) : existing;
             }
         }
 
-        Long providerId = Objects.requireNonNull(context.providerId(), "Pull request processing requires a provider");
         User author = dto.author() != null ? findOrCreateUser(dto.author(), providerId) : null;
         User mergedBy = dto.mergedBy() != null ? findOrCreateUser(dto.mergedBy(), providerId) : null;
         Milestone milestone = dto.milestone() != null ? findOrCreateMilestone(dto.milestone(), repository) : null;
@@ -224,7 +234,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                                 + dto.number()));
 
         // Handle ManyToMany relationships (labels, assignees, requestedReviewers)
-        boolean relationshipsChanged = updateRelationships(dto, pr, repository, providerId);
+        boolean relationshipsChanged = updateRelationships(dto, pr, repository, providerId, context.observedAt());
 
         // Save relationship changes
         if (relationshipsChanged) {
@@ -277,16 +287,29 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
      * @return true if any relationships were changed
      */
     private boolean updateRelationships(
-            GitHubPullRequestDTO dto, PullRequest pr, Repository repository, Long providerId) {
+            GitHubPullRequestDTO dto, PullRequest pr, Repository repository, Long providerId, Instant observedAt) {
         boolean assigneesChanged =
                 updateAssignees(Objects.requireNonNullElse(dto.assignees(), List.of()), pr.getAssignees(), providerId);
         boolean labelsChanged =
                 updateLabels(Objects.requireNonNullElse(dto.labels(), List.of()), pr.getLabels(), repository);
-        boolean reviewersChanged = updateRequestedReviewers(
-                Objects.requireNonNullElse(dto.requestedReviewers(), List.of()),
-                pr.getRequestedReviewers(),
-                providerId);
-        return assigneesChanged || labelsChanged || reviewersChanged || applySyncOnlyFacts(dto, pr, repository);
+        boolean reviewRequestsChanged = updateReviewRequests(dto, pr, providerId, observedAt);
+        return assigneesChanged || labelsChanged || reviewRequestsChanged || applySyncOnlyFacts(dto, pr, repository);
+    }
+
+    /** The people and teams the payload asks for a review, received at {@code observedAt}. */
+    private boolean updateReviewRequests(
+            GitHubPullRequestDTO dto, PullRequest pr, Long providerId, Instant observedAt) {
+        boolean reviewersChanged = updateRequestedReviewers(dto.requestedReviewers(), pr, providerId, observedAt);
+        boolean teamsChanged = dto.requestedTeamIds() != null
+                && pr.replaceRequestedTeams(requestedTeams(dto.requestedTeamIds(), providerId), observedAt);
+        return reviewersChanged || teamsChanged;
+    }
+
+    /** The requested teams Hephaestus has synced; a team it does not know is left out. */
+    private Set<Team> requestedTeams(List<Long> nativeIds, Long providerId) {
+        return nativeIds.isEmpty()
+                ? Set.of()
+                : new HashSet<>(teamRepository.findAllByNativeIdInAndProviderId(nativeIds, providerId));
     }
 
     /**

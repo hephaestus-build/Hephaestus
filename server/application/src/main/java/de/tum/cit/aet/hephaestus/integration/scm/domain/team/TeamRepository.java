@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.team;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -13,6 +14,8 @@ import org.springframework.stereotype.Repository;
         + "organization-string finders match same-named orgs across providers and leak across tenants.")
 public interface TeamRepository extends JpaRepository<Team, Long> {
     Optional<Team> findByNativeIdAndProviderId(Long nativeId, Long providerId);
+
+    List<Team> findAllByNativeIdInAndProviderId(Collection<Long> nativeIds, Long providerId);
 
     /**
      * Provider-scoped name lookup — the workspace-safe form. A same-named team on a different

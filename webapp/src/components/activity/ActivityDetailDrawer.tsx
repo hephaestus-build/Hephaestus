@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { OpenWork, UserInfo } from "@/api/types.gen";
-import type { PanelState } from "@/components/common/panel-state";
+import type { UserInfo } from "@/api/types.gen";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { levelPathAt } from "@/components/layout/detail-drawer/level-path";
 import type { ProviderType } from "@/lib/provider/provider-terms";
@@ -13,6 +12,7 @@ import type { ActivityStackEntry } from "./activity-search";
 import { ActivityCategoryLevel } from "./ActivityCategoryLevel";
 import type { ActivityWorkLogState, WorkLogSubject } from "./ActivityWorkLog";
 import { MemberActivityLevel } from "./MemberActivityLevel";
+import type { OpenWorkState } from "./OpenWorkSections";
 
 /** One owner's reads for its levels: the range's overview, and its timeline of the open category. */
 export interface ActivityLevelReads {
@@ -39,7 +39,7 @@ export interface ActivityDetailDrawerProps {
 	 */
 	member?: ActivityLevelReads & {
 		user?: UserInfo;
-		openWork: PanelState<{ openWork: OpenWork }>;
+		openWork: OpenWorkState;
 		workLog: ActivityWorkLogState;
 	};
 }

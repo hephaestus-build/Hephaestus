@@ -18,6 +18,18 @@ vi.setConfig({ testTimeout: 20_000 });
 // The GitLab instance the shared fixtures configure a login for and link the current user on.
 const lrz = "https://gitlab.lrz.de";
 
+/** The workspace the server answers a creation with; a new one does not review practices yet. */
+function created(body: CreateWorkspaceRequest) {
+	return {
+		id: 1,
+		workspaceSlug: body.workspaceSlug,
+		displayName: body.displayName,
+		accountLogin: body.accountLogin,
+		createdAt: "2026-09-26T10:00:00Z",
+		practicesEnabled: false,
+	};
+}
+
 /**
  * The server creates GitLab workspaces on `instance`. Every token validates; the first validation
  * answers only once `firstPreflightHeld` settles.
@@ -61,17 +73,10 @@ function serveGitLab({
 		http.post<PathParams, CreateWorkspaceRequest>("*/workspaces", async ({ request }) => {
 			const body = await request.json();
 			requests.create.push(body);
-			return HttpResponse.json(
-				{
-					id: 1,
-					workspaceSlug: body.workspaceSlug,
-					displayName: body.displayName,
-					accountLogin: body.accountLogin,
-					createdAt: "2026-09-26T10:00:00Z",
-				},
-				{ status: 201 },
-			);
+			return HttpResponse.json(created(body), { status: 201 });
 		}),
+		// The list the wizard refreshes once the workspace exists.
+		http.get("*/workspaces", () => HttpResponse.json(requests.create.map(created))),
 	);
 	return requests;
 }

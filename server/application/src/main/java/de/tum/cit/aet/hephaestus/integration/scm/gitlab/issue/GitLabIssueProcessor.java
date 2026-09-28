@@ -138,8 +138,8 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
 
         // Update relationships
         boolean changed = updateLabels(event.labels(), issue.getLabels(), Objects.requireNonNull(context.repository()));
-        changed |=
-                updateAssignees(event.assignees(), issue.getAssignees(), Objects.requireNonNull(context.providerId()));
+        changed |= updateAssignees(
+                event.currentAssignees(), issue.getAssignees(), Objects.requireNonNull(context.providerId()));
         if (changed) {
             issue = issueRepository.save(issue);
         }

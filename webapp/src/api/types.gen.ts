@@ -2785,6 +2785,10 @@ export type OpenWork = {
    * Open pull requests by other people that ask this member for a review; drafts are excluded
    */
   reviewRequests: WorkItemList;
+  /**
+   * Open pull requests by other people that ask one of this member's teams for a review, and not this member: not asking them directly, and not yet approved or sent back by them. Drafts are excluded. GitHub only; GitLab has no team reviewers, so a GitLab workspace lists none.
+   */
+  teamReviewRequests: WorkItemList;
 };
 
 export type OptionCount = {
@@ -5274,6 +5278,20 @@ export type TeamInfo = {
 };
 
 /**
+ * A team, by name
+ */
+export type TeamRef = {
+  /**
+   * Identifier of the team
+   */
+  id: number;
+  /**
+   * Name of the team
+   */
+  name: string;
+};
+
+/**
  * Lightweight summary of a team without member/repository details
  */
 export type TeamSummary = {
@@ -6076,6 +6094,10 @@ export type WorkItem = {
    * The repository
    */
   repository?: RepositoryInfo;
+  /**
+   * The member's teams the pull request asks for a review; only team review requests list them
+   */
+  requestedTeams?: Array<TeamRef>;
   /**
    * The pull request's review decision, when the provider reported one
    */

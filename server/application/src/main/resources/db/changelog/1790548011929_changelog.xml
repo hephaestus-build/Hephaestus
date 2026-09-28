@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790548011929-1" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="pull_request_requested_team already exists; this changeset creates it">
+            <not>
+                <tableExists tableName="pull_request_requested_team"/>
+            </not>
+        </preConditions>
+        <createTable tableName="pull_request_requested_team">
+            <column name="pull_request_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pull_request_requested_teamPK"/>
+            </column>
+            <column name="team_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pull_request_requested_teamPK"/>
+            </column>
+        </createTable>
+        <rollback>
+            <dropTable tableName="pull_request_requested_team"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790548011929-2" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="idx_pull_request_requested_team_team already exists; this changeset creates it">
+            <not>
+                <indexExists tableName="pull_request_requested_team" indexName="idx_pull_request_requested_team_team"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="pull_request_requested_team" indexName="idx_pull_request_requested_team_team">
+            <column name="team_id"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="pull_request_requested_team" indexName="idx_pull_request_requested_team_team"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790548011929-3" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="fk_pull_request_requested_team_pull_request already exists; this changeset creates it">
+            <not>
+                <foreignKeyConstraintExists foreignKeyTableName="pull_request_requested_team" foreignKeyName="fk_pull_request_requested_team_pull_request"/>
+            </not>
+        </preConditions>
+        <addForeignKeyConstraint baseColumnNames="pull_request_id" baseTableName="pull_request_requested_team" constraintName="fk_pull_request_requested_team_pull_request" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="issue" validate="true"/>
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="pull_request_requested_team" constraintName="fk_pull_request_requested_team_pull_request"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790548011929-4" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="fk_pull_request_requested_team_team already exists; this changeset creates it">
+            <not>
+                <foreignKeyConstraintExists foreignKeyTableName="pull_request_requested_team" foreignKeyName="fk_pull_request_requested_team_team"/>
+            </not>
+        </preConditions>
+        <addForeignKeyConstraint baseColumnNames="team_id" baseTableName="pull_request_requested_team" constraintName="fk_pull_request_requested_team_team" deferrable="false" initiallyDeferred="false" onDelete="CASCADE" referencedColumnNames="id" referencedTableName="team" validate="true"/>
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="pull_request_requested_team" constraintName="fk_pull_request_requested_team_team"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790548011929-5" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="pull_request_requested_reviewers.review_state already exists; this changeset adds it">
+            <not>
+                <columnExists tableName="pull_request_requested_reviewers" columnName="review_state"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="pull_request_requested_reviewers">
+            <column name="review_state" type="VARCHAR(32)"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="pull_request_requested_reviewers" columnName="review_state"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790548011929-6" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="issue.reviewers_observed_at already exists; this changeset adds it">
+            <not>
+                <columnExists tableName="issue" columnName="reviewers_observed_at"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="issue">
+            <column name="reviewers_observed_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="issue" columnName="reviewers_observed_at"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
