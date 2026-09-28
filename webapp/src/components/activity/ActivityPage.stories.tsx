@@ -45,7 +45,7 @@ const meta = {
 		account: { status: "ready", login: ada.login },
 		range: "30d",
 		onRangeChange: fn(),
-		openWork: { status: "ready", openWork: OPEN_WORK },
+		openWork: { status: "ready", openWork: OPEN_WORK, login: ada.login },
 		overview: readyOverview(OVERVIEW),
 		timeline: readyTimeline(),
 	},
@@ -89,7 +89,7 @@ export const Updating: Story = {
 /** A first week: nothing open, nothing done, every region saying so in a line. */
 export const FirstWeek: Story = {
 	args: {
-		openWork: { status: "ready", openWork: NOTHING_OPEN },
+		openWork: { status: "ready", openWork: NOTHING_OPEN, login: ada.login },
 		overview: readyOverview(QUIET_OVERVIEW),
 		timeline: readyTimeline([]),
 	},
@@ -113,7 +113,7 @@ export const GitLab: Story = {
 	decorators: [withProvider("GITLAB")],
 	args: {
 		providerType: "GITLAB",
-		openWork: { status: "ready", openWork: GITLAB_OPEN_WORK },
+		openWork: { status: "ready", openWork: GITLAB_OPEN_WORK, login: ada.login },
 		timeline: readyTimeline(GITLAB_WORK_LOG),
 	},
 	play: async ({ canvas }) => {

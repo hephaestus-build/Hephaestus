@@ -101,19 +101,20 @@ describe("groupOpenWork", () => {
 		).toStrictEqual({ 1: "review-requested", 2: "review-requested" });
 	});
 
-	it("covers a GitLab re-request once another reviewer's approval meets the approval rules", () => {
+	it("covers by what it can see: the decision and the other reviewers' states", () => {
 		expect(
 			groupsOf({
 				reviewRequests: [
+					// Documents a limit: the decision does not say whether it still counts your own earlier
+					// approval, so another reviewer's approval covers the request either way.
 					pullRequest(1, {
 						reviewDecision: "APPROVED",
 						reviewers: [reviewer("ada", "REQUESTED"), reviewer("bob", "APPROVED")],
 					}),
-					// Not synced yet, so no decision: an approval alone does not cover it.
+					// No decision, as where the branch requires no review: an approval does not cover.
 					pullRequest(2, {
 						reviewers: [reviewer("ada", "REQUESTED"), reviewer("bob", "APPROVED")],
 					}),
-					// A request for changes covers it with or without a decision.
 					pullRequest(3, {
 						reviewers: [reviewer("ada", "REQUESTED"), reviewer("chen", "CHANGES_REQUESTED")],
 					}),

@@ -23,14 +23,14 @@ export interface WorkItemRowProps {
 	work: WorkItem;
 	providerType: ProviderType;
 	/** Whose list the row is in; the author is named only when it is someone else. */
-	login: string | undefined;
+	login: string;
 }
 
 /**
- * One open pull request or issue as the provider's own lists draw it: the state icon, the title
- * that opens it there, where it lives — and which of the person's teams it asks, when it asks a team
- * rather than them — and when it last moved, and — at the end — who reviews it and
- * where each review stands, and whether its checks fail.
+ * One open pull request or issue as the provider's own lists draw it. It shows the state icon, the
+ * title that opens it there, where it lives and when it last moved. A request to the person's teams
+ * names those teams. At the end it shows who reviews it, where each review stands, and whether its
+ * checks fail.
  */
 export function WorkItemRow({ work, providerType, login }: WorkItemRowProps) {
 	const state = workStateVisual(work, providerType);

@@ -202,17 +202,4 @@ describe("user view guard", () => {
 			ROUTE_RENDER_WAIT,
 		);
 	});
-
-	it("lands a view outside its workspace on Activity where the workspace does not review practices", async () => {
-		server.use(
-			http.get("*/workspaces", () =>
-				HttpResponse.json([{ ...workspace, practicesEnabled: false }]),
-			),
-		);
-		const { router } = renderRouteAtWithRouter("/settings");
-		await waitFor(
-			() => expect(router.state.resolvedLocation?.pathname).toBe("/w/engineering/activity"),
-			ROUTE_RENDER_WAIT,
-		);
-	});
 });

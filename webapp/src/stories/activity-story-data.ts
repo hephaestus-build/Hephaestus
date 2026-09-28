@@ -241,7 +241,6 @@ const paymentsTeam = { id: 21, name: "payments" };
 const billingTeam = { id: 22, name: "Billing Reliability" };
 const developerExperienceTeam = { id: 23, name: "Developer Experience and Tooling" };
 
-/** Asked of Ada's team, not of Ada: someone on Developer Experience and Tooling will pick it up. */
 const teamReviewRequest = pullRequest(115, 2327, "Retire the old sync scheduler", {
 	author: eli,
 	updatedAt: hoursBefore(4),
@@ -249,8 +248,7 @@ const teamReviewRequest = pullRequest(115, 2327, "Retire the old sync scheduler"
 	reviewers: [reviewer(gus, "COMMENTED")],
 });
 
-/** Asked of two of Ada's teams at once. */
-const twoTeamsReviewRequest = pullRequest(116, 2329, "Charge retries through one queue", {
+export const twoTeamsReviewRequest = pullRequest(116, 2329, "Charge retries through one queue", {
 	author: fay,
 	updatedAt: daysBefore(1),
 	requestedTeams: [paymentsTeam, billingTeam],
@@ -342,7 +340,6 @@ export const gitLabMergeRequest = onGitLab(
 	}),
 );
 
-/** GitLab has no team reviewers, so a GitLab workspace lists no team requests. */
 export const GITLAB_OPEN_WORK: OpenWork = {
 	reviewRequests: list(OPEN_WORK.reviewRequests.content.map(onGitLab)),
 	teamReviewRequests: list([]),

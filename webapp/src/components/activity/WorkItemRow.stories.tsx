@@ -12,6 +12,7 @@ import {
 	gitLabMergeRequest,
 	longTitlePullRequest,
 	reviewRequest,
+	twoTeamsReviewRequest,
 } from "@/stories/activity-story-data";
 import { withStandardPage } from "@/stories/decorators";
 import { expectNoPageOverflow } from "@/stories/reflow";
@@ -87,6 +88,16 @@ export const LongTitle: Story = {
 	args: { work: longTitlePullRequest },
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async () => {
+		await expectNoPageOverflow();
+	},
+};
+
+/** A request to two of Ada's teams names both, and the caption wraps rather than overflows. */
+export const TeamRequest: Story = {
+	args: { work: twoTeamsReviewRequest },
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("via payments and Billing Reliability")).toBeVisible();
 		await expectNoPageOverflow();
 	},
 };

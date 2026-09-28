@@ -8,14 +8,15 @@ import {
 	getOpenWorkOptions,
 	listMemberActivityOptions,
 } from "@/api/@tanstack/react-query.gen";
-import type { ActivityWork, OpenWork } from "@/api/types.gen";
+import type { ActivityWork } from "@/api/types.gen";
 import type { ActivityOverviewState } from "@/components/activity/activity-buckets";
 import type { ActivityKind } from "@/components/activity/activity-kind-defs";
 import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "@/components/activity/activity-range";
 import type { ActivityWorkLogState } from "@/components/activity/ActivityWorkLog";
 import type { MemberActivityState } from "@/components/activity/MemberActivityTable";
+import type { OpenWorkState } from "@/components/activity/OpenWorkSections";
 import { workLogMarkdown } from "@/components/activity/work-log-markdown";
-import { type PanelState, panelState } from "@/components/common/panel-state";
+import { panelState } from "@/components/common/panel-state";
 import { copyRichText } from "@/lib/clipboard";
 import { formatDayRange } from "@/lib/dates";
 import type { ProviderType } from "@/lib/provider/provider-terms";
@@ -153,13 +154,16 @@ export function useOpenWork({
 }: {
 	workspaceSlug: string;
 	login: string | undefined;
-}): PanelState<{ openWork: OpenWork }> {
+}): OpenWorkState {
 	const options = getOpenWorkOptions({ path: { workspaceSlug, login: login ?? "" } });
 	const query = useQuery({
 		...options,
 		queryFn: login === undefined ? skipToken : options.queryFn,
 	});
-	return panelState(query, (openWork) => ({ status: "ready" as const, openWork }));
+	if (login === undefined) {
+		return { status: "loading" };
+	}
+	return panelState(query, (openWork) => ({ status: "ready" as const, openWork, login }));
 }
 
 interface ActivityWorkRequest extends ActivityScopeRequest {

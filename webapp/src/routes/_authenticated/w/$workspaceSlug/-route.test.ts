@@ -82,12 +82,6 @@ describe("workspace route gate", () => {
 		);
 		expect(location.pathname).toBe(WORKSPACE_HOME);
 	});
-	it("opens a workspace the account can reach", async () => {
-		listWorkspaces("acme");
-		const location = await land("/w/acme");
-		expect(location.href).toBe(WORKSPACE_HOME);
-	});
-
 	it("returns an inaccessible workspace's deep link to an accessible workspace home", async () => {
 		listWorkspaces("acme");
 		const location = await land(DEEP_LINK);
@@ -117,7 +111,7 @@ describe("workspace route gate", () => {
 		expect(location.search).toMatchObject({ survey: "welcome" });
 	});
 
-	it("opens Activity where the workspace does not review practices, carrying the search", async () => {
+	it("opens a reachable workspace on Activity where it does not review practices, carrying the search", async () => {
 		listWorkspaces("acme");
 		const location = await land("/w/acme?survey=welcome");
 		expect(location.pathname).toBe(WORKSPACE_HOME);

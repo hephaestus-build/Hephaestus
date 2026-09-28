@@ -1,8 +1,6 @@
 import { Activity, UserRoundXIcon } from "lucide-react";
 import type { ReactElement } from "react";
 
-import type { OpenWork } from "@/api/types.gen";
-import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -22,7 +20,7 @@ import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "./activity-range";
 import { ActivityTiles } from "./ActivityTiles";
 import { ActivityWorkLog, type ActivityWorkLogState } from "./ActivityWorkLog";
 import { CopyMarkdownButton } from "./CopyMarkdownButton";
-import { OpenWorkSections } from "./OpenWorkSections";
+import { OpenWorkSections, type OpenWorkState } from "./OpenWorkSections";
 import { RangeControls } from "./RangeControls";
 
 /** Whose activity the page reads: the account's login in this workspace, once the membership says. */
@@ -41,7 +39,7 @@ export interface ActivityPageProps {
 	account: ActivityAccount;
 	range: ActivityRange;
 	onRangeChange: (range: ActivityRange) => void;
-	openWork: PanelState<{ openWork: OpenWork }>;
+	openWork: OpenWorkState;
 	overview: ActivityOverviewState;
 	timeline: ActivityWorkLogState;
 }
@@ -98,12 +96,7 @@ export function ActivityPage({
 	return (
 		<PageLayout className="space-y-8">
 			{header}
-			<OpenWorkSections
-				state={openWork}
-				providerType={providerType}
-				perspective="self"
-				login={login}
-			/>
+			<OpenWorkSections state={openWork} providerType={providerType} perspective="self" />
 			<Section
 				size="lg"
 				title={ACTIVITY_RANGE_DEFS[range].label}
