@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 
 import { withStandardPage } from "@/stories/decorators";
-import { expectNoPageOverflow, expectTablesScrollInPlace } from "@/stories/reflow";
+import { expectNoPageOverflow } from "@/stories/reflow";
 import { levelsOpenedBy } from "@/test/detail-stack";
 
 import {
@@ -125,8 +125,8 @@ export const WithdrawnPracticeIsNotQuiet: Story = {
 };
 
 /**
- * The table keeps the name and the total, and scrolls inside its own box rather than the page. The
- * line counting quiet practices wraps rather than setting the table's width.
+ * The table keeps the name and the total, and fits the phone: a long practice name wraps, as does
+ * the line counting quiet practices, rather than setting the table's width.
  */
 export const Reflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
@@ -141,7 +141,8 @@ export const Reflow: Story = {
 		await expect(
 			within(quiet).getByRole("link", { name: "Open Practice setup" }).getBoundingClientRect().top,
 		).toBeGreaterThan(sentence.getClientRects()[0]?.bottom ?? Number.POSITIVE_INFINITY);
-		await expectTablesScrollInPlace();
+		const table = canvas.getByRole("table");
+		await expect(table.scrollWidth).toBeLessThanOrEqual(table.parentElement?.clientWidth ?? 0);
 		await expectNoPageOverflow();
 	},
 };

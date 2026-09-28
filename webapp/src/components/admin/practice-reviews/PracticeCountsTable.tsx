@@ -124,7 +124,7 @@ export function PracticeCountsTable({ workspaceSlug, state, practices }: Practic
 						: Array.from({ length: SKELETON_ROWS }, (_, index) => (
 								<TableRow key={index} variant="static" aria-hidden>
 									<TableCell>
-										<Skeleton className="h-4 w-48" />
+										<Skeleton className="h-4 w-full max-w-48 min-w-24" />
 									</TableCell>
 									<TableCell>
 										<Skeleton className="ml-auto h-4 w-8" />
@@ -179,7 +179,7 @@ function PracticeCountsRow({ counts }: { counts: PracticeReviewCounts }) {
 	return (
 		// `relative` anchors the name link's stretched hit area, so the whole row opens the practice.
 		<TableRow className="relative">
-			<TableCell className="max-w-72">
+			<TableCell className="max-w-72 whitespace-normal">
 				<span className="flex min-w-0 items-center gap-2">
 					{counts.group && (
 						<GroupPill
@@ -192,7 +192,7 @@ function PracticeCountsRow({ counts }: { counts: PracticeReviewCounts }) {
 						/>
 					)}
 					<InlineLink
-						className="min-w-0 truncate font-medium after:absolute after:inset-0"
+						className="min-w-0 font-medium break-words after:absolute after:inset-0"
 						render={<DetailStackLink entry={practiceLevel(counts.practiceSlug)} />}
 					>
 						{counts.practiceName}
