@@ -24,6 +24,9 @@ export interface ChangedFile {
 	status: string;
 	path: string;
 	oldPath?: string;
+	/** Changed-line counts where the record carries them (the commit record does; the change view does not). */
+	additions?: number;
+	deletions?: number;
 }
 
 /** The file's text, or null when the directory or the file is absent. */
@@ -57,6 +60,9 @@ function changedFiles(value: unknown): ChangedFile[] {
 		status: text(file.status),
 		path: text(file.path),
 		...(typeof file.oldPath === "string" ? { oldPath: file.oldPath } : {}),
+		...(typeof file.additions === "number" && typeof file.deletions === "number"
+			? { additions: file.additions, deletions: file.deletions }
+			: {}),
 	}));
 }
 

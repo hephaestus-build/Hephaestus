@@ -85,9 +85,6 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
 
     static final int MAX_COMMENTS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
-    /** Excludes Hephaestus feedback from captured reviewer comments to prevent self-citation. */
-    static final String HEPHAESTUS_MARKER = "<!-- hephaestus";
-
     private final ObjectMapper objectMapper;
     private final GitRepositoryManager gitRepositoryManager;
     private final PullRequestRepository pullRequestRepository;
@@ -354,7 +351,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
 
     private CommentCapture loadComments(long pullRequestId) {
         var comments = new ArrayList<>(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(
-                pullRequestId, HEPHAESTUS_MARKER, PageRequest.of(0, MAX_COMMENTS + 1)));
+                pullRequestId, ReviewThreadContentSource.HEPHAESTUS_MARKER, PageRequest.of(0, MAX_COMMENTS + 1)));
         if (comments.size() > MAX_COMMENTS + 1) {
             comments = new ArrayList<>(comments.subList(0, MAX_COMMENTS + 1));
         }

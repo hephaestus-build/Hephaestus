@@ -1,7 +1,7 @@
 // Precompute FACTS for commits-are-atomic-and-cohesive: one row per authored commit — its subject,
-// whether it lists several concerns, and the files it touched — read from the change view. The
-// criteria say what a listed subject means and the model judges the partition; a flag is a place to
-// look, never a verdict.
+// whether it joins clauses, and the files it touched with their line counts and moves — read from the
+// commit record. The criteria say what one logical change is and the model judges the partition; a
+// flag is a place to look, never a verdict.
 import { readCommits } from "../lib/change.ts";
 import { commitRows, describeCommitCount, subjectFacts } from "../lib/commit-subjects.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
@@ -23,14 +23,14 @@ export default async function commitsAreAtomicAndCohesive(
 				]
 			: [
 					describeCommitCount(facts),
-					"A subject that lists several concerns is the shape the criteria name; read it literally, beside the paths and kinds the commit touched, and judge whether the listed items are one step or several.",
+					"`joinedClauses` marks a subject that joins clauses with 'and', '&', '+', a comma or a semicolon, or a body with two or more bullets; `moved` counts files renamed with no line changed. Both describe the record, not how many changes a commit holds.",
 				];
 	return {
 		hints: commitRows(facts, contextReference),
 		metrics: {
 			authoredCommits: authored.length,
 			mergeCommits: facts.length - authored.length,
-			conjoinedSubjects: authored.filter((f) => f.conjoined).length,
+			joinedSubjects: authored.filter((f) => f.joinedClauses).length,
 		},
 		directions,
 	};

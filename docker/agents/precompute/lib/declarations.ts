@@ -249,6 +249,107 @@ function skipBalanced(
 	return i;
 }
 
+interface OpenString {
+	spec: StringSyntax;
+	hashes: number;
+}
+
+/** A literal that may span lines; only these carry into the next line when they stay open. */
+function spansLines(spec: StringSyntax): boolean {
+	return spec.close === '"""' || spec.close === "`";
+}
+
+/** One line's code, and the multi-line literal still open at its end. */
+function codeOfLine(
+	line: string,
+	syntax: Syntax,
+	carried: OpenString | null,
+): { code: string; open: OpenString | null } {
+	let code = "";
+	let open = carried;
+	let i = 0;
+	while (i < line.length) {
+		if (open === null) {
+			if (startsWith(line, i, syntax.lineComment)) {
+				break;
+			}
+			const spec = stringOpeningAt(line, i, syntax.strings);
+			if (spec) {
+				const hashes = opensAt(line, i, spec) ?? 0;
+				const opener = "#".repeat(hashes) + spec.open;
+				code += opener;
+				i += opener.length;
+				open = { spec, hashes };
+				continue;
+			}
+			code += line[i];
+			i += 1;
+			continue;
+		}
+		const raw = "#".repeat(open.hashes);
+		const close = open.spec.close + raw;
+		if (startsWith(line, i, close)) {
+			code += close;
+			i += close.length;
+			open = null;
+			continue;
+		}
+		const interpolation = interpolationOpener(open.spec, open.hashes, raw);
+		if (
+			interpolation !== undefined &&
+			open.spec.interpolation !== undefined &&
+			startsWith(line, i, interpolation)
+		) {
+			const [, openBracket, closeBracket] = open.spec.interpolation;
+			const end = skipBalanced(
+				line,
+				i + interpolation.length,
+				openBracket,
+				closeBracket,
+				syntax.strings,
+			);
+			code += ` ${line.slice(i + interpolation.length, end - closeBracket.length)} `;
+			i = end;
+			continue;
+		}
+		const escape = open.spec.escape === undefined ? undefined : open.spec.escape + raw;
+		if (escape !== undefined && startsWith(line, i, escape)) {
+			code += " ".repeat(escape.length + 1);
+			i += escape.length + 1;
+			continue;
+		}
+		code += " ";
+		i += 1;
+	}
+	return { code, open: open !== null && spansLines(open.spec) ? open : null };
+}
+
+/**
+ * The code of each line with the text of string literals blanked and a trailing comment dropped, so a
+ * pattern matches what the program does rather than what it prints: `"https://a/b"` divides nothing,
+ * while the interpolation in `"\(items[2])"` still indexes. A multi-line literal left open carries into
+ * the next consecutive line. A language without a syntax row keeps its lines as they are.
+ */
+export function codeLines(
+	language: string,
+	lines: ReadonlyMap<number, string>,
+): Map<number, string> {
+	const syntax = SYNTAX[language];
+	if (syntax === undefined) {
+		return new Map(lines);
+	}
+	const code = new Map<number, string>();
+	let open: OpenString | null = null;
+	let previous = Number.NaN;
+	for (const [number, line] of [...lines].toSorted(([a], [b]) => a - b)) {
+		const result = codeOfLine(line, syntax, number === previous + 1 ? open : null);
+		code.set(number, result.code);
+		open = result.open;
+		previous = number;
+	}
+	return code;
+}
+
 /** The brace events of the source, with comments and strings removed: `{`/`}` with their line. */
 function braceEvents(source: string, syntax: Syntax): { brace: "{" | "}"; line: number }[] {
 	const events: { brace: "{" | "}"; line: number }[] = [];
@@ -369,6 +470,44 @@ export function declarations(language: string, source: string): Declaration[] | 
 		}
 	}
 	return found;
+}
+
+/**
+ * The brace-delimited extent of each block a line matching `opener` starts — a Swift `#Preview { … }` —
+ * as 1-based inclusive lines; an opener whose block never closes runs to the end of the source.
+ */
+export function blockExtents(
+	language: string,
+	source: string,
+	opener: RegExp,
+): { start: number; end: number }[] | null {
+	const syntax = SYNTAX[language];
+	if (!syntax) {
+		return null;
+	}
+	const lines = source.split("\n");
+	const events = braceEvents(source, syntax);
+	const extents: { start: number; end: number }[] = [];
+	for (const [index, text] of lines.entries()) {
+		if (!opener.test(text)) {
+			continue;
+		}
+		const first = events.findIndex((event) => event.brace === "{" && event.line >= index + 1);
+		if (first === -1) {
+			continue;
+		}
+		let depth = 0;
+		let end = lines.length;
+		for (const event of events.slice(first)) {
+			depth += event.brace === "{" ? 1 : -1;
+			if (depth === 0) {
+				end = event.line;
+				break;
+			}
+		}
+		extents.push({ start: index + 1, end });
+	}
+	return extents;
 }
 
 /** The innermost declaration a line lies in, or undefined at file scope. */
