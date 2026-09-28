@@ -500,9 +500,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     /**
      * Leaves the merge request's review decision unknown once a webhook changed where one person's review stands. The
      * hook names that one act; what every reviewer's acts now add up to is the sync's to read ({@link #reviewDecision}),
-     * so the stored decision would otherwise outlive the act that changed it.
+     * so the stored decision would otherwise outlive the act that changed it. Runs in the caller's transaction.
      */
-    @Transactional
     public void forgetReviewDecision(PullRequest pr) {
         if (pr.getReviewDecision() != null) {
             pr.setReviewDecision(null);
