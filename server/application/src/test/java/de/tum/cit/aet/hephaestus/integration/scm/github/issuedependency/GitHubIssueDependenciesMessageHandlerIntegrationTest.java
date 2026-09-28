@@ -22,6 +22,9 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.ObjectMapper;
@@ -104,36 +107,20 @@ class GitHubIssueDependenciesMessageHandlerIntegrationTest extends BaseIntegrati
         workspaceRepository.save(workspace);
     }
 
-    @Test
-    void shouldRecordTheBlockerWhenTheBlockedIssueReportsIt() throws IOException {
-        handler.handleEvent(load("blocked_by_added"));
+    @ParameterizedTest
+    @ValueSource(strings = {"blocked_by_added", "blocking_added"})
+    void shouldRecordTheBlockerWhenEitherSideReportsIt(String action) throws IOException {
+        handler.handleEvent(load(action));
 
         assertThat(blockerNumbers()).containsExactly(BLOCKING_NUMBER);
     }
 
-    @Test
-    void shouldRecordTheBlockerWhenOnlyTheBlockingIssueReportsIt() throws IOException {
-        handler.handleEvent(load("blocking_added"));
+    @ParameterizedTest
+    @CsvSource({"blocked_by_added, blocked_by_removed", "blocking_added, blocking_removed"})
+    void shouldRemoveTheBlockerWhenEitherSideReportsItsRemoval(String added, String removed) throws IOException {
+        handler.handleEvent(load(added));
+        handler.handleEvent(load(removed));
 
-        assertThat(blockerNumbers()).containsExactly(BLOCKING_NUMBER);
-    }
-
-    @Test
-    void shouldRecordTheBlockerOnceWhenBothSidesReportIt() throws IOException {
-        handler.handleEvent(load("blocked_by_added"));
-        handler.handleEvent(load("blocking_added"));
-
-        assertThat(blockerNumbers()).containsExactly(BLOCKING_NUMBER);
-    }
-
-    @Test
-    void shouldRemoveTheBlockerWhenEitherSideReportsItsRemoval() throws IOException {
-        handler.handleEvent(load("blocked_by_added"));
-        handler.handleEvent(load("blocked_by_removed"));
-        assertThat(blockerNumbers()).isEmpty();
-
-        handler.handleEvent(load("blocking_added"));
-        handler.handleEvent(load("blocking_removed"));
         assertThat(blockerNumbers()).isEmpty();
     }
 

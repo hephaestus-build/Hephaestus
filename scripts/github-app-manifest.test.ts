@@ -3,9 +3,6 @@
  * the server actually consumes. A permission it omits is a sync that silently returns nothing, and a
  * subscription it adds ahead of a consumer is stored in the bounded webhook stream and then dropped —
  * paying retention that the deliveries Hephaestus does read would otherwise have.
- *
- * The events are compared with `GitHubEventType`, and the server's `WebhookFixtureHandlerResolutionTest`
- * ties that enum to the registered handlers, so together the two prove every subscription has a handler.
  */
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";

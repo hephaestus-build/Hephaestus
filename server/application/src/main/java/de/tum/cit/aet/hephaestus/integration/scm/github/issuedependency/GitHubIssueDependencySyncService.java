@@ -74,7 +74,7 @@ import reactor.util.retry.Retry;
  * {@code issue_dependencies} deliveries apply single changes through {@link #processIssueDependencyEvent};
  * {@link #syncDependenciesForScope} reconciles every relationship through GraphQL.
  * <p>
- * <b>ARCHITECTURE NOTE (Jan 2026):</b> This service implements the "find-or-create"
+ * This service implements the "find-or-create"
  * pattern for blocker issues. When a blocking issue doesn't exist locally (e.g.,
  * it's in a different repository or hasn't been synced yet), we create a stub
  * issue entity on-the-fly using the GraphQL response data. This ensures blocking

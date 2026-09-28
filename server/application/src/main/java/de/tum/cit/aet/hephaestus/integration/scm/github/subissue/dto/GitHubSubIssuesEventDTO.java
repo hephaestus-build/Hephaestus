@@ -10,11 +10,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import org.jspecify.annotations.Nullable;
 
 /**
- * DTO for GitHub sub_issues webhook events.
- * <p>
- * {@code repository} is the repository of the side that reports the change. The payload names the other
- * side's repository: {@code sub_issue_repo} on a {@code sub_issue_*} action, {@code parent_issue_repo} on a
- * {@code parent_issue_*} action.
+ * DTO for GitHub sub_issues webhook events. {@code repository} is the reporting side's repository; the
+ * other side's is {@code sub_issue_repo} or {@code parent_issue_repo}.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record GitHubSubIssuesEventDTO(

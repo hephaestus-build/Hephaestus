@@ -10,11 +10,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import org.jspecify.annotations.Nullable;
 
 /**
- * DTO for GitHub issue_dependencies webhook events.
- * <p>
- * {@code repository} is the repository of the side that reports the change. The payload names the other
- * side's repository: {@code blocking_issue_repo} on a {@code blocked_by_*} action, {@code blocked_issue_repo} on a
- * {@code blocking_*} action.
+ * DTO for GitHub issue_dependencies webhook events. {@code repository} is the reporting side's repository;
+ * the other side's is {@code blocking_issue_repo} or {@code blocked_issue_repo}.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record GitHubIssueDependenciesEventDTO(

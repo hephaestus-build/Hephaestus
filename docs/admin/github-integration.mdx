@@ -33,8 +33,7 @@ Tokens are stored encrypted (AES-256-GCM) per workspace in the database.
 
 1. Create a token. A **classic PAT** needs the scopes `repo`, `read:org` and `read:project`; `repo`
    includes pull request and issue write access and the check state. A **fine-grained PAT** needs the
-   organization as its *resource owner* and the permissions in the table below. Metadata read is
-   always included.
+   organization as its *resource owner* and the permissions in the table below.
 2. PAT connections need no GitHub App credentials. Keep existing App configuration if other
    workspaces use it; authentication is selected per workspace connection.
 3. Paste the token when creating/configuring the workspace in the UI.
@@ -59,8 +58,9 @@ offer to fine-grained tokens.
 
 :::warning A missing permission does not fail the connection
 
-GitHub accepts a fine-grained token without any of these permissions, and Hephaestus then syncs
-nothing for that permission: the last column says what stays empty. GitHub does not offer the Checks
+GitHub accepts a fine-grained token without any of these permissions. Without Contents, Pull
+requests, Issues, Discussions, Members, Projects or Issue types, the sync that reads it stays empty,
+as the last column says. GitHub does not offer the Checks
 permission to fine-grained tokens
 ([community discussion](https://github.com/orgs/community/discussions/129512)), and a token without
 it can be refused a private repository's check state. There, only the `check_suite` and `status`

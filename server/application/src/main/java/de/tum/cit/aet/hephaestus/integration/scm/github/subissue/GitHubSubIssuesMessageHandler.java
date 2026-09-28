@@ -11,10 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContextFactory;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueProcessor;
-import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.subissue.dto.GitHubSubIssuesEventDTO;
-import java.util.Optional;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -73,10 +70,16 @@ public class GitHubSubIssuesMessageHandler extends AbstractIntegrationMessageHan
 
         // The relationship is keyed by the stored rows, whose ids are not GitHub's.
         GitHubEventAction.SubIssue action = event.actionType();
-        Long parentIssueId = storedId(
-                parentIssueDto, contextFactory.forRelatedIssue(context, event.parentIssueRepo(), event.action()));
-        Long subIssueId =
-                storedId(subIssueDto, contextFactory.forRelatedIssue(context, event.subIssueRepo(), event.action()));
+        Long parentIssueId = contextFactory
+                .forRelatedIssue(context, event.parentIssueRepo(), event.action())
+                .map(issueContext -> issueProcessor.process(parentIssueDto, issueContext))
+                .map(Issue::getId)
+                .orElse(null);
+        Long subIssueId = contextFactory
+                .forRelatedIssue(context, event.subIssueRepo(), event.action())
+                .map(issueContext -> issueProcessor.process(subIssueDto, issueContext))
+                .map(Issue::getId)
+                .orElse(null);
         if (subIssueId == null || parentIssueId == null) {
             log.debug("Skipped sub_issues event: reason=issueNotStored, action={}", event.action());
             return;
@@ -93,11 +96,5 @@ public class GitHubSubIssuesMessageHandler extends AbstractIntegrationMessageHan
         } else {
             log.debug("Skipped sub_issues event: reason=unhandledAction, action={}", event.action());
         }
-    }
-
-    /** Stores one side of the relationship and returns its row id; nothing when its repository is not synchronized. */
-    private @Nullable Long storedId(GitHubIssueDTO issue, Optional<ProcessingContext> context) {
-        Issue stored = context.isPresent() ? issueProcessor.process(issue, context.get()) : null;
-        return stored == null ? null : stored.getId();
     }
 }

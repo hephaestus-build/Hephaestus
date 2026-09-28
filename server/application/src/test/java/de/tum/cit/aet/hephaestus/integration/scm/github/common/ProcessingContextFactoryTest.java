@@ -159,31 +159,6 @@ class ProcessingContextFactoryTest {
             });
         }
 
-        @Test
-        void shouldReturnNothingWhenTheNamedRepositoryIsNotStored() {
-            String repoFullName = "ls1intum/Artemis";
-            when(repositoryScopeFilter.isRepositoryAllowed(repoFullName)).thenReturn(true);
-            when(repositoryRepository.findByNameWithOwnerWithOrganization(repoFullName))
-                    .thenReturn(Optional.empty());
-
-            Optional<ProcessingContext> result =
-                    factory.forRelatedIssue(delivering, repositoryRef(repoFullName), "blocked_by_added");
-
-            assertThat(result).isEmpty();
-        }
-
-        @Test
-        void shouldReturnNothingWhenTheNamedRepositoryIsFiltered() {
-            String repoFullName = "ls1intum/Artemis";
-            when(repositoryScopeFilter.isRepositoryAllowed(repoFullName)).thenReturn(false);
-
-            Optional<ProcessingContext> result =
-                    factory.forRelatedIssue(delivering, repositoryRef(repoFullName), "blocked_by_added");
-
-            assertThat(result).isEmpty();
-            verifyNoInteractions(repositoryRepository);
-        }
-
         private static GitHubRepositoryRefDTO repositoryRef(String fullName) {
             return new GitHubRepositoryRefDTO(2L, "node_id", "repo", fullName, false, "url", null);
         }

@@ -157,12 +157,7 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
                 .isEmpty();
     }
 
-    /**
-     * {@link GitHubEventType} is the list of events Hephaestus consumes, and the GitHub App guide's manifest
-     * subscribes to exactly that list ({@code scripts/github-app-manifest.test.ts}). Tying the list to the handlers
-     * in both directions is what makes every subscription reach a handler: a value without one is a subscription
-     * whose deliveries are ACK-dropped, and a handler outside the list is an event the manifest never subscribes to.
-     */
+    /** A value without a handler is a subscription whose deliveries are ACK-dropped. */
     @Test
     void shouldRegisterAHandlerForExactlyTheGithubEventTypes() {
         Set<String> handledEvents = registeredKeys(GITHUB_HANDLER_PACKAGE).stream()

@@ -64,9 +64,8 @@ public class ProcessingContextFactory {
 
     /**
      * Create a ProcessingContext for one issue of a relationship event ({@code sub_issues},
-     * {@code issue_dependencies}). The issue belongs to the repository the payload names for it, or to the
-     * delivering repository when the payload names none; a named repository passes the same filtering as
-     * {@link #forWebhookEvent}, so a cross-repository issue is never stored under the delivering repository.
+     * {@code issue_dependencies}): the repository the payload names for that issue, filtered like
+     * {@link #forWebhookEvent}, or the delivering repository when it names none.
      */
     @Transactional(readOnly = true)
     public Optional<ProcessingContext> forRelatedIssue(

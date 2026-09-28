@@ -507,9 +507,8 @@ public sealed interface GitHubEventAction {
     // Issue Dependency Events
 
     /**
-     * Actions for the issue_dependencies webhook event. GitHub reports one change twice, once from
-     * each side: {@code blocked_by_*} from the blocked issue and {@code blocking_*} from the issue
-     * that blocks it.
+     * Actions for the issue_dependencies webhook event. GitHub reports each change from both sides:
+     * {@code blocked_by_*} from the blocked issue, {@code blocking_*} from the blocking one.
      *
      * @see GitHubEventType#ISSUE_DEPENDENCIES
      */

@@ -5,9 +5,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * The GitHub webhook events Hephaestus consumes, each named by its X-GitHub-Event header value.
  * <p>
- * Every value has a registered message handler ({@code WebhookFixtureHandlerResolutionTest}), and the GitHub App
- * guide's manifest subscribes to every value GitHub does not deliver unasked
- * ({@code scripts/github-app-manifest.test.ts}), so adding a value means adding its handler and its subscription.
+ * Adding a value means adding its handler ({@code WebhookFixtureHandlerResolutionTest}) and its subscription in
+ * the GitHub App guide's manifest ({@code scripts/github-app-manifest.test.ts}).
  *
  * @see <a href="https://docs.github.com/en/webhooks/webhook-events-and-payloads">
  *      GitHub Webhook Events Reference</a>
