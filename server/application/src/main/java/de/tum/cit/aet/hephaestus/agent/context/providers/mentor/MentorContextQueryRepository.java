@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -92,14 +93,18 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
                   AND rtmr3.workspace.id = :workspaceId
                   AND r3.submittedAt > :weekAgo
                   AND r3.submittedAt <= :now), 0L),
-            COALESCE((SELECT COUNT(prr)
-                FROM PullRequest prr
-                JOIN RepositoryToMonitor rtmpr ON rtmpr.nameWithOwner = prr.repository.nameWithOwner
-                JOIN prr.requestedReviewers reviewer
-                WHERE reviewer.id = :userId
-                  AND prr.deletedAt IS NULL
+            COALESCE((SELECT COUNT(work)
+                FROM PullRequest work
+                JOIN RepositoryToMonitor rtmpr ON rtmpr.nameWithOwner = work.repository.nameWithOwner
+                JOIN work.requestedReviewers request
+                WHERE request.user.id = :userId
+                  AND work.deletedAt IS NULL
+                  AND work.isDraft = false
                   AND rtmpr.workspace.id = :workspaceId
-                  AND prr.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN), 0L),
+                  AND work.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
+                  AND
+        """ + RequestedReviewer.AWAITING_REVIEW + """
+                ), 0L),
             COALESCE((SELECT COUNT(t)
                 FROM PullRequestReviewThread t
                 JOIN RepositoryToMonitor rtmt ON rtmt.nameWithOwner = t.pullRequest.repository.nameWithOwner
@@ -143,19 +148,26 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
         """)
     List<Issue> findAssignedOpenIssues(@Param("workspaceId") Long workspaceId, @Param("userId") Long userId);
 
-    /** Open PRs where user has been requested to review, with author + repo fetched. */
+    /**
+     * Open, ready PRs that ask the user directly for a review they still owe ({@link RequestedReviewer#AWAITING_REVIEW}),
+     * including those Activity shows as covered by other reviewers; a request to one of the user's teams is not one.
+     * Author and repository fetched.
+     */
     @Query("""
-        SELECT p
-        FROM PullRequest p
-        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = p.repository.nameWithOwner
-        JOIN p.requestedReviewers reviewer
-        LEFT JOIN FETCH p.author
-        LEFT JOIN FETCH p.repository
-        WHERE reviewer.id = :userId
-          AND p.deletedAt IS NULL
+        SELECT work
+        FROM PullRequest work
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = work.repository.nameWithOwner
+        JOIN work.requestedReviewers request
+        LEFT JOIN FETCH work.author
+        LEFT JOIN FETCH work.repository
+        WHERE request.user.id = :userId
+          AND work.deletedAt IS NULL
+          AND work.isDraft = false
           AND rtm.workspace.id = :workspaceId
-          AND p.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
-        ORDER BY p.createdAt DESC
+          AND work.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
+          AND
+        """ + RequestedReviewer.AWAITING_REVIEW + """
+        ORDER BY work.createdAt DESC
         """)
     List<PullRequest> findPendingReviewRequestPrs(@Param("workspaceId") Long workspaceId, @Param("userId") Long userId);
 

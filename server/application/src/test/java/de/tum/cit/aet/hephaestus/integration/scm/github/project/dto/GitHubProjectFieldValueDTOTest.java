@@ -3,8 +3,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.project.dto;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHBot;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHLabel;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHLabelConnection;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHMannequin;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHMilestone;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHProjectV2Field;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHProjectV2ItemFieldDateValue;
@@ -335,6 +337,27 @@ class GitHubProjectFieldValueDTOTest extends BaseUnitTest {
             assertNotNull(result);
             assertThat(result.fieldType()).isEqualTo("REVIEWERS");
             assertThat(result.textValue()).contains("alice", "core-team");
+        }
+
+        @Test
+        void shouldKeepBotAndMannequinLoginsWhenTheyAreAskedToReview() {
+            GHUser user = new GHUser();
+            user.setLogin("alice");
+            GHBot bot = new GHBot();
+            bot.setLogin("copilot-pull-request-reviewer");
+            GHMannequin mannequin = new GHMannequin();
+            mannequin.setLogin("imported-reviewer");
+            GHRequestedReviewerConnection reviewerConn = new GHRequestedReviewerConnection();
+            reviewerConn.setNodes(List.of(user, bot, mannequin));
+            reviewerConn.setTotalCount(3);
+            GHProjectV2ItemFieldReviewerValue value = new GHProjectV2ItemFieldReviewerValue();
+            value.setField(createField(FIELD_ID));
+            value.setReviewers(reviewerConn);
+
+            GitHubProjectFieldValueDTO result = GitHubProjectFieldValueDTO.fromFieldValue(value);
+
+            assertNotNull(result);
+            assertThat(result.textValue()).contains("alice", "copilot-pull-request-reviewer", "imported-reviewer");
         }
 
         @Test

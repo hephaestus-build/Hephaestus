@@ -22,7 +22,7 @@ const meta = {
 		user: ada,
 		providerType: "GITHUB",
 		range: "30d",
-		openWork: { status: "ready", openWork: OPEN_WORK },
+		openWork: { status: "ready", openWork: OPEN_WORK, login: ada.login },
 		overview: readyOverview(OVERVIEW),
 		workLog: {
 			status: "ready",

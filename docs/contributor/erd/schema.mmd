@@ -622,6 +622,7 @@ erDiagram
         VARCHAR(16) head_check_state
         UUID review_snapshot_id
         VARCHAR(128) review_snapshot_digest
+        TIMESTAMPTZ reviewers_observed_at
     }
 
     IssueAssignee {
@@ -1200,6 +1201,12 @@ erDiagram
     PullRequestRequestedReviewer {
         BIGINT pull_request_id PK,FK
         BIGINT user_id PK,FK
+        VARCHAR(32) review_state
+    }
+
+    PullRequestRequestedTeam {
+        BIGINT pull_request_id PK,FK
+        BIGINT team_id PK,FK
     }
 
     PullRequestReview {
@@ -1872,6 +1879,8 @@ erDiagram
     Issue }o--o{ PullRequestClosingIssue : references
     Issue }o--o{ PullRequestRequestedReviewer : reviewed
     User }o--o{ PullRequestRequestedReviewer : reviewed
+    Issue }o--o{ PullRequestRequestedTeam : references
+    Team }o--o{ PullRequestRequestedTeam : has
     Repository }o--o{ RepositoryCollaborator : has
     User }o--o{ RepositoryCollaborator : has
     User }o--o{ TeamMembership : belongs_to

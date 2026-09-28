@@ -1,6 +1,5 @@
-import type { OpenWork, UserInfo } from "@/api/types.gen";
+import type { UserInfo } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
-import type { PanelState } from "@/components/common/panel-state";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { Section } from "@/components/layout/Section";
@@ -14,7 +13,7 @@ import { ActivityTiles } from "./ActivityTiles";
 import { ActivityWorkLog, type ActivityWorkLogState } from "./ActivityWorkLog";
 import { CopyMarkdownButton } from "./CopyMarkdownButton";
 import { MemberAvatar } from "./MemberAvatar";
-import { OpenWorkSections } from "./OpenWorkSections";
+import { OpenWorkSections, type OpenWorkState } from "./OpenWorkSections";
 
 export interface MemberActivityLevelProps {
 	nested?: boolean;
@@ -24,7 +23,7 @@ export interface MemberActivityLevelProps {
 	user?: UserInfo;
 	providerType: ProviderType;
 	range: ActivityRange;
-	openWork: PanelState<{ openWork: OpenWork }>;
+	openWork: OpenWorkState;
 	overview: ActivityOverviewState;
 	workLog: ActivityWorkLogState;
 }
@@ -65,12 +64,7 @@ export function MemberActivityLevel({
 				}
 			/>
 			<DrawerBody className="flex flex-col gap-8 pt-2">
-				<OpenWorkSections
-					state={openWork}
-					providerType={providerType}
-					perspective="member"
-					login={login}
-				/>
+				<OpenWorkSections state={openWork} providerType={providerType} perspective="member" />
 				<Section level={3} size="lg" title={ACTIVITY_RANGE_DEFS[range].label}>
 					<ActivityTiles state={overview} providerType={providerType} />
 				</Section>

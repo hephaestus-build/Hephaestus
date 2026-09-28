@@ -55,7 +55,13 @@ public record WorkItemDTO(
         @Schema(
                 description = "The pull request's reviewers besides its author, where each review stands; only open"
                         + " work lists them")
-        List<ReviewerDTO> reviewers) {
+        List<ReviewerDTO> reviewers,
+
+        @Nullable
+        @Schema(
+                description = "The member's teams the pull request asks for a review; only team review requests list"
+                        + " them")
+        List<TeamRefDTO> requestedTeams) {
 
     public enum WorkItemType {
         PULL_REQUEST,
@@ -87,6 +93,7 @@ public record WorkItemDTO(
                     UserInfoDTO.fromUser(pullRequest.getAuthor()),
                     pullRequest.getCreatedAt(),
                     pullRequest.getUpdatedAt(),
+                    null,
                     null);
         }
         return new WorkItemDTO(
@@ -103,7 +110,27 @@ public record WorkItemDTO(
                 UserInfoDTO.fromUser(work.getAuthor()),
                 work.getCreatedAt(),
                 work.getUpdatedAt(),
+                null,
                 null);
+    }
+
+    public WorkItemDTO withRequestedTeams(List<TeamRefDTO> requestedTeams) {
+        return new WorkItemDTO(
+                id,
+                type,
+                number,
+                title,
+                state,
+                isDraft,
+                reviewDecision,
+                checks,
+                htmlUrl,
+                repository,
+                author,
+                createdAt,
+                updatedAt,
+                reviewers,
+                requestedTeams);
     }
 
     public WorkItemDTO withReviewers(List<ReviewerDTO> reviewers) {
@@ -121,6 +148,7 @@ public record WorkItemDTO(
                 author,
                 createdAt,
                 updatedAt,
-                reviewers);
+                reviewers,
+                requestedTeams);
     }
 }

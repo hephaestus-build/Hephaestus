@@ -1,16 +1,20 @@
 package de.tum.cit.aet.hephaestus.activity.overview;
 
-import de.tum.cit.aet.hephaestus.activity.overview.WorkItemQueryRepository.RequestedReviewer;
+import de.tum.cit.aet.hephaestus.activity.overview.WorkItemQueryRepository.ReviewRequest;
 import de.tum.cit.aet.hephaestus.activity.overview.WorkItemQueryRepository.StandingReview;
+import de.tum.cit.aet.hephaestus.activity.overview.WorkItemQueryRepository.TeamReviewRequest;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.OpenWorkDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO.ReviewerState;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.TeamRefDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.WorkItemDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.WorkItemListDTO;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer.ReviewState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserInfoDTO;
 import java.util.Comparator;
@@ -25,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,24 +56,58 @@ public class OpenWorkService {
 
     @Transactional(readOnly = true)
     public OpenWorkDTO openWork(long workspaceId, String login) {
-        long userId = scopes.member(workspaceId, login).getId();
+        User member = scopes.member(workspaceId, login);
+        long userId = member.getId();
         Pageable first = PageRequest.ofSize(LIMIT);
+        Set<Long> teamIds = scopes.memberTeams(workspaceId, member).stream()
+                .map(Team::getId)
+                .collect(Collectors.toSet());
         Slice<PullRequest> reviewRequests = workItems.findReviewRequests(workspaceId, userId, first);
+        Slice<PullRequest> teamReviewRequests = teamIds.isEmpty()
+                ? new SliceImpl<>(List.of())
+                : workItems.findTeamReviewRequests(workspaceId, userId, teamIds, first);
         Slice<PullRequest> pullRequests = workItems.findOpenPullRequests(workspaceId, userId, first);
-        Map<Long, List<ReviewerDTO>> reviewers =
-                reviewers(Stream.concat(reviewRequests.getContent().stream(), pullRequests.getContent().stream())
-                        .toList());
+        Map<Long, List<ReviewerDTO>> reviewers = reviewers(Stream.of(reviewRequests, teamReviewRequests, pullRequests)
+                .flatMap(slice -> slice.getContent().stream())
+                .toList());
+        Map<Long, List<TeamRefDTO>> requestedTeams = requestedTeams(teamReviewRequests.getContent(), teamIds);
         return new OpenWorkDTO(
-                list(reviewRequests, reviewers),
-                list(pullRequests, reviewers),
-                list(workItems.findAssignedIssues(workspaceId, userId, first), Map.of()));
+                list(reviewRequests, reviewers, Map.of()),
+                list(teamReviewRequests, reviewers, requestedTeams),
+                list(pullRequests, reviewers, Map.of()),
+                list(workItems.findAssignedIssues(workspaceId, userId, first), Map.of(), Map.of()));
+    }
+
+    private Map<Long, List<TeamRefDTO>> requestedTeams(List<PullRequest> pullRequests, Set<Long> teamIds) {
+        if (pullRequests.isEmpty()) {
+            return Map.of();
+        }
+        return workItems
+                .findRequestedTeams(
+                        pullRequests.stream().map(PullRequest::getId).toList(), teamIds)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        TeamReviewRequest::getPullRequestId,
+                        Collectors.collectingAndThen(
+                                Collectors.mapping(
+                                        request -> new TeamRefDTO(request.getTeamId(), request.getTeamName()),
+                                        Collectors.toList()),
+                                teams -> teams.stream()
+                                        .sorted(Comparator.comparing(TeamRefDTO::name, ActivityScopeResolver.NAMES))
+                                        .toList())));
     }
 
     /**
-     * Each pull request's reviewers besides its author, listed by {@link ReviewerState}, then by name. A reviewer
-     * stands where their latest verdict left them, or their latest comment when they gave no verdict. A requested
-     * reviewer is REQUESTED on GitHub, which lists only those it is waiting for; GitLab keeps reviewers listed after
-     * they reviewed, so there a review stands over the request.
+     * Each pull request's reviewers besides its author, listed by {@link ReviewerState}, then by name.
+     *
+     * <ul>
+     *   <li>GitHub lists only the reviewers it is waiting for, so a listed reviewer is REQUESTED.
+     *   <li>GitLab keeps every reviewer listed and says where each review stands; asking a reviewer again sets
+     *       them back to unreviewed, so that state is the reviewer's. Where GitLab stated none, a standing review
+     *       is taken over the request.
+     *   <li>Anyone else reviewing stands where their latest verdict left them, or their latest comment when they
+     *       gave no verdict.
+     * </ul>
      */
     private Map<Long, List<ReviewerDTO>> reviewers(List<PullRequest> pullRequests) {
         if (pullRequests.isEmpty()) {
@@ -80,16 +119,18 @@ public class OpenWorkService {
                 .sorted(STANDING)
                 .forEach(review -> reviewed.computeIfAbsent(review.getPullRequestId(), id -> new HashMap<>())
                         .put(review.getReviewer().getId(), reviewer(review.getReviewer(), state(review))));
-        Map<Long, List<User>> requested = workItems.findRequestedReviewers(ids).stream()
-                .collect(Collectors.groupingBy(
-                        RequestedReviewer::getPullRequestId,
-                        Collectors.mapping(RequestedReviewer::getReviewer, Collectors.toList())));
+        Map<Long, List<ReviewRequest>> requested = workItems.findRequestedReviewers(ids).stream()
+                .collect(Collectors.groupingBy(ReviewRequest::getPullRequestId));
         Map<Long, List<ReviewerDTO>> reviewers = new HashMap<>();
         for (PullRequest pullRequest : pullRequests) {
-            boolean requestStands = pullRequest.getProvider().getType() != IdentityProviderType.GITLAB;
+            boolean gitLab = pullRequest.getProvider().getType() == IdentityProviderType.GITLAB;
             Map<Long, ReviewerDTO> byUser = new HashMap<>(reviewed.getOrDefault(pullRequest.getId(), Map.of()));
-            for (User user : requested.getOrDefault(pullRequest.getId(), List.of())) {
-                if (requestStands || !byUser.containsKey(user.getId())) {
+            for (ReviewRequest request : requested.getOrDefault(pullRequest.getId(), List.of())) {
+                User user = request.getReviewer();
+                ReviewState stated = request.getReviewState();
+                if (stated != null) {
+                    byUser.put(user.getId(), reviewer(user, state(stated)));
+                } else if (!gitLab || !byUser.containsKey(user.getId())) {
                     byUser.put(user.getId(), reviewer(user, ReviewerState.REQUESTED));
                 }
             }
@@ -107,6 +148,16 @@ public class OpenWorkService {
         return new ReviewerDTO(Objects.requireNonNull(UserInfoDTO.fromUser(user)), state);
     }
 
+    /** Where GitLab says a reviewer stands: not begun, begun but not submitted, or withdrawn is still requested. */
+    private static ReviewerState state(ReviewState stated) {
+        return switch (stated) {
+            case UNREVIEWED, REVIEW_STARTED, UNAPPROVED -> ReviewerState.REQUESTED;
+            case REVIEWED -> ReviewerState.COMMENTED;
+            case APPROVED -> ReviewerState.APPROVED;
+            case REQUESTED_CHANGES -> ReviewerState.CHANGES_REQUESTED;
+        };
+    }
+
     private static ReviewerState state(StandingReview review) {
         return switch (review.getState()) {
             case APPROVED -> ReviewerState.APPROVED;
@@ -115,13 +166,18 @@ public class OpenWorkService {
         };
     }
 
-    private static WorkItemListDTO list(Slice<? extends Issue> work, Map<Long, List<ReviewerDTO>> reviewers) {
+    private static WorkItemListDTO list(
+            Slice<? extends Issue> work,
+            Map<Long, List<ReviewerDTO>> reviewers,
+            Map<Long, List<TeamRefDTO>> requestedTeams) {
         return new WorkItemListDTO(
                 work.getContent().stream()
                         .map(item -> {
                             WorkItemDTO dto = WorkItemDTO.from(item);
                             List<ReviewerDTO> listed = reviewers.get(item.getId());
-                            return listed == null ? dto : dto.withReviewers(listed);
+                            List<TeamRefDTO> teams = requestedTeams.get(item.getId());
+                            dto = listed == null ? dto : dto.withReviewers(listed);
+                            return teams == null ? dto : dto.withRequestedTeams(teams);
                         })
                         .toList(),
                 work.hasNext());

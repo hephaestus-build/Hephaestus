@@ -192,8 +192,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void mapState_opened() {
             PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
 
             GitLabMergeRequestEventDTO event = createEvent("open", "opened", false);
@@ -239,8 +240,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void mapState_closed() {
             PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
 
             GitLabMergeRequestEventDTO event = createEvent("close", "closed", false);
@@ -286,8 +288,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void mapState_merged() {
             PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
 
             GitLabMergeRequestEventDTO event = createEvent("merge", "merged", false);
@@ -333,8 +336,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void mapState_null() {
             PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
 
             GitLabMergeRequestEventDTO event = createEventWithState("open", null);
@@ -380,8 +384,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void mapState_unknown() {
             PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
 
             GitLabMergeRequestEventDTO event = createEventWithState("open", "some_unknown_state");
@@ -427,8 +432,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void mapState_locked() {
             PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
 
             GitLabMergeRequestEventDTO event = createEventWithState("open", "locked");
@@ -482,8 +488,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             PullRequest pr = createPullRequestEntity();
             // 1st: stale check + isNew (process) -> empty (new PR)
             // 2nd: post-upsert fetch (upsertMergeRequest) -> found
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -504,8 +511,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         @DisplayName("a new merge request opened ready is Created only, as a GitHub pull request is")
         void shouldNotRaiseReadyWhenANonDraftMergeRequestIsOpened() {
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(createPullRequestEntity()));
             when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
                     .thenReturn(createUserEntity());
@@ -523,6 +531,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void shouldRaiseSynchronizedWhenAnUpdateMovesTheHead() {
             PullRequest pr = createPullRequestEntity();
             pr.setHeadRefOid("a".repeat(40));
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(pr));
             when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
@@ -538,6 +548,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void shouldNotRaiseSynchronizedWhenTheHeadStays() {
             PullRequest pr = createPullRequestEntity();
             pr.setHeadRefOid("a".repeat(40));
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(pr));
             when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
@@ -578,8 +590,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void processUpdatesExistingPR() {
             PullRequest pr = createPullRequestEntity();
             // 2 calls: stale check + isNew (process), post-upsert fetch (upsertMergeRequest)
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -599,8 +612,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void processUpdatesExistingPRPublishesPullRequestUpdated() {
             PullRequest pr = createPullRequestEntity();
             // 2 calls: stale check + isNew (process), post-upsert fetch (upsertMergeRequest)
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -624,9 +638,10 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void processClosedPublishesEvent() {
             PullRequest pr = createPullRequestEntity();
             // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -651,9 +666,10 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             PullRequest pr = createPullRequestEntity();
             pr.setState(Issue.State.CLOSED);
             // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -679,9 +695,10 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void processMergedPublishesEvents() {
             PullRequest pr = createPullRequestEntity();
             // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -712,9 +729,10 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             PullRequest pr = createPullRequestEntity();
             pr.setNativeId(RAW_MR_ID);
             // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -755,9 +773,10 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             PullRequest pr = createPullRequestEntity();
             pr.setNativeId(RAW_MR_ID);
             // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -805,8 +824,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             PullRequest pr = createPullRequestEntity();
             pr.setNativeId(RAW_MR_ID);
             // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -838,8 +858,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             PullRequest pr = createPullRequestEntity();
             pr.setNativeId(RAW_MR_ID);
             // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -873,8 +894,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void processMergedResolvesMergeUser() {
             PullRequest pr = createPullRequestEntity();
             // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -959,9 +981,10 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             PullRequest pr = createPullRequestEntity();
             pr.setNativeId(RAW_MR_ID);
             // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -1011,9 +1034,10 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void processUnapproved_alreadyDismissed_isIdempotent() {
             PullRequest pr = createPullRequestEntity();
             pr.setNativeId(RAW_MR_ID);
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -1052,9 +1076,10 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void processApproved_reApproval_fromChangesRequested_updatesToApproved() {
             PullRequest pr = createPullRequestEntity();
             pr.setNativeId(RAW_MR_ID);
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -1196,7 +1221,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             // lifecycle events while preventing stale data from overwriting newer sync data.
             PullRequest pr = createPullRequestEntity();
             pr.setUpdatedAt(Instant.parse("2024-02-01T00:00:00Z"));
-            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(pr));
 
             // Create an event with older updatedAt ("2024-01-15T10:00:00Z") than the existing entity
@@ -1256,8 +1281,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void processFromSyncCreatesPR() {
             PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -1265,7 +1291,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     .thenReturn(author);
 
             var syncData = createSyncData();
-            PullRequest result = processor.processFromSync(syncData, testRepo, 1L);
+            PullRequest result = processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             assertThat(result).isNotNull();
             assertThat(result.getProvider()).isEqualTo(gitLabProvider);
@@ -1310,12 +1336,13 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void processFromSyncPublishesCreatedEvent() {
             PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
 
             var syncData = createSyncData();
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             ArgumentCaptor<ScmDomainEvent.PullRequestCreated> eventCaptor =
                     ArgumentCaptor.forClass(ScmDomainEvent.PullRequestCreated.class);
@@ -1326,12 +1353,13 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void processFromSyncPublishesUpdatedForExisting() {
             PullRequest pr = createPullRequestEntity();
             // PR already exists
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             var syncData = createSyncData();
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             var captor = ArgumentCaptor.forClass(Object.class);
             verify(eventPublisher, atLeastOnce()).publishEvent(captor.capture());
@@ -1354,10 +1382,12 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             // Detected as a diff against the prior row, before the upsert below overwrites it.
             PullRequest existingDraft = createPullRequestEntity();
             existingDraft.setDraft(true);
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(existingDraft));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(existingDraft));
 
-            processor.processFromSync(createSyncData(false), testRepo, 1L);
+            processor.processFromSync(createSyncData(false), ProcessingContext.forSync(1L, testRepo));
 
             assertThat(publishedEvents()).anyMatch(e -> e instanceof ScmDomainEvent.PullRequestReady);
         }
@@ -1366,10 +1396,12 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void shouldPublishDraftedWhenSyncFindsAMergeRequestSentBackToDraft() {
             PullRequest existingReady = createPullRequestEntity();
             existingReady.setDraft(false);
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(existingReady));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(existingReady));
 
-            processor.processFromSync(createSyncData(true), testRepo, 1L);
+            processor.processFromSync(createSyncData(true), ProcessingContext.forSync(1L, testRepo));
 
             assertThat(publishedEvents()).anyMatch(e -> e instanceof ScmDomainEvent.PullRequestDrafted);
         }
@@ -1378,10 +1410,12 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void shouldNotPublishADraftTransitionWhenNothingAboutTheDraftFlagMoved() {
             PullRequest existingReady = createPullRequestEntity();
             existingReady.setDraft(false);
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(existingReady));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(existingReady));
 
-            processor.processFromSync(createSyncData(false), testRepo, 1L);
+            processor.processFromSync(createSyncData(false), ProcessingContext.forSync(1L, testRepo));
 
             assertThat(publishedEvents())
                     .noneMatch(e -> e instanceof ScmDomainEvent.PullRequestReady
@@ -1391,11 +1425,12 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void shouldNotInventATransitionForAMergeRequestSyncIsSeeingForTheFirstTime() {
             // No prior row to diff against, so a backfill must not read as a wave of new transitions.
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(createPullRequestEntity()));
 
-            processor.processFromSync(createSyncData(false), testRepo, 1L);
+            processor.processFromSync(createSyncData(false), ProcessingContext.forSync(1L, testRepo));
 
             assertThat(publishedEvents())
                     .noneMatch(e -> e instanceof ScmDomainEvent.PullRequestReady
@@ -1411,8 +1446,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void shouldRecordTheHeadPipelineAndTheClosingIssuesFromSync() {
             PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
             when(gitLabUserService.findOrCreateUser(any(GitLabUserLookup.class), eq(PROVIDER_ID)))
                     .thenReturn(createUserEntity());
@@ -1423,7 +1459,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenReturn(Optional.empty());
             when(pullRequestRepository.save(pr)).thenReturn(pr);
 
-            processor.processFromSync(syncDataWith("FAILED", "d".repeat(40), List.of(41, 42)), testRepo, 1L);
+            processor.processFromSync(
+                    syncDataWith("FAILED", "d".repeat(40), List.of(41, 42)), ProcessingContext.forSync(1L, testRepo));
 
             assertThat(pr.getHeadCheckState()).isEqualTo(CheckState.FAILURE);
             assertThat(pr.getHeadCheckSha()).isEqualTo("d".repeat(40));
@@ -1437,14 +1474,15 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             Issue earlier = new Issue();
             earlier.setId(9002L);
             pr.getClosingIssues().add(earlier);
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
             when(gitLabUserService.findOrCreateUser(any(GitLabUserLookup.class), eq(PROVIDER_ID)))
                     .thenReturn(createUserEntity());
             when(pullRequestRepository.save(pr)).thenReturn(pr);
 
-            processor.processFromSync(syncDataWith(null, null, null), testRepo, 1L);
+            processor.processFromSync(syncDataWith(null, null, null), ProcessingContext.forSync(1L, testRepo));
 
             assertThat(pr.getClosingIssues()).containsExactly(earlier);
             assertThat(pr.getHeadCheckState()).isEqualTo(CheckState.NONE);
@@ -1505,8 +1543,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void processFromSyncLinksMilestone() {
             PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -1566,7 +1605,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null, // headPipelineSha
                     null // closingIssueNumbers
                     );
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             verify(pullRequestRepository)
                     .upsertCore(
@@ -1608,8 +1647,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void processFromSyncMilestoneNotFound() {
             PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
 
             User author = createUserEntity();
@@ -1666,7 +1706,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null, // headPipelineSha
                     null // closingIssueNumbers
                     );
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             verify(pullRequestRepository)
                     .upsertCore(
@@ -1708,12 +1748,13 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void processFromSyncNullMilestoneIid() {
             PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
 
             var syncData = createSyncData();
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             verify(milestoneRepository, never()).findByNumberAndRepositoryId(anyInt(), anyLong());
         }
@@ -1768,7 +1809,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null, // headPipelineSha
                     null // closingIssueNumbers
                     );
-            PullRequest result = processor.processFromSync(syncData, testRepo, 1L);
+            PullRequest result = processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             assertThat(result).isNull();
         }
@@ -1823,7 +1864,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null, // headPipelineSha
                     null // closingIssueNumbers
                     );
-            PullRequest result = processor.processFromSync(syncData, testRepo, 1L);
+            PullRequest result = processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             assertThat(result).isNull();
         }
@@ -1850,8 +1891,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             staleReview.setPullRequest(pr);
             pr.getReviews().add(staleReview);
 
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
 
             // Stub the author user lookup (processFromSync resolves the MR author via gitLabUserService)
@@ -1927,7 +1969,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null, // headPipelineSha
                     null // closingIssueNumbers
                     );
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             // Verify new approval was created (save called for new review)
             // and stale review was dismissed (save called for stale review)
@@ -2038,8 +2080,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 @org.jspecify.annotations.Nullable String detailedStatus,
                 @org.jspecify.annotations.Nullable String expectedMapping) {
             PullRequest pr = createPullRequestEntity();
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(pr));
 
             var syncData = new GitLabMergeRequestProcessor.SyncMergeRequestData(
@@ -2090,7 +2133,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null, // headPipelineSha
                     null // closingIssueNumbers
                     );
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             verify(pullRequestRepository)
                     .upsertCore(
@@ -2214,7 +2257,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         pr.setHtmlUrl("https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5");
         pr.setLabels(new HashSet<>());
         pr.setAssignees(new HashSet<>());
-        pr.setRequestedReviewers(new HashSet<>());
         pr.setReviews(new HashSet<>());
         return pr;
     }

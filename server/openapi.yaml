@@ -12998,10 +12998,17 @@ components:
           $ref: "#/components/schemas/WorkItemList"
           description: Open pull requests by other people that ask this member for
             a review; drafts are excluded
+        teamReviewRequests:
+          $ref: "#/components/schemas/WorkItemList"
+          description: "Open pull requests by other people that ask one of this member's\
+            \ teams for a review, and not this member: not asking them directly, and\
+            \ not yet approved or sent back by them. Drafts are excluded. GitHub only;\
+            \ GitLab has no team reviewers, so a GitLab workspace lists none."
       required:
       - issues
       - pullRequests
       - reviewRequests
+      - teamReviewRequests
     OptionCount:
       type: object
       properties:
@@ -17095,6 +17102,21 @@ components:
       - name
       - repoPermissionCount
       - repositories
+    TeamRef:
+      type: object
+      description: "A team, by name"
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Identifier of the team
+        name:
+          type: string
+          description: Name of the team
+          example: Platform
+      required:
+      - id
+      - name
     TeamSummary:
       type: object
       description: Lightweight summary of a team without member/repository details
@@ -18238,6 +18260,12 @@ components:
         repository:
           $ref: "#/components/schemas/RepositoryInfo"
           description: The repository
+        requestedTeams:
+          type: array
+          description: The member's teams the pull request asks for a review; only
+            team review requests list them
+          items:
+            $ref: "#/components/schemas/TeamRef"
         reviewDecision:
           type: string
           description: "The pull request's review decision, when the provider reported\

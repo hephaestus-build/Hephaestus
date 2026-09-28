@@ -23,16 +23,17 @@ import {
 } from "./open-work-groups";
 import { WorkItemRow } from "./WorkItemRow";
 
+/** One person's open work, with the login that decides which reviewer entry is theirs. */
+export type OpenWorkState = PanelState<{ openWork: OpenWork; login: string }>;
+
 export interface OpenWorkSectionsProps {
-	state: PanelState<{ openWork: OpenWork }>;
+	state: OpenWorkState;
 	providerType: ProviderType;
 	/**
 	 * Whose open work: your own page speaks to you and its sections are the page's; a member's level
 	 * names the work plainly and nests its sections under the level's title.
 	 */
 	perspective: OpenWorkPerspective;
-	/** The person the open work is about; a row names its author only when it is someone else. */
-	login: string | undefined;
 }
 
 const NOTHING_ICON = providerIcon(CheckCircleIcon, GitLabCheckCircleIcon);
@@ -46,12 +47,7 @@ const WAITING = OPEN_WORK_GROUPS.filter((group) => !OPEN_WORK_GROUP_DEFS[group].
  * first; then, folded away, what waits on someone else — a request other reviewers already covered
  * sits there, never among the work to do. Assigned issues are their own section.
  */
-export function OpenWorkSections({
-	state,
-	providerType,
-	perspective,
-	login,
-}: OpenWorkSectionsProps) {
+export function OpenWorkSections({ state, providerType, perspective }: OpenWorkSectionsProps) {
 	const self = perspective === "self";
 	const level = self ? 2 : 3;
 	const title = self ? "Needs you" : "Open work";
@@ -68,37 +64,40 @@ export function OpenWorkSections({
 			</Section>
 		);
 	}
-	const openWork = state.status === "ready" ? state.openWork : undefined;
-	const groups = openWork && groupOpenWork(openWork, login);
+	const ready =
+		state.status === "ready"
+			? { ...state, groups: groupOpenWork(state.openWork, state.login) }
+			: undefined;
 	return (
 		<>
 			<Section level={level} size="lg" title={title}>
-				{openWork && groups ? (
+				{ready ? (
 					<div className="space-y-4">
 						<GroupLists
 							groups={COUNTED}
-							items={groups}
+							items={ready.groups}
 							providerType={providerType}
 							perspective={perspective}
-							login={login}
+							login={ready.login}
 						/>
-						{COUNTED.every((group) => groups[group].length === 0) && (
+						{COUNTED.every((group) => ready.groups[group].length === 0) && (
 							<p className="flex items-center gap-2 text-sm text-muted-foreground">
 								<NothingIcon size={16} className={cn("shrink-0", ACTIVITY_TONES.success.text)} />
 								{self ? "Nothing needs you" : "Nothing needs them"}
 							</p>
 						)}
 						<WaitingOnOthers
-							items={groups}
+							items={ready.groups}
 							providerType={providerType}
 							perspective={perspective}
-							login={login}
+							login={ready.login}
 						/>
 						<Truncation
 							lists={[
-								{ list: openWork.reviewRequests, of: `${whose} review requests` },
+								{ list: ready.openWork.reviewRequests, of: `${whose} review requests` },
+								{ list: ready.openWork.teamReviewRequests, of: `${whose} teams' review requests` },
 								{
-									list: openWork.pullRequests,
+									list: ready.openWork.pullRequests,
 									of: `${whose} open ${artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType)}`,
 								},
 							]}
@@ -109,15 +108,15 @@ export function OpenWorkSections({
 				)}
 			</Section>
 			<Section level={level} size="lg" title="Assigned issues">
-				{openWork ? (
+				{ready ? (
 					<div className="space-y-4">
 						<WorkList
-							items={openWork.issues.content}
+							items={ready.openWork.issues.content}
 							providerType={providerType}
-							login={login}
+							login={ready.login}
 							empty={self ? "No issues assigned to you" : "No issues assigned"}
 						/>
-						<Truncation lists={[{ list: openWork.issues, of: `${whose} assigned issues` }]} />
+						<Truncation lists={[{ list: ready.openWork.issues, of: `${whose} assigned issues` }]} />
 					</div>
 				) : (
 					<GroupSkeleton rows={1} />
@@ -132,7 +131,7 @@ interface GroupListsProps {
 	items: Record<OpenWorkGroup, WorkItem[]>;
 	providerType: ProviderType;
 	perspective: OpenWorkPerspective;
-	login: string | undefined;
+	login: string;
 }
 
 /** Each group that holds anything, as a small header over its bordered list. */
@@ -203,7 +202,7 @@ function WorkList({
 }: {
 	items: WorkItem[];
 	providerType: ProviderType;
-	login: string | undefined;
+	login: string;
 	/** What an empty list says in one line; a group with nothing in it is not drawn at all. */
 	empty?: string;
 }) {

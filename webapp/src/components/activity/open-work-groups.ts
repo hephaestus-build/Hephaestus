@@ -5,12 +5,14 @@ import {
 	EyeIcon,
 	FileDiffIcon,
 	GitPullRequestDraftIcon,
+	OrganizationIcon,
 	PeopleIcon,
 } from "@primer/octicons-react";
 
 import type { OpenWork, WorkItem } from "@/api/types.gen";
 import {
 	GitLabCheckIcon,
+	GitLabGroupIcon,
 	GitLabHourglassIcon,
 	GitLabMergeRequestDraftIcon,
 	GitLabReviewCheckmarkIcon,
@@ -32,6 +34,7 @@ export const OPEN_WORK_GROUPS = [
 	"approved",
 	"waiting",
 	"drafts",
+	"team-requested",
 	"covered",
 	"reviewed",
 ] as const;
@@ -84,6 +87,14 @@ export const OPEN_WORK_GROUP_DEFS = {
 		tone: "muted",
 		counted: false,
 	},
+	// GitLab has no team reviewers, but every group names an icon for each provider.
+	"team-requested": {
+		label: (perspective) =>
+			perspective === "self" ? "Requested from your team" : "Requested from their team",
+		icon: providerIcon(OrganizationIcon, GitLabGroupIcon),
+		tone: "muted",
+		counted: false,
+	},
 	covered: {
 		label: () => "Covered by other reviewers",
 		icon: providerIcon(PeopleIcon, GitLabUsersIcon),
@@ -104,11 +115,18 @@ const changesRequested = (work: Review): boolean =>
 	work.reviewers?.some((reviewer) => reviewer.state === "CHANGES_REQUESTED") === true;
 
 /**
- * A review request someone else has already settled: the pull request is approved, or a reviewer
- * asked for changes, so the author has to move before this review does anything.
+ * Whether other reviewers have settled the request for now: someone other than the person
+ * requested changes, or the decision is approved and someone other than the person approved. The
+ * person's own entry never covers their own request. It cannot see that a provider's decision may
+ * still count the person's own earlier approval; which providers and versions do is in
+ * `docs/user/activity.mdx` § Needs you. There is no decision where the branch requires no review,
+ * or where Hephaestus has not read a merge request's approvals yet.
  */
-export function isCovered(work: Review): boolean {
-	return work.reviewDecision === "APPROVED" || changesRequested(work);
+function isCovered(work: Review, login: string): boolean {
+	const others = (work.reviewers ?? []).filter((reviewer) => reviewer.user.login !== login);
+	const approvedByOther =
+		work.reviewDecision === "APPROVED" && others.some((reviewer) => reviewer.state === "APPROVED");
+	return approvedByOther || others.some((reviewer) => reviewer.state === "CHANGES_REQUESTED");
 }
 
 /**
@@ -146,27 +164,28 @@ function authoredGroup(work: WorkItem): OpenWorkGroup {
  * approved or requested changes among the reviewers until the author asks again, where GitHub
  * turns a new request back into a plain request. A comment is not a verdict.
  */
-function reviewedBy(work: Review, login: string | undefined): boolean {
+function reviewedBy(work: Review, login: string): boolean {
 	const own = work.reviewers?.find((reviewer) => reviewer.user.login === login);
 	return own?.state === "APPROVED" || own?.state === "CHANGES_REQUESTED";
 }
 
-function requestGroup(work: Review, login: string | undefined): OpenWorkGroup {
+function requestGroup(work: Review, login: string): OpenWorkGroup {
 	if (reviewedBy(work, login)) {
 		return "reviewed";
 	}
-	return isCovered(work) ? "covered" : "review-requested";
+	return isCovered(work, login) ? "covered" : "review-requested";
 }
 
 /**
  * One person's open pull requests by what they need, each in exactly one group and in the order
- * the server listed them: review requests split into the ones that need this person, the ones they
- * already gave a verdict on, and the ones other reviewers already covered; their own pull requests
- * into drafts, the ones returned to them, the approved ones, and the rest, waiting for review.
+ * the server listed them. Review requests to the person split into the ones that need them, the
+ * ones they already gave a verdict on, and the ones other reviewers covered. Requests to a team of
+ * theirs stay apart from those. Their own pull requests split into drafts, returned, approved, and
+ * the rest, waiting for review.
  */
 export function groupOpenWork(
-	openWork: Pick<OpenWork, "reviewRequests" | "pullRequests">,
-	login: string | undefined,
+	openWork: Pick<OpenWork, "reviewRequests" | "teamReviewRequests" | "pullRequests">,
+	login: string,
 ): Record<OpenWorkGroup, WorkItem[]> {
 	const groups: Record<OpenWorkGroup, WorkItem[]> = {
 		"review-requested": [],
@@ -174,12 +193,14 @@ export function groupOpenWork(
 		approved: [],
 		waiting: [],
 		drafts: [],
+		"team-requested": [],
 		covered: [],
 		reviewed: [],
 	};
 	for (const work of openWork.reviewRequests.content) {
 		groups[requestGroup(work, login)].push(work);
 	}
+	groups["team-requested"].push(...openWork.teamReviewRequests.content);
 	for (const work of openWork.pullRequests.content) {
 		groups[authoredGroup(work)].push(work);
 	}

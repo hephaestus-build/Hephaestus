@@ -3,9 +3,9 @@
 The leaderboard, leagues and league points, experience points and levels, the league reset, and the
 weekly Slack leaderboard digest are removed. So are the workspace switches **Leaderboard**, **XP and
 level progression** and **Leagues**, the digest's day, time, channel and team settings, and the Slack
-connection card's test message. Every workspace now has **Activity** (the workspace home) and
-**Workspace activity**: counts and lists of pull or merge requests, reviews, issues and comments, with
-members listed by name — see [Activity](https://docs.hephaestus.build/user/activity).
+connection card's test message. Every workspace now has **Activity** and **Workspace activity**:
+counts and lists of pull or merge requests, reviews, issues and comments, with members listed by
+name — see [Activity](https://docs.hephaestus.build/user/activity).
 
 **League, XP and leaderboard data is deleted by the upgrade.** The upgrade first attributes each recorded
 merge to the pull request's author (a merge whose author is unknown is no longer counted for anyone) and
