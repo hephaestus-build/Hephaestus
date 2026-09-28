@@ -5,8 +5,7 @@ weekly Slack leaderboard digest are removed. So are the workspace switches **Lea
 level progression** and **Leagues**, the digest's day, time, channel and team settings, and the Slack
 connection card's test message. Every workspace now has **Activity** and **Workspace activity**:
 counts and lists of pull or merge requests, reviews, issues and comments, with members listed by
-name — see [Activity](https://docs.hephaestus.build/user/activity). A workspace opens on the Practice
-profile, or on Activity where it does not review practices.
+name — see [Activity](https://docs.hephaestus.build/user/activity).
 
 **League, XP and leaderboard data is deleted by the upgrade.** The upgrade first attributes each recorded
 merge to the pull request's author (a merge whose author is unknown is no longer counted for anyone) and

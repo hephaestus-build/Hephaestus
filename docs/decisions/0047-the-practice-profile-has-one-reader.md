@@ -9,10 +9,10 @@ and 2026-09-24)
 
 ## Context
 
-Issue #1273 planned the practice-centric profile for two audiences: the developer and the workspace's
-admins. The developer's half shipped as the Practice profile, and #2260 removed what was left of the old
-XP and league profile. Only the workspace-admin audience remains. Every Practice profile endpoint serves
-the caller and nobody else; the one way to read another person's profile is an instance
+[#1273] planned the practice-centric profile for two audiences: the developer and the workspace's
+admins. The developer's half shipped as the Practice profile, and [#2260] removed what was left of the
+old XP and league profile. Only the workspace-admin audience remains. Every Practice profile endpoint
+serves the caller and nobody else; the one way to read another person's profile is an instance
 administrator's audited **View as user**.
 
 A workspace-admin audience would break what the product tells developers today:
@@ -38,7 +38,9 @@ conclusion — is already served by the admin practice-review pages.
 
 - A promise made to developers is not reversed as a side effect of a feature.
 - Feedback that skips approval is feedback nobody else reads.
-- Someone who reads a named developer's record needs a stated reason and a record of the read (#1421).
+- Someone who reads a named developer's record gives a reason and leaves a record of the read, as
+  **View as user** does ([ADR 0017](0017-replace-keycloak-with-spring-native-auth.md), update of
+  2026-09-24).
 - One place per question for an admin.
 
 ## Considered options
@@ -46,13 +48,13 @@ conclusion — is already served by the admin practice-review pages.
 1. **A workspace-admin audience:** read-only copies of the Practice profile endpoints for workspace
    admins, without the feedback text. Rejected: it reverses the four promises above. Standings, trends
    and the summary are a claim about a person across their work, so leaving out the feedback text does
-   not make the view any less personal. It would need #1421's disclosure records for every read, an
-   amendment to ADR 0029's `IN_APP` audience, a privacy notice change that tells every member, and a new
-   answer to why in-app feedback skips approval.
+   not make the view any less personal. It would need the disclosure records of [#1421] for every read,
+   an amendment to ADR 0029's `IN_APP` audience, a privacy notice change that tells every member, and a
+   new answer to why in-app feedback skips approval.
 2. **A member opt-in to show their profile to workspace admins.** Rejected: nobody has asked for it,
    and it adds a consent surface with its own reverse state, its own record and its own wording in each
-   instance's privacy notice, for a view admins do not need. Opt-ins for peer and public audiences are
-   #1275's question and are not decided here.
+   instance's privacy notice, for a view admins do not need. Opt-ins for peer and public audiences
+   belong to [#1275] and are not decided here.
 3. **The Practice profile has one reader, the developer.** Chosen.
 
 ## Decision
@@ -68,15 +70,14 @@ user to read on behalf of.
 - **Instance administrators** can read a member's Practice profile through **View as user**
   (ADR 0017, update of 2026-09-24): read-only, with a stated reason, and each read recorded as a
   `USER_VIEW` audit row.
-- #1273 is done with the developer's audience.
 
 ## Consequences
 
 - The privacy page, the vocabulary and ADR 0029 stay as they are, and in-app feedback keeps skipping the
   approval queue.
 - A workspace admin who wants to see what a developer sees asks the developer.
-- An instructor or cohort view (#1274) and peer or public tiers (#1275) are new audiences, each decided
-  in its own ADR rather than by widening this one.
+- An instructor or cohort view ([#1274]) and peer or public tiers ([#1275]) are new audiences, each
+  decided in its own ADR rather than by widening this one.
 - An endpoint that reads another user's Practice profile outside **View as user** is a change to this
   decision, not an addition beside it.
 
@@ -85,3 +86,9 @@ user to read on behalf of.
 Workspace admins who cannot do their job from the practice-review pages — for example, a course that
 has to assess a named developer's practice over a term — or members asking to share their Practice
 profile with their admins.
+
+[#1273]: https://github.com/hephaestus-build/Hephaestus/issues/1273
+[#1274]: https://github.com/hephaestus-build/Hephaestus/issues/1274
+[#1275]: https://github.com/hephaestus-build/Hephaestus/issues/1275
+[#1421]: https://github.com/hephaestus-build/Hephaestus/issues/1421
+[#2260]: https://github.com/hephaestus-build/Hephaestus/pull/2260

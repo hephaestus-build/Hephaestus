@@ -41,14 +41,15 @@ else's:
 
 - **Waiting for review**: your pull requests that reviewers have not got to yet.
 - **Drafts**: your draft pull requests.
-- **Covered by other reviewers**: pull requests that still ask for your review, but where your review
-  would change nothing yet. Either another reviewer requested changes, so the author acts first, or
-  the pull request is approved and another reviewer approved it. Your own earlier review never
-  covers a request: when the author asks for your review again, it is under **Review requested**
-  even if your approval still stands on the pull request. On GitLab, a merge request is approved
-  once its approval rules are met; one Hephaestus has not synced yet is covered only by another
-  reviewer's request for changes. It moves back to **Review requested** once that approval or
-  request for changes no longer stands.
+- **Covered by other reviewers**: pull requests that still ask for your review, but where another
+  reviewer has already had their say. Either they requested changes, so the author acts first, or
+  they approved and GitHub or GitLab counts the pull request as approved. Your own review never
+  covers a request: when the author asks you again, it is under **Review requested** until another
+  reviewer settles it. On GitHub, and on GitLab before 16.11, an approval you gave earlier still
+  counts toward the pull request's decision; on GitLab 16.11 and later, asking you again removes it.
+  Without a decision, only a request for changes covers a pull request: GitHub gives none where a
+  branch needs no review, and GitLab none until Hephaestus has read the merge request's approvals.
+  It moves back to **Review requested** once that approval or request for changes no longer stands.
 - **Requested from your team**: pull requests that ask one of your teams for a review, but not you.
   Each shows which of your teams it asks, such as *via payments*. Someone on the team picks it up,
   so it never counts as yours. A request that asks you as well is under **Review requested**; one
@@ -57,8 +58,9 @@ else's:
   GitLab workspace never shows this group.
 - **Reviewed by you**: merge requests that still list you as a reviewer after you approved them or
   requested changes, as GitLab keeps you listed. A review with comments only leaves the request in
-  **Review requested**. When the author asks for your review again, on GitHub or GitLab, it moves
-  back to **Review requested** by itself.
+  **Review requested**. When the author asks for your review again, it moves back to **Review
+  requested** by itself; on GitLab before 18.6, that may take until Hephaestus next reads the merge
+  request.
 
 Open **Waiting on others** to see them; it closes again when you leave the page.
 
