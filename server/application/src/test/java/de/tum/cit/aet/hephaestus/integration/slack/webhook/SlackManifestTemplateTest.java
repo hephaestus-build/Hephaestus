@@ -81,7 +81,10 @@ class SlackManifestTemplateTest extends BaseUnitTest {
                         mock(SlackIngestService.class), deserializer, mock(TransactionTemplate.class)),
                 new SlackMentorDmMessageHandler(mock(SlackMentorService.class), deserializer),
                 new SlackAppHomeOpenedMessageHandler(
-                        mock(SlackAppHomeService.class), mock(SlackAssistantEventHandler.class), deserializer),
+                        mock(SlackAppHomeService.class),
+                        mock(SlackAssistantEventHandler.class),
+                        mock(SlackMentorService.class),
+                        deserializer),
                 new SlackMemberJoinedChannelMessageHandler(mock(SlackChannelJoinNoticeHandler.class), deserializer),
                 new SlackAppContextChangedMessageHandler(deserializer),
                 new SlackAppUninstalledMessageHandler(uninstall, deserializer),

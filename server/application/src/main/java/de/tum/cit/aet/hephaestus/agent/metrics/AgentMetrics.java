@@ -71,6 +71,7 @@ public final class AgentMetrics {
     public static final String MENTOR_TURN_COMPLETED = "mentor.turn.completed";
     public static final String MENTOR_TURN_COST_USD = "mentor.turn.cost.usd";
     public static final String MENTOR_TURN_DURATION = "mentor.turn.duration";
+    public static final String MENTOR_TURN_FIRST_TOKEN = "mentor.turn.first_token";
     public static final String MENTOR_TURN_STARTED = "mentor.turn.started";
     public static final String MENTOR_WATCHDOG_TARGETS = "mentor.watchdog.targets";
     public static final String PRACTICE_FEEDBACK_DISPATCH = "practice.feedback.dispatch";

@@ -9,12 +9,14 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Resource tuning for the interactive (mentor) sandbox. Bound from {@code hephaestus.mentor.*}.
  *
- * @param idleTtlSeconds default 300 s (5 min). A mentor runner is ~165 MB RSS; evicting idle
- *     users sooner is the highest-leverage fleet-level memory lever because the per-container
- *     floor is dominated by Pi SDK imports that we cannot slim (transitive imports through
- *     {@code core/resource-loader} always pull in the interactive theme + highlight.js).
- *     UX cost: a user who walks away for &gt;5 min pays a ~1 s cold-start on the next message.
- *     Override via {@code hephaestus.mentor.idle-ttl-seconds} for soak / capacity tests.
+ * @param idleTtlSeconds default 900 s (15 min) since the last frame. A mentor runner is ~165 MB RSS,
+ *     a floor dominated by Pi SDK imports that we cannot slim (transitive imports through
+ *     {@code core/resource-loader} always pull in the interactive theme + highlight.js), so the TTL
+ *     trades idle memory for warm turns; the session caps, not the TTL, bound the total. A message
+ *     after it pays a full cold start — job network, volumes, workspace initializer, runtime
+ *     container, {@code runner_ready} and the SDK import; opening Heph starts that ahead of the
+ *     message. The Traefik sticky-cookie {@code maxAge} in
+ *     {@code docker/compose.app.yaml} follows this value.
  * @param graceTimeoutSeconds SIGTERM → SIGKILL grace. Capped at 25 s: the registry's
  *     {@code @PreDestroy} adds a 5-second slop, and Spring's default
  *     {@code spring.lifecycle.timeout-per-shutdown-phase} is 30 s. A grace beyond 25 s would
@@ -29,7 +31,7 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.mentor")
 public record InteractiveSandboxProperties(
-        @DefaultValue("300") @Min(1) int idleTtlSeconds,
+        @DefaultValue("900") @Min(1) int idleTtlSeconds,
         @DefaultValue("25") @Min(1) @Max(25) int graceTimeoutSeconds,
         @DefaultValue("30") @Min(1) int reapIntervalSeconds,
         @DefaultValue("512") @Min(16) int ringBufferFrames,
