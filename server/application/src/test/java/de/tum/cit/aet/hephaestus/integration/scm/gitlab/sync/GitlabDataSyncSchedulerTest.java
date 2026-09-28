@@ -40,12 +40,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTr
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.label.GitLabLabelSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.subissue.GitLabSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -360,6 +362,40 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
 
         verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Label sync: ABORTED_ERROR");
         verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.LABELS), any());
+    }
+
+    @Test
+    void shouldRefreshTheOpenMergeRequestsReviewersAfterTheWatermarkWhenAnIncrementalSyncCompletes() {
+        var holder = mockHolder();
+        var mrSync = org.mockito.Mockito.mock(GitLabMergeRequestSyncService.class);
+        when(holder.getMergeRequestSyncService()).thenReturn(mrSync);
+        Repository project = prepareProject(holder);
+        project.setLastSyncAt(Instant.parse("2026-01-31T18:00:00Z"));
+        when(mrSync.syncMergeRequests(eq(WORKSPACE_ID), eq(project), any())).thenReturn(SyncResult.completed(0));
+        when(mrSync.refreshOpenMergeRequestReviewers(WORKSPACE_ID, project))
+                .thenReturn(SyncResult.completedWithWarnings(1));
+
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        var order = org.mockito.Mockito.inOrder(repositoryRepository, mrSync);
+        order.verify(repositoryRepository).updateLastSyncAt(eq(99L), any());
+        order.verify(mrSync).refreshOpenMergeRequestReviewers(WORKSPACE_ID, project);
+        verify(syncTargetProvider)
+                .updateSyncError(77L, SyncPass.RECENT, "Merge request reviewer refresh: COMPLETED_WITH_WARNINGS");
+    }
+
+    @Test
+    void shouldNotRefreshTheReviewersWhenTheSyncReadEveryMergeRequest() {
+        var holder = mockHolder();
+        var mrSync = org.mockito.Mockito.mock(GitLabMergeRequestSyncService.class);
+        when(holder.getMergeRequestSyncService()).thenReturn(mrSync);
+        Repository project = prepareProject(holder);
+        when(mrSync.syncMergeRequests(WORKSPACE_ID, project, null)).thenReturn(SyncResult.completed(0));
+
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(mrSync, never()).refreshOpenMergeRequestReviewers(any(), any());
+        verify(repositoryRepository).updateLastSyncAt(eq(99L), any());
     }
 
     private Repository prepareProject(GitLabSyncServiceHolder holder) {

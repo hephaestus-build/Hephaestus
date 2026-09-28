@@ -591,6 +591,57 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
+        void shouldKeepTheStoredReviewRequestsWhenASyncCannotReadThemWhole() {
+            Team synced = new Team();
+            synced.setNativeId(13459148L);
+            synced.setName("Hephaetus");
+            synced.setSlug("hephaetus");
+            synced.setOrganization(FIXTURE_ORG_LOGIN);
+            synced.setHtmlUrl("https://github.com/orgs/" + FIXTURE_ORG_LOGIN + "/teams/hephaetus");
+            synced.setPrivacy(Team.Privacy.VISIBLE);
+            synced.setProvider(githubProvider);
+            Long syncedId = teamRepository.save(synced).getId();
+            processor.process(
+                    Objects.requireNonNull(GitHubPullRequestDTO.fromPullRequest(readBySync(28, 5, 0))),
+                    createContext());
+
+            PullRequest result = processor.process(
+                    Objects.requireNonNull(GitHubPullRequestDTO.fromPullRequest(readBySync(28, 101, 60))),
+                    createContext());
+
+            assertNotNull(result);
+            transactionTemplate.executeWithoutResult(status -> {
+                PullRequest stored =
+                        pullRequestRepository.findById(result.getId()).orElseThrow();
+                assertThat(stored.getRequestedTeams())
+                        .extracting(request -> request.getTeam().getId())
+                        .containsExactly(syncedId);
+                assertThat(stored.getRequestedReviewers())
+                        .extracting(request -> request.getUser().getLogin())
+                        .containsExactly("FelixTJDietrich");
+            });
+        }
+
+        /** Pull request {@code number} as a sync reads it, GitHub counting {@code totalCount} review requests. */
+        private GHPullRequest readBySync(int number, int totalCount, int minutesLater) {
+            GHPullRequest read = GitHubPullRequestDTORequestedTeamsTest.pullRequestAskingForReviews(number);
+            read.getReviewRequests().setTotalCount(totalCount);
+            read.setFullDatabaseId(BigInteger.valueOf(FIXTURE_PR_ID + number));
+            read.setId("PR_kwDOO4CKW86_" + number);
+            read.setTitle("Asks for reviews");
+            read.setState(GHPullRequestState.OPEN);
+            read.setUrl(URI.create("https://github.com/" + FIXTURE_REPO_FULL_NAME + "/pull/" + number));
+            read.setCreatedAt(OffsetDateTime.parse("2025-11-01T21:42:45Z"));
+            read.setUpdatedAt(OffsetDateTime.parse("2025-11-01T21:42:45Z").plusMinutes(minutesLater));
+            read.setAuthor(
+                    GitHubPullRequestDTORequestedTeamsTest.productionMapper().readValue("""
+                            {"__typename": "User", "id": "U_kgDOAAB5Fw", "databaseId": 31031,
+                             "login": "pull-request-author"}
+                            """, GHActor.class));
+            return read;
+        }
+
+        @Test
         void shouldCreateNewPullRequestAndPublishCreatedEvent() {
             GitHubPullRequestDTO dto = createBasicPullRequestDto(FIXTURE_PR_ID, 26);
 

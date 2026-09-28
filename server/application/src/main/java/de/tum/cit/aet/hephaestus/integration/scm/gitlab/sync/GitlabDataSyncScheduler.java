@@ -827,6 +827,30 @@ public class GitlabDataSyncScheduler {
                     syncTargetProvider.updateSyncTimestamp(rtmId, SyncType.FULL_REPOSITORY, Instant.now());
                 }
             }
+            // After the watermarks: the refresh's own time and rate-limit waits must not widen the window the
+            // next incremental sync overlaps, and its problems must not hold the watermark back.
+            if (mrSync != null && mrsDone && updatedAfter != null) {
+                try {
+                    SyncResult r = mrSync.refreshOpenMergeRequestReviewers(session.scopeId(), repo);
+                    if (r.status() != SyncResult.Status.COMPLETED) {
+                        if (error == null) {
+                            error = "Merge request reviewer refresh: " + r.status();
+                        }
+                        reportWarning(handle);
+                    }
+                } catch (Exception e) {
+                    if (error == null) {
+                        error = "Merge request reviewer refresh failed ("
+                                + e.getClass().getSimpleName() + ")";
+                    }
+                    log.warn(
+                            "Failed MR reviewer refresh: scopeId={}, repo={}",
+                            session.scopeId(),
+                            repo.getNameWithOwner(),
+                            e);
+                    reportWarning(handle);
+                }
+            }
             if (rtmId != null && attempted) {
                 resourceErrors.put(rtmId, error);
             }

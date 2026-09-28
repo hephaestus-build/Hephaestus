@@ -41,8 +41,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Integration tests for GitHubPullRequestMessageHandler.
@@ -544,21 +542,8 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
         }
 
         @Test
-        void shouldLeaveABotOutWhenTheWebhookListsItAmongTheRequestedReviewers() throws Exception {
-            ObjectNode payload = (ObjectNode) objectMapper.readTree(loadPayloadRaw("pull_request.review_requested"));
-            ArrayNode reviewers = ((ObjectNode) payload.get("pull_request")).putArray("requested_reviewers");
-            reviewers
-                    .addObject()
-                    .put("id", 990101L)
-                    .put("login", "reviewing-person")
-                    .put("type", "User");
-            reviewers
-                    .addObject()
-                    .put("id", 990102L)
-                    .put("login", "copilot-pull-request-reviewer[bot]")
-                    .put("type", "Bot");
-
-            handler.handleEvent(objectMapper.treeToValue(payload, GitHubPullRequestEventDTO.class));
+        void shouldStoreThePersonButNotTheBotWhenBothAreAskedToReview() throws Exception {
+            handler.handleEvent(loadPayload("pull_request.review_requested.reviewer.derived"));
 
             Set<String> logins = required(transactionTemplate.execute(status -> pullRequestRepository
                     .findByRepositoryIdAndNumber(testRepository.getId(), PR_26_NUMBER)
@@ -567,7 +552,7 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
                     .stream()
                     .map(request -> request.getUser().getLogin())
                     .collect(Collectors.toSet())));
-            assertThat(logins).containsExactly("reviewing-person");
+            assertThat(logins).containsExactly("octocat");
         }
 
         private Set<Long> requestedTeamIds() {

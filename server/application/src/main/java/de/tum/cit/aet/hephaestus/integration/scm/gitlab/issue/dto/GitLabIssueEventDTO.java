@@ -37,6 +37,17 @@ public record GitLabIssueEventDTO(
         @Nullable List<GitLabWebhookLabel> labels,
         @Nullable List<GitLabWebhookUser> assignees,
         @JsonProperty("changes") @Nullable Changes changes) {
+
+    /**
+     * The assignees now. GitLab leaves the key out of every issue hook when there are none, so an absent list is an
+     * empty one.
+     *
+     * @see <a href="https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/data_builder/issuable.rb">GitLab's issuable hook data builder</a>
+     */
+    public List<GitLabWebhookUser> currentAssignees() {
+        return assignees == null ? List.of() : assignees;
+    }
+
     /**
      * The {@code changes} diff GitLab sends on an {@code action=update} event: one entry per attribute
      * the update moved. GitLab has no per-attribute action, so this diff is the only thing that says

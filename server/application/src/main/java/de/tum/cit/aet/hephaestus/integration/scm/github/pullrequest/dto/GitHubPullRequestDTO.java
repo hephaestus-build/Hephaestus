@@ -400,10 +400,15 @@ public record GitHubPullRequestDTO(
         return result;
     }
 
-    /** The teams among the review requests; null when the requests were not read. */
+    /**
+     * The teams among the review requests; null when the requests were not read, or not read whole. A list cut
+     * short by {@code reviewRequests(first: 100)} would take the rest off the pull request, so it is not used.
+     */
     private static @Nullable List<GitHubTeamRefDTO> extractRequestedTeams(
             @Nullable GHReviewRequestConnection connection) {
-        if (connection == null || connection.getNodes() == null) {
+        if (connection == null
+                || connection.getNodes() == null
+                || connection.getNodes().size() < connection.getTotalCount()) {
             return null;
         }
         return connection.getNodes().stream()
@@ -415,24 +420,22 @@ public record GitHubPullRequestDTO(
                 .toList();
     }
 
-    private static List<GitHubUserDTO> extractRequestedReviewers(
+    /** The people among the review requests; null when the requests were not read, or not read whole. */
+    private static @Nullable List<GitHubUserDTO> extractRequestedReviewers(
             @Nullable GHReviewRequestConnection connection, String context) {
         if (connection == null || connection.getNodes() == null) {
-            return Collections.emptyList();
+            return null;
         }
-        // Check overflow using the pre-filter count (total nodes fetched, including
-        // Teams/Bots/Mannequins) against totalCount. The previous implementation
-        // compared the post-filter count (only Users) against totalCount, producing
-        // false-positive overflow warnings whenever non-User reviewers existed.
-        int fetchedCount = connection.getNodes().size();
-        GraphQlConnectionOverflowDetector.check(
-                "requestedReviewers", fetchedCount, connection.getTotalCount(), context);
-        List<GitHubUserDTO> result = connection.getNodes().stream()
+        // Checked against every node fetched, teams, bots and mannequins included, not only the people.
+        if (GraphQlConnectionOverflowDetector.check(
+                "requestedReviewers", connection.getNodes().size(), connection.getTotalCount(), context)) {
+            return null;
+        }
+        return connection.getNodes().stream()
                 .map(GHReviewRequest::getRequestedReviewer)
                 .filter(reviewer -> reviewer instanceof GHUser)
                 .map(reviewer -> GitHubUserDTO.fromUser((GHUser) reviewer))
                 .filter(Objects::nonNull)
                 .toList();
-        return result;
     }
 }

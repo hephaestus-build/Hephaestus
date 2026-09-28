@@ -63,6 +63,18 @@ class GitHubPullRequestDTORequestedTeamsTest extends BaseUnitTest {
         assertThat(dto.requestedReviewers()).extracting(GitHubUserDTO::login).containsExactly("FelixTJDietrich");
     }
 
+    /** {@code reviewRequests(first: 100)} has no follow-up page: a longer list is not read whole. */
+    @Test
+    void shouldLeaveTheReviewRequestsUnreadWhenGitHubListsMoreThanWereFetched() {
+        GHPullRequest pullRequest = pullRequestAskingForReviews(9);
+        pullRequest.getReviewRequests().setTotalCount(101);
+
+        GitHubPullRequestDTO dto = Objects.requireNonNull(GitHubPullRequestDTO.fromPullRequest(pullRequest));
+
+        assertThat(dto.requestedTeamIds()).isNull();
+        assertThat(dto.requestedReviewers()).isNull();
+    }
+
     @Test
     void shouldLeaveTheTeamsUnreadWhenTheSyncDidNotReadTheReviewRequests() {
         GHPullRequest pullRequest = new GHPullRequest();

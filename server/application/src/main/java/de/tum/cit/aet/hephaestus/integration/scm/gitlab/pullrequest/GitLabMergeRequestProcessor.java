@@ -265,7 +265,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                     // An approval can arrive with the merge request's updated_at unchanged, so the reviewer list
                     // still applies unless the payload is older; its arrival time decides against the sync's.
                     if (!eventUpdatedAt.isBefore(existing.getUpdatedAt())
-                            && updateRequestedReviewers(event.reviewers(), existing, context)) {
+                            && updateRequestedReviewers(event.currentReviewers(), existing, context)) {
                         existing = pullRequestRepository.save(existing);
                     }
                     log.debug(
@@ -314,8 +314,9 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         if (pr == null) return null;
 
         boolean changed = updateLabels(event.labels(), pr.getLabels(), Objects.requireNonNull(context.repository()));
-        changed |= updateAssignees(event.assignees(), pr.getAssignees(), Objects.requireNonNull(context.providerId()));
-        changed |= updateRequestedReviewers(event.reviewers(), pr, context);
+        changed |= updateAssignees(
+                event.currentAssignees(), pr.getAssignees(), Objects.requireNonNull(context.providerId()));
+        changed |= updateRequestedReviewers(event.currentReviewers(), pr, context);
         if (changed) {
             pr = pullRequestRepository.save(pr);
         }
@@ -569,6 +570,29 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                         event.objectAttributes().iid())
                 .map(PullRequest::getState)
                 .orElse(null);
+    }
+
+    /**
+     * Applies a merge request's reviewer list as a sync read it, without touching the rest of the merge request.
+     * A merge request Hephaestus has not stored yet is left to the merge request sync.
+     *
+     * @param fetchedAt when the sync asked for the page the list came from; the list is as of then
+     * @return whether the stored reviewers changed
+     */
+    @Transactional
+    public boolean applySyncedReviewers(
+            Repository repository, int iid, List<SyncReviewerData> reviewers, Instant fetchedAt) {
+        Long providerId = Objects.requireNonNull(repository.getProvider().getId());
+        return pullRequestRepository
+                .findByRepositoryIdAndNumber(repository.getId(), iid)
+                .map(pr -> {
+                    boolean changed = updateSyncReviewers(reviewers, pr, providerId, fetchedAt);
+                    if (changed) {
+                        pullRequestRepository.save(pr);
+                    }
+                    return changed;
+                })
+                .orElse(false);
     }
 
     /**
@@ -1149,9 +1173,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
     /** The payload's reviewer list, as it stood when the webhook arrived. */
     private boolean updateRequestedReviewers(
-            @Nullable List<GitLabMergeRequestReviewerDTO> reviewerDtos, PullRequest pr, ProcessingContext context) {
-        if (reviewerDtos == null) return false;
-
+            List<GitLabMergeRequestReviewerDTO> reviewerDtos, PullRequest pr, ProcessingContext context) {
         Map<User, RequestedReviewer.@Nullable ReviewState> reviewers = new HashMap<>();
         for (var dto : reviewerDtos) {
             User user = findOrCreateUser(dto.user(), Objects.requireNonNull(context.providerId()));

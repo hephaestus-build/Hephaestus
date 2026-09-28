@@ -73,13 +73,22 @@ The `hephaestus.tenancy.enforcement: throw` setting in `application-test.yml` fa
 
 ## Webhook fixtures and tooling
 
-Reusable webhook JSON lives in `server/application/src/test/resources/github`, named after the event it records. Load one with a `ClassPathResource`, or extract new samples with:
+Reusable webhook JSON lives in `server/application/src/test/resources/github` and `…/gitlab`, named after the event it records. Load one with a `ClassPathResource`, or extract new samples with:
 
 ```bash
 vp run schema:nats
 ```
 
 Available examples include `label.created`, `repository.created`, `create`, `push`, and more – consult the folder before recording new payloads.
+
+A fixture ending in `.derived.json` is not a recording: it is a recorded payload with the fields the
+test organization had no event to record filled in from the provider's documented payload. Replace it
+with a recording when one exists.
+
+| Fixture | Recorded base | Documented fields |
+|---|---|---|
+| `github/pull_request.review_requested.reviewer.derived.json` | `pull_request.review_requested` | `requested_reviewer` and `requested_reviewers`, a user and the Copilot review bot ([octokit/webhooks example](https://github.com/octokit/webhooks/blob/main/payload-examples/api.github.com/pull_request/review_requested.payload.json)) |
+| `gitlab/merge_request.update.reviewers.derived.json`, `….review_rerequested.derived.json`, `….reviewers_removed.derived.json` | `merge_request.update` | `reviewers[].state`, `re_requested`, `assignees` and their `changes` entries ([GitLab merge request events](https://docs.gitlab.com/user/project/integrations/webhook_events/#merge-request-events)); GitLab leaves `reviewers` and `assignees` out when there are none ([hook data builder](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/data_builder/issuable.rb)) |
 
 ## Gradle recipes
 

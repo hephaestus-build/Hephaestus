@@ -67,7 +67,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
@@ -383,51 +382,66 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
     @Nested
     class ReviewerStates {
 
+        /** The reviewers after their reviews, as {@code merge_request.update.reviewers} lists them. */
+        private static final Map<String, RequestedReviewer.ReviewState> REVIEWED = Map.of(
+                "user1", RequestedReviewer.ReviewState.APPROVED,
+                "sjones", RequestedReviewer.ReviewState.REQUESTED_CHANGES,
+                "user2", RequestedReviewer.ReviewState.REVIEWED,
+                "user3", RequestedReviewer.ReviewState.UNREVIEWED);
+
         @Test
         void shouldStoreEachReviewersStateWhenTheMergeRequestListsReviewers() throws Exception {
-            handler.handleEvent(withReviewers(
-                    null,
-                    reviewer(900001L, "approving-reviewer", "approved"),
-                    reviewer(900002L, "waiting-reviewer", "unreviewed")));
+            handler.handleEvent(loadPayload("merge_request.update.reviewers.derived"));
 
-            assertThat(reviewerStates())
-                    .containsExactlyInAnyOrderEntriesOf(Map.of(
-                            "approving-reviewer", RequestedReviewer.ReviewState.APPROVED,
-                            "waiting-reviewer", RequestedReviewer.ReviewState.UNREVIEWED));
+            assertThat(reviewerStates()).containsExactlyInAnyOrderEntriesOf(REVIEWED);
         }
 
         @Test
         void shouldSetTheReviewerBackToUnreviewedWhenTheirReviewIsRequestedAgain() throws Exception {
-            handler.handleEvent(withReviewers(null, reviewer(900001L, "re-requested-reviewer", "approved")));
+            handler.handleEvent(loadPayload("merge_request.update.reviewers.derived"));
 
-            ObjectNode reRequested = reviewer(900001L, "re-requested-reviewer", "unreviewed");
-            reRequested.put("re_requested", true);
-            handler.handleEvent(withReviewers("2026-01-31 19:10:00 +0100", reRequested));
+            handler.handleEvent(loadPayload("merge_request.update.review_rerequested.derived"));
 
             assertThat(reviewerStates())
-                    .containsExactlyEntriesOf(
-                            Map.of("re-requested-reviewer", RequestedReviewer.ReviewState.UNREVIEWED));
+                    .containsEntry("user1", RequestedReviewer.ReviewState.UNREVIEWED)
+                    .containsEntry("sjones", RequestedReviewer.ReviewState.REQUESTED_CHANGES)
+                    .hasSize(4);
         }
 
         @Test
         void shouldTakeTheReviewersStateWhenAnApprovalLeavesTheUpdateTimeAsItWas() throws Exception {
-            handler.handleEvent(withReviewers(null, reviewer(900001L, "approving-reviewer", "unreviewed")));
+            handler.handleEvent(loadPayload("merge_request.update.review_rerequested.derived"));
 
-            handler.handleEvent(withReviewers(null, reviewer(900001L, "approving-reviewer", "approved")));
+            handler.handleEvent(loadPayload("merge_request.update.reviewers.derived"));
 
-            assertThat(reviewerStates())
-                    .containsExactlyEntriesOf(Map.of("approving-reviewer", RequestedReviewer.ReviewState.APPROVED));
+            assertThat(reviewerStates()).containsEntry("user1", RequestedReviewer.ReviewState.APPROVED);
         }
 
         @Test
         void shouldKeepTheNewerStateWhenAnOlderPayloadArrivesLate() throws Exception {
-            handler.handleEvent(
-                    withReviewers("2026-01-31 19:10:00 +0100", reviewer(900001L, "approving-reviewer", "approved")));
+            handler.handleEvent(at("merge_request.update.review_rerequested.derived", "2026-01-31 19:10:00 +0100"));
 
-            handler.handleEvent(withReviewers(null, reviewer(900001L, "approving-reviewer", "unreviewed")));
+            handler.handleEvent(loadPayload("merge_request.update.reviewers.derived"));
 
-            assertThat(reviewerStates())
-                    .containsExactlyEntriesOf(Map.of("approving-reviewer", RequestedReviewer.ReviewState.APPROVED));
+            assertThat(reviewerStates()).containsEntry("user1", RequestedReviewer.ReviewState.UNREVIEWED);
+        }
+
+        /** GitLab leaves {@code reviewers} and {@code assignees} out of a hook when there are none. */
+        @Test
+        void shouldRemoveTheLastReviewersAndAssigneesWhenTheHookLeavesTheListsOut() throws Exception {
+            handler.handleEvent(loadPayload("merge_request.update.reviewers.derived"));
+
+            handler.handleEvent(loadPayload("merge_request.update.reviewers_removed.derived"));
+
+            assertThat(reviewerStates()).isEmpty();
+            Boolean assigned = transactionTemplate.execute(status -> !pullRequestRepository
+                    .findByRepositoryIdAndNumber(savedRepo.getId(), MR2_IID)
+                    .orElseThrow()
+                    .getAssignees()
+                    .isEmpty());
+            assertThat(assigned)
+                    .as("the assignee the first hook listed is gone")
+                    .isFalse();
         }
 
         @Test
@@ -448,52 +462,79 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @Test
         void shouldKeepTheWebhooksReviewersWhenASyncPageFetchedBeforeItIsWrittenAfterIt() throws Exception {
             Instant fetchedBeforeTheWebhook = Instant.now().minus(Duration.ofMinutes(1));
-            handler.handleEvent(withReviewers(null, reviewer(900001L, "added-reviewer", "approved")));
+            handler.handleEvent(loadPayload("merge_request.update.reviewers.derived"));
 
             sync(fetchedBeforeTheWebhook, syncedReviewer(900002L, "earlier-reviewer", "UNREVIEWED"));
 
             assertThat(reviewerStates())
-                    .as("the older page neither removes the reviewer the webhook added nor adds its own")
-                    .containsExactlyEntriesOf(Map.of("added-reviewer", RequestedReviewer.ReviewState.APPROVED));
+                    .as("the older page neither removes the webhook's reviewers nor adds its own")
+                    .containsExactlyInAnyOrderEntriesOf(REVIEWED);
         }
 
         @Test
         void shouldNotBringBackAReviewerTheWebhookRemovedWhenAnOlderSyncPageListsThem() throws Exception {
-            sync(Instant.now().minus(Duration.ofMinutes(2)), syncedReviewer(900002L, "removed-reviewer", "UNREVIEWED"));
-            handler.handleEvent(withReviewers("2026-01-31 19:15:00 +0100"));
+            sync(Instant.now().minus(Duration.ofMinutes(2)), syncedReviewer(6L, "user1", "UNREVIEWED"));
+            handler.handleEvent(loadPayload("merge_request.update.reviewers_removed.derived"));
 
-            sync(Instant.now().minus(Duration.ofMinutes(1)), syncedReviewer(900002L, "removed-reviewer", "UNREVIEWED"));
+            sync(Instant.now().minus(Duration.ofMinutes(1)), syncedReviewer(6L, "user1", "UNREVIEWED"));
 
             assertThat(reviewerStates()).isEmpty();
         }
 
         @Test
         void shouldTakeTheSyncsReviewersWhenItsPageWasFetchedAfterTheWebhook() throws Exception {
-            handler.handleEvent(withReviewers(null, reviewer(900001L, "re-requested-reviewer", "approved")));
+            handler.handleEvent(loadPayload("merge_request.update.reviewers.derived"));
 
             sync(
                     Instant.now().plusSeconds(1),
-                    syncedReviewer(900001L, "re-requested-reviewer", "UNREVIEWED"),
+                    syncedReviewer(6L, "user1", "UNREVIEWED"),
                     syncedReviewer(900002L, "new-reviewer", "UNREVIEWED"));
 
             assertThat(reviewerStates())
                     .containsExactlyInAnyOrderEntriesOf(Map.of(
-                            "re-requested-reviewer", RequestedReviewer.ReviewState.UNREVIEWED,
+                            "user1", RequestedReviewer.ReviewState.UNREVIEWED,
                             "new-reviewer", RequestedReviewer.ReviewState.UNREVIEWED));
+        }
+
+        @Test
+        void shouldLeaveARefreshedReviewerListUnappliedWhenTheMergeRequestIsNotStored() {
+            assertThat(mergeRequestProcessor.applySyncedReviewers(
+                            savedRepo, 999, List.of(syncedReviewer(6L, "user1", "APPROVED")), Instant.now()))
+                    .isFalse();
+        }
+
+        @Test
+        void shouldApplyARefreshedReviewerListOnlyWhenItIsNewerThanTheStoredOne() throws Exception {
+            handler.handleEvent(loadPayload("merge_request.update.reviewers.derived"));
+            List<GitLabMergeRequestProcessor.SyncReviewerData> refreshed =
+                    List.of(syncedReviewer(6L, "user1", "UNREVIEWED"));
+
+            boolean older = mergeRequestProcessor.applySyncedReviewers(
+                    savedRepo, MR2_IID, refreshed, Instant.now().minus(Duration.ofMinutes(1)));
+            Map<String, RequestedReviewer.@Nullable ReviewState> afterOlder = reviewerStates();
+            boolean newer = mergeRequestProcessor.applySyncedReviewers(
+                    savedRepo, MR2_IID, refreshed, Instant.now().plusSeconds(1));
+
+            assertThat(older).isFalse();
+            assertThat(afterOlder).containsExactlyInAnyOrderEntriesOf(REVIEWED);
+            assertThat(newer).isTrue();
+            assertThat(reviewerStates())
+                    .containsExactlyEntriesOf(Map.of("user1", RequestedReviewer.ReviewState.UNREVIEWED));
         }
 
         /** The webhook sat in the stream while a sync read the merge request; its arrival, not its handling, dates it. */
         @Test
         void shouldIgnoreADelayedWebhookWhenItArrivedBeforeTheSyncPageWasRead() throws Exception {
             Instant arrived = Instant.now().minus(Duration.ofMinutes(5));
-            sync(Instant.now().minus(Duration.ofMinutes(1)), syncedReviewer(900001L, "approving-reviewer", "APPROVED"));
+            sync(Instant.now().minus(Duration.ofMinutes(1)), syncedReviewer(6L, "user1", "APPROVED"));
 
+            // As new as the merge request the sync stored, so only the arrival can date it.
             GitLabMergeRequestEventDTO delayed =
-                    withReviewers("2026-01-31 19:20:00 +0100", reviewer(900001L, "approving-reviewer", "unreviewed"));
+                    at("merge_request.update.review_rerequested.derived", "2026-01-31 19:10:00 +0100");
             WebhookDelivery.during(arrived, () -> handler.handleEvent(delayed));
 
             assertThat(reviewerStates())
-                    .containsExactlyEntriesOf(Map.of("approving-reviewer", RequestedReviewer.ReviewState.APPROVED));
+                    .containsExactlyEntriesOf(Map.of("user1", RequestedReviewer.ReviewState.APPROVED));
         }
 
         private void sync(Instant fetchedAt, GitLabMergeRequestProcessor.SyncReviewerData... reviewers) {
@@ -560,30 +601,12 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     null); // closingIssueNumbers
         }
 
-        /** The {@code update} fixture of MR !2, listing {@code reviewers}, at {@code updatedAt} when given. */
-        private GitLabMergeRequestEventDTO withReviewers(@Nullable String updatedAt, ObjectNode... reviewers)
-                throws IOException {
-            ObjectNode payload =
-                    (ObjectNode) objectMapper.readTree(new ClassPathResource("gitlab/merge_request.update.json")
-                            .getContentAsString(StandardCharsets.UTF_8));
-            ArrayNode list = payload.putArray("reviewers");
-            for (ObjectNode reviewer : reviewers) {
-                list.add(reviewer);
-            }
-            if (updatedAt != null) {
-                ((ObjectNode) payload.get("object_attributes")).put("updated_at", updatedAt);
-            }
+        /** A recorded payload at another {@code updated_at}, for a test about the order payloads arrive in. */
+        private GitLabMergeRequestEventDTO at(String filename, String updatedAt) throws IOException {
+            ObjectNode payload = (ObjectNode) objectMapper.readTree(
+                    new ClassPathResource("gitlab/" + filename + ".json").getContentAsString(StandardCharsets.UTF_8));
+            ((ObjectNode) payload.get("object_attributes")).put("updated_at", updatedAt);
             return objectMapper.treeToValue(payload, GitLabMergeRequestEventDTO.class);
-        }
-
-        private ObjectNode reviewer(long id, String username, String state) {
-            ObjectNode reviewer = objectMapper.createObjectNode();
-            reviewer.put("id", id);
-            reviewer.put("username", username);
-            reviewer.put("name", username);
-            reviewer.put("state", state);
-            reviewer.put("re_requested", false);
-            return reviewer;
         }
 
         private Map<String, RequestedReviewer.@Nullable ReviewState> reviewerStates() {

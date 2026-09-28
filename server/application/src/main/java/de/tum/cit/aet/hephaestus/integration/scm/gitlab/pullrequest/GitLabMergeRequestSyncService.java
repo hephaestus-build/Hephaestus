@@ -46,6 +46,7 @@ public class GitLabMergeRequestSyncService {
     private static final String GET_PROJECT_MRS_HISTORICAL_DOCUMENT = "GetProjectMergeRequestsHistorical";
     private static final String GET_MR_APPROVALS_DOCUMENT = "GetMergeRequestApprovals";
     private static final String GET_MR_REVIEWERS_DOCUMENT = "GetMergeRequestReviewers";
+    private static final String GET_OPEN_MR_REVIEWERS_DOCUMENT = "GetProjectOpenMergeRequestReviewers";
     private static final String GET_MR_LABELS_DOCUMENT = "GetMergeRequestLabels";
     private static final String GET_MR_ASSIGNEES_DOCUMENT = "GetMergeRequestAssignees";
 
@@ -238,6 +239,110 @@ public class GitLabMergeRequestSyncService {
                 reportedTotalCount);
 
         return result;
+    }
+
+    /**
+     * Re-reads the reviewers of every open merge request, for a caller that has just run an incremental sync. The
+     * incremental sync reads only merge requests updated after its watermark, and a reviewer's approval, request for
+     * changes or re-request is not known to advance a merge request's {@code updatedAt}: a state whose webhook was
+     * missed would otherwise never be read again. Each list applies only if it is newer than the stored one, so a
+     * webhook that arrived after the page was asked for keeps its word. A list that cannot be read whole is not
+     * applied.
+     *
+     * <p>A failure does not undo what was read: a listing that stops early, or a merge request that cannot be
+     * stored, makes the result {@link SyncResult.Status#COMPLETED_WITH_WARNINGS}. GitLab's refusals and transport
+     * failures count against its circuit breaker; a failure to store does not.
+     *
+     * @return how many merge requests' reviewers changed, and whether everything was read and stored
+     */
+    public SyncResult refreshOpenMergeRequestReviewers(Long scopeId, Repository repository) {
+        String projectPath = repository.getNameWithOwner();
+        String safeProjectPath = Objects.requireNonNullElse(sanitizeForLog(projectPath), "<unknown>");
+        int changed = 0;
+        boolean complete = true;
+        String cursor = null;
+        String previousCursor = null;
+        int page = 0;
+        while (true) {
+            if (page >= GitLabSyncConstants.MAX_PAGINATION_PAGES) {
+                log.warn("Reached max pagination pages for open MR reviewers: projectPath={}", safeProjectPath);
+                return SyncResult.completedWithWarnings(changed);
+            }
+            Instant fetchedAt;
+            ClientGraphQlResponse response;
+            try {
+                graphQlClientProvider.acquirePermission();
+                graphQlClientProvider.waitIfRateLimitLow(scopeId);
+                fetchedAt = Instant.now();
+                response = graphQlClientProvider
+                        .forScope(scopeId)
+                        .documentName(GET_OPEN_MR_REVIEWERS_DOCUMENT)
+                        .variable("fullPath", projectPath)
+                        .variable("first", GitLabSyncConstants.OPEN_MERGE_REQUEST_REVIEWERS_PAGE_SIZE)
+                        .variable("after", cursor)
+                        .execute()
+                        .block(gitLabProperties.graphqlTimeout());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return SyncResult.completedWithWarnings(changed);
+            } catch (Exception e) {
+                graphQlClientProvider.recordFailure(e);
+                log.warn("Open MR reviewer listing failed: scopeId={}, projectPath={}", scopeId, safeProjectPath, e);
+                return SyncResult.completedWithWarnings(changed);
+            }
+
+            var handleResult = responseHandler.handle(response, "open MR reviewers for " + safeProjectPath, log);
+            if (handleResult.action() == GitLabGraphQlResponseHandler.HandleResult.Action.RETRY) {
+                continue;
+            }
+            if (handleResult.action() == GitLabGraphQlResponseHandler.HandleResult.Action.ABORT) {
+                graphQlClientProvider.recordFailure(new GitLabSyncException("Invalid GraphQL response"));
+                return SyncResult.completedWithWarnings(changed);
+            }
+            graphQlClientProvider.recordSuccess();
+
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            List<Map<String, Object>> nodes = (List) Objects.requireNonNull(response)
+                    .field("project.mergeRequests.nodes")
+                    .toEntityList(Map.class);
+            for (Map<String, Object> node : nodes == null ? List.<Map<String, Object>>of() : nodes) {
+                String iid = (String) node.get("iid");
+                Integer number = parseIid(iid);
+                if (number == null) {
+                    continue;
+                }
+                String context = safeProjectPath + "!" + iid;
+                List<GitLabMergeRequestProcessor.SyncReviewerData> reviewers =
+                        extractReviewers(node, scopeId, projectPath, iid, context);
+                if (reviewers == null) {
+                    complete = false;
+                    continue;
+                }
+                try {
+                    if (mergeRequestProcessor.applySyncedReviewers(repository, number, reviewers, fetchedAt)) {
+                        changed++;
+                    }
+                } catch (RuntimeException e) {
+                    complete = false;
+                    log.warn("Failed to store open MR reviewers: context={}", context, e);
+                }
+            }
+
+            GitLabPageInfo pageInfo = Objects.requireNonNull(response)
+                    .field("project.mergeRequests.pageInfo")
+                    .toEntity(GitLabPageInfo.class);
+            if (nodes == null || nodes.isEmpty() || pageInfo == null || !pageInfo.hasNextPage()) {
+                return complete ? SyncResult.completed(changed) : SyncResult.completedWithWarnings(changed);
+            }
+            cursor = pageInfo.endCursor();
+            if (cursor == null
+                    || responseHandler.isPaginationLoop(
+                            cursor, previousCursor, "open MR reviewers for " + safeProjectPath, log)) {
+                return SyncResult.completedWithWarnings(changed);
+            }
+            previousCursor = cursor;
+            page++;
+        }
     }
 
     // Intermediate extraction records
