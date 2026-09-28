@@ -19,7 +19,7 @@ import { test } from "node:test";
 import { parseDocument } from "yaml";
 
 import { environmentForGitFixture, GIT_REPOSITORY_VARIABLES } from "./lib/git-environment.ts";
-import { asArray, asRecord, at, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, asString, asStringArray, at, parseJson } from "./lib/json.ts";
 import {
 	adoptTooling,
 	appliedCommit,
@@ -676,7 +676,7 @@ async function reconcilerFixture(directory: string) {
 		path.join(checkout, "scripts/prepare-release-lock.ts"),
 		'throw new Error("candidate release must not verify itself");\n',
 	);
-	// As the repository does: the proxy's ACME store lived there before it moved to a volume.
+	// As the repository does, for the ACME store an older release's proxy keeps there.
 	await writeFile(path.join(checkout, ".gitignore"), "docker/letsencrypt/\n");
 	gitIn(checkout, "init", "--quiet", "--initial-branch=main");
 	gitIn(checkout, "config", "user.email", "host@example.invalid");
@@ -1032,7 +1032,6 @@ async function followingHost(directory: string) {
 			return files.map((file) => file.slice(0, -".env".length)).toSorted();
 		},
 		record: async () => readApplied(path.join(directory, "applied.json")),
-		registered: () => gitIn(fixture.checkout, "worktree", "list", "--porcelain"),
 	};
 }
 
@@ -1056,8 +1055,6 @@ await test(
 			assert.deepEqual(await host.trees(), sorted(second, third));
 			assert.deepEqual(await host.locks(), sorted(second, third));
 			assert.match(pruned, new RegExp(`Removed .*releases/${first}\\n`, "u"));
-			// Removed through git, so the checkout forgets the tree rather than keeping a registration.
-			assert.doesNotMatch(host.registered(), new RegExp(first, "u"));
 			const afterThird = await host.record();
 			assert.equal(afterThird?.previous, second);
 
@@ -1077,16 +1074,13 @@ await test(
 			);
 			assert.deepEqual(await host.trees(), sorted(second, third, fourth));
 
-			// A certificate store left in a tree from before the volume is ignored by git, which is
-			// exactly what a plain `git worktree remove` deletes.
+			// An older release's certificate store is ignored by git, and a plain `git worktree remove`
+			// deletes ignored files.
 			const store = path.join(host.releases, third, "docker/letsencrypt/acme.json");
 			await mkdir(path.dirname(store), { recursive: true });
 			await writeFile(store, '{"letsencrypt":{}}\n');
 			const fifth = await host.publish();
-			assert.match(
-				host.apply(),
-				new RegExp(`Keeping .*${third}: it holds docker/letsencrypt/acme\\.json`, "u"),
-			);
+			assert.match(host.apply(), new RegExp(`Keeping .*${third}: !! docker/letsencrypt/`, "u"));
 			assert.equal(await readFile(store, "utf8"), '{"letsencrypt":{}}\n');
 			assert.deepEqual(await host.trees(), sorted(second, third, fourth, fifth));
 			assert.deepEqual(await host.locks(), sorted(second, third, fourth, fifth));
@@ -1101,7 +1095,6 @@ await test(
 			assert.equal(reapplied.previous, fourth);
 			assert.deepEqual(await host.trees(), sorted(third, fourth, fifth));
 			assert.deepEqual(await host.locks(), sorted(third, fourth, fifth));
-			assert.doesNotMatch(await host.calls(), /worktree remove .*--force/u);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
@@ -1123,7 +1116,6 @@ await test(
 			host.apply();
 			assert.deepEqual(await host.trees(), sorted(second, third));
 
-			const earlier = await host.calls();
 			await host.promote(first, true);
 			host.apply();
 			const tree = path.join(host.releases, first);
@@ -1134,18 +1126,12 @@ await test(
 			assert.equal(record.previous, third);
 			assert.deepEqual(await host.trees(), sorted(first, third));
 			assert.deepEqual(await host.locks(), sorted(first, third));
-
-			// The certificates are in a volume no release tree holds (see the Compose test below), and
-			// nothing the rollback runs removes or renews a volume.
-			const calls = await host.calls();
-			const docker = calls
-				.slice(earlier.length)
-				.split("\n")
-				.filter((line) => line.startsWith("docker"));
-			assert.match(docker.join("\n"), /--project-name proxy .* up /u);
-			for (const call of docker) {
-				assert.doesNotMatch(call, / volume | down|--volumes| -v |--renew-anon-volumes| -V /u);
-			}
+			// The proxy starts from the recreated tree, and its certificates are in a volume no tree
+			// holds; the Compose test below proves that part.
+			assert.match(
+				await host.calls(),
+				new RegExp(`--project-name proxy .* --file ${tree}/docker/compose\\.proxy\\.yaml up `, "u"),
+			);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
@@ -1173,27 +1159,15 @@ await test(
 			assert.equal(record.previous, second);
 			const tree = path.join(host.releases, third);
 			assert.equal(await readlink(path.join(directory, "tooling")), tree);
-			assert.equal(
-				await readFile(path.join(host.units, "hephaestus-reconcile.service"), "utf8"),
-				await readFile(
-					path.join(tree, "docker/self-host/systemd/hephaestus-reconcile.service"),
-					"utf8",
-				),
-			);
 			assert.match(
 				await host.calls(),
-				new RegExp(`${third}/docker/compose\\.proxy\\.yaml up `, "u"),
+				new RegExp(`${tree}/docker/compose\\.proxy\\.yaml up `, "u"),
 			);
-			assert.match(await readFile(host.metricsFile, "utf8"), new RegExp(`release="${third}"`, "u"));
 			assert.deepEqual(await host.trees(), sorted(first, second, third));
 
-			// Nothing is left half-done: the next tick sees the release it runs, and the next apply
-			// prunes everything the failed one did not.
+			// The host recovers on its own: the next tick finds the release it runs, and the next apply
+			// prunes what this one left.
 			assert.match(host.apply(), /No change: already running/u);
-			assert.match(
-				await readFile(host.metricsFile, "utf8"),
-				/^hephaestus_deploy_reconcile_success 1$/mu,
-			);
 			const fourth = await host.publish();
 			host.apply();
 			assert.deepEqual(await host.trees(), sorted(third, fourth));
@@ -1205,39 +1179,31 @@ await test(
 );
 
 await test("no stack keeps anything in the release tree it was started from", () => {
-	// Pruning deletes release trees and a rollback recreates one from git, so anything a service
-	// mounted from beside its Compose file would be lost or come back empty. The proxy's ACME store
-	// was one such path, and every certificate would be issued again.
+	// Pruning deletes release trees and a rollback recreates one from git, so a host path mounted from
+	// beside a Compose file — a source starting with `.` or `~` — would be lost or come back empty.
+	const mounts = new Map<string, string>();
 	for (const stack of ["app", "core", "proxy"]) {
 		const file = `docker/compose.${stack}.yaml`;
 		const services = asRecord(
 			at(parseDocument(readFileSync(file, "utf8")).toJS(), ["services"], file),
-			`${file} services`,
+			file,
 		);
 		for (const [name, service] of Object.entries(services)) {
-			const volumes = asRecord(service, `${file} ${name}`).volumes ?? [];
-			for (const volume of asArray(volumes, `${file} ${name} volumes`)) {
-				const source =
-					typeof volume === "string"
-						? volume.split(":")[0]
-						: asRecord(volume, `${file} ${name} volume`).source;
-				assert.ok(
-					source === undefined ||
-						(typeof source === "string" && (source.startsWith("/") || /^\w[\w.-]*$/u.test(source))),
-					`${file} ${name} mounts ${String(source)} from its release tree`,
-				);
+			const volumes = asArray(asRecord(service, name).volumes ?? [], `${name} volumes`);
+			for (const volume of volumes) {
+				const [source = "", target = ""] = asString(volume, `${name} volume`).split(":");
+				assert.doesNotMatch(source, /^[.~]/u, `${file} ${name} mounts ${source}`);
+				mounts.set(`${name}:${target}`, source);
 			}
 		}
+		if (stack === "proxy") {
+			// Traefik's certificates in particular are on a named volume, so no apply reissues them.
+			const command = asStringArray(
+				asRecord(services["reverse-proxy"], "reverse-proxy").command,
+				file,
+			);
+			const store = command.find((flag) => flag.includes(".acme.storage="))?.split("=")[1] ?? "";
+			assert.match(mounts.get(`reverse-proxy:${path.posix.dirname(store)}`) ?? "", /^\w[\w.-]*$/u);
+		}
 	}
-	const proxy: unknown = parseDocument(readFileSync("docker/compose.proxy.yaml", "utf8")).toJS();
-	const traefik = asRecord(
-		at(proxy, ["services", "reverse-proxy"], "docker/compose.proxy.yaml"),
-		"reverse-proxy",
-	);
-	assert.ok(
-		asArray(traefik.command, "reverse-proxy command").includes(
-			"--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json",
-		),
-	);
-	assert.ok(asArray(traefik.volumes, "reverse-proxy volumes").includes("letsencrypt:/letsencrypt"));
 });

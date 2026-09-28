@@ -237,12 +237,12 @@ release left without a worktree. It keeps:
 - the worktree the `/var/lib/hephaestus/tooling` link names;
 - a worktree locked with `git worktree lock`, which is how you keep one you are working in;
 - a worktree that holds anything its release does not, such as a modified file or an untracked or
-  ignored one. An `acme.json` from before certificates moved to the `proxy_letsencrypt` volume is
-  one of these.
+  ignored one. An `acme.json` that an older release's proxy wrote to `docker/letsencrypt/` is one of
+  these.
 
-The journal names each worktree it keeps for one of the last two reasons, with the lock reason or
-the files it holds. Pruning deletes worktrees and lock files only. It never touches a Docker volume,
-so the certificates in `proxy_letsencrypt` and the database stay as they are.
+The journal names each worktree the reconciler removes, and says why it keeps a locked worktree or
+one that holds files. Pruning deletes worktrees and lock files only. It never touches a Docker
+volume, so the certificates in `proxy_letsencrypt` and the database stay as they are.
 
 To keep a worktree while you use it, lock it, and unlock it when you are done:
 
@@ -262,8 +262,10 @@ for a release whose proxy still used the bind mount; see
 
 If pruning fails, the pass fails after the new release is running, recorded and its tooling
 adopted. The journal gives the reason. The next apply prunes everything that is still obsolete.
-The pass runs only through `hephaestus-reconcile.service`, and systemd runs one at a time, so no
-other pass uses a worktree that pruning removes.
+
+To run a pass by hand, use `sudo systemctl start hephaestus-reconcile.service`. Do not start the
+reconciler directly: systemd runs one pass at a time, so no other pass can use a worktree that
+pruning removes.
 
 ## Watching it
 

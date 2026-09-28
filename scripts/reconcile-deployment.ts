@@ -1011,11 +1011,10 @@ export async function ensureReleaseTree(
 			},
 		);
 	}
-	// Tracked content only: Compose writes into the worktree it renders from wherever a release binds
-	// a path beside its Compose file — the proxy's ACME store was `docker/letsencrypt/` before it moved
-	// to a volume — so counting untracked files would turn every retry after a partial apply into a
-	// permanent refusal. An untracked file cannot alter a tracked Compose file,
-	// and anyone who can write here already has the Docker socket.
+	// Tracked content only: Compose writes into the worktree it renders from — an older release's
+	// proxy keeps its ACME store in `docker/letsencrypt/` — so counting untracked files would turn
+	// every retry after a partial apply into a permanent refusal. An untracked file cannot alter a
+	// tracked Compose file, and anyone who can write here already has the Docker socket.
 	const changes = await output("git", ["status", "--porcelain=v1", "--untracked-files=no"], {
 		cwd: tree,
 	});
@@ -1026,26 +1025,24 @@ export async function ensureReleaseTree(
 }
 
 /**
- * Removes the release trees nothing needs after an apply, and the lock of every release left without
- * one. Kept are the releases named in `kept`, the tree the tooling link names, a tree locked with
+ * Removes the release trees nothing needs after an apply, then the lock of every release left without
+ * a tree. Kept are the releases in `kept`, the tree the tooling link names, a tree locked with
  * `git worktree lock` — how anything else working in a tree says so — and a tree holding anything its
- * release does not: a modified file, or an untracked or ignored one such as the `acme.json` the proxy
- * kept under `docker/letsencrypt/` before its certificates moved to a volume. `git worktree remove`
- * alone would delete that file, because it refuses only untracked and modified content. Each step is
- * idempotent, so the next apply finishes a prune that stopped partway.
+ * release does not, such as the `acme.json` an older release's proxy keeps in `docker/letsencrypt/`.
+ * That file is ignored, and `git worktree remove` refuses only untracked and modified content, so the
+ * check here includes ignored files. The next apply finishes a prune that stopped partway.
  */
 async function pruneReleases(
 	config: HostConfig,
 	kept: readonly (string | undefined)[],
 ): Promise<void> {
-	const releases = releasesDirectory(config);
 	// A tree deleted by hand leaves its registration behind, and `remove` cannot act on that.
 	await run("git", ["worktree", "prune"], { cwd: config.checkout });
-	// Paths are compared resolved, so a state directory reached through a link hides no tree.
-	const directory = await realpath(releases);
+	// Git lists resolved paths, so the directory is resolved too.
+	const releases = await realpath(releasesDirectory(config));
 	const remaining = new Set(kept);
-	const tooling = await realpath(config.tooling).catch(() => undefined);
-	if (tooling !== undefined && path.dirname(tooling) === directory) {
+	const tooling = await realpath(config.tooling);
+	if (path.dirname(tooling) === releases) {
 		remaining.add(path.basename(tooling));
 	}
 	const listing = await output("git", ["worktree", "list", "--porcelain", "-z"], {
@@ -1054,31 +1051,19 @@ async function pruneReleases(
 	for (const record of listing.split("\0\0")) {
 		const lines = record.split("\0");
 		const tree = lines.find((line) => line.startsWith("worktree "))?.slice("worktree ".length);
-		const release = path.basename(tree ?? "");
-		if (tree === undefined || !isTarget(release) || remaining.has(release)) {
+		if (tree === undefined || path.dirname(tree) !== releases) {
 			continue;
 		}
-		if ((await realpath(path.dirname(tree)).catch(() => undefined)) !== directory) {
+		const release = path.basename(tree);
+		if (remaining.has(release)) {
 			continue;
 		}
 		const lock = lines.find((line) => line === "locked" || line.startsWith("locked "));
-		if (lock !== undefined) {
-			console.log(`Keeping ${tree}: ${lock}`);
-			remaining.add(release);
-			continue;
-		}
-		const held = await output(
-			"git",
-			["status", "--porcelain=v1", "--ignored", "--untracked-files=all"],
-			{ cwd: tree },
-		);
-		if (held) {
-			const files = held
-				.trimEnd()
-				.split("\n")
-				.map((line) => line.slice(3));
-			const more = files.length > 5 ? ` and ${files.length - 5} more` : "";
-			console.log(`Keeping ${tree}: it holds ${files.slice(0, 5).join(", ")}${more}`);
+		const reason = (
+			lock ?? (await output("git", ["status", "--porcelain=v1", "--ignored"], { cwd: tree }))
+		).trimEnd();
+		if (reason) {
+			console.log(`Keeping ${tree}: ${reason.replaceAll("\n", ", ")}`);
 			remaining.add(release);
 			continue;
 		}
@@ -1088,8 +1073,8 @@ async function pruneReleases(
 	}
 	const locks = locksDirectory(config);
 	for (const file of await readdir(locks)) {
-		const release = file.slice(0, -".env".length);
-		if (file.endsWith(".env") && isTarget(release) && !remaining.has(release)) {
+		const { name, ext } = path.parse(file);
+		if (ext === ".env" && isTarget(name) && !remaining.has(name)) {
 			await rm(path.join(locks, file));
 			console.log(`Removed ${path.join(locks, file)}`);
 		}
