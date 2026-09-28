@@ -233,36 +233,28 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             verify(mergeRequestProcessor, never()).process(any(), any());
         }
 
+        /** GitLab sends {@code approval} for an approval that leaves approvals missing: the same act as {@code approved}. */
         @Test
-        void approvalAction_skipsProcessing() throws IOException {
+        void shouldRecordTheApproverWhenAnApprovalLeavesApprovalsMissing() throws IOException {
             GitLabMergeRequestEventDTO event = createEvent("approval", "opened", false);
             setupRepository();
 
-            Message msg = mockMessage(event);
-            handler.onMessage(msg);
+            handler.onMessage(mockMessage(event));
 
+            verify(mergeRequestProcessor).processApproved(eq(event), any(ProcessingContext.class));
             verify(mergeRequestProcessor, never()).process(any(), any());
-            verify(mergeRequestProcessor, never()).processApproved(any(), any());
-            verify(mergeRequestProcessor, never()).processUnapproved(any(), any());
-            verify(mergeRequestProcessor, never()).processClosed(any(), any());
-            verify(mergeRequestProcessor, never()).processReopened(any(), any());
-            verify(mergeRequestProcessor, never()).processMerged(any(), any());
         }
 
+        /** GitLab sends {@code unapproval} when the merge request still meets its approval rules afterwards. */
         @Test
-        void unapprovalAction_skipsProcessing() throws IOException {
+        void shouldDismissTheApprovalWhenItsWithdrawalLeavesTheRulesMet() throws IOException {
             GitLabMergeRequestEventDTO event = createEvent("unapproval", "opened", false);
             setupRepository();
 
-            Message msg = mockMessage(event);
-            handler.onMessage(msg);
+            handler.onMessage(mockMessage(event));
 
+            verify(mergeRequestProcessor).processUnapproved(eq(event), any(ProcessingContext.class));
             verify(mergeRequestProcessor, never()).process(any(), any());
-            verify(mergeRequestProcessor, never()).processApproved(any(), any());
-            verify(mergeRequestProcessor, never()).processUnapproved(any(), any());
-            verify(mergeRequestProcessor, never()).processClosed(any(), any());
-            verify(mergeRequestProcessor, never()).processReopened(any(), any());
-            verify(mergeRequestProcessor, never()).processMerged(any(), any());
         }
 
         @Test

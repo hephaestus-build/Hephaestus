@@ -30,9 +30,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>{@code close} → {@link GitLabMergeRequestProcessor#processClosed}</li>
  *   <li>{@code reopen} → {@link GitLabMergeRequestProcessor#processReopened}</li>
  *   <li>{@code merge} → {@link GitLabMergeRequestProcessor#processMerged}</li>
- *   <li>{@code approved} → {@link GitLabMergeRequestProcessor#processApproved}</li>
- *   <li>{@code unapproved} → {@link GitLabMergeRequestProcessor#processUnapproved}</li>
+ *   <li>{@code approved} / {@code approval} → {@link GitLabMergeRequestProcessor#processApproved}</li>
+ *   <li>{@code unapproved} / {@code unapproval} → {@link GitLabMergeRequestProcessor#processUnapproved}</li>
  * </ul>
+ * Each pair is one person's act; the two names only say whether the merge request's approval rules were met
+ * afterwards.
  */
 @Component
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
@@ -147,11 +149,8 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
             case CLOSE -> mergeRequestProcessor.processClosed(event, context);
             case REOPEN -> mergeRequestProcessor.processReopened(event, context);
             case MERGE -> mergeRequestProcessor.processMerged(event, context);
-            case APPROVED -> mergeRequestProcessor.processApproved(event, context);
-            case UNAPPROVED -> mergeRequestProcessor.processUnapproved(event, context);
-            case APPROVAL, UNAPPROVAL ->
-                log.debug(
-                        "Skipped group-level approval rule event: projectPath={}, action={}", safeProjectPath, action);
+            case APPROVED, APPROVAL -> mergeRequestProcessor.processApproved(event, context);
+            case UNAPPROVED, UNAPPROVAL -> mergeRequestProcessor.processUnapproved(event, context);
             default -> log.debug("Unhandled merge request action: projectPath={}, action={}", safeProjectPath, action);
         }
         return context;

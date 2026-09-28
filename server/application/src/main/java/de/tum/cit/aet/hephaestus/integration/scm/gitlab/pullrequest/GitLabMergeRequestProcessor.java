@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -400,10 +401,12 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * Process an approval event.
+     * Process an {@code approved} or {@code approval} event: the hook's user approved. GitLab sends {@code approved}
+     * when the approval meets the merge request's approval rules and {@code approval} when approvals are still missing
+     * (<a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/services/ee/merge_requests/execute_approval_hooks_service.rb">execute_approval_hooks_service.rb</a>),
+     * so both are the same act by one person.
      *
-     * <p>Creates a new APPROVED review or updates an existing review (e.g., from
-     * CHANGES_REQUESTED after a previous unapproval) to APPROVED state.
+     * <p>Creates a new APPROVED review or gives a dismissed one again.
      */
     @Transactional
     @Nullable
@@ -419,13 +422,15 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 approvalNativeId, Objects.requireNonNull(context.providerId()));
 
         if (existingReview.isPresent()) {
-            // Re-approval: update existing review (may be DISMISSED from unapproval or CHANGES_REQUESTED)
+            // Re-approval: the approval row was dismissed by an unapproval
             PullRequestReview review = existingReview.get();
             if (review.getState() != PullRequestReview.State.APPROVED) {
                 review.setState(PullRequestReview.State.APPROVED);
+                review.setDismissed(false);
                 review.setSubmittedAt(Instant.now());
                 review.setUpdatedAt(Instant.now());
                 reviewRepository.save(review);
+                forgetReviewDecision(pr);
 
                 ScmEventPayload.ReviewData.from(review)
                         .ifPresent(reviewData -> eventPublisher.publishEvent(
@@ -437,6 +442,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             PullRequestReview review = createApprovalReview(approvalNativeId, pr, approver);
             reviewRepository.save(review);
             pr.addReview(review);
+            forgetReviewDecision(pr);
 
             ScmEventPayload.ReviewData.from(review)
                     .ifPresent(reviewData -> eventPublisher.publishEvent(
@@ -448,18 +454,13 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * Process an unapproval event.
+     * Process an {@code unapproved} or {@code unapproval} event: the hook's user withdrew their approval. GitLab sends
+     * {@code unapproved} when the merge request stops meeting its approval rules and {@code unapproval} otherwise
+     * (<a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/services/ee/merge_requests/remove_approval_service.rb">remove_approval_service.rb</a>).
      *
-     * <p>Dismisses the existing approval review. Unapproval means "I retract my approval"
-     * — it does NOT mean "I request changes." These are distinct actions in GitLab:
-     * <ul>
-     *   <li><b>Unapproval</b> ({@code unapproved} webhook): revokes an existing approval.
-     *       Fires when the user clicks "Revoke approval" or when the system auto-revokes
-     *       after new commits. The review transitions to DISMISSED.</li>
-     *   <li><b>Request changes</b> (detected via note {@code detailed_merge_status}):
-     *       explicitly blocks the MR. Handled by
-     *       {@link #processRequestedChangesFromNote}.</li>
-     * </ul>
+     * <p>Dismisses the existing approval review. Withdrawing an approval is not a request for changes: that is its
+     * own system note, recorded by
+     * {@link de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler}.
      */
     @Transactional
     @Nullable
@@ -485,6 +486,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                     review.setDismissed(true);
                     review.setUpdatedAt(Instant.now());
                     reviewRepository.save(review);
+                    forgetReviewDecision(pr);
 
                     ScmEventPayload.ReviewData.from(review)
                             .ifPresent(reviewData -> eventPublisher.publishEvent(
@@ -496,62 +498,16 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * Updates an existing review to CHANGES_REQUESTED when detected from a note event.
-     *
-     * <p>GitLab's "Request changes" feature (Premium, GA 17.3) does NOT fire a dedicated
-     * MR webhook. Instead, note events from the batch review carry
-     * {@code merge_request.detailed_merge_status = "requested_changes"}.
-     * This method is called from the note handler when that signal is detected.
-     *
-     * <p><b>Important:</b> This method only UPDATES existing reviews — it does NOT create
-     * new ones. The {@code detailed_merge_status} is an MR-level status that persists on
-     * ALL subsequent note events (not just notes from the reviewer who requested changes).
-     * Creating new reviews from this signal would cause false positives: any commenter on
-     * an MR with active change requests would be falsely attributed. New CHANGES_REQUESTED
-     * reviews without a prior approval are created by the GraphQL sync path instead.
-     *
-     * @param pr the pull request
-     * @param reviewer the user who requested changes (note author)
-     * @param context the processing context
+     * Leaves the merge request's review decision unknown once a webhook changed where one person's review stands. The
+     * hook names that one act; what every reviewer's acts now add up to is the sync's to read ({@link #reviewDecision}),
+     * so the stored decision would otherwise outlive the act that changed it.
      */
     @Transactional
-    public void processRequestedChangesFromNote(PullRequest pr, User reviewer, ProcessingContext context) {
-        if (pr.getNativeId() == null || reviewer.getNativeId() == null) return;
-
-        long approvalNativeId = generateApprovalNativeId(pr.getNativeId(), reviewer.getNativeId());
-        var existingReview = reviewRepository.findByNativeIdAndProviderId(
-                approvalNativeId, Objects.requireNonNull(context.providerId()));
-
-        if (existingReview.isEmpty()) {
-            // No existing review for this reviewer — cannot safely attribute from note signal.
-            // The sync path will create the review with correct attribution.
-            log.debug(
-                    "No existing review to update from note signal, deferring to sync: prId={}, reviewer={}",
-                    pr.getId(),
-                    reviewer.getLogin());
-            return;
+    public void forgetReviewDecision(PullRequest pr) {
+        if (pr.getReviewDecision() != null) {
+            pr.setReviewDecision(null);
+            pullRequestRepository.save(pr);
         }
-
-        PullRequestReview review = existingReview.get();
-        if (review.getState() == PullRequestReview.State.CHANGES_REQUESTED) {
-            log.debug(
-                    "Review already CHANGES_REQUESTED from note signal: prId={}, reviewer={}",
-                    pr.getId(),
-                    reviewer.getLogin());
-            return;
-        }
-        review.setState(PullRequestReview.State.CHANGES_REQUESTED);
-        review.setSubmittedAt(Instant.now());
-        review.setUpdatedAt(Instant.now());
-        reviewRepository.save(review);
-
-        ScmEventPayload.ReviewData.from(review)
-                .ifPresent(reviewData -> eventPublisher.publishEvent(
-                        new ScmDomainEvent.ReviewSubmitted(reviewData, EventContext.from(context))));
-        log.info(
-                "Updated review to CHANGES_REQUESTED (from note signal): prId={}, reviewer={}",
-                pr.getId(),
-                reviewer.getLogin());
     }
 
     // Sync Processing
@@ -650,7 +606,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
         Issue.State mrState = convertState(data.state());
         boolean isMerged = "merged".equalsIgnoreCase(data.state());
-        String reviewDecision = deriveReviewDecision(data.approved(), data.detailedMergeStatus());
+        ReviewDecision reviewDecision = reviewDecision(data);
         String mergeStateStatus = mapDetailedMergeStatus(data.detailedMergeStatus());
 
         // Resolve milestone by iid + repository (milestones are synced before MRs)
@@ -695,7 +651,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 data.additions(),
                 data.deletions(),
                 data.fileCount(),
-                reviewDecision,
+                null, // reviewDecision: set below, as upsertCore keeps a stored one where it is given none
                 mergeStateStatus,
                 data.mergeable(),
                 data.sourceBranch(),
@@ -712,7 +668,9 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
         pr.setProvider(repository.getProvider());
 
-        boolean changed = updateSyncLabels(data.syncLabels(), pr.getLabels(), repository);
+        boolean changed = pr.getReviewDecision() != reviewDecision;
+        pr.setReviewDecision(reviewDecision);
+        changed |= updateSyncLabels(data.syncLabels(), pr.getLabels(), repository);
         changed |= updateSyncAssignees(data.syncAssignees(), pr.getAssignees(), providerId);
         changed |= updateSyncReviewers(data.syncReviewers(), pr, providerId, context);
         // The head pipeline is read on every sync: a head with none has no checks, for that head.
@@ -930,20 +888,30 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * Derives the PR review decision from GitLab's binary approval flag plus detailed merge status.
+     * The merge request's review decision from what its reviewers did, or none where the sync did not read that whole.
      *
-     * <p>GitLab's {@code approved} field is binary and cannot express CHANGES_REQUESTED. The
-     * {@code detailed_merge_status == "requested_changes"} signal (Premium, GA 17.3) surfaces
-     * active change requests on the MR, so we lift it into the three-state {@code ReviewDecision}.
+     * <p>A standing request for changes decides it, over any approval: GitLab's {@code REQUESTED_CHANGES} merge status
+     * where the project blocks merging on one (Premium), and a reviewer's {@code REQUESTED_CHANGES} review state on any
+     * tier. Otherwise it is approved only when someone approved and GitLab's {@code approved} says the approval rules
+     * are met: that flag alone is also true when a project requires no approval and nobody gave one
+     * (<a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/models/approval_state.rb">approval_state.rb</a>).
+     * A reviewer or approver list GitLab did not return whole could hide either, so it leaves the decision unknown.
+     * {@code approvalsRequired} is not read: GitLab's Community Edition schema has no such field.
      */
-    private static String deriveReviewDecision(boolean approved, @Nullable String detailedStatus) {
-        if (approved) {
-            return "APPROVED";
+    private static @Nullable ReviewDecision reviewDecision(SyncMergeRequestData data) {
+        List<SyncReviewerData> reviewers = data.syncReviewers();
+        List<SyncUserData> approvers = data.syncApprovers();
+        boolean changesRequested = "REQUESTED_CHANGES".equalsIgnoreCase(data.detailedMergeStatus())
+                || (reviewers != null
+                        && reviewers.stream()
+                                .anyMatch(reviewer -> "REQUESTED_CHANGES".equalsIgnoreCase(reviewer.reviewState())));
+        if (changesRequested) {
+            return ReviewDecision.CHANGES_REQUESTED;
         }
-        if (detailedStatus != null && "requested_changes".equalsIgnoreCase(detailedStatus)) {
-            return "CHANGES_REQUESTED";
+        if (reviewers == null || approvers == null) {
+            return null;
         }
-        return "REVIEW_REQUIRED";
+        return data.approved() && !approvers.isEmpty() ? ReviewDecision.APPROVED : ReviewDecision.REVIEW_REQUIRED;
     }
 
     @Nullable

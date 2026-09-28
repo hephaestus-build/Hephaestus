@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -112,16 +113,6 @@ public class GitLabReviewReconciler {
     public static final String REQUESTED_CHANGES_SYSTEM_NOTE = "requested changes";
 
     /**
-     * Records one review-decision system note, from the discussion sync or the note webhook.
-     *
-     * <p>A live approval note is the approval itself, so it may create the approval row and give a
-     * dismissed one again; a replayed one only re-times what {@code approvedBy} already established,
-     * and re-approves only after an unapproval note the same pass has seen.
-     *
-     * @param unapproved the authors whose unapproval note this pass has already seen; added to here
-     * @return whether the body was a review-decision note at all
-     */
-    /**
      * One review-decision system note as GitLab wrote it.
      *
      * @param body the note's body
@@ -132,6 +123,17 @@ public class GitLabReviewReconciler {
      */
     public record SystemNote(String body, Instant at, String globalId, boolean live) {}
 
+    /**
+     * Records one review-decision system note, from the discussion sync or the note webhook. The note names the person
+     * who decided, so it is the only note that says who approved, withdrew an approval or requested changes.
+     *
+     * <p>A live approval note is the approval itself, so it may create the approval row and give a
+     * dismissed one again; a replayed one only re-times what {@code approvedBy} already established,
+     * and re-approves only after an unapproval note the same pass has seen.
+     *
+     * @param unapproved the authors whose unapproval note this pass has already seen; added to here
+     * @return whether the note changed where its author's review stands, rather than re-timing or restating it
+     */
     @Transactional(propagation = Propagation.REQUIRED)
     public boolean recordSystemNote(
             PullRequest pr, User author, SystemNote note, IdentityProvider provider, Set<Long> unapproved) {
@@ -139,25 +141,42 @@ public class GitLabReviewReconciler {
         if (authorNativeId == null) {
             return false;
         }
-        switch (note.body().strip()) {
+        return switch (note.body().strip()) {
             case APPROVED_SYSTEM_NOTE -> {
+                PullRequestReview.State before = approvalState(pr, author, provider);
                 PullRequestReview review = recordApprovalTime(
                         pr, author, note.at(), provider, note.live() || unapproved.contains(authorNativeId));
                 if (review == null && note.live()) {
                     createLiveApproval(pr, author, note.at(), provider);
+                    yield true;
                 }
+                yield review != null && review.getState() != before;
             }
             case UNAPPROVED_SYSTEM_NOTE -> {
-                recordUnapproval(pr, author, note.at(), provider);
                 unapproved.add(authorNativeId);
+                yield withdrawApproval(pr, author, note.at(), provider);
             }
-            case REQUESTED_CHANGES_SYSTEM_NOTE ->
-                recordChangesRequested(pr, author, note.globalId(), note.at(), provider);
-            default -> {
-                return false;
+            case REQUESTED_CHANGES_SYSTEM_NOTE -> {
+                boolean recorded = changesRequestedReview(author, note.globalId(), provider) != null;
+                boolean requested =
+                        recordChangesRequested(pr, author, note.globalId(), note.at(), provider) != null && !recorded;
+                // GitLab withdraws a reviewer's approval when they request changes, and writes no note or hook for
+                // it (update_reviewer_state_service.rb); a replayed note leaves that to approvedBy, which the sync
+                // read with it and which also keeps the approval of someone who was not a reviewer.
+                if (requested && note.live()) {
+                    withdrawApproval(pr, author, note.at(), provider);
+                }
+                yield requested;
             }
-        }
-        return true;
+            default -> false;
+        };
+    }
+
+    /** Dismisses the approval by {@code approver}; whether one stood. */
+    private boolean withdrawApproval(PullRequest pr, User approver, Instant at, IdentityProvider provider) {
+        boolean stood = approvalState(pr, approver, provider) == PullRequestReview.State.APPROVED;
+        recordUnapproval(pr, approver, at, provider);
+        return stood;
     }
 
     /** Whether a system note's body is one of the three review decisions. */
@@ -257,8 +276,7 @@ public class GitLabReviewReconciler {
     /**
      * The system note "requested changes": one CHANGES_REQUESTED review by its author at the note's
      * time. Each such note is its own decision, so the row is keyed by the note, and a re-sync finds the
-     * row it made before. The approval review of the same person is left alone: GitLab keeps the two
-     * apart, and so does this record.
+     * row it made before. The approval review of the same person is {@link #recordSystemNote}'s to settle.
      */
     @Nullable
     PullRequestReview recordChangesRequested(
@@ -267,8 +285,7 @@ public class GitLabReviewReconciler {
             return null;
         }
         long nativeId = generateChangesRequestedNativeId(noteGlobalId, reviewer.getNativeId());
-        PullRequestReview review = reviewRepository
-                .findByNativeIdAndProviderId(nativeId, provider.getId())
+        PullRequestReview review = Optional.ofNullable(changesRequestedReview(reviewer, noteGlobalId, provider))
                 .orElseGet(() -> {
                     PullRequestReview created = new PullRequestReview();
                     created.setNativeId(nativeId);
@@ -285,6 +302,22 @@ public class GitLabReviewReconciler {
         PullRequestReview saved = reviewRepository.save(review);
         pr.addReview(saved);
         return saved;
+    }
+
+    private @Nullable PullRequestReview changesRequestedReview(
+            User reviewer, String noteGlobalId, IdentityProvider provider) {
+        if (reviewer.getNativeId() == null || provider.getId() == null) {
+            return null;
+        }
+        return reviewRepository
+                .findByNativeIdAndProviderId(
+                        generateChangesRequestedNativeId(noteGlobalId, reviewer.getNativeId()), provider.getId())
+                .orElse(null);
+    }
+
+    private PullRequestReview.@Nullable State approvalState(PullRequest pr, User approver, IdentityProvider provider) {
+        PullRequestReview review = approvalReview(pr, approver, provider);
+        return review == null ? null : review.getState();
     }
 
     private @Nullable PullRequestReview approvalReview(PullRequest pr, User approver, IdentityProvider provider) {

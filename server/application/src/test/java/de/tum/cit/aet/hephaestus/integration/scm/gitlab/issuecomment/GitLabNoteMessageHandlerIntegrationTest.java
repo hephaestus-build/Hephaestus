@@ -16,10 +16,15 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecision;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -29,6 +34,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -38,6 +46,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /** Integration tests: JSON fixtures → DTO → handler → processor → DB. */
 @Tag("integration")
@@ -80,6 +89,9 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PullRequestRepository pullRequestRepository;
+
+    @Autowired
+    private PullRequestReviewRepository reviewRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -230,6 +242,120 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(commentRepository.count()).isZero();
             assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class))
                     .isEmpty();
+        }
+    }
+
+    /**
+     * Who requested changes is known only from a note that names them: GitLab's system note "requested changes". A
+     * note's embedded {@code detailed_merge_status} is the merge request's, stated on every note while anyone's request
+     * for changes stands.
+     */
+    @Nested
+    class ReviewDecisions {
+
+        private static final long APPROVAL_NATIVE_ID =
+                GitLabMergeRequestProcessor.generateApprovalNativeId(NATIVE_MR_ID, NATIVE_USER_ID);
+
+        @BeforeEach
+        void approveAsTheCommenter() throws Exception {
+            receive(loadPayload("note.mergerequest.system.approved"));
+            assertThat(reviewState(APPROVAL_NATIVE_ID)).isEqualTo(PullRequestReview.State.APPROVED);
+            eventListener.clear();
+        }
+
+        @Test
+        void shouldKeepAnApprovalWhenTheApproverCommentsWhileSomeoneElseRequestsChanges() throws Exception {
+            receive(whileChangesAreRequested("note.mergerequest.create", attributes -> {}));
+
+            assertThat(reviewState(APPROVAL_NATIVE_ID)).isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(reviewStatesOf(FIXTURE_AUTHOR_LOGIN)).doesNotContain(PullRequestReview.State.CHANGES_REQUESTED);
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+                    .isEmpty();
+        }
+
+        @Test
+        void shouldKeepAnApprovalWhenTheApproverCommentsOnTheDiffWhileSomeoneElseRequestsChanges() throws Exception {
+            receive(whileChangesAreRequested("note.mergerequest.create", attributes -> {
+                attributes.put("type", "DiffNote");
+                attributes.put("discussion_id", "6a9c1750b37d513a43987b574953fceb50b03ce7");
+                ObjectNode position = attributes.putObject("position");
+                position.put("position_type", "text");
+                position.put("new_path", "src/auth.ts");
+                position.put("old_path", "src/auth.ts");
+                position.put("new_line", 12);
+                position.put("base_sha", "a".repeat(40));
+                position.put("start_sha", "a".repeat(40));
+                position.put("head_sha", "b".repeat(40));
+            }));
+
+            assertThat(reviewState(APPROVAL_NATIVE_ID)).isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(reviewStatesOf(FIXTURE_AUTHOR_LOGIN)).doesNotContain(PullRequestReview.State.CHANGES_REQUESTED);
+        }
+
+        @Test
+        void shouldRecordTheRequestForChangesItsSystemNoteNames() throws Exception {
+            setReviewDecision(ReviewDecision.APPROVED);
+
+            receive(loadPayload("note.mergerequest.system.requested_changes"));
+
+            long nativeId = GitLabReviewReconciler.generateChangesRequestedNativeId(
+                    "gid://gitlab/Note/4538603", NATIVE_USER_ID);
+            assertThat(reviewState(nativeId)).isEqualTo(PullRequestReview.State.CHANGES_REQUESTED);
+            assertThat(reviewState(APPROVAL_NATIVE_ID))
+                    .as("GitLab withdraws the approval of a reviewer who requests changes")
+                    .isEqualTo(PullRequestReview.State.DISMISSED);
+            assertThat(reviewDecision())
+                    .as("one person's decision changed, so the stored decision no longer stands")
+                    .isNull();
+
+            setReviewDecision(ReviewDecision.CHANGES_REQUESTED);
+            receive(loadPayload("note.mergerequest.system.requested_changes"));
+
+            assertThat(reviewDecision())
+                    .as("a redelivered note changes no one's decision, so it leaves a newer sync's standing")
+                    .isEqualTo(ReviewDecision.CHANGES_REQUESTED);
+        }
+
+        /** Handles {@code event} in the transaction a delivery runs in. */
+        private void receive(GitLabNoteEventDTO event) {
+            transactionTemplate.executeWithoutResult(status -> handler.handleEvent(event));
+        }
+
+        private GitLabNoteEventDTO whileChangesAreRequested(String fixture, Consumer<ObjectNode> attributes)
+                throws IOException {
+            ObjectNode payload = (ObjectNode) objectMapper.readTree(
+                    new ClassPathResource("gitlab/" + fixture + ".json").getContentAsString(StandardCharsets.UTF_8));
+            ((ObjectNode) payload.get("merge_request")).put("detailed_merge_status", "requested_changes");
+            attributes.accept((ObjectNode) payload.get("object_attributes"));
+            return objectMapper.treeToValue(payload, GitLabNoteEventDTO.class);
+        }
+
+        private PullRequestReview.@Nullable State reviewState(long nativeId) {
+            return reviewRepository
+                    .findByNativeIdAndProviderId(nativeId, Objects.requireNonNull(savedProvider.getId()))
+                    .map(PullRequestReview::getState)
+                    .orElse(null);
+        }
+
+        private List<PullRequestReview.State> reviewStatesOf(String login) {
+            return Objects.requireNonNull(transactionTemplate.execute(status -> reviewRepository.findAll().stream()
+                    .filter(review -> review.getPullRequest() != null
+                            && review.getPullRequest().getId().equals(savedPr.getId()))
+                    .filter(review -> review.getAuthor() != null
+                            && login.equals(review.getAuthor().getLogin()))
+                    .map(PullRequestReview::getState)
+                    .toList()));
+        }
+
+        private @Nullable ReviewDecision reviewDecision() {
+            return pullRequestRepository.findById(savedPr.getId()).orElseThrow().getReviewDecision();
+        }
+
+        private void setReviewDecision(ReviewDecision decision) {
+            transactionTemplate.executeWithoutResult(status -> pullRequestRepository
+                    .findById(savedPr.getId())
+                    .orElseThrow()
+                    .setReviewDecision(decision));
         }
     }
 
