@@ -81,6 +81,12 @@ vp run schema:nats
 
 Available examples include `label.created`, `repository.created`, `create`, `push`, and more – consult the folder before recording new payloads.
 
+`vp run schema:nats` only sees events an environment already subscribes to. To record any other GitHub event,
+add a temporary repository webhook in the `HephaestusTest` organization that subscribes to that event only.
+Its URL does not need to answer. Cause the event, and then save each delivery's `request.payload` from
+`gh api repos/<owner>/<repo>/hooks/<hook_id>/deliveries/<delivery_id>`. Delete the webhook and whatever you
+created when you are done. The `issue_dependencies` fixtures were recorded this way.
+
 A fixture ending in `.derived.json` is not a recording: it is a recorded payload with the fields the
 test organization had no event to record filled in from the provider's documented payload. Replace it
 with a recording when one exists.

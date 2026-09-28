@@ -54,13 +54,10 @@ public record PiPlanSpec(
                                 Map.Entry::getKey, e -> e.getValue().clone()))
                 : Map.of();
         for (String path : extraInputs.keySet()) {
-            boolean ok = SandboxLayout.allowedExtraInputPaths().contains(path)
-                    || SandboxLayout.allowedExtraInputPrefixes().stream().anyMatch(path::startsWith);
-            if (!ok) {
+            if (!SandboxLayout.allowedExtraInputPaths().contains(path)) {
                 throw new IllegalArgumentException("extraInputs path '" + path
                         + "' is not a recognised workspace path: must appear in "
-                        + "SandboxLayout.allowedExtraInputPaths() or be prefixed by one of "
-                        + SandboxLayout.allowedExtraInputPrefixes());
+                        + "SandboxLayout.allowedExtraInputPaths()");
             }
         }
         precomputeStep = precomputeStep != null ? precomputeStep : "";

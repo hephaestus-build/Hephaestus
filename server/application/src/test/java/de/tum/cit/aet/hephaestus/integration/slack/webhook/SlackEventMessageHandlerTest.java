@@ -52,7 +52,8 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         dmHandler = new SlackMentorDmMessageHandler(mentorService, deserializer);
-        appHomeHandler = new SlackAppHomeOpenedMessageHandler(appHomeService, assistantEventHandler, deserializer);
+        appHomeHandler = new SlackAppHomeOpenedMessageHandler(
+                appHomeService, assistantEventHandler, mentorService, deserializer);
         joinHandler = new SlackMemberJoinedChannelMessageHandler(joinNoticeHandler, deserializer);
         appUninstalledHandler = new SlackAppUninstalledMessageHandler(uninstallService, deserializer);
         tokensRevokedHandler = new SlackTokensRevokedMessageHandler(uninstallService, deserializer);
@@ -129,6 +130,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                 "{\"team_id\":\"T1\",\"event\":{\"type\":\"app_home_opened\",\"tab\":\"home\",\"user\":\"U1\"}}"));
 
         verify(appHomeService).onHomeOpened("T1", "U1");
+        verify(mentorService).prepare("T1", "U1");
     }
 
     @Test
@@ -140,6 +142,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
 
         verify(assistantEventHandler).onMessagesOpened(ArgumentMatchers.eq("T1"), ArgumentMatchers.any(JsonNode.class));
         verify(appHomeService, never()).onHomeOpened(ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
+        verify(mentorService).prepare("T1", "U1");
     }
 
     @Test

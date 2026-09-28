@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabReposito
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.List;
 import java.util.Optional;
@@ -131,7 +132,8 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
                 deletionSweepService,
                 initializationService,
                 mock(GitLabRepositoryMonitors.class),
-                mock(WorkspaceRepository.class));
+                mock(WorkspaceRepository.class),
+                mock(WorkspaceActorSelector.class));
 
         // syncScope's first real step: no GitLabSyncServiceHolder available -> it logs and returns
         // immediately. This isolates the job-recording wrapper from the sync pipeline itself.

@@ -275,9 +275,31 @@ promote an existing proposal to automatic delivery.
 ### Who counts as a person
 
 The people side of coverage contains linked human workspace members, and the count beside **People** on
-the review screen is how many are in scope. A covered person must appear as eligible on the **Members**
-screen. Manage a missing person in the connected organization, group, or team roster and let membership
-sync pick them up; signing in to Hephaestus alone does not create workspace membership.
+the review screen is how many are in scope. Only a member's account on the connected GitHub or GitLab
+instance counts: the GitHub profile of whoever created a GitLab workspace makes them a member, but never a
+person reviewed there. A covered person must appear as eligible on the **Members** screen. Manage a missing
+person in the connected organization, group, or team roster and let membership sync pick them up; signing in
+to Hephaestus alone does not create workspace membership.
+
+A GitLab workspace's members are everyone with access to its group, as GitLab's own member list of the
+group shows it, with **Include inherited** on:
+
+- direct members of the group;
+- members of any parent group, so a workspace on a course subgroup includes the students enrolled in the
+  course's parent group;
+- members of a group invited to the group, at no more than the role the invitation grants;
+- members of a subgroup, such as a tutor listed only in a team subgroup;
+- people with the Developer or Reporter role on a project in the group or one of its subgroups, such as a
+  student added to one project only.
+
+Someone GitLab lists more than once holds their highest role; Maintainer and Owner make a workspace
+administrator, and someone only a subgroup or a project lists is a member. An invitation sent to an e-mail
+address counts once it is accepted. A person leaves the workspace when GitLab stops listing them: at once
+when GitLab reports that they have lost access to the group and every subgroup, otherwise at the next
+membership sync (`MONITORING_SYNC_CRON`) whose listing GitLab returns in full. A listing GitLab cannot return
+in full changes nobody. The workspace owner keeps the workspace whatever the roster says. Removing someone's
+direct membership in the group does not remove them from the workspace while they still reach the group
+through a parent or invited group.
 
 The person a practice evaluates must be covered. That is normally the pull-request or issue author;
 reviewer practices use the reviewer. Outside contributors, unlinked reviewers, unidentified people, and
@@ -405,10 +427,16 @@ run themselves once a sync finds the work again, and are dropped if it does not 
    activity** and **Start requested reviews** off, the workspace is on and nothing reaches it; the screen
    says *"Nothing can start a review"*.
 6. **Is the work covered?** Same screen, **What gets reviewed**. Both counts have to be non-zero, and the
-   author of the quiet work has to be one of the covered people. The trace prints one reason for the whole
-   of coverage — *"The author, repository, or base branch is outside the workspace's review coverage"* — so
-   check all three before changing a repository list. A separate reason, *"Hephaestus could not tell whose
-   work this is"*, means the work had no identifiable author at all.
+   author of the quiet work has to be one of the covered people. The trace tells a missing author from
+   excluded work:
+   - *"The author is unknown or not a workspace member yet"* — the repository and base branch are covered,
+     but the author is not a member on the connected instance, or has no known account at all. Check the
+     author on the **Members** screen and, for GitLab, in the group's member list with inherited members
+     shown. The work waits: once a membership sync admits the author, it is reviewed without anyone asking
+     again, provided that happens within `SIGNAL_LEDGER_PENDING_LAPSE_AFTER` (seven days by default).
+   - *"The author, repository, or base branch is outside the workspace's review coverage"* — the repository
+     or base branch is not selected, the author is a member the person selection leaves out, or the author
+     is a bot. That decision is final for this work; widening coverage affects work that happens next.
 7. **Is sending paused?** Same screen, **Sending feedback**. Reviews and in-app feedback continue, but no
    comments or mentor messages leave Hephaestus. Resuming does not release automatic feedback withheld by
    the pause.

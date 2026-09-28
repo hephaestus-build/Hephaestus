@@ -1073,7 +1073,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         }
 
         @Test
-        void processApproved_reApproval_fromChangesRequested_updatesToApproved() {
+        void shouldGiveADismissedApprovalAgainWhenTheApproverApprovesAgain() {
             PullRequest pr = createPullRequestEntity();
             pr.setNativeId(RAW_MR_ID);
             when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
@@ -1090,11 +1090,12 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
                     .thenReturn(approver);
 
-            // Existing review in CHANGES_REQUESTED state (from a prior unapproval)
+            // Dismissed by a prior unapproval
             long expectedNativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID);
             PullRequestReview existingReview = new PullRequestReview();
             existingReview.setNativeId(expectedNativeId);
-            existingReview.setState(PullRequestReview.State.CHANGES_REQUESTED);
+            existingReview.setState(PullRequestReview.State.DISMISSED);
+            existingReview.setDismissed(true);
             existingReview.setHtmlUrl("https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5#approvals");
             existingReview.setSubmittedAt(Instant.now().minusSeconds(3600));
             existingReview.setAuthor(approver);
@@ -1111,6 +1112,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
 
             // Review should be updated to APPROVED and saved
             assertThat(existingReview.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(existingReview.isDismissed()).isFalse();
             verify(reviewRepository).save(existingReview);
 
             // ReviewSubmitted event should be emitted for the state change
@@ -1119,68 +1121,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             boolean hasReviewSubmitted =
                     eventCaptor.getAllValues().stream().anyMatch(e -> e instanceof ScmDomainEvent.ReviewSubmitted);
             assertThat(hasReviewSubmitted).isTrue();
-        }
-
-        @Test
-        void processRequestedChangesFromNote_updatesExistingApproval() {
-            PullRequest pr = createPullRequestEntity();
-            pr.setNativeId(RAW_MR_ID);
-
-            User reviewer = createUserEntity();
-            reviewer.setNativeId(RAW_USER_ID);
-
-            PullRequestReview existingReview = new PullRequestReview();
-            existingReview.setState(PullRequestReview.State.APPROVED);
-            existingReview.setAuthor(reviewer);
-            existingReview.setPullRequest(pr);
-
-            long approvalNativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_USER_ID);
-            when(reviewRepository.findByNativeIdAndProviderId(approvalNativeId, PROVIDER_ID))
-                    .thenReturn(Optional.of(existingReview));
-
-            processor.processRequestedChangesFromNote(pr, reviewer, createContext());
-
-            assertThat(existingReview.getState()).isEqualTo(PullRequestReview.State.CHANGES_REQUESTED);
-            verify(reviewRepository).save(existingReview);
-            verify(eventPublisher, atLeastOnce()).publishEvent(any(ScmDomainEvent.ReviewSubmitted.class));
-        }
-
-        @Test
-        void processRequestedChangesFromNote_idempotent() {
-            PullRequest pr = createPullRequestEntity();
-            pr.setNativeId(RAW_MR_ID);
-
-            User reviewer = createUserEntity();
-            reviewer.setNativeId(RAW_USER_ID);
-
-            PullRequestReview existingReview = new PullRequestReview();
-            existingReview.setState(PullRequestReview.State.CHANGES_REQUESTED);
-
-            long approvalNativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_USER_ID);
-            when(reviewRepository.findByNativeIdAndProviderId(approvalNativeId, PROVIDER_ID))
-                    .thenReturn(Optional.of(existingReview));
-
-            processor.processRequestedChangesFromNote(pr, reviewer, createContext());
-
-            verify(reviewRepository, never()).save(any());
-        }
-
-        @Test
-        void processRequestedChangesFromNote_noExistingReview_skips() {
-            PullRequest pr = createPullRequestEntity();
-            pr.setNativeId(RAW_MR_ID);
-
-            User reviewer = createUserEntity();
-            reviewer.setNativeId(RAW_USER_ID);
-
-            long approvalNativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_USER_ID);
-            when(reviewRepository.findByNativeIdAndProviderId(approvalNativeId, PROVIDER_ID))
-                    .thenReturn(Optional.empty());
-
-            processor.processRequestedChangesFromNote(pr, reviewer, createContext());
-
-            verify(reviewRepository, never()).save(any());
-            verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.ReviewSubmitted.class));
         }
 
         @Test

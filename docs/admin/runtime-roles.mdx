@@ -157,6 +157,8 @@ deployment silently does half its job. They do **not** share a gate:
 `application-server` (submission + recovery) and `application-worker` (execution). A pod you never set
 it on claims nothing and spends nothing.
 
+## Interactive mentor turns
+
 Interactive mentor turns are different from queued practice-review jobs: the HTTP/SSE request and
 its reusable sandbox live on the **application-server replica that accepted the request**. Keep the
 worker capability and Docker access enabled on application-server even in a split deployment. A
@@ -166,7 +168,32 @@ dedicated `application-worker` adds queue capacity but does not receive mentor H
 The compose topology keeps sticky workspace affinity so consecutive turns can reuse the same warm
 sandbox. A change to its model, upstream route, image, prompt/runtime files, or security limits
 closes that sandbox and creates a compatible replacement instead of silently reusing stale runtime
-state; per-turn context is refreshed through the runner callback without restarting it.
+state; per-turn context is refreshed through the runner callback without restarting it, and a
+thread's saved conversation is handed to whichever sandbox opens it.
+
+Each developer has at most one Heph sandbox per workspace on a replica. Starting one is several
+seconds of work — a job network, volumes, the workspace initializer, the runtime container, and the
+runner loading its SDK — so it is started **before** the first message where Hephaestus can see one
+coming:
+
+- **Opening Heph** in the webapp, or coming back to its browser tab, calls
+  `POST /api/workspaces/{slug}/mentor/sandbox`. The server answers `202` at once and starts the sandbox
+  in the background; it sends no prompt, calls no model and writes no thread.
+- **Opening the Hephaestus app in Slack** (`app_home_opened`, either tab) does the same for a linked
+  developer.
+
+Preparing does nothing when the sandbox is already warm, when a turn is using it, when the developer
+has no Heph model or their budget is spent, or when `hephaestus.mentor.max-sessions-per-user` or
+`hephaestus.mentor.max-sessions-total` is reached. A turn that arrives while a prepare is still
+starting the sandbox waits for it rather than starting a second one.
+
+A sandbox stays warm for `hephaestus.mentor.idle-ttl-seconds` (default `900`) after its last frame.
+Each idle runner holds about 165 MB, so a longer TTL keeps more memory in use between messages; the
+session caps, not the TTL, bound the total. The Traefik sticky cookie's `maxAge` in
+`docker/compose.app.yaml` follows the TTL — change both together. A restart or deploy removes every
+Heph sandbox on that replica, so the next message after it starts cold unless Heph was reopened.
+`mentor_turn_first_token_seconds{sandbox="cold"}` counts the turns that waited
+([Observability](./observability.mdx#heph-turn-metrics)).
 
 ## Worker pod env vars
 

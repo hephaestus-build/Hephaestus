@@ -10918,6 +10918,25 @@ export type UpdateMemberVisibilityResponses = {
 
 export type UpdateMemberVisibilityResponse = UpdateMemberVisibilityResponses[keyof UpdateMemberVisibilityResponses];
 
+export type PrepareMentorSandboxData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/mentor/sandbox';
+};
+
+export type PrepareMentorSandboxResponses = {
+  /**
+   * Accepted; the sandbox starts unless it is already warm or Heph could not answer anyway
+   */
+  202: unknown;
+};
+
 export type ListThreadsData = {
   body?: never;
   path: {

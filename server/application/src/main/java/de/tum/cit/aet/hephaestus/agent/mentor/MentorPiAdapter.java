@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.mentor;
 
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
-import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MentorContextKeys;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry.Route;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
@@ -12,12 +11,10 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -25,14 +22,16 @@ import org.springframework.stereotype.Service;
  * session, symmetric to {@code PracticePiAdapter}'s one-shot {@code task.json} build.
  * Single-flight is enforced by the sandbox registry's {@code (userId, workspaceId)} keying, where the
  * mentee's {@code developerId} is carried in the spec's {@code userId} slot.
+ *
+ * <p>The spec carries nothing of a turn or a thread, so a sandbox prepared before the first message is
+ * the one that message runs in: the runner reads context through {@code fetch_context}, and a
+ * thread's saved session arrives with {@code open_thread}.
  */
 @Service
 @RequiredArgsConstructor
 public class MentorPiAdapter {
 
     public static final String SYSTEM_PROMPT_PATH = SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH;
-    public static final String CONTEXT_INPUT_PREFIX = SandboxLayout.CONTEXT_PREFIX;
-    public static final String SESSIONS_DIR_PREFIX = SandboxLayout.SESSIONS_DIR_PREFIX;
 
     private static final MentorRunnerProfile PROFILE = new MentorRunnerProfile();
 
@@ -40,25 +39,13 @@ public class MentorPiAdapter {
     private final AgentImageProperties imageProperties;
     private final MentorProxyCredentialRegistry proxyCredentialRegistry;
 
-    /**
-     * Build the interactive sandbox spec for a mentor chat session. A non-null {@code sessionRestore}
-     * injects the prior turn's JSONL so Pi restores it, keeping the prompt cache warm.
-     */
-    public InteractiveSandboxSpec buildSandboxSpec(
-            MentorAgentRequest request,
-            MentorLlmConfig llmConfig,
-            Map<String, byte[]> contextInputs,
-            @Nullable SessionRestore sessionRestore) {
+    /** Build the interactive sandbox spec for one developer's mentor sandbox in one workspace. */
+    public InteractiveSandboxSpec buildSandboxSpec(MentorAgentRequest request, MentorLlmConfig llmConfig) {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(llmConfig, "llmConfig");
-        Objects.requireNonNull(contextInputs, "contextInputs");
-        validateContextInputs(contextInputs);
 
-        Map<String, byte[]> extraInputs = new LinkedHashMap<>(contextInputs);
-        extraInputs.put(SYSTEM_PROMPT_PATH, PiRuntimeFactory.loadClasspathResource("mentor/system.md"));
-        if (sessionRestore != null) {
-            extraInputs.put(SESSIONS_DIR_PREFIX + sessionRestore.threadId() + ".jsonl", sessionRestore.bytes());
-        }
+        Map<String, byte[]> extraInputs =
+                Map.of(SYSTEM_PROMPT_PATH, PiRuntimeFactory.loadClasspathResource("mentor/system.md"));
 
         String baseUrl = llmConfig.baseUrl();
 
@@ -114,22 +101,5 @@ public class MentorPiAdapter {
                 configuredTimeoutSeconds,
                 PiRuntimeFactory.TIMEOUT_BUFFER_SECONDS + 1,
                 AgentBindingLimits.MAX_TIMEOUT_SECONDS);
-    }
-
-    private static void validateContextInputs(Map<String, byte[]> contextInputs) {
-        for (Map.Entry<String, byte[]> entry : contextInputs.entrySet()) {
-            String key = entry.getKey();
-            if (key == null || !key.startsWith(CONTEXT_INPUT_PREFIX)) {
-                throw new IllegalArgumentException(
-                        "contextInputs key must begin with '" + CONTEXT_INPUT_PREFIX + "', got: " + key);
-            }
-            if (!MentorContextKeys.ALLOWED_OUTPUT_KEYS.contains(key)) {
-                throw new IllegalArgumentException("unsupported mentor context input key: " + key);
-            }
-            // Checked here so the failure names the key, not as an NPE deep inside PiPlanSpec.
-            if (entry.getValue() == null) {
-                throw new IllegalArgumentException("contextInputs value for '" + key + "' must not be null");
-            }
-        }
     }
 }

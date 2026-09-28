@@ -144,9 +144,9 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
                     true,
                     600,
                     PRACTICE,
-                    Map.of(SandboxLayout.CONTEXT_PREFIX + "metadata.json", payload),
+                    Map.of(SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH, payload),
                     "");
-            assertThat(factory.build(spec).inputFiles()).containsKey(SandboxLayout.CONTEXT_PREFIX + "metadata.json");
+            assertThat(factory.build(spec).inputFiles()).containsKey(SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH);
         }
     }
 

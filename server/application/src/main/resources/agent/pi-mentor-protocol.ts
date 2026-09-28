@@ -78,6 +78,14 @@ export interface ThreadScopedParams {
 	threadId: string;
 }
 
+export interface OpenThreadParams extends ThreadScopedParams {
+	/**
+	 * The thread's saved Pi session JSONL, sent on every open because a sandbox is not created for one
+	 * thread. The runner restores it only when it holds no session of its own for the thread.
+	 */
+	session?: string;
+}
+
 export interface PromptParams extends ThreadScopedParams {
 	text: string;
 }
@@ -90,7 +98,7 @@ export interface PromptParams extends ThreadScopedParams {
  */
 export interface MentorRequestParams {
 	hello: EmptyParams;
-	open_thread: ThreadScopedParams;
+	open_thread: OpenThreadParams;
 	prompt: PromptParams;
 	steer: PromptParams;
 	abort: ThreadScopedParams;

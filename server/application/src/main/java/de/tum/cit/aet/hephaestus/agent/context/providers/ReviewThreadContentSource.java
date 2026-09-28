@@ -190,8 +190,10 @@ public class ReviewThreadContentSource implements EvidenceSource {
 
     /**
      * Marker embedded in every Hephaestus practice-review note ({@code <!-- hephaestus-diff-note -->},
-     * {@code <!-- hephaestus:practice-review:… -->}). A human reviewer never writes it, so a thread that
-     * carries it is the tool's own posted finding, never a reviewer thread. The {@code rootComment} FK is
+     * {@code <!-- hephaestus:practice-review:… -->}, {@code <!-- hephaestus-approved-package:… -->}). A human
+     * reviewer never writes it, so a note that carries it is the tool's own posted feedback, never reviewer
+     * input. Every source that stages review discussion filters by this one prefix: a diff note whose line
+     * falls outside the hunk is posted as a conversation comment and still carries the diff-note form. The {@code rootComment} FK is
      * not populated by the sync, so we scan the thread's comment set for the marker.
      *
      * <p>The marker is the ONLY signal used: the mirror's Hephaestus identity is an opaque

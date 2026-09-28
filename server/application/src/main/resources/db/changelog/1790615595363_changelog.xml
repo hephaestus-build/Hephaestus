@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+        A GitLab approval row stores the approval of one person. Before this release a comment on a merge request
+        where anyone requested changes turned the commenter's approval row into a request for changes. Those rows
+        stand for neither: each is dismissed, and its activity event is removed. The next sync of the merge request
+        gives the approval again where GitLab still lists it. The key of an approval row is
+        GitLabMergeRequestProcessor.generateApprovalNativeId.
+    -->
+    <changeSet id="1790615595363-1" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="pull_request_review, issue, user, identity_provider and activity_event are required to correct GitLab review rows">
+            <columnExists tableName="pull_request_review" columnName="native_id"/>
+            <columnExists tableName="pull_request_review" columnName="is_dismissed"/>
+            <columnExists tableName="activity_event" columnName="target_id"/>
+            <columnExists tableName="identity_provider" columnName="type"/>
+        </preConditions>
+        <sql>
+            DELETE FROM activity_event
+            WHERE event_type = 'REVIEW_CHANGES_REQUESTED'
+              AND target_type = 'review'
+              AND target_id IN (
+                  SELECT r.id
+                  FROM pull_request_review r
+                  JOIN issue i ON i.id = r.pull_request_id
+                  JOIN "user" u ON u.id = r.author_id
+                  JOIN identity_provider p ON p.id = r.provider_id
+                  WHERE p.type = 'GITLAB'
+                    AND r.state = 'CHANGES_REQUESTED'
+                    AND r.native_id = (((i.native_id &amp; 4294967295) &lt;&lt; 32) | (u.native_id &amp; 4294967295)) &amp; 9223372036854775807)
+        </sql>
+        <sql>
+            UPDATE pull_request_review r
+            SET state = 'DISMISSED', is_dismissed = true
+            FROM issue i, "user" u, identity_provider p
+            WHERE i.id = r.pull_request_id
+              AND u.id = r.author_id
+              AND p.id = r.provider_id
+              AND p.type = 'GITLAB'
+              AND r.state = 'CHANGES_REQUESTED'
+              AND r.native_id = (((i.native_id &amp; 4294967295) &lt;&lt; 32) | (u.native_id &amp; 4294967295)) &amp; 9223372036854775807
+        </sql>
+        <rollback>
+            <stop>Which approval rows were turned into requests for changes is not recorded; restore a pre-upgrade database backup.</stop>
+        </rollback>
+    </changeSet>
+    <!--
+        A GitLab merge request was stored as approved whenever its approval rules were met, including where the
+        project requires no approval and nobody approved. A merge request stored as approved with no standing approval
+        has no review decision until the sync reads it again.
+    -->
+    <changeSet id="1790615595363-2" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="issue.review_decision is required to correct GitLab review decisions">
+            <columnExists tableName="issue" columnName="review_decision"/>
+        </preConditions>
+        <sql>
+            UPDATE issue i
+            SET review_decision = NULL
+            WHERE i.issue_type = 'PULL_REQUEST'
+              AND i.review_decision = 'APPROVED'
+              AND i.provider_id IN (SELECT id FROM identity_provider WHERE type = 'GITLAB')
+              AND NOT EXISTS (
+                  SELECT 1 FROM pull_request_review r
+                  WHERE r.pull_request_id = i.id AND r.state = 'APPROVED')
+        </sql>
+        <rollback>
+            <stop>Which review decisions were cleared is not recorded; restore a pre-upgrade database backup.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

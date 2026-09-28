@@ -7,11 +7,11 @@ description: Mentor replica affinity and how to disable it for debugging.
 
 ## Why mentor traffic is sticky
 
-The mentor SSE endpoint opens a long-lived `docker exec -i` against the user's Pi container (`PiProcessHandle`). The stdin/stdout pipes live in JVM memory; the conversation itself is persisted to Postgres (`chat_thread.session_jsonl`, BYTEA), so any replica can serve any turn — but a replica without the live pipes must rebuild the sandbox first, paying a cold-start cost tracked by `InteractiveSandboxMetrics.attachDuration`.
+A Heph sandbox's runtime container runs `gateway-mentor.ts`, which starts `pi-mentor-runner.ts` and relays its stdin and stdout over a WebSocket it opens back to the replica that started it (`/internal/llm/runtime/{id}/frames`, `GatewayInteractiveChannel`). That connection and the sandbox registry (`InteractiveSandboxRegistry`, keyed by developer and workspace) live in that replica's memory. The conversation itself is persisted to Postgres (`chat_thread.session_jsonl`) and handed to the runner with `open_thread`, so any replica can serve any turn — but a replica without the sandbox must start one first, a cold start timed by `mentor.attach.duration` and visible to operators as `mentor.turn.first_token{sandbox="cold"}`. Opening Heph prepares the sandbox on the replica the request lands on (`POST /api/workspaces/{slug}/mentor/sandbox`), which is why the prepare call goes through the same affinity as the turn that follows.
 
 Traefik pins workspace traffic to the originating replica via a cookie scoped to `/api/workspaces` — narrower than the full `/api` router (auth and public endpoints stay round-robin), broad enough to cover the actual mentor URL `/api/workspaces/{slug}/mentor/chat`. Labels live on the `https-application-server` service in `docker/compose.app.yaml`. Inspect with `curl -i`:
 
-- Cookie: `__Secure-hep_workspace_aff` — `Secure`, `HttpOnly`, `SameSite=Lax`, `maxAge` matches `hephaestus.mentor.idle-ttl-seconds` (300s default) so the cookie expires when the sandbox is reaped.
+- Cookie: `__Secure-hep_workspace_aff` — `Secure`, `HttpOnly`, `SameSite=Lax`, `maxAge` follows `hephaestus.mentor.idle-ttl-seconds` (900 s default). Traefik writes the cookie only when it picks a replica, so the affinity lasts that long from the first request rather than from the last one.
 - Response header: `X-Hephaestus-Replica: <container-id-prefix>` — emitted by `ReplicaIdentityFilter` from `$HOSTNAME`, CORS-exposed for the webapp.
 
 Labels are HTTPS-only; the HTTP router redirects to HTTPS, so pinning it would just double-issue cookies. The `cookie.path` attribute requires Traefik >= 3.3. Previews (`docker/preview/compose.app.yaml`) are single-replica and omit the labels.
@@ -19,7 +19,8 @@ Labels are HTTPS-only; the HTTP router redirects to HTTPS, so pinning it would j
 ## Known limitations
 
 - **Two browsers, same user.** Two browsers can pin to two replicas, each spawning its own `(userId, workspaceId)` sandbox — `InteractiveSandboxRegistry` is per-JVM.
-- **Rolling deploys.** Each pinned user whose replica restarts pays one cold start. The `SseEmitter` timeout is 10 minutes (`MentorChatController.EMITTER_TIMEOUT_MS`); drain by refusing new turns and letting in-flight emitters complete.
+- **Slack has no affinity.** Slack events reach the server through shared durable NATS consumers, so with more than one application-server replica the `app_home_opened` that prepares a sandbox and the DM that follows can land on different replicas; the DM then starts its own. A single replica, the reference topology, always reuses it.
+- **Rolling deploys.** A restart removes every Heph sandbox on that replica; a pinned user pays one cold start unless they reopen Heph first. The `SseEmitter` timeout is 10 minutes (`MentorChatController.EMITTER_TIMEOUT_MS`); drain by refusing new turns and letting in-flight emitters complete.
 
 ## Disabling affinity for debugging
 

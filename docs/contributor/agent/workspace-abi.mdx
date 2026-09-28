@@ -153,7 +153,8 @@ entries are kept and the capture is reported `PARTIAL`. Commit records have the 
 `assignees` (logins, sorted) are always written. `is_merged` is stated apart from `state` because a
 webhook-synced pull request closed by its merge is stored `CLOSED` with `merged_at` set. When present:
 `created_at`, `closed_at`, `merged_at` (ISO instants), `author`, `merged_by`, `milestone` (its title),
-and `merge_state_status` and `review_decision`, which only the GraphQL sync fills, and `head_checks`
+and `merge_state_status` and `review_decision`, which only the GraphQL sync fills (GitLab's is left out
+until the sync reads every reviewer and approver again after a webhook changed someone's review), and `head_checks`
 — `SUCCESS`, `FAILURE`, `PENDING`, `CANCELLED` or `NONE`, what the provider's checks said about the
 head (GitHub's status check rollup, GitLab's head pipeline), written only when the state was observed
 for the head under review and left out for a head no sync or check event has reported on. `author_bot: true`

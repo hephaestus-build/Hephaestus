@@ -1,9 +1,13 @@
+import {
+	branchIssueReferences,
+	closingReferences,
+	issueNumberReferences,
+} from "../lib/references.ts";
 // Precompute FACTS for states-how-to-verify-the-change: what kind of change this is, and where
 // guidance-shaped text sits. The occasion gate is where a small model slips most (a diagram or a
 // self-introduction judged as lacking instructions), so the facts it needs for that gate
 // are stated up front. Nothing here is a verdict — the model reads the sources and judges.
-import { readContextJson } from "../lib/context.ts";
-import { isJsonObject } from "../lib/practice-contract.ts";
+import { readLinkedWorkItemCapture } from "../lib/review.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
 const IMAGE = /\.(?:png|jpe?g|gif|svg|webp|pdf)$/iu;
@@ -16,10 +20,18 @@ const TEST_PATH =
 	/(?:^|\/)(?:tests?|specs?|__tests__)(?:\/)|[._-](?:test|tests|spec|specs)\.[a-z]+$|Tests?\.[a-z0-9]+$|Spec\.[a-z0-9]+$/iu;
 const CODE = /\.(?:swift|ts|tsx|js|jsx|py|java|kt|go|rb|cs|cpp|cc|cxx|c|m|mm|h|hpp|vue|dart|rs)$/iu;
 const PREVIEW = /^\+.*(?:#Preview\b|PreviewProvider\b|\.stories\.[jt]sx?|storiesOf\()/u;
-const CLOSING = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+[\w./~-]*#\d+/iu;
+// A CommonMark heading may be indented by up to three spaces.
 const TESTING_HEADING =
-	/^#+\s*(?:testing|test(?:ing)? instructions|how to test|verification|steps to (?:test|verify|reproduce))/iu;
+	/^ {0,3}#+\s*(?:testing|test(?:ing)? instructions|how to test|verification|steps to (?:test|verify|reproduce))/iu;
+const PLACEHOLDER_TESTING_TEXT = /^(?:n\/?a|none|not applicable|-|—)\.?$/iu;
 const SCREENSHOT = /!\[[^\]]*\]\([^)]*\)/gu;
+// Xcode's library inserts these around a control's defaults until the author replaces them.
+const PLACEHOLDER_TOKEN = /\/\*@(?:START_MENU_TOKEN|PLACEHOLDER=)/u;
+// A key or secret the code reads at runtime: a secret-shaped name beside a runtime lookup.
+const SECRET_NAME =
+	/api[_-]?key|apikey|client[_-]?secret|\bsecrets?\b|secret[A-Z_]|access[_-]?token/iu;
+const RUNTIME_LOOKUP =
+	/Bundle\.main|ProcessInfo|\benvironment\[|\.plist|xcconfig|Keychain|SecItem|UserDefaults|infoDictionary|process\.env|System\.getenv|os\.environ/u;
 
 /** The section under a testing heading, stripped of template comments; empty when it holds nothing. */
 function testingSection(body: string): { heading: string; content: string } | null {
@@ -29,11 +41,11 @@ function testingSection(body: string): { heading: string; content: string } | nu
 		if (!TESTING_HEADING.test(line)) {
 			continue;
 		}
-		const level = (/^#+/u.exec(line)?.[0] ?? "#").length;
+		const level = (/#+/u.exec(line)?.[0] ?? "#").length;
 		const content: string[] = [];
 		for (let next = index + 1; next < lines.length; next += 1) {
 			const candidate = lines[next] ?? "";
-			const nextLevel = /^(?<hashes>#+)\s/u.exec(candidate)?.groups?.hashes?.length;
+			const nextLevel = /^ {0,3}(?<hashes>#+)\s/u.exec(candidate)?.groups?.hashes?.length;
 			if (nextLevel !== undefined && nextLevel <= level) {
 				break;
 			}
@@ -48,6 +60,19 @@ function testingSection(body: string): { heading: string; content: string } | nu
 	return null;
 }
 
+/** `path:line, line` for each file with a matching added line. */
+function addedLinesMatching(
+	diffFiles: Map<string, DiffFile>,
+	matches: (path: string, line: string) => boolean,
+): string[] {
+	return [...diffFiles.values()].flatMap((file) => {
+		const lines = [...file.addedLines]
+			.filter(([, line]) => matches(file.path, line))
+			.map(([number]) => String(number));
+		return lines.length === 0 ? [] : [`${file.path}:${lines.join(", ")}`];
+	});
+}
+
 export default async function statesHowToVerifyTheChange(
 	_repoPath: string,
 	diffFiles: Map<string, DiffFile>,
@@ -55,17 +80,25 @@ export default async function statesHowToVerifyTheChange(
 	contextDir?: string,
 ) {
 	const paths = [...diffFiles.keys()];
+	// A move, a rename or a binary file changes no line; an image among them is still content.
+	const unchanged = [...diffFiles.values()]
+		.filter(
+			(file) => file.hunks.length === 0 && file.addedLines.size + file.removedLines.size === 0,
+		)
+		.map((file) => file.path)
+		.filter((path) => !IMAGE.test(path));
+	const content = paths.filter((path) => !unchanged.includes(path));
 	const kinds = {
-		images: paths.filter((path) => IMAGE.test(path)).length,
-		diagramFiles: paths.filter(
+		images: content.filter((path) => IMAGE.test(path)).length,
+		diagramFiles: content.filter(
 			(path) =>
 				DIAGRAM_PATH.test(path) ||
 				(DIAGRAM_JSON.test(path) && /diagram|aom|uml|model/iu.test(path)),
 		).length,
-		prose: paths.filter((path) => PROSE.test(path)).length,
-		projectConfig: paths.filter((path) => PROJECT_CONFIG.test(path)).length,
-		tests: paths.filter((path) => TEST_PATH.test(path)).length,
-		code: paths.filter((path) => CODE.test(path) && !TEST_PATH.test(path)).length,
+		prose: content.filter((path) => PROSE.test(path)).length,
+		projectConfig: content.filter((path) => PROJECT_CONFIG.test(path)).length,
+		tests: content.filter((path) => TEST_PATH.test(path)).length,
+		code: content.filter((path) => CODE.test(path) && !TEST_PATH.test(path)).length,
 	};
 	const addedLines = [...diffFiles.values()].reduce((sum, file) => sum + file.addedLines.size, 0);
 	const removedLines = [...diffFiles.values()].reduce(
@@ -75,14 +108,40 @@ export default async function statesHowToVerifyTheChange(
 	const previews = [...diffFiles.values()].filter((file) =>
 		[...file.addedLines.values()].some((line) => PREVIEW.test(`+${line}`)),
 	);
+	const placeholders = addedLinesMatching(diffFiles, (_path, line) => PLACEHOLDER_TOKEN.test(line));
+	const secretReads = addedLinesMatching(
+		diffFiles,
+		(path, line) =>
+			!path.endsWith(".gitignore") && SECRET_NAME.test(line) && RUNTIME_LOOKUP.test(line),
+	);
+	const ignoredSecrets = [...diffFiles.values()]
+		.filter((file) => file.path.endsWith(".gitignore"))
+		.flatMap((file) => [...file.addedLines.values()])
+		.map((line) => line.trim())
+		.filter((line) => SECRET_NAME.test(line) || /\.xcconfig$|\.env\b/iu.test(line));
 
 	const body = typeof metadata.body === "string" ? metadata.body : "";
 	const testing = testingSection(body);
-	const closing = CLOSING.exec(body)?.[0] ?? null;
 	const screenshots = body.match(SCREENSHOT)?.length ?? 0;
-	const linked = await readContextJson(contextDir, "linked_work_items.json");
-	const linkedItems =
-		isJsonObject(linked) && Array.isArray(linked.workItems) ? linked.workItems.length : 0;
+	// Only the author's own words adopt an issue: a closing keyword in their prose, the title, the
+	// branch, or the provider's closing link. A template's example in code or a comment names nothing.
+	const capture = await readLinkedWorkItemCapture(contextDir);
+	const captured = capture?.items.map((item) => item.number) ?? [];
+	const named = new Map<number, string[]>();
+	const name = (how: string, numbers: number[]) => {
+		for (const n of numbers) {
+			named.set(n, [...(named.get(n) ?? []), how]);
+		}
+	};
+	name(
+		"provider closing link",
+		(capture?.items ?? [])
+			.filter((item) => item.how === "closesOnMerge")
+			.map((item) => item.number),
+	);
+	name("closing keyword in the description", closingReferences(body));
+	name("title", issueNumberReferences(metadata.title ?? ""));
+	name("branch", branchIssueReferences(metadata.source_branch));
 
 	const directions: string[] = [];
 	if (paths.length === 0 || addedLines + removedLines === 0) {
@@ -91,36 +150,61 @@ export default async function statesHowToVerifyTheChange(
 		);
 	} else if (kinds.code === 0 && kinds.tests === 0 && kinds.projectConfig === 0) {
 		directions.push(
-			`No code, test or project-configuration file changes; the change is ${kinds.images} image(s), ${kinds.diagramFiles} diagram file(s) and ${kinds.prose} prose file(s). Read the prose hunks: if they add setup or run instructions the change is material; if they add an introduction, a glossary, user stories or a diagram's embedding, it is one of the kinds the criteria's Occasion section names.`,
+			`No code, test or project-configuration file has line changes; the change is ${kinds.images} image(s), ${kinds.diagramFiles} diagram file(s) and ${kinds.prose} prose file(s). Read the prose hunks: if they add setup or run instructions the change is material; if they add an introduction, a glossary, user stories or a diagram's embedding, it is one of the kinds the criteria's Occasion section names.`,
 		);
 	} else {
 		directions.push(
-			`Material files changed: ${kinds.code} code, ${kinds.tests} test, ${kinds.projectConfig} project-configuration (plus ${kinds.prose} prose, ${kinds.images} image). The practice applies; collect guidance from every source before judging.`,
+			`Files with line changes: ${kinds.code} code, ${kinds.tests} test, ${kinds.projectConfig} project-configuration, ${kinds.prose} prose, ${kinds.images} image.`,
 		);
 	}
-	if (testing) {
+	if (unchanged.length > 0) {
 		directions.push(
-			testing.content.length === 0
-				? `The description has a testing heading ("${testing.heading}") with no content beneath it once template comments are removed: an empty heading is not evidence of anything; read the whole description, the adopted issue, previews and the documented setup.`
-				: `The description has a testing section ("${testing.heading}") with ${testing.content.split(/\r?\n/u).filter((line) => line.trim()).length} line(s) of content: read it in description.md and judge whether it names an entry, an action and an expected result.`,
+			`${unchanged.length} file(s) change no line — moves, renames or binary files: ${unchanged.slice(0, 5).join(", ")}${unchanged.length > 5 ? ", …" : ""}.`,
+		);
+	}
+	if (testing === null) {
+		directions.push("The description has no testing heading.");
+	} else if (testing.content.length === 0) {
+		directions.push(
+			`The description's testing heading ("${testing.heading}") has no content beneath it once template comments are removed.`,
+		);
+	} else if (PLACEHOLDER_TESTING_TEXT.test(testing.content)) {
+		directions.push(
+			`The description's testing section ("${testing.heading}") holds only "${testing.content}".`,
 		);
 	} else {
 		directions.push(
-			"The description has no testing heading; guidance may still sit in any section, in an adopted issue, in a preview or test of the patch, or in the documented setup.",
+			`The description's testing section ("${testing.heading}") holds ${testing.content.split(/\r?\n/u).filter((line) => line.trim()).length} line(s) of author text.`,
 		);
 	}
-	if (closing !== null) {
+	if (named.size > 0) {
 		directions.push(
-			`The description adopts an issue with a closing keyword ("${closing}"); ${linkedItems} linked issue(s) were captured as linked_work_items/<n>.md — its acceptance criteria and steps count as the author's guidance.`,
+			`Issue(s) the author names: ${[...named].map(([n, how]) => `#${n} (${how.join(", ")})`).join("; ")}.`,
 		);
-	} else if (linkedItems > 0) {
+	}
+	const unnamed = captured.filter((n) => !named.has(n));
+	if (unnamed.length > 0) {
 		directions.push(
-			`${linkedItems} linked issue(s) were captured, none by a closing keyword in the description; check whether the title or branch was created from one before treating it as adopted.`,
+			`Captured as linked_work_items/<n>.md but not named by a closing keyword, the title, the branch or a provider closing link: ${unnamed.map((n) => `#${n}`).join(", ")}.`,
+		);
+	}
+	const uncaptured = [...named.keys()].filter((n) => !captured.includes(n));
+	if (capture !== null && uncaptured.length > 0) {
+		directions.push(
+			`Named by the author but not captured: ${uncaptured.map((n) => `#${n}`).join(", ")}.`,
 		);
 	}
 	if (previews.length > 0) {
 		directions.push(
-			`The patch adds an authored preview or story in: ${previews.map((file) => file.path).join(", ")} — an ENTRY for the view it renders (and, for an appearance-only change, the action).`,
+			`The patch adds an authored preview or story in: ${previews.map((file) => file.path).join(", ")}.`,
+		);
+	}
+	if (placeholders.length > 0) {
+		directions.push(`Added lines keep Xcode placeholder tokens: ${placeholders.join("; ")}.`);
+	}
+	if (secretReads.length > 0 || ignoredSecrets.length > 0) {
+		directions.push(
+			`Added lines read a key or secret at runtime: ${secretReads.join("; ") || "none"}.${ignoredSecrets.length > 0 ? ` The ignore file gains: ${ignoredSecrets.join(", ")}.` : ""}`,
 		);
 	}
 	if (screenshots > 0) {
@@ -132,6 +216,7 @@ export default async function statesHowToVerifyTheChange(
 		hints: [],
 		metrics: {
 			changedFiles: paths.length,
+			filesWithoutLineChanges: unchanged.length,
 			addedLines,
 			removedLines,
 			imageFiles: kinds.images,
@@ -145,7 +230,9 @@ export default async function statesHowToVerifyTheChange(
 			testingSectionLines: testing
 				? testing.content.split(/\r?\n/u).filter((line) => line.trim()).length
 				: 0,
-			linkedIssues: linkedItems,
+			linkedIssues: captured.length,
+			namedIssues: named.size,
+			secretReadLines: secretReads.length,
 		},
 		directions,
 	};

@@ -49,7 +49,15 @@ function createLogger(level: LogLevel): Logger {
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 
 const DEFAULT_NATS_SERVER = process.env.NATS_URL ?? "nats://localhost:4222";
-const DEFAULT_EXAMPLES_DIR = path.join(REPO_ROOT, "server", "src", "test", "resources", "github");
+const DEFAULT_EXAMPLES_DIR = path.join(
+	REPO_ROOT,
+	"server",
+	"application",
+	"src",
+	"test",
+	"resources",
+	"github",
+);
 const DEFAULT_NATS_SUBJECT = "github.HephaestusTest.>";
 const DEFAULT_NATS_STREAM = "github";
 

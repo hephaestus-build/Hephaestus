@@ -126,17 +126,35 @@ public class MentorTurnLock {
      * counted: when the last holder releases, the entry is removed from the map.
      */
     public SandboxLockHandle acquireSandboxLock(SandboxKey key) {
-        Entry entry = sandboxLocks.compute(key, (k, existing) -> {
-            Entry e = existing != null ? existing : new Entry();
-            e.holders.incrementAndGet();
-            return e;
-        });
+        Entry entry = holdSandboxEntry(key);
         entry.lock.lock();
         return new SandboxLockHandle(key, entry);
     }
 
+    /** Like {@link #acquireSandboxLock}, but empty at once when a turn (or another holder) has the sandbox. */
+    public Optional<SandboxLockHandle> tryAcquireSandboxLock(SandboxKey key) {
+        Entry entry = holdSandboxEntry(key);
+        if (!entry.lock.tryLock()) {
+            dropSandboxHolder(key, entry);
+            return Optional.empty();
+        }
+        return Optional.of(new SandboxLockHandle(key, entry));
+    }
+
+    private Entry holdSandboxEntry(SandboxKey key) {
+        return sandboxLocks.compute(key, (k, existing) -> {
+            Entry e = existing != null ? existing : new Entry();
+            e.holders.incrementAndGet();
+            return e;
+        });
+    }
+
     private void releaseSandbox(SandboxKey key, Entry entry) {
         entry.lock.unlock();
+        dropSandboxHolder(key, entry);
+    }
+
+    private void dropSandboxHolder(SandboxKey key, Entry entry) {
         sandboxLocks.computeIfPresent(key, (k, current) -> {
             if (current != entry) return current;
             int after = current.holders.decrementAndGet();

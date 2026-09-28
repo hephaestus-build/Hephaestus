@@ -361,14 +361,15 @@ services:
       - "traefik.http.routers.http-application-server.priority=5"
       - "traefik.http.routers.https-application-server.priority=10"
       # Replica affinity for workspace traffic (mentor lives here) — see docs/contributor/unified-pi-runtime.mdx.
-      # maxAge=300 matches hephaestus.mentor.idle-ttl-seconds; cookie.path requires Traefik >=3.3.
+      # maxAge=900 follows hephaestus.mentor.idle-ttl-seconds; change both together. Traefik sets the cookie
+      # only when it picks a replica, so the affinity runs from that request. cookie.path requires Traefik >=3.3.
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie=true"
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.name=__Secure-hep_workspace_aff"
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.httpOnly=true"
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.secure=true"
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.sameSite=lax"
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.path=/api/workspaces"
-      - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.maxAge=300"
+      - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.maxAge=900"
       - "traefik.http.services.https-application-server.loadbalancer.healthcheck.path=/actuator/health/readiness"
       - "traefik.http.services.https-application-server.loadbalancer.healthcheck.interval=10s"
       - "traefik.http.services.https-application-server.loadbalancer.healthcheck.timeout=3s"

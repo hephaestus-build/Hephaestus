@@ -7,15 +7,19 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubWebhookEven
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
+import org.jspecify.annotations.Nullable;
 
 /**
- * DTO for GitHub sub_issues webhook events.
+ * DTO for GitHub sub_issues webhook events. {@code repository} is the reporting side's repository; the
+ * other side's is {@code sub_issue_repo} or {@code parent_issue_repo}.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record GitHubSubIssuesEventDTO(
         @JsonProperty("action") String action,
         @JsonProperty("sub_issue") GitHubIssueDTO subIssue,
+        @JsonProperty("sub_issue_repo") @Nullable GitHubRepositoryRefDTO subIssueRepo,
         @JsonProperty("parent_issue") GitHubIssueDTO parentIssue,
+        @JsonProperty("parent_issue_repo") @Nullable GitHubRepositoryRefDTO parentIssueRepo,
         @JsonProperty("repository") GitHubRepositoryRefDTO repository,
         @JsonProperty("sender") GitHubUserDTO sender)
         implements GitHubWebhookEvent {

@@ -1,9 +1,10 @@
 // Long-lived JSON-RPC runner; frame definitions live in pi-mentor-protocol.ts.
-// Java restores .sessions/<threadId>.jsonl before startup; SessionManager resumes it without replay RPCs.
+// Java sends a thread's saved session with open_thread; restored as .sessions/<threadId>.jsonl, SessionManager
+// resumes it without replay RPCs.
 
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -564,12 +565,6 @@ function defineLinkObservationTool(sdk: PiSdk) {
 function handleHello(id: JsonRpcId | undefined) {
 	// Java validates protocolOnly so a stub runtime cannot answer production traffic.
 	sendResult(id, { protocolVersion: PROTOCOL_VERSION, protocolOnly: PROTOCOL_ONLY });
-	// Reply before synchronously evaluating the SDK during background prewarm.
-	if (!PROTOCOL_ONLY) {
-		setImmediate(() => {
-			void prewarmRuntime();
-		});
-	}
 }
 
 async function prewarmRuntime() {
@@ -626,12 +621,22 @@ async function handleOpenThread(id: JsonRpcId | undefined, params: MentorParams)
 	}
 
 	try {
+		restoreSession(state, jsonText(params.session));
 		await bindThread(state);
 		sendResult(id, { threadId, sessionPath: state.sessionPath });
 	} catch (error) {
 		log(`open_thread failed for ${threadId}:`, error);
 		sendError(id, ERR.PI_ERROR, `open_thread failed: ${errorText(error)}`);
 	}
+}
+
+/** A session this runner already holds for the thread is the one it last answered from, so it is kept. */
+function restoreSession(state: ThreadState, session: string) {
+	if (session === "" || existsSync(state.sessionPath)) {
+		return;
+	}
+	writeFileSync(state.sessionPath, session);
+	log(`restored session for thread ${state.threadId}`);
 }
 
 // Detach previous thread (unsubscribe), switch the runtime session file, re-subscribe.
@@ -1321,10 +1326,10 @@ function start() {
 	}
 
 	announceReady();
-	// SDK prewarm is intentionally NOT triggered here — it fires inside handleHello after the
-	// reply is written. Pi SDK module evaluation is synchronous (~300-400 ms) and would block
-	// hello until it completes. Firing it post-hello lets the reply land instantly and the load
-	// runs while Java orchestrates open_thread.
+	// Started with the process, not on demand: a sandbox prepared before the first message then has
+	// its runtime ready by the time the message arrives. Frames that land while the SDK module
+	// evaluates wait for it; open_thread would wait for it anyway.
+	void prewarmRuntime();
 }
 
 start();

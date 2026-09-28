@@ -10,11 +10,13 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
@@ -27,7 +29,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResp
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler.HandleResult;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -36,16 +40,21 @@ import java.util.Collection;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.HttpGraphQlClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 
 /**
@@ -62,6 +71,7 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
     private static final Long SCOPE_ID = 100L;
     private static final Long REPO_ID = 7L;
     private static final String FULL_PATH = "acme/widgets";
+    private static final Long PROVIDER_ID = 77L;
 
     /** The committed operation document each connection prefix is listed by. */
     private static final Map<String, String> LISTING_DOCUMENTS = Map.of(
@@ -88,6 +98,12 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
     @Mock
     private SyncExecutionHandle handle;
 
+    @Mock
+    private WorkspaceActorSelector actorSelector;
+
+    @Mock
+    private GitLabWorkspaceLinkService workspaceLinkService;
+
     private GitLabDeletionSweepService service;
 
     /** Responses handed to the client in order, so a multi-page listing can be scripted. */
@@ -102,8 +118,22 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
                 Duration.ZERO,
                 Duration.ofMinutes(5));
 
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        lenient().when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         service = new GitLabDeletionSweepService(
-                issueRepository, repositoryRepository, graphQlClientProvider, responseHandler, properties);
+                issueRepository,
+                repositoryRepository,
+                graphQlClientProvider,
+                responseHandler,
+                properties,
+                actorSelector,
+                workspaceLinkService,
+                new TransactionTemplate(transactionManager));
+        // Default: the scope is connected to the repository's instance and may still write it.
+        lenient().when(actorSelector.connectedProviderId(SCOPE_ID)).thenReturn(Optional.of(PROVIDER_ID));
+        lenient()
+                .when(workspaceLinkService.mayWriteRepository(eq(SCOPE_ID), any()))
+                .thenReturn(true);
 
         lenient().when(graphQlClientProvider.forScope(SCOPE_ID)).thenReturn(client);
         lenient().when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(100);
@@ -632,7 +662,8 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
             Repository second = new Repository();
             second.setId(8L);
             second.setNameWithOwner("acme/gadgets");
-            when(repositoryRepository.findAllByWorkspaceMonitors(SCOPE_ID)).thenReturn(List.of(first, second));
+            when(repositoryRepository.findAllByWorkspaceMonitorsOnProvider(SCOPE_ID, PROVIDER_ID))
+                    .thenReturn(List.of(first, second));
             when(handle.isCancellationRequested()).thenReturn(true);
 
             var outcome = service.sweepScope(SCOPE_ID, handle);
@@ -643,11 +674,44 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
     }
 
     @Nested
+    class WritesOnlyWithAuthority {
+
+        @Test
+        void shouldTombstoneNothingWhenTheRepositoryStoppedBeingThisScopesDuringTheListing() {
+            // A complete listing that proves #2 gone, but by the time it ends the monitor, the connection or
+            // the group link it was started under has changed.
+            scriptedResponses.add(Mono.just(issuePage(List.of(1, 3), false, 2)));
+            scriptedResponses.add(Mono.just(mergeRequestPage(List.of(), false, 0)));
+            stubLocalNumbers(List.of(1, 2, 3), List.of());
+            when(workspaceLinkService.mayWriteRepository(eq(SCOPE_ID), any())).thenReturn(false);
+
+            var outcome = service.sweepRepository(SCOPE_ID, repository(), handle);
+
+            verifyNothingTombstoned();
+            assertThat(outcome.skipped()).isTrue();
+            InOrder listingThenCheck = inOrder(requestSpec, workspaceLinkService);
+            listingThenCheck.verify(requestSpec).execute();
+            listingThenCheck.verify(workspaceLinkService).mayWriteRepository(eq(SCOPE_ID), any());
+        }
+
+        @Test
+        void shouldSweepNothingWithoutAnActiveConnection() {
+            when(actorSelector.connectedProviderId(SCOPE_ID)).thenReturn(Optional.empty());
+
+            var outcome = service.sweepScope(SCOPE_ID, handle);
+
+            assertThat(outcome.total()).isZero();
+            verifyNoInteractions(repositoryRepository, graphQlClientProvider);
+        }
+    }
+
+    @Nested
     class SweepScope {
 
         @Test
         void shouldReportSweepPhaseProgressPerProject() {
-            when(repositoryRepository.findAllByWorkspaceMonitors(SCOPE_ID)).thenReturn(List.of(repository()));
+            when(repositoryRepository.findAllByWorkspaceMonitorsOnProvider(SCOPE_ID, PROVIDER_ID))
+                    .thenReturn(List.of(repository()));
             scriptEmptyUpstream();
             stubLocalNumbers(List.of(), List.of());
 
@@ -659,7 +723,8 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
 
         @Test
         void shouldRunWithoutAHandleOutsideARecordedJob() {
-            when(repositoryRepository.findAllByWorkspaceMonitors(SCOPE_ID)).thenReturn(List.of(repository()));
+            when(repositoryRepository.findAllByWorkspaceMonitorsOnProvider(SCOPE_ID, PROVIDER_ID))
+                    .thenReturn(List.of(repository()));
             scriptEmptyUpstream();
             stubLocalNumbers(List.of(), List.of());
 
@@ -670,7 +735,8 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
 
         @Test
         void shouldSweepNothingWhenScopeMonitorsNoProjects() {
-            when(repositoryRepository.findAllByWorkspaceMonitors(SCOPE_ID)).thenReturn(List.of());
+            when(repositoryRepository.findAllByWorkspaceMonitorsOnProvider(SCOPE_ID, PROVIDER_ID))
+                    .thenReturn(List.of());
 
             var outcome = service.sweepScope(SCOPE_ID, handle);
 

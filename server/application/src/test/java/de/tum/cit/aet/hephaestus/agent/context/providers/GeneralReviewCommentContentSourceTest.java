@@ -287,21 +287,27 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void contribute_hyphenFormDiffNoteMarker_isNotExcluded() throws Exception {
-        // The hyphen-form diff-note marker is NOT matched by HEPHAESTUS_MARKER (colon form only) — correctly
-        // so, since diff notes are stored as PullRequestReviewComment, which this IssueComment-only provider
-        // never sees.
+    void contribute_diffNotePostedAsAConversationComment_isExcluded() throws Exception {
+        // A diff note whose line falls outside the hunk is posted as a conversation comment and keeps the
+        // diff-note marker; staged, it would read as an unanswered automated finding.
         when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
-                .thenReturn(List.of(comment(
-                        "reviewer-a",
-                        "<!-- hephaestus-diff-note --> human follow-up",
-                        Instant.parse("2025-06-01T10:00:00Z"))));
+                .thenReturn(List.of(
+                        comment(
+                                "group_328643_bot_1",
+                                "**`App/WeatherViewModel.swift:13`**\n\nAdd observation support so the view refreshes."
+                                        + "\n<!-- hephaestus-diff-note -->\n<!-- hephaestus-diff-note-ck=abc -->",
+                                Instant.parse("2025-06-01T09:00:00Z")),
+                        comment(
+                                "reviewer-a",
+                                "could you resolve the merge conflicts",
+                                Instant.parse("2025-06-01T10:00:00Z"))));
 
         Map<String, byte[]> files = new HashMap<>();
         provider.contribute(request(metadataWithPr()), files);
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
         assertThat(out.get("comments")).hasSize(1);
+        assertThat(out.get("comments").get(0).get("author").asString()).isEqualTo("reviewer-a");
     }
 
     @Test
