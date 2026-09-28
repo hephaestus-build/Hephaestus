@@ -308,6 +308,8 @@ final class PracticeTraceDeriver {
         return new PracticeTraceEntryDTO(
                 practice.slug(),
                 practice.name(),
+                practice.groupSlug(),
+                practice.groupName(),
                 practice.autonomy(),
                 outcome,
                 explanation,

@@ -92,12 +92,13 @@ class ReviewedWorkLabelsTest {
                                 null,
                                 "Engineering",
                                 null),
+                        // The title is the label, so it is not carried a second time.
                         new ReviewedWorkRefDTO(
                                 "3",
                                 ArtifactKinds.DOCUMENT,
                                 IntegrationKind.OUTLINE,
                                 "Queue retry policy",
-                                "Queue retry policy",
+                                null,
                                 null,
                                 null)));
     }

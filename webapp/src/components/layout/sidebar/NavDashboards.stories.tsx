@@ -22,22 +22,18 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		// The Practice profile is the workspace home, so it leads; Activity follows it.
+		// The Practice profile is the workspace home, so it leads; Activity follows it. Review
+		// activity is not a place the sidebar goes at all: the practice profile's "Latest run" chip
+		// is the way to the reviews of your own work.
 		const links = canvas.getAllByRole("link").map((link) => link.textContent);
-		await expect(links).toEqual([
-			"Practice profile",
-			"Activity",
-			"Workspace activity",
-			"Review activity",
-			"Teams",
-		]);
+		await expect(links).toEqual(["Practice profile", "Activity", "Workspace activity", "Teams"]);
 	},
 };
 
 export const PracticeReviewsOff: Story = {
 	args: { practicesEnabled: false },
 	play: async ({ canvas }) => {
-		// Activity is always on, and leads — it is the home of a workspace that does not review
+		// Activity is always on, and leads: it is the home of a workspace that does not review
 		// practices. The practice pages are gone rather than leading to a page that could only explain
 		// itself.
 		const links = canvas.getAllByRole("link").map((link) => link.textContent);

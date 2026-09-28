@@ -107,21 +107,58 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
 
     /** A completed review of pull request {@code #number} of {@code acme/api}, named the way the target lookup reads it. */
     protected AgentJob persistPullRequestReview(Workspace workspace, int number, @Nullable Instant completedAt) {
+        return persistPullRequestReview(workspace, number, number, completedAt);
+    }
+
+    /**
+     * {@link #persistPullRequestReview(Workspace, int, Instant)} where the mirrored pull request's own id is
+     * not its number, which is what a run over work this workspace really holds looks like.
+     */
+    protected AgentJob persistPullRequestReview(
+            Workspace workspace, int number, long pullRequestId, @Nullable Instant completedAt) {
+        return persistReview(
+                workspace,
+                AgentJobType.PULL_REQUEST_REVIEW,
+                Map.of(
+                        "pull_request_id",
+                        pullRequestId,
+                        "pr_number",
+                        number,
+                        "title",
+                        "Pull request " + number,
+                        "repository_full_name",
+                        "acme/api",
+                        "pr_url",
+                        "https://github.com/acme/api/pull/" + number),
+                completedAt);
+    }
+
+    /** {@link #persistPullRequestReview} for issue {@code #number}, with the metadata an issue review writes. */
+    protected AgentJob persistIssueReview(Workspace workspace, int number, @Nullable Instant completedAt) {
+        return persistReview(
+                workspace,
+                AgentJobType.ISSUE_REVIEW,
+                Map.of(
+                        "issue_id",
+                        (long) number,
+                        "issue_number",
+                        number,
+                        "title",
+                        "Issue " + number,
+                        "repository_full_name",
+                        "acme/api",
+                        "issue_url",
+                        "https://github.com/acme/api/issues/" + number),
+                completedAt);
+    }
+
+    private AgentJob persistReview(
+            Workspace workspace, AgentJobType jobType, Map<String, Object> metadata, @Nullable Instant completedAt) {
         AgentJob job = new AgentJob();
         job.setWorkspace(workspace);
-        job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        job.setJobType(jobType);
         job.setIntegrationKind(IntegrationKind.GITHUB);
-        job.setMetadata(OBJECT_MAPPER.valueToTree(Map.of(
-                "pull_request_id",
-                (long) number,
-                "pr_number",
-                number,
-                "title",
-                "Pull request " + number,
-                "repository_full_name",
-                "acme/api",
-                "pr_url",
-                "https://github.com/acme/api/pull/" + number)));
+        job.setMetadata(OBJECT_MAPPER.valueToTree(metadata));
         job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
         job.setEvidenceSnapshot(OBJECT_MAPPER.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.2.0"))));
         if (completedAt != null) {

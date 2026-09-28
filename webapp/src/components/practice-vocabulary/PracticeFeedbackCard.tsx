@@ -242,6 +242,10 @@ export function PracticeFeedbackCard({
 	// that asked for it and not on a pressed button in the other row.
 	const [lastPressed, setLastPressed] = useState<"rating" | "answer">("rating");
 	const resolved = state === "resolved";
+	// A card closed because the practice's review rules changed can never be ticked, so the meter is
+	// not drawn for it: "0 of 3 clean" is a count towards a threshold that no longer exists, and it
+	// reads as a mark against work nobody can answer any more. The condition line says why instead.
+	const closed = state === "closed";
 	const answerable = isOpenFeedback(state) || resolvedBy === "DEVELOPER";
 	const BandIcon = FEEDBACK_STATE_DEFS[isOpenFeedback(state) ? "open" : state].icon;
 	const GroupIcon = group?.icon ?? PackageIcon;
@@ -379,28 +383,30 @@ export function PracticeFeedbackCard({
 					</p>
 				</div>
 				{/* A count toward a threshold is a meter, not task progress (APG meter pattern). */}
-				<Meter.Root
-					value={cleanCount}
-					max={cleanNeeded}
-					aria-label="Clean work in a row"
-					getAriaValueText={() => cleanLabel}
-					className="col-start-2 flex flex-col items-start gap-1.5 sm:col-start-3 sm:items-end sm:pt-0.5"
-				>
-					<Meter.Track className="inline-flex gap-1">
-						{Array.from({ length: cleanNeeded }, (_, index) => (
-							<span
-								key={index}
-								className={cn(
-									"h-2 w-6 rounded-full",
-									index < cleanCount ? "bg-success" : "bg-border",
-								)}
-							/>
-						))}
-					</Meter.Track>
-					<Meter.Value className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-						{() => cleanLabel}
-					</Meter.Value>
-				</Meter.Root>
+				{!closed && (
+					<Meter.Root
+						value={cleanCount}
+						max={cleanNeeded}
+						aria-label="Clean work in a row"
+						getAriaValueText={() => cleanLabel}
+						className="col-start-2 flex flex-col items-start gap-1.5 sm:col-start-3 sm:items-end sm:pt-0.5"
+					>
+						<Meter.Track className="inline-flex gap-1">
+							{Array.from({ length: cleanNeeded }, (_, index) => (
+								<span
+									key={index}
+									className={cn(
+										"h-2 w-6 rounded-full",
+										index < cleanCount ? "bg-success" : "bg-border",
+									)}
+								/>
+							))}
+						</Meter.Track>
+						<Meter.Value className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+							{() => cleanLabel}
+						</Meter.Value>
+					</Meter.Root>
+				)}
 				{/* The other way to close the card, under the clean work that ticks it by itself. */}
 				{onResolve && answerable && (
 					<div className="col-start-2 flex flex-wrap items-center gap-x-3 gap-y-2">

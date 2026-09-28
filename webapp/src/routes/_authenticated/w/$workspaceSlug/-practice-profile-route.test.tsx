@@ -1,9 +1,11 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { differenceInCalendarDays, startOfDay } from "date-fns";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { InAppFeedback } from "@/api/types.gen";
-import type { Wire } from "@/lib/dates";
+import { formatDayTime, type Wire } from "@/lib/dates";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { clearUserView } from "@/runtime/user-view/session";
@@ -15,6 +17,11 @@ import {
 	packagingGroup,
 	practiceStandings,
 } from "@/stories/practice-profile-story-mock-data";
+import {
+	openProfileReviewRun,
+	profileReviewRuns,
+	profileRunTrace,
+} from "@/stories/profile-review-runs-story-mock-data";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
 
@@ -38,7 +45,11 @@ const observation = {
 };
 const run = { ...detailRun, observations: [observation] };
 
+/** The `reviewId` each read of the work's review activity carried, newest last. */
+let tracedReviewIds: (string | null)[] = [];
+
 beforeEach(() => {
+	tracedReviewIds = [];
 	server.use(
 		// The surface exists only where practices review the work, and the shared fixture has them
 		// off, so every case below has to say that this workspace reviews.
@@ -64,6 +75,22 @@ beforeEach(() => {
 		// observation in full, so opening one asks for nothing more.
 		http.get("*/workspaces/:workspaceSlug/practice-groups/:groupSlug/review-runs", () =>
 			HttpResponse.json({ content: [run], hasNext: false, page: 0, size: 10 }),
+		),
+		// The two run levels' reads, each its own request.
+		http.get("*/workspaces/:workspaceSlug/practice-profile/review-runs", () =>
+			HttpResponse.json({ content: profileReviewRuns, hasNext: false, page: 0, size: 10 }),
+		),
+		http.get("*/workspaces/:workspaceSlug/practice-profile/review-runs/:reviewId", () =>
+			HttpResponse.json({ run: openProfileReviewRun, observations: [observation] }),
+		),
+		// The open run's third read, once the run has named its work: the work's review activity,
+		// which is the only thing that lists the practices that stayed quiet.
+		http.get(
+			"*/workspaces/:workspaceSlug/practices/trace/:artifactKind/:artifactId",
+			({ request }) => {
+				tracedReviewIds.push(new URL(request.url).searchParams.get("reviewId"));
+				return HttpResponse.json(profileRunTrace);
+			},
 		),
 	);
 });
@@ -165,6 +192,71 @@ describe("practice profile route", () => {
 		expect(router.history).toHaveLength(entries + 3);
 		router.history.back();
 		await waitFor(() => expect(detail()).toStrictEqual(["practice-groups:all", group]));
+	});
+
+	it("opens every review of the reader's work from the chip, then one run over it", async () => {
+		const router = await renderProfile();
+		const detail = () => router.state.location.search.detail;
+
+		fireEvent.click(await screen.findByRole("button", { name: /^Latest run/u }, ROUTE_RENDER_WAIT));
+		await waitFor(() => expect(detail()).toStrictEqual(["review-runs:all"]));
+		await screen.findByRole("heading", { name: "Reviews of your work" }, ROUTE_RENDER_WAIT);
+
+		// Each row's link is named by the run's own moment, so the newest one is addressable.
+		fireEvent.click(
+			await screen.findByRole(
+				"button",
+				{ name: `Open run ${formatDayTime(openProfileReviewRun.reviewedAt)}` },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		await waitFor(() =>
+			expect(detail()).toStrictEqual([
+				"review-runs:all",
+				`review-run:${openProfileReviewRun.reviewId}`,
+			]),
+		);
+		await screen.findByRole("tab", { name: /^Every practice/u }, ROUTE_RENDER_WAIT);
+		// A practice the run left quiet is in the table with its recorded reason, which only the
+		// activity read can supply; the list is complete, so the head tags which review of its work
+		// this is, and the activity was asked for this run rather than for the work at large.
+		await screen.findByText(/reviewed 40 minutes ago/u, undefined, ROUTE_RENDER_WAIT);
+		// Twice: once on the row under the level, once in the run head over it.
+		await waitFor(() => expect(screen.getAllByText("2nd review")).toHaveLength(2));
+		await waitFor(() => expect(tracedReviewIds).toContain(openProfileReviewRun.reviewId));
+
+		// One level per history entry, so Back closes exactly one and then the drawer.
+		router.history.back();
+		await waitFor(() => expect(detail()).toStrictEqual(["review-runs:all"]));
+		router.history.back();
+		await waitFor(() => expect(detail()).toBeUndefined());
+	});
+
+	it("turns the chosen timeframe into the since the runs list asks for", async () => {
+		const asked: (string | null)[] = [];
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practice-profile/review-runs", ({ request }) => {
+				asked.push(new URL(request.url).searchParams.get("since"));
+				return HttpResponse.json({ content: profileReviewRuns, hasNext: false, page: 0, size: 10 });
+			}),
+		);
+		const router = await renderProfile();
+
+		fireEvent.click(await screen.findByRole("button", { name: /^Latest run/u }, ROUTE_RENDER_WAIT));
+		await screen.findByRole("heading", { name: "Reviews of your work" }, ROUTE_RENDER_WAIT);
+		// At rest the list reaches back over every run, so no bound is sent at all.
+		await waitFor(() => expect(asked).toStrictEqual([null]));
+
+		const user = userEvent.setup();
+		await user.click(screen.getByRole("combobox", { name: "Timeframe" }));
+		await user.click(await screen.findByRole("option", { name: "Last 30 days" }));
+
+		await waitFor(() => expect(router.state.location.search.runSince).toBe("30d"));
+		// A bound is sent, at the reader's own midnight so it is stable all day, thirty days back.
+		await waitFor(() => expect(asked).toStrictEqual([null, expect.any(String)]));
+		const since = new Date(String(asked[1]));
+		expect(since.getTime()).toBe(startOfDay(since).getTime());
+		expect(differenceInCalendarDays(new Date(), since)).toBe(30);
 	});
 
 	it("opens and closes an observation without writing the URL, so leaving the level takes one step", async () => {

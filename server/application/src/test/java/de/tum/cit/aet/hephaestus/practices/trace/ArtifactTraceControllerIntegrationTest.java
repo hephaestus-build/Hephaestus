@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluation;
@@ -22,6 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
@@ -65,6 +67,9 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Autowired
     private PracticeRepository practiceRepository;
+
+    @Autowired
+    private PracticeGroupRepository groupRepository;
 
     @Autowired
     private ObservationRepository observationRepository;
@@ -170,6 +175,36 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
          * {@code not-admitted} watches the very signal in the ledger, so it is <em>not</em> reported as
          * waiting even though coverage would say so: the recorded occurrence refutes the claim.
          */
+        /**
+         * The group is on the entry because the reader's own surfaces cannot look it up for a practice that
+         * stayed quiet: a practice with no standing, or one in a group hidden from the dashboards, is
+         * missing from every list they hold, and the group filter would then be short of choices.
+         */
+        @Test
+        @WithMentorUser
+        void namesTheGroupOfEveryPracticeIncludingTheQuietOnes() {
+            PracticeGroup packaging = persistGroup("review-ready-work", "Packaging work for review");
+            persistPractice(
+                    "grouped",
+                    "Grouped practice",
+                    PracticeAutonomy.AUTOMATIC,
+                    ScmSignals.PULL_REQUEST_READY,
+                    packaging);
+            persistPractice("loose", "Loose practice", PracticeAutonomy.AUTOMATIC);
+            recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.RECORDED, null, null);
+
+            get(TRACE, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID)
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.practices[?(@.practiceSlug=='grouped')].groupSlug")
+                    .isEqualTo("review-ready-work")
+                    .jsonPath("$.practices[?(@.practiceSlug=='grouped')].groupName")
+                    .isEqualTo("Packaging work for review")
+                    .jsonPath("$.practices[?(@.practiceSlug=='loose')].groupSlug")
+                    .doesNotExist();
+        }
+
         @Test
         @WithMentorUser
         void reportsEveryPracticeIncludingTheQuietOnes() {
@@ -240,6 +275,63 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .isEqualTo("BUDGET_EXHAUSTED");
         }
 
+        /**
+         * Two reviews of one pull request. Without a review named, each practice answers from the newest
+         * review that observed it, which is what left an older run's own table empty. Named, the older
+         * review answers for itself, and the occurrence ledger stays whole either way: it is what the work
+         * has been noticed doing, not what one run made of it.
+         */
+        @Test
+        @WithMentorUser
+        void answersForOneReviewWhenTheCallerNamesIt() {
+            Practice first = persistPractice("first", "First practice", PracticeAutonomy.AUTOMATIC);
+            Practice second = persistPractice("second", "Second practice", PracticeAutonomy.AUTOMATIC);
+            AgentJob older = persistJob();
+            AgentJob newer = persistJob();
+            recordSignal(
+                    workspace, ScmSignals.PULL_REQUEST_READY, SignalState.TRIGGERED, null, older.getId(), READY_AT);
+            recordSignal(
+                    workspace,
+                    ScmSignals.PULL_REQUEST_READY,
+                    SignalState.TRIGGERED,
+                    null,
+                    newer.getId(),
+                    READY_AT.plusSeconds(3600));
+            insertObservation(first, older);
+            insertObservation(second, newer);
+
+            get(TRACE, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID)
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.practices[?(@.practiceSlug=='first')].outcome")
+                    .isEqualTo("REVIEWED")
+                    .jsonPath("$.practices[?(@.practiceSlug=='second')].outcome")
+                    .isEqualTo("REVIEWED");
+
+            get(
+                            TRACE + "?reviewId={reviewId}",
+                            workspace.getWorkspaceSlug(),
+                            ArtifactKinds.PULL_REQUEST.value(),
+                            ARTIFACT_ID,
+                            older.getId())
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.signals.length()")
+                    .isEqualTo(2)
+                    .jsonPath("$.practices[?(@.practiceSlug=='first')].outcome")
+                    .isEqualTo("REVIEWED")
+                    .jsonPath("$.practices[?(@.practiceSlug=='first')].observationCount")
+                    .isEqualTo(1)
+                    .jsonPath("$.practices[?(@.practiceSlug=='first')].reviewId")
+                    .isEqualTo(older.getId().toString())
+                    .jsonPath("$.practices[?(@.practiceSlug=='second')].outcome")
+                    .isEqualTo("SKIPPED")
+                    .jsonPath("$.practices[?(@.practiceSlug=='second')].observationCount")
+                    .isEqualTo(0);
+        }
+
         @Test
         @WithMentorUser
         void answersNothingForAnArtifactNobodyRecordedAnythingAbout() {
@@ -304,8 +396,22 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
         return persistPractice(slug, name, autonomy, ScmSignals.PULL_REQUEST_READY);
     }
 
+    private PracticeGroup persistGroup(String slug, String name) {
+        PracticeGroup group = new PracticeGroup();
+        group.setWorkspace(workspace);
+        group.setSlug(slug);
+        group.setName(name);
+        return groupRepository.save(group);
+    }
+
     private Practice persistPractice(String slug, String name, PracticeAutonomy autonomy, SignalName signal) {
+        return persistPractice(slug, name, autonomy, signal, null);
+    }
+
+    private Practice persistPractice(
+            String slug, String name, PracticeAutonomy autonomy, SignalName signal, @Nullable PracticeGroup group) {
         Practice practice = new Practice();
+        practice.setGroup(group);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
         practice.setWorkspace(workspace);
         practice.setSlug(slug);
@@ -334,19 +440,30 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
             SignalState state,
             @Nullable SignalStateReason reason,
             @Nullable UUID jobId) {
+        return recordSignal(ws, signal, state, reason, jobId, READY_AT);
+    }
+
+    private ArtifactSignal recordSignal(
+            Workspace ws,
+            SignalName signal,
+            SignalState state,
+            @Nullable SignalStateReason reason,
+            @Nullable UUID jobId,
+            Instant occurredAt) {
         ArtifactSignal row = new ArtifactSignal();
         row.setId(UUID.randomUUID());
         row.setWorkspace(ws);
         row.setArtifactKind(ArtifactKinds.PULL_REQUEST.value());
         row.setArtifactId(ARTIFACT_ID);
         row.setSignalName(signal.value());
-        row.setRevision("sha~deadbeef");
-        row.setOccurredAt(READY_AT);
+        // One row per revision: the ledger is unique on it, so two occurrences of one signal differ here.
+        row.setRevision("sha~" + occurredAt.getEpochSecond());
+        row.setOccurredAt(occurredAt);
         row.setDiscoveredVia(DiscoveredVia.EVENT);
         row.setState(state);
         row.setStateReason(reason);
         row.setJobId(jobId);
-        row.setStateChangedAt(READY_AT);
+        row.setStateChangedAt(occurredAt);
         return signalRepository.save(row);
     }
 

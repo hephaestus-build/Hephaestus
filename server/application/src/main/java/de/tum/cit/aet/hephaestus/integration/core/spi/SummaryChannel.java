@@ -58,6 +58,21 @@ public interface SummaryChannel {
         return repoFullName + "#" + issueNumber;
     }
 
+    /**
+     * Where a reader opens the summary comment this channel posted, as an address on the work's own page.
+     * Every vendor anchors its comments differently, so the channel that posted one says how to reach it and
+     * nobody else guesses.
+     *
+     * <p>Null whenever this channel cannot address the comment it holds, and a surface that would have linked
+     * it then says nothing rather than sending a reader to a page that does not scroll anywhere.
+     *
+     * @param workUrl the reviewed work's own page at the vendor
+     * @param commentId the identifier this channel recorded for the posted summary
+     */
+    default @Nullable String summaryCommentUrl(String workUrl, String commentId) {
+        return null;
+    }
+
     record FeedbackTarget(
             IntegrationRef ref,
             String subjectExternalId,

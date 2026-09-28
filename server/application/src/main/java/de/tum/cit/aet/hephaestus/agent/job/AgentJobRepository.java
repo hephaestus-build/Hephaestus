@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
@@ -70,6 +71,40 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
     /** What these runs wrote about themselves: the composed next steps live in {@code output}. */
     List<ReviewRunNarrativeRow> findReviewRunNarrativesByWorkspaceIdAndIdIn(Long workspaceId, Collection<UUID> ids);
+
+    /**
+     * What these runs record about the run itself: how it ended, what occasioned it, the edges its duration is
+     * the difference of, the comment its summary landed in, and the {@code output} the opening sentence and
+     * the coverage ledger sit in. Selected
+     * rather than the entity for the reason {@code findWorkspaceJobs} gives — a review transcript per row is
+     * not what a listing reads.
+     */
+    @Query("SELECT j.id AS id, j.status AS status, j.practiceTriggerMode AS triggerMode, "
+            + "j.startedAt AS startedAt, j.completedAt AS completedAt, j.output AS output, "
+            + "j.deliveryCommentId AS deliveryCommentId FROM AgentJob j "
+            + "WHERE j.workspace.id = :workspaceId AND j.id IN :ids")
+    List<ReviewRunFactsRow> findReviewRunFacts(
+            @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
+
+    interface ReviewRunFactsRow {
+        UUID getId();
+
+        AgentJobStatus getStatus();
+
+        TriggerMode getTriggerMode();
+
+        @Nullable
+        Instant getStartedAt();
+
+        @Nullable
+        Instant getCompletedAt();
+
+        @Nullable
+        JsonNode getOutput();
+
+        @Nullable
+        String getDeliveryCommentId();
+    }
 
     interface ReviewRunNarrativeRow {
         UUID getId();

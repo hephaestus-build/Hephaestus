@@ -17,6 +17,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -53,6 +54,9 @@ public class GitlabSummaryChannel implements SummaryChannel {
                     + "due|remove_due_date|weight|epic|copy_metadata|move|confidential|shrug|tableflip)\\b)",
             Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
 
+    /** The note identifier GitLab's own {@code #note_} anchor takes. */
+    private static final Pattern NOTE_NUMBER = Pattern.compile("\\d+");
+
     private final GitLabGraphQlClientProvider gitLabProvider;
     private final GitlabMrResolver mrResolver;
     private final OutboundEgressGuard egressGuard;
@@ -67,6 +71,17 @@ public class GitlabSummaryChannel implements SummaryChannel {
     @Override
     public IntegrationKind kind() {
         return IntegrationKind.GITLAB;
+    }
+
+    /**
+     * GitLab anchors a note on the merge request's or issue's own page as {@code #note_<id>}, which takes the
+     * note's numeric identifier. What this channel records is the note's global id, {@code gid://gitlab/Note/7},
+     * so the number is its last segment; anything else this channel is holding gets no address.
+     */
+    @Override
+    public @Nullable String summaryCommentUrl(String workUrl, String commentId) {
+        String number = commentId.substring(commentId.lastIndexOf('/') + 1);
+        return NOTE_NUMBER.matcher(number).matches() ? workUrl + "#note_" + number : null;
     }
 
     @Override

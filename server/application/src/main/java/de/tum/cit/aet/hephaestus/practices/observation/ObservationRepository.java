@@ -810,7 +810,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * aggregates order the same way, so kind and id come from one row. Either bound
      * may be null; a run is inside the bounds when its date is after {@code since} and at or before
      * {@code until}. The lower bound is a row filter, since dropping rows at or before it leaves a later run's
-     * newest observation as it was; the upper bound has to wait for the aggregate.
+     * newest observation as it was; the upper bound has to wait for the aggregate. A null {@code artifactKind}
+     * is every kind; it filters rows rather than the aggregate, because one run reviews one piece of work.
      *
      * <p>Every presence counts, including {@code NOT_APPLICABLE}: the question is when a review last ran on
      * this person's work, and a run that found nothing to judge still ran. The visibility gate is not applied
@@ -829,16 +830,37 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                       AND f.workspace_id = :workspaceId
             """ + HIDDEN_REPOSITORY_GUARD + """
               AND (CAST(:since AS timestamptz) IS NULL OR f.observed_at > CAST(:since AS timestamptz))
+              AND (CAST(:artifactKind AS text) IS NULL OR f.artifact_kind = CAST(:artifactKind AS text))
             GROUP BY f.agent_job_id
             HAVING (CAST(:until AS timestamptz) IS NULL OR MAX(f.observed_at) <= CAST(:until AS timestamptz))
             ORDER BY MAX(f.observed_at) DESC, f.agent_job_id DESC
             """, nativeQuery = true)
-    List<DeveloperReviewRunRow> findDeveloperReviewRuns(
+    Slice<DeveloperReviewRunRow> findDeveloperReviewRuns(
             @Param("aboutUserId") Long aboutUserId,
             @Param("workspaceId") Long workspaceId,
             @Param("since") @Nullable Instant since,
             @Param("until") @Nullable Instant until,
+            @Param("artifactKind") @Nullable String artifactKind,
             Pageable pageable);
+
+    /**
+     * Every observation the given runs made about one developer, newest first: what the developer's own run
+     * list counts and what the run detail on that page lists, so the two cannot disagree. Every presence,
+     * like {@link #findDeveloperReviewRuns} it opens from: a run that found nothing to judge still said so
+     * about this work. Carries {@link #HIDDEN_REPOSITORY_GUARD} like every developer surface.
+     */
+    @Query(value = """
+                    SELECT f.* FROM observation f
+                    WHERE f.agent_job_id IN :jobIds
+                      AND f.about_user_id = :aboutUserId
+                      AND f.workspace_id = :workspaceId
+            """ + HIDDEN_REPOSITORY_GUARD + """
+            ORDER BY f.observed_at DESC, f.id DESC
+            """, nativeQuery = true)
+    List<Observation> findDeveloperReviewRunObservations(
+            @Param("jobIds") Collection<UUID> jobIds,
+            @Param("aboutUserId") Long aboutUserId,
+            @Param("workspaceId") Long workspaceId);
 
     interface DeveloperReviewRunRow extends ReviewRunRow {
         /** The raw column: a native-query projection is mapped from JDBC types, with no converter run. */

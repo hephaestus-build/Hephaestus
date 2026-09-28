@@ -73,10 +73,11 @@ const reviewOf = (
 ): ReviewWork => ({
 	type: reviewedWork.kind,
 	title,
-	// The server names the work on the ref as well, provider included; a conversation thread has no
-	// title of its own.
+	// The server names the work on the ref as well, provider included. A conversation thread has no
+	// title of its own, and a document's title is already its label, so neither carries one.
 	reviewedWork:
-		reviewedWork.kind === ARTIFACT_KIND.conversationThread
+		reviewedWork.kind === ARTIFACT_KIND.conversationThread ||
+		reviewedWork.kind === ARTIFACT_KIND.document
 			? { ...reviewedWork, provider }
 			: { ...reviewedWork, provider, title },
 });

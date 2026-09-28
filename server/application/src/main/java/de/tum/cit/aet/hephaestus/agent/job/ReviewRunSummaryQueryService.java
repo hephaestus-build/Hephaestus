@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.ReviewFee
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.ReviewObservationCounts;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackCountsDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewObservationCountsDTO;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;

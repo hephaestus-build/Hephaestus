@@ -29,6 +29,7 @@ const meta = {
 		feedbackCards: ALL_FEEDBACK_CARDS,
 		onOpenGroup: fn(),
 		onOpenPractice: fn(),
+		onOpenRuns: fn(),
 		feedbackTab: DEFAULT_FEEDBACK_TAB,
 		onFeedbackTabChange: fn(),
 		state: { status: "ready" },
@@ -53,7 +54,7 @@ export const Default: Story = {
 		await expect(tabs.map((tab) => tab.textContent)).toStrictEqual([
 			"Newest 2",
 			"Open 6",
-			"Resolved 3",
+			"Resolved and closed 3",
 			"All 9",
 		]);
 		await expect(canvas.getByRole("tab", { name: /^Newest/u })).toHaveAttribute(
@@ -88,6 +89,18 @@ export const Default: Story = {
 		// The card's group name opens the group the page knows by that slug.
 		await userEvent.click(within(card).getByRole("button", { name: "Packaging work for review" }));
 		await expect(args.onOpenGroup).toHaveBeenLastCalledWith(groups[0]);
+	},
+};
+
+/**
+ * The chip beside the title is the way into every review of the reader's work; the work's own link
+ * is not inside it, because a link inside a button is a control inside a control.
+ */
+export const ChipOpensTheRuns: Story = {
+	play: async ({ args, canvas }) => {
+		const chip = canvas.getByRole("button", { name: /^Latest run/u });
+		await userEvent.click(chip);
+		await expect(args.onOpenRuns).toHaveBeenCalled();
 	},
 };
 
@@ -199,7 +212,7 @@ export const ColdStart: Story = {
 	},
 };
 
-/** The Resolved tab says what would move a card here, rather than repeating the other tabs. */
+/** "Resolved and closed" says what would move a card here, rather than repeating the other tabs. */
 export const NothingResolvedYet: Story = {
 	args: {
 		overview: empty,
@@ -208,9 +221,11 @@ export const NothingResolvedYet: Story = {
 		feedbackTab: "resolved",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No resolved feedback yet.")).toBeVisible();
+		await expect(canvas.getByText("No resolved or closed feedback yet.")).toBeVisible();
 		await expect(
-			canvas.getByText("A card moves here once the work resolves it or you mark it as addressed."),
+			canvas.getByText(
+				"A card moves here once the work resolves it, you mark it as addressed, or its practice's review rules change.",
+			),
 		).toBeVisible();
 	},
 };

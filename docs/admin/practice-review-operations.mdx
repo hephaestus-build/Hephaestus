@@ -86,7 +86,8 @@ Query `/actuator/health/readiness` for aggregate readiness. An authorized respon
 **`practiceReview`** component. An enabled review worker reports `OUT_OF_SERVICE` with
 `GIT_CHECKOUT_DISABLED` when repository checkout is disabled, or `SOURCE_AUTHORIZATION_EXPIRED` when an
 automated-review source authorization has expired. Missing model bindings are workspace-specific and remain
-visible in **Review activity** and the refusal counter; they do not remove the worker from service.
+visible in **Review activity**, which the **Latest run** chip on the practice profile opens, and in the
+refusal counter; they do not remove the worker from service.
 
 Gauges are sampled periodically; timers and counters are recorded when the corresponding event occurs.
 Metric names in the instrumented code are the source of truth for dashboards and alerts.

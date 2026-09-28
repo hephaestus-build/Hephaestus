@@ -1,10 +1,15 @@
-package de.tum.cit.aet.hephaestus.agent.job;
+package de.tum.cit.aet.hephaestus.practices.spi;
 
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.AssessmentCounts;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
+/**
+ * What one review run observed, by assessment: the four numbers the operator's console shows per run and
+ * the developer's own page shows narrowed to them. One record for both, so the wire says the same thing
+ * about the same number on every surface.
+ */
 @Schema(description = "Counts of observations by assessment")
 public record ReviewObservationCountsDTO(
         @NonNull Long strengths,
@@ -23,7 +28,7 @@ public record ReviewObservationCountsDTO(
         return new ReviewObservationCountsDTO(0L, 0L, 0L, 0L);
     }
 
-    static ReviewObservationCountsDTO from(@Nullable AssessmentCounts counts) {
+    public static ReviewObservationCountsDTO from(@Nullable AssessmentCounts counts) {
         return counts == null
                 ? empty()
                 : new ReviewObservationCountsDTO(
@@ -33,7 +38,7 @@ public record ReviewObservationCountsDTO(
                         counts.getUndetermined());
     }
 
-    ReviewObservationCountsDTO plus(ReviewObservationCountsDTO other) {
+    public ReviewObservationCountsDTO plus(ReviewObservationCountsDTO other) {
         return new ReviewObservationCountsDTO(
                 strengths + other.strengths,
                 problems + other.problems,

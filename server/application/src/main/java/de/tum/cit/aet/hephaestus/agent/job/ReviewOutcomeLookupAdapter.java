@@ -40,7 +40,7 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
                 && row.getOutput() != null
                 && ReviewRunOutcome.fromJobOutput(row.getOutput()) == ReviewRunOutcome.INSUFFICIENT_EVIDENCE;
         return new ReviewOutcome(
-                state(row.getStatus()),
+                AgentJobReviewRunStates.of(row.getStatus()),
                 refusedEvidence,
                 row.getCompletedAt(),
                 readiness(row.getReviewReadiness()),
@@ -63,18 +63,6 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
             }
         }
         return Map.copyOf(bySlug);
-    }
-
-    /**
-     * A timed-out run and a cancelled one are both "it did not finish" to a reader; keeping the
-     * distinction here would put a vocabulary on the wire that no surface renders.
-     */
-    private static ReviewRunState state(AgentJobStatus status) {
-        return switch (status) {
-            case QUEUED, RUNNING -> ReviewRunState.IN_PROGRESS;
-            case COMPLETED -> ReviewRunState.COMPLETED;
-            case FAILED, TIMED_OUT, CANCELLED -> ReviewRunState.FAILED;
-        };
     }
 
     private static Map<String, PracticeReadinessOutcome> readiness(@Nullable JsonNode report) {

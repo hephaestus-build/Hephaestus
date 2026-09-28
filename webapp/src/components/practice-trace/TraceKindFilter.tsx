@@ -1,3 +1,4 @@
+import { ALL_OPTION } from "@/components/common/FilterToolbar";
 import { Label } from "@/components/ui/label";
 import {
 	Select,
@@ -8,9 +9,6 @@ import {
 } from "@/components/ui/select";
 import { artifactKindPluralLabel } from "@/lib/artifact-kinds";
 
-/** Base UI treats "" as "no selection", so the "everything" choice needs a value of its own. */
-const ALL_KINDS = "__all";
-
 export interface TraceKindFilterProps {
 	/** Every kind on offer, the active one included, in the order they are shown. */
 	kinds: string[];
@@ -19,15 +17,10 @@ export interface TraceKindFilterProps {
 	onChange: (kind: string | undefined) => void;
 }
 
-/**
- * The one control on the review-activity list: which kind of work to show.
- *
- * The {@link ALL_KINDS} sentinel never leaves this file — it stands for "no filter", and a URL
- * carrying it would filter for a kind nothing ever has.
- */
+/** Which kind of work to show, on every list that narrows by one. */
 export function TraceKindFilter({ kinds, value, onChange }: TraceKindFilterProps) {
 	const items = [
-		{ value: ALL_KINDS, label: "All work" },
+		{ value: ALL_OPTION, label: "All work" },
 		...kinds.map((kind) => ({ value: kind, label: artifactKindPluralLabel(kind) })),
 	];
 
@@ -42,8 +35,8 @@ export function TraceKindFilter({ kinds, value, onChange }: TraceKindFilterProps
 			</Label>
 			<Select
 				items={items}
-				value={value ?? ALL_KINDS}
-				onValueChange={(next) => onChange(next === ALL_KINDS ? undefined : String(next))}
+				value={value ?? ALL_OPTION}
+				onValueChange={(next) => onChange(next === ALL_OPTION ? undefined : String(next))}
 			>
 				<SelectTrigger id="trace-artifact-kind" className="w-56 max-w-full">
 					<SelectValue placeholder="All work" />

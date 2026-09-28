@@ -66,7 +66,7 @@ export function FeedbackListPage({
 				practices={practices}
 				people={people}
 				total={feedback?.page?.totalElements}
-				scopedArtifact={rows[0]?.reviewedWork}
+				scopedWork={rows[0]?.reviewedWork}
 				recipientName={filteredRecipient?.name ?? filteredRecipient?.login}
 			/>
 			{error == null ? (

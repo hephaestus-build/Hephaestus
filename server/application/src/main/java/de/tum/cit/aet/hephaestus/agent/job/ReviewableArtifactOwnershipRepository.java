@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import java.util.Collection;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -40,4 +42,24 @@ interface ReviewableArtifactOwnershipRepository extends JpaRepository<Issue, Lon
         WHERE rtm.workspace.id = :workspaceId AND i.id = :issueId AND TYPE(i) = Issue
         """)
     boolean issueBelongsToWorkspace(@Param("workspaceId") Long workspaceId, @Param("issueId") Long issueId);
+
+    /**
+     * What each of these artifacts is called now, for the workspace's own artifacts only. Deliberately
+     * without a {@code TYPE} discriminator, unlike the two ownership queries: a pull request is an
+     * {@code Issue} row too, and both kinds are named off the same column.
+     */
+    @Query("""
+        SELECT i.id AS id, i.title AS title FROM Issue i
+        JOIN i.repository r
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = r.nameWithOwner
+        WHERE rtm.workspace.id = :workspaceId AND i.id IN :ids
+        """)
+    List<ReviewedWorkTitle> findCurrentTitles(
+            @Param("workspaceId") Long workspaceId, @Param("ids") Collection<Long> ids);
+
+    interface ReviewedWorkTitle {
+        Long getId();
+
+        String getTitle();
+    }
 }

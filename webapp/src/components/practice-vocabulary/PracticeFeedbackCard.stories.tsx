@@ -449,8 +449,10 @@ export const WorkWithoutAnAddress: Story = {
 };
 
 /**
- * The practice's review rules changed after the card was written: it closes unresolved, keeps
- * its evidence and the meter where the work left it, wears no wash, and the condition says why.
+ * The practice's review rules changed after the card was written: it closes unresolved, keeps its
+ * evidence, wears no wash and says why in the condition line. The clean-work meter is gone with the
+ * threshold it counted towards — nobody can tick a card that is closed, and a count left standing
+ * would read as a mark against work no answer can change.
  */
 export const Closed: Story = {
 	args: {
@@ -465,7 +467,9 @@ export const Closed: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Closed")).toBeVisible();
 		await expect(canvas.queryByText("Resolved")).toBeNull();
-		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
+		// No meter, and nothing of the resolved card's success ground.
+		await expect(canvas.queryByRole("meter")).toBeNull();
+		await expect(canvas.queryByText("2 of 3 clean")).toBeNull();
 		await expect(canvas.getByText("Closed 9 September")).toBeVisible();
 		await expect(
 			canvas.getByText("Closed on 9 September · the practice's review rules changed"),

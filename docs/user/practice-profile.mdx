@@ -19,7 +19,7 @@ has no Practice profile and opens on [Activity](./activity.mdx) instead.
 ## Reading the top of the page
 
 The header says what Hephaestus reviews and how a piece of feedback resolves, and **Latest run** names
-the latest review and the work it ran on. A ring counts your practices by standing — going well, mixed feedback, needs
+the latest review and the work it ran on. Choosing it opens **Reviews of your work**. A ring counts your practices by standing — going well, mixed feedback, needs
 attention, nothing to report yet, or not observed yet — and **See all practice groups** opens the
 table of every practice group.
 
@@ -39,12 +39,36 @@ Under the header, Heph sums up what happened since the review before the latest 
 The summary describes recent evidence, not your ability. There are no scores, no percentages and no
 ranking.
 
+## Reviews of your work
+
+**Latest run** in the header opens every review that ran on your work, newest first and grouped by
+day, each heading naming its day: when the review ran, which piece of work it looked at, and what it
+found. A row leads with the practices the review marked as problems, by name, or says "Nothing to
+improve" where none slipped, and for a review that stopped early, that it stopped and what it had
+recorded by then. Under that it counts what the review reached: what held up, what did not apply,
+and how many practices it reached in all, which is what those add up to. Where the review left
+feedback on the work, **Read the feedback on the pull request** opens it where it was left. The
+second review of a piece of work says so under the work's own title.
+**Show** narrows the list to one kind of work and **Timeframe** to the last 7, 30 or 90 days; the
+list starts on all time and loads the earlier reviews as you read to the end of it. The work's own
+title links to the original, and where you may ask for another review of that work — your own pull
+requests and issues — **Review this now** is beside the row. Only you can see this list.
+
+**Open run** opens one review: the work it ran on with a link to the original, when it ran, a tag
+saying which review of that work it is where it is not the first, and, when you may ask,
+**Review this now**. Two tabs follow. **Every
+practice** lists each practice this review ran against your work: what it saw about your work, one
+line per observation, or else why the practice stayed quiet. The list follows the newest review of
+a piece of work; an older review of the same work points you to **What we noticed** instead. The list narrows by practice group, by the event that starts a review, or by name. **What we noticed** lists everything recorded
+about this work in order: what happened, how it was noticed, and whether a review started.
+
 ## Your feedback
 
 Each card is one pattern that recurred across your work: what was seen, on which pieces of work and
 when, and one next step to try. The tabs above the cards split them, newest first: **Newest** shows
-the two newest open cards, **Open** every open card, **Resolved** every closed card, and **All** every
-card, withdrawn ones included.
+the two newest open cards, **Open** every open card, **Resolved and closed** every card that has
+finished, whether resolved by the work, marked by you, or closed because its practice's review rules
+changed, and **All** every card, withdrawn ones included.
 
 A card resolves in one of two ways:
 
@@ -55,8 +79,10 @@ A card resolves in one of two ways:
   reads *Marked as addressed* or *Marked as not applicable* with the day you did. Press it again to
   take it back, and the card opens again.
 
-If your workspace changes a practice after a card about it was written, the card closes and says so. A
-closed card stays on the page for 30 days after it closed. A newer card about the same practice
+If your workspace changes a practice after a card about it was written, the card closes unresolved and
+says so: it reads *Closed*, the line under the next step gives the day and the reason, and the count of
+clean work is gone, because nothing can tick a card that is closed. A closed card stays on the page for
+30 days after it closed. A newer card about the same practice
 replaces the open one, so you never have two open cards about one practice.
 
 A workspace admin can withdraw a card whose words were wrong. If you had already seen it, a recent

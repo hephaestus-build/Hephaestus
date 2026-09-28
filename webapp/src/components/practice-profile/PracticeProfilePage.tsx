@@ -51,6 +51,8 @@ export interface PracticeProfilePageProps {
 	 * practice named in the text the observations, the level's default.
 	 */
 	onOpenPractice?: (practiceSlug: string, tab?: PracticeTab) => void;
+	/** Opens the level with every review of the reader's work, from the header's chip. */
+	onOpenRuns?: () => void;
 	/** The tab over the feedback cards, from the route's `feedback` search param. */
 	feedbackTab: FeedbackTab;
 	onFeedbackTabChange?: (tab: FeedbackTab) => void;
@@ -67,7 +69,7 @@ const NEWEST_CARD_COUNT = 2;
 const FEEDBACK_TAB_LABELS: Record<FeedbackTab, string> = {
 	newest: "Newest",
 	open: "Open",
-	resolved: "Resolved",
+	resolved: "Resolved and closed",
 	all: "All",
 };
 
@@ -79,8 +81,9 @@ const EMPTY_TAB: Record<FeedbackTab, FeedbackEmptyProps> = {
 	newest: NO_OPEN_FEEDBACK,
 	open: NO_OPEN_FEEDBACK,
 	resolved: {
-		title: "No resolved feedback yet.",
-		description: "A card moves here once the work resolves it or you mark it as addressed.",
+		title: "No resolved or closed feedback yet.",
+		description:
+			"A card moves here once the work resolves it, you mark it as addressed, or its practice's review rules change.",
 	},
 	all: {},
 };
@@ -121,6 +124,7 @@ export function PracticeProfilePage({
 	ratingProps,
 	onOpenGroup,
 	onOpenPractice,
+	onOpenRuns,
 	feedbackTab,
 	onFeedbackTabChange,
 	state,
@@ -171,6 +175,7 @@ export function PracticeProfilePage({
 				counts={countPracticeStandings(practices)}
 				practiceCount={practices.length}
 				groupCount={groups.length}
+				onOpenRuns={onOpenRuns}
 				isLoading={isLoading}
 			/>
 			{isLoading ? (

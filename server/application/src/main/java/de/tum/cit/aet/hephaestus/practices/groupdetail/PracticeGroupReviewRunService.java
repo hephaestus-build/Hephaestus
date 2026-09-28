@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.ReviewRunRow;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationService;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.practices.observation.VisibleRunPage;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunNarrativeLookup;
@@ -28,9 +29,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -105,31 +104,21 @@ public class PracticeGroupReviewRunService {
                 ? null
                 : severities.stream().map(Enum::name).collect(Collectors.joining(","));
 
-        int first = Math.multiplyExact(pageable.getPageNumber(), pageable.getPageSize());
-        int required = Math.addExact(first, pageable.getPageSize() + 1);
-        List<PracticeGroupReviewRunDTO> visibleRuns = new ArrayList<>(required);
-        int candidatePage = 0;
-        boolean moreCandidates;
-        do {
-            Slice<ReviewRunRow> runs = observationRepository.findPracticeGroupReviewRuns(
-                    developerId,
-                    workspaceContext.id(),
-                    groupSlug,
-                    work == null ? null : work.kind().value(),
-                    work == null ? null : work.id(),
-                    practiceSlug,
-                    artifactFilter,
-                    severityFilter,
-                    PageRequest.of(candidatePage++, Math.max(pageable.getPageSize(), 50)));
-            visibleRuns.addAll(toVisibleRuns(workspaceContext.id(), developerId, runs.getContent(), groupSlug));
-            moreCandidates = runs.hasNext();
-        } while (visibleRuns.size() < required && moreCandidates);
-
-        int end = Math.min(first + pageable.getPageSize(), visibleRuns.size());
-        List<PracticeGroupReviewRunDTO> content =
-                first >= visibleRuns.size() ? List.of() : List.copyOf(visibleRuns.subList(first, end));
+        VisibleRunPage<PracticeGroupReviewRunDTO> page = VisibleRunPage.collect(
+                pageable,
+                candidates -> observationRepository.findPracticeGroupReviewRuns(
+                        developerId,
+                        workspaceContext.id(),
+                        groupSlug,
+                        work == null ? null : work.kind().value(),
+                        work == null ? null : work.id(),
+                        practiceSlug,
+                        artifactFilter,
+                        severityFilter,
+                        candidates),
+                runs -> toVisibleRuns(workspaceContext.id(), developerId, runs, groupSlug));
         return new PracticeGroupReviewRunsPageDTO(
-                content, pageable.getPageNumber(), pageable.getPageSize(), visibleRuns.size() > end);
+                page.content(), pageable.getPageNumber(), pageable.getPageSize(), page.hasNext());
     }
 
     private List<PracticeGroupReviewRunDTO> toVisibleRuns(
