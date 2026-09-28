@@ -1265,7 +1265,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     .thenReturn(author);
 
             var syncData = createSyncData();
-            PullRequest result = processor.processFromSync(syncData, testRepo, 1L);
+            PullRequest result = processor.processFromSync(syncData, testRepo, 1L, Instant.now());
 
             assertThat(result).isNotNull();
             assertThat(result.getProvider()).isEqualTo(gitLabProvider);
@@ -1315,7 +1315,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(pr));
 
             var syncData = createSyncData();
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, testRepo, 1L, Instant.now());
 
             ArgumentCaptor<ScmDomainEvent.PullRequestCreated> eventCaptor =
                     ArgumentCaptor.forClass(ScmDomainEvent.PullRequestCreated.class);
@@ -1331,7 +1331,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(pr));
 
             var syncData = createSyncData();
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, testRepo, 1L, Instant.now());
 
             var captor = ArgumentCaptor.forClass(Object.class);
             verify(eventPublisher, atLeastOnce()).publishEvent(captor.capture());
@@ -1357,7 +1357,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(existingDraft));
 
-            processor.processFromSync(createSyncData(false), testRepo, 1L);
+            processor.processFromSync(createSyncData(false), testRepo, 1L, Instant.now());
 
             assertThat(publishedEvents()).anyMatch(e -> e instanceof ScmDomainEvent.PullRequestReady);
         }
@@ -1369,7 +1369,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(existingReady));
 
-            processor.processFromSync(createSyncData(true), testRepo, 1L);
+            processor.processFromSync(createSyncData(true), testRepo, 1L, Instant.now());
 
             assertThat(publishedEvents()).anyMatch(e -> e instanceof ScmDomainEvent.PullRequestDrafted);
         }
@@ -1381,7 +1381,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(existingReady));
 
-            processor.processFromSync(createSyncData(false), testRepo, 1L);
+            processor.processFromSync(createSyncData(false), testRepo, 1L, Instant.now());
 
             assertThat(publishedEvents())
                     .noneMatch(e -> e instanceof ScmDomainEvent.PullRequestReady
@@ -1395,7 +1395,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(createPullRequestEntity()));
 
-            processor.processFromSync(createSyncData(false), testRepo, 1L);
+            processor.processFromSync(createSyncData(false), testRepo, 1L, Instant.now());
 
             assertThat(publishedEvents())
                     .noneMatch(e -> e instanceof ScmDomainEvent.PullRequestReady
@@ -1423,7 +1423,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenReturn(Optional.empty());
             when(pullRequestRepository.save(pr)).thenReturn(pr);
 
-            processor.processFromSync(syncDataWith("FAILED", "d".repeat(40), List.of(41, 42)), testRepo, 1L);
+            processor.processFromSync(
+                    syncDataWith("FAILED", "d".repeat(40), List.of(41, 42)), testRepo, 1L, Instant.now());
 
             assertThat(pr.getHeadCheckState()).isEqualTo(CheckState.FAILURE);
             assertThat(pr.getHeadCheckSha()).isEqualTo("d".repeat(40));
@@ -1444,7 +1445,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     .thenReturn(createUserEntity());
             when(pullRequestRepository.save(pr)).thenReturn(pr);
 
-            processor.processFromSync(syncDataWith(null, null, null), testRepo, 1L);
+            processor.processFromSync(syncDataWith(null, null, null), testRepo, 1L, Instant.now());
 
             assertThat(pr.getClosingIssues()).containsExactly(earlier);
             assertThat(pr.getHeadCheckState()).isEqualTo(CheckState.NONE);
@@ -1566,7 +1567,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null, // headPipelineSha
                     null // closingIssueNumbers
                     );
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, testRepo, 1L, Instant.now());
 
             verify(pullRequestRepository)
                     .upsertCore(
@@ -1666,7 +1667,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null, // headPipelineSha
                     null // closingIssueNumbers
                     );
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, testRepo, 1L, Instant.now());
 
             verify(pullRequestRepository)
                     .upsertCore(
@@ -1713,7 +1714,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(pr));
 
             var syncData = createSyncData();
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, testRepo, 1L, Instant.now());
 
             verify(milestoneRepository, never()).findByNumberAndRepositoryId(anyInt(), anyLong());
         }
@@ -1768,7 +1769,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null, // headPipelineSha
                     null // closingIssueNumbers
                     );
-            PullRequest result = processor.processFromSync(syncData, testRepo, 1L);
+            PullRequest result = processor.processFromSync(syncData, testRepo, 1L, Instant.now());
 
             assertThat(result).isNull();
         }
@@ -1823,7 +1824,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null, // headPipelineSha
                     null // closingIssueNumbers
                     );
-            PullRequest result = processor.processFromSync(syncData, testRepo, 1L);
+            PullRequest result = processor.processFromSync(syncData, testRepo, 1L, Instant.now());
 
             assertThat(result).isNull();
         }
@@ -1927,7 +1928,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null, // headPipelineSha
                     null // closingIssueNumbers
                     );
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, testRepo, 1L, Instant.now());
 
             // Verify new approval was created (save called for new review)
             // and stale review was dismissed (save called for stale review)
@@ -2090,7 +2091,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null, // headPipelineSha
                     null // closingIssueNumbers
                     );
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, testRepo, 1L, Instant.now());
 
             verify(pullRequestRepository)
                     .upsertCore(
@@ -2214,7 +2215,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         pr.setHtmlUrl("https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5");
         pr.setLabels(new HashSet<>());
         pr.setAssignees(new HashSet<>());
-        pr.setRequestedReviewers(new HashSet<>());
         pr.setReviews(new HashSet<>());
         return pr;
     }

@@ -25,7 +25,7 @@ public record GitLabMergeRequestEventDTO(
         @JsonProperty("object_attributes") @Nullable ObjectAttributes objectAttributes,
         @Nullable List<GitLabWebhookLabel> labels,
         @Nullable List<GitLabWebhookUser> assignees,
-        @Nullable List<GitLabWebhookUser> reviewers) {
+        @Nullable List<GitLabMergeRequestReviewerDTO> reviewers) {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ObjectAttributes(
             @Nullable Long id,

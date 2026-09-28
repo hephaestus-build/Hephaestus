@@ -39,6 +39,25 @@ import org.jspecify.annotations.Nullable;
 @ToString(callSuper = true)
 public class PullRequestReview extends BaseGitServiceEntity {
 
+    /** HQL: the review {@code review} is a verdict that still stands: an approval or a request for changes. */
+    public static final String VERDICT = """
+            review.isDismissed = false
+            AND review.state IN (
+                de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview$State.APPROVED,
+                de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview$State.CHANGES_REQUESTED
+            )
+            """;
+
+    /** HQL: the review {@code review} still stands: submitted with a verdict or a comment, and not dismissed. */
+    public static final String STANDING = """
+            review.isDismissed = false
+            AND review.state IN (
+                de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview$State.APPROVED,
+                de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview$State.CHANGES_REQUESTED,
+                de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview$State.COMMENTED
+            )
+            """;
+
     @Column(columnDefinition = "TEXT")
     private String body;
 

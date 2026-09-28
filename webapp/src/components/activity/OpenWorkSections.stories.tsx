@@ -21,7 +21,15 @@ import { OpenWorkSections } from "./OpenWorkSections";
  */
 const meta = {
 	component: OpenWorkSections,
-	decorators: [withStandardPage],
+	decorators: [
+		// The two sections are siblings on the Activity page, which spaces them.
+		(Story) => (
+			<div className="space-y-8">
+				<Story />
+			</div>
+		),
+		withStandardPage,
+	],
 	tags: ["autodocs"],
 	args: {
 		state: { status: "ready", openWork: OPEN_WORK },
@@ -48,7 +56,7 @@ export const Default: Story = {
 		await expect(canvas.getByRole("img", { name: "Bob Brenner requested changes" })).toBeVisible();
 		// What waits on others is folded, with its count, until asked for.
 		const waiting = canvas.getByRole("button", { name: /Waiting on others/u });
-		await expect(waiting).toHaveAccessibleName("Waiting on others · 5");
+		await expect(waiting).toHaveAccessibleName("Waiting on others · 7");
 		await expect(waiting).toHaveAttribute("aria-expanded", "false");
 		await userEvent.click(waiting);
 		await expect(
@@ -57,6 +65,39 @@ export const Default: Story = {
 		await expect(canvas.getByRole("heading", { name: /Drafts/u })).toBeVisible();
 		// A request Ada already approved, still listed as GitLab lists it, waits as hers done.
 		await expect(canvas.getByRole("heading", { name: "Reviewed by you 1" })).toBeVisible();
+	},
+};
+
+/**
+ * Asked of a team Ada is in rather than of her: someone on the team picks it up, so it waits with
+ * the rest, each row naming the teams it asks — one with a long name, or several.
+ */
+export const TeamRequests: Story = {
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("button", { name: /Waiting on others/u }));
+		await expect(canvas.getByRole("heading", { name: "Requested from your team 2" })).toBeVisible();
+		await expect(canvas.getByText("via Developer Experience and Tooling")).toBeVisible();
+		await expect(canvas.getByText("via payments and Billing Reliability")).toBeVisible();
+		// A team request is not Ada's own: it never counts among what needs her.
+		await expect(canvas.getByRole("heading", { name: "Review requested 2" })).toBeVisible();
+	},
+};
+
+/** The server lists the most recently updated team requests and says there are more. */
+export const MoreTeamRequestsThanListed: Story = {
+	args: {
+		state: {
+			status: "ready",
+			openWork: {
+				...OPEN_WORK,
+				teamReviewRequests: { ...OPEN_WORK.teamReviewRequests, hasMore: true },
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText("Showing the 2 most recently updated of your teams' review requests."),
+		).toBeVisible();
 	},
 };
 
@@ -96,17 +137,26 @@ export const MoreThanListed: Story = {
 /** In a member's level: the same groups, named from the outside. */
 export const Member: Story = {
 	args: { perspective: "member", login: "bob" },
-	play: async ({ canvas }) => {
+	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.getByRole("heading", { level: 3, name: "Open work" })).toBeVisible();
 		await expect(canvas.getByRole("heading", { level: 4, name: "Returned 2" })).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: /Waiting on others/u }));
+		await expect(
+			canvas.getByRole("heading", { level: 4, name: "Requested from their team 2" }),
+		).toBeVisible();
 	},
 };
 
 export const GitLab: Story = {
 	decorators: [withProvider("GITLAB")],
 	args: { providerType: "GITLAB", state: { status: "ready", openWork: GITLAB_OPEN_WORK } },
-	play: async ({ canvas }) => {
+	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.getAllByText(/^pipelines !\d+$/u).length).toBeGreaterThan(0);
+		// GitLab has no team reviewers, so no request is ever a team's.
+		await userEvent.click(canvas.getByRole("button", { name: /Waiting on others/u }));
+		await expect(
+			canvas.queryByRole("heading", { name: /Requested from your team/u }),
+		).not.toBeInTheDocument();
 	},
 };
 

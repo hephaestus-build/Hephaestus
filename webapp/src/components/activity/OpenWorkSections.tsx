@@ -97,6 +97,7 @@ export function OpenWorkSections({
 						<Truncation
 							lists={[
 								{ list: openWork.reviewRequests, of: `${whose} review requests` },
+								{ list: openWork.teamReviewRequests, of: `${whose} teams' review requests` },
 								{
 									list: openWork.pullRequests,
 									of: `${whose} open ${artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType)}`,

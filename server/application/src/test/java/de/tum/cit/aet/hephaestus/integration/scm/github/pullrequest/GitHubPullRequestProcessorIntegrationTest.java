@@ -22,7 +22,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHActor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestState;
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.dto.GitHubLabelDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.dto.GitHubMilestoneDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
@@ -32,12 +37,17 @@ import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.math.BigInteger;
+import java.net.URI;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Integration tests for GitHubPullRequestProcessor.
@@ -91,6 +101,12 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IssueRepository issueRepository;
+
+    @Autowired
+    private TeamRepository teamRepository;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @Autowired
     private RecordingScmEventListener eventListener;
@@ -209,7 +225,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                 false, // maintainerCanModify
                 null, // mergeCommitInfo
                 null, // headChecks
-                null // closingIssueNumbers
+                null, // closingIssueNumbers
+                null // requestedTeams
                 );
     }
 
@@ -261,7 +278,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
 
             PullRequest result = processor.process(dto, createContext());
@@ -316,7 +334,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
 
             // Verify the fallback works
@@ -373,7 +392,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
 
             // Verify fallback returns null
@@ -509,7 +529,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false,
                     null,
                     new GitHubPullRequestDTO.HeadChecks("f".repeat(40), CheckState.SUCCESS),
-                    List.of(3));
+                    List.of(3), // closingIssueNumbers
+                    null // requestedTeams
+                    );
 
             PullRequest result = processor.process(fromSync, createContext());
 
@@ -523,6 +545,49 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(pullRequestRepository.findClosingIssuesById(stored.getId()))
                     .extracting(Issue::getId)
                     .containsExactly(closed.getId());
+        }
+
+        @Test
+        void shouldStoreOnlyTheSyncedTeamsWhenTheSyncReadsTeamsAmongTheReviewRequests() {
+            Team synced = new Team();
+            synced.setNativeId(13459148L);
+            synced.setName("Hephaetus");
+            synced.setSlug("hephaetus");
+            synced.setOrganization(FIXTURE_ORG_LOGIN);
+            synced.setHtmlUrl("https://github.com/orgs/" + FIXTURE_ORG_LOGIN + "/teams/hephaetus");
+            synced.setPrivacy(Team.Privacy.VISIBLE);
+            synced.setProvider(githubProvider);
+            Long syncedId = teamRepository.save(synced).getId();
+            GHPullRequest read = GitHubPullRequestDTORequestedTeamsTest.pullRequestAskingForReviews(27);
+            read.setFullDatabaseId(BigInteger.valueOf(FIXTURE_PR_ID + 1));
+            read.setId("PR_kwDOO4CKW86_synced");
+            read.setTitle("Asks a team, a bot and a mannequin");
+            read.setState(GHPullRequestState.OPEN);
+            read.setUrl(URI.create("https://github.com/" + FIXTURE_REPO_FULL_NAME + "/pull/27"));
+            read.setCreatedAt(OffsetDateTime.parse("2025-11-01T21:42:45Z"));
+            read.setUpdatedAt(OffsetDateTime.parse("2025-11-01T21:42:45Z"));
+            read.setAuthor(
+                    GitHubPullRequestDTORequestedTeamsTest.productionMapper().readValue("""
+                            {"__typename": "User", "id": "U_kgDOAFoAsQ", "databaseId": 5898705,
+                             "login": "FelixTJDietrich"}
+                            """, GHActor.class));
+
+            PullRequest result = processor.process(
+                    Objects.requireNonNull(GitHubPullRequestDTO.fromPullRequest(read)), createContext());
+
+            assertNotNull(result);
+            transactionTemplate.executeWithoutResult(status -> {
+                PullRequest stored =
+                        pullRequestRepository.findById(result.getId()).orElseThrow();
+                assertThat(stored.getRequestedTeams())
+                        .as("the unsynced team is left out")
+                        .extracting(request -> request.getTeam().getId())
+                        .containsExactly(syncedId);
+                assertThat(stored.getRequestedReviewers())
+                        .as("the bot and the mannequin are not people asked to review")
+                        .extracting(request -> request.getUser().getLogin())
+                        .containsExactly("FelixTJDietrich");
+            });
         }
 
         @Test
@@ -607,7 +672,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
 
             PullRequest result = processor.process(dto, createContext());
@@ -677,7 +743,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
 
             PullRequest result = processor.process(dto, createContext());
@@ -740,7 +807,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
 
             PullRequest result = processor.processClosed(closedDto, createContext());
@@ -800,7 +868,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
 
             PullRequest result = processor.processClosed(mergedDto, createContext());
@@ -862,7 +931,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
             processor.process(draftDto, createContext());
             eventListener.clear();
@@ -906,7 +976,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
 
             PullRequest result = processor.processReadyForReview(readyDto, createContext());
@@ -968,7 +1039,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
 
             PullRequest result = processor.processConvertedToDraft(draftDto, createContext());
@@ -1030,7 +1102,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
 
             PullRequest result = processor.processSynchronize(syncDto, createContext());
@@ -1096,7 +1169,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
 
             processor.processLabeled(labeledDto, labelDto, createContext());
@@ -1151,7 +1225,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
             processor.process(withLabelDto, createContext());
             eventListener.clear();
@@ -1195,7 +1270,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     false, // maintainerCanModify
                     null, // mergeCommitInfo
                     null, // headChecks
-                    null // closingIssueNumbers
+                    null, // closingIssueNumbers
+                    null // requestedTeams
                     );
 
             processor.processUnlabeled(unlabeledDto, labelDto, createContext());

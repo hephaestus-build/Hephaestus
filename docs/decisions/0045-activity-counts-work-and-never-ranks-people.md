@@ -85,12 +85,23 @@ Activity counts and lists work, for one developer (**Activity**) and for a works
 - **Grouped by the work.** The timeline has one row per pull request or issue, with how often each
   kind of activity happened on it, not one row per event. Its rows add up to the counts for the same
   range, and work the provider no longer has keeps its row without a link.
-- **Covered review requests wait.** A review request is *covered* when its pull request is approved,
-  or when a reviewer requested changes so the author acts first. It sits with the rest of what waits
-  on someone else, apart from what needs the person, and is derived from the review state each time
-  rather than dismissed and stored. So is a request the person already approved or requested
-  changes on, which GitLab keeps listing until the author asks again; a comment-only review is not
-  a verdict and leaves the request where it was.
+- **Covered review requests wait.** A review request is *covered* when another reviewer requested
+  changes, so the author acts first, or when the pull request is approved and another reviewer
+  approved it. The person's own review never covers their own request, so a decision their earlier
+  approval set does not hide the author's asking again. On GitLab the decision says whether the
+  merge request's approval rules are met; a merge request not yet synced has none, so only another
+  reviewer's request for changes covers it. It sits with the rest of what waits on someone else,
+  apart from what needs the person, and is derived from the review state each time rather than
+  dismissed and stored. So is a request the person already approved or requested
+  changes on, which GitLab keeps listing; the provider's own reviewer state decides it, so the
+  author's asking again brings it back to what needs the person, on GitLab as on GitHub. A
+  comment-only review is not a verdict and leaves the request where it was.
+- **A team's request is not the person's.** A GitHub review request to a team the person is in, and
+  not to them, waits with the rest, naming the team: someone on the team picks it up, and counting
+  every member's share of it would multiply one request across the team. One that also asks the
+  person directly, that they authored, that is a draft, or that they approved or requested changes
+  on is not listed as the team's; a comment-only review keeps it listed. Hiding a team leaves its
+  requests with its members: hiding changes only workspace activity. GitLab has no team reviewers.
 - **Every count opens its list.** A count and its list follow the same rules.
 - **Outcomes belong to the author.** A merge, or a close without merging, counts for the pull
   request's author and a closed issue for the issue's author; reviews of one's own pull request and

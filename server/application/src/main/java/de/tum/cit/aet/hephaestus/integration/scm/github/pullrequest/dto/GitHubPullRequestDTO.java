@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHReviewRe
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHReviewRequestConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHStatusCheckRollup;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHStatusState;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHTeam;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHUser;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHUserConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.dto.GitHubLabelDTO;
@@ -94,7 +95,31 @@ public record GitHubPullRequestDTO(
          * The numbers of this repository's issues GitHub lists as closing candidates for the pull request,
          * from GraphQL; null when the source did not read them, which leaves the stored set alone.
          */
-        @Nullable List<Integer> closingIssueNumbers) {
+        @Nullable List<Integer> closingIssueNumbers,
+        /**
+         * The teams asked to review: every webhook payload and every sync lists them all, so a team no longer
+         * listed is no longer asked. Null when the source did not read them, which leaves the stored set alone.
+         *
+         * @see <a href="https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request">GitHub
+         *     pull_request webhook</a>
+         */
+        @JsonProperty("requested_teams") @Nullable List<GitHubTeamRefDTO> requestedTeams) {
+    /** A team asked to review, by GitHub's database id. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record GitHubTeamRefDTO(
+            @JsonProperty("id") @Nullable Long id) {}
+
+    /** The GitHub ids of the teams asked to review; null when the source did not read them. */
+    public @Nullable List<Long> requestedTeamIds() {
+        if (requestedTeams == null) {
+            return null;
+        }
+        return requestedTeams.stream()
+                .map(GitHubTeamRefDTO::id)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
     /** The head the checks were observed for, and their rolled-up state. */
     public record HeadChecks(String sha, CheckState state) {}
 
@@ -186,7 +211,8 @@ public record GitHubPullRequestDTO(
                 pr.getMaintainerCanModify(),
                 extractMergeCommitInfo(pr),
                 extractHeadChecks(pr),
-                extractClosingIssueNumbers(pr));
+                extractClosingIssueNumbers(pr),
+                extractRequestedTeams(pr.getReviewRequests()));
     }
 
     /**
@@ -372,6 +398,21 @@ public record GitHubPullRequestDTO(
                 .toList();
         GraphQlConnectionOverflowDetector.check("assignees", result.size(), connection.getTotalCount(), context);
         return result;
+    }
+
+    /** The teams among the review requests; null when the requests were not read. */
+    private static @Nullable List<GitHubTeamRefDTO> extractRequestedTeams(
+            @Nullable GHReviewRequestConnection connection) {
+        if (connection == null || connection.getNodes() == null) {
+            return null;
+        }
+        return connection.getNodes().stream()
+                .map(GHReviewRequest::getRequestedReviewer)
+                .filter(reviewer -> reviewer instanceof GHTeam)
+                .map(reviewer -> ((GHTeam) reviewer).getDatabaseId())
+                .filter(Objects::nonNull)
+                .map(databaseId -> new GitHubTeamRefDTO(databaseId.longValue()))
+                .toList();
     }
 
     private static List<GitHubUserDTO> extractRequestedReviewers(

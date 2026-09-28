@@ -41,13 +41,23 @@ else's:
 - **Waiting for review**: your pull requests that reviewers have not got to yet.
 - **Drafts**: your draft pull requests.
 - **Covered by other reviewers**: pull requests that still ask for your review, but where your review
-  would change nothing yet. Either another reviewer has already approved it, or someone requested
-  changes, so the author acts first. It moves back to **Review requested** once that approval or
+  would change nothing yet. Either another reviewer requested changes, so the author acts first, or
+  the pull request is approved and another reviewer approved it. Your own earlier review never
+  covers a request: when the author asks for your review again, it is under **Review requested**
+  even if your approval still stands on the pull request. On GitLab, a merge request is approved
+  once its approval rules are met; one Hephaestus has not synced yet is covered only by another
+  reviewer's request for changes. It moves back to **Review requested** once that approval or
   request for changes no longer stands.
-- **Reviewed by you**: pull requests that still list you as a reviewer after you approved them or
-  requested changes, as GitLab does until the author asks for your review again. A review with
-  comments only leaves the request in **Review requested**. On GitHub, asking you again makes it a
-  review request once more, so it moves back by itself.
+- **Requested from your team**: pull requests that ask one of your teams for a review, but not you.
+  Each shows which of your teams it asks, such as *via payments*. Someone on the team picks it up,
+  so it never counts as yours. A request that asks you as well is under **Review requested**; one
+  you opened, one that is still a draft, and one you have already approved or requested changes on
+  are not listed. A review with comments only keeps it listed. Only GitHub has team reviewers; a
+  GitLab workspace never shows this group.
+- **Reviewed by you**: merge requests that still list you as a reviewer after you approved them or
+  requested changes, as GitLab keeps you listed. A review with comments only leaves the request in
+  **Review requested**. When the author asks for your review again, on GitHub or GitLab, it moves
+  back to **Review requested** by itself.
 
 Open **Waiting on others** to see them; it closes again when you leave the page.
 
@@ -140,4 +150,6 @@ row.
 
 A workspace admin can hide a member or a team from workspace activity. A hidden member is left out
 of every count and list here. A hidden team is not offered in **Team** and does not count toward the
-team above it. Hiding someone does not change their own Activity page.
+team above it. Hiding changes only Workspace activity: a hidden member's own Activity page stays as
+it was, and review requests to a hidden team still appear under **Requested from your team** for
+the people on it.

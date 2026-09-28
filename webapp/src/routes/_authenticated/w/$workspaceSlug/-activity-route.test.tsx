@@ -43,6 +43,7 @@ const overview = {
 const nothing = { content: [], hasMore: false };
 const openWork = {
 	reviewRequests: nothing,
+	teamReviewRequests: nothing,
 	pullRequests: nothing,
 	issues: nothing,
 } satisfies OpenWork;

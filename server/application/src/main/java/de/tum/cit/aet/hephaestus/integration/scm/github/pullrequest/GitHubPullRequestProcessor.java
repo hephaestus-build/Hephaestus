@@ -15,6 +15,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepos
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.BaseGitHubProcessor;
@@ -60,6 +62,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
     private final CommitRepository commitRepository;
     private final CommitAuthorResolver commitAuthorResolver;
     private final ApplicationEventPublisher eventPublisher;
+    private final TeamRepository teamRepository;
 
     public GitHubPullRequestProcessor(
             PullRequestRepository pullRequestRepository,
@@ -70,8 +73,10 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
             MilestoneRepository milestoneRepository,
             UserRepository userRepository,
             GitHubUserProcessor gitHubUserProcessor,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            TeamRepository teamRepository) {
         super(userRepository, labelRepository, milestoneRepository, gitHubUserProcessor);
+        this.teamRepository = teamRepository;
         this.pullRequestRepository = pullRequestRepository;
         this.issueRepository = issueRepository;
         this.commitRepository = commitRepository;
@@ -283,10 +288,23 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
         boolean labelsChanged =
                 updateLabels(Objects.requireNonNullElse(dto.labels(), List.of()), pr.getLabels(), repository);
         boolean reviewersChanged = updateRequestedReviewers(
-                Objects.requireNonNullElse(dto.requestedReviewers(), List.of()),
-                pr.getRequestedReviewers(),
-                providerId);
-        return assigneesChanged || labelsChanged || reviewersChanged || applySyncOnlyFacts(dto, pr, repository);
+                Objects.requireNonNullElse(dto.requestedReviewers(), List.of()), pr, providerId);
+        boolean teamsChanged = dto.requestedTeamIds() != null
+                && pr.replaceRequestedTeams(requestedTeams(dto.requestedTeamIds(), providerId));
+        return assigneesChanged
+                || labelsChanged
+                || reviewersChanged
+                || teamsChanged
+                || applySyncOnlyFacts(dto, pr, repository);
+    }
+
+    /** The requested teams Hephaestus has synced; a team it does not know is left out. */
+    private Set<Team> requestedTeams(List<Long> nativeIds, Long providerId) {
+        Set<Team> teams = new HashSet<>();
+        for (Long nativeId : nativeIds) {
+            teamRepository.findByNativeIdAndProviderId(nativeId, providerId).ifPresent(teams::add);
+        }
+        return teams;
     }
 
     /**

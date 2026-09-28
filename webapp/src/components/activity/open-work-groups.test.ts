@@ -32,11 +32,13 @@ function pullRequest(id: number, overrides: Partial<WorkItem> = {}): WorkItem {
 /** The group each pull request landed in, by id. */
 function groupsOf(work: {
 	reviewRequests?: WorkItem[];
+	teamReviewRequests?: WorkItem[];
 	pullRequests?: WorkItem[];
 }): Record<number, string> {
 	const groups = groupOpenWork(
 		{
 			reviewRequests: { content: work.reviewRequests ?? [], hasMore: false },
+			teamReviewRequests: { content: work.teamReviewRequests ?? [], hasMore: false },
 			pullRequests: { content: work.pullRequests ?? [], hasMore: false },
 		},
 		"ada",
@@ -64,17 +66,60 @@ describe("groupOpenWork", () => {
 		).toStrictEqual({ 1: "review-requested", 2: "review-requested", 3: "review-requested" });
 	});
 
-	it("folds a review request away once it is approved or another reviewer asked for changes", () => {
+	it("folds a review request away once another reviewer approved it or asked for changes", () => {
 		expect(
 			groupsOf({
 				reviewRequests: [
-					pullRequest(1, { reviewDecision: "APPROVED" }),
+					pullRequest(1, {
+						reviewDecision: "APPROVED",
+						reviewers: [reviewer("bob", "APPROVED"), reviewer("ada", "REQUESTED")],
+					}),
 					pullRequest(2, {
 						reviewers: [reviewer("chen", "CHANGES_REQUESTED"), reviewer("ada", "REQUESTED")],
 					}),
 				],
 			}),
 		).toStrictEqual({ 1: "covered", 2: "covered" });
+	});
+
+	it("never lets your own earlier review cover the request you were asked again for", () => {
+		expect(
+			groupsOf({
+				reviewRequests: [
+					// GitHub: your earlier approval set the decision, then the author asked you again.
+					pullRequest(1, {
+						reviewDecision: "APPROVED",
+						reviewers: [reviewer("ada", "REQUESTED"), reviewer("bob", "COMMENTED")],
+					}),
+					// An approval that is still only yours, after the author asked you again.
+					pullRequest(2, {
+						reviewDecision: "APPROVED",
+						reviewers: [reviewer("ada", "REQUESTED")],
+					}),
+				],
+			}),
+		).toStrictEqual({ 1: "review-requested", 2: "review-requested" });
+	});
+
+	it("covers a GitLab re-request once another reviewer's approval meets the approval rules", () => {
+		expect(
+			groupsOf({
+				reviewRequests: [
+					pullRequest(1, {
+						reviewDecision: "APPROVED",
+						reviewers: [reviewer("ada", "REQUESTED"), reviewer("bob", "APPROVED")],
+					}),
+					// Not synced yet, so no decision: an approval alone does not cover it.
+					pullRequest(2, {
+						reviewers: [reviewer("ada", "REQUESTED"), reviewer("bob", "APPROVED")],
+					}),
+					// A request for changes covers it with or without a decision.
+					pullRequest(3, {
+						reviewers: [reviewer("ada", "REQUESTED"), reviewer("chen", "CHANGES_REQUESTED")],
+					}),
+				],
+			}),
+		).toStrictEqual({ 1: "covered", 2: "review-requested", 3: "covered" });
 	});
 
 	it("keeps a request you already approved or asked changes on apart, as reviewed by you", () => {
@@ -103,6 +148,19 @@ describe("groupOpenWork", () => {
 			4: "review-requested",
 			5: "review-requested",
 		});
+	});
+
+	it("keeps a request to one of your teams apart from those to you, whatever its reviews say", () => {
+		const platform = { id: 5, name: "Platform" };
+		expect(
+			groupsOf({
+				reviewRequests: [pullRequest(1)],
+				teamReviewRequests: [
+					pullRequest(2, { requestedTeams: [platform] }),
+					pullRequest(3, { requestedTeams: [platform], reviewDecision: "APPROVED" }),
+				],
+			}),
+		).toStrictEqual({ 1: "review-requested", 2: "team-requested", 3: "team-requested" });
 	});
 
 	it("returns your pull request to you on a request for changes or a failing check", () => {
@@ -151,6 +209,7 @@ describe("groupOpenWork", () => {
 		const groups = groupOpenWork(
 			{
 				reviewRequests: { content: reviewRequests, hasMore: false },
+				teamReviewRequests: { content: [], hasMore: false },
 				pullRequests: { content: pullRequests, hasMore: false },
 			},
 			"ada",

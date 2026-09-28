@@ -17,6 +17,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestEventDTO;
@@ -39,6 +41,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Integration tests for GitHubPullRequestMessageHandler.
@@ -146,6 +150,9 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private TeamRepository teamRepository;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -506,33 +513,83 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
     @Nested
     class ReviewRequestEvents {
 
+        /** The fixtures ask the Hephaetus team for a review, then take the request back. */
+        private static final long FIXTURE_TEAM_ID = 13459148L;
+
         @Test
-        void shouldHandleReviewRequestedEvent() throws Exception {
-            GitHubPullRequestEventDTO reviewRequestedEvent = loadPayload("pull_request.review_requested");
+        void shouldStoreTheRequestedTeamWhenATeamHephaestusKnowsIsAskedForAReview() throws Exception {
+            Team team = team(FIXTURE_TEAM_ID, "hephaetus");
 
-            handler.handleEvent(reviewRequestedEvent);
+            handler.handleEvent(loadPayload("pull_request.review_requested"));
 
-            PullRequest pr = pullRequestRepository
-                    .findByRepositoryIdAndNumber(testRepository.getId(), PR_26_NUMBER)
-                    .orElse(null);
-            assertNotNull(pr);
-            // Note: The fixture has requested_teams but no user reviewers in requested_reviewers
-            // The handler processes this via the generic process() method
+            assertThat(requestedTeamIds()).containsExactly(team.getId());
         }
 
         @Test
-        void shouldHandleReviewRequestRemovedEvent() throws Exception {
-            // Given - create PR with review request
+        void shouldRemoveTheRequestedTeamWhenTheTeamsReviewRequestIsRemoved() throws Exception {
+            Team team = team(FIXTURE_TEAM_ID, "hephaetus");
+            handler.handleEvent(loadPayload("pull_request.review_requested"));
+            assertThat(requestedTeamIds()).containsExactly(team.getId());
+
+            handler.handleEvent(loadPayload("pull_request.review_request_removed"));
+
+            assertThat(requestedTeamIds()).isEmpty();
+        }
+
+        @Test
+        void shouldStoreNoTeamWhenTheRequestedTeamIsNotSynced() throws Exception {
             handler.handleEvent(loadPayload("pull_request.review_requested"));
 
-            GitHubPullRequestEventDTO reviewRequestRemovedEvent = loadPayload("pull_request.review_request_removed");
+            assertThat(requestedTeamIds()).isEmpty();
+        }
 
-            handler.handleEvent(reviewRequestRemovedEvent);
+        @Test
+        void shouldLeaveABotOutWhenTheWebhookListsItAmongTheRequestedReviewers() throws Exception {
+            ObjectNode payload = (ObjectNode) objectMapper.readTree(loadPayloadRaw("pull_request.review_requested"));
+            ArrayNode reviewers = ((ObjectNode) payload.get("pull_request")).putArray("requested_reviewers");
+            reviewers
+                    .addObject()
+                    .put("id", 990101L)
+                    .put("login", "reviewing-person")
+                    .put("type", "User");
+            reviewers
+                    .addObject()
+                    .put("id", 990102L)
+                    .put("login", "copilot-pull-request-reviewer[bot]")
+                    .put("type", "Bot");
 
-            PullRequest pr = pullRequestRepository
+            handler.handleEvent(objectMapper.treeToValue(payload, GitHubPullRequestEventDTO.class));
+
+            Set<String> logins = required(transactionTemplate.execute(status -> pullRequestRepository
                     .findByRepositoryIdAndNumber(testRepository.getId(), PR_26_NUMBER)
-                    .orElse(null);
-            assertNotNull(pr);
+                    .orElseThrow()
+                    .getRequestedReviewers()
+                    .stream()
+                    .map(request -> request.getUser().getLogin())
+                    .collect(Collectors.toSet())));
+            assertThat(logins).containsExactly("reviewing-person");
+        }
+
+        private Set<Long> requestedTeamIds() {
+            return required(transactionTemplate.execute(status -> pullRequestRepository
+                    .findByRepositoryIdAndNumber(testRepository.getId(), PR_26_NUMBER)
+                    .orElseThrow()
+                    .getRequestedTeams()
+                    .stream()
+                    .map(request -> request.getTeam().getId())
+                    .collect(Collectors.toSet())));
+        }
+
+        private Team team(long nativeId, String slug) {
+            Team team = new Team();
+            team.setNativeId(nativeId);
+            team.setName(slug);
+            team.setSlug(slug);
+            team.setOrganization(FIXTURE_ORG_LOGIN);
+            team.setHtmlUrl("https://github.com/orgs/" + FIXTURE_ORG_LOGIN + "/teams/" + slug);
+            team.setPrivacy(Team.Privacy.VISIBLE);
+            team.setProvider(testProvider);
+            return teamRepository.save(team);
         }
     }
 

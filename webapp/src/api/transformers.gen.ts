@@ -419,6 +419,7 @@ const openWorkSchemaResponseTransformer = (data: any) => {
   data.issues = workItemListSchemaResponseTransformer(data.issues);
   data.pullRequests = workItemListSchemaResponseTransformer(data.pullRequests);
   data.reviewRequests = workItemListSchemaResponseTransformer(data.reviewRequests);
+  data.teamReviewRequests = workItemListSchemaResponseTransformer(data.teamReviewRequests);
   return data;
 };
 

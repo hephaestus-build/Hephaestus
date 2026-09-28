@@ -156,6 +156,12 @@ export const GitLabCheckIcon = createGitLabIcon(
 	"GitLabCheckIcon",
 );
 
+/** Group — `group.svg` */
+export const GitLabGroupIcon = createGitLabIcon(
+	"M6 4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm1.5 0a3 3 0 11-6 0 3 3 0 016 0zm4 5.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 1.5a3 3 0 100-6 3 3 0 000 6zm-7 2.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 1.5a3 3 0 100-6 3 3 0 000 6z",
+	"GitLabGroupIcon",
+);
+
 /** Failed pipeline — `status_failed.svg`, on GitLab's 14px status grid */
 export const GitLabStatusFailedIcon = createGitLabIcon(
 	"M7 0a7 7 0 110 14A7 7 0 017 0zm0 1a6 6 0 100 12A6 6 0 007 1zM7 5.969L5.599 4.568a.29.29 0 00-.413.004l-.614.614a.294.294 0 00-.004.413L5.968 7l-1.4 1.401a.29.29 0 00.004.413l.614.614c.113.114.3.117.413.004L7 8.032l1.401 1.4a.29.29 0 00.413-.004l.614-.614a.294.294 0 00.004-.413L8.032 7l1.4-1.401a.29.29 0 00-.004-.413l-.614-.614a.294.294 0 00-.413-.004L7 5.968z",

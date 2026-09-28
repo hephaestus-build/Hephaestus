@@ -5,12 +5,14 @@ import {
 	EyeIcon,
 	FileDiffIcon,
 	GitPullRequestDraftIcon,
+	OrganizationIcon,
 	PeopleIcon,
 } from "@primer/octicons-react";
 
 import type { OpenWork, WorkItem } from "@/api/types.gen";
 import {
 	GitLabCheckIcon,
+	GitLabGroupIcon,
 	GitLabHourglassIcon,
 	GitLabMergeRequestDraftIcon,
 	GitLabReviewCheckmarkIcon,
@@ -32,6 +34,7 @@ export const OPEN_WORK_GROUPS = [
 	"approved",
 	"waiting",
 	"drafts",
+	"team-requested",
 	"covered",
 	"reviewed",
 ] as const;
@@ -84,6 +87,13 @@ export const OPEN_WORK_GROUP_DEFS = {
 		tone: "muted",
 		counted: false,
 	},
+	"team-requested": {
+		label: (perspective) =>
+			perspective === "self" ? "Requested from your team" : "Requested from their team",
+		icon: providerIcon(OrganizationIcon, GitLabGroupIcon),
+		tone: "muted",
+		counted: false,
+	},
 	covered: {
 		label: () => "Covered by other reviewers",
 		icon: providerIcon(PeopleIcon, GitLabUsersIcon),
@@ -104,11 +114,18 @@ const changesRequested = (work: Review): boolean =>
 	work.reviewers?.some((reviewer) => reviewer.state === "CHANGES_REQUESTED") === true;
 
 /**
- * A review request someone else has already settled: the pull request is approved, or a reviewer
- * asked for changes, so the author has to move before this review does anything.
+ * A review request someone else has already settled: another reviewer asked for changes, so the
+ * author has to move before this review does anything; or the pull request is approved and another
+ * reviewer's approval is what approved it. On GitLab the decision says whether the merge request's
+ * approval rules are met. The person's own entry never covers their own request: a decision their
+ * earlier approval set is theirs to revisit once the author asks them again. A merge request not yet
+ * synced has no decision, so only a request for changes covers it.
  */
-export function isCovered(work: Review): boolean {
-	return work.reviewDecision === "APPROVED" || changesRequested(work);
+export function isCovered(work: Review, login: string | undefined): boolean {
+	const others = (work.reviewers ?? []).filter((reviewer) => reviewer.user.login !== login);
+	const approvedByOther =
+		work.reviewDecision === "APPROVED" && others.some((reviewer) => reviewer.state === "APPROVED");
+	return approvedByOther || others.some((reviewer) => reviewer.state === "CHANGES_REQUESTED");
 }
 
 /**
@@ -155,17 +172,18 @@ function requestGroup(work: Review, login: string | undefined): OpenWorkGroup {
 	if (reviewedBy(work, login)) {
 		return "reviewed";
 	}
-	return isCovered(work) ? "covered" : "review-requested";
+	return isCovered(work, login) ? "covered" : "review-requested";
 }
 
 /**
  * One person's open pull requests by what they need, each in exactly one group and in the order
  * the server listed them: review requests split into the ones that need this person, the ones they
- * already gave a verdict on, and the ones other reviewers already covered; their own pull requests
+ * already gave a verdict on, and the ones other reviewers already covered; requests to a team of
+ * theirs apart from those to them; their own pull requests
  * into drafts, the ones returned to them, the approved ones, and the rest, waiting for review.
  */
 export function groupOpenWork(
-	openWork: Pick<OpenWork, "reviewRequests" | "pullRequests">,
+	openWork: Pick<OpenWork, "reviewRequests" | "teamReviewRequests" | "pullRequests">,
 	login: string | undefined,
 ): Record<OpenWorkGroup, WorkItem[]> {
 	const groups: Record<OpenWorkGroup, WorkItem[]> = {
@@ -174,12 +192,16 @@ export function groupOpenWork(
 		approved: [],
 		waiting: [],
 		drafts: [],
+		"team-requested": [],
 		covered: [],
 		reviewed: [],
 	};
 	for (const work of openWork.reviewRequests.content) {
 		groups[requestGroup(work, login)].push(work);
 	}
+	// Asked of a team the person is in, and not of them: someone on the team will pick it up, so it
+	// waits with the rest rather than counting as the person's own.
+	groups["team-requested"].push(...openWork.teamReviewRequests.content);
 	for (const work of openWork.pullRequests.content) {
 		groups[authoredGroup(work)].push(work);
 	}

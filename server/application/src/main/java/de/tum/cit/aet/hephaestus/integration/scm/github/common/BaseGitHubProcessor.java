@@ -6,6 +6,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -14,8 +16,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.dto.GitHubMile
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -295,32 +299,28 @@ public abstract class BaseGitHubProcessor {
     }
 
     /**
-     * Updates requested reviewers collection from DTO list.
-     * Specific to PullRequest but provided here for consistency.
+     * Replaces the pull request's requested reviewers with GitHub's list. GitHub lists only the reviewers it
+     * is waiting for, so a listed reviewer carries no review state. A bot asked to review is left out, as the
+     * sync leaves it out, so the two never disagree about the row.
      *
      * @param reviewerDtos the reviewer DTOs from GitHub (null means don't update)
-     * @param currentReviewers the current reviewer set to update (modified in place)
      * @return true if reviewers changed, false otherwise
      */
     protected boolean updateRequestedReviewers(
-            @Nullable List<GitHubUserDTO> reviewerDtos, Set<User> currentReviewers, Long providerId) {
+            @Nullable List<GitHubUserDTO> reviewerDtos, PullRequest pullRequest, Long providerId) {
         if (reviewerDtos == null) {
             return false;
         }
-
-        Set<User> newReviewers = new HashSet<>();
+        Map<User, RequestedReviewer.@Nullable ReviewState> reviewers = new HashMap<>();
         for (GitHubUserDTO reviewerDto : reviewerDtos) {
+            if (reviewerDto.type() == User.Type.BOT) {
+                continue;
+            }
             User reviewer = findOrCreateUser(reviewerDto, providerId);
             if (reviewer != null) {
-                newReviewers.add(reviewer);
+                reviewers.put(reviewer, null);
             }
         }
-
-        if (!currentReviewers.equals(newReviewers)) {
-            currentReviewers.clear();
-            currentReviewers.addAll(newReviewers);
-            return true;
-        }
-        return false;
+        return pullRequest.replaceRequestedReviewers(reviewers, null);
     }
 }

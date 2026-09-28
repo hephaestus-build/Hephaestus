@@ -72,12 +72,7 @@ class ActivityScopeResolver {
         if (teamId == null) {
             return Set.of();
         }
-        var workspace = workspaces.findById(workspaceId).orElseThrow();
-        List<Team> workspaceTeams = teamScopes
-                .resolve(workspace)
-                .map(scope ->
-                        teams.findAllByOrganizationIgnoreCaseAndProviderId(scope.accountLogin(), scope.providerId()))
-                .orElse(List.of());
+        List<Team> workspaceTeams = workspaceTeams(workspaceId);
         Set<Long> hidden = teamSettings.getHiddenTeamIds(workspaceId);
         boolean visible =
                 workspaceTeams.stream().anyMatch(team -> teamId.equals(team.getId())) && !hidden.contains(teamId);
@@ -97,5 +92,29 @@ class ActivityScopeResolver {
             }
         }
         return Set.copyOf(ids);
+    }
+
+    /**
+     * The workspace's teams {@code member} is in, hidden or not: hiding a team shapes workspace activity, not what
+     * the member is asked to do. A sub-team's members are its parent team's members too, as the synced memberships
+     * already say.
+     */
+    @Transactional(readOnly = true)
+    public List<Team> memberTeams(long workspaceId, User member) {
+        Set<Long> workspaceTeamIds =
+                workspaceTeams(workspaceId).stream().map(Team::getId).collect(Collectors.toSet());
+        return member.getTeamMemberships().stream()
+                .map(membership -> membership.getTeam())
+                .filter(team -> team != null && workspaceTeamIds.contains(team.getId()))
+                .toList();
+    }
+
+    private List<Team> workspaceTeams(long workspaceId) {
+        var workspace = workspaces.findById(workspaceId).orElseThrow();
+        return teamScopes
+                .resolve(workspace)
+                .map(scope ->
+                        teams.findAllByOrganizationIgnoreCaseAndProviderId(scope.accountLogin(), scope.providerId()))
+                .orElse(List.of());
     }
 }

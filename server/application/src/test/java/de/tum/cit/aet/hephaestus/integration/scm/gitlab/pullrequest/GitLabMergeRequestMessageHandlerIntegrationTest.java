@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.core.handler.WebhookDelivery;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
@@ -30,6 +31,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -48,8 +50,13 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -60,6 +67,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Integration tests for GitLabMergeRequestMessageHandler.
@@ -111,6 +120,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
     @Autowired
     private GitLabMergeRequestMessageHandler handler;
+
+    @Autowired
+    private GitLabMergeRequestProcessor mergeRequestProcessor;
 
     @Autowired
     private PullRequestRepository pullRequestRepository;
@@ -365,6 +377,227 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
     }
 
     // Edge Cases
+
+    // Reviewer states
+
+    @Nested
+    class ReviewerStates {
+
+        @Test
+        void shouldStoreEachReviewersStateWhenTheMergeRequestListsReviewers() throws Exception {
+            handler.handleEvent(withReviewers(
+                    null,
+                    reviewer(900001L, "approving-reviewer", "approved"),
+                    reviewer(900002L, "waiting-reviewer", "unreviewed")));
+
+            assertThat(reviewerStates())
+                    .containsExactlyInAnyOrderEntriesOf(Map.of(
+                            "approving-reviewer", RequestedReviewer.ReviewState.APPROVED,
+                            "waiting-reviewer", RequestedReviewer.ReviewState.UNREVIEWED));
+        }
+
+        @Test
+        void shouldSetTheReviewerBackToUnreviewedWhenTheirReviewIsRequestedAgain() throws Exception {
+            handler.handleEvent(withReviewers(null, reviewer(900001L, "re-requested-reviewer", "approved")));
+
+            ObjectNode reRequested = reviewer(900001L, "re-requested-reviewer", "unreviewed");
+            reRequested.put("re_requested", true);
+            handler.handleEvent(withReviewers("2026-01-31 19:10:00 +0100", reRequested));
+
+            assertThat(reviewerStates())
+                    .containsExactlyEntriesOf(
+                            Map.of("re-requested-reviewer", RequestedReviewer.ReviewState.UNREVIEWED));
+        }
+
+        @Test
+        void shouldTakeTheReviewersStateWhenAnApprovalLeavesTheUpdateTimeAsItWas() throws Exception {
+            handler.handleEvent(withReviewers(null, reviewer(900001L, "approving-reviewer", "unreviewed")));
+
+            handler.handleEvent(withReviewers(null, reviewer(900001L, "approving-reviewer", "approved")));
+
+            assertThat(reviewerStates())
+                    .containsExactlyEntriesOf(Map.of("approving-reviewer", RequestedReviewer.ReviewState.APPROVED));
+        }
+
+        @Test
+        void shouldKeepTheNewerStateWhenAnOlderPayloadArrivesLate() throws Exception {
+            handler.handleEvent(
+                    withReviewers("2026-01-31 19:10:00 +0100", reviewer(900001L, "approving-reviewer", "approved")));
+
+            handler.handleEvent(withReviewers(null, reviewer(900001L, "approving-reviewer", "unreviewed")));
+
+            assertThat(reviewerStates())
+                    .containsExactlyEntriesOf(Map.of("approving-reviewer", RequestedReviewer.ReviewState.APPROVED));
+        }
+
+        @Test
+        void shouldStoreEachReviewersStateWhenTheSyncReadsThem() {
+            sync(
+                    Instant.now(),
+                    syncedReviewer(900003L, "synced-approver", "APPROVED"),
+                    syncedReviewer(900004L, "synced-waiting", "UNREVIEWED"),
+                    syncedReviewer(900005L, "stateless-reviewer", null));
+
+            Map<String, RequestedReviewer.@Nullable ReviewState> expected = new HashMap<>();
+            expected.put("synced-approver", RequestedReviewer.ReviewState.APPROVED);
+            expected.put("synced-waiting", RequestedReviewer.ReviewState.UNREVIEWED);
+            expected.put("stateless-reviewer", null);
+            assertThat(reviewerStates()).containsExactlyInAnyOrderEntriesOf(expected);
+        }
+
+        @Test
+        void shouldKeepTheWebhooksReviewersWhenASyncPageFetchedBeforeItIsWrittenAfterIt() throws Exception {
+            Instant fetchedBeforeTheWebhook = Instant.now().minus(Duration.ofMinutes(1));
+            handler.handleEvent(withReviewers(null, reviewer(900001L, "added-reviewer", "approved")));
+
+            sync(fetchedBeforeTheWebhook, syncedReviewer(900002L, "earlier-reviewer", "UNREVIEWED"));
+
+            assertThat(reviewerStates())
+                    .as("the older page neither removes the reviewer the webhook added nor adds its own")
+                    .containsExactlyEntriesOf(Map.of("added-reviewer", RequestedReviewer.ReviewState.APPROVED));
+        }
+
+        @Test
+        void shouldNotBringBackAReviewerTheWebhookRemovedWhenAnOlderSyncPageListsThem() throws Exception {
+            sync(Instant.now().minus(Duration.ofMinutes(2)), syncedReviewer(900002L, "removed-reviewer", "UNREVIEWED"));
+            handler.handleEvent(withReviewers("2026-01-31 19:15:00 +0100"));
+
+            sync(Instant.now().minus(Duration.ofMinutes(1)), syncedReviewer(900002L, "removed-reviewer", "UNREVIEWED"));
+
+            assertThat(reviewerStates()).isEmpty();
+        }
+
+        @Test
+        void shouldTakeTheSyncsReviewersWhenItsPageWasFetchedAfterTheWebhook() throws Exception {
+            handler.handleEvent(withReviewers(null, reviewer(900001L, "re-requested-reviewer", "approved")));
+
+            sync(
+                    Instant.now().plusSeconds(1),
+                    syncedReviewer(900001L, "re-requested-reviewer", "UNREVIEWED"),
+                    syncedReviewer(900002L, "new-reviewer", "UNREVIEWED"));
+
+            assertThat(reviewerStates())
+                    .containsExactlyInAnyOrderEntriesOf(Map.of(
+                            "re-requested-reviewer", RequestedReviewer.ReviewState.UNREVIEWED,
+                            "new-reviewer", RequestedReviewer.ReviewState.UNREVIEWED));
+        }
+
+        /** The webhook sat in the stream while a sync read the merge request; its arrival, not its handling, dates it. */
+        @Test
+        void shouldIgnoreADelayedWebhookWhenItArrivedBeforeTheSyncPageWasRead() throws Exception {
+            Instant arrived = Instant.now().minus(Duration.ofMinutes(5));
+            sync(Instant.now().minus(Duration.ofMinutes(1)), syncedReviewer(900001L, "approving-reviewer", "APPROVED"));
+
+            GitLabMergeRequestEventDTO delayed =
+                    withReviewers("2026-01-31 19:20:00 +0100", reviewer(900001L, "approving-reviewer", "unreviewed"));
+            WebhookDelivery.during(arrived, () -> handler.handleEvent(delayed));
+
+            assertThat(reviewerStates())
+                    .containsExactlyEntriesOf(Map.of("approving-reviewer", RequestedReviewer.ReviewState.APPROVED));
+        }
+
+        private void sync(Instant fetchedAt, GitLabMergeRequestProcessor.SyncReviewerData... reviewers) {
+            mergeRequestProcessor.processFromSync(syncedMergeRequest(List.of(reviewers)), savedRepo, null, fetchedAt);
+        }
+
+        private GitLabMergeRequestProcessor.SyncReviewerData syncedReviewer(
+                long id, String username, @Nullable String state) {
+            return new GitLabMergeRequestProcessor.SyncReviewerData(
+                    new GitLabMergeRequestProcessor.SyncUserData(
+                            "gid://gitlab/User/" + id, username, username, null, null, null),
+                    state);
+        }
+
+        /** MR !2 as a sync reads it, with only what these tests need. */
+        private GitLabMergeRequestProcessor.SyncMergeRequestData syncedMergeRequest(
+                List<GitLabMergeRequestProcessor.SyncReviewerData> reviewers) {
+            return new GitLabMergeRequestProcessor.SyncMergeRequestData(
+                    "gid://gitlab/MergeRequest/" + NATIVE_MR2_ID,
+                    String.valueOf(MR2_IID),
+                    MR2_TITLE,
+                    null, // description
+                    "opened",
+                    false, // draft
+                    null, // mergeable
+                    null, // detailedMergeStatus
+                    false, // approved
+                    "https://gitlab.lrz.de/" + FIXTURE_REPO_FULL_NAME + "/-/merge_requests/" + MR2_IID,
+                    "2026-01-31T18:00:00Z",
+                    "2026-01-31T18:10:00Z",
+                    null, // closedAt
+                    null, // mergedAt
+                    1, // commitCount
+                    0, // additions
+                    0, // deletions
+                    0, // fileCount
+                    "feature/oauth",
+                    "main",
+                    null, // diffHeadSha
+                    null, // baseSha
+                    null, // mergeCommitSha
+                    false, // discussionLocked
+                    0, // commentsCount
+                    "gid://gitlab/User/" + NATIVE_AUTHOR_ID,
+                    FIXTURE_AUTHOR_LOGIN,
+                    FIXTURE_AUTHOR_LOGIN,
+                    null, // authorAvatarUrl
+                    null, // authorWebUrl
+                    null, // authorPublicEmail
+                    null, // mergeUserGlobalId
+                    null, // mergeUserUsername
+                    null, // mergeUserName
+                    null, // mergeUserAvatarUrl
+                    null, // mergeUserWebUrl
+                    null, // mergeUserPublicEmail
+                    null, // syncLabels
+                    null, // syncAssignees
+                    reviewers,
+                    null, // syncApprovers
+                    null, // syncParticipants
+                    null, // milestoneIid
+                    null, // headPipelineStatus
+                    null, // headPipelineSha
+                    null); // closingIssueNumbers
+        }
+
+        /** The {@code update} fixture of MR !2, listing {@code reviewers}, at {@code updatedAt} when given. */
+        private GitLabMergeRequestEventDTO withReviewers(@Nullable String updatedAt, ObjectNode... reviewers)
+                throws IOException {
+            ObjectNode payload =
+                    (ObjectNode) objectMapper.readTree(new ClassPathResource("gitlab/merge_request.update.json")
+                            .getContentAsString(StandardCharsets.UTF_8));
+            ArrayNode list = payload.putArray("reviewers");
+            for (ObjectNode reviewer : reviewers) {
+                list.add(reviewer);
+            }
+            if (updatedAt != null) {
+                ((ObjectNode) payload.get("object_attributes")).put("updated_at", updatedAt);
+            }
+            return objectMapper.treeToValue(payload, GitLabMergeRequestEventDTO.class);
+        }
+
+        private ObjectNode reviewer(long id, String username, String state) {
+            ObjectNode reviewer = objectMapper.createObjectNode();
+            reviewer.put("id", id);
+            reviewer.put("username", username);
+            reviewer.put("name", username);
+            reviewer.put("state", state);
+            reviewer.put("re_requested", false);
+            return reviewer;
+        }
+
+        private Map<String, RequestedReviewer.@Nullable ReviewState> reviewerStates() {
+            return Objects.requireNonNull(transactionTemplate.execute(status -> {
+                Map<String, RequestedReviewer.@Nullable ReviewState> states = new HashMap<>();
+                pullRequestRepository
+                        .findByRepositoryIdAndNumber(savedRepo.getId(), MR2_IID)
+                        .orElseThrow()
+                        .getRequestedReviewers()
+                        .forEach(request -> states.put(request.getUser().getLogin(), request.getReviewState()));
+                return states;
+            }));
+        }
+    }
 
     @Nested
     class EdgeCases {

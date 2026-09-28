@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.common;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.handler.WebhookDelivery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import java.time.Instant;
 import java.util.UUID;
@@ -36,7 +37,8 @@ import org.jspecify.annotations.Nullable;
  * @param scopeId        The scope this data belongs to
  * @param repository     The repository being processed (JPA entity - transaction required)
  * @param provider       The git provider instance (e.g., github.com, gitlab.lrz.de)
- * @param startedAt      When processing started
+ * @param observedAt     When the provider said what is processed: a webhook's arrival in the stream
+ *                       ({@link WebhookDelivery}), or when a sync started, before it read anything
  * @param correlationId  Unique ID for distributed tracing - correlates all log
  *                       entries and events from a single webhook or sync operation
  * @param webhookAction  The webhook action (e.g. "opened", "closed") if from webhook
@@ -47,7 +49,7 @@ public record ProcessingContext(
         @Nullable Long scopeId,
         @Nullable Repository repository,
         @Nullable IdentityProvider provider,
-        Instant startedAt,
+        Instant observedAt,
         String correlationId,
         @Nullable String webhookAction,
         DataSource source,
@@ -56,17 +58,17 @@ public record ProcessingContext(
             @Nullable Long scopeId,
             @Nullable Repository repository,
             @Nullable IdentityProvider provider,
-            Instant startedAt,
+            Instant observedAt,
             String correlationId,
             @Nullable String webhookAction,
             DataSource source) {
-        this(scopeId, repository, provider, startedAt, correlationId, webhookAction, source, null);
+        this(scopeId, repository, provider, observedAt, correlationId, webhookAction, source, null);
     }
 
     /** The webhook sender is not necessarily the developer whose work is reviewed. */
     public ProcessingContext withActorUserId(@Nullable Long actorUserId) {
         return new ProcessingContext(
-                scopeId, repository, provider, startedAt, correlationId, webhookAction, source, actorUserId);
+                scopeId, repository, provider, observedAt, correlationId, webhookAction, source, actorUserId);
     }
     /**
      * Returns the provider's database ID for use in upsert queries.
@@ -106,7 +108,7 @@ public record ProcessingContext(
                 scopeId,
                 repository,
                 repository != null ? repository.getProvider() : null,
-                Instant.now(),
+                WebhookDelivery.arrivedAt().orElseGet(Instant::now),
                 UUID.randomUUID().toString(),
                 action,
                 DataSource.WEBHOOK);
@@ -118,7 +120,13 @@ public record ProcessingContext(
      */
     public static ProcessingContext forWebhook(@Nullable Long scopeId, IdentityProvider provider, String action) {
         return new ProcessingContext(
-                scopeId, null, provider, Instant.now(), UUID.randomUUID().toString(), action, DataSource.WEBHOOK);
+                scopeId,
+                null,
+                provider,
+                WebhookDelivery.arrivedAt().orElseGet(Instant::now),
+                UUID.randomUUID().toString(),
+                action,
+                DataSource.WEBHOOK);
     }
 
     /**

@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class GitLabMergeRequestSyncServiceTest extends BaseUnitTest {
@@ -24,5 +26,26 @@ class GitLabMergeRequestSyncServiceTest extends BaseUnitTest {
     void shouldSpareTheRequestForAnUntouchedOpenMergeRequest() {
         assertThat(GitLabMergeRequestSyncService.readsDiscussions(0, false, "opened"))
                 .isFalse();
+    }
+
+    @Test
+    void shouldReadTheReviewersStateWhenGitLabStatesIt() {
+        Map<String, Object> reviewer = new HashMap<>(Map.of(
+                "id", "gid://gitlab/User/900003",
+                "username", "synced-approver",
+                "mergeRequestInteraction", Map.of("reviewState", "APPROVED")));
+
+        var read = GitLabMergeRequestSyncService.toSyncReviewerData(reviewer);
+
+        assertThat(read.user().username()).isEqualTo("synced-approver");
+        assertThat(read.reviewState()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    void shouldReadNoStateWhenTheReviewerHasNoInteractionWithTheMergeRequest() {
+        Map<String, Object> reviewer = new HashMap<>(Map.of("id", "gid://gitlab/User/900004", "username", "gone"));
+
+        assertThat(GitLabMergeRequestSyncService.toSyncReviewerData(reviewer).reviewState())
+                .isNull();
     }
 }

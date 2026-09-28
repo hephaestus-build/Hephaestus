@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.MemberActivityDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.OpenWorkDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO.ReviewerState;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.TeamRefDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.WorkItemDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
@@ -29,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer.ReviewState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -55,6 +57,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -961,6 +965,91 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             return labelRepository.save(label);
         }
 
+        @Test
+        void shouldListAPullRequestAskingTheMembersTeamWhenTheTeamIsAskedForAReview() {
+            PullRequest asking = pullRequest(ada, monitored, requestingTeam(web).andThen(requestingTeam(platform)));
+
+            OpenWorkDTO zoes = openWork(zoe);
+
+            assertThat(zoes.teamReviewRequests().content())
+                    .filteredOn(item -> item.id().equals(asking.getId()))
+                    .singleElement()
+                    .satisfies(item -> assertThat(item.requestedTeams())
+                            .as("only the teams Zoe is in")
+                            .containsExactly(new TeamRefDTO(web.getId(), "platform-web")));
+            assertThat(zoes.reviewRequests().content())
+                    .extracting(WorkItemDTO::id)
+                    .doesNotContain(asking.getId());
+            assertThat(openWork(ada).teamReviewRequests().content())
+                    .as("Ada is in no team the pull request asks")
+                    .extracting(WorkItemDTO::id)
+                    .doesNotContain(asking.getId());
+        }
+
+        @Test
+        void shouldLeaveOutATeamRequestWhenTheMemberIsAskedDirectlyAuthoredItOrGaveAVerdict() {
+            PullRequest direct = pullRequest(ada, monitored, requestingTeam(web).andThen(requesting(zoe)));
+            PullRequest own = pullRequest(zoe, monitored, requestingTeam(web));
+            PullRequest approved = pullRequest(ada, monitored, requestingTeam(web));
+            review(approved, zoe, PullRequestReview.State.APPROVED);
+            PullRequest sentBack = pullRequest(ada, monitored, requestingTeam(web));
+            review(sentBack, zoe, PullRequestReview.State.CHANGES_REQUESTED);
+            PullRequest commented = pullRequest(ada, monitored, requestingTeam(web));
+            review(commented, zoe, PullRequestReview.State.COMMENTED);
+            PullRequest dismissed = pullRequest(ada, monitored, requestingTeam(web));
+            PullRequestReview withdrawn = review(dismissed, zoe, PullRequestReview.State.APPROVED);
+            withdrawn.setDismissed(true);
+            reviewRepository.save(withdrawn);
+            PullRequest drafted =
+                    pullRequest(ada, monitored, requestingTeam(web).andThen(work -> {
+                        work.setDraft(true);
+                        return work;
+                    }));
+            PullRequest elsewhere = pullRequest(ada, unmonitored, requestingTeam(web));
+
+            OpenWorkDTO zoes = openWork(zoe);
+
+            assertThat(zoes.teamReviewRequests().content())
+                    .extracting(WorkItemDTO::id)
+                    .as("a comment is not a verdict, and a dismissed approval no longer stands")
+                    .contains(commented.getId(), dismissed.getId())
+                    .doesNotContain(
+                            direct.getId(),
+                            own.getId(),
+                            approved.getId(),
+                            sentBack.getId(),
+                            drafted.getId(),
+                            elsewhere.getId());
+            assertThat(zoes.reviewRequests().content())
+                    .extracting(WorkItemDTO::id)
+                    .contains(direct.getId());
+        }
+
+        @Test
+        void shouldKeepATeamRequestWhenTheTeamIsHiddenFromWorkspaceActivity() {
+            PullRequest asking = pullRequest(ada, monitored, requestingTeam(web));
+            teamSettingsService.updateTeamVisibility(workspace, web.getId(), true);
+            teamSettingsService.updateTeamVisibility(workspace, platform.getId(), true);
+
+            assertThat(openWork(zoe).teamReviewRequests().content())
+                    .as("hiding a team shapes workspace activity, not what Zoe is asked to do")
+                    .extracting(WorkItemDTO::id)
+                    .contains(asking.getId());
+        }
+
+        @Test
+        void shouldLeaveOutARequestToATeamOutsideTheWorkspaceWhenTheMemberIsInIt() {
+            Team outside = team("outside", null);
+            outside.setOrganization("other-org");
+            outside = teamRepository.save(outside);
+            teamMembershipRepository.save(new TeamMembership(outside, zoe, TeamMembership.Role.MEMBER));
+            PullRequest asking = pullRequest(ada, monitored, requestingTeam(outside));
+
+            assertThat(openWork(zoe).teamReviewRequests().content())
+                    .extracting(WorkItemDTO::id)
+                    .doesNotContain(asking.getId());
+        }
+
         private Team team(String name, @Nullable Long parentId) {
             Team team = new Team();
             team.setNativeId(nativeIds.incrementAndGet());
@@ -1116,7 +1205,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
-        void shouldShowTheReviewOverTheRequestWhenAGitLabReviewerStaysListedAfterReviewing() {
+        void shouldShowTheReviewOverTheRequestWhenGitLabStatedNoReviewerState() {
             User bob = member("bob", "Bob");
             PullRequest mergeRequest = pullRequest(
                     ada, monitored, onGitLab().andThen(requesting(zoe)).andThen(requesting(bob)));
@@ -1129,7 +1218,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
-        void shouldKeepAMergeRequestWithTheReadersOwnReviewWhenTheGitLabReviewerHasReviewedIt() {
+        void shouldKeepAMergeRequestWithTheReadersOwnReviewWhenGitLabStatedNoReviewerState() {
             PullRequest approved = pullRequest(zoe, monitored, onGitLab().andThen(requesting(ada)));
             review(approved, ada, PullRequestReview.State.APPROVED);
             PullRequest commented = pullRequest(zoe, monitored, onGitLab().andThen(requesting(ada)));
@@ -1139,7 +1228,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             List<WorkItemDTO> requests = openWork(ada).reviewRequests().content();
 
             assertThat(requests)
-                    .as("GitLab does not say when a review is asked again, so a request never leaves the list")
+                    .as("GitLab keeps a reviewer listed after they reviewed, so the request stays in the list")
                     .extracting(WorkItemDTO::id)
                     .contains(approved.getId(), commented.getId(), waiting.getId());
             assertThat(reviewersOf(requests, approved))
@@ -1151,6 +1240,54 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             assertThat(reviewersOf(requests, waiting))
                     .extracting(reviewer -> reviewer.user().id(), ReviewerDTO::state)
                     .containsExactly(tuple(ada.getId(), ReviewerState.REQUESTED));
+        }
+
+        @Test
+        void shouldShowTheReviewerWhereGitLabSaysTheyStandWhenGitLabStatesIt() {
+            User bob = member("bob", "Bob");
+            User cleo = member("cleo", "Cleo");
+            User dan = member("dan", "Dan");
+            PullRequest mergeRequest = pullRequest(
+                    ada,
+                    monitored,
+                    onGitLab()
+                            .andThen(requesting(zoe, ReviewState.APPROVED))
+                            .andThen(requesting(bob, ReviewState.REVIEWED))
+                            .andThen(requesting(cleo, ReviewState.REQUESTED_CHANGES))
+                            .andThen(requesting(dan, ReviewState.REVIEW_STARTED)));
+            review(mergeRequest, dan, PullRequestReview.State.APPROVED);
+
+            assertThat(reviewersOf(openWork(ada).pullRequests().content(), mergeRequest))
+                    .extracting(reviewer -> reviewer.user().id(), ReviewerDTO::state)
+                    .containsExactly(
+                            tuple(cleo.getId(), ReviewerState.CHANGES_REQUESTED),
+                            tuple(zoe.getId(), ReviewerState.APPROVED),
+                            tuple(bob.getId(), ReviewerState.COMMENTED),
+                            tuple(dan.getId(), ReviewerState.REQUESTED));
+        }
+
+        @Test
+        void shouldShowTheReviewAsRequestedAgainWhenGitLabSetsTheReviewerBackToUnreviewed() {
+            PullRequest reRequested =
+                    pullRequest(zoe, monitored, onGitLab().andThen(requesting(ada, ReviewState.UNREVIEWED)));
+            review(reRequested, ada, PullRequestReview.State.APPROVED);
+            PullRequest withdrawn =
+                    pullRequest(zoe, monitored, onGitLab().andThen(requesting(ada, ReviewState.UNAPPROVED)));
+            PullRequest approved =
+                    pullRequest(zoe, monitored, onGitLab().andThen(requesting(ada, ReviewState.APPROVED)));
+
+            List<WorkItemDTO> requests = openWork(ada).reviewRequests().content();
+
+            assertThat(reviewersOf(requests, reRequested))
+                    .as("the approval came before GitLab asked again")
+                    .extracting(reviewer -> reviewer.user().id(), ReviewerDTO::state)
+                    .containsExactly(tuple(ada.getId(), ReviewerState.REQUESTED));
+            assertThat(reviewersOf(requests, withdrawn))
+                    .extracting(reviewer -> reviewer.user().id(), ReviewerDTO::state)
+                    .containsExactly(tuple(ada.getId(), ReviewerState.REQUESTED));
+            assertThat(reviewersOf(requests, approved))
+                    .extracting(reviewer -> reviewer.user().id(), ReviewerDTO::state)
+                    .containsExactly(tuple(ada.getId(), ReviewerState.APPROVED));
         }
 
         @Test
@@ -1214,29 +1351,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .reviewers());
         }
 
-        private OpenWorkDTO openWork(User member) {
-            return Objects.requireNonNull(webTestClient
-                    .get()
-                    .uri(
-                            "/workspaces/{slug}/activity/members/{login}/open-work",
-                            workspace.getWorkspaceSlug(),
-                            member.getLogin())
-                    .headers(TestAuthUtils.withCurrentUser())
-                    .exchange()
-                    .expectStatus()
-                    .isOk()
-                    .expectBody(OpenWorkDTO.class)
-                    .returnResult()
-                    .getResponseBody());
-        }
-
-        private static Function<PullRequest, PullRequest> requesting(User reviewer) {
-            return work -> {
-                work.getRequestedReviewers().add(reviewer);
-                return work;
-            };
-        }
-
         private Function<PullRequest, PullRequest> onGitLab() {
             return work -> {
                 work.setProvider(ensureGitLabProvider());
@@ -1273,6 +1387,46 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 return work;
             };
         }
+    }
+
+    private OpenWorkDTO openWork(User member) {
+        return Objects.requireNonNull(webTestClient
+                .get()
+                .uri(
+                        "/workspaces/{slug}/activity/members/{login}/open-work",
+                        workspace.getWorkspaceSlug(),
+                        member.getLogin())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(OpenWorkDTO.class)
+                .returnResult()
+                .getResponseBody());
+    }
+
+    private static Function<PullRequest, PullRequest> requesting(User reviewer) {
+        return requesting(reviewer, null);
+    }
+
+    private static Function<PullRequest, PullRequest> requesting(User reviewer, @Nullable ReviewState state) {
+        return work -> {
+            Map<User, @Nullable ReviewState> reviewers = new HashMap<>();
+            work.getRequestedReviewers().forEach(listed -> reviewers.put(listed.getUser(), listed.getReviewState()));
+            reviewers.put(reviewer, state);
+            work.replaceRequestedReviewers(reviewers, null);
+            return work;
+        };
+    }
+
+    private static Function<PullRequest, PullRequest> requestingTeam(Team team) {
+        return work -> {
+            Set<Team> teams = new HashSet<>();
+            work.getRequestedTeams().forEach(listed -> teams.add(listed.getTeam()));
+            teams.add(team);
+            work.replaceRequestedTeams(teams);
+            return work;
+        };
     }
 
     private ActivitySummaryDTO summary(Function<UriBuilder, UriBuilder> query) {
@@ -1545,7 +1699,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         work.setAuthor(author);
         work.setCreatedAt(DAY);
         work.setUpdatedAt(DAY);
-        return pullRequestRepository.save(shape.apply(work));
+        // Shaped once stored: a reviewer request is keyed by the pull request's id.
+        return pullRequestRepository.save(shape.apply(pullRequestRepository.save(work)));
     }
 
     private PullRequestReview review(PullRequest pullRequest, User author, PullRequestReview.State state) {

@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncExcepti
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.backfill.BackfillBatchResult;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -113,6 +114,8 @@ public class GitLabMergeRequestSyncService {
 
                 HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
 
+                // What a page says of a reviewer is as of the moment it was asked for.
+                Instant fetchedAt = Instant.now();
                 ClientGraphQlResponse response = client.documentName(GET_PROJECT_MRS_DOCUMENT)
                         .variable("fullPath", projectPath)
                         .variable("first", pageSize)
@@ -159,7 +162,7 @@ public class GitLabMergeRequestSyncService {
 
                 for (Map<String, Object> mrNode : nodes) {
                     try {
-                        if (processMrNode(mrNode, repository, scopeId) != null) {
+                        if (processMrNode(mrNode, repository, scopeId, fetchedAt) != null) {
                             totalSynced++;
                         } else {
                             totalSkipped++;
@@ -314,6 +317,7 @@ public class GitLabMergeRequestSyncService {
                         remaining);
 
                 HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
+                Instant fetchedAt = Instant.now();
                 ClientGraphQlResponse response = client.documentName(GET_PROJECT_MRS_HISTORICAL_DOCUMENT)
                         .variable("fullPath", projectPath)
                         .variable("first", pageSize)
@@ -348,7 +352,7 @@ public class GitLabMergeRequestSyncService {
                             minIid = Math.min(minIid, iid);
                             maxIid = Math.max(maxIid, iid);
                         }
-                        processMrNode(mrNode, repository, scopeId);
+                        processMrNode(mrNode, repository, scopeId, fetchedAt);
                         totalProcessed++;
                     } catch (Exception e) {
                         log.warn(
@@ -405,7 +409,8 @@ public class GitLabMergeRequestSyncService {
     // processMrNode — delegates to focused extraction helpers
 
     @Nullable
-    private PullRequest processMrNode(Map<String, Object> node, Repository repository, Long scopeId) {
+    private PullRequest processMrNode(
+            Map<String, Object> node, Repository repository, Long scopeId, Instant fetchedAt) {
         String projectPath = repository.getNameWithOwner();
         ScalarFields fields = extractScalarFields(node);
         String mrContext = sanitizeForLog(projectPath) + "!" + fields.iid();
@@ -417,7 +422,7 @@ public class GitLabMergeRequestSyncService {
                 extractLabels(node, scopeId, projectPath, fields.iid(), mrContext);
         List<GitLabMergeRequestProcessor.SyncUserData> syncAssignees =
                 extractAssignees(node, scopeId, projectPath, fields.iid(), mrContext);
-        List<GitLabMergeRequestProcessor.SyncUserData> syncReviewers =
+        List<GitLabMergeRequestProcessor.SyncReviewerData> syncReviewers =
                 extractReviewers(node, scopeId, projectPath, fields.iid(), mrContext);
         List<GitLabMergeRequestProcessor.SyncUserData> syncApprovers =
                 extractApprovers(node, scopeId, projectPath, fields.iid(), mrContext);
@@ -481,7 +486,7 @@ public class GitLabMergeRequestSyncService {
                 headPipeline.status(),
                 headPipeline.sha(),
                 closingIssueNumbers);
-        PullRequest pr = mergeRequestProcessor.processFromSync(syncData, repository, scopeId);
+        PullRequest pr = mergeRequestProcessor.processFromSync(syncData, repository, scopeId, fetchedAt);
 
         // Sync discussions (threads + comments) for this MR when something can be there.
         // Uses discussion-based sync to preserve thread structure, resolution state, and diff positions.
@@ -649,6 +654,20 @@ public class GitLabMergeRequestSyncService {
                 (String) userMap.get("publicEmail"));
     }
 
+    /**
+     * Reads a reviewer node with GitLab's state for them. {@code mergeRequestInteraction} is null for a reviewer
+     * who can no longer access the merge request.
+     *
+     * @see <a href="https://docs.gitlab.com/api/graphql/reference/#usermergerequestinteraction">GitLab
+     *     UserMergeRequestInteraction</a>
+     */
+    @SuppressWarnings("unchecked")
+    static GitLabMergeRequestProcessor.SyncReviewerData toSyncReviewerData(Map<String, Object> reviewerMap) {
+        Map<String, Object> interaction = (Map<String, Object>) reviewerMap.get("mergeRequestInteraction");
+        return new GitLabMergeRequestProcessor.SyncReviewerData(
+                toSyncUserData(reviewerMap), interaction == null ? null : (String) interaction.get("reviewState"));
+    }
+
     // Labels extraction with overflow detection
 
     @SuppressWarnings("unchecked")
@@ -716,7 +735,7 @@ public class GitLabMergeRequestSyncService {
 
     @SuppressWarnings("unchecked")
     @Nullable
-    private List<GitLabMergeRequestProcessor.SyncUserData> extractReviewers(
+    private List<GitLabMergeRequestProcessor.SyncReviewerData> extractReviewers(
             Map<String, Object> node, Long scopeId, String projectPath, @Nullable String iid, String context) {
         Map<String, Object> reviewersMap = (Map<String, Object>) node.get("reviewers");
         if (reviewersMap == null) return null;
@@ -724,14 +743,14 @@ public class GitLabMergeRequestSyncService {
         List<Map<String, Object>> reviewerNodes = (List<Map<String, Object>>) reviewersMap.get("nodes");
         if (reviewerNodes == null) return null;
 
-        List<GitLabMergeRequestProcessor.SyncUserData> syncReviewers = new ArrayList<>(reviewerNodes.size());
+        List<GitLabMergeRequestProcessor.SyncReviewerData> syncReviewers = new ArrayList<>(reviewerNodes.size());
         for (Map<String, Object> r : reviewerNodes) {
-            syncReviewers.add(toSyncUserData(r));
+            syncReviewers.add(toSyncReviewerData(r));
         }
 
         NestedOverflow overflow = detectNestedOverflow(reviewersMap, "reviewers", reviewerNodes.size(), context);
         if (overflow.hasOverflow()) {
-            List<GitLabMergeRequestProcessor.SyncUserData> remaining =
+            List<GitLabMergeRequestProcessor.SyncReviewerData> remaining =
                     fetchRemainingReviewers(scopeId, projectPath, iid, overflow.endCursor(), context);
             if (remaining == null) {
                 return null; // Do not reconcile with incomplete data
@@ -1014,11 +1033,11 @@ public class GitLabMergeRequestSyncService {
 
     @SuppressWarnings("unchecked")
     @Nullable
-    private List<GitLabMergeRequestProcessor.SyncUserData> fetchRemainingReviewers(
+    private List<GitLabMergeRequestProcessor.SyncReviewerData> fetchRemainingReviewers(
             Long scopeId, String projectPath, @Nullable String iid, @Nullable String afterCursor, String context) {
         if (afterCursor == null) return null;
 
-        List<GitLabMergeRequestProcessor.SyncUserData> allRemaining = new ArrayList<>();
+        List<GitLabMergeRequestProcessor.SyncReviewerData> allRemaining = new ArrayList<>();
         String cursor = afterCursor;
         String previousReviewerCursor = null;
         int followUpPages = 0;
@@ -1065,7 +1084,7 @@ public class GitLabMergeRequestSyncService {
                 if (reviewerNodes == null || reviewerNodes.isEmpty()) break;
 
                 for (Map<String, Object> r : reviewerNodes) {
-                    allRemaining.add(toSyncUserData(r));
+                    allRemaining.add(toSyncReviewerData(r));
                 }
 
                 Map<String, Object> pageInfo = (Map<String, Object>) reviewersMap.get("pageInfo");

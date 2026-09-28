@@ -233,6 +233,29 @@ export const longTitlePullRequest = pullRequest(112, 2325, LONG_TITLE, {
 	reviewers: [reviewer(ada, "REQUESTED")],
 });
 
+/**
+ * Ada's teams as the server names them: each team's own name, as its provider shows it, with no
+ * parent team or organization before it.
+ */
+const paymentsTeam = { id: 21, name: "payments" };
+const billingTeam = { id: 22, name: "Billing Reliability" };
+const developerExperienceTeam = { id: 23, name: "Developer Experience and Tooling" };
+
+/** Asked of Ada's team, not of Ada: someone on Developer Experience and Tooling will pick it up. */
+const teamReviewRequest = pullRequest(115, 2327, "Retire the old sync scheduler", {
+	author: eli,
+	updatedAt: hoursBefore(4),
+	requestedTeams: [developerExperienceTeam],
+	reviewers: [reviewer(gus, "COMMENTED")],
+});
+
+/** Asked of two of Ada's teams at once. */
+const twoTeamsReviewRequest = pullRequest(116, 2329, "Charge retries through one queue", {
+	author: fay,
+	updatedAt: daysBefore(1),
+	requestedTeams: [paymentsTeam, billingTeam],
+});
+
 function list(content: WorkItem[], hasMore = false): WorkItemList {
 	return { content, hasMore };
 }
@@ -245,6 +268,7 @@ export const OPEN_WORK: OpenWork = {
 		coveredByChanges,
 		reviewedByAda,
 	]),
+	teamReviewRequests: list([teamReviewRequest, twoTeamsReviewRequest]),
 	pullRequests: list([
 		failingChecksPullRequest,
 		changesRequestedPullRequest,
@@ -257,6 +281,7 @@ export const OPEN_WORK: OpenWork = {
 
 export const NOTHING_OPEN: OpenWork = {
 	reviewRequests: list([]),
+	teamReviewRequests: list([]),
 	pullRequests: list([]),
 	issues: list([]),
 };
@@ -264,6 +289,7 @@ export const NOTHING_OPEN: OpenWork = {
 /** Nothing asks anything of Ada: her pull requests wait on reviewers, the one request is covered. */
 export const ONLY_WAITING: OpenWork = {
 	reviewRequests: list([coveredByApproval]),
+	teamReviewRequests: list([]),
 	pullRequests: list([waitingPullRequest, draftPullRequest]),
 	issues: list([]),
 };
@@ -316,8 +342,10 @@ export const gitLabMergeRequest = onGitLab(
 	}),
 );
 
+/** GitLab has no team reviewers, so a GitLab workspace lists no team requests. */
 export const GITLAB_OPEN_WORK: OpenWork = {
 	reviewRequests: list(OPEN_WORK.reviewRequests.content.map(onGitLab)),
+	teamReviewRequests: list([]),
 	pullRequests: list(OPEN_WORK.pullRequests.content.map(onGitLab)),
 	issues: list(OPEN_WORK.issues.content.map(onGitLab)),
 };

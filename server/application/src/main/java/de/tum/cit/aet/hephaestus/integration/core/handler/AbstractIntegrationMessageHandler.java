@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeseri
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.PayloadParsingException;
 import io.nats.client.Message;
 import java.io.IOException;
+import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -109,7 +110,7 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
 
         try {
             T eventPayload = deserializer.deserialize(msg, payloadType);
-            dispatchEvent(eventPayload);
+            WebhookDelivery.during(arrivedAt(msg), () -> dispatchEvent(eventPayload));
         } catch (IOException e) {
             log.error("Failed to parse payload: subject={}", safeSubject, e);
             throw new PayloadParsingException("Payload parsing failed for subject: " + safeSubject, e);
@@ -120,6 +121,11 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
     }
 
     /** Override when external preparation must run before short persistence transactions. */
+    /** When JetStream stored the message; a redelivery keeps the first time. Now for a plain NATS message. */
+    private static Instant arrivedAt(Message msg) {
+        return msg.isJetStream() ? msg.metaData().timestamp().toInstant() : Instant.now();
+    }
+
     protected void dispatchEvent(T eventPayload) {
         transactionTemplate.executeWithoutResult(status -> handleEvent(eventPayload));
     }
