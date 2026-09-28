@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -51,6 +52,7 @@ class ReviewFeedbackInAppBodyTest extends BaseUnitTest {
             policyEvaluationRepository,
             mock(FeedbackWithdrawalRepository.class),
             mock(AccountSummaryQuery.class),
+            mock(ReactionRepository.class),
             JsonMapper.builder().build());
 
     @Test

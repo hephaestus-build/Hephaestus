@@ -71,7 +71,7 @@ class DiffNotePoster {
             @Nullable UUID packageId,
             List<InlineFeedbackChannel.DeliveredSignal> acknowledged) {
         Set<String> known = acknowledgedKeys(acknowledged);
-        List<InlineFeedbackChannel.InlineFeedback> unacknowledged = mapObservations(diffNotes, packageId).stream()
+        List<InlineFeedbackChannel.InlineFeedback> unacknowledged = mapObservations(job, diffNotes, packageId).stream()
                 .filter(item -> !known.contains(item.deliveryKey()))
                 .toList();
         if (unacknowledged.isEmpty()) {
@@ -138,7 +138,7 @@ class DiffNotePoster {
                 commentPoster.buildTarget(job, kind, job.getWorkspace().getId());
 
         List<InlineFeedbackChannel.InlineFeedback> observations =
-                mapObservations(diffNotes == null ? List.of() : diffNotes, packageId);
+                mapObservations(job, diffNotes == null ? List.of() : diffNotes, packageId);
 
         if (observations.isEmpty()) {
             try {
@@ -175,7 +175,7 @@ class DiffNotePoster {
     }
 
     private List<InlineFeedbackChannel.InlineFeedback> mapObservations(
-            List<DiffNote> diffNotes, @Nullable UUID packageId) {
+            AgentJob job, List<DiffNote> diffNotes, @Nullable UUID packageId) {
         List<InlineFeedbackChannel.InlineFeedback> observations = new ArrayList<>(diffNotes.size());
         for (int index = 0; index < diffNotes.size(); index++) {
             DiffNote note = diffNotes.get(index);
@@ -191,7 +191,7 @@ class DiffNotePoster {
                     : FeedbackAnchor.DiffAnchor.singleLine(note.filePath(), note.startLine());
             observations.add(new InlineFeedbackChannel.InlineFeedback(
                     anchor,
-                    packageId == null ? commentFormatter.appendInlineFeedbackPrompt(sanitized) : sanitized,
+                    packageId == null ? commentFormatter.appendInlineFeedbackPrompt(sanitized, job) : sanitized,
                     packageId == null ? HEPHAESTUS_MARKER : "<!-- hephaestus-approved-package:" + packageId + " -->",
                     packageId == null ? note.deliveryKey() : "approved:" + packageId + ":" + index));
         }

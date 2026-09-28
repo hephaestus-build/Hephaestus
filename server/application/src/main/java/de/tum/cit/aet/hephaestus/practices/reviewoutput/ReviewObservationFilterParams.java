@@ -42,6 +42,13 @@ public record ReviewObservationFilterParams(
         @Nullable
         Boolean invalidated,
 
+        @Parameter(
+                description = "true for only the observations the developer disputes feedback about, false for only"
+                        + " the others; omit for both")
+        @RequestParam(required = false)
+        @Nullable
+        Boolean disputed,
+
         @RequestParam(required = false) @Nullable List<Severity> severity,
         @RequestParam(required = false) @Nullable UUID agentJobId,
         /**
@@ -97,6 +104,7 @@ public record ReviewObservationFilterParams(
                 assessment,
                 outcome,
                 invalidated,
+                disputed,
                 severity,
                 agentJobId,
                 kind,

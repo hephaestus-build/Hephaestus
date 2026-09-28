@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepositor
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
@@ -37,6 +38,8 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
@@ -105,6 +108,9 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
 
     @Autowired
     private FeedbackWithdrawalRepository withdrawalRepository;
+
+    @Autowired
+    private ReactionRepository reactionRepository;
 
     private Workspace workspace;
     private Workspace otherWorkspace;
@@ -685,6 +691,58 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
             expectListed("?invalidated=true", markedIncorrect);
             expectListed("?invalidated=false", restored, standing);
             expectListed("", markedIncorrect, restored, standing);
+        }
+
+        /**
+         * A developer's dispute reaches the admins on its observation and on the feedback, with their explanation,
+         * and filters the list; a dispute they withdrew does neither.
+         */
+        @Test
+        @WithAdminUser
+        void shouldShowTheDevelopersStandingDisputeOnItsObservationAndFilterByIt() {
+            UUID disputed = insertProblem(practiceA, job, alice, "Disputed", "MAJOR");
+            UUID withdrawn = insertProblem(practiceA, job, alice, "Dispute withdrawn", "MAJOR");
+            UUID undisputed = insertProblem(practiceB, job, bob, "Undisputed", "MINOR");
+            Feedback standing = persistUnit(workspace, job, alice, 0, FeedbackDeliveryState.DELIVERED, null, "One");
+            bind(standing, disputed);
+            Feedback takenBack = persistUnit(workspace, job, alice, 1, FeedbackDeliveryState.DELIVERED, null, "Two");
+            bind(takenBack, withdrawn);
+            Instant earlier = Instant.now().minusSeconds(60);
+            respond(standing, FeedbackResolution.DISPUTED, "The caller retries the export.", earlier);
+            respond(takenBack, FeedbackResolution.DISPUTED, "Not my change.", earlier);
+            respond(takenBack, null, null, Instant.now());
+
+            expectListed("?disputed=true", disputed);
+            expectListed("?disputed=false", withdrawn, undisputed);
+            getOk(OBSERVATIONS + "/{id}", workspace.getWorkspaceSlug(), disputed)
+                    .jsonPath("$.disputes.length()")
+                    .isEqualTo(1)
+                    .jsonPath("$.disputes[0].feedbackId")
+                    .isEqualTo(standing.getId().toString())
+                    .jsonPath("$.disputes[0].channel")
+                    .isEqualTo("IN_CONTEXT")
+                    .jsonPath("$.disputes[0].explanation")
+                    .isEqualTo("The caller retries the export.");
+            getOk(OBSERVATIONS + "/{id}", workspace.getWorkspaceSlug(), withdrawn)
+                    .jsonPath("$.disputes.length()")
+                    .isEqualTo(0);
+            getOk(FEEDBACK + "/{id}", workspace.getWorkspaceSlug(), standing.getId())
+                    .jsonPath("$.dispute.explanation")
+                    .isEqualTo("The caller retries the export.");
+            getOk(FEEDBACK + "/{id}", workspace.getWorkspaceSlug(), takenBack.getId())
+                    .jsonPath("$.dispute")
+                    .doesNotExist();
+        }
+
+        private void respond(
+                Feedback feedback, @Nullable FeedbackResolution resolution, @Nullable String explanation, Instant at) {
+            reactionRepository.save(Reaction.builder()
+                    .feedback(feedback)
+                    .reactorUserId(feedback.getRecipientUserId())
+                    .resolution(resolution)
+                    .explanation(explanation)
+                    .createdAt(at)
+                    .build());
         }
 
         /** Each overview count opens the observation list on exactly the rows it counted. */

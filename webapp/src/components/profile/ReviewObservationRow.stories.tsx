@@ -398,6 +398,8 @@ export const DisputeWaitsForItsSentence: Story = {
 		await expect(args.onRespond).not.toHaveBeenCalled();
 		const field = canvas.getByRole("textbox", { name: "What was missed?" });
 		await expect(field).toBeRequired();
+		// The one answer written for somebody else says so before it is sent.
+		await expect(field).toHaveAccessibleDescription(/Workspace admins read this/u);
 		// An empty sentence does not send.
 		await userEvent.click(canvas.getByRole("button", { name: "Send" }));
 		await expect(args.onRespond).not.toHaveBeenCalled();

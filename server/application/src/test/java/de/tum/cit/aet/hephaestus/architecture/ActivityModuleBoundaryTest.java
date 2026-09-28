@@ -125,6 +125,8 @@ class ActivityModuleBoundaryTest extends HephaestusArchitectureTest {
                     .orShould()
                     .haveSimpleName("FeedbackResponseController")
                     .orShould()
+                    .haveSimpleName("ReviewedWorkController")
+                    .orShould()
                     .haveSimpleName("PracticeReviewSettingsController")
                     .orShould()
                     .haveSimpleName("PracticeReviewOutputController")

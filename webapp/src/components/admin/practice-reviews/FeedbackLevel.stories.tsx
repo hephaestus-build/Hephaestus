@@ -222,6 +222,30 @@ export const WithdrawFeedbackFails: Story = {
 	},
 };
 
+/** A disputed card shows the developer's explanation above what became of it, never the card's text. */
+export const Disputed: Story = {
+	args: {
+		feedback: ready({
+			...practicePageCard,
+			dispute: {
+				feedbackId: practicePageCard.id,
+				channel: "IN_APP",
+				explanation: "This was about a branch I did not write.",
+				disputedAt: hoursBefore(1),
+			},
+		}),
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(panel.getByText("The developer disputes this")).toBeVisible();
+		panel.getByText("This was about a branch I did not write.");
+		panel.getByText(
+			/written for the developer's own practice pages and is withheld from operators/u,
+		);
+		panel.getByRole("button", { name: "Withdraw feedback" });
+	},
+};
+
 /** Withdrawn again after a restore: the level offers the restore, and the earlier round stays listed. */
 export const Withdrawn: Story = {
 	args: {

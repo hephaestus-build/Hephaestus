@@ -6374,6 +6374,65 @@ paths:
       summary: "List reviewed practices, developer-facing"
       tags:
       - Practice Catalog
+  /workspaces/{workspaceSlug}/practices/reviewed-work/{artifactKind}/{artifactId}/review-runs:
+    get:
+      description: "Complete review runs newest first, every practice group together,\
+        \ with each observation's feedback response."
+      operationId: listReviewedWorkReviewRuns
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - description: "Kind of reviewed work, e.g. scm.pull_request"
+        in: path
+        name: artifactKind
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: artifactId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - description: "Zero-based page, at most 100"
+        in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 100
+          minimum: 0
+      - description: Page size from 1 to 50
+        in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 50
+          minimum: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeGroupReviewRunsPage"
+          description: Paginated review runs returned
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Unknown kind of work or invalid pagination
+      summary: List the current developer's review runs of one piece of work
+      tags:
+      - Practice Group Detail
   /workspaces/{workspaceSlug}/practices/reviews:
     get:
       description: Results are ordered newest first.
@@ -6902,6 +6961,13 @@ paths:
           \ and not restored, false for only the others; omit for both"
         in: query
         name: invalidated
+        required: false
+        schema:
+          type: boolean
+      - description: "true for only the observations the developer disputes feedback\
+          \ about, false for only the others; omit for both"
+        in: query
+        name: disputed
         required: false
         schema:
           type: boolean
@@ -11560,6 +11626,32 @@ components:
           - DUPLICATE
           - INAPPROPRIATE_PLACEMENT
           - OTHER
+    FeedbackDispute:
+      type: object
+      description: "A developer's standing dispute of feedback written for them. The\
+        \ explanation is theirs, written to the workspace's administrators; the feedback's\
+        \ own text stays as private as its channel keeps it."
+      properties:
+        channel:
+          type: string
+          enum:
+          - IN_CONTEXT
+          - IN_CHAT
+          - IN_APP
+        disputedAt:
+          type: string
+          format: date-time
+        explanation:
+          type: string
+          description: "Why the developer thinks the feedback is wrong, in their words"
+        feedbackId:
+          type: string
+          format: uuid
+      required:
+      - channel
+      - disputedAt
+      - explanation
+      - feedbackId
     FeedbackItem:
       type: object
       properties:
@@ -15791,6 +15883,10 @@ components:
           - FAILED
           - DISCARDED
           - UNCONFIRMED
+        dispute:
+          $ref: "#/components/schemas/FeedbackDispute"
+          description: The developer's standing dispute of this feedback; null while
+            they do not dispute it
         id:
           type: string
           format: uuid
@@ -15904,6 +16000,11 @@ components:
           - CURRENT
           - STALE
           - UNVERIFIABLE
+        disputedAt:
+          type: string
+          format: date-time
+          description: When the developer last disputed feedback written from this
+            observation; null while nothing about it is disputed
         feedback:
           $ref: "#/components/schemas/ReviewFeedbackCounts"
           description: Counts of linked feedback by delivery state
@@ -16031,6 +16132,12 @@ components:
           - CURRENT
           - STALE
           - UNVERIFIABLE
+        disputes:
+          type: array
+          description: "The developer's standing disputes of feedback written from\
+            \ this observation, newest first; empty when nothing about it is disputed"
+          items:
+            $ref: "#/components/schemas/FeedbackDispute"
         evidence:
           $ref: "#/components/schemas/ObservationEvidence"
         evidenceRationale:
@@ -16099,6 +16206,7 @@ components:
       - agentJobId
       - assessmentStatus
       - claimCurrentness
+      - disputes
       - feedback
       - id
       - invalidations

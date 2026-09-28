@@ -40,6 +40,7 @@ import { hasText } from "@/lib/text";
 
 import { APPROVAL_DECISION_DEFS } from "./approval-decision-defs";
 import { CorrectionEntry, CorrectionReasonPopover } from "./CorrectionReason";
+import { DisputeAlert } from "./DisputeAlert";
 import { FeedbackBody } from "./FeedbackBody";
 import { LevelBodySkeleton } from "./LevelBodySkeleton";
 import {
@@ -163,6 +164,7 @@ export function FeedbackLevel({
 			{header}
 			<DrawerBody className="flex flex-col gap-8 pt-2">
 				{withdrawal && <WithdrawalAlert withdrawal={withdrawal} />}
+				{record.dispute && <DisputeAlert dispute={record.dispute} />}
 				<FeedbackFacts feedback={record} proposal={awaitingApproval} />
 				{awaitingApproval ? (
 					<ProposalPackage feedback={record} />

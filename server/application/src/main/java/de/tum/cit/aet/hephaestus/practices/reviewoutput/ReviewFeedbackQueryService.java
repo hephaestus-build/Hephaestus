@@ -17,6 +17,8 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawal;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.FeedbackApprovalDTO;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
+import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.FeedbackDisputeDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.FeedbackWithdrawalDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewBoundObservationDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDTO;
@@ -55,6 +57,7 @@ class ReviewFeedbackQueryService {
     private final DeliveryPolicyEvaluationRepository policyEvaluations;
     private final FeedbackWithdrawalRepository withdrawalRepository;
     private final AccountSummaryQuery accountSummaryQuery;
+    private final ReactionRepository reactionRepository;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -136,6 +139,10 @@ class ReviewFeedbackQueryService {
                 history.stream()
                         .map(withdrawal -> FeedbackWithdrawalDTO.from(withdrawal, accounts))
                         .toList(),
+                reactionRepository
+                        .findStandingDispute(workspaceId, feedbackId)
+                        .map(FeedbackDisputeDTO::from)
+                        .orElse(null),
                 bodyVisibleToOperator(feedback));
     }
 

@@ -122,6 +122,9 @@ public class InAppFeedbackService {
                 .filter(prepared::contains)
                 .toList();
         if (!toMarkDelivered.isEmpty()) {
+            // Locked first, in a statement of its own, so a withdrawal committed while this read waited keeps
+            // the card from being marked as seen.
+            feedbackRepository.lockPreparedInApp(workspaceId, toMarkDelivered);
             feedbackRepository.markInAppDelivered(workspaceId, toMarkDelivered, now);
         }
         return onThePage;

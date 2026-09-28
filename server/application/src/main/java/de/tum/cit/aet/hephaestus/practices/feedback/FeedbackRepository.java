@@ -911,6 +911,20 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             @Param("since") Instant since);
 
     /**
+     * Takes the row lock a withdrawal takes on each of {@code ids} still PREPARED on the practice page, in id order.
+     * Called in the transaction that then runs {@link #markInAppDelivered}: that UPDATE, as a statement issued after
+     * the locks are held, judges withdrawals by a snapshot taken after any withdrawal it waited on committed.
+     */
+    @Query(value = """
+                    SELECT f.id FROM feedback f
+                    WHERE f.id IN (:ids) AND f.workspace_id = :workspaceId AND f.channel = 'IN_APP'
+                      AND f.delivery_state = 'PREPARED'
+                    ORDER BY f.id
+                    FOR UPDATE
+                    """, nativeQuery = true)
+    List<UUID> lockPreparedInApp(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
+
+    /**
      * Flips PREPARED in-app feedback to DELIVERED at the moment its recipient actually reads it — one
      * statement for the whole page (compare-and-set, so two concurrent page loads cannot both claim a flip
      * and the second sees it in the count).

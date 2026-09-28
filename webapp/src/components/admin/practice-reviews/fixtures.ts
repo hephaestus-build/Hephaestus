@@ -1126,6 +1126,7 @@ export function observationDetail(observationId: string): ReviewObservationDetai
 		})),
 		evidenceRationale: observation.evidenceRationale,
 		invalidations: [],
+		disputes: [],
 	};
 }
 

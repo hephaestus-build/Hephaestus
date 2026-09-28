@@ -144,6 +144,33 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     /** Whether an admin has marked {@code o} incorrect. */
     String INVALIDATED = "EXISTS (SELECT 1 FROM observation_invalidation oi WHERE " + OPEN_INVALIDATION + ")";
 
+    /**
+     * The recipient's newest response on feedback {@code fb}, as {@code latest}, kept only while it disputes the
+     * feedback. A native join fragment over {@code fb}.
+     */
+    String STANDING_DISPUTE = """
+         JOIN LATERAL (
+             SELECT r.action, r.explanation, r.created_at
+             FROM reaction r
+             WHERE r.feedback_id = fb.id AND r.reactor_user_id = fb.recipient_user_id
+             ORDER BY r.created_at DESC, r.id DESC LIMIT 1
+         ) latest ON latest.action = 'DISPUTED'
+        """;
+
+    /**
+     * The feedback bound to {@code o} whose recipient disputes it, each with its {@link #STANDING_DISPUTE}. A native
+     * fragment to follow {@code SELECT ...}.
+     */
+    String CURRENT_DISPUTES = """
+         FROM feedback_observation fo
+         JOIN feedback fb ON fb.id = fo.feedback_id AND fb.workspace_id = o.workspace_id
+        """ + STANDING_DISPUTE + """
+         WHERE fo.observation_id = o.id
+        """;
+
+    /** Whether the developer disputes feedback written from {@code o}. */
+    String DISPUTED = "EXISTS (SELECT 1 " + CURRENT_DISPUTES + ")";
+
     /** Observations counted by assessment, as native select columns over {@code o}. */
     String ASSESSMENT_COUNTS = "COUNT(*) FILTER (WHERE " + POSITIVE_OUTCOME + ") AS \"strengths\","
             + " COUNT(*) FILTER (WHERE " + NEGATIVE_OUTCOME + ") AS \"problems\"," + """
@@ -544,7 +571,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             Pageable pageable);
 
     /**
-     * Review-history page at the run grain. Paging observations directly can split one review across pages,
+     * Review-history page at the run grain, for one practice group, one piece of work, or both. Paging observations directly can split one review across pages,
      * which leaves the developer with an incomplete explanation of what the reviewer saw. This projection first
      * selects complete agent-job runs; {@link #findPracticeGroupReviewRunObservations} loads their observations next.
      *
@@ -557,10 +584,12 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                            MAX(f.observed_at) AS "reviewedAt"
                     FROM observation f
                     JOIN practice p ON p.id = f.practice_id
-                    JOIN practice_group a ON a.id = p.practice_group_id
+                    LEFT JOIN practice_group a ON a.id = p.practice_group_id
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
-                      AND a.slug = :groupSlug
+                      AND (CAST(:groupSlug AS text) IS NULL OR a.slug = :groupSlug)
+                      AND (CAST(:artifactId AS bigint) IS NULL
+                           OR (f.artifact_kind = :artifactKind AND f.artifact_id = CAST(:artifactId AS bigint)))
                       AND (:practiceSlug IS NULL OR p.slug = :practiceSlug)
                       AND (:artifactKinds IS NULL OR f.artifact_kind = ANY(string_to_array(:artifactKinds, ',')))
                       AND (:severities IS NULL OR f.severity = ANY(string_to_array(:severities, ',')))
@@ -573,13 +602,16 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("aboutUserId") Long aboutUserId,
             @Param("workspaceId") Long workspaceId,
             @Param("groupSlug") @Nullable String groupSlug,
+            @Param("artifactKind") @Nullable String artifactKind,
+            @Param("artifactId") @Nullable Long artifactId,
             @Param("practiceSlug") @Nullable String practiceSlug,
             @Param("artifactKinds") @Nullable String artifactKinds,
             @Param("severities") @Nullable String severities,
             Pageable pageable);
 
     /**
-     * Every observation in the group for the runs {@link #findPracticeGroupReviewRuns} returned. Filters select
+     * Every observation in the group, or in every group when {@code groupSlug} is null, for the runs
+     * {@link #findPracticeGroupReviewRuns} returned. Filters select
      * matching runs; they do not truncate a selected review run.
      *
      * <p>Fetches both revisions because every row is handed straight to {@code ObservationVisibilityPolicy},
@@ -590,11 +622,11 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     @Query("""
         SELECT o FROM Observation o
         JOIN FETCH o.practice p
-        JOIN p.group a
+        LEFT JOIN p.group a
         WHERE o.agentJobId IN :jobIds
           AND o.aboutUserId = :aboutUserId
           AND o.workspaceId = :workspaceId
-          AND a.slug = :groupSlug
+          AND (:groupSlug IS NULL OR a.slug = :groupSlug)
           AND o.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE
         ORDER BY o.observedAt DESC, o.id ASC
         """)
@@ -934,6 +966,9 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     String INVALIDATED_FILTER = "AND (CAST(:#{#f.invalidated()} AS boolean) IS NULL"
             + " OR CAST(:#{#f.invalidated()} AS boolean) = " + INVALIDATED + ")\n";
 
+    String DISPUTED_FILTER = "AND (CAST(:#{#f.disputed()} AS boolean) IS NULL"
+            + " OR CAST(:#{#f.disputed()} AS boolean) = " + DISPUTED + ")\n";
+
     String OPERATOR_PREDICATES = """
           AND (CAST(:#{#f.assessmentStatusNames()} AS text[]) IS NULL OR o.assessment_status = ANY(CAST(:#{#f.assessmentStatusNames()} AS text[])))
           AND (CAST(:#{#f.practiceSlugArray()} AS text[]) IS NULL OR p.slug = ANY(CAST(:#{#f.practiceSlugArray()} AS text[])))
@@ -948,11 +983,14 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
           AND (CAST(:#{#f.originNames()} AS text[]) IS NULL OR o.origin = ANY(CAST(:#{#f.originNames()} AS text[])))
           AND (CAST(:#{#f.from()} AS timestamptz) IS NULL OR o.observed_at >= CAST(:#{#f.from()} AS timestamptz))
           AND (CAST(:#{#f.to()} AS timestamptz) IS NULL OR o.observed_at < CAST(:#{#f.to()} AS timestamptz))
-        """ + OUTCOME_FILTER + INVALIDATED_FILTER;
+        """ + OUTCOME_FILTER + INVALIDATED_FILTER + DISPUTED_FILTER;
 
     /** When an admin marked {@code o} incorrect; null while it stands. */
     String INVALIDATED_AT =
             "(SELECT oi.invalidated_at FROM observation_invalidation oi WHERE " + OPEN_INVALIDATION + ")";
+
+    /** When the developer last disputed feedback written from {@code o}; null while nothing about it is disputed. */
+    String DISPUTED_AT = "(SELECT MAX(latest.created_at) " + CURRENT_DISPUTES + ")";
 
     /**
      * With {@code :prioritizeActionable}, problems first and the most severe of them first, then the other assessed
@@ -992,7 +1030,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                    evaluated_revision.review_rule_fingerprint AS "practiceRevisionFingerprint",
                    current_revision.review_rule_fingerprint AS "currentPracticeRevisionFingerprint",
                    o.superseded_at AS "supersededAt",
-            """ + INVALIDATED_AT + " AS \"invalidatedAt\"," + """
+            """ + INVALIDATED_AT + " AS \"invalidatedAt\"," + DISPUTED_AT + " AS \"disputedAt\"," + """
                    o.observed_at AS "observedAt"
             FROM observation o
             JOIN practice p ON p.id = o.practice_id
@@ -1000,7 +1038,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             LEFT JOIN practice_revision current_revision ON current_revision.id = p.current_revision_id
             LEFT JOIN practice_group pa ON pa.id = p.practice_group_id
             WHERE o.workspace_id = :workspaceId
-            """ + OPERATOR_PREDICATES + OPERATOR_ORDER,
+            """
+                    + OPERATOR_PREDICATES + OPERATOR_ORDER,
             countQuery = """
             SELECT count(*)
             FROM observation o
@@ -1082,6 +1121,10 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         /** When a workspace admin invalidated this claim; null while it stands. */
         @Nullable
         Instant getInvalidatedAt();
+
+        /** When the developer last disputed feedback written from this claim; null while none is disputed. */
+        @Nullable
+        Instant getDisputedAt();
 
         Instant getObservedAt();
     }

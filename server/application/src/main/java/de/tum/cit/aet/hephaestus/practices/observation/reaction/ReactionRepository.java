@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.observation.reaction;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -131,6 +132,43 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
         String getResolution();
 
         Instant getRespondedAt();
+    }
+
+    /**
+     * The disputes standing on feedback written from one observation, newest first: each piece's recipient disputes
+     * it with the explanation their newest response carries.
+     */
+    @Query(value = """
+        SELECT fb.id AS "feedbackId", fb.channel AS "channel", latest.explanation AS "explanation",
+               latest.created_at AS "disputedAt"
+        FROM feedback_observation fo
+        JOIN feedback fb ON fb.id = fo.feedback_id AND fb.workspace_id = :workspaceId
+        """ + ObservationRepository.STANDING_DISPUTE + """
+        WHERE fo.observation_id = :observationId
+        ORDER BY latest.created_at DESC, fb.id
+        """, nativeQuery = true)
+    List<StandingDisputeRow> findStandingDisputesOfObservation(
+            @Param("workspaceId") Long workspaceId, @Param("observationId") UUID observationId);
+
+    /** The dispute standing on one piece of feedback, if its recipient disputes it now. */
+    @Query(value = """
+        SELECT fb.id AS "feedbackId", fb.channel AS "channel", latest.explanation AS "explanation",
+               latest.created_at AS "disputedAt"
+        FROM feedback fb
+        """ + ObservationRepository.STANDING_DISPUTE + """
+        WHERE fb.id = :feedbackId AND fb.workspace_id = :workspaceId
+        """, nativeQuery = true)
+    Optional<StandingDisputeRow> findStandingDispute(
+            @Param("workspaceId") Long workspaceId, @Param("feedbackId") UUID feedbackId);
+
+    interface StandingDisputeRow {
+        UUID getFeedbackId();
+
+        String getChannel();
+
+        String getExplanation();
+
+        Instant getDisputedAt();
     }
 
     /**

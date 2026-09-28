@@ -75,7 +75,11 @@ public record ReviewFeedbackDetailDTO(
         @Schema(
                 description = "Every withdrawal of this card from the developer's practice page, newest first; empty"
                         + " when none")
-        List<FeedbackWithdrawalDTO> withdrawals) {
+        List<FeedbackWithdrawalDTO> withdrawals,
+
+        @Schema(description = "The developer's standing dispute of this feedback; null while they do not dispute it")
+        @Nullable
+        FeedbackDisputeDTO dispute) {
     public static ReviewFeedbackDetailDTO from(
             Feedback feedback,
             @Nullable ReviewedWorkRefDTO reviewedWork,
@@ -86,6 +90,7 @@ public record ReviewFeedbackDetailDTO(
             @Nullable FeedbackApprovalDTO approval,
             List<DeliveryPolicyTraceDTO> deliveryPolicy,
             List<FeedbackWithdrawalDTO> withdrawals,
+            @Nullable FeedbackDisputeDTO dispute,
             boolean bodyVisible) {
         return new ReviewFeedbackDetailDTO(
                 feedback.getId(),
@@ -111,6 +116,7 @@ public record ReviewFeedbackDetailDTO(
                         : List.of(),
                 approval,
                 deliveryPolicy,
-                withdrawals);
+                withdrawals,
+                dispute);
     }
 }

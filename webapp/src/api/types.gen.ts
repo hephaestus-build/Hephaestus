@@ -1728,6 +1728,19 @@ export type FeedbackApproval = {
   rejectionReason?: 'INCORRECT' | 'MISSING_CONTEXT' | 'UNHELPFUL' | 'DUPLICATE' | 'INAPPROPRIATE_PLACEMENT' | 'OTHER';
 };
 
+/**
+ * A developer's standing dispute of feedback written for them. The explanation is theirs, written to the workspace's administrators; the feedback's own text stays as private as its channel keeps it.
+ */
+export type FeedbackDispute = {
+  channel: 'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP';
+  disputedAt: Date;
+  /**
+   * Why the developer thinks the feedback is wrong, in their words
+   */
+  explanation: string;
+  feedbackId: string;
+};
+
 export type FeedbackItem = {
   account?: FeedbackAccountRef;
   appVersion?: string;
@@ -4539,6 +4552,10 @@ export type ReviewFeedbackDetail = {
    */
   deliveryPolicy: Array<DeliveryPolicyTrace>;
   deliveryState: 'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED' | 'UNCONFIRMED';
+  /**
+   * The developer's standing dispute of this feedback; null while they do not dispute it
+   */
+  dispute?: FeedbackDispute;
   id: string;
   /**
    * Source observations in render order
@@ -4600,6 +4617,10 @@ export type ReviewObservation = {
    * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * When the developer last disputed feedback written from this observation; null while nothing about it is disputed
+   */
+  disputedAt?: Date;
   /**
    * Counts of linked feedback by delivery state
    */
@@ -4671,6 +4692,10 @@ export type ReviewObservationDetail = {
    * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * The developer's standing disputes of feedback written from this observation, newest first; empty when nothing about it is disputed
+   */
+  disputes: Array<FeedbackDispute>;
   evidence?: ObservationEvidence;
   evidenceRationale?: string;
   /**
@@ -7200,6 +7225,10 @@ export type ReviewFeedbackDetailWritable = {
    */
   deliveryPolicy: Array<DeliveryPolicyTrace>;
   deliveryState: 'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED' | 'UNCONFIRMED';
+  /**
+   * The developer's standing dispute of this feedback; null while they do not dispute it
+   */
+  dispute?: FeedbackDispute;
   id: string;
   /**
    * Source observations in render order
@@ -7262,6 +7291,10 @@ export type ReviewObservationWritable = {
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
+   * When the developer last disputed feedback written from this observation; null while nothing about it is disputed
+   */
+  disputedAt?: Date;
+  /**
    * Counts of linked feedback by delivery state
    */
   feedback: ReviewFeedbackCounts;
@@ -7312,6 +7345,10 @@ export type ReviewObservationDetailWritable = {
    * Whether an observation still has current review rules and supporting work snapshot
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * The developer's standing disputes of feedback written from this observation, newest first; empty when nothing about it is disputed
+   */
+  disputes: Array<FeedbackDispute>;
   evidence?: ObservationEvidence;
   evidenceRationale?: string;
   /**
@@ -12563,6 +12600,50 @@ export type ListReviewedPracticesResponses = {
 
 export type ListReviewedPracticesResponse = ListReviewedPracticesResponses[keyof ListReviewedPracticesResponses];
 
+export type ListReviewedWorkReviewRunsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    /**
+     * Kind of reviewed work, e.g. scm.pull_request
+     */
+    artifactKind: string;
+    artifactId: number;
+  };
+  query?: {
+    /**
+     * Zero-based page, at most 100
+     */
+    page?: number;
+    /**
+     * Page size from 1 to 50
+     */
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/practices/reviewed-work/{artifactKind}/{artifactId}/review-runs';
+};
+
+export type ListReviewedWorkReviewRunsErrors = {
+  /**
+   * Unknown kind of work or invalid pagination
+   */
+  400: ProblemDetail;
+};
+
+export type ListReviewedWorkReviewRunsError = ListReviewedWorkReviewRunsErrors[keyof ListReviewedWorkReviewRunsErrors];
+
+export type ListReviewedWorkReviewRunsResponses = {
+  /**
+   * Paginated review runs returned
+   */
+  200: PracticeGroupReviewRunsPage;
+};
+
+export type ListReviewedWorkReviewRunsResponse = ListReviewedWorkReviewRunsResponses[keyof ListReviewedWorkReviewRunsResponses];
+
 export type ListPracticeReviewsData = {
   body?: never;
   path: {
@@ -12833,6 +12914,10 @@ export type ListPracticeReviewObservationsData = {
      * true for only the observations an admin has marked incorrect and not restored, false for only the others; omit for both
      */
     invalidated?: boolean;
+    /**
+     * true for only the observations the developer disputes feedback about, false for only the others; omit for both
+     */
+    disputed?: boolean;
     severity?: Array<'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO'>;
     agentJobId?: string;
     /**

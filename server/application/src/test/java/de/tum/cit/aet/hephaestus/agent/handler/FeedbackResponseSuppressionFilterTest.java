@@ -174,7 +174,8 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
 
     @Test
     void shouldAskOnlyForTheExactObservationWhenItRecordedNoPlace() {
-        UUID observationId = persisted(null, "occ-a", Presence.ABSENT, Assessment.GOOD).getId();
+        UUID observationId =
+                persisted(null, "occ-a", Presence.ABSENT, Assessment.GOOD).getId();
         answers();
 
         filter().evaluate(job(), List.of(vf(null, "occ-a", Presence.ABSENT)));

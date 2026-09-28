@@ -19,6 +19,7 @@ import {
 } from "@/components/practice-vocabulary/ClaimCurrentness";
 import { deliveryOutcome } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
+import { DEVELOPER_RESPONSE_DEFS } from "@/components/practice-vocabulary/observation-dispute-defs";
 import {
 	MARKED_INCORRECT_DEF,
 	PROVIDER_COPY_IN_FORCE,
@@ -37,6 +38,7 @@ import {
 import { hasText } from "@/lib/text";
 
 import { CorrectionEntry, CorrectionReasonPopover } from "./CorrectionReason";
+import { DisputeAlert } from "./DisputeAlert";
 import { LevelBodySkeleton } from "./LevelBodySkeleton";
 import { ObservationEvidence } from "./ObservationEvidence";
 import { feedbackLevel, workLevel } from "./review-levels";
@@ -89,6 +91,9 @@ export function ObservationLevel({
 						<ObservationResultBadge observation={observation} />
 						<ClaimCurrentnessBadge currentness={observation.claimCurrentness} />
 						{inForce && <StatusBadge def={MARKED_INCORRECT_DEF} />}
+						{observation.disputes.length > 0 && (
+							<StatusBadge def={DEVELOPER_RESPONSE_DEFS.DISPUTED} />
+						)}
 					</>
 				)
 			}
@@ -133,6 +138,9 @@ export function ObservationLevel({
 			<DrawerBody className="flex flex-col gap-8 pt-2">
 				<ClaimCurrentnessAlert currentness={record.claimCurrentness} />
 				{inForce && <InvalidationAlert invalidation={inForce} />}
+				{record.disputes.map((dispute) => (
+					<DisputeAlert key={dispute.feedbackId} dispute={dispute} linkFeedback />
+				))}
 
 				<ReviewFactGrid>
 					<ReviewFact label="Practice">

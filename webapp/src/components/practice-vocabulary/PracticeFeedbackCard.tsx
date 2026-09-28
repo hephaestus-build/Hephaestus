@@ -495,6 +495,11 @@ export function PracticeFeedbackCard({
 						placeholder="One or two sentences on what is off"
 						required
 						reasons={NOT_HELPFUL_REASONS}
+						audience={(reason) =>
+							reason === "not-accurate"
+								? "Not accurate disputes this card: workspace admins read your sentence, not the card, and can correct its observations or withdraw it."
+								: undefined
+						}
 						isPending={isPending}
 						onSend={onSendComment}
 						onSkip={onSkipComment}

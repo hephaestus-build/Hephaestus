@@ -141,6 +141,64 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
                 .expectBody();
     }
 
+    /**
+     * The page a comment on the work links to reads the same runs by the work instead of the group: every group,
+     * an ungrouped practice included, and nothing from other work.
+     */
+    @Test
+    @WithUser
+    void shouldListEveryGroupsObservationsOfOneWorkWhenReadByTheWork() {
+        Practice ungrouped = persistPractice(workspace, null, "commit-discipline", "Commit discipline", null);
+        UUID grouped =
+                observe("No testing notes", OMISSION_GAP, Severity.MAJOR, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        UUID loose = observe(
+                ungrouped,
+                agentJob,
+                ArtifactKinds.PULL_REQUEST.value(),
+                1L,
+                developer,
+                "Commits mix two changes",
+                OMISSION_GAP,
+                Severity.MINOR,
+                Instant.now(),
+                DIFF_EVIDENCE_JSON,
+                null);
+        AgentJob otherReview = persistAgentJob(workspace);
+        observe(
+                practice,
+                otherReview,
+                ArtifactKinds.PULL_REQUEST.value(),
+                2L,
+                developer,
+                "Other work",
+                OMISSION_GAP,
+                Severity.MAJOR,
+                Instant.now(),
+                DIFF_EVIDENCE_JSON,
+                null);
+
+        webTestClient
+                .get()
+                .uri(
+                        "/workspaces/{workspaceSlug}/practices/reviewed-work/{artifactKind}/{artifactId}/review-runs",
+                        workspace.getWorkspaceSlug(),
+                        ArtifactKinds.PULL_REQUEST.value(),
+                        1L)
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content.length()")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].reviewId")
+                .isEqualTo(agentJob.getId().toString())
+                .jsonPath("$.content[0].observations[*].id")
+                .value(ids -> org.assertj.core.api.Assertions.assertThat(ids)
+                        .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                        .containsExactlyInAnyOrder(grouped.toString(), loose.toString()));
+    }
+
     @Test
     @WithUser
     @DisplayName("returns a review run whole, with every observation that explains it")

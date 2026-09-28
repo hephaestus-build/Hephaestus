@@ -70,6 +70,7 @@ import { Route as AuthenticatedWWorkspaceSlugAdminPracticesIndexRouteImport } fr
 import { Route as AuthenticatedWWorkspaceSlugAdminPracticesReleasesRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/practices/releases'
 import { Route as AuthenticatedWWorkspaceSlugAdminPracticesReviewRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/practices/review'
 import { Route as AuthenticatedWWorkspaceSlugAdminPracticesReviewsRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/practices/reviews'
+import { Route as AuthenticatedWWorkspaceSlugFeedbackArtifactKindArtifactIdRouteImport } from './routes/_authenticated/w/$workspaceSlug/feedback.$artifactKind.$artifactId'
 import { Route as AuthenticatedWWorkspaceSlugReviewsArtifactKindArtifactIdRouteImport } from './routes/_authenticated/w/$workspaceSlug/reviews/$artifactKind.$artifactId'
 import { Route as AuthenticatedWWorkspaceSlugUserUsernameIndexRouteImport } from './routes/_authenticated/w/$workspaceSlug/user/$username/index'
 import { Route as AuthenticatedWWorkspaceSlugAdminPracticesReviewsIndexRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/index'
@@ -425,6 +426,12 @@ const AuthenticatedWWorkspaceSlugAdminPracticesReviewsRoute =
     path: '/reviews',
     getParentRoute: () => AuthenticatedWWorkspaceSlugAdminPracticesRoute,
   } as any)
+const AuthenticatedWWorkspaceSlugFeedbackArtifactKindArtifactIdRoute =
+  AuthenticatedWWorkspaceSlugFeedbackArtifactKindArtifactIdRouteImport.update({
+    id: '/feedback/$artifactKind/$artifactId',
+    path: '/feedback/$artifactKind/$artifactId',
+    getParentRoute: () => AuthenticatedWWorkspaceSlugRouteRoute,
+  } as any)
 const AuthenticatedWWorkspaceSlugReviewsArtifactKindArtifactIdRoute =
   AuthenticatedWWorkspaceSlugReviewsArtifactKindArtifactIdRouteImport.update({
     id: '/$artifactKind/$artifactId',
@@ -532,6 +539,7 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceSlug/admin/practices/releases': typeof AuthenticatedWWorkspaceSlugAdminPracticesReleasesRoute
   '/w/$workspaceSlug/admin/practices/review': typeof AuthenticatedWWorkspaceSlugAdminPracticesReviewRoute
   '/w/$workspaceSlug/admin/practices/reviews': typeof AuthenticatedWWorkspaceSlugAdminPracticesReviewsRouteWithChildren
+  '/w/$workspaceSlug/feedback/$artifactKind/$artifactId': typeof AuthenticatedWWorkspaceSlugFeedbackArtifactKindArtifactIdRoute
   '/w/$workspaceSlug/reviews/$artifactKind/$artifactId': typeof AuthenticatedWWorkspaceSlugReviewsArtifactKindArtifactIdRoute
   '/w/$workspaceSlug/admin/integrations/': typeof AuthenticatedWWorkspaceSlugAdminIntegrationsIndexRoute
   '/w/$workspaceSlug/admin/practices/': typeof AuthenticatedWWorkspaceSlugAdminPracticesIndexRoute
@@ -593,6 +601,7 @@ export interface FileRoutesByTo {
   '/w/$workspaceSlug/admin/integrations/slack': typeof AuthenticatedWWorkspaceSlugAdminIntegrationsSlackRoute
   '/w/$workspaceSlug/admin/practices/releases': typeof AuthenticatedWWorkspaceSlugAdminPracticesReleasesRoute
   '/w/$workspaceSlug/admin/practices/review': typeof AuthenticatedWWorkspaceSlugAdminPracticesReviewRoute
+  '/w/$workspaceSlug/feedback/$artifactKind/$artifactId': typeof AuthenticatedWWorkspaceSlugFeedbackArtifactKindArtifactIdRoute
   '/w/$workspaceSlug/reviews/$artifactKind/$artifactId': typeof AuthenticatedWWorkspaceSlugReviewsArtifactKindArtifactIdRoute
   '/w/$workspaceSlug/admin/integrations': typeof AuthenticatedWWorkspaceSlugAdminIntegrationsIndexRoute
   '/w/$workspaceSlug/admin/practices': typeof AuthenticatedWWorkspaceSlugAdminPracticesIndexRoute
@@ -664,6 +673,7 @@ export interface FileRoutesById {
   '/_authenticated/w/$workspaceSlug/admin/practices/releases': typeof AuthenticatedWWorkspaceSlugAdminPracticesReleasesRoute
   '/_authenticated/w/$workspaceSlug/admin/practices/review': typeof AuthenticatedWWorkspaceSlugAdminPracticesReviewRoute
   '/_authenticated/w/$workspaceSlug/admin/practices/reviews': typeof AuthenticatedWWorkspaceSlugAdminPracticesReviewsRouteWithChildren
+  '/_authenticated/w/$workspaceSlug/feedback/$artifactKind/$artifactId': typeof AuthenticatedWWorkspaceSlugFeedbackArtifactKindArtifactIdRoute
   '/_authenticated/w/$workspaceSlug/reviews/$artifactKind/$artifactId': typeof AuthenticatedWWorkspaceSlugReviewsArtifactKindArtifactIdRoute
   '/_authenticated/w/$workspaceSlug/admin/integrations/': typeof AuthenticatedWWorkspaceSlugAdminIntegrationsIndexRoute
   '/_authenticated/w/$workspaceSlug/admin/practices/': typeof AuthenticatedWWorkspaceSlugAdminPracticesIndexRoute
@@ -735,6 +745,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/admin/practices/releases'
     | '/w/$workspaceSlug/admin/practices/review'
     | '/w/$workspaceSlug/admin/practices/reviews'
+    | '/w/$workspaceSlug/feedback/$artifactKind/$artifactId'
     | '/w/$workspaceSlug/reviews/$artifactKind/$artifactId'
     | '/w/$workspaceSlug/admin/integrations/'
     | '/w/$workspaceSlug/admin/practices/'
@@ -796,6 +807,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/admin/integrations/slack'
     | '/w/$workspaceSlug/admin/practices/releases'
     | '/w/$workspaceSlug/admin/practices/review'
+    | '/w/$workspaceSlug/feedback/$artifactKind/$artifactId'
     | '/w/$workspaceSlug/reviews/$artifactKind/$artifactId'
     | '/w/$workspaceSlug/admin/integrations'
     | '/w/$workspaceSlug/admin/practices'
@@ -866,6 +878,7 @@ export interface FileRouteTypes {
     | '/_authenticated/w/$workspaceSlug/admin/practices/releases'
     | '/_authenticated/w/$workspaceSlug/admin/practices/review'
     | '/_authenticated/w/$workspaceSlug/admin/practices/reviews'
+    | '/_authenticated/w/$workspaceSlug/feedback/$artifactKind/$artifactId'
     | '/_authenticated/w/$workspaceSlug/reviews/$artifactKind/$artifactId'
     | '/_authenticated/w/$workspaceSlug/admin/integrations/'
     | '/_authenticated/w/$workspaceSlug/admin/practices/'
@@ -1321,6 +1334,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWWorkspaceSlugAdminPracticesReviewsRouteImport
       parentRoute: typeof AuthenticatedWWorkspaceSlugAdminPracticesRoute
     }
+    '/_authenticated/w/$workspaceSlug/feedback/$artifactKind/$artifactId': {
+      id: '/_authenticated/w/$workspaceSlug/feedback/$artifactKind/$artifactId'
+      path: '/feedback/$artifactKind/$artifactId'
+      fullPath: '/w/$workspaceSlug/feedback/$artifactKind/$artifactId'
+      preLoaderRoute: typeof AuthenticatedWWorkspaceSlugFeedbackArtifactKindArtifactIdRouteImport
+      parentRoute: typeof AuthenticatedWWorkspaceSlugRouteRoute
+    }
     '/_authenticated/w/$workspaceSlug/reviews/$artifactKind/$artifactId': {
       id: '/_authenticated/w/$workspaceSlug/reviews/$artifactKind/$artifactId'
       path: '/$artifactKind/$artifactId'
@@ -1578,6 +1598,7 @@ interface AuthenticatedWWorkspaceSlugRouteRouteChildren {
   AuthenticatedWWorkspaceSlugWorkspaceActivityRoute: typeof AuthenticatedWWorkspaceSlugWorkspaceActivityRoute
   AuthenticatedWWorkspaceSlugIndexRoute: typeof AuthenticatedWWorkspaceSlugIndexRoute
   AuthenticatedWWorkspaceSlugTeamsIndexRoute: typeof AuthenticatedWWorkspaceSlugTeamsIndexRoute
+  AuthenticatedWWorkspaceSlugFeedbackArtifactKindArtifactIdRoute: typeof AuthenticatedWWorkspaceSlugFeedbackArtifactKindArtifactIdRoute
   AuthenticatedWWorkspaceSlugUserUsernameIndexRoute: typeof AuthenticatedWWorkspaceSlugUserUsernameIndexRoute
   AuthenticatedWWorkspaceSlugUserUsernamePracticeGroupsGroupSlugRoute: typeof AuthenticatedWWorkspaceSlugUserUsernamePracticeGroupsGroupSlugRoute
 }
@@ -1602,6 +1623,8 @@ const AuthenticatedWWorkspaceSlugRouteRouteChildren: AuthenticatedWWorkspaceSlug
       AuthenticatedWWorkspaceSlugIndexRoute,
     AuthenticatedWWorkspaceSlugTeamsIndexRoute:
       AuthenticatedWWorkspaceSlugTeamsIndexRoute,
+    AuthenticatedWWorkspaceSlugFeedbackArtifactKindArtifactIdRoute:
+      AuthenticatedWWorkspaceSlugFeedbackArtifactKindArtifactIdRoute,
     AuthenticatedWWorkspaceSlugUserUsernameIndexRoute:
       AuthenticatedWWorkspaceSlugUserUsernameIndexRoute,
     AuthenticatedWWorkspaceSlugUserUsernamePracticeGroupsGroupSlugRoute:

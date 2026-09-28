@@ -300,6 +300,12 @@ export const NotHelpfulReasonOpen: Story = {
 			"Not useful",
 			"Already doing this",
 		]);
+		// Only "Not accurate" disputes the card, and only then is the sentence read by the admins.
+		await expect(field).not.toHaveAccessibleDescription(/workspace admins/u);
+		await userEvent.click(canvas.getByRole("button", { name: "Not accurate" }));
+		await expect(field).toHaveAccessibleDescription(
+			/workspace admins read your sentence, not the card/u,
+		);
 		await userEvent.click(canvas.getByRole("button", { name: "Already doing this" }));
 		await userEvent.type(field, "Each of these was already one concern.");
 		await userEvent.click(canvas.getByRole("button", { name: "Send" }));
