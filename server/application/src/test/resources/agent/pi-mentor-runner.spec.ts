@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 
 import {
 	isFetchContextKey,
@@ -145,6 +146,7 @@ interface RunnerHandle {
 	reader: Reader;
 	send: (request: MentorRequest) => void;
 	diagnose: () => void;
+	stderr: () => string;
 }
 
 function spawnRunner(t: TestContext, env: Record<string, string> = {}): RunnerHandle {
@@ -182,7 +184,7 @@ function spawnRunner(t: TestContext, env: Record<string, string> = {}): RunnerHa
 				}
 				assert.match(
 					message,
-					/^(?:runtime initialised|shutdown requested — exiting|bound thread [\da-f-]+ → .+\.jsonl|prompt resolved: thread=[\da-f-]+)$/u,
+					/^(?:runtime initialised|shutdown requested — exiting|bound thread [\da-f-]+ → .+\.jsonl|restored session for thread [\da-f-]+|prompt resolved: thread=[\da-f-]+)$/u,
 				);
 			}
 		} catch (error) {
@@ -193,7 +195,13 @@ function spawnRunner(t: TestContext, env: Record<string, string> = {}): RunnerHa
 	const send = (request: MentorRequest) => {
 		child.stdin.write(`${JSON.stringify(request)}\n`);
 	};
-	return { child, reader, send, diagnose: () => t.diagnostic(`Runner stderr:\n${stderr}`) };
+	return {
+		child,
+		reader,
+		send,
+		diagnose: () => t.diagnostic(`Runner stderr:\n${stderr}`),
+		stderr: () => stderr,
+	};
 }
 
 async function shutdown({ child, send }: RunnerHandle): Promise<void> {
@@ -244,6 +252,53 @@ void test("hello handshake returns protocolVersion 1", async (t) => {
 		const result = await readResult(runner.reader, "h1");
 		assert.ok("protocolVersion" in result, "hello must answer with a protocolVersion");
 		assert.equal(result.protocolVersion, 1);
+	} catch (error) {
+		runner.diagnose();
+		throw error;
+	} finally {
+		await shutdown(runner);
+	}
+});
+
+void test("starts the runtime with the process, before any request", async (t) => {
+	const runner = spawnRunner(t);
+	try {
+		await readReady(runner.reader);
+		for (let waited = 0; !runner.stderr().includes("runtime initialised"); waited += 20) {
+			assert.ok(waited < 5000, "the runtime never started without a request");
+			await delay(20);
+		}
+	} catch (error) {
+		runner.diagnose();
+		throw error;
+	} finally {
+		await shutdown(runner);
+	}
+});
+
+void test("open_thread restores a saved session only where the runner holds none", async (t) => {
+	const runner = spawnRunner(t);
+	const threadId = "33333333-4444-5555-6666-777777777777";
+	const sessionPath = path.join(SESSIONS_TMPDIR, `${threadId}.jsonl`);
+	try {
+		await readReady(runner.reader);
+		runner.send({
+			jsonrpc: "2.0",
+			id: "o1",
+			method: "open_thread",
+			params: { threadId, session: '{"type":"session"}\n' },
+		});
+		await readResult(runner.reader, "o1");
+		assert.equal(readFileSync(sessionPath, "utf8"), '{"type":"session"}\n');
+
+		runner.send({
+			jsonrpc: "2.0",
+			id: "o2",
+			method: "open_thread",
+			params: { threadId, session: '{"type":"older"}\n' },
+		});
+		await readResult(runner.reader, "o2");
+		assert.equal(readFileSync(sessionPath, "utf8"), '{"type":"session"}\n');
 	} catch (error) {
 		runner.diagnose();
 		throw error;

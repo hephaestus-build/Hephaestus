@@ -87,6 +87,39 @@ class SlackMentorServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldPrepareTheSandboxOfALinkedDeveloperWhoOpensTheApp() {
+        when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
+        when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.of(314L));
+
+        service().prepare(TEAM, USER);
+
+        verify(mentorTurnRunner).prepare(WORKSPACE, 314L);
+        verifyNoInteractions(slackMessageService, threadLinker);
+    }
+
+    @Test
+    void shouldPrepareNothingForAnUnlinkedSlackUser() {
+        when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
+        when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.empty());
+
+        service().prepare(TEAM, USER);
+
+        verify(mentorTurnRunner, never()).prepare(anyLong(), anyLong());
+        verifyNoInteractions(slackMessageService, threadLinker);
+    }
+
+    @Test
+    void shouldPrepareNothingWhenHephIsNotReady() {
+        when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
+        SlackMentorService service = service();
+        when(mentorReadinessQuery.isReady(WORKSPACE)).thenReturn(false);
+
+        service.prepare(TEAM, USER);
+
+        verifyNoInteractions(identityResolver, mentorTurnRunner, slackMessageService);
+    }
+
+    @Test
     void shouldIgnoreTheDmWithoutAnySideEffectWhenHephIsNotReady() {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
         SlackMentorService service = service();

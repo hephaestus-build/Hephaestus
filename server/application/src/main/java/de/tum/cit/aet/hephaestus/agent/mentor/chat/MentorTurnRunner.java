@@ -11,4 +11,11 @@ public interface MentorTurnRunner {
 
     /** The caller must authenticate the developer and verify workspace membership before submitting the turn. */
     void run(MentorTurnRequest request, MentorChannel channel, long developerId);
+
+    /**
+     * Starts the developer's Heph sandbox in the background, so a message that follows finds it warm. Returns at
+     * once; sends no prompt, calls no model and writes no thread. The caller verifies the developer as for
+     * {@link #run}.
+     */
+    void prepare(long workspaceId, long developerId);
 }

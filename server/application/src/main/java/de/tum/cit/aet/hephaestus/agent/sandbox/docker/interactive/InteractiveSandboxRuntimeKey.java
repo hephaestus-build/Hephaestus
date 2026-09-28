@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
 
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
-import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
@@ -25,10 +24,6 @@ record InteractiveSandboxRuntimeKey(
         @Nullable RoutingKey routing) {
     static InteractiveSandboxRuntimeKey of(InteractiveSandboxSpec spec, @Nullable ProxyRouting routing) {
         Map<String, String> inputDigests = spec.inputFiles().entrySet().stream()
-                // Excluded because both are cold-start snapshots a warm runner refreshes for itself;
-                // including them would restart the container on every turn.
-                .filter(entry -> !entry.getKey().startsWith(SandboxLayout.SESSIONS_DIR_PREFIX)
-                        && !entry.getKey().startsWith(SandboxLayout.CONTEXT_PREFIX))
                 .collect(Collectors.toUnmodifiableMap(
                         Map.Entry::getKey, entry -> ProvenanceDigest.sha256Hex(entry.getValue())));
         boolean internetAccess =

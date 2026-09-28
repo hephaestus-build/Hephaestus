@@ -66,7 +66,7 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
 
     @Test
     @DisplayName(
-            "pi-mentor-runner.ts pins MENTOR_SYSTEM_PROMPT_PATH, SESSIONS_DIR_PREFIX, PI_AGENT_DIR, and the envelope exit")
+            "pi-mentor-runner.ts pins MENTOR_SYSTEM_PROMPT_PATH, SESSIONS_DIR, PI_AGENT_DIR, and the envelope exit")
     void mentorRunnerLiteralsMatchAbi() throws IOException {
         Path runner = resolveResource("agent/pi-mentor-runner.ts");
         assertThat(runner).isRegularFile();
@@ -77,7 +77,7 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
                 .contains("\"" + SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH + "\"");
 
         assertThat(body)
-                .as("mentor runner references SandboxLayout.SESSIONS_DIR_PREFIX dir name (.sessions)")
+                .as("mentor runner references SandboxLayout.SESSIONS_DIR dir name (.sessions)")
                 .contains("/" + SandboxLayout.SESSIONS_DIR);
 
         assertThat(body)

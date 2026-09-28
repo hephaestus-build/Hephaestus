@@ -480,15 +480,13 @@ class MentorLiveLlmTest {
     }
 
     /**
-     * Stage a second workspace pre-seeded with the captured JSONL and spawn a fresh runner against
-     * it (mirrors {@code MentorPiAdapter#buildSandboxSpec} injecting {@code .sessions/<id>.jsonl}).
-     * Deletes the prior workspace; {@code workspaceDir} is updated so @AfterEach cleans the new one.
+     * Stage a second workspace and spawn a fresh runner against it, then open the thread with the captured
+     * JSONL as {@code MentorChatService} does, so the runner restores {@code .sessions/<id>.jsonl} itself.
+     * {@code workspaceDir} is updated so @AfterEach cleans the new one.
      */
     private Path respawnWithSession(LiveLlmCredentials creds, UUID threadId, byte[] sessionBytes) throws Exception {
         Path nextWorkspace = stageWorkspace(creds);
         Path sessionFile = nextWorkspace.resolve(".sessions").resolve(threadId + ".jsonl");
-        Files.createDirectories(sessionFile.getParent());
-        Files.write(sessionFile, sessionBytes);
 
         // Keep the old workspace alive: the Pi SDK stores the CWD path in session JSONL, and
         // switchSession validates that the stored path still exists on disk. @AfterEach cleans all.
@@ -498,7 +496,7 @@ class MentorLiveLlmTest {
         var driver = new RunnerDriver(sandbox);
         driver.expectRunnerReady();
         driver.helloOk();
-        driver.openThread(threadId);
+        driver.openThread(threadId, sessionBytes);
         return sessionFile;
     }
 
@@ -706,8 +704,15 @@ class MentorLiveLlmTest {
         }
 
         void openThread(UUID threadId) {
+            openThread(threadId, null);
+        }
+
+        void openThread(UUID threadId, byte @Nullable [] session) {
             ObjectNode params = MAPPER.createObjectNode();
             params.put("threadId", threadId.toString());
+            if (session != null) {
+                params.put("session", new String(session, StandardCharsets.UTF_8));
+            }
             JsonNode response = call("open_thread", params, Duration.ofSeconds(30));
             assertThat(response.path("result").path("threadId").asString())
                     .as("open_thread acks with threadId")

@@ -131,6 +131,11 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
         boolean owned = false;
         boolean registered = false;
         try {
+            // Advisory: registration stays the authority, but a sandbox that cannot register is not worth building.
+            if (!registry.hasCapacity(spec.userId())) {
+                metrics.attachFailureMaxSessions.increment();
+                throw new InteractiveSandboxException("Mentor session cap reached");
+            }
             boolean allowInternet =
                     spec.networkPolicy() != null && spec.networkPolicy().internetAccess();
             networkId = networkManager.createJobNetwork(spec.sessionId(), allowInternet);
@@ -250,6 +255,12 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             }
             MDC.remove(MDC_SESSION_ID);
         }
+    }
+
+    @Override
+    public boolean isWarm(InteractiveSandboxSpec spec) {
+        DockerAttachedSandboxAdapter live = registry.findLive(spec.userId(), spec.workspaceId());
+        return live != null && live.hasRuntimeKey(runtimeKey(spec));
     }
 
     @Override

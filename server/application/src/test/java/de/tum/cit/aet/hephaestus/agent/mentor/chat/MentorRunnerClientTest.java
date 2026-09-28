@@ -110,7 +110,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
 
     @Test
     void shouldFailPendingAndLaterCallsWhenTheEventStreamIsLost() throws Exception {
-        CompletableFuture<JsonNode> inFlight = client.openThread(threadId);
+        CompletableFuture<JsonNode> inFlight = client.openThread(threadId, null);
         sandbox.takeFrame();
 
         sandbox.onLost.run();
@@ -126,7 +126,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
 
     @Test
     void errorResponseBecomesException() throws Exception {
-        CompletableFuture<JsonNode> future = client.openThread(UUID.randomUUID());
+        CompletableFuture<JsonNode> future = client.openThread(UUID.randomUUID(), null);
         JsonNode request = sandbox.takeFrame();
         long id = request.get("id").asLong();
         ObjectNode error = mapper.createObjectNode();

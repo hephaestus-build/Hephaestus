@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerExcepti
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerTimeoutException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
@@ -114,9 +115,13 @@ public final class MentorRunnerClient implements AutoCloseable {
         return call("hello", objectMapper.createObjectNode(), DEFAULT_CONTROL_TIMEOUT);
     }
 
-    public CompletableFuture<JsonNode> openThread(UUID threadId) {
+    /** {@code session} is the thread's saved Pi session JSONL; the runner restores it unless it holds its own. */
+    public CompletableFuture<JsonNode> openThread(UUID threadId, byte @Nullable [] session) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("threadId", threadId.toString());
+        if (session != null && session.length > 0) {
+            params.put("session", new String(session, StandardCharsets.UTF_8));
+        }
         return call("open_thread", params, DEFAULT_CONTROL_TIMEOUT);
     }
 

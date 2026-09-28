@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MergeReadinessCo
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
-import de.tum.cit.aet.hephaestus.agent.mentor.SessionRestore;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.ClientDisconnectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRefusedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerException;
@@ -54,6 +53,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -70,6 +70,8 @@ import tools.jackson.databind.node.JsonNodeFactory;
  * Runs one mentor chat turn: persist → attach sandbox → handshake → translate runner events
  * into {@link UIMessageChunk}s on the SSE stream. {@link #start} returns once the turn is
  * submitted to the virtual-thread executor; all blocking work happens off the request thread.
+ * {@link #prepare} starts a developer's sandbox the same way, without a turn, so the first message
+ * finds it warm.
  */
 @Service
 @RequiredArgsConstructor
@@ -109,6 +111,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
 
         // Record-started fires here so started/completed balance on the executor-rejected branch.
         metrics.recordStarted();
+        long acceptedAt = System.nanoTime();
         ExecutorService executor = turnExecutor.executor();
         Long actorId = CurrentScmIdentityHolder.getUserId().orElse(null);
         String actorLogin = CurrentScmIdentityHolder.getLogin().orElse(null);
@@ -120,7 +123,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     CurrentScmIdentityHolder.set(actorId, actorLogin, accountActorIds);
                 }
                 try {
-                    dispatchTurn(request, channel, clientHolder);
+                    dispatchTurn(request, channel, clientHolder, acceptedAt);
                 } finally {
                     CurrentScmIdentityHolder.clear();
                 }
@@ -149,11 +152,12 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 .findById(developerId)
                 .orElseThrow(() -> new EntityNotFoundException("User", String.valueOf(developerId)));
         metrics.recordStarted();
+        long acceptedAt = System.nanoTime();
         try {
             turnExecutor.executor().execute(() -> {
                 CurrentScmIdentityHolder.set(developerId, developer.getLogin(), Set.of(developerId));
                 try {
-                    dispatchTurn(request, channel, new AtomicReference<>());
+                    dispatchTurn(request, channel, new AtomicReference<>(), acceptedAt);
                 } finally {
                     CurrentScmIdentityHolder.clear();
                 }
@@ -165,10 +169,73 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         }
     }
 
+    /**
+     * Returns at once; the sandbox starts on the turn executor. Skipped where a turn could not run or would
+     * not need it: no sandbox service in this runtime, a turn holding the sandbox, a warm sandbox, no Heph
+     * model for the developer, a spent budget, or the session caps.
+     */
+    @Override
+    public void prepare(long workspaceId, long developerId) {
+        InteractiveSandboxService sandboxService = interactiveSandboxServiceProvider.getIfAvailable();
+        if (sandboxService == null) {
+            return;
+        }
+        try {
+            turnExecutor.executor().execute(() -> prepareSandbox(sandboxService, workspaceId, developerId));
+        } catch (RejectedExecutionException rejected) {
+            log.debug("Mentor sandbox prepare rejected by executor: {}", rejected.getMessage());
+        }
+    }
+
+    // Closing the scope is the operation; its binding is intentionally unread.
+    @SuppressWarnings("try")
+    private void prepareSandbox(InteractiveSandboxService sandboxService, long workspaceId, long developerId) {
+        // tryLock, never lock: a turn that holds the sandbox attaches for itself, and a prepare must not queue it.
+        var lock = turnLock.tryAcquireSandboxLock(new MentorTurnLock.SandboxKey(workspaceId, developerId));
+        if (lock.isEmpty()) {
+            return;
+        }
+        try (var ignored = lock.get()) {
+            Optional<WorkspaceAgentBinding> binding =
+                    memberAiRouting.binding(workspaceId, AgentPurpose.MENTOR, developerId);
+            if (binding.isEmpty()) {
+                return;
+            }
+            MentorLlmConfig llmConfig =
+                    MentorLlmConfig.fromAdmission(binding.get(), llmAdmissionService.admit(binding.get()));
+            if (llmBudgetService.decide(workspaceId).blocks(llmConfig.connectionScope())) {
+                return;
+            }
+            InteractiveSandboxSpec spec =
+                    mentorPiAdapter.buildSandboxSpec(new MentorAgentRequest(workspaceId, developerId), llmConfig);
+            boolean warm = true;
+            try {
+                warm = sandboxService.isWarm(spec);
+            } finally {
+                if (warm) {
+                    // Only attach would have used, and so revoked, the credential the spec minted.
+                    proxyCredentialRegistry.revoke(spec.sessionId());
+                }
+            }
+            if (!warm) {
+                sandboxService.attach(spec);
+                log.debug("Prepared mentor sandbox: workspaceId={}, developerId={}", workspaceId, developerId);
+            }
+        } catch (RuntimeException e) {
+            // The next turn attaches for itself and reports whatever still fails.
+            log.info(
+                    "Mentor sandbox not prepared: workspaceId={}, developerId={}: {}",
+                    workspaceId,
+                    developerId,
+                    e.getMessage());
+        }
+    }
+
     private void dispatchTurn(
             MentorTurnRequest request,
             MentorChannel channel,
-            AtomicReference<@Nullable MentorRunnerClient> clientHolder) {
+            AtomicReference<@Nullable MentorRunnerClient> clientHolder,
+            long acceptedAt) {
         MentorTurnLock.ThreadKey key = new MentorTurnLock.ThreadKey(request.workspaceId(), request.threadId());
         // Outer catch: anything that escapes the lock helper itself (not the lambda) would leave
         // started/completed metrics unbalanced and the emitter dangling for EMITTER_TIMEOUT_MS.
@@ -176,7 +243,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             Optional<Boolean> acquired = turnLock.withLockOr409(key, () -> {
                 Timer.Sample sample = metrics.startTimer();
                 try {
-                    MentorChatMetrics.Outcome outcome = runTurn(request, channel, clientHolder);
+                    MentorChatMetrics.Outcome outcome = runTurn(request, channel, clientHolder, acceptedAt);
                     metrics.recordCompleted(outcome);
                     return Boolean.TRUE;
                 } catch (TurnAlreadyInFlightException dup) {
@@ -227,11 +294,12 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     private MentorChatMetrics.Outcome runTurn(
             MentorTurnRequest request,
             MentorChannel channel,
-            AtomicReference<@Nullable MentorRunnerClient> clientHolder) {
+            AtomicReference<@Nullable MentorRunnerClient> clientHolder,
+            long acceptedAt) {
         org.slf4j.MDC.put("mentorThreadId", request.threadId().toString());
         org.slf4j.MDC.put("mentorWorkspaceId", Long.toString(request.workspaceId()));
         try {
-            return runTurnInternal(request, channel, clientHolder);
+            return runTurnInternal(request, channel, clientHolder, acceptedAt);
         } finally {
             org.slf4j.MDC.remove("mentorThreadId");
             org.slf4j.MDC.remove("mentorWorkspaceId");
@@ -243,7 +311,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     private MentorChatMetrics.Outcome runTurnInternal(
             MentorTurnRequest request,
             MentorChannel channel,
-            AtomicReference<@Nullable MentorRunnerClient> clientHolder) {
+            AtomicReference<@Nullable MentorRunnerClient> clientHolder,
+            long acceptedAt) {
         // Admission and budget checks precede persistence; the admitted model determines whose budget applies.
         MentorLlmConfig llmConfig = resolveWorkspaceLlmConfig(request.workspaceId());
 
@@ -266,7 +335,10 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 user,
                 CurrentScmIdentityHolder.getAccountActorIds(),
                 request.userMessage());
-        Optional<byte[]> priorSessionBytes = chatThreadRepository.findSessionJsonl(thread.getId());
+        byte @Nullable [] priorSession = chatThreadRepository
+                .findSessionJsonl(thread.getId())
+                .filter(bytes -> bytes.length > 0)
+                .orElse(null);
 
         UUID assistantMessageId = UUID.randomUUID();
         // Read model only: it makes this turn's completed calls visible to the budget gate while the
@@ -281,7 +353,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
 
         AttachedSandbox sandbox = null;
         MentorRunnerClient client = null;
-        Turn turn = new Turn();
+        Turn turn = new Turn(acceptedAt);
         channel.startKeepAlive();
         boolean poisoned = false;
         MentorChatMetrics.Outcome outcome = MentorChatMetrics.Outcome.ERROR;
@@ -290,30 +362,38 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             // multi-second cold start; markStarted then suppresses the translator's duplicate Start.
             channel.send(new UIMessageChunk.Start(assistantMessageId, null));
             state.markStarted();
-            channel.send(UIMessageChunk.DataMentorStatus.of("warming-up", "container-cold"));
 
             Map<String, byte[]> contextInputs = buildMentorContext(request, user, cookie.userMessageId());
             Function<MentorRunnerClient.FetchContextRequest, JsonNode> fetchContext =
                     callback -> handleFetchContext(callback, contextInputs, request.workspaceId(), user.getId());
             MentorAgentRequest agentRequest = new MentorAgentRequest(request.workspaceId(), user.getId());
-            SessionRestore sessionRestore = priorSessionBytes
-                    .filter(bytes -> bytes.length > 0)
-                    .map(bytes -> new SessionRestore(request.threadId(), bytes))
-                    .orElse(null);
-            InteractiveSandboxSpec spec =
-                    mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig, contextInputs, sessionRestore);
+            InteractiveSandboxService sandboxService = interactiveSandboxServiceProvider.getObject();
+            InteractiveSandboxSpec spec = mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig);
+            try {
+                // Asked before the sandbox lock: a turn queued behind a prepare that is still starting the
+                // sandbox waits for a cold start too.
+                turn.coldSandbox = !sandboxService.isWarm(spec);
+                if (turn.coldSandbox) {
+                    channel.send(UIMessageChunk.DataMentorStatus.of("warming-up", "container-cold"));
+                }
+            } catch (RuntimeException beforeAttach) {
+                // Only attach would have used, and so revoked, the credential the spec minted.
+                proxyCredentialRegistry.revoke(spec.sessionId());
+                throw beforeAttach;
+            }
             // Pi is single-session: hold the lock from attach through the terminal chunk, so a second turn can
             // neither orphan this one nor pick up a runner this turn is about to discard.
             MentorTurnLock.SandboxKey sandboxKey = new MentorTurnLock.SandboxKey(request.workspaceId(), user.getId());
             try (var ignored = turnLock.acquireSandboxLock(sandboxKey)) {
                 boolean poisoning = false;
                 try {
-                    sandbox = attachSandbox(spec);
+                    sandbox = attachSandbox(
+                            sandboxService, spec, () -> mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig));
                     client = startRunner(sandbox, request, channel, clientHolder, state, cookie, turn, fetchContext);
                     try {
-                        client.openThread(request.threadId()).get(10, TimeUnit.SECONDS);
+                        client.openThread(request.threadId(), priorSession).get(10, TimeUnit.SECONDS);
                     } catch (Exception openFailure) {
-                        if (sessionRestore == null || state.isStreamBroken()) {
+                        if (priorSession == null || state.isStreamBroken()) {
                             throw openFailure;
                         }
                         log.warn(
@@ -324,12 +404,13 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                         discardRunner(client, sandbox);
                         clientHolder.set(null);
 
-                        InteractiveSandboxSpec cleanSpec =
-                                mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig, contextInputs, null);
-                        sandbox = attachSandbox(cleanSpec);
+                        // The discarded sandbox keeps the session it restored, so the retry starts a fresh one.
+                        Supplier<InteractiveSandboxSpec> freshSpec =
+                                () -> mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig);
+                        sandbox = attachSandbox(sandboxService, freshSpec.get(), freshSpec);
                         client =
                                 startRunner(sandbox, request, channel, clientHolder, state, cookie, turn, fetchContext);
-                        client.openThread(request.threadId()).get(10, TimeUnit.SECONDS);
+                        client.openThread(request.threadId(), null).get(10, TimeUnit.SECONDS);
                     }
                     // Bind and unbind INSIDE the sandbox lock: that exclusivity is what stops a call being
                     // attributed to the wrong turn. A late call outside the window has no row to bill and
@@ -431,6 +512,16 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         final AtomicReference<@Nullable Terminal> terminal = new AtomicReference<>();
         final ReentrantLock delivery = new ReentrantLock();
         final CompletableFuture<Void> done = new CompletableFuture<>();
+        /** {@link System#nanoTime()} when the turn was accepted, before it queued for the executor or a lock. */
+        final long acceptedAt;
+        /** Set before the runner starts; whether this turn had to wait for its sandbox to start. */
+        volatile boolean coldSandbox;
+        /** Guarded by {@link #delivery}. */
+        boolean textSent;
+
+        Turn(long acceptedAt) {
+            this.acceptedAt = acceptedAt;
+        }
     }
 
     private enum Terminal {
@@ -540,8 +631,11 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         }
     }
 
-    private AttachedSandbox attachSandbox(InteractiveSandboxSpec spec) {
-        InteractiveSandboxService sandboxService = interactiveSandboxServiceProvider.getObject();
+    /** A failed attach revokes its spec's credential with the sandbox, so the retry needs a spec of its own. */
+    private static AttachedSandbox attachSandbox(
+            InteractiveSandboxService sandboxService,
+            InteractiveSandboxSpec spec,
+            Supplier<InteractiveSandboxSpec> retrySpec) {
         try {
             return sandboxService.attach(spec);
         } catch (InteractiveSandboxException first) {
@@ -549,7 +643,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 throw first;
             }
             log.warn("Mentor sandbox died during attach; retrying once: {}", first.getMessage());
-            return sandboxService.attach(spec);
+            return sandboxService.attach(retrySpec.get());
         }
     }
 
@@ -627,6 +721,10 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     return;
                 }
                 channel.send(chunk);
+                if (chunk instanceof UIMessageChunk.TextDelta && !turn.textSent) {
+                    turn.textSent = true;
+                    metrics.recordFirstToken(turn.coldSandbox, Duration.ofNanos(System.nanoTime() - turn.acceptedAt));
+                }
             }
         } catch (ClientDisconnectedException disconnect) {
             // Stop channel writes but keep the runner subscription alive until its terminal chunk

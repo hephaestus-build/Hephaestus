@@ -1,3 +1,4 @@
+import { focusManager } from "@tanstack/react-query";
 import { act, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { expect, it, vi } from "vitest";
@@ -14,7 +15,7 @@ vi.setConfig({ testTimeout: 30_000 });
 
 it("keeps an existing conversation readable under No AI and restores its composer after opting in", async () => {
 	const threadId = "65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed";
-	const preference = { ...workspaceOnboarding(), aiChoice: "NO_AI" as const };
+	let preference: WorkspaceOnboarding = { ...workspaceOnboarding(), aiChoice: "NO_AI" };
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
@@ -50,16 +51,18 @@ it("keeps an existing conversation readable under No AI and restores its compose
 	expect(screen.queryByRole("textbox")).toBeNull();
 	expect(screen.queryByRole("button", { name: /edit|try again/iu })).toBeNull();
 
+	// The server now answers with the new choice too, so a refetch cannot undo the opt-in.
+	preference = {
+		...preference,
+		aiChoice: "IN_HOUSE_ONLY",
+		aiOptions: [
+			{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
+		],
+	};
 	await act(async () => {
 		queryClient.setQueryData<WorkspaceOnboarding>(
 			getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } }),
-			{
-				...preference,
-				aiChoice: "IN_HOUSE_ONLY",
-				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
-				],
-			},
+			preference,
 		);
 	});
 	await screen.findByRole("textbox", {}, ROUTE_RENDER_WAIT);
@@ -151,6 +154,63 @@ it("opens Heph for a member whose account carries no feature flags", async () =>
 	await screen.findByRole("textbox", {}, ROUTE_RENDER_WAIT);
 	// A new chat opens under its own thread id; what matters is that the member stayed in Heph.
 	expect(router.state.location.pathname.startsWith("/w/acme/mentor")).toBe(true);
+});
+
+it("prepares the member's Heph sandbox when Heph opens, and again when they come back to the tab", async () => {
+	const prepared: string[] = [];
+	server.use(
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/workspaces/acme/members/me", () =>
+			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),
+		),
+		http.get("*/workspaces/acme/onboarding/me", () =>
+			HttpResponse.json({
+				...workspaceOnboarding(),
+				aiChoice: "IN_HOUSE_ONLY",
+				aiOptions: [
+					{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
+				],
+			}),
+		),
+		http.get("*/workspaces/acme/mentor/threads", () => HttpResponse.json([])),
+		http.post("*/workspaces/:workspaceSlug/mentor/sandbox", ({ params }) => {
+			prepared.push(String(params.workspaceSlug));
+			return new HttpResponse(null, { status: 202 });
+		}),
+	);
+	renderRouteAtWithRouter("/w/acme/mentor");
+	await screen.findByRole("textbox", {}, ROUTE_RENDER_WAIT);
+	await waitFor(() => expect(prepared).toStrictEqual(["acme"]), ROUTE_RENDER_WAIT);
+
+	act(() => {
+		focusManager.setFocused(false);
+		focusManager.setFocused(true);
+	});
+	await waitFor(() => expect(prepared).toStrictEqual(["acme", "acme"]), ROUTE_RENDER_WAIT);
+	focusManager.setFocused(undefined);
+});
+
+it("prepares nothing when Heph is off for the member", async () => {
+	let prepared = false;
+	server.use(
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/workspaces/acme/members/me", () =>
+			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),
+		),
+		http.get("*/workspaces/acme/onboarding/me", () =>
+			HttpResponse.json({ ...workspaceOnboarding(), aiChoice: "NO_AI" }),
+		),
+		http.get("*/workspaces/acme/mentor/threads", () => HttpResponse.json([])),
+		http.post("*/workspaces/:workspaceSlug/mentor/sandbox", () => {
+			prepared = true;
+			return new HttpResponse(null, { status: 202 });
+		}),
+	);
+	renderRouteAtWithRouter("/w/acme/mentor");
+	await screen.findByRole("heading", { name: "Heph is off for you" }, ROUTE_RENDER_WAIT);
+	expect(prepared).toBe(false);
 });
 
 it("keeps Heph out of the navigation for a reader who is not a member", async () => {

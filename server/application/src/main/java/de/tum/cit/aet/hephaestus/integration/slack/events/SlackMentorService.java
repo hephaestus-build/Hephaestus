@@ -107,6 +107,22 @@ public class SlackMentorService {
         log.info("Accepted Slack mentor turn: workspace={} thread={} developer={}", workspaceId, threadId, developerId);
     }
 
+    /** A linked developer who opens the app is about to write, so their sandbox starts now. Nothing reaches Slack. */
+    public void prepare(String teamId, String slackUserId) {
+        try {
+            Optional<Long> workspace = workspaceResolver.resolveWorkspaceId(teamId);
+            if (workspace.isEmpty() || !mentorReadinessQuery.isReady(workspace.get())) {
+                return;
+            }
+            identityResolver
+                    .resolveActiveMemberId(workspace.get(), teamId, slackUserId)
+                    .ifPresent(developerId -> mentorTurnRunner.prepare(workspace.get(), developerId));
+        } catch (RuntimeException e) {
+            // Advisory: the event it rides on must not fail, and the next message starts the sandbox anyway.
+            log.debug("Could not prepare Heph for Slack team={}: {}", teamId, e.toString());
+        }
+    }
+
     private static UUID deterministicSlackMessageId(String teamId, String channelId, String messageTs) {
         String key = "slack:" + teamId + ":" + channelId + ":" + messageTs;
         return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8));
