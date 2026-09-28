@@ -127,6 +127,44 @@ class ProcessingContextFactoryTest {
     }
 
     @Nested
+    class ForRelatedIssue {
+
+        private final ProcessingContext delivering = ProcessingContext.forWebhook(
+                7L, TestEntities.repository(1L, "ls1intum/Hephaestus"), "blocked_by_added");
+
+        @Test
+        void shouldKeepTheDeliveringRepositoryWhenThePayloadNamesNone() {
+            Optional<ProcessingContext> result = factory.forRelatedIssue(delivering, null, "blocked_by_added");
+
+            assertThat(result).contains(delivering);
+            verifyNoInteractions(repositoryScopeFilter, repositoryRepository);
+        }
+
+        @Test
+        void shouldUseTheNamedRepositoryWhenItIsSynchronized() {
+            String repoFullName = "ls1intum/Artemis";
+            Repository named = TestEntities.repository(2L, repoFullName);
+            named.setOrganization(null);
+            when(repositoryScopeFilter.isRepositoryAllowed(repoFullName)).thenReturn(true);
+            when(repositoryRepository.findByNameWithOwnerWithOrganization(repoFullName))
+                    .thenReturn(Optional.of(named));
+            when(scopeIdResolver.findScopeIdByRepositoryName(repoFullName)).thenReturn(Optional.of(7L));
+
+            Optional<ProcessingContext> result =
+                    factory.forRelatedIssue(delivering, repositoryRef(repoFullName), "blocked_by_added");
+
+            assertThat(result).hasValueSatisfying(context -> {
+                assertThat(context.repository()).isEqualTo(named);
+                assertThat(context.webhookAction()).isEqualTo("blocked_by_added");
+            });
+        }
+
+        private static GitHubRepositoryRefDTO repositoryRef(String fullName) {
+            return new GitHubRepositoryRefDTO(2L, "node_id", "repo", fullName, false, "url", null);
+        }
+    }
+
+    @Nested
     class ScopeIdResolution {
 
         @Test
