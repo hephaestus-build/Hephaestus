@@ -13,7 +13,7 @@ import { routeTree } from "@/routeTree.gen";
 vi.setConfig({ testTimeout: 15_000 });
 
 const DEEP_LINK = "/w/foreign/mentor/thread-1?message=stale";
-// The workspace home is your Activity.
+// The fixture workspace does not review practices, so its home is Activity.
 const WORKSPACE_HOME = "/w/acme/activity";
 
 function listWorkspaces(...slugs: string[]) {
@@ -104,6 +104,24 @@ describe("workspace route gate", () => {
 		server.use(http.get("*/workspaces", () => HttpResponse.error()));
 		const location = await land(DEEP_LINK);
 		expect(location.href).toBe(DEEP_LINK);
+	});
+
+	it("opens the Practice profile where the workspace reviews practices, carrying the search", async () => {
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]),
+			),
+		);
+		const location = await land("/w/acme?survey=welcome");
+		expect(location.pathname).toBe("/w/acme/practice-profile");
+		expect(location.search).toMatchObject({ survey: "welcome" });
+	});
+
+	it("opens Activity where the workspace does not review practices, carrying the search", async () => {
+		listWorkspaces("acme");
+		const location = await land("/w/acme?survey=welcome");
+		expect(location.pathname).toBe(WORKSPACE_HOME);
+		expect(location.search).toMatchObject({ survey: "welcome" });
 	});
 
 	it("opens a just-created workspace the cache carries before the server lists it", async () => {

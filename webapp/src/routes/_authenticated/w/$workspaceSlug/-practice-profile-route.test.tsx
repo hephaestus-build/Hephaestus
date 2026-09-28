@@ -121,9 +121,12 @@ describe("practice profile route", () => {
 		);
 		const { router } = renderRouteAtWithRouter(PAGE);
 
-		// With practices off the page does not exist here, so the reader lands on the workspace home
-		// rather than on a profile with nothing to be about.
-		await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme"), ROUTE_RENDER_WAIT);
+		// With practices off the page does not exist here, so the reader lands on the workspace home,
+		// which is Activity for such a workspace, rather than on a profile with nothing to be about.
+		await waitFor(
+			() => expect(router.state.location.pathname).toBe("/w/acme/activity"),
+			ROUTE_RENDER_WAIT,
+		);
 		// Reading the cards is what delivers them: a reader who is sent away must never have their
 		// unread feedback marked delivered on the way out.
 		expect(inApp).not.toHaveBeenCalled();

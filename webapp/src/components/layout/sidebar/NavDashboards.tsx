@@ -31,16 +31,6 @@ export function NavDashboards({
 		<SidebarGroup>
 			<SidebarGroupLabel>Dashboards</SidebarGroupLabel>
 			<SidebarMenu>
-				<SidebarMenuItem>
-					<SidebarMenuButton
-						tooltip="Activity"
-						isActive={onActivity}
-						render={<Link to="/w/$workspaceSlug/activity" params={{ workspaceSlug }} />}
-					>
-						<Activity />
-						<span>Activity</span>
-					</SidebarMenuButton>
-				</SidebarMenuItem>
 				{practicesEnabled && (
 					<SidebarMenuItem>
 						<SidebarMenuButton
@@ -53,6 +43,16 @@ export function NavDashboards({
 						</SidebarMenuButton>
 					</SidebarMenuItem>
 				)}
+				<SidebarMenuItem>
+					<SidebarMenuButton
+						tooltip="Activity"
+						isActive={onActivity}
+						render={<Link to="/w/$workspaceSlug/activity" params={{ workspaceSlug }} />}
+					>
+						<Activity />
+						<span>Activity</span>
+					</SidebarMenuButton>
+				</SidebarMenuItem>
 				<SidebarMenuItem>
 					<SidebarMenuButton
 						tooltip="Workspace activity"

@@ -237,7 +237,7 @@ describe("workspace member onboarding route", () => {
 		);
 		await screen.findByRole("radio", { name: /^In-house /u }, ROUTE_RENDER_WAIT);
 		fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-		// Workspace home opens the member’s own Activity.
+		// The workspace home: Activity, since this workspace does not review practices.
 		await waitFor(
 			() => expect(router.state.location.pathname).toBe("/w/acme/activity"),
 			ROUTE_RENDER_WAIT,

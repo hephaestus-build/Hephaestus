@@ -20,6 +20,7 @@ const workspace = {
 	id: 1,
 	workspaceSlug: "engineering",
 	displayName: "Engineering",
+	practicesEnabled: true,
 };
 const users = { content: [{ userId: 11, login: "never-signed-in", name: "Sam" }], totalPages: 1 };
 const viewedProfile = "/w/engineering/user/never-signed-in";
@@ -188,15 +189,29 @@ describe("user view guard", () => {
 		expect(getUserViewSession()).toBeUndefined();
 	});
 
+	// A view outside its workspace lands on the workspace home, which the home route decides.
 	it.each([
-		["/settings", "/w/engineering/activity"],
-		["/w/other/user/alex", "/w/engineering/activity"],
-		["/w/engineering/admin", "/w/engineering/activity"],
+		["/settings", "/w/engineering/practice-profile"],
+		["/w/other/user/alex", "/w/engineering/practice-profile"],
+		["/w/engineering/admin", "/w/engineering/practice-profile"],
 		["/w/engineering/user/sam", "/w/engineering/workspace-activity"],
 	])("resolves %s to %s", async (path, expected) => {
 		const { router } = renderRouteAtWithRouter(path);
 		await waitFor(
 			() => expect(router.state.resolvedLocation?.pathname).toBe(expected),
+			ROUTE_RENDER_WAIT,
+		);
+	});
+
+	it("lands a view outside its workspace on Activity where the workspace does not review practices", async () => {
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([{ ...workspace, practicesEnabled: false }]),
+			),
+		);
+		const { router } = renderRouteAtWithRouter("/settings");
+		await waitFor(
+			() => expect(router.state.resolvedLocation?.pathname).toBe("/w/engineering/activity"),
 			ROUTE_RENDER_WAIT,
 		);
 	});
