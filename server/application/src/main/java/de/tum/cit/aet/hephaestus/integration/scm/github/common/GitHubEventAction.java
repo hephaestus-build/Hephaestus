@@ -507,17 +507,17 @@ public sealed interface GitHubEventAction {
     // Issue Dependency Events
 
     /**
-     * Actions for the issue_dependencies webhook event.
-     * <p>
-     * <b>Note:</b> As of January 2026, the issue_dependencies webhook cannot be subscribed to
-     * via GitHub App settings. This enum is defined based on documentation and will become
-     * active when GitHub enables webhook subscription for this event type.
+     * Actions for the issue_dependencies webhook event. GitHub reports one change twice, once from
+     * each side: {@code blocked_by_*} from the blocked issue and {@code blocking_*} from the issue
+     * that blocks it.
      *
      * @see GitHubEventType#ISSUE_DEPENDENCIES
      */
     enum IssueDependency implements GitHubEventAction {
-        ADDED,
-        REMOVED,
+        BLOCKED_BY_ADDED,
+        BLOCKED_BY_REMOVED,
+        BLOCKING_ADDED,
+        BLOCKING_REMOVED,
         UNKNOWN;
 
         @Override
@@ -528,10 +528,16 @@ public sealed interface GitHubEventAction {
         public static IssueDependency fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
             return switch (action.toLowerCase()) {
-                case "added" -> ADDED;
-                case "removed" -> REMOVED;
+                case "blocked_by_added" -> BLOCKED_BY_ADDED;
+                case "blocked_by_removed" -> BLOCKED_BY_REMOVED;
+                case "blocking_added" -> BLOCKING_ADDED;
+                case "blocking_removed" -> BLOCKING_REMOVED;
                 default -> UNKNOWN;
             };
+        }
+
+        public boolean isAdded() {
+            return this == BLOCKED_BY_ADDED || this == BLOCKING_ADDED;
         }
     }
 

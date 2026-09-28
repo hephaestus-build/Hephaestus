@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -58,19 +59,35 @@ public class ProcessingContextFactory {
      */
     @Transactional(readOnly = true)
     public Optional<ProcessingContext> forWebhookEvent(GitHubWebhookEvent event) {
-        if (event.repository() == null || event.repository().fullName() == null) {
-            log.warn("Skipped webhook event: reason=missingRepositoryData, action={}", event.action());
+        return forWebhookRepository(event.repository(), event.action());
+    }
+
+    /**
+     * Create a ProcessingContext for one issue of a relationship event ({@code sub_issues},
+     * {@code issue_dependencies}). The issue belongs to the repository the payload names for it, or to the
+     * delivering repository when the payload names none; a named repository passes the same filtering as
+     * {@link #forWebhookEvent}, so a cross-repository issue is never stored under the delivering repository.
+     */
+    @Transactional(readOnly = true)
+    public Optional<ProcessingContext> forRelatedIssue(
+            ProcessingContext delivering, @Nullable GitHubRepositoryRefDTO namedRepository, String action) {
+        return namedRepository == null ? Optional.of(delivering) : forWebhookRepository(namedRepository, action);
+    }
+
+    private Optional<ProcessingContext> forWebhookRepository(@Nullable GitHubRepositoryRefDTO ref, String action) {
+        if (ref == null || ref.fullName() == null) {
+            log.warn("Skipped webhook event: reason=missingRepositoryData, action={}", action);
             return Optional.empty();
         }
 
-        String repoFullName = event.repository().fullName();
+        String repoFullName = ref.fullName();
 
         // Check filter BEFORE database lookup to avoid unnecessary queries
         if (!repositoryScopeFilter.isRepositoryAllowed(repoFullName)) {
             log.debug(
                     "Skipped webhook event: reason=repositoryFiltered, repoName={}, action={}",
                     sanitizeForLog(repoFullName),
-                    event.action());
+                    action);
             return Optional.empty();
         }
 
@@ -82,12 +99,12 @@ public class ProcessingContextFactory {
             log.debug(
                     "Skipped webhook event: reason=repositoryNotFound, repoName={}, action={}",
                     sanitizeForLog(repoFullName),
-                    event.action());
+                    action);
             return Optional.empty();
         }
 
         Long scopeId = resolveScopeId(repository);
-        ProcessingContext context = ProcessingContext.forWebhook(scopeId, repository, event.action());
+        ProcessingContext context = ProcessingContext.forWebhook(scopeId, repository, action);
 
         return Optional.of(context);
     }

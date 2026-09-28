@@ -585,8 +585,6 @@ public class GithubDataSyncScheduler {
     }
 
     private void syncIssueDependencies(SyncSession session, @Nullable SyncExecutionHandle handle) {
-        // GitHub has no webhook for issue dependency changes (shipped the UI without an API/webhook
-        // — see GitHub Discussion #165749), so GraphQL bulk sync is the only way to get this data.
         try {
             log.debug("Starting issue dependencies sync: scopeId={}, scopeSlug={}", session.scopeId(), session.slug());
             issueDependencySyncService.syncDependenciesForScope(session.scopeId());

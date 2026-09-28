@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineSubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineSubjectParser;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GithubSubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GithubSubjectParser;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabSubjectKeyDeriver;
@@ -22,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -153,6 +155,26 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
                         + "registered handler. A listed fixture derives a subject whose parsed EventTypeKey has "
                         + "no handler — the consumer would ACK-drop it silently (invisible data loss).")
                 .isEmpty();
+    }
+
+    /**
+     * {@link GitHubEventType} is the list of events Hephaestus consumes, and the GitHub App guide's manifest
+     * subscribes to exactly that list ({@code scripts/github-app-manifest.test.ts}). Tying the list to the handlers
+     * in both directions is what makes every subscription reach a handler: a value without one is a subscription
+     * whose deliveries are ACK-dropped, and a handler outside the list is an event the manifest never subscribes to.
+     */
+    @Test
+    void shouldRegisterAHandlerForExactlyTheGithubEventTypes() {
+        Set<String> handledEvents = registeredKeys(GITHUB_HANDLER_PACKAGE).stream()
+                .map(key -> lastSegment(key.eventType()))
+                .collect(Collectors.toCollection(TreeSet::new));
+        Set<String> eventTypes = Arrays.stream(GitHubEventType.values())
+                .map(GitHubEventType::getValue)
+                .collect(Collectors.toCollection(TreeSet::new));
+
+        assertThat(handledEvents)
+                .as("GitHubEventType and the registered GitHub handlers must name the same events")
+                .isEqualTo(eventTypes);
     }
 
     @Test

@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Integration tests for GitHubSubIssuesMessageHandler.
@@ -172,10 +173,29 @@ class GitHubSubIssuesMessageHandlerIntegrationTest extends BaseIntegrationTest {
         assertThat(event.action()).isEqualTo("sub_issue_removed");
     }
 
+    @Test
+    void shouldNotStoreASubIssueFromAnotherRepositoryUnderTheDeliveringOne() throws Exception {
+        ObjectNode payload = (ObjectNode) objectMapper.readTree(json("sub_issues.sub_issue_added"));
+        ((ObjectNode) payload.required("sub_issue_repo")).put("full_name", "HephaestusTest/Unsynchronized");
+        GitHubSubIssuesEventDTO event = objectMapper.treeToValue(payload, GitHubSubIssuesEventDTO.class);
+        createTestIssue(
+                required(event.parentIssue().getDatabaseId()),
+                event.parentIssue().number(),
+                "Parent Issue");
+
+        handler.handleEvent(event);
+
+        assertThat(issueRepository.findByRepositoryIdAndNumber(
+                        testRepository.getId(), event.subIssue().number()))
+                .isEmpty();
+    }
+
     private GitHubSubIssuesEventDTO loadPayload(String filename) throws IOException {
-        ClassPathResource resource = new ClassPathResource("github/" + filename + ".json");
-        String json = resource.getContentAsString(StandardCharsets.UTF_8);
-        return objectMapper.readValue(json, GitHubSubIssuesEventDTO.class);
+        return objectMapper.readValue(json(filename), GitHubSubIssuesEventDTO.class);
+    }
+
+    private static String json(String filename) throws IOException {
+        return new ClassPathResource("github/" + filename + ".json").getContentAsString(StandardCharsets.UTF_8);
     }
 
     private static <T> T required(@Nullable T value) {
