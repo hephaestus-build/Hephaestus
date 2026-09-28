@@ -179,26 +179,35 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
                                 "approved this merge request", APPROVED_AT, "gid://gitlab/Note/1", false),
                         provider,
                         unapproved))
-                .isTrue();
+                .as("re-timing an approval changes no decision")
+                .isFalse();
         assertThat(review.getSubmittedAt()).isEqualTo(APPROVED_AT);
 
-        reconciler.recordSystemNote(
-                pr,
-                approver,
-                new GitLabReviewReconciler.SystemNote(
-                        "unapproved this merge request", APPROVED_AT.plusSeconds(60), "gid://gitlab/Note/2", false),
-                provider,
-                unapproved);
+        assertThat(reconciler.recordSystemNote(
+                        pr,
+                        approver,
+                        new GitLabReviewReconciler.SystemNote(
+                                "unapproved this merge request",
+                                APPROVED_AT.plusSeconds(60),
+                                "gid://gitlab/Note/2",
+                                false),
+                        provider,
+                        unapproved))
+                .isTrue();
         assertThat(review.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
         assertThat(unapproved).containsExactly(99L);
 
-        reconciler.recordSystemNote(
-                pr,
-                approver,
-                new GitLabReviewReconciler.SystemNote(
-                        "approved this merge request", APPROVED_AT.plusSeconds(120), "gid://gitlab/Note/3", false),
-                provider,
-                unapproved);
+        assertThat(reconciler.recordSystemNote(
+                        pr,
+                        approver,
+                        new GitLabReviewReconciler.SystemNote(
+                                "approved this merge request",
+                                APPROVED_AT.plusSeconds(120),
+                                "gid://gitlab/Note/3",
+                                false),
+                        provider,
+                        unapproved))
+                .isTrue();
         assertThat(review.getState()).isEqualTo(PullRequestReview.State.APPROVED);
         assertThat(review.getSubmittedAt()).isEqualTo(APPROVED_AT.plusSeconds(120));
 
@@ -253,6 +262,34 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
 
         assertThat(review.getState()).isEqualTo(PullRequestReview.State.APPROVED);
         assertThat(review.isDismissed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("a live requested-changes note withdraws its author's approval once, however often it arrives")
+    void shouldWithdrawTheRequestersApprovalOnlyForANewRequestForChanges() {
+        PullRequestReview review = approval(APPROVED_AT);
+        long nativeId = GitLabReviewReconciler.generateChangesRequestedNativeId("gid://gitlab/Note/5", 99L);
+        PullRequestReview recorded = new PullRequestReview();
+        recorded.setState(PullRequestReview.State.CHANGES_REQUESTED);
+        when(reviewRepository.findByNativeIdAndProviderId(nativeId, 7L))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(recorded));
+        when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        GitLabReviewReconciler.SystemNote note = new GitLabReviewReconciler.SystemNote(
+                "requested changes", APPROVED_AT.plusSeconds(60), "gid://gitlab/Note/5", true);
+
+        assertThat(reconciler.recordSystemNote(pr, approver, note, provider, new java.util.HashSet<>()))
+                .isTrue();
+        assertThat(review.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
+
+        review.setState(PullRequestReview.State.APPROVED);
+        review.setDismissed(false);
+        assertThat(reconciler.recordSystemNote(pr, approver, note, provider, new java.util.HashSet<>()))
+                .isFalse();
+        assertThat(review.getState())
+                .as("an approval given after the request for changes outlives the note's redelivery")
+                .isEqualTo(PullRequestReview.State.APPROVED);
     }
 
     @Test

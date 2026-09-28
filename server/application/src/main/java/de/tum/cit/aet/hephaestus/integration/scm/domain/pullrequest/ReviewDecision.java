@@ -5,12 +5,12 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest;
  * Indicates whether the PR has been approved or requires changes.
  */
 public enum ReviewDecision {
-    /** The PR has been approved by required reviewers. */
+    /** Someone approved, and the approvals meet what the PR requires. */
     APPROVED,
 
     /** Changes have been requested by a reviewer. */
     CHANGES_REQUESTED,
 
-    /** A review is required before the PR can be merged. */
+    /** Not approved yet: a required approval is missing, or, on GitLab, nobody has approved. */
     REVIEW_REQUIRED,
 }
