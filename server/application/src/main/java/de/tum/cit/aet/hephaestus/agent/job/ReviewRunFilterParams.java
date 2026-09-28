@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import io.swagger.v3.oas.annotations.Parameter;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.EnumSet;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -17,7 +20,17 @@ import org.springframework.web.server.ResponseStatusException;
  * three surfaces under {@code /practices/reviews} answer a pasted date range identically.
  */
 public record ReviewRunFilterParams(
-        @RequestParam(required = false) @Nullable AgentJobStatus status,
+        @Parameter(description = "Statuses to list (repeatable); omit for every status")
+        @RequestParam(required = false)
+        @Nullable
+        List<AgentJobStatus> status,
+
+        @Parameter(
+                description = "Result-processing statuses to list (repeatable), such as FAILED for the reviews whose"
+                        + " results can be processed again; omit for every review, including those without one")
+        @RequestParam(required = false)
+        @Nullable
+        List<DeliveryStatus> resultProcessing,
 
         @Parameter(description = "Inclusive lower bound on when the review was requested")
         @RequestParam(required = false)
@@ -36,5 +49,20 @@ public record ReviewRunFilterParams(
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must not be after to");
         }
         return this;
+    }
+
+    public Collection<AgentJobStatus> statuses() {
+        return status == null || status.isEmpty() ? EnumSet.allOf(AgentJobStatus.class) : status;
+    }
+
+    public boolean anyResultProcessing() {
+        return resultProcessing == null || resultProcessing.isEmpty();
+    }
+
+    /** Never empty, so the query can bind it even when {@link #anyResultProcessing()} leaves it unused. */
+    public Collection<DeliveryStatus> resultProcessingStates() {
+        return resultProcessing == null || resultProcessing.isEmpty()
+                ? EnumSet.allOf(DeliveryStatus.class)
+                : resultProcessing;
     }
 }

@@ -319,10 +319,7 @@ export const Missing: Story = {
 	args: { group: undefined, standing: undefined, practices: undefined },
 };
 
-/**
- * At 320px the standing summary wraps under the title, its full width, and the tabs keep to the
- * rail.
- */
+/** At 320px the standing summary wraps under the title and nothing leaves the panel. */
 export const MobileReflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async () => {
@@ -333,5 +330,24 @@ export const MobileReflow: Story = {
 		await expect(summary.getBoundingClientRect().top).toBeGreaterThanOrEqual(
 			title.getBoundingClientRect().bottom,
 		);
+	},
+};
+
+/** Below `sm` the standing summary spans the header under the title rather than hugging its legend. */
+export const MobileSummarySpansHeader: Story = {
+	parameters: { viewport: { defaultViewport: "mobile" }, chromatic: { viewports: [375] } },
+	play: async () => {
+		await settledDrawerPanel();
+		// At 320px the legend alone fills the column, so a box that hugs it only shows from here up.
+		// The summary's text block sits in the box, and the heading's row in the title column.
+		const box = screen.getByText("five practices in this group").parentElement?.parentElement;
+		const titleColumn = screen.getByRole("heading", { name: packagingGroup.name }).parentElement
+			?.parentElement;
+		if (!box || !titleColumn) {
+			throw new Error("The summary box or the title column is missing.");
+		}
+		await expect(
+			Math.abs(box.getBoundingClientRect().width - titleColumn.getBoundingClientRect().width),
+		).toBeLessThanOrEqual(1);
 	},
 };

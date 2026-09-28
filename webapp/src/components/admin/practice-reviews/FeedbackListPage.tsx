@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 
 import type { ListPracticeReviewFeedbackResponse, ReviewFeedback } from "@/api/types.gen";
+import type { FacetSource } from "@/components/common/FacetMultiSelect";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { TablePagination } from "@/components/common/TablePagination";
 
@@ -18,6 +19,7 @@ export interface FeedbackListPageProps {
 	isLoading: boolean;
 	error: unknown;
 	onRetry?: () => void;
+	practices: FacetSource;
 	people: ReviewPeople;
 }
 
@@ -45,6 +47,7 @@ export function FeedbackListPage({
 	isLoading,
 	error,
 	onRetry,
+	practices,
 	people,
 }: FeedbackListPageProps) {
 	const rows = feedback?.content ?? [];
@@ -53,24 +56,21 @@ export function FeedbackListPage({
 	const filteredRecipient = search.recipientUserId == null ? undefined : rows[0]?.recipient;
 	const hasFilter = hasFeedbackFilter(search);
 	const reset = () => onSearchChange(clearedFeedbackFilters());
-	const patchFilter = (patch: Partial<FeedbackSearch>) => onSearchChange({ ...patch, page: 0 });
 
 	return (
-		<section aria-label="Feedback delivery" className="space-y-4">
+		<section aria-label="Feedback" className="space-y-4">
 			<FeedbackFilters
 				search={search}
-				onPatch={patchFilter}
+				onPatch={onSearchChange}
 				onReset={reset}
+				practices={practices}
 				people={people}
 				total={feedback?.page?.totalElements}
 				scopedArtifact={rows[0]?.reviewedWork}
 				recipientName={filteredRecipient?.name ?? filteredRecipient?.login}
 			/>
 			{error == null ? (
-				<FeedbackResults
-					workspaceSlug={workspaceSlug}
-					state={resultsState(isLoading, rows, hasFilter ? reset : undefined)}
-				/>
+				<FeedbackResults state={resultsState(isLoading, rows, hasFilter ? reset : undefined)} />
 			) : (
 				<QueryErrorAlert error={error} title="Couldn't load feedback" onRetry={onRetry} />
 			)}
@@ -80,7 +80,9 @@ export function FeedbackListPage({
 				renderPageLink={(page, props) => (
 					<Link
 						{...props}
-						to="/w/$workspaceSlug/admin/practices/reviews/delivery"
+						// Why `from`: `order` in `review-search.ts`.
+						from="/w/$workspaceSlug/admin/practices/reviews/feedback"
+						to="/w/$workspaceSlug/admin/practices/reviews/feedback"
 						params={{ workspaceSlug }}
 						search={(previous) => ({ ...previous, page: page === 0 ? undefined : page })}
 					/>

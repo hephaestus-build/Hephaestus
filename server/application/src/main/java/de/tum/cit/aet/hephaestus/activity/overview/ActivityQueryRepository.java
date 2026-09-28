@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.activity.overview;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityEvent;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
+import de.tum.cit.aet.hephaestus.core.time.TimeRange;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -77,10 +78,9 @@ public interface ActivityQueryRepository extends Repository<ActivityEvent, UUID>
     String GROUP_BY_ACTOR_AND_TYPE = " GROUP BY e.actor.id, e.eventType";
 
     /**
-     * Counts by bucket: {@code width_bucket} numbers each event by the last bucket start at or before it, from 1.
-     * Starts and events are compared as seconds since the epoch, so no time zone of the JVM or the session can
-     * shift them. The grouping sits outside it because PostgreSQL does not take two parameterised calls for the same
-     * expression.
+     * Counts by bucket, numbered from 1 as {@link de.tum.cit.aet.hephaestus.core.time.TimeBuckets#epochSeconds()}
+     * describes. The grouping sits outside the {@code width_bucket} call because PostgreSQL does not take two
+     * parameterised calls for the same expression.
      */
     String COUNT_BY_BUCKET_AND_TYPE = """
             SELECT counted.bucket AS bucket, counted.eventType AS eventType, COUNT(*) AS count FROM (
@@ -151,33 +151,33 @@ public interface ActivityQueryRepository extends Repository<ActivityEvent, UUID>
     List<TypeCount> countByActorAndType(
             @Param("scope") ActivityScope scope,
             @Param("eventTypes") Collection<ActivityEventType> eventTypes,
-            @Param("range") ActivityRange range);
+            @Param("range") TimeRange range);
 
     @Query(COUNT_BY_ACTOR_AND_TYPE + COUNTED + IN_TEAMS + GROUP_BY_ACTOR_AND_TYPE)
     List<TypeCount> countByActorAndTypeInTeams(
             @Param("scope") ActivityScope scope,
             @Param("eventTypes") Collection<ActivityEventType> eventTypes,
-            @Param("range") ActivityRange range);
+            @Param("range") TimeRange range);
 
     @Query(COUNT_BY_BUCKET_AND_TYPE + COUNTED + GROUP_BY_BUCKET_AND_TYPE)
     List<BucketCount> countByBucketAndType(
             @Param("scope") ActivityScope scope,
             @Param("eventTypes") Collection<ActivityEventType> eventTypes,
-            @Param("range") ActivityRange range,
+            @Param("range") TimeRange range,
             @Param("starts") Long[] starts);
 
     @Query(COUNT_BY_BUCKET_AND_TYPE + COUNTED + IN_TEAMS + GROUP_BY_BUCKET_AND_TYPE)
     List<BucketCount> countByBucketAndTypeInTeams(
             @Param("scope") ActivityScope scope,
             @Param("eventTypes") Collection<ActivityEventType> eventTypes,
-            @Param("range") ActivityRange range,
+            @Param("range") TimeRange range,
             @Param("starts") Long[] starts);
 
     @Query(WORK_PAGE + COUNTED + AFTER_CURSOR)
     List<WorkGroup> findWork(
             @Param("scope") ActivityScope scope,
             @Param("eventTypes") Collection<ActivityEventType> eventTypes,
-            @Param("range") ActivityRange range,
+            @Param("range") TimeRange range,
             @Param("after") ActivityWorkCursor after,
             Limit limit);
 
@@ -185,7 +185,7 @@ public interface ActivityQueryRepository extends Repository<ActivityEvent, UUID>
     List<WorkGroup> findWorkInTeams(
             @Param("scope") ActivityScope scope,
             @Param("eventTypes") Collection<ActivityEventType> eventTypes,
-            @Param("range") ActivityRange range,
+            @Param("range") TimeRange range,
             @Param("after") ActivityWorkCursor after,
             Limit limit);
 

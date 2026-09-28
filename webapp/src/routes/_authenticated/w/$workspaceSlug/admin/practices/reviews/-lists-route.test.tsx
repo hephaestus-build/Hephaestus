@@ -22,11 +22,12 @@ function values(url: URL | undefined, name: string): string[] {
 }
 
 /**
- * Every request the two list routes make, with the observation and feedback URLs recorded. The
- * screens they feed take their rows as props, so a story mounts them without ever issuing the
+ * Every request the three list routes make, with the review, observation and feedback URLs recorded.
+ * The screens they feed take their rows as props, so a story mounts them without ever issuing the
  * request — this route test is the only place that can see what went on the wire.
  */
 function recordRequests() {
+	const reviewUrls: URL[] = [];
 	const observationUrls: URL[] = [];
 	const feedbackUrls: URL[] = [];
 	server.use(
@@ -44,8 +45,12 @@ function recordRequests() {
 			feedbackUrls.push(new URL(request.url));
 			return HttpResponse.json(emptyPage);
 		}),
+		http.get("*/workspaces/:workspaceSlug/practices/reviews", ({ request }) => {
+			reviewUrls.push(new URL(request.url));
+			return HttpResponse.json(emptyPage);
+		}),
 	);
-	return { observationUrls, feedbackUrls };
+	return { reviewUrls, observationUrls, feedbackUrls };
 }
 
 describe("practice review list routes", () => {
@@ -72,6 +77,25 @@ describe("practice review list routes", () => {
 		expect(requested?.searchParams.get("size")).toBe("25");
 	});
 
+	/**
+	 * The feedback list reads its ordering from the same URL word, and the approvals queue on the
+	 * overview links here oldest first, so a lost ordering would put the newest proposal at the top of
+	 * a queue that is worked through from the other end.
+	 */
+	it("asks the feedback endpoint for the ordering the URL chose, under the same names", async () => {
+		const { feedbackUrls } = recordRequests();
+
+		renderRouteAtWithRouter(
+			'/w/acme/admin/practices/reviews/feedback?order=OLDEST&deliveryState=["AWAITING_APPROVAL"]',
+		);
+		await screen.findByText("No feedback matches these filters", undefined, ROUTE_RENDER_WAIT);
+
+		const requested = feedbackUrls.at(-1);
+		expect(requested?.searchParams.get("sort")).toBe("OLDEST");
+		expect(requested?.searchParams.get("order")).toBeNull();
+		expect(values(requested, "deliveryState")).toStrictEqual(["AWAITING_APPROVAL"]);
+	});
+
 	/** The default ordering is the server's, so nothing is sent rather than a guess at its name. */
 	it("sends no ordering when the reader has not chosen one", async () => {
 		const { observationUrls } = recordRequests();
@@ -80,6 +104,32 @@ describe("practice review list routes", () => {
 		await screen.findByText("No observations yet", undefined, ROUTE_RENDER_WAIT);
 
 		expect(observationUrls.at(-1)?.searchParams.get("sort")).toBeNull();
+	});
+
+	it("sends no feedback ordering when the reader has not chosen one", async () => {
+		const { feedbackUrls } = recordRequests();
+
+		renderRouteAtWithRouter("/w/acme/admin/practices/reviews/feedback");
+		await screen.findByText("No feedback yet", undefined, ROUTE_RENDER_WAIT);
+
+		expect(feedbackUrls.at(-1)?.searchParams.get("sort")).toBeNull();
+	});
+
+	/**
+	 * The overview's counts link here as outcome and marked-incorrect filters, so a count that opens a
+	 * list which forgot either shows more rows than the number the reader clicked.
+	 */
+	it("sends the outcome and marked-incorrect filters to the endpoint", async () => {
+		const { observationUrls } = recordRequests();
+
+		renderRouteAtWithRouter(
+			'/w/acme/admin/practices/reviews/observations?outcome=["NEGATIVE"]&invalidated=true',
+		);
+		await screen.findByText("No observations match these filters", undefined, ROUTE_RENDER_WAIT);
+
+		const requested = observationUrls.at(-1);
+		expect(values(requested, "outcome")).toStrictEqual(["NEGATIVE"]);
+		expect(requested?.searchParams.get("invalidated")).toBe("true");
 	});
 
 	/**
@@ -91,7 +141,7 @@ describe("practice review list routes", () => {
 		const { feedbackUrls } = recordRequests();
 
 		renderRouteAtWithRouter(
-			'/w/acme/admin/practices/reviews/delivery?withheldFamily=["HOUSEKEEPING"]',
+			'/w/acme/admin/practices/reviews/feedback?withheldFamily=["HOUSEKEEPING"]',
 		);
 		await screen.findByText("No feedback matches these filters", undefined, ROUTE_RENDER_WAIT);
 
@@ -99,5 +149,42 @@ describe("practice review list routes", () => {
 		expect(reasons).toContain("COMPOSER_DEDUPED");
 		expect(reasons).not.toContain("HOUSEKEEPING");
 		expect(feedbackUrls.at(-1)?.searchParams.get("withheldFamily")).toBeNull();
+	});
+
+	/** Live, requested and backfilled reviews are separate populations; the origin travels as asked. */
+	it("sends the origin filter to the endpoint", async () => {
+		const { observationUrls } = recordRequests();
+
+		renderRouteAtWithRouter(
+			'/w/acme/admin/practices/reviews/observations?origin=["MANUAL","BACKFILL"]',
+		);
+		await screen.findByText("No observations match these filters", undefined, ROUTE_RENDER_WAIT);
+
+		expect(values(observationUrls.at(-1), "origin")).toStrictEqual(["MANUAL", "BACKFILL"]);
+	});
+
+	/**
+	 * A practice's feedback count on the overview links here filtered to that practice, so a list that
+	 * dropped the practice would show every piece of feedback under a number that counted a few.
+	 */
+	it("sends the practice filter to the feedback endpoint", async () => {
+		const { feedbackUrls } = recordRequests();
+
+		renderRouteAtWithRouter(
+			'/w/acme/admin/practices/reviews/feedback?practiceSlug=["thin-controllers"]',
+		);
+		await screen.findByText("No feedback matches these filters", undefined, ROUTE_RENDER_WAIT);
+
+		expect(values(feedbackUrls.at(-1), "practiceSlug")).toStrictEqual(["thin-controllers"]);
+	});
+
+	/** A completed review whose results failed to process is only found by this filter. */
+	it("sends the result-processing filter to the reviews endpoint", async () => {
+		const { reviewUrls } = recordRequests();
+
+		renderRouteAtWithRouter('/w/acme/admin/practices/reviews/runs?resultProcessing=["FAILED"]');
+		await screen.findByText("No reviews found", undefined, ROUTE_RENDER_WAIT);
+
+		expect(values(reviewUrls.at(-1), "resultProcessing")).toStrictEqual(["FAILED"]);
 	});
 });

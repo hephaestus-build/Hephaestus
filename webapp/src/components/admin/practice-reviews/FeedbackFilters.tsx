@@ -1,6 +1,6 @@
 import type { ReviewedWorkRef } from "@/api/types.gen";
 import { DateRangeFacet } from "@/components/common/DateRangeFacet";
-import { FacetMultiSelect } from "@/components/common/FacetMultiSelect";
+import { FacetMultiSelect, type FacetSource } from "@/components/common/FacetMultiSelect";
 import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
@@ -16,9 +16,10 @@ import { nonEmpty } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 
 import { AppliedFacetPills, facetPills } from "./AppliedFacetPills";
-import type { FeedbackSearch } from "./review-search";
+import type { FeedbackSearch, FeedbackSort } from "./review-search";
 import { reviewArtifactScopeLabel } from "./ReviewArtifact";
 import { type ReviewPeople, ReviewPersonFacet } from "./ReviewPersonFacet";
+import { type ReviewSortItem, ReviewSortSelect } from "./ReviewSortSelect";
 
 const OUTCOME_OPTIONS = statusFacetOptions(DELIVERY_STATE_DEFS);
 // The one facet that offers a subset: a place nothing is ever written to would be a filter with no
@@ -29,16 +30,23 @@ const PLACE_OPTIONS = statusFacetOptions(DELIVERY_PLACE_DEFS).filter((option) =>
 );
 const WITHHELD_FAMILY_OPTIONS = statusFacetOptions(WITHHOLDING_FAMILY_DEFS);
 
+const SORT_ITEMS: [ReviewSortItem<FeedbackSort>, ...ReviewSortItem<FeedbackSort>[]] = [
+	{ value: "NEWEST", label: "Newest first" },
+	{ value: "OLDEST", label: "Oldest first" },
+];
+
 /**
- * Every field this toolbar can set, cleared. Exported so the list's empty state can offer the same
- * "clear all" the toolbar's Reset does without the two drifting into clearing different things.
+ * Every field this toolbar can set, cleared — `order` deliberately excluded, as on the observations
+ * list, because sorting does not narrow anything and Reset leaves it alone. Exported so the list's
+ * empty state can offer the same "clear all" the toolbar's Reset does without the two drifting into
+ * clearing different things.
  */
 export function clearedFeedbackFilters(): Partial<FeedbackSearch> {
 	return {
-		page: 0,
 		deliveryState: undefined,
 		withheldFamily: undefined,
 		channel: undefined,
+		practiceSlug: undefined,
 		agentJobId: undefined,
 		artifactKind: undefined,
 		artifactId: undefined,
@@ -53,6 +61,7 @@ export function hasFeedbackFilter(search: FeedbackSearch): boolean {
 		(search.deliveryState?.length ?? 0) > 0 ||
 		(search.withheldFamily?.length ?? 0) > 0 ||
 		(search.channel?.length ?? 0) > 0 ||
+		(search.practiceSlug?.length ?? 0) > 0 ||
 		search.agentJobId !== undefined ||
 		search.artifactKind !== undefined ||
 		search.recipientUserId !== undefined ||
@@ -66,6 +75,8 @@ export interface FeedbackFiltersProps {
 	/** Reports one changed facet. The caller sends the reader back to page one. */
 	onPatch: (patch: Partial<FeedbackSearch>) => void;
 	onReset: () => void;
+	/** The practices whose observations the feedback was written from. */
+	practices: FacetSource;
 	people: ReviewPeople;
 	/** How many rows the filters currently select, or `undefined` while that is unknown. */
 	total: number | undefined;
@@ -85,6 +96,7 @@ export function FeedbackFilters({
 	search,
 	onPatch,
 	onReset,
+	practices,
 	people,
 	total,
 	scopedArtifact,
@@ -97,14 +109,30 @@ export function FeedbackFilters({
 			hasFilter={hasFilter}
 			onReset={onReset}
 			actions={
-				<ResultCount
-					total={total}
-					noun={["piece of feedback", "pieces of feedback"]}
-					hasFilter={hasFilter}
-				/>
+				<>
+					{/* With the count rather than among the facets, as on the observations list. */}
+					<ReviewSortSelect
+						items={SORT_ITEMS}
+						value={search.order}
+						onChange={(order) => onPatch({ order })}
+					/>
+					<ResultCount
+						total={total}
+						noun={["piece of feedback", "pieces of feedback"]}
+						hasFilter={hasFilter}
+					/>
+				</>
 			}
 		>
 			<div className="flex flex-wrap gap-2">
+				<FacetMultiSelect
+					title="Practice"
+					options={practices.options}
+					selected={search.practiceSlug ?? []}
+					onChange={(values) => onPatch({ practiceSlug: nonEmpty(values) })}
+					disabled={practices.isLoading}
+					emptyLabel={practices.isError ? "Could not load practices" : "No practices available"}
+				/>
 				<FacetMultiSelect
 					title="Outcome"
 					options={OUTCOME_OPTIONS}
@@ -140,6 +168,9 @@ export function FeedbackFilters({
 			</div>
 			<AppliedFacetPills
 				pills={[
+					...facetPills("Practice", practices.options, search.practiceSlug, (values) =>
+						onPatch({ practiceSlug: nonEmpty(values) }),
+					),
 					...facetPills("Outcome", OUTCOME_OPTIONS, search.deliveryState, (values) =>
 						onPatch({ deliveryState: nonEmpty(values) }),
 					),

@@ -7,7 +7,7 @@ import {
 	bucketLabel,
 	bucketSummary,
 	deltaPhrase,
-	edgeLabels,
+	startLabel,
 	totalRows,
 } from "./activity-buckets";
 
@@ -121,17 +121,16 @@ describe("averagePerBucket", () => {
 	});
 });
 
-describe("edgeLabels", () => {
-	it("names the first bucket and ends today, at every bucket size", () => {
+describe("startLabel", () => {
+	it("names the first bucket by its tick in the current year", () => {
 		const september = new Date(2026, 8, 27).getTime();
-		expect(edgeLabels(buckets, "DAY", september)).toStrictEqual(["21 Sep", "Today"]);
-		expect(edgeLabels(buckets, "WEEK", september)).toStrictEqual(["21 Sep", "Today"]);
-		expect(edgeLabels([], "DAY", september)).toBeUndefined();
+		expect(startLabel(new Date(2026, 8, 21), "DAY", september)).toBe("21 Sep");
+		expect(startLabel(new Date(2026, 8, 21), "WEEK", september)).toBe("21 Sep");
 	});
 
 	it("gives the start its year when it is not this one", () => {
 		const nextYear = new Date(2027, 7, 27).getTime();
-		expect(edgeLabels([bucket(1, {})], "MONTH", nextYear)).toStrictEqual(["Sep 2026", "Today"]);
-		expect(edgeLabels([bucket(21, {})], "DAY", nextYear)).toStrictEqual(["21 Sep 2026", "Today"]);
+		expect(startLabel(new Date(2026, 8, 1), "MONTH", nextYear)).toBe("Sep 2026");
+		expect(startLabel(new Date(2026, 8, 21), "DAY", nextYear)).toBe("21 Sep 2026");
 	});
 });

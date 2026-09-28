@@ -8,7 +8,7 @@ import type { AgentJob } from "@/api/types.gen";
 import { reviewJob } from "@/components/admin/practice-reviews/fixtures";
 import { server } from "@/mocks/server";
 
-import { useReviewRunController } from "./use-review-run-controller";
+import { type ReviewRunController, useReviewRunController } from "./use-review-run-controller";
 
 const jobId = "11111111-1111-1111-1111-111111111111";
 
@@ -42,9 +42,9 @@ describe("review result-processing retry", () => {
 			);
 			await waitFor(() => expect(client.isFetching()).toBe(0));
 			act(() => result.current.onRetryResultProcessing());
-			await waitFor(() => expect(result.current.job?.deliveryStatus).toBe("PENDING"));
+			await waitFor(() => expect(jobOf(result.current)?.deliveryStatus).toBe("PENDING"));
 			expect(result.current.feedback).toStrictEqual({ status: "pending" });
-			await waitFor(() => expect(result.current.job?.deliveryStatus).toBe("DELIVERED"), {
+			await waitFor(() => expect(jobOf(result.current)?.deliveryStatus).toBe("DELIVERED"), {
 				timeout: 7000,
 			});
 			await waitFor(() => {
@@ -57,3 +57,7 @@ describe("review result-processing retry", () => {
 		}
 	}, 10_000);
 });
+
+function jobOf(controller: ReviewRunController): AgentJob | undefined {
+	return controller.job.status === "ready" ? controller.job.job : undefined;
+}

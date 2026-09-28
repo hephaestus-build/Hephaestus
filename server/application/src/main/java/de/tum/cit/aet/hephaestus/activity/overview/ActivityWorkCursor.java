@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.activity.overview;
 
 import de.tum.cit.aet.hephaestus.activity.overview.ActivityQueryRepository.WorkGroup;
+import de.tum.cit.aet.hephaestus.core.time.TimeRange;
 import java.nio.charset.StandardCharsets;
 import java.time.DateTimeException;
 import java.time.Instant;
@@ -18,12 +19,12 @@ import org.springframework.web.server.ResponseStatusException;
 public record ActivityWorkCursor(Instant to, Instant lastOccurredAt, String id) {
 
     /** Where the first page starts: every group in the range precedes it, since a range excludes its end. */
-    static ActivityWorkCursor startOf(ActivityRange range) {
+    static ActivityWorkCursor startOf(TimeRange range) {
         return new ActivityWorkCursor(range.to(), range.to(), "");
     }
 
     /** Where the page after {@code last} starts. */
-    static ActivityWorkCursor after(ActivityRange range, WorkGroup last) {
+    static ActivityWorkCursor after(TimeRange range, WorkGroup last) {
         return new ActivityWorkCursor(range.to(), last.getLastOccurredAt(), last.getId());
     }
 

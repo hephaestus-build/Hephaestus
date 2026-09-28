@@ -1,14 +1,18 @@
 import { CopyIcon } from "lucide-react";
 
+import { cn } from "cn";
 import type { AgentJob } from "@/api/types.gen";
 import { formatTokens, JOB_TYPE_LABELS } from "@/components/admin/usage/usage-utils";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { statusToneClass } from "@/components/common/status-def";
+import { REVIEW_STATUS_DEFS } from "@/components/practice-vocabulary/review-status-defs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { copyToClipboard } from "@/lib/clipboard";
 import { hasText } from "@/lib/text";
 import { modelLabel } from "./job-utils";
 
-import { ReviewFact, ReviewFactGrid } from "./ReviewDetailHeader";
+import { ReviewFact, ReviewFactGrid } from "./ReviewFactGrid";
 
 export interface ReviewRunCardProps {
 	job: AgentJob;
@@ -56,14 +60,35 @@ export function ReviewRunCard({ job }: ReviewRunCardProps) {
 					)}
 				</ReviewFact>
 			</ReviewFactGrid>
-			{hasText(job.errorMessage) && (
-				<div className="space-y-1 rounded-lg border border-destructive/40 p-3">
-					<p className="text-sm font-medium">What went wrong</p>
-					<pre className="max-h-48 overflow-auto text-xs break-words whitespace-pre-wrap text-muted-foreground">
-						{job.errorMessage}
-					</pre>
-				</div>
-			)}
+			{hasText(job.errorMessage) && <RunFailure job={job} message={job.errorMessage} />}
 		</section>
+	);
+}
+
+/**
+ * A failure the review had, not one this page is having: it was over before the reader arrived, so
+ * it is no live region (`role="none"` takes back the primitive's `alert`) and no destructive prose.
+ * The status registry's icon says what kind of ending it was, in its tone. It sits in the title
+ * rather than as the alert's own icon, whose colour the primitive pins to the text's.
+ */
+function RunFailure({ job, message }: { job: AgentJob; message: string }) {
+	const status = REVIEW_STATUS_DEFS[job.status];
+	const Icon = status.icon;
+	return (
+		<Alert role="none">
+			<AlertTitle className="flex items-center">
+				<Icon
+					aria-hidden
+					className={cn("mr-2 size-4 shrink-0", statusToneClass(status.badgeVariant))}
+				/>
+				What went wrong
+			</AlertTitle>
+			{/* `min-w-0`: a grid track's floor is its longest word, and a stack trace has long ones. */}
+			<AlertDescription className="min-w-0">
+				<pre className="max-h-48 overflow-auto text-xs break-words whitespace-pre-wrap text-muted-foreground">
+					{message}
+				</pre>
+			</AlertDescription>
+		</Alert>
 	);
 }

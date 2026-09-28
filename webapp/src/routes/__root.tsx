@@ -65,6 +65,7 @@ import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
+import { useFeedbackAwaitingApproval } from "@/hooks/use-feedback-awaiting-approval";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
 import { useProductSurveys, useSubmitProductFeedback } from "@/hooks/use-product-feedback";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
@@ -485,6 +486,12 @@ function AppSidebarContainer() {
 	];
 
 	const sidebarContext = sidebarContextOf(pathname);
+	const awaitingApproval = useFeedbackAwaitingApproval(
+		chromeWorkspaceSlug,
+		workspaceAccess.isAdmin &&
+			chromeWorkspace?.practicesEnabled === true &&
+			sidebarContext === "main",
+	);
 
 	const {
 		data: mentorThreads,
@@ -520,6 +527,7 @@ function AppSidebarContainer() {
 			isMember={workspaceAccess.role !== undefined}
 			readOnly={Boolean(userView)}
 			integrationKinds={integrationKinds}
+			awaitingApproval={awaitingApproval}
 			context={sidebarContext}
 			workspaces={workspaces}
 			activeWorkspace={chromeWorkspace}

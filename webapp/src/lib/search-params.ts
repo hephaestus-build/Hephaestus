@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { retainSearchParams, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
 export const multiValue = z
@@ -9,6 +9,19 @@ export const multiValue = z
 
 export function nonEmpty<T>(values: T[]): T[] | undefined {
 	return values.length > 0 ? values : undefined;
+}
+
+/**
+ * Search params that follow the reader to every link into the route — a range picked once — and
+ * leave the URL while they hold their default. Each middleware works on what the ones after it
+ * return, so the first has the last word: the strip goes first, because a link that names none of
+ * `keys` gets the current value from the retain, and only a strip that runs after can drop a default.
+ */
+export function carriedSearchParams<TSearch extends object>(
+	keys: readonly (keyof TSearch)[],
+	defaults: Partial<TSearch>,
+) {
+	return [stripSearchParams<TSearch>(defaults), retainSearchParams<TSearch>([...keys])];
 }
 
 /** Page one is index `0`, which the parsers here already default to, so `page=0` is noise in a URL. */

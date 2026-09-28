@@ -1,7 +1,7 @@
-import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
-import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { Section } from "@/components/layout/Section";
-import { DrawerBody, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
+import { DrawerBody } from "@/components/ui/drawer";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 
 import type { ActivityOverviewState } from "./activity-buckets";
@@ -42,15 +42,7 @@ export function ActivityCategoryLevel({
 	const title = ACTIVITY_CATEGORY_DEFS[category].label(providerType);
 	return (
 		<>
-			<DetailDrawerHeader nested={nested}>
-				<div className="flex min-w-0 flex-1 flex-col gap-2">
-					<DetailPath {...path} current={title} />
-					<DrawerTitle className="text-2xl font-semibold tracking-tight break-words">
-						{title}
-					</DrawerTitle>
-					<DrawerDescription>{description}</DrawerDescription>
-				</div>
-			</DetailDrawerHeader>
+			<LevelHeader nested={nested} path={path} current={title} description={description} />
 			<DrawerBody className="flex flex-col gap-8 pt-2">
 				<ActivityTrendChart
 					state={overview}

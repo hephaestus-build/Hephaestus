@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityOverviewDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkPageDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.MemberActivityDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.OpenWorkDTO;
+import de.tum.cit.aet.hephaestus.core.time.TimeBucketParams;
+import de.tum.cit.aet.hephaestus.core.time.TimeRangeFilterParams;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -81,12 +83,9 @@ public class ActivityController {
                     @RequestParam(required = false)
                     @Nullable
                     Long teamId,
-            @Valid @ParameterObject ActivityRangeFilterParams range,
-            @Parameter(description = "The IANA time zone whose midnights start the buckets, such as Europe/Berlin")
-                    @RequestParam(defaultValue = "UTC")
-                    String zone) {
-        return ResponseEntity.ok(activityService.overview(
-                workspaceContext.id(), login, teamId, range.toRange(clock), ActivityBuckets.zone(zone)));
+            @ParameterObject TimeBucketParams range) {
+        return ResponseEntity.ok(
+                activityService.overview(workspaceContext.id(), login, teamId, range.toBuckets(clock)));
     }
 
     @GetMapping("/members")
@@ -115,7 +114,7 @@ public class ActivityController {
                     @RequestParam(required = false)
                     @Nullable
                     Long teamId,
-            @Valid @ParameterObject ActivityRangeFilterParams range) {
+            @ParameterObject TimeRangeFilterParams range) {
         return ResponseEntity.ok(activityService.members(workspaceContext.id(), teamId, range.toRange(clock)));
     }
 
@@ -149,7 +148,7 @@ public class ActivityController {
                     @RequestParam(required = false)
                     @Nullable
                     Long teamId,
-            @Valid @ParameterObject ActivityRangeFilterParams range,
+            @ParameterObject TimeRangeFilterParams range,
             @Valid @ParameterObject ActivityWorkFilterParams work) {
         return ResponseEntity.ok(
                 activityService.work(workspaceContext.id(), login, teamId, work.range(range, clock), work));

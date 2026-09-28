@@ -1,14 +1,11 @@
 import { useId } from "react";
-import { Bar, BarChart, LabelList, XAxis, YAxis } from "recharts";
 
 import { cn } from "cn";
 import type { ActivityOverview } from "@/api/types.gen";
 import { FOCUS_RING } from "@/components/common/focus";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { useNow } from "@/components/common/use-now";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { type ChartConfig, ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 import { capitalise } from "@/lib/text";
@@ -16,25 +13,13 @@ import { capitalise } from "@/lib/text";
 import { ActionChips } from "./ActionChip";
 import {
 	type ActivityOverviewState,
-	bucketLabel,
 	bucketSummary,
 	type DateSpan,
 	deltaPhrase,
-	edgeLabels,
-	trackRows,
 	type PreviousPeriod,
 	readSpan,
 	totalRows,
 } from "./activity-buckets";
-import {
-	BAR_RADIUS,
-	TRACK_FILL,
-	BarTooltip,
-	CountShape,
-	MAX_BAR_SIZE,
-	PeakLabel,
-	peakValue,
-} from "./activity-chart";
 import {
 	ACTIVITY_CATEGORIES,
 	ACTIVITY_CATEGORY_DEFS,
@@ -45,6 +30,7 @@ import {
 } from "./activity-kind-defs";
 import { categoryLevel } from "./activity-search";
 import { ACTIVITY_TONES, STALE } from "./activity-tones";
+import { BucketBars } from "./BucketBars";
 
 export interface ActivityTilesProps {
 	state: ActivityOverviewState;
@@ -117,7 +103,6 @@ function ActivityTile({
 	providerType: ProviderType;
 }) {
 	const descriptionId = useId();
-	const nowMs = useNow();
 	const def: ActivityCategoryDef = ACTIVITY_CATEGORY_DEFS[category];
 	const Icon = def.icon(providerType);
 	const headline = kindsTotal(overview.summary, def.headline.kinds);
@@ -126,7 +111,6 @@ function ActivityTile({
 	const delta =
 		previous &&
 		deltaPhrase(headline, kindsTotal(previous.summary, def.headline.kinds), previous.name);
-	const edges = edgeLabels(overview.buckets, overview.bucket, nowMs);
 	const card = (
 		<Card variant={opens ? "interactive" : "muted"} size="sm" className="w-full">
 			<CardHeader>
@@ -159,20 +143,12 @@ function ActivityTile({
 					{delta !== undefined && <p className="text-xs text-muted-foreground">{delta}</p>}
 				</div>
 				{opens && (
-					<div aria-hidden className="space-y-1">
-						<TileChart
-							category={category}
-							overview={overview}
-							span={span}
-							providerType={providerType}
-						/>
-						{edges && (
-							<div className="flex justify-between text-xs text-muted-foreground">
-								<span>{edges[0]}</span>
-								<span>{edges[1]}</span>
-							</div>
-						)}
-					</div>
+					<TileChart
+						category={category}
+						overview={overview}
+						span={span}
+						providerType={providerType}
+					/>
 				)}
 				{chips.length > 0 && (
 					<ActionChips actions={chips} providerType={providerType} display="labelled" />
@@ -202,11 +178,7 @@ function ActivityTile({
 }
 
 /**
- * The headline alone, one column per bucket on this tile's own scale from zero, in the category's
- * tone, each standing in a faint full-height track so an empty day reads as present and zero. Only
- * the peak carries its value; the tile's number, its sentence and the category level's table carry
- * the rest. The breakdown by kind is the category level's. Hidden from assistive technology, which
- * reads the tile's description instead.
+ * The headline alone, in the category's tone. The breakdown by kind is the category level's.
  */
 function TileChart({
 	category,
@@ -220,49 +192,14 @@ function TileChart({
 	providerType: ProviderType;
 }) {
 	const def: ActivityCategoryDef = ACTIVITY_CATEGORY_DEFS[category];
-	const { fill } = ACTIVITY_TONES[def.tone];
-	const name = capitalise(def.headline.qualifier ?? def.label(providerType));
-	const rows = trackRows(totalRows(overview.buckets, def.headline.kinds));
-	const config = { count: { label: name, color: fill } } satisfies ChartConfig;
 	return (
-		<ChartContainer config={config} className="aspect-auto h-16 w-full">
-			<BarChart
-				data={rows}
-				margin={{ top: 16, right: 4, bottom: 0, left: 4 }}
-				barCategoryGap="20%"
-				accessibilityLayer={false}
-			>
-				<XAxis dataKey="start" hide />
-				<YAxis hide domain={[0, "dataMax"]} />
-				<ChartTooltip
-					cursor={false}
-					content={
-						<BarTooltip
-							name={name}
-							bucketLabel={(start) => capitalise(bucketLabel(start, overview.bucket, span))}
-						/>
-					}
-				/>
-				<Bar
-					dataKey="count"
-					stackId="track"
-					fill={fill}
-					maxBarSize={MAX_BAR_SIZE}
-					shape={<CountShape />}
-					isAnimationActive={false}
-				>
-					<LabelList valueAccessor={peakValue(rows)} content={<PeakLabel />} />
-				</Bar>
-				<Bar
-					dataKey="rest"
-					stackId="track"
-					fill={TRACK_FILL}
-					radius={BAR_RADIUS}
-					maxBarSize={MAX_BAR_SIZE}
-					isAnimationActive={false}
-				/>
-			</BarChart>
-		</ChartContainer>
+		<BucketBars
+			rows={totalRows(overview.buckets, def.headline.kinds)}
+			bucket={overview.bucket}
+			span={span}
+			name={capitalise(def.headline.qualifier ?? def.label(providerType))}
+			fill={ACTIVITY_TONES[def.tone].fill}
+		/>
 	);
 }
 

@@ -165,11 +165,6 @@ describe("useWorkspaceSwitcher", () => {
 	it.each([
 		["mentor thread", "/w/alpha/mentor/thread-1?message=foreign", "mentor/$threadId"],
 		["member", "/w/alpha/user/octocat?group=foreign", "user/$username"],
-		[
-			"practice",
-			"/w/alpha/admin/practices/testing?status=foreign",
-			"admin/practices/$practiceSlug",
-		],
 	])("falls back to workspace home from a %s", async (_name, initialEntry, path) => {
 		const router = renderRoute(initialEntry, path);
 

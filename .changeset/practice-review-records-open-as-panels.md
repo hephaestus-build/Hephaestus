@@ -1,0 +1,5 @@
+---
+"hephaestus": minor
+---
+
+Reviews, observations, feedback, reviewed work and practices open as panels over the Practice reviews page you are on, and links in a panel open the next record over it, so you keep your place; the page's address names the open panels, so you can share it. Feedback counts on reviews and observations now include every delivery state, so feedback that waits for approval no longer reads as "No feedback composed". These addresses no longer open, and nothing redirects from them; open the record from its list instead. Under `/w/<workspace>/admin/practices/`: `reviews/<review>`, `reviews/delivery`, `reviews/delivery/<feedback>`, `reviews/findings`, `reviews/findings/<observation>`, `reviews/observations/<observation>`, `reviews/targets/<kind>/<work>`, `runs`, `settings`, `autonomy`, `backfill`, `new`, `available`, `available/<practice>` and `<practice>`. For instance admins: `/admin/catalog/practices/new`, `/admin/catalog/practices/<practice>`, `/admin/catalog/groups/new` and `/admin/catalog/groups/<group>`.

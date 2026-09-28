@@ -35,6 +35,7 @@ import {
 	DETAIL_LEVEL_KINDS,
 	GUARDED_LEVEL_KINDS,
 	PRACTICE_SEARCH_PARAMS,
+	PRACTICE_SETUP_LEVEL_LABELS,
 	practiceSetupSearchSchema,
 } from "@/components/admin/practices/practice-search";
 import {
@@ -59,6 +60,7 @@ import {
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { detailStackKey, parseDetailStack } from "@/components/layout/detail-drawer/detail-stack";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { levelPathAt } from "@/components/layout/detail-drawer/level-path";
 import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -187,6 +189,26 @@ function PracticeCatalogRoute() {
 				select: (data: Practice) => ({ kind: "practice", data }) as const,
 			};
 		}),
+	});
+
+	// A level behind is named by what it shows once that has loaded, and by its kind until then.
+	const pathAt = levelPathAt(detailStack, {
+		pageLabel: "Practice setup",
+		labelOf: (entry, index) => {
+			const query = levelQueries[index];
+			const label = PRACTICE_SETUP_LEVEL_LABELS[entry.kind];
+			if (entry.kind === "catalog-group") {
+				return groupAdoptionAt(query)?.definition.name ?? label;
+			}
+			if (entry.kind === "catalog-practice") {
+				return practiceAdoptionAt(query)?.definition.name ?? label;
+			}
+			if (entry.kind === "practice") {
+				return workspacePracticeAt(query)?.name ?? label;
+			}
+			return label;
+		},
+		onClose: stackControls.close,
 	});
 
 	let libraryState: LibraryState = { status: "loading" };
@@ -475,6 +497,7 @@ function PracticeCatalogRoute() {
 						return (
 							<GroupAdoptionPanel
 								nested={level.nested}
+								path={pathAt(level.depth)}
 								state={state}
 								onOpenPractice={(catalogSlug) =>
 									stackControls.open({ kind: "catalog-practice", id: catalogSlug })
@@ -513,7 +536,14 @@ function PracticeCatalogRoute() {
 								)?.name,
 							};
 						}
-						return <WorkspacePracticePanel nested={level.nested} state={state} />;
+						return (
+							<WorkspacePracticePanel
+								workspaceSlug={workspaceSlug}
+								nested={level.nested}
+								path={pathAt(level.depth)}
+								state={state}
+							/>
+						);
 					}
 					if (entry.kind === "practice-edit" || entry.kind === "practice-new") {
 						const creating = entry.kind === "practice-new";
@@ -525,7 +555,11 @@ function PracticeCatalogRoute() {
 							stackControls.close(level.depth);
 						};
 						return (
-							<PracticeFormLevel nested={level.nested} creating={creating}>
+							<PracticeFormLevel
+								nested={level.nested}
+								path={pathAt(level.depth)}
+								creating={creating}
+							>
 								{editableGroups === undefined ||
 								definitionOptionsQuery.data === undefined ||
 								(!creating && editing === undefined) ? (
@@ -589,6 +623,7 @@ function PracticeCatalogRoute() {
 					return (
 						<PracticeAdoptionPanel
 							nested={level.nested}
+							path={pathAt(level.depth)}
 							state={state}
 							onAdopt={() => {
 								void adoptReviewedPractice(level.depth);

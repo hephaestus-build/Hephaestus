@@ -33,7 +33,7 @@ way it condemns most of the tree. A **list shell** whose toolbar renders through
 legitimately takes the query result as three fields; forcing a page-level union would drag the filter
 toolbar into every branch. Only the component that owns the region that *swaps* takes the union.
 
-Exemplar: `ReviewSectionState` in `webapp/src/components/admin/practice-reviews/ReviewOutputSections.tsx`
+Exemplar: `ReviewSectionState` in `webapp/src/components/admin/practice-reviews/review-states.ts`
 — four branches, and `onRetry` lives *inside* the error branch so no caller can hand you a retry with
 nothing to retry. Anti-exemplar: `FeedbackResultsState` in the same directory's `FeedbackResults.tsx`,
 a `loading | empty | ready` union with no error branch — this rule broken while appearing to follow it.

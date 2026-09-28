@@ -23,6 +23,14 @@ export const CURATED_LEVEL_KINDS = [
 
 export type CuratedLevelKind = (typeof CURATED_LEVEL_KINDS)[number];
 
+/** What each level is called: the last crumb of its path, its title, and its crumb once covered. */
+export const CURATED_LEVEL_LABELS = {
+	"practice-edit": "Edit practice",
+	"practice-new": "Create practice",
+	"group-edit": "Edit group",
+	"group-new": "Create group",
+} as const satisfies Record<CuratedLevelKind, string>;
+
 /** Every level here is an editor, so every one holds a draft — see `GUARDED_LEVEL_KINDS`. */
 export const GUARDED_CURATED_LEVEL_KINDS = CURATED_LEVEL_KINDS;
 

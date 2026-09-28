@@ -1,14 +1,20 @@
-import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, within } from "storybook/test";
+import type { Meta, StoryContext, StoryObj } from "@storybook/react-vite";
+import { expect, fn, screen, waitFor, within } from "storybook/test";
 
-import type { ListPracticeReviewsResponse } from "@/api/types.gen";
+import type { ListPracticeReviewsResponse, ReviewRunSummary } from "@/api/types.gen";
 import { withStandardPage, withWidePage } from "@/stories/decorators";
+import { settledPopup } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
 
 import { reviewRuns } from "./fixtures";
 import { REVIEW_PAGE_SIZE, type RunsSearch, runsQuery } from "./review-search";
 import { ReviewRunsPage } from "./ReviewRunsPage";
+
+/** The fixture's reviews, one of which completed and then failed to process what it produced. */
+const RUNS: ReviewRunSummary[] = reviewRuns.map((run) =>
+	run.id === "11111111-1111-1111-1111-111111111111" ? { ...run, resultProcessing: "FAILED" } : run,
+);
 
 /**
  * The page of reviews the endpoint would return for a search, computed from the fixture instead of
@@ -22,9 +28,12 @@ import { ReviewRunsPage } from "./ReviewRunsPage";
  */
 function reviewsFor(search: RunsSearch): ListPracticeReviewsResponse {
 	const query = runsQuery(search, REVIEW_PAGE_SIZE);
-	const rows = reviewRuns.filter(
+	const rows = RUNS.filter(
 		(run) =>
-			(!query.status || run.status === query.status) &&
+			(query.status === undefined || query.status.includes(run.status)) &&
+			(query.resultProcessing === undefined ||
+				(run.resultProcessing !== undefined &&
+					query.resultProcessing.includes(run.resultProcessing))) &&
 			(!query.from || run.createdAt >= query.from) &&
 			(!query.to || run.createdAt < query.to),
 	);
@@ -39,6 +48,28 @@ function reviewsFor(search: RunsSearch): ListPracticeReviewsResponse {
 	};
 }
 
+/**
+ * Toggles one status in the facet and closes it again, waiting out both transitions: a press on the
+ * trigger while the popup is still leaving lands on its inert layer.
+ */
+async function pickStatus(
+	canvas: StoryContext["canvas"],
+	userEvent: {
+		click: (element: Element) => Promise<void>;
+		keyboard: (text: string) => Promise<void>;
+	},
+	option: RegExp,
+) {
+	await userEvent.click(canvas.getByRole("combobox", { name: /^Status/u }));
+	await settledPopup();
+	const listbox = screen.getByRole("listbox", { name: "Status options" });
+	await userEvent.click(within(listbox).getByRole("option", { name: option }));
+	await userEvent.keyboard("{Escape}");
+	await waitFor(() => {
+		void expect(screen.queryByRole("listbox", { name: "Status options" })).toBeNull();
+	});
+}
+
 const meta = {
 	component: ReviewRunsPage,
 	parameters: {
@@ -49,9 +80,9 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		workspaceSlug: "demo",
-		search: {},
+		search: { status: undefined, resultProcessing: undefined },
 		onSearchChange: fn(),
-		reviews: reviewsFor({}),
+		reviews: reviewsFor({ status: undefined, resultProcessing: undefined }),
 		isLoading: false,
 		error: null,
 		onRetry: fn(),
@@ -60,11 +91,14 @@ const meta = {
 	// follow the search the same way the route's query would.
 	render: (args) => (
 		<StatefulPatch initial={args.search}>
-			{(search, onSearchChange) => (
+			{(search, patch) => (
 				<ReviewRunsPage
 					{...args}
 					search={search}
-					onSearchChange={onSearchChange}
+					onSearchChange={(next) => {
+						patch(next);
+						args.onSearchChange(next);
+					}}
 					reviews={reviewsFor(search)}
 				/>
 			)}
@@ -94,9 +128,10 @@ export const Default: Story = {
 };
 
 /**
- * A strip draws every slot including the zeroes. Dropping them would start the next number at a
- * different x on each row and reflow the line under the reader whenever the poll refreshes an active
- * review, and it would make "no shortfalls" read the same as "shortfalls are not shown here".
+ * Observations are a strip that draws every slot including the zeroes. Dropping them would start
+ * the next number at a different x on each row and reflow the line under the reader whenever the
+ * poll refreshes an active review. Feedback, spread over ten delivery states, is a sentence of only
+ * the states that happened.
  */
 export const WhatEachReviewProduced: Story = {
 	parameters: { viewport: { defaultViewport: "desktop" }, chromatic: { viewports: [1440] } },
@@ -105,50 +140,63 @@ export const WhatEachReviewProduced: Story = {
 		// A still-running review has no tally, so index 0 is the first review with output rather than
 		// the first row.
 		const observations = canvas.getAllByRole("list", { name: "Observations" })[0];
-		const feedback = canvas.getAllByRole("list", { name: "Feedback" })[0];
-
 		// A count and its word are two elements, so each pair is asserted on the strip, not per cell.
-		for (const pair of ["1 strength", "2 improvements", "0 not applicable", "0 undetermined"]) {
+		for (const pair of [
+			"1 positive outcome",
+			"2 negative outcomes",
+			"0 not applicable",
+			"0 undetermined",
+		]) {
 			await expect(observations).toHaveTextContent(pair);
 		}
-		for (const pair of [
-			"1 delivered",
-			"2 withheld",
-			"0 failed to deliver",
-			"0 unconfirmed",
-			// The bare stored state: this strip counts a run's units across every channel, so it cannot
-			// name the moment one lane's prepared unit is waiting for.
-			"0 prepared",
-		]) {
-			await expect(feedback).toHaveTextContent(pair);
-		}
-
 		for (const strip of canvas.getAllByRole("list", { name: "Observations" })) {
 			await expect(within(strip).getAllByRole("listitem")).toHaveLength(4);
 		}
-		for (const strip of canvas.getAllByRole("list", { name: "Feedback" })) {
-			await expect(within(strip).getAllByRole("listitem")).toHaveLength(6);
-		}
+		canvas.getByText("Feedback: 1 delivered · 2 withheld");
 	},
 };
 
+/** Statuses add up: each one chosen widens the list by the reviews in it. */
 export const StatusFilter: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
 		await canvas.findByRole("list", { name: /Practice reviews/u });
-		await userEvent.click(canvas.getByRole("combobox"));
-		const listbox = await screen.findByRole("listbox");
-		await userEvent.click(within(listbox).getByRole("option", { name: /Failed/u }));
-		await expect(canvas.getByRole("combobox")).toHaveTextContent("Failed");
+		await pickStatus(canvas, userEvent, /Failed/u);
 		await canvas.findByText("1 review matches your filters.");
-
-		await userEvent.click(canvas.getByRole("combobox"));
-		await userEvent.click(
-			within(await screen.findByRole("listbox")).getByRole("option", { name: /Cancelled/u }),
-		);
-		await canvas.findByText("No reviews found");
-		await userEvent.click(canvas.getByRole("button", { name: "Clear all filters" }));
+		await pickStatus(canvas, userEvent, /Running/u);
+		await canvas.findByText("2 reviews match your filters.");
+		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
 		await canvas.findByText("7 reviews.");
+	},
+};
+
+/**
+ * A completed review whose results could not be processed is found by that failure, which its status
+ * alone does not tell apart from a review that finished cleanly.
+ */
+export const ResultProcessingFilter: Story = {
+	parameters: { chromatic: { viewports: [1440] } },
+	play: async ({ canvas, userEvent }) => {
+		await canvas.findByText("7 reviews.");
+		const trigger = canvas.getByRole("combobox", { name: /^Result processing/u });
+		await userEvent.click(trigger);
+		await settledPopup();
+		const listbox = screen.getByRole("listbox", { name: "Result processing options" });
+		await userEvent.click(
+			within(listbox).getByRole("option", { name: /Result processing failed/u }),
+		);
+		await userEvent.keyboard("{Escape}");
+		await canvas.findByText("1 review matches your filters.");
+		const list = canvas.getByRole("list", { name: /Practice reviews/u });
+		const [row] = within(list).getAllByRole("listitem");
+		if (!row) {
+			throw new Error("The filtered list has no row");
+		}
+		within(row).getByRole("link", { name: "Cache the workspace member lookup on the review path" });
+		within(row).getByText("Result processing failed");
+		await waitFor(() => {
+			void expect(screen.queryByRole("listbox")).toBeNull();
+		});
 	},
 };
 
@@ -158,7 +206,14 @@ export const StatusFilter: Story = {
  * empty toolbar does not reach.
  */
 export const FilterByRequestedDate: Story = {
-	args: { search: { from: "2026-07-28", to: "2026-07-29" } },
+	args: {
+		search: {
+			status: undefined,
+			resultProcessing: undefined,
+			from: "2026-07-28",
+			to: "2026-07-29",
+		},
+	},
 	parameters: { viewport: { defaultViewport: "desktop" }, chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
 		await canvas.findByText("3 reviews match your filters.");
@@ -175,18 +230,13 @@ export const FilterByRequestedDate: Story = {
 
 		canvas.getByRole("button", { name: "Requested: Jul 28 – Jul 29, 2026" });
 
-		// Adding a status intersects with the range rather than replacing it.
-		await userEvent.click(canvas.getByRole("combobox"));
-		await userEvent.click(
-			within(await screen.findByRole("listbox")).getByRole("option", { name: /Completed/u }),
-		);
+		// A status intersects with the range rather than replacing it.
+		await pickStatus(canvas, userEvent, /Completed/u);
 		await canvas.findByText("2 reviews match your filters.");
 
-		// The failed review was requested outside the window, so this intersection is empty.
-		await userEvent.click(canvas.getByRole("combobox"));
-		await userEvent.click(
-			within(await screen.findByRole("listbox")).getByRole("option", { name: /Failed/u }),
-		);
+		// The failed review was requested outside the window, so failed alone intersects to nothing.
+		await pickStatus(canvas, userEvent, /Failed/u);
+		await pickStatus(canvas, userEvent, /Completed/u);
 		await canvas.findByText("No reviews found");
 		canvas.getByText("No review matches these filters. Other reviews may exist outside them.");
 
@@ -214,7 +264,14 @@ export const Mobile: Story = {
  * date range out, rather than printing the same range twice.
  */
 export const MobileAppliedDateRange: Story = {
-	args: { search: { from: "2026-07-28", to: "2026-07-29" } },
+	args: {
+		search: {
+			status: undefined,
+			resultProcessing: undefined,
+			from: "2026-07-28",
+			to: "2026-07-29",
+		},
+	},
 	parameters: { chromatic: { viewports: [320] }, viewport: { defaultViewport: "reflow" } },
 	play: async ({ canvas }) => {
 		await canvas.findByText("3 reviews match your filters.");

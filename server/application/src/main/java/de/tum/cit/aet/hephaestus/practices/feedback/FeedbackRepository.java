@@ -98,16 +98,41 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     Optional<Feedback> findByIdAndWorkspaceIdAndRecipientUserIdAndDeliveryState(
             UUID id, Long workspaceId, Long recipientUserId, FeedbackDeliveryState deliveryState);
 
-    @Query(value = """
-        SELECT f.agent_job_id AS "jobId",
-               COUNT(*) FILTER (WHERE f.delivery_state = 'PREPARED' OR
-                   (f.delivery_state = 'PARTIALLY_DELIVERED' AND f.suppression_reason IS NULL)) AS "prepared",
+    /**
+     * Feedback counted by delivery state, one column per {@link FeedbackDeliveryState} value, as native select
+     * columns over {@code f}, so each count matches the operator feedback list filtered to that one state.
+     */
+    String STATE_COUNTS = """
+               COUNT(*) FILTER (WHERE f.delivery_state = 'AWAITING_APPROVAL') AS "awaitingApproval",
+               COUNT(*) FILTER (WHERE f.delivery_state = 'PREPARED') AS "prepared",
+               COUNT(*) FILTER (WHERE f.delivery_state = 'PARTIALLY_DELIVERED') AS "partiallyDelivered",
+               COUNT(*) FILTER (WHERE f.delivery_state = 'PARTIALLY_FAILED') AS "partiallyFailed",
                COUNT(*) FILTER (WHERE f.delivery_state = 'DELIVERED') AS "delivered",
                COUNT(*) FILTER (WHERE f.delivery_state = 'SUPERSEDED') AS "superseded",
-               COUNT(*) FILTER (WHERE f.delivery_state = 'SUPPRESSED' OR
-                   (f.delivery_state = 'PARTIALLY_DELIVERED' AND f.suppression_reason IS NOT NULL)) AS "suppressed",
-               COUNT(*) FILTER (WHERE f.delivery_state IN ('FAILED', 'PARTIALLY_FAILED')) AS "failed",
+               COUNT(*) FILTER (WHERE f.delivery_state = 'SUPPRESSED') AS "suppressed",
+               COUNT(*) FILTER (WHERE f.delivery_state = 'FAILED') AS "failed",
+               COUNT(*) FILTER (WHERE f.delivery_state = 'DISCARDED') AS "discarded",
                COUNT(*) FILTER (WHERE f.delivery_state = 'UNCONFIRMED') AS "unconfirmed"
+        """;
+
+    /**
+     * Feedback {@code f} joined to each observation {@code o} of its workspace it is bound to, in any role: the one
+     * definition of which practices a piece of feedback belongs to, shared by the per-practice counts and the practice
+     * filter of the operator feedback list so that a practice's count and its filtered list agree.
+     */
+    String WITH_BOUND_OBSERVATIONS = """
+            FROM feedback f
+            JOIN feedback_observation fo ON fo.feedback_id = f.id
+            JOIN observation o ON o.id = fo.observation_id AND o.workspace_id = f.workspace_id
+        """;
+
+    /** Feedback created in {@code [from, to)}, the window the operator feedback list filters by. */
+    String CREATED_IN_RANGE = """
+          AND f.created_at >= :from
+          AND f.created_at < :to
+        """;
+
+    @Query(value = "SELECT f.agent_job_id AS \"jobId\"," + STATE_COUNTS + """
         FROM feedback f
         WHERE f.workspace_id = :workspaceId
           AND f.agent_job_id IN :jobIds
@@ -116,10 +141,66 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     List<ReviewFeedbackCounts> summarizeReviewFeedback(
             @Param("workspaceId") Long workspaceId, @Param("jobIds") Collection<UUID> jobIds);
 
-    interface ReviewFeedbackCounts {
-        UUID getJobId();
+    /**
+     * Feedback created in {@code [from, to)} by the time bucket it was created in, numbered from 1 as
+     * {@link de.tum.cit.aet.hephaestus.core.time.TimeBuckets#epochSeconds()} describes; buckets without feedback have
+     * no row.
+     */
+    @Query(value = """
+        SELECT width_bucket(extract(epoch from f.created_at), CAST(:starts AS bigint[])) AS "bucket",
+               COUNT(*) AS "total",
+        """ + STATE_COUNTS + """
+        FROM feedback f
+        WHERE f.workspace_id = :workspaceId
+        """ + CREATED_IN_RANGE + """
+        GROUP BY 1
+        """, nativeQuery = true)
+    List<BucketFeedbackCounts> summarizeFeedbackByBucket(
+            @Param("workspaceId") Long workspaceId,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("starts") Long[] starts);
+
+    /**
+     * Feedback created in {@code [from, to)} by the practice of any observation it is bound to, in any role. One
+     * piece of feedback fusing several observations of a practice has a join row for each, so the derived table
+     * keeps one row per practice and piece of feedback; fusing observations of two practices, it counts for both.
+     */
+    @Query(
+            value = "SELECT f.practice_id AS \"practiceId\"," + STATE_COUNTS + """
+        FROM (
+            SELECT DISTINCT o.practice_id, f.id, f.delivery_state
+        """ + WITH_BOUND_OBSERVATIONS + """
+            WHERE f.workspace_id = :workspaceId
+        """
+                    + CREATED_IN_RANGE + """
+        ) f
+        GROUP BY f.practice_id
+        """,
+            nativeQuery = true)
+    List<PracticeFeedbackCounts> summarizeFeedbackByPractice(
+            @Param("workspaceId") Long workspaceId, @Param("from") Instant from, @Param("to") Instant to);
+
+    /** Feedback bound to each of these observations, in any role; an observation without feedback has no row. */
+    @Query(value = "SELECT fo.observation_id AS \"observationId\"," + STATE_COUNTS + """
+        FROM feedback_observation fo
+        JOIN feedback f ON f.id = fo.feedback_id
+        WHERE fo.observation_id IN :observationIds
+          AND f.workspace_id = :workspaceId
+        GROUP BY fo.observation_id
+        """, nativeQuery = true)
+    List<ObservationFeedbackCounts> summarizeFeedbackByObservation(
+            @Param("workspaceId") Long workspaceId, @Param("observationIds") Collection<UUID> observationIds);
+
+    /** The columns of {@link #STATE_COUNTS}. */
+    interface FeedbackStateCounts {
+        Long getAwaitingApproval();
 
         Long getPrepared();
+
+        Long getPartiallyDelivered();
+
+        Long getPartiallyFailed();
 
         Long getDelivered();
 
@@ -129,7 +210,27 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
 
         Long getFailed();
 
+        Long getDiscarded();
+
         Long getUnconfirmed();
+    }
+
+    interface ReviewFeedbackCounts extends FeedbackStateCounts {
+        UUID getJobId();
+    }
+
+    interface BucketFeedbackCounts extends FeedbackStateCounts {
+        Integer getBucket();
+
+        Long getTotal();
+    }
+
+    interface PracticeFeedbackCounts extends FeedbackStateCounts {
+        Long getPracticeId();
+    }
+
+    interface ObservationFeedbackCounts extends FeedbackStateCounts {
+        UUID getObservationId();
     }
 
     /**
@@ -592,6 +693,15 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
 
     int BODY_PREVIEW_LENGTH = 320;
 
+    /**
+     * Keeps feedback bound to an observation of a practice asked for, by {@link #WITH_BOUND_OBSERVATIONS}. The
+     * subquery's own {@code f} shadows the outer one.
+     */
+    String PRACTICE_FILTER = "AND (CAST(:#{#f.practiceSlugArray()} AS text[]) IS NULL OR f.id IN (SELECT f.id"
+            + WITH_BOUND_OBSERVATIONS
+            + " JOIN practice p ON p.id = o.practice_id WHERE f.workspace_id = :workspaceId"
+            + " AND p.slug = ANY(CAST(:#{#f.practiceSlugArray()} AS text[]))))\n";
+
     String OPERATOR_PREDICATES = """
           AND (CAST(:#{#f.deliveryStateNames()} AS text[]) IS NULL OR f.delivery_state = ANY(CAST(:#{#f.deliveryStateNames()} AS text[])))
           AND (CAST(:#{#f.suppressionReasonNames()} AS text[]) IS NULL OR f.suppression_reason = ANY(CAST(:#{#f.suppressionReasonNames()} AS text[])))
@@ -602,7 +712,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
           AND (CAST(:#{#f.recipientUserId()} AS bigint) IS NULL OR f.recipient_user_id = CAST(:#{#f.recipientUserId()} AS bigint))
           AND (CAST(:#{#f.from()} AS timestamptz) IS NULL OR f.created_at >= CAST(:#{#f.from()} AS timestamptz))
           AND (CAST(:#{#f.to()} AS timestamptz) IS NULL OR f.created_at < CAST(:#{#f.to()} AS timestamptz))
-        """;
+        """ + PRACTICE_FILTER;
 
     /**
      * The operator's page of feedback.
@@ -652,11 +762,15 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
                     + " WHERE fo.feedback_id = f.id AND p.workspace_id = f.workspace_id) AS \"observationCount\""
                     + " FROM feedback f WHERE f.workspace_id = :workspaceId"
                     + OPERATOR_PREDICATES
-                    + " ORDER BY f.created_at DESC, f.id DESC",
+                    + " ORDER BY CASE WHEN :oldestFirst THEN f.created_at END ASC,"
+                    + " CASE WHEN :oldestFirst THEN f.id END ASC, f.created_at DESC, f.id DESC",
             countQuery = "SELECT count(*) FROM feedback f WHERE f.workspace_id = :workspaceId" + OPERATOR_PREDICATES,
             nativeQuery = true)
     Page<OperatorFeedbackRow> findForWorkspace(
-            @Param("workspaceId") Long workspaceId, @Param("f") FeedbackQueryFilter filter, Pageable pageable);
+            @Param("workspaceId") Long workspaceId,
+            @Param("f") FeedbackQueryFilter filter,
+            @Param("oldestFirst") boolean oldestFirst,
+            Pageable pageable);
 
     interface OperatorFeedbackRow {
         UUID getId();

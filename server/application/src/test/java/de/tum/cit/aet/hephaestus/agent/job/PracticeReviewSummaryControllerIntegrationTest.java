@@ -170,6 +170,29 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .isEqualTo(1);
     }
 
+    /** Feedback waiting on an admin, or rejected by one, is still feedback the review produced. */
+    @Test
+    @WithAdminUser
+    void shouldCountFeedbackAwaitingApprovalAndDiscardedWhenTheReviewProducedIt() {
+        job.setStatus(AgentJobStatus.COMPLETED);
+        jobRepository.save(job);
+        persistFeedback(0, FeedbackDeliveryState.AWAITING_APPROVAL, null, "Proposed");
+        persistFeedback(1, FeedbackDeliveryState.AWAITING_APPROVAL, null, "Proposed too");
+        persistFeedback(2, FeedbackDeliveryState.DISCARDED, null, "Rejected");
+
+        listReviews("?status=COMPLETED")
+                .jsonPath("$.content[0].id")
+                .isEqualTo(job.getId().toString())
+                .jsonPath("$.content[0].feedback.awaitingApproval")
+                .isEqualTo(2)
+                .jsonPath("$.content[0].feedback.discarded")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].feedback.prepared")
+                .isEqualTo(0)
+                .jsonPath("$.content[0].feedback.suppressed")
+                .isEqualTo(0);
+    }
+
     /** A run that recorded no work names its kind and nothing more, so no surface prints a number that was not there. */
     @Test
     @WithAdminUser
@@ -300,6 +323,57 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .isEqualTo(insideButFailed.getId().toString())
                 .jsonPath("$.content[2].id")
                 .isEqualTo(justBefore.getId().toString());
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldListReviewsInEitherStatusWhenTwoStatusesAreGiven() {
+        Instant at = Instant.parse("2026-03-10T00:00:00Z");
+        AgentJob failed = persistReviewAt(workspace, at, AgentJobStatus.FAILED);
+        AgentJob timedOut = persistReviewAt(workspace, at.plusSeconds(60), AgentJobStatus.TIMED_OUT);
+        persistReviewAt(workspace, at.plusSeconds(120), AgentJobStatus.COMPLETED);
+
+        listReviews("?status=FAILED&status=TIMED_OUT")
+                .jsonPath("$.page.totalElements")
+                .isEqualTo(2)
+                .jsonPath("$.content[0].id")
+                .isEqualTo(timedOut.getId().toString())
+                .jsonPath("$.content[1].id")
+                .isEqualTo(failed.getId().toString());
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldListOnlyReviewsWhoseResultProcessingFailedWhenFilteredByIt() {
+        Instant at = Instant.parse("2026-03-10T00:00:00Z");
+        AgentJob failed = persistReviewAt(workspace, at, AgentJobStatus.COMPLETED);
+        failed.setDeliveryStatus(DeliveryStatus.FAILED);
+        jobRepository.save(failed);
+        AgentJob pending = persistReviewAt(workspace, at.plusSeconds(60), AgentJobStatus.COMPLETED);
+        pending.setDeliveryStatus(DeliveryStatus.PENDING);
+        jobRepository.save(pending);
+        AgentJob delivered = persistReviewAt(workspace, at.plusSeconds(120), AgentJobStatus.COMPLETED);
+        delivered.setDeliveryStatus(DeliveryStatus.DELIVERED);
+        jobRepository.save(delivered);
+
+        listReviews("?resultProcessing=FAILED")
+                .jsonPath("$.page.totalElements")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].id")
+                .isEqualTo(failed.getId().toString())
+                .jsonPath("$.content[0].resultProcessing")
+                .isEqualTo("FAILED");
+        listReviews("?resultProcessing=FAILED&resultProcessing=PENDING")
+                .jsonPath("$.page.totalElements")
+                .isEqualTo(2);
+        listReviews("?status=QUEUED")
+                .jsonPath("$.page.totalElements")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].id")
+                .isEqualTo(job.getId().toString())
+                .jsonPath("$.content[0].resultProcessing")
+                .doesNotExist();
+        listReviews("").jsonPath("$.page.totalElements").isEqualTo(4);
     }
 
     /** A backwards window is a mistake, not an empty page — the siblings answer it the same way. */

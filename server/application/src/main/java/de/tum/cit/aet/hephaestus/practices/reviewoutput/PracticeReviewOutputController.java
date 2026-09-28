@@ -71,8 +71,8 @@ public class PracticeReviewOutputController {
             @RequestParam(defaultValue = "50") @Min(1) @Max(100) int size,
             @Parameter(
                             description =
-                                    "Sorting strategy. ACTIONABILITY orders problems from CRITICAL to INFO, then strengths, "
-                                            + "then not-applicable observations; ties are newest first.")
+                                    "Sorting strategy. ACTIONABILITY orders negative outcomes from CRITICAL to INFO, then "
+                                            + "positive outcomes, then not-applicable observations; ties are newest first.")
                     @RequestParam(defaultValue = "NEWEST")
                     ReviewObservationSort sort,
             @Valid @ParameterObject ReviewObservationFilterParams filter) {
@@ -139,7 +139,7 @@ public class PracticeReviewOutputController {
     @GetMapping("/feedback")
     @Operation(
             summary = "List practice review feedback across the workspace",
-            description = "Results are ordered newest first and include every delivery state.",
+            description = "Results include every delivery state and are ordered newest first by default.",
             operationId = "listPracticeReviewFeedback")
     @ApiResponse(responseCode = "200", description = "Paginated feedback returned")
     @ApiResponse(
@@ -153,9 +153,14 @@ public class PracticeReviewOutputController {
             WorkspaceContext workspaceContext,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "50") @Min(1) @Max(100) int size,
+            @Parameter(
+                            description = "Sorting strategy. NEWEST and OLDEST order by when the feedback was created; "
+                                    + "ties by id.")
+                    @RequestParam(defaultValue = "NEWEST")
+                    ReviewFeedbackSort sort,
             @Valid @ParameterObject ReviewFeedbackFilterParams filter) {
         return ResponseEntity.ok(new PagedModel<>(
-                feedbackQueryService.list(workspaceContext.id(), filter.toFilter(), PageRequest.of(page, size))));
+                feedbackQueryService.list(workspaceContext.id(), filter.toFilter(), sort, PageRequest.of(page, size))));
     }
 
     @GetMapping("/feedback/{feedbackId}")

@@ -18,9 +18,10 @@ import type { OpenWorkState } from "@/components/activity/OpenWorkSections";
 import { workLogMarkdown } from "@/components/activity/work-log-markdown";
 import { panelState } from "@/components/common/panel-state";
 import { copyRichText } from "@/lib/clipboard";
-import { formatDayRange } from "@/lib/dates";
+import { browserTimeZone, formatDayRange } from "@/lib/dates";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 import { infiniteListState } from "@/runtime/tanstack-query/infinite-list";
+import { keepSameSubject } from "@/runtime/tanstack-query/keep-same-subject";
 import { loadedPages } from "@/runtime/tanstack-query/spring-page";
 
 /** Whose activity: one member by login, one team, or — with neither — everyone in the workspace. */
@@ -42,45 +43,6 @@ const WORK_PAGE_SIZE = 30;
 
 /** The largest page the server serves, for reading the rest of a timeline at once to copy it. */
 const COPY_PAGE_SIZE = 100;
-
-/** The part of a query key that says whose activity, and of which kinds, a read is. */
-interface SubjectKey {
-	queryKey: readonly [
-		{
-			path?: { workspaceSlug?: string };
-			query?: { login?: string; teamId?: number; kinds?: readonly string[] };
-		},
-	];
-}
-
-interface Subject {
-	workspaceSlug: string;
-	login?: string;
-	teamId?: number;
-	kinds?: readonly string[];
-}
-
-/**
- * While another range loads, what is on screen stays — marked stale — rather than blanking the
- * page. Only the same subject's figures may stand in: another workspace's, team's, member's or
- * category's activity never does, and the region shows its skeleton instead.
- */
-function keepSameSubject({ workspaceSlug, login, teamId, kinds = [] }: Subject) {
-	return <TData>(previous: TData | undefined, previousQuery: SubjectKey | undefined) => {
-		const key = previousQuery?.queryKey[0];
-		const same =
-			key?.path?.workspaceSlug === workspaceSlug &&
-			key.query?.login === login &&
-			key.query?.teamId === teamId &&
-			(key.query?.kinds ?? []).join(",") === kinds.join(",");
-		return same ? previous : undefined;
-	};
-}
-
-/** The browser's IANA time zone, whose midnights start the overview's days, weeks and months. */
-function browserTimeZone(): string {
-	return Intl.DateTimeFormat().resolvedOptions().timeZone;
-}
 
 /**
  * What the range adds up to, in total and per day, week or month in the reader's time zone — and

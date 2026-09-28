@@ -117,18 +117,34 @@ renders them in the app and in Slack. The label is **Prepared for conversation**
 **Unconfirmed** (`UNCONFIRMED`) is conversation feedback a completed turn linked with no record that the feedback
 was shown. Its visibility is unknown, so it counts as neither delivered nor withheld, and it is never prepared again.
 
+A **delivery family** is how a count of feedback groups the ten stored delivery states, so a summary
+answers what an admin asks at a glance. There are six, and every state is in exactly one:
+
+| Delivery family       | Delivery states it holds                                                      |
+| --------------------- | ----------------------------------------------------------------------------- |
+| **Awaiting approval** | Awaiting approval (`AWAITING_APPROVAL`)                                       |
+| **Prepared**          | Prepared (`PREPARED`)                                                         |
+| **Delivered**         | Delivered (`DELIVERED`), Partially delivered (`PARTIALLY_DELIVERED`)          |
+| **Unconfirmed**       | Unconfirmed (`UNCONFIRMED`)                                                   |
+| **Withheld**          | Withheld (`SUPPRESSED`), Rejected (`DISCARDED`), Replaced by newer (`SUPERSEDED`) |
+| **Failed to deliver** | Failed to deliver (`FAILED`), Partially delivered · retries exhausted (`PARTIALLY_FAILED`) |
+
+A family is a count's word and nothing else. Rejected and replaced feedback count as **Withheld**,
+but a row, its badge and a list filter keep each delivery state's own word, and a count opens its list
+filtered to exactly the states its family holds. Unconfirmed is a family of its own because counting
+it as prepared would promise a delivery that will not happen.
+
 **Observation, not finding**, for the measurement — in copy, URLs, API schema, field names, and Java.
 Delivery uses `FeedbackAnchor` and `InlineFeedbackChannel`; the mentor uses `link_observation` and
-`data-observation`. The schema and wire protocol have no aliases for the retired vocabulary. The only
-compatibility surface is an HTTP redirect from the former reviews URL so existing bookmarks do not break;
-it carries no data contract and new links never use it.
+`data-observation`. The schema, wire protocol and web routes have no aliases for the retired
+vocabulary: the former reviews URL no longer opens, and nothing redirects from it.
 
 Everything else is an observation, including the read APIs and the reviews UI — the surfaces an operator
 actually reads are exactly where the banned word does the most damage. Those names are
 `ReviewObservation`, `ReviewObservationDetail`, `ReviewBoundObservation`, `observationId`, and the
 workspace-admin route `/workspaces/{workspaceSlug}/practices/reviews/observations`. Developer-scoped
-reads live under `/workspaces/{workspaceSlug}/practices/observations`. Apart from the web-route redirect, a
-*finding* in this subsystem is a bug.
+reads live under `/workspaces/{workspaceSlug}/practices/observations`. A *finding* in this subsystem is
+a bug.
 
 **Practice autonomy** and **effective autonomy** are the glossary's
 ([Practice autonomy](./practice-review-glossary.mdx#practice-autonomy),
