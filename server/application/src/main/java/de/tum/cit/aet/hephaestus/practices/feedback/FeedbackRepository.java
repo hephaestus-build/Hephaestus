@@ -911,6 +911,21 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             @Param("since") Instant since);
 
     /**
+     * Takes the row lock a withdrawal takes ({@link #lockByIdAndWorkspaceId}) on every card still waiting on the
+     * recipient's practice page, in id order. A page read takes it before it reads anything, so a withdrawal either
+     * commits first and the read sees it, or waits until the cards the read shows are recorded as delivered.
+     */
+    @Query(value = """
+                    SELECT f.id FROM feedback f
+                    WHERE f.workspace_id = :workspaceId AND f.recipient_user_id = :recipientUserId
+                      AND f.channel = 'IN_APP' AND f.delivery_state = 'PREPARED'
+                    ORDER BY f.id
+                    FOR UPDATE
+                    """, nativeQuery = true)
+    List<UUID> lockPreparedInAppForRecipient(
+            @Param("workspaceId") Long workspaceId, @Param("recipientUserId") Long recipientUserId);
+
+    /**
      * Flips PREPARED in-app feedback to DELIVERED at the moment its recipient actually reads it — one
      * statement for the whole page (compare-and-set, so two concurrent page loads cannot both claim a flip
      * and the second sees it in the count).
@@ -921,15 +936,20 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
      *
      * <p>Native because {@link Feedback} is {@code @Immutable} — the ORM cannot update it.
      *
+     * <p>A withdrawn card is never flipped: nobody was shown it.
+     *
      * @return how many pieces of feedback this call flipped; one that was no longer PREPARED is not counted
      */
     @Modifying
     @Transactional
-    @Query(
-            value =
-                    "UPDATE feedback SET delivery_state = 'DELIVERED', delivered_at = :at "
-                            + "WHERE id IN (:ids) AND workspace_id = :workspaceId AND channel = 'IN_APP' AND delivery_state = 'PREPARED'",
-            nativeQuery = true)
+    @Query(value = """
+                    UPDATE feedback f SET delivery_state = 'DELIVERED', delivered_at = :at
+                    WHERE f.id IN (:ids) AND f.workspace_id = :workspaceId AND f.channel = 'IN_APP'
+                      AND f.delivery_state = 'PREPARED'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM feedback_withdrawal w
+                          WHERE w.feedback_id = f.id AND w.workspace_id = f.workspace_id AND w.restored_at IS NULL)
+                    """, nativeQuery = true)
     int markInAppDelivered(
             @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids, @Param("at") Instant at);
 

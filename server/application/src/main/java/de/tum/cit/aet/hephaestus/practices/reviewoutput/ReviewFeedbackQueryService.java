@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.reviewoutput;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountSummaryQuery;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountSummaryQuery.AccountSummary;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluationRepository;
@@ -11,8 +13,13 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackQueryFilter;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.OperatorFeedbackRow;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawal;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.FeedbackApprovalDTO;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
+import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.FeedbackDisputeDTO;
+import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.FeedbackWithdrawalDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewBoundObservationDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDetailDTO;
@@ -26,7 +33,10 @@ import de.tum.cit.aet.hephaestus.practices.trace.dto.DeliveryPolicyTraceDTO;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -45,6 +55,9 @@ class ReviewFeedbackQueryService {
     private final ReviewRunTargetLookup reviewRunTargetLookup;
     private final FeedbackApprovalRepository approvalRepository;
     private final DeliveryPolicyEvaluationRepository policyEvaluations;
+    private final FeedbackWithdrawalRepository withdrawalRepository;
+    private final AccountSummaryQuery accountSummaryQuery;
+    private final ReactionRepository reactionRepository;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -108,6 +121,12 @@ class ReviewFeedbackQueryService {
                 .findByFeedbackIdAndWorkspaceId(feedbackId, workspaceId)
                 .map(FeedbackApprovalDTO::from)
                 .orElse(null);
+        List<FeedbackWithdrawal> history = withdrawalRepository.findHistory(workspaceId, feedbackId);
+        Map<Long, AccountSummary> accounts = accountSummaryQuery.findAllByIds(history.stream()
+                .flatMap(withdrawal ->
+                        Stream.of(withdrawal.getWithdrawnByAccountId(), withdrawal.getRestoredByAccountId()))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
         return ReviewFeedbackDetailDTO.from(
                 feedback,
                 reviewedWork,
@@ -117,6 +136,13 @@ class ReviewFeedbackQueryService {
                 placements,
                 approval,
                 deliveryPolicy,
+                history.stream()
+                        .map(withdrawal -> FeedbackWithdrawalDTO.from(withdrawal, accounts))
+                        .toList(),
+                reactionRepository
+                        .findStandingDispute(workspaceId, feedbackId)
+                        .map(FeedbackDisputeDTO::from)
+                        .orElse(null),
                 bodyVisibleToOperator(feedback));
     }
 

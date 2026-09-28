@@ -24,8 +24,10 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepositor
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementAnchorKind;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementAnchorSide;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
@@ -36,6 +38,8 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
@@ -101,6 +105,12 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
 
     @Autowired
     private ObservationInvalidationRepository invalidationRepository;
+
+    @Autowired
+    private FeedbackWithdrawalRepository withdrawalRepository;
+
+    @Autowired
+    private ReactionRepository reactionRepository;
 
     private Workspace workspace;
     private Workspace otherWorkspace;
@@ -681,6 +691,58 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
             expectListed("?invalidated=true", markedIncorrect);
             expectListed("?invalidated=false", restored, standing);
             expectListed("", markedIncorrect, restored, standing);
+        }
+
+        /**
+         * A developer's dispute reaches the admins on its observation and on the feedback, with their explanation,
+         * and filters the list; a dispute they withdrew does neither.
+         */
+        @Test
+        @WithAdminUser
+        void shouldShowTheDevelopersStandingDisputeOnItsObservationAndFilterByIt() {
+            UUID disputed = insertProblem(practiceA, job, alice, "Disputed", "MAJOR");
+            UUID withdrawn = insertProblem(practiceA, job, alice, "Dispute withdrawn", "MAJOR");
+            UUID undisputed = insertProblem(practiceB, job, bob, "Undisputed", "MINOR");
+            Feedback standing = persistUnit(workspace, job, alice, 0, FeedbackDeliveryState.DELIVERED, null, "One");
+            bind(standing, disputed);
+            Feedback takenBack = persistUnit(workspace, job, alice, 1, FeedbackDeliveryState.DELIVERED, null, "Two");
+            bind(takenBack, withdrawn);
+            Instant earlier = Instant.now().minusSeconds(60);
+            respond(standing, FeedbackResolution.DISPUTED, "The caller retries the export.", earlier);
+            respond(takenBack, FeedbackResolution.DISPUTED, "Not my change.", earlier);
+            respond(takenBack, null, null, Instant.now());
+
+            expectListed("?disputed=true", disputed);
+            expectListed("?disputed=false", withdrawn, undisputed);
+            getOk(OBSERVATIONS + "/{id}", workspace.getWorkspaceSlug(), disputed)
+                    .jsonPath("$.disputes.length()")
+                    .isEqualTo(1)
+                    .jsonPath("$.disputes[0].feedbackId")
+                    .isEqualTo(standing.getId().toString())
+                    .jsonPath("$.disputes[0].channel")
+                    .isEqualTo("IN_CONTEXT")
+                    .jsonPath("$.disputes[0].explanation")
+                    .isEqualTo("The caller retries the export.");
+            getOk(OBSERVATIONS + "/{id}", workspace.getWorkspaceSlug(), withdrawn)
+                    .jsonPath("$.disputes.length()")
+                    .isEqualTo(0);
+            getOk(FEEDBACK + "/{id}", workspace.getWorkspaceSlug(), standing.getId())
+                    .jsonPath("$.dispute.explanation")
+                    .isEqualTo("The caller retries the export.");
+            getOk(FEEDBACK + "/{id}", workspace.getWorkspaceSlug(), takenBack.getId())
+                    .jsonPath("$.dispute")
+                    .doesNotExist();
+        }
+
+        private void respond(
+                Feedback feedback, @Nullable FeedbackResolution resolution, @Nullable String explanation, Instant at) {
+            reactionRepository.save(Reaction.builder()
+                    .feedback(feedback)
+                    .reactorUserId(feedback.getRecipientUserId())
+                    .resolution(resolution)
+                    .explanation(explanation)
+                    .createdAt(at)
+                    .build());
         }
 
         /** Each overview count opens the observation list on exactly the rows it counted. */
@@ -1775,6 +1837,162 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     .expectStatus()
                     .isForbidden()
                     .expectBody(Void.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("Feedback withdrawal")
+    class FeedbackWithdrawals {
+
+        private static final String WITHDRAWAL = FEEDBACK + "/{id}/withdrawal";
+
+        private WebTestClient.ResponseSpec patchWithdrawal(
+                Workspace ws, UUID feedbackId, boolean withdrawn, String reason) {
+            return webTestClient
+                    .patch()
+                    .uri(WITHDRAWAL, ws.getWorkspaceSlug(), feedbackId)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(Map.of("withdrawn", withdrawn, "reason", reason))
+                    .exchange();
+        }
+
+        private Feedback inApp(Workspace ws, AgentJob agentJob, int position, FeedbackDeliveryState state) {
+            return feedbackRepository.save(Feedback.builder()
+                    .agentJobId(agentJob.getId())
+                    .workspaceId(ws.getId())
+                    .recipientUserId(alice.getId())
+                    .aboutUserId(alice.getId())
+                    .channel(FeedbackChannel.IN_APP)
+                    .position(position)
+                    .deliveryState(state)
+                    .suppressionReason(
+                            state == FeedbackDeliveryState.SUPPRESSED
+                                    ? FeedbackSuppressionReason.RECIPIENT_OPTED_OUT
+                                    : null)
+                    .body("Wrong words")
+                    .source(FeedbackSource.AGENT)
+                    .createdAt(Instant.now())
+                    .deliveredAt(state == FeedbackDeliveryState.DELIVERED ? Instant.now() : null)
+                    .build());
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldWithdrawAndRestoreIdempotentlyKeepingEveryRoundAndTheFeedbackRow() {
+            Feedback card = inApp(workspace, job, 8000, FeedbackDeliveryState.DELIVERED);
+
+            patchWithdrawal(workspace, card.getId(), true, "  About older issues  ")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.withdrawals.length()")
+                    .isEqualTo(1)
+                    .jsonPath("$.withdrawals[0].reason")
+                    .isEqualTo("About older issues")
+                    .jsonPath("$.withdrawals[0].withdrawnBy")
+                    .isEqualTo("admin")
+                    .jsonPath("$.body")
+                    .doesNotExist();
+            patchWithdrawal(workspace, card.getId(), true, "Again")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.withdrawals.length()")
+                    .isEqualTo(1)
+                    .jsonPath("$.withdrawals[0].reason")
+                    .isEqualTo("About older issues");
+            patchWithdrawal(workspace, card.getId(), false, "It was right")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.withdrawals[0].restorationReason")
+                    .isEqualTo("It was right")
+                    .jsonPath("$.withdrawals[0].restoredBy")
+                    .isEqualTo("admin");
+            patchWithdrawal(workspace, card.getId(), false, "Again")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.withdrawals[0].restorationReason")
+                    .isEqualTo("It was right");
+            patchWithdrawal(workspace, card.getId(), true, "Second look")
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.withdrawals.length()")
+                    .isEqualTo(2)
+                    .jsonPath("$.withdrawals[0].reason")
+                    .isEqualTo("Second look")
+                    .jsonPath("$.withdrawals[1].reason")
+                    .isEqualTo("About older issues")
+                    .jsonPath("$.withdrawals[1].restorationReason")
+                    .isEqualTo("It was right");
+
+            Feedback reread = feedbackRepository
+                    .findByIdAndWorkspaceId(card.getId(), workspace.getId())
+                    .orElseThrow();
+            assertThat(reread.getDeliveryState()).isEqualTo(FeedbackDeliveryState.DELIVERED);
+            assertThat(reread.getBody()).isEqualTo("Wrong words");
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldRefuseAnotherChannelAndAStateThatIsNotWaitingOrShown() {
+            Feedback onTheWork =
+                    persistUnit(workspace, job, alice, 8100, FeedbackDeliveryState.DELIVERED, null, "Note");
+            Feedback suppressed = inApp(workspace, job, 8101, FeedbackDeliveryState.SUPPRESSED);
+
+            for (Feedback refused : List.of(onTheWork, suppressed)) {
+                patchWithdrawal(workspace, refused.getId(), true, "Wrong")
+                        .expectStatus()
+                        .isEqualTo(409)
+                        .expectBody(Void.class);
+                assertThat(withdrawalRepository.findHistory(workspace.getId(), refused.getId()))
+                        .isEmpty();
+            }
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldNotFindOrChangeAnotherWorkspacesFeedback() {
+            Feedback foreign = inApp(otherWorkspace, otherJob, 8200, FeedbackDeliveryState.DELIVERED);
+
+            patchWithdrawal(workspace, foreign.getId(), true, "Not yours")
+                    .expectStatus()
+                    .isNotFound()
+                    .expectBody(Void.class);
+
+            assertThat(withdrawalRepository.findHistory(otherWorkspace.getId(), foreign.getId()))
+                    .isEmpty();
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldRequireAReason() {
+            Feedback card = inApp(workspace, job, 8300, FeedbackDeliveryState.PREPARED);
+
+            patchWithdrawal(workspace, card.getId(), true, "   ")
+                    .expectStatus()
+                    .isBadRequest()
+                    .expectBody(Void.class);
+
+            assertThat(withdrawalRepository.findHistory(workspace.getId(), card.getId()))
+                    .isEmpty();
+        }
+
+        @Test
+        @WithUser
+        void shouldForbidAWorkspaceMember() {
+            Feedback card = inApp(workspace, job, 8400, FeedbackDeliveryState.DELIVERED);
+
+            patchWithdrawal(workspace, card.getId(), true, "Members cannot withdraw")
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
+
+            assertThat(withdrawalRepository.findHistory(workspace.getId(), card.getId()))
+                    .isEmpty();
         }
     }
 

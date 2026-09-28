@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepositor
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.RecipientFeedbackRow;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -58,6 +59,9 @@ class DeliveredFeedbackContentSourceTest extends BaseUnitTest {
 
     @Mock
     FeedbackObservationRepository feedbackObservationRepository;
+
+    @Mock
+    FeedbackWithdrawalRepository withdrawalRepository;
 
     @Mock
     ConversationConsentGate conversationConsentGate;

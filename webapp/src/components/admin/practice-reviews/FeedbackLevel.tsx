@@ -1,7 +1,8 @@
-import { ScanSearchIcon } from "lucide-react";
+import { EyeOffIcon, ScanSearchIcon, Undo2Icon } from "lucide-react";
 
 import type {
 	FeedbackApproval,
+	FeedbackWithdrawal,
 	GetPracticeReviewFeedbackResponse,
 	Practice,
 	ReviewPlacement,
@@ -23,8 +24,10 @@ import {
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
 import { DeliveryTrace } from "@/components/practice-vocabulary/DeliveryTrace";
 import { codeCitationLocator } from "@/components/practice-vocabulary/evidence-source-defs";
+import { FEEDBACK_WITHDRAWN_DEF } from "@/components/practice-vocabulary/feedback-withdrawal-defs";
 import { observationResult } from "@/components/practice-vocabulary/observation-result";
 import { PLACEMENT_DEFS } from "@/components/practice-vocabulary/placement-defs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
 import {
 	Empty,
@@ -36,6 +39,8 @@ import {
 import { hasText } from "@/lib/text";
 
 import { APPROVAL_DECISION_DEFS } from "./approval-decision-defs";
+import { CorrectionEntry, CorrectionReasonPopover } from "./CorrectionReason";
+import { DisputeAlert } from "./DisputeAlert";
 import { FeedbackBody } from "./FeedbackBody";
 import { LevelBodySkeleton } from "./LevelBodySkeleton";
 import {
@@ -69,13 +74,21 @@ export interface FeedbackLevelProps {
 	onReject: (reason: ProposalRejectionReason, note?: string) => void;
 	/** Where this feedback sits among all awaiting approval; absent when it awaits none. */
 	queue?: ApprovalQueue;
+	/**
+	 * Withdraws (`true`) or restores (`false`) a card on the developer's practice page, with the
+	 * admin's reason. Settles when the server has answered; the form keeps the reason until it
+	 * succeeded.
+	 */
+	onChangeWithdrawal: (withdrawn: boolean, reason: string) => Promise<unknown>;
+	isChangingWithdrawal: boolean;
 }
 
 /**
  * One piece of feedback: who it is for, what it says, what became of it and what it was based on.
  * Feedback awaiting approval is the same level with the decision as its footer and the package
  * expanded, so approving it happens where it is read, and the level turns into the record the moment
- * the decision lands.
+ * the decision lands. A card on the developer's practice page has withdrawing it, or restoring it, as
+ * its footer instead.
  */
 export function FeedbackLevel({
 	nested,
@@ -86,9 +99,12 @@ export function FeedbackLevel({
 	onApprove,
 	onReject,
 	queue,
+	onChangeWithdrawal,
+	isChangingWithdrawal,
 }: FeedbackLevelProps) {
 	const feedback = state.status === "ready" ? state.feedback : undefined;
 	const awaitingApproval = feedback?.deliveryState === "AWAITING_APPROVAL";
+	const withdrawal = feedback && activeWithdrawal(feedback);
 	const header = (
 		<ReviewLevelHeader
 			nested={nested}
@@ -100,6 +116,7 @@ export function FeedbackLevel({
 					<>
 						<StatusBadge def={deliveryOutcome(feedback)} />
 						<StatusBadge def={DELIVERY_PLACE_DEFS[feedback.channel]} />
+						{withdrawal && <StatusBadge def={FEEDBACK_WITHDRAWN_DEF} />}
 					</>
 				)
 			}
@@ -146,6 +163,8 @@ export function FeedbackLevel({
 		<>
 			{header}
 			<DrawerBody className="flex flex-col gap-8 pt-2">
+				{withdrawal && <WithdrawalAlert withdrawal={withdrawal} />}
+				{record.dispute && <DisputeAlert dispute={record.dispute} />}
 				<FeedbackFacts feedback={record} proposal={awaitingApproval} />
 				{awaitingApproval ? (
 					<ProposalPackage feedback={record} />
@@ -170,6 +189,7 @@ export function FeedbackLevel({
 							: undefined
 					}
 				/>
+				{record.withdrawals.length > 0 && <WithdrawalHistory withdrawals={record.withdrawals} />}
 			</DrawerBody>
 			{awaitingApproval && (
 				<DrawerFooter>
@@ -182,7 +202,118 @@ export function FeedbackLevel({
 					/>
 				</DrawerFooter>
 			)}
+			{canWithdraw(record) && (
+				<DrawerFooter>
+					<WithdrawalPopover
+						withdrawn={withdrawal !== undefined}
+						disabled={isChangingWithdrawal}
+						onSubmit={async (reason) => onChangeWithdrawal(withdrawal === undefined, reason)}
+					/>
+				</DrawerFooter>
+			)}
 		</>
+	);
+}
+
+/** The withdrawal in force, if any: the newest one, until it is restored. */
+function activeWithdrawal(feedback: GetPracticeReviewFeedbackResponse) {
+	const latest = feedback.withdrawals.at(0);
+	return latest !== undefined && latest.restoredAt === undefined ? latest : undefined;
+}
+
+/**
+ * Only a practice-page card that is waiting to be read or already shown can be taken back; a
+ * withdrawn one can always be restored.
+ */
+function canWithdraw(feedback: GetPracticeReviewFeedbackResponse) {
+	return (
+		feedback.channel === "IN_APP" &&
+		(activeWithdrawal(feedback) !== undefined ||
+			feedback.deliveryState === "PREPARED" ||
+			feedback.deliveryState === "DELIVERED")
+	);
+}
+
+function WithdrawalPopover({
+	withdrawn,
+	disabled,
+	onSubmit,
+}: {
+	withdrawn: boolean;
+	disabled: boolean;
+	onSubmit: (reason: string) => Promise<unknown>;
+}) {
+	return (
+		<CorrectionReasonPopover
+			copy={
+				withdrawn
+					? {
+							trigger: "Restore feedback",
+							title: "Restore this feedback",
+							description:
+								"It returns to the developer's practice page if its observations can still be shown there. Nothing is sent again.",
+							placeholder: "Why the feedback was right after all…",
+						}
+					: {
+							trigger: "Withdraw feedback",
+							title: "Withdraw this feedback",
+							description:
+								"It comes off the developer's practice page and out of the feedback given to later reviews and Heph. The observations behind it are unchanged. A developer who already saw it sees that it was withdrawn, not your reason.",
+							placeholder: "What the feedback got wrong…",
+						}
+			}
+			icon={withdrawn ? Undo2Icon : EyeOffIcon}
+			destructive={!withdrawn}
+			name="feedback-withdrawal-reason"
+			disabled={disabled}
+			onSubmit={onSubmit}
+		/>
+	);
+}
+
+function WithdrawalAlert({ withdrawal }: { withdrawal: FeedbackWithdrawal }) {
+	return (
+		<Alert variant="destructive">
+			<EyeOffIcon />
+			<AlertTitle>Withdrawn from the practice page</AlertTitle>
+			<AlertDescription>
+				<p>
+					{withdrawal.withdrawnBy ?? "A workspace admin"} withdrew this feedback{" "}
+					<RelativeTime value={withdrawal.withdrawnAt} />: “{withdrawal.reason}”. It is off the
+					developer’s practice page and out of the feedback given to later reviews and Heph. If the
+					developer had already seen it, their page shows for a while that it was withdrawn. The
+					observations behind it are unchanged.
+				</p>
+			</AlertDescription>
+		</Alert>
+	);
+}
+
+/** Every withdrawal and restore, newest first, each with who, when and why. */
+function WithdrawalHistory({ withdrawals }: { withdrawals: FeedbackWithdrawal[] }) {
+	return (
+		<Section level={3} title="Withdrawals">
+			<ol aria-label="Withdrawals" className="space-y-3 text-sm">
+				{withdrawals.flatMap((entry) => [
+					entry.restoredAt !== undefined && (
+						<CorrectionEntry
+							key={`${entry.id}-restored`}
+							action="Restored"
+							actor={entry.restoredBy}
+							at={entry.restoredAt}
+							reason={entry.restorationReason}
+						/>
+					),
+					<CorrectionEntry
+						key={entry.id}
+						action="Withdrawn"
+						actor={entry.withdrawnBy}
+						at={entry.withdrawnAt}
+						reason={entry.reason}
+					/>,
+				])}
+			</ol>
+		</Section>
 	);
 }
 

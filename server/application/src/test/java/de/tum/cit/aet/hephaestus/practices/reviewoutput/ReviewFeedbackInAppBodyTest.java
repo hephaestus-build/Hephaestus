@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountSummaryQuery;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
@@ -13,7 +14,9 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepositor
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -47,6 +50,9 @@ class ReviewFeedbackInAppBodyTest extends BaseUnitTest {
             reviewRunTargetLookup,
             approvalRepository,
             policyEvaluationRepository,
+            mock(FeedbackWithdrawalRepository.class),
+            mock(AccountSummaryQuery.class),
+            mock(ReactionRepository.class),
             JsonMapper.builder().build());
 
     @Test

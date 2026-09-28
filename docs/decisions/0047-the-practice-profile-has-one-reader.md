@@ -92,3 +92,12 @@ profile with their admins.
 [#1275]: https://github.com/hephaestus-build/Hephaestus/issues/1275
 [#1421]: https://github.com/hephaestus-build/Hephaestus/issues/1421
 [#2260]: https://github.com/hephaestus-build/Hephaestus/pull/2260
+
+## Update — 2026-09-28: a dispute is written to the admins
+
+A developer who disputes feedback, including a Practice profile card they rate **Not accurate**, writes the
+explanation to the workspace admins, and the form says so before they send it. Admins read it on the
+observations the feedback was written from and on the feedback's record under Practice reviews, so they can
+mark an observation incorrect or withdraw the card. Only the explanation crosses: the card's text stays
+withheld from them, and every other response a developer writes — a rating's note, an *Addressed* or *Not
+applicable* note — stays theirs alone.

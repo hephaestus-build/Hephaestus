@@ -79,7 +79,7 @@ function feedbackCardsOf(cards: PracticeFeedbackCardEntry[], practiceSlug: strin
 	const own = newestFirst(cards.filter((card) => card.practiceSlug === practiceSlug));
 	return {
 		open: own.find((card) => isOpenFeedback(card.state)),
-		resolved: own.filter((card) => !isOpenFeedback(card.state)),
+		resolved: own.filter((card) => !isOpenFeedback(card.state) && card.state !== "withdrawn"),
 	};
 }
 

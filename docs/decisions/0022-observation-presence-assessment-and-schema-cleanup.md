@@ -123,3 +123,24 @@ Corrects § 5 on the channel value and the "Supersedes" pointer in the header.
   [ADR 0021](0021-observations-feedback-synthesis-seam.md) carried before the in-place rewrites its
   § Status dates; the superseded content is what § Context quotes, and the last revision carrying the
   table is `7dc852afc:docs/decisions/0021-findings-feedback-synthesis-seam.md`.
+
+## Update — 2026-09-28: a dispute holds for later reviews of the same work
+
+Amends § 2. Bound only to the exact observations, a dispute or "not applicable" never reached the next
+review of the work: every review records new observations, so the next review raised the same point again
+and the developer's answer was lost. Suppression was also off by default, behind a setting nobody could
+reason about. It is now always on and reaches further:
+
+- Within one review, an answer binds only the observations its feedback was written from. Two observations
+  there may share a place and still be two behaviours.
+- In a later review, an answer carries to an observation with the same `recurrence_key` — practice, piece of
+  work, developer and place — and the same presence and assessment: the same claim, raised again. A
+  different claim at the same place, such as "present" after a disputed "missing", is not held back.
+- When several answers speak for one observation, the newest wins. Withdrawing the dispute, or marking a
+  later piece of feedback about the same claim addressed, lets it through again.
+- A committed secret is never held back.
+
+The accepted cost is that a second behaviour of the same practice at the same place in a later review is
+also held back. It fails toward saying less, the direction "feedback earns trust or it is not sent" chooses,
+and workspace admins see every dispute on its observation under Practice reviews, where they can mark the
+observation incorrect or withdraw the feedback.

@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 class PracticeReviewHttpSurfaceTest extends HephaestusArchitectureTest {
 
     @Test
-    void practiceReviewHttpSurfaceIsAdminGatedAndReadOnlyExceptForApprovalAndValidityDecisions() {
+    void practiceReviewHttpSurfaceIsAdminGatedAndReadOnlyExceptForApprovalValidityAndWithdrawalDecisions() {
         var controllers = classes.stream()
                 .filter(type -> type.isAnnotatedWith(RequestMapping.class))
                 .filter(type -> java.util.Arrays.asList(
@@ -30,7 +30,8 @@ class PracticeReviewHttpSurfaceTest extends HephaestusArchitectureTest {
                         && !(method.isAnnotatedWith(PutMapping.class)
                                 && method.getName().equals("decideFeedbackProposal"))
                         && !(method.isAnnotatedWith(PatchMapping.class)
-                                && method.getName().equals("updateObservationValidity")))
+                                && (method.getName().equals("updateObservationValidity")
+                                        || method.getName().equals("updateFeedbackWithdrawal"))))
                 .map(method -> method.getFullName())
                 .sorted()
                 .toList();

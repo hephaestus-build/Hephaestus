@@ -1,15 +1,22 @@
-import { CircleCheckIcon, CircleMinusIcon, CircleSlashIcon, SparkleIcon } from "lucide-react";
+import {
+	CircleCheckIcon,
+	CircleMinusIcon,
+	CircleSlashIcon,
+	EyeOffIcon,
+	SparkleIcon,
+} from "lucide-react";
 
 import type { StatusDef } from "@/components/common/status-def";
 
 /**
  * Where one piece of practice feedback on the Practice profile stands: not yet read, open,
  * resolved — by the work or by the reader, which the card's condition line tells apart — or
- * closed without a resolution because the practice's review rules changed after it was written.
- * The server records when it was read and when and by what it closed; `practice-feedback-cards.ts`
- * reads that into one of these four, and this registry is the words for it.
+ * closed without a resolution because the practice's review rules changed after it was written, or
+ * withdrawn by a workspace admin because what it said was wrong. The server records when it was read,
+ * when and by what it closed, and when it was withdrawn; `practice-feedback-cards.ts` reads that into
+ * one of these five, and this registry is the words for it.
  */
-export type FeedbackState = "new" | "open" | "resolved" | "closed";
+export type FeedbackState = "new" | "open" | "resolved" | "closed" | "withdrawn";
 
 /** A card the reader can still act on: neither resolved nor closed. */
 export const isOpenFeedback = (state: FeedbackState): boolean =>
@@ -50,5 +57,12 @@ export const FEEDBACK_STATE_DEFS: Record<FeedbackState, FeedbackStateDef> = {
 		badgeVariant: "outline",
 		description:
 			"The practice's review rules changed after this was written, so it closed unresolved.",
+	},
+	withdrawn: {
+		label: "Withdrawn",
+		icon: EyeOffIcon,
+		badgeVariant: "outline",
+		description:
+			"A workspace admin withdrew this feedback because what it said was wrong. It says nothing about how your work stands.",
 	},
 };

@@ -55,8 +55,32 @@ public class PracticeGroupReviewRunService {
             return new PracticeGroupReviewRunsPageDTO(
                     List.of(), pageable.getPageNumber(), pageable.getPageSize(), false);
         }
-        return loadRuns(workspaceContext, currentDeveloperId.get(), groupSlug, filter, pageable);
+        practiceGroupService.getGroup(workspaceContext, groupSlug);
+        return loadRuns(workspaceContext, currentDeveloperId.get(), groupSlug, null, filter, pageable);
     }
+
+    /**
+     * The reader's own complete review runs of one piece of work, every practice group together: where a note
+     * posted on the work sends its developer to answer it.
+     */
+    @Transactional(readOnly = true)
+    public PracticeGroupReviewRunsPageDTO listForWork(
+            WorkspaceContext workspaceContext, ArtifactKind artifactKind, long artifactId, Pageable pageable) {
+        var currentDeveloperId = currentDeveloperLookup.currentDeveloperId();
+        if (currentDeveloperId.isEmpty()) {
+            return new PracticeGroupReviewRunsPageDTO(
+                    List.of(), pageable.getPageNumber(), pageable.getPageSize(), false);
+        }
+        return loadRuns(
+                workspaceContext,
+                currentDeveloperId.get(),
+                null,
+                new Work(artifactKind, artifactId),
+                new RunFilters(null, null, null),
+                pageable);
+    }
+
+    private record Work(ArtifactKind kind, long id) {}
 
     public record RunFilters(
             @Nullable String practiceSlug,
@@ -66,10 +90,10 @@ public class PracticeGroupReviewRunService {
     private PracticeGroupReviewRunsPageDTO loadRuns(
             WorkspaceContext workspaceContext,
             long developerId,
-            String groupSlug,
+            @Nullable String groupSlug,
+            @Nullable Work work,
             RunFilters filter,
             Pageable pageable) {
-        practiceGroupService.getGroup(workspaceContext, groupSlug);
         var practiceSlug = filter.practiceSlug();
         var artifactKinds = filter.artifactKinds();
         var severities = filter.severities();
@@ -91,6 +115,8 @@ public class PracticeGroupReviewRunService {
                     developerId,
                     workspaceContext.id(),
                     groupSlug,
+                    work == null ? null : work.kind().value(),
+                    work == null ? null : work.id(),
                     practiceSlug,
                     artifactFilter,
                     severityFilter,
@@ -107,7 +133,7 @@ public class PracticeGroupReviewRunService {
     }
 
     private List<PracticeGroupReviewRunDTO> toVisibleRuns(
-            long workspaceId, long developerId, List<ReviewRunRow> runs, String groupSlug) {
+            long workspaceId, long developerId, List<ReviewRunRow> runs, @Nullable String groupSlug) {
         if (runs.isEmpty()) {
             return List.of();
         }

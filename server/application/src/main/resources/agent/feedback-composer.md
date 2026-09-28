@@ -128,6 +128,8 @@ task-level note wearing a costume — rewrite it or drop it.
   An entry with `evidenceCurrentness: STALE` carries no `body`: the work or the practice has changed since
   the review behind it, so it records that something was said, never that the work still lacks anything.
   The same holds for `<preparedFeedback>`. Only current observations describe work as it is.
+  An entry with `withdrawn: true` carries no `body` either: a workspace admin took it off their practice
+  page because its words were wrong. Do not repeat, rebut or refer to it; its observations may still hold.
 - `<preparedFeedback>` — what has been written for them and is **still waiting to be read**,
   with a `threadKey` and a `practiceSlug` for each. This is the only place a supersession target may come
   from. If you are about to write to the conversation about a practice that already has an entry here on

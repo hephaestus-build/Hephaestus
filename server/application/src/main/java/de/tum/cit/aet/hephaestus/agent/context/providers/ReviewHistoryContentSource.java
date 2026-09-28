@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -96,6 +97,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     private final ObservationRepository observationRepository;
     private final FeedbackRepository feedbackRepository;
     private final FeedbackObservationRepository feedbackObservationRepository;
+    private final FeedbackWithdrawalRepository withdrawalRepository;
     private final ObservationVisibilityPolicy visibilityPolicy;
     private final ConversationSourceLiveness conversationLiveness;
     private final PullRequestRepository pullRequestRepository;
@@ -107,6 +109,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             ObservationRepository observationRepository,
             FeedbackRepository feedbackRepository,
             FeedbackObservationRepository feedbackObservationRepository,
+            FeedbackWithdrawalRepository withdrawalRepository,
             ObservationVisibilityPolicy visibilityPolicy,
             ConversationSourceLiveness conversationLiveness,
             PullRequestRepository pullRequestRepository,
@@ -116,6 +119,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         this.observationRepository = observationRepository;
         this.feedbackRepository = feedbackRepository;
         this.feedbackObservationRepository = feedbackObservationRepository;
+        this.withdrawalRepository = withdrawalRepository;
         this.visibilityPolicy = visibilityPolicy;
         this.conversationLiveness = conversationLiveness;
         this.pullRequestRepository = pullRequestRepository;
@@ -213,10 +217,13 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             List<Feedback> queued = queuedRows.stream()
                     .filter(f -> shown.containsKey(f.getId()))
                     .toList();
+            Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(workspaceId, shown.keySet());
             feedbackCount = delivered.size();
-            files.put(FEEDBACK_FILE, serialize(feedbackPayload(workspaceId, delivered, shown, since), FEEDBACK_FILE));
+            files.put(
+                    FEEDBACK_FILE,
+                    serialize(feedbackPayload(workspaceId, delivered, shown, withdrawn, since), FEEDBACK_FILE));
             preparedCount = queued.size();
-            files.put(PREPARED_FILE, serialize(preparedPayload(workspaceId, queued, shown), PREPARED_FILE));
+            files.put(PREPARED_FILE, serialize(preparedPayload(workspaceId, queued, shown, withdrawn), PREPARED_FILE));
             completeness.put(FEEDBACK_HISTORY, SourceCompleteness.PARTIAL);
             // Reported off what has been delivered, not off the queue: the kind is "what was said to this
             // person", and a full queue with nothing delivered is still an empty record of having spoken.
@@ -331,11 +338,19 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         return new StagedArtifactNames.Reference(feedback.getArtifactKind(), feedback.getArtifactId());
     }
 
-    /** The words of a row whose evidence is still current; a stale row is staged without them. */
-    private static void putBody(ObjectNode node, Feedback f, Map<UUID, ReviewClaimCurrentness> shown) {
+    /**
+     * The words of a row whose evidence is still current; a stale row is staged without them. So is a row a
+     * workspace admin withdrew: its evidence may be sound while its words are not, so only the fact is staged.
+     */
+    private static void putBody(
+            ObjectNode node, Feedback f, Map<UUID, ReviewClaimCurrentness> shown, Set<UUID> withdrawn) {
         ReviewClaimCurrentness currentness = Objects.requireNonNull(shown.get(f.getId()));
         node.put("evidenceCurrentness", currentness.name());
-        if (currentness == ReviewClaimCurrentness.CURRENT) {
+        boolean isWithdrawn = withdrawn.contains(f.getId());
+        if (isWithdrawn) {
+            node.put("withdrawn", true);
+        }
+        if (currentness == ReviewClaimCurrentness.CURRENT && !isWithdrawn) {
             node.put("body", f.getBody());
         }
     }
@@ -363,7 +378,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
      * nothing leaves the body null and the slug is all there is to recognise the entry by.
      */
     private ObjectNode preparedPayload(
-            long workspaceId, List<Feedback> queued, Map<UUID, ReviewClaimCurrentness> shown) {
+            long workspaceId, List<Feedback> queued, Map<UUID, ReviewClaimCurrentness> shown, Set<UUID> withdrawn) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("limit", MAX_PREPARED);
         StagedArtifactNames.Resolved names = artifactNames.resolve(
@@ -394,7 +409,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             // situation, coaching goal, evidence summary and success signal, and the turn itself is still written live.
             // Null when the run that queued it composed nothing,
             // which leaves only the fact that something is queued.
-            putBody(node, f, shown);
+            putBody(node, f, shown, withdrawn);
         }
         return root;
     }
@@ -434,7 +449,11 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     }
 
     private ObjectNode feedbackPayload(
-            long workspaceId, List<Feedback> delivered, Map<UUID, ReviewClaimCurrentness> shown, Instant since) {
+            long workspaceId,
+            List<Feedback> delivered,
+            Map<UUID, ReviewClaimCurrentness> shown,
+            Set<UUID> withdrawn,
+            Instant since) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("since", since.toString());
         root.put("limit", MAX_FEEDBACK);
@@ -449,7 +468,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             node.put(
                     "deliveredAt",
                     f.getDeliveredAt() == null ? null : f.getDeliveredAt().toString());
-            putBody(node, f, shown);
+            putBody(node, f, shown, withdrawn);
         }
         return root;
     }

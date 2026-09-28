@@ -3,7 +3,10 @@ import { MessageSquareTextIcon } from "lucide-react";
 import type { ReviewFeedback } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { deliveryOutcome } from "@/components/practice-vocabulary/delivery-outcome-defs";
-import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
+import {
+	DELIVERY_PLACE_DEFS,
+	OPERATOR_WITHHELD_TEXT,
+} from "@/components/practice-vocabulary/delivery-place-defs";
 import { withholdingReasonSentence } from "@/components/practice-vocabulary/withholding-defs";
 import { Button } from "@/components/ui/button";
 import {
@@ -97,8 +100,10 @@ export function FeedbackRow({ feedback }: FeedbackRowProps) {
 			title={
 				<ReviewRowLink entry={entry} className="line-clamp-2">
 					{/* Feedback whose preview is nothing but a code quote has a body and no prose to show
-					    for it, which is not the same state as feedback nobody has composed yet. */}
-					{feedbackPreviewText(feedback) ??
+					    for it, which is not the same state as feedback nobody has composed yet; nor is
+					    feedback on a private place, whose text is withheld and never previewed here. */}
+					{OPERATOR_WITHHELD_TEXT[feedback.channel]?.title ??
+						feedbackPreviewText(feedback) ??
 						(hasText(feedback.bodyPreview)
 							? "Opens with a quote from the work…"
 							: "No feedback text was composed")}

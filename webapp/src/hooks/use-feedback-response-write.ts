@@ -19,6 +19,7 @@ import { isEmptyFeedbackResponse } from "@/components/profile/review-runs";
 import { filedUnder } from "@/hooks/use-pending-mutation-ids";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
+import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-workspace-reads";
 
 /**
  * Every write of a feedback response, whatever surface it was made on, so the rating buttons of
@@ -61,8 +62,12 @@ async function invalidateFeedbackResponses(
 					path: { workspaceSlug, groupSlug },
 				}),
 			}),
+		invalidateWorkspaceReads(queryClient, workspaceSlug, READS_OF_REVIEWED_WORK),
 	]);
 }
+
+/** A piece of work's own review-run feed, the page a note on the work links to, whatever the work. */
+const READS_OF_REVIEWED_WORK: ReadonlySet<string> = new Set(["listReviewedWorkReviewRuns"]);
 
 export interface FeedbackResponseWrite {
 	/** Writes the complete response; one with nothing left in it is withdrawn. */

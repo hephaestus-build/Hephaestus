@@ -14,6 +14,8 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRe
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationQueryFilter;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.OperatorObservationRow;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
+import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.FeedbackDisputeDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ObservationInvalidationDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewBoundFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewObservationDTO;
@@ -49,6 +51,7 @@ class ReviewObservationQueryService {
     private final EvidenceAuthorization evidenceAuthorization;
     private final ObservationInvalidationRepository invalidationRepository;
     private final AccountSummaryQuery accountSummaryQuery;
+    private final ReactionRepository reactionRepository;
 
     @Transactional(readOnly = true)
     public Page<ReviewObservationDTO> list(
@@ -109,7 +112,11 @@ class ReviewObservationQueryService {
         List<ObservationInvalidationDTO> invalidations = history.stream()
                 .map(invalidation -> ObservationInvalidationDTO.from(invalidation, accounts))
                 .toList();
+        List<FeedbackDisputeDTO> disputes =
+                reactionRepository.findStandingDisputesOfObservation(workspaceId, observationId).stream()
+                        .map(FeedbackDisputeDTO::from)
+                        .toList();
         return ReviewObservationDetailDTO.from(
-                observation, reviewedWork, subject, feedback, invalidations, includeEvidence);
+                observation, reviewedWork, subject, feedback, invalidations, disputes, includeEvidence);
     }
 }

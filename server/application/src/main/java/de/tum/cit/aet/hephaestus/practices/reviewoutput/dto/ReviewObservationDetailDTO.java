@@ -62,6 +62,12 @@ public record ReviewObservationDetailDTO(
                         + "has no restoration")
         List<ObservationInvalidationDTO> invalidations,
 
+        @NonNull
+        @Schema(
+                description = "The developer's standing disputes of feedback written from this observation, newest"
+                        + " first; empty when nothing about it is disputed")
+        List<FeedbackDisputeDTO> disputes,
+
         @NonNull Instant observedAt,
 
         @NonNull @Schema(description = "Linked feedback, newest first")
@@ -80,6 +86,7 @@ public record ReviewObservationDetailDTO(
             @Nullable ReviewSubjectDTO subject,
             List<ReviewBoundFeedbackDTO> feedback,
             List<ObservationInvalidationDTO> invalidations,
+            List<FeedbackDisputeDTO> disputes,
             boolean includeEvidence) {
         var practice = observation.getPractice();
         var revision = observation.getPracticeRevision();
@@ -102,6 +109,7 @@ public record ReviewObservationDetailDTO(
                 observation.getRecurrenceKey(),
                 ReviewClaimCurrentness.of(revision, practice, observation.getSupersededAt()),
                 invalidations,
+                disputes,
                 observation.getObservedAt(),
                 feedback);
     }

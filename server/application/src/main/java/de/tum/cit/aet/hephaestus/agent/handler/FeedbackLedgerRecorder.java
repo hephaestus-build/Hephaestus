@@ -680,7 +680,7 @@ public class FeedbackLedgerRecorder {
                 .position(position)
                 .deliveryState(FeedbackDeliveryState.AWAITING_APPROVAL)
                 .body(providerSummary)
-                .proposedPlacements(proposedPlacements(delivery, providerSummary))
+                .proposedPlacements(proposedPlacements(job, delivery, providerSummary))
                 .reviewedRevision(reviewedRevision(job))
                 .proposedPracticeSlugs(proposed.stream()
                         .map(observation -> observation.getPractice().getSlug())
@@ -712,7 +712,7 @@ public class FeedbackLedgerRecorder {
                 .toList();
     }
 
-    private List<ProposedPlacement> proposedPlacements(DeliveryContent delivery, String summary) {
+    private List<ProposedPlacement> proposedPlacements(AgentJob job, DeliveryContent delivery, String summary) {
         var placements =
                 new java.util.ArrayList<ProposedPlacement>(delivery.diffNotes().size() + 1);
         placements.add(ProposedPlacement.summary(summary));
@@ -720,7 +720,7 @@ public class FeedbackLedgerRecorder {
             String body = PullRequestCommentPoster.sanitize(note.body());
             if (!body.isBlank()) {
                 placements.add(ProposedPlacement.inline(
-                        commentFormatter.appendInlineFeedbackPrompt(body),
+                        commentFormatter.appendInlineFeedbackPrompt(body, job),
                         note.filePath(),
                         note.startLine(),
                         note.endLine(),

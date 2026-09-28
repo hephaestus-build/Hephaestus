@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790520303182-1" author="hephaestus">
+        <createTable tableName="feedback_withdrawal">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="feedback_withdrawalPK"/>
+            </column>
+            <column name="feedback_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reason" type="VARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="restoration_reason" type="VARCHAR(500)"/>
+            <column name="restored_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="restored_by_account_id" type="BIGINT"/>
+            <column name="withdrawn_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="withdrawn_by_account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790520303182-2" author="hephaestus">
+        <createIndex indexName="idx_feedback_withdrawal_feedback" tableName="feedback_withdrawal">
+            <column name="feedback_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790520303182-3" author="hephaestus">
+        <comment>A withdrawal names only its own workspace's feedback and real accounts; at most one is open per feedback, and a restore is recorded whole.</comment>
+        <addForeignKeyConstraint baseTableName="feedback_withdrawal" baseColumnNames="workspace_id,feedback_id"
+                                 referencedTableName="feedback" referencedColumnNames="workspace_id,id"
+                                 constraintName="sfk_feedback_withdrawal_feedback" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="feedback_withdrawal" baseColumnNames="withdrawn_by_account_id"
+                                 referencedTableName="account" referencedColumnNames="id"
+                                 constraintName="sfk_feedback_withdrawal_withdrawn_by"/>
+        <addForeignKeyConstraint baseTableName="feedback_withdrawal" baseColumnNames="restored_by_account_id"
+                                 referencedTableName="account" referencedColumnNames="id"
+                                 constraintName="sfk_feedback_withdrawal_restored_by"/>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            CREATE UNIQUE INDEX uk_feedback_withdrawal_active
+                ON feedback_withdrawal (feedback_id) WHERE restored_at IS NULL;
+            ALTER TABLE feedback_withdrawal ADD CONSTRAINT ck_feedback_withdrawal_reason
+                CHECK (btrim(reason) <> '');
+            ALTER TABLE feedback_withdrawal ADD CONSTRAINT ck_feedback_withdrawal_restoration
+                CHECK ((restored_at IS NULL AND restored_by_account_id IS NULL AND restoration_reason IS NULL)
+                    OR (restored_at IS NOT NULL AND restored_by_account_id IS NOT NULL
+                        AND restoration_reason IS NOT NULL AND btrim(restoration_reason) <> ''));
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

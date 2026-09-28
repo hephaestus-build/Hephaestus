@@ -46,6 +46,10 @@ public class FeedbackResponseController {
             responseCode = "404",
             description = "Delivered feedback not found for the current recipient",
             content = @Content(schema = @Schema(hidden = true)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "A workspace admin withdrew this feedback",
+            content = @Content(schema = @Schema(hidden = true)))
     public ResponseEntity<FeedbackResponseDTO> replace(
             WorkspaceContext workspaceContext,
             @PathVariable UUID feedbackId,

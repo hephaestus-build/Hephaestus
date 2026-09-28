@@ -99,7 +99,10 @@ function feedbackCardsByTab(
 	const open = newestFirst(cards.filter((card) => isOpenFeedback(card.state)));
 	return {
 		open,
-		resolved: newestFirst(cards.filter((card) => !isOpenFeedback(card.state))),
+		// A withdrawn card resolved nothing, so only "All" lists it.
+		resolved: newestFirst(
+			cards.filter((card) => !isOpenFeedback(card.state) && card.state !== "withdrawn"),
+		),
 		all: newestFirst(cards),
 		newest: open.slice(0, NEWEST_CARD_COUNT),
 	};

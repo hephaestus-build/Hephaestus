@@ -69,7 +69,17 @@ public record ReviewFeedbackDetailDTO(
         FeedbackApprovalDTO approval,
 
         @NonNull @Schema(description = "Ordered delivery-policy evaluations for this feedback's review")
-        List<DeliveryPolicyTraceDTO> deliveryPolicy) {
+        List<DeliveryPolicyTraceDTO> deliveryPolicy,
+
+        @NonNull
+        @Schema(
+                description = "Every withdrawal of this card from the developer's practice page, newest first; empty"
+                        + " when none")
+        List<FeedbackWithdrawalDTO> withdrawals,
+
+        @Schema(description = "The developer's standing dispute of this feedback; null while they do not dispute it")
+        @Nullable
+        FeedbackDisputeDTO dispute) {
     public static ReviewFeedbackDetailDTO from(
             Feedback feedback,
             @Nullable ReviewedWorkRefDTO reviewedWork,
@@ -79,6 +89,8 @@ public record ReviewFeedbackDetailDTO(
             List<ReviewPlacementDTO> placements,
             @Nullable FeedbackApprovalDTO approval,
             List<DeliveryPolicyTraceDTO> deliveryPolicy,
+            List<FeedbackWithdrawalDTO> withdrawals,
+            @Nullable FeedbackDisputeDTO dispute,
             boolean bodyVisible) {
         return new ReviewFeedbackDetailDTO(
                 feedback.getId(),
@@ -103,6 +115,8 @@ public record ReviewFeedbackDetailDTO(
                                 .toList()
                         : List.of(),
                 approval,
-                deliveryPolicy);
+                deliveryPolicy,
+                withdrawals,
+                dispute);
     }
 }
