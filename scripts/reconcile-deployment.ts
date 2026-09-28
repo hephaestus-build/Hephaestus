@@ -1,8 +1,10 @@
 import {
 	lstat,
 	mkdir,
+	readdir,
 	readFile,
 	readlink,
+	realpath,
 	rename,
 	rm,
 	stat,
@@ -72,6 +74,8 @@ export interface AppliedState {
 	appliedAt: string;
 	/** The release's source commit as the signed lock named it; absent in records written earlier. */
 	commit?: string;
+	/** The last other release this host ran, whose tree pruning keeps for a rollback. */
+	previous?: string;
 }
 
 export type Decision =
@@ -437,6 +441,9 @@ export async function readApplied(file: string): Promise<AppliedState | undefine
 			channelCommit: asString(record.channelCommit, "applied.channelCommit"),
 			appliedAt: asString(record.appliedAt, "applied.appliedAt"),
 			...(record.commit === undefined ? {} : { commit: asString(record.commit, "applied.commit") }),
+			...(record.previous === undefined
+				? {}
+				: { previous: asString(record.previous, "applied.previous") }),
 		};
 		if (!isTarget(applied.release)) {
 			throw new Error("applied.release must be a vX.Y.Z tag or a commit");
@@ -446,6 +453,9 @@ export async function readApplied(file: string): Promise<AppliedState | undefine
 		}
 		if (applied.commit !== undefined && !COMMIT_SHA.test(applied.commit)) {
 			throw new Error("applied.commit must be a Git commit");
+		}
+		if (applied.previous !== undefined && !isTarget(applied.previous)) {
+			throw new Error("applied.previous must be a vX.Y.Z tag or a commit");
 		}
 		if (
 			!Number.isFinite(Date.parse(applied.appliedAt)) ||
@@ -644,7 +654,7 @@ async function prepareLock(
 	releaseCommit: string,
 	releaseTree: string,
 ): Promise<{ lockEnv: string; lockFile: string }> {
-	const lockDirectory = path.join(config.stateDirectory, "release-locks");
+	const lockDirectory = locksDirectory(config);
 	await mkdir(lockDirectory, { recursive: true });
 	const lockFile = path.join(lockDirectory, `${release}.env`);
 	if (channel.images) {
@@ -826,9 +836,11 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	await startStacks(config, releaseTree, composeArgsByStack);
 
 	const finishedAt = new Date();
+	// A re-promotion of the running release keeps the rollback target the host already had.
+	const previous = applied?.release === decision.release ? applied.previous : applied?.release;
 	await writeAtomic(
 		appliedFile,
-		`${JSON.stringify({ release: decision.release, channelCommit, appliedAt: finishedAt.toISOString(), commit: releaseCommit }, null, "\t")}\n`,
+		`${JSON.stringify({ release: decision.release, channelCommit, appliedAt: finishedAt.toISOString(), commit: releaseCommit, previous }, null, "\t")}\n`,
 	);
 	if (isSet(config.metricsFile)) {
 		await writeAtomic(
@@ -846,6 +858,9 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	console.log(`Applied ${decision.release} to ${config.stacks.join(", ")}`);
 	// Only now, with the release verified and running, does the host run that release's tooling.
 	await followTooling(config, releaseTree, unitsDirectory);
+	// Last, so a prune that fails leaves this release running, recorded and adopted; the next apply
+	// prunes again.
+	await pruneReleases(config, [decision.release, previous]);
 }
 
 const DAY_SECONDS = 24 * 60 * 60;
@@ -960,6 +975,10 @@ function releasesDirectory(config: HostConfig): string {
 	return path.join(config.stateDirectory, "releases");
 }
 
+function locksDirectory(config: HostConfig): string {
+	return path.join(config.stateDirectory, "release-locks");
+}
+
 /** The accepted source commit a record names: kept since it was recorded, or the release itself. */
 export function appliedCommit(applied: AppliedState): string | undefined {
 	return applied.commit ?? (COMMIT_SHA.test(applied.release) ? applied.release : undefined);
@@ -992,10 +1011,10 @@ export async function ensureReleaseTree(
 			},
 		);
 	}
-	// Tracked content only: Compose writes into the worktree it renders from — the proxy stack's ACME
-	// store is `docker/letsencrypt/` — so counting untracked files would turn every retry after a
-	// partial apply into a permanent refusal. An untracked file cannot alter a tracked Compose file,
-	// and anyone who can write here already has the Docker socket.
+	// Tracked content only: Compose writes into the worktree it renders from — an older release's
+	// proxy keeps its ACME store in `docker/letsencrypt/` — so counting untracked files would turn
+	// every retry after a partial apply into a permanent refusal. An untracked file cannot alter a
+	// tracked Compose file, and anyone who can write here already has the Docker socket.
 	const changes = await output("git", ["status", "--porcelain=v1", "--untracked-files=no"], {
 		cwd: tree,
 	});
@@ -1003,6 +1022,63 @@ export async function ensureReleaseTree(
 		throw new Error(`${tree} differs from ${release}`);
 	}
 	return { tree, commit };
+}
+
+/**
+ * Removes the release trees nothing needs after an apply, then the lock of every release left without
+ * a tree. Kept are the releases in `kept`, the tree the tooling link names, a tree locked with
+ * `git worktree lock` — how anything else working in a tree says so — and a tree holding anything its
+ * release does not, such as the `acme.json` an older release's proxy keeps in `docker/letsencrypt/`.
+ * That file is ignored, and `git worktree remove` refuses only untracked and modified content, so the
+ * check here includes ignored files. The next apply finishes a prune that stopped partway.
+ */
+async function pruneReleases(
+	config: HostConfig,
+	kept: readonly (string | undefined)[],
+): Promise<void> {
+	// A tree deleted by hand leaves its registration behind, and `remove` cannot act on that.
+	await run("git", ["worktree", "prune"], { cwd: config.checkout });
+	// Git lists resolved paths, so the directory is resolved too.
+	const releases = await realpath(releasesDirectory(config));
+	const remaining = new Set(kept);
+	const tooling = await realpath(config.tooling);
+	if (path.dirname(tooling) === releases) {
+		remaining.add(path.basename(tooling));
+	}
+	const listing = await output("git", ["worktree", "list", "--porcelain", "-z"], {
+		cwd: config.checkout,
+	});
+	for (const record of listing.split("\0\0")) {
+		const lines = record.split("\0");
+		const tree = lines.find((line) => line.startsWith("worktree "))?.slice("worktree ".length);
+		if (tree === undefined || path.dirname(tree) !== releases) {
+			continue;
+		}
+		const release = path.basename(tree);
+		if (remaining.has(release)) {
+			continue;
+		}
+		const lock = lines.find((line) => line === "locked" || line.startsWith("locked "));
+		const reason = (
+			lock ?? (await output("git", ["status", "--porcelain=v1", "--ignored"], { cwd: tree }))
+		).trimEnd();
+		if (reason) {
+			console.log(`Keeping ${tree}: ${reason.replaceAll("\n", ", ")}`);
+			remaining.add(release);
+			continue;
+		}
+		// Never forced, so git still refuses a tree locked or given an untracked file since the check.
+		await run("git", ["worktree", "remove", tree], { cwd: config.checkout });
+		console.log(`Removed ${tree}`);
+	}
+	const locks = locksDirectory(config);
+	for (const file of await readdir(locks)) {
+		const { name, ext } = path.parse(file);
+		if (ext === ".env" && isTarget(name) && !remaining.has(name)) {
+			await rm(path.join(locks, file));
+			console.log(`Removed ${path.join(locks, file)}`);
+		}
+	}
 }
 
 /** Unlike `existsSync`, this reports a lookup that failed for any reason other than absence. */
