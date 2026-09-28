@@ -213,8 +213,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 warm = sandboxService.isWarm(spec);
             } finally {
                 if (warm) {
-                    // Only attach would have used, and so revoked, the credential the spec minted.
-                    proxyCredentialRegistry.revoke(spec.sessionId());
+                    releaseUnattached(spec);
                 }
             }
             if (!warm) {
@@ -377,8 +376,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     channel.send(UIMessageChunk.DataMentorStatus.of("warming-up", "container-cold"));
                 }
             } catch (RuntimeException beforeAttach) {
-                // Only attach would have used, and so revoked, the credential the spec minted.
-                proxyCredentialRegistry.revoke(spec.sessionId());
+                releaseUnattached(spec);
                 throw beforeAttach;
             }
             // Pi is single-session: hold the lock from attach through the terminal chunk, so a second turn can
@@ -629,6 +627,11 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         } catch (RuntimeException e) {
             log.warn("Failed to close mentor sandbox: {}", e.toString());
         }
+    }
+
+    /** Only attach uses, and so revokes, the proxy credential a spec mints; a spec that never reaches it must. */
+    private void releaseUnattached(InteractiveSandboxSpec spec) {
+        proxyCredentialRegistry.revoke(spec.sessionId());
     }
 
     /** A failed attach revokes its spec's credential with the sandbox, so the retry needs a spec of its own. */

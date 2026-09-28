@@ -14,8 +14,8 @@ import org.springframework.validation.annotation.Validated;
  *     {@code core/resource-loader} always pull in the interactive theme + highlight.js), so the TTL
  *     trades idle memory for warm turns; the session caps, not the TTL, bound the total. A message
  *     after it pays a full cold start — job network, volumes, workspace initializer, runtime
- *     container, {@code runner_ready} and the SDK import — which runs to several seconds; opening Heph
- *     starts that ahead of the message. The Traefik sticky-cookie {@code maxAge} in
+ *     container, {@code runner_ready} and the SDK import; opening Heph starts that ahead of the
+ *     message. The Traefik sticky-cookie {@code maxAge} in
  *     {@code docker/compose.app.yaml} follows this value.
  * @param graceTimeoutSeconds SIGTERM → SIGKILL grace. Capped at 25 s: the registry's
  *     {@code @PreDestroy} adds a 5-second slop, and Spring's default
