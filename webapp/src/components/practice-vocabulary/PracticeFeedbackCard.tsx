@@ -242,9 +242,7 @@ export function PracticeFeedbackCard({
 	// that asked for it and not on a pressed button in the other row.
 	const [lastPressed, setLastPressed] = useState<"rating" | "answer">("rating");
 	const resolved = state === "resolved";
-	// A card closed because the practice's review rules changed can never be ticked, so the meter is
-	// not drawn for it: "0 of 3 clean" is a count towards a threshold that no longer exists, and it
-	// reads as a mark against work nobody can answer any more. The condition line says why instead.
+	// No work can tick a closed card, so it draws no count towards the threshold.
 	const closed = state === "closed";
 	const answerable = isOpenFeedback(state) || resolvedBy === "DEVELOPER";
 	const BandIcon = FEEDBACK_STATE_DEFS[isOpenFeedback(state) ? "open" : state].icon;

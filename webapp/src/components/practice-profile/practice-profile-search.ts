@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import type { ActivityRange } from "@/components/activity/activity-range";
 import {
 	type DetailStackEntry,
 	detailStackSchema,
@@ -8,8 +9,6 @@ import {
 	DEFAULT_PRACTICE_GROUP_SORT,
 	type SortDirection,
 } from "@/components/practice-vocabulary/practice-group-list-order";
-
-import { RUN_TIMEFRAMES, type RunTimeframe } from "./review-run-timeframes";
 
 const SORT_DIRECTIONS = ["asc", "desc"] as const satisfies readonly SortDirection[];
 
@@ -20,16 +19,15 @@ const SORT_DIRECTIONS = ["asc", "desc"] as const satisfies readonly SortDirectio
  * kinds and drops the rest. A practice may open with no group beneath it — one the workspace files
  * in no group, or a hand-typed URL — and its path then names no group.
  *
- * The two run levels are the other pair: every review of the reader's work, opened from the
- * header's chip, and one run over it. A run may open on its own from a shared link, and its path
- * then names no list.
+ * The other pair is the reviews of the reader's work and one review over it; a review opened from
+ * a shared link has no list beneath it.
  */
 export const PRACTICE_PROFILE_LEVEL_KINDS = [
 	"practice-group",
 	"practice",
 	"practice-groups",
-	"review-runs",
-	"review-run",
+	"reviews",
+	"review",
 ] as const;
 
 export type PracticeProfileDetailLevelKind = (typeof PRACTICE_PROFILE_LEVEL_KINDS)[number];
@@ -60,32 +58,31 @@ export function openLevelId(
 	return stack.find((entry) => entry.kind === kind)?.id;
 }
 
-/** What the level with every review run is called, wherever it is named. */
 export const REVIEWS_OF_YOUR_WORK = "Reviews of your work";
 
-/**
- * Every review run on the reader's work as a level; there is one, so the id names the list rather
- * than a row.
- */
-export const REVIEW_RUNS_LEVEL: DetailStackEntry<PracticeProfileDetailLevelKind> = {
-	kind: "review-runs",
+/** How many reviews a page of that list holds, and so how many rows its skeleton draws. */
+export const PROFILE_REVIEWS_PAGE_SIZE = 10;
+
+export const REVIEWS_LEVEL: DetailStackEntry<PracticeProfileDetailLevelKind> = {
+	kind: "reviews",
 	id: "all",
 };
 
-/** One review run as the level over the list, addressed by its review id. */
-export function reviewRunLevel(reviewId: string): DetailStackEntry<PracticeProfileDetailLevelKind> {
-	return { kind: "review-run", id: reviewId };
+export function reviewLevel(reviewId: string): DetailStackEntry<PracticeProfileDetailLevelKind> {
+	return { kind: "review", id: reviewId };
 }
 
-/**
- * The run level's tabs: every practice this workspace runs against this kind of work, and the
- * occurrences recorded about it. The choice is the `runTab` search param.
- */
-export const RUN_TABS = ["practices", "noticed"] as const;
+/** The review level's tabs, from the `reviewTab` search param. */
+export const REVIEW_TABS = ["practices", "noticed"] as const;
 
-export type RunTab = (typeof RUN_TABS)[number];
+export type ReviewTab = (typeof REVIEW_TABS)[number];
 
-export const DEFAULT_RUN_TAB: RunTab = "practices";
+export const DEFAULT_REVIEW_TAB: ReviewTab = "practices";
+
+/** How far back the reviews list reaches; absent is every review. */
+export const REVIEW_TIMEFRAMES = ["7d", "30d", "90d"] as const satisfies readonly ActivityRange[];
+
+export type ReviewTimeframe = (typeof REVIEW_TIMEFRAMES)[number];
 
 /** What the level with every practice group is called, wherever it is named. */
 export const ALL_PRACTICE_GROUPS = "All practice groups";
@@ -109,19 +106,15 @@ export type PracticeTab = (typeof PRACTICE_TABS)[number];
 
 export const DEFAULT_PRACTICE_TAB: PracticeTab = "observations";
 
-/**
- * The selection inside an open level: the practice level's tab, the runs list's two filters, and
- * the run level's tab with the three filters over its practice table. Every one of them means
- * nothing outside the level that shows it, so every one is cleared when the level closes.
- */
+/** The selection inside an open level; each is cleared when its level closes. */
 export interface PracticeGroupDetailSelection {
 	practiceTab?: PracticeTab;
-	runKind?: string;
-	runSince?: RunTimeframe;
-	runTab?: RunTab;
-	runGroup?: string;
-	runPractice?: string;
-	runWatches?: string;
+	reviewKind?: string;
+	reviewSince?: ReviewTimeframe;
+	reviewTab?: ReviewTab;
+	reviewGroup?: string;
+	reviewPractice?: string;
+	reviewWatches?: string;
 }
 
 /**
@@ -135,10 +128,16 @@ export type FeedbackTab = (typeof FEEDBACK_TABS)[number];
 export const DEFAULT_FEEDBACK_TAB: FeedbackTab = "newest";
 
 /**
+ * The longest free-text filter the URL keeps. The practice filter's input stops there, so only a
+ * hand-edited address reaches the schema's fallback.
+ */
+export const REVIEW_FILTER_MAX_LENGTH = 120;
+
+/**
  * What the page itself reads out of the URL: the table's sort, the feedback tab, and the selection
- * inside the open practice level — the tab shown. A hand-typed value a surface cannot show reads as
- * the default. Which observations are open is not here: every one arrives open and closes on its
- * own, and nothing addresses one.
+ * inside the open levels — the practice level's tab, and the review levels' filters and tab. A
+ * hand-typed value a surface cannot show reads as the default. Which observations are open is not
+ * here: every one arrives open and closes on its own, and nothing addresses one.
  */
 const practiceProfileFilterSchema = z.object({
 	dir: z
@@ -150,15 +149,13 @@ const practiceProfileFilterSchema = z.object({
 	// A free string rather than an enum, for the reason `trace-search.ts` gives: the server derives
 	// the kinds from whichever integrations are registered, and narrowing here would quietly ignore
 	// a reader's filter instead of answering it.
-	runKind: z.string().min(1).max(120).optional().catch(undefined),
-	// No timeframe is every run, which is the default, so the param is absent rather than spelling it.
-	runSince: z.enum(RUN_TIMEFRAMES).optional().catch(undefined),
-	runTab: z.enum(RUN_TABS).default(DEFAULT_RUN_TAB).catch(DEFAULT_RUN_TAB),
-	runGroup: z.string().min(1).max(120).optional().catch(undefined),
-	runPractice: z.string().min(1).max(120).optional().catch(undefined),
-	// A signal name, free for the reason `runKind` is: which occurrences a practice may watch comes
-	// from the integrations the instance registered, not from anything this build can enumerate.
-	runWatches: z.string().min(1).max(120).optional().catch(undefined),
+	reviewKind: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
+	reviewSince: z.enum(REVIEW_TIMEFRAMES).optional().catch(undefined),
+	reviewTab: z.enum(REVIEW_TABS).default(DEFAULT_REVIEW_TAB).catch(DEFAULT_REVIEW_TAB),
+	reviewGroup: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
+	reviewPractice: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
+	// A signal name, free for the reason `reviewKind` is.
+	reviewWatches: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
 });
 
 /** Each param at its default, which the route leaves out of the URL. */
@@ -175,17 +172,16 @@ export type PracticeProfileSearch = z.infer<typeof practiceProfileSearchSchema>;
 export const PRACTICE_PROFILE_SEARCH_PARAMS: (keyof PracticeProfileSearch)[] = ["dir", "feedback"];
 
 /**
- * The params that belong to a level and leave the URL with it: the practice level's tab, the runs
- * list's filters, and the run level's tab and filters. Going back restores the entry before the
- * level was pushed, which never held them, so a forward write must clear them or the next level
+ * The params that belong to a level and leave the URL with it. Going back restores the entry before
+ * the level was pushed, which never held them, so a forward write must clear them or the next level
  * opened inherits a filter nobody set.
  */
 export const PRACTICE_PROFILE_LEVEL_PARAMS = [
 	"practiceTab",
-	"runKind",
-	"runSince",
-	"runTab",
-	"runGroup",
-	"runPractice",
-	"runWatches",
+	"reviewKind",
+	"reviewSince",
+	"reviewTab",
+	"reviewGroup",
+	"reviewPractice",
+	"reviewWatches",
 ] as const satisfies readonly (keyof PracticeGroupDetailSelection)[];

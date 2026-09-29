@@ -11,17 +11,16 @@ import {
 } from "@/runtime/tanstack-query/infinite-list";
 
 /**
- * A feed of review runs, newest first, with its paging while earlier runs exist: a practice level's
- * runs on one group, or every run on the reader's own work.
+ * A feed of reviews, newest first, with its paging while earlier ones exist: a practice level's
+ * reviews on one group, or the reviews of the reader's own work.
  */
 export type ReviewRunFeedState<TRun = PracticeGroupReviewRun> = PanelState<
 	{ runs: TRun[] } & MorePages
 >;
 
 /**
- * A level with no runs of its own: ready, empty, and with nothing more to load; `hasMore: false`
- * keeps the paging button off screen, so the callback is never reached. Typed over no run at all,
- * so it stands in for a feed of any run.
+ * A level with no runs of its own: ready, empty, and with nothing more to load — `hasMore: false`
+ * keeps the paging button off screen, so the callback is never reached.
  */
 export const EMPTY_REVIEW_RUN_FEED = {
 	status: "ready",
@@ -29,22 +28,7 @@ export const EMPTY_REVIEW_RUN_FEED = {
 	hasMore: false,
 	isLoadingMore: false,
 	onLoadMore: () => undefined,
-	loadMoreError: undefined,
 } satisfies ReviewRunFeedState<never>;
-
-/** What every page of a feed says about the one after it. */
-interface ReviewRunPage {
-	hasNext?: boolean;
-	page?: number;
-}
-
-/**
- * How every review-run feed pages: a page says whether another follows and which number it is, and
- * the feed ends where it does not.
- */
-export function nextReviewRunPage(lastPage: ReviewRunPage): number | undefined {
-	return lastPage.hasNext === true ? (lastPage.page ?? 0) + 1 : undefined;
-}
 
 /** One infinite query as the feed's state: failed, loading, or the loaded pages as one list. */
 export function reviewRunFeedState<TRun>(

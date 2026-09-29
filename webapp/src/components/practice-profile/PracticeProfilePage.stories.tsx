@@ -29,7 +29,6 @@ const meta = {
 		feedbackCards: ALL_FEEDBACK_CARDS,
 		onOpenGroup: fn(),
 		onOpenPractice: fn(),
-		onOpenRuns: fn(),
 		feedbackTab: DEFAULT_FEEDBACK_TAB,
 		onFeedbackTabChange: fn(),
 		state: { status: "ready" },
@@ -89,18 +88,6 @@ export const Default: Story = {
 		// The card's group name opens the group the page knows by that slug.
 		await userEvent.click(within(card).getByRole("button", { name: "Packaging work for review" }));
 		await expect(args.onOpenGroup).toHaveBeenLastCalledWith(groups[0]);
-	},
-};
-
-/**
- * The chip beside the title is the way into every review of the reader's work; the work's own link
- * is not inside it, because a link inside a button is a control inside a control.
- */
-export const ChipOpensTheRuns: Story = {
-	play: async ({ args, canvas }) => {
-		const chip = canvas.getByRole("button", { name: /^Latest run/u });
-		await userEvent.click(chip);
-		await expect(args.onOpenRuns).toHaveBeenCalled();
 	},
 };
 
@@ -207,7 +194,7 @@ export const ColdStart: Story = {
 			canvas.getByText("Feedback appears once the same shortcoming keeps showing up on your work."),
 		).toBeVisible();
 		await expect(canvas.queryByRole("article")).toBeNull();
-		await expect(canvas.queryByText("Latest run")).toBeNull();
+		await expect(canvas.queryByText("Latest review")).toBeNull();
 		await expect(canvas.queryByRole("img", { name: HEPH_LABEL })).toBeNull();
 	},
 };

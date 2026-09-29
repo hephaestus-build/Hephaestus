@@ -26,7 +26,7 @@ export interface InfiniteQueryLike<TPage> {
 	hasNextPage: boolean;
 	isFetchingNextPage: boolean;
 	refetch: () => unknown;
-	fetchNextPage: () => unknown;
+	fetchNextPage: (options: { cancelRefetch: boolean }) => unknown;
 }
 
 const READY: LoadState = { status: "ready" };
@@ -47,8 +47,10 @@ export function infiniteListState<TPage, TReady extends object>(
 	const more: MorePages = {
 		hasMore: query.hasNextPage,
 		isLoadingMore: query.isFetchingNextPage,
+		// A press while the list is already fetching — a poll's refetch, or the last press — does
+		// nothing, rather than cancel that read.
 		onLoadMore: () => {
-			void query.fetchNextPage();
+			void query.fetchNextPage({ cancelRefetch: false });
 		},
 	};
 	if (query.isFetchNextPageError && !query.isFetchingNextPage) {

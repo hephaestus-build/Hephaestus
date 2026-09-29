@@ -129,6 +129,8 @@ export const practiceTraceEntries = [
 	{
 		practiceSlug: "thin-controllers",
 		practiceName: "Thin controllers",
+		groupSlug: "review-ready-work",
+		groupName: "Packaging work for review",
 		autonomy: "AUTOMATIC",
 		outcome: "REVIEWED",
 		explanation:
@@ -145,6 +147,8 @@ export const practiceTraceEntries = [
 	{
 		practiceSlug: "product-language",
 		practiceName: "Product language",
+		groupSlug: "communication",
+		groupName: "Communicating in the open",
 		autonomy: "HUMAN_APPROVAL",
 		outcome: "REVIEWED",
 		explanation:
@@ -161,6 +165,8 @@ export const practiceTraceEntries = [
 	{
 		practiceSlug: "meaningful-commits",
 		practiceName: "Meaningful commit history",
+		groupSlug: "review-ready-work",
+		groupName: "Packaging work for review",
 		autonomy: "AUTOMATIC",
 		outcome: "RUNNING",
 		explanation:
@@ -176,6 +182,8 @@ export const practiceTraceEntries = [
 	{
 		practiceSlug: "tests-accompany-behaviour",
 		practiceName: "Tests accompany behaviour changes",
+		groupSlug: "testing-discipline",
+		groupName: "Testing your changes",
 		autonomy: "AUTOMATIC",
 		outcome: "PENDING",
 		explanation:
@@ -192,6 +200,8 @@ export const practiceTraceEntries = [
 	{
 		practiceSlug: "small-changes",
 		practiceName: "Small, reviewable changes",
+		groupSlug: "review-ready-work",
+		groupName: "Packaging work for review",
 		autonomy: "AUTOMATIC",
 		outcome: "SKIPPED",
 		explanation:
@@ -207,6 +217,8 @@ export const practiceTraceEntries = [
 	{
 		practiceSlug: "clear-ownership",
 		practiceName: "Clear ownership",
+		groupSlug: "acting-on-review-feedback",
+		groupName: "Acting on review feedback",
 		autonomy: "AUTOMATIC",
 		outcome: "NOT_REACHED",
 		explanation: "The review ended before reaching this practice.",
@@ -222,6 +234,8 @@ export const practiceTraceEntries = [
 	{
 		practiceSlug: "migration-safety",
 		practiceName: "Migration safety",
+		groupSlug: "testing-discipline",
+		groupName: "Testing your changes",
 		autonomy: "AUTOMATIC",
 		outcome: "NOT_ASSESSABLE",
 		explanation:
@@ -238,6 +252,8 @@ export const practiceTraceEntries = [
 	{
 		practiceSlug: "descriptive-pull-requests",
 		practiceName: "Descriptive pull requests",
+		groupSlug: "review-ready-work",
+		groupName: "Packaging work for review",
 		autonomy: "OFF",
 		outcome: "TURNED_OFF",
 		explanation:
@@ -250,6 +266,8 @@ export const practiceTraceEntries = [
 	{
 		practiceSlug: "timely-review-response",
 		practiceName: "Timely review response",
+		groupSlug: "acting-on-review-feedback",
+		groupName: "Acting on review feedback",
 		autonomy: "AUTOMATIC",
 		outcome: "NOT_OCCASIONED",
 		explanation:
@@ -262,6 +280,8 @@ export const practiceTraceEntries = [
 	{
 		practiceSlug: "discussion-hygiene",
 		practiceName: "Discussion hygiene",
+		groupSlug: "communication",
+		groupName: "Communicating in the open",
 		autonomy: "AUTOMATIC",
 		outcome: "DORMANT",
 		explanation:
@@ -274,6 +294,8 @@ export const practiceTraceEntries = [
 	{
 		practiceSlug: "draft-not-left-open",
 		practiceName: "Drafts are not left open",
+		groupSlug: "acting-on-review-feedback",
+		groupName: "Acting on review feedback",
 		autonomy: "AUTOMATIC",
 		outcome: "LAPSED",
 		explanation:

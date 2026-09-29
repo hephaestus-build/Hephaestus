@@ -8,9 +8,8 @@ import { cn } from "cn";
  * ⚠️ Diverges from the shadcn registry — `shadcn add badge` drops the following; re-apply them.
  *
  * 1. `success` and `warning`, the two status tones the registry does not ship.
- * 2. `muted`, an outlined tag that must not read as a status, and the two accent tags: `mentor`,
- *    reserved for where Heph is introduced rather than wherever Heph appears, and `mentorSolid`,
- *    the same accent filled, for the one tag on a surface a reader should land on first.
+ * 2. `muted`, an outlined tag that must not read as a status, and `mentor`, reserved for where Heph
+ *    is introduced rather than wherever Heph appears.
  * 3. `label`, painted by the caller through `--label` and `--label-foreground`: a provider's own label
  *    colour is data, not a theme tone.
  * 4. The `size` axis: `xs` for a count or identifier inside a control, `lg` for a pill that carries a
@@ -30,7 +29,6 @@ const badgeVariants = cva(
 				outline: "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
 				muted: "border-border text-muted-foreground [a]:hover:bg-muted",
 				mentor: "border-mentor/20 bg-mentor/5 text-mentor",
-				mentorSolid: "bg-mentor text-mentor-foreground [a]:hover:bg-mentor/90",
 				label: "border-(--label) bg-(--label) text-(--label-foreground)",
 				ghost: "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
 				link: "text-primary underline-offset-4 hover:underline",

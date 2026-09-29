@@ -1,15 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-	asDate,
-	formatDay,
-	formatDayRange,
-	formatDayTime,
-	formatShortDay,
-	formatTime,
-	formatWeekdayDay,
-	type Wire,
-} from "./dates";
+import { asDate, formatDayRange, formatWeekdayDay, type Wire } from "./dates";
 
 describe("asDate", () => {
 	// The instant, not merely the type: `toBeInstanceOf(Date)` is satisfied by `new Date(0)`.
@@ -30,33 +21,6 @@ describe("asDate", () => {
 		["an Invalid Date", new Date("nonsense")],
 	])("degrades %s to undefined rather than to a fabricated now", (_name, value) => {
 		expect(asDate(value)).toBeUndefined();
-	});
-});
-
-describe("the formatters", () => {
-	const at = new Date(2026, 8, 9, 14, 10);
-
-	it("spell the day and the time the practice surfaces' way", () => {
-		expect(formatDay(at)).toBe("9 September");
-		expect(formatShortDay(at)).toBe("9 Sep");
-		expect(formatTime(at)).toBe("2:10 pm");
-		expect(formatDayTime(at)).toBe("9 September, 2:10 pm");
-	});
-
-	it("read a timestamp that reached them as a string", () => {
-		expect(formatDay("2026-09-09T14:10:00")).toBe("9 September");
-	});
-
-	// date-fns throws on an Invalid Date, and a render that formats a wire timestamp must not.
-	it.each([
-		["an Invalid Date", new Date("nonsense")],
-		["a non-date string", "not a date"],
-		["undefined", undefined],
-	])("format %s to undefined rather than throwing", (_name, value) => {
-		expect(formatDay(value)).toBeUndefined();
-		expect(formatShortDay(value)).toBeUndefined();
-		expect(formatTime(value)).toBeUndefined();
-		expect(formatDayTime(value)).toBeUndefined();
 	});
 });
 

@@ -1,11 +1,13 @@
+import { useQuery } from "@tanstack/react-query";
 import {
 	createFileRoute,
 	Navigate,
 	retainSearchParams,
 	stripSearchParams,
 } from "@tanstack/react-router";
+
 import type { PracticeGroup } from "@/api/types.gen";
-import { combinePanelStates, loadProps, queryLoadState } from "@/components/common/panel-state";
+import { combinePanelStates, queryLoadState } from "@/components/common/panel-state";
 import { parseDetailStack } from "@/components/layout/detail-drawer/detail-stack";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
 import {
@@ -24,26 +26,23 @@ import {
 	type PracticeProfileSearch,
 	practiceProfileSearchSchema,
 	type PracticeTab,
-	REVIEW_RUNS_LEVEL,
-	reviewRunLevel,
+	reviewLevel,
 } from "@/components/practice-profile/practice-profile-search";
 import { PracticeGroupDetailDrawer } from "@/components/practice-profile/PracticeGroupDetailDrawer";
 import { PracticeProfilePage } from "@/components/practice-profile/PracticeProfilePage";
-import { EMPTY_REVIEW_RUN_FEED } from "@/components/profile/review-runs";
+import { TraceRefusalAlert } from "@/components/practice-trace/TraceRefusalAlert";
 import { useInAppFeedback } from "@/hooks/use-in-app-feedback";
 import { REVIEW_RUN_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
 import { usePracticeProfileOverview } from "@/hooks/use-practice-profile-overview";
-import {
-	PROFILE_REVIEW_RUN_PAGE_SIZE,
-	usePracticeProfileReviewRuns,
-} from "@/hooks/use-practice-profile-review-runs";
+import { usePracticeProfileReviewRuns } from "@/hooks/use-practice-profile-review-runs";
 import { usePracticeStandings } from "@/hooks/use-practice-standings";
-import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { workspaceHead } from "@/lib/page-title";
 import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
+import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
 import { useAuth } from "@/runtime/auth/AuthContext";
+import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-profile")({
 	component: PracticeProfile,
@@ -61,10 +60,9 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-
 function PracticeProfile() {
 	// A user view reads the developer's page and answers nothing on their behalf.
 	const readOnly = useAuth().userView !== undefined;
-	// Duration and the coverage ratio are operating figures with no action beside them, so they are
-	// the admin's; `useWorkspaceAccess` already withdraws the admin view inside an impersonation.
-	const { isAdmin } = useWorkspaceAccess();
 	const { workspaceSlug } = Route.useParams();
+	const membership = useQuery(workspaceMembershipQueryOptions(workspaceSlug));
+	const isAdmin = !readOnly && hasMinimumWorkspaceRole(membership.data?.role, "ADMIN");
 	const search = Route.useSearch();
 	const setSearch = useSearchState();
 
@@ -89,14 +87,14 @@ function PracticeProfile() {
 		groups,
 		enabled: featureState.practicesEnabled === true,
 	});
-	const openRunId = openLevelId(detailStack, "review-run");
+	const openReviewId = openLevelId(detailStack, "review");
 	const reviewRuns = usePracticeProfileReviewRuns({
 		workspaceSlug,
-		// The run level needs the list too: the stepper walks the runs on the same piece of work.
-		listOpen: openLevelId(detailStack, "review-runs") !== undefined || openRunId !== undefined,
-		reviewId: openRunId,
-		kind: search.runKind,
-		since: search.runSince,
+		// The review level reads its position and its work off the list.
+		listOpen: openLevelId(detailStack, "reviews") !== undefined || openReviewId !== undefined,
+		reviewId: openReviewId,
+		kind: search.reviewKind,
+		since: search.reviewSince,
 	});
 	const detail = usePracticeGroupDetail({
 		workspaceSlug,
@@ -122,12 +120,8 @@ function PracticeProfile() {
 	}
 
 	const composed = composeOverview(overview);
-	// What the levels read while their list or run is still in flight: nothing, settled.
-	const runsList = reviewRuns.list.status === "ready" ? reviewRuns.list : EMPTY_REVIEW_RUN_FEED;
-	const openRunDetail =
-		reviewRuns.open.status === "ready"
-			? reviewRuns.open
-			: { run: undefined, observations: [], trace: undefined, traceState: undefined };
+	// A user view reads the developer's page; it never spends their workspace's budget.
+	const onReviewNow = readOnly ? undefined : reviewRuns.onReviewNow;
 	const openGroup = (group: PracticeGroup) => stackControls.open(practiceGroupLevel(group.slug));
 	// One level in, one level out: a practice is its group, then the practice over it, so the
 	// level's back arrow lands on the group and the browser's Back button agrees with it. A list
@@ -151,7 +145,6 @@ function PracticeProfile() {
 				ratingProps={readOnly ? undefined : feedback.ratingProps}
 				onOpenGroup={openGroup}
 				onOpenPractice={openPractice}
-				onOpenRuns={() => stackControls.open(REVIEW_RUNS_LEVEL)}
 				feedbackTab={search.feedback}
 				onFeedbackTabChange={(tab) => setView({ feedback: tab })}
 				state={page}
@@ -182,45 +175,43 @@ function PracticeProfile() {
 				skeletonRows={REVIEW_RUN_PAGE_SIZE}
 				reviewRuns={{
 					list: {
-						...loadProps(reviewRuns.list),
-						runs: runsList.runs,
-						hasMore: runsList.hasMore,
-						isLoadingMore: runsList.isLoadingMore,
-						onLoadMore: runsList.onLoadMore,
-						loadMoreError: runsList.loadMoreError,
-						skeletonRows: PROFILE_REVIEW_RUN_PAGE_SIZE,
-						onOpenRun: (reviewId) => stackControls.open(reviewRunLevel(reviewId)),
-						kind: search.runKind,
-						onKindChange: (runKind) => setView({ runKind }),
-						since: search.runSince,
-						onSinceChange: (runSince) => setView({ runSince }),
-						// A user view reads the developer's page; it never spends their workspace's
-						// budget on their behalf.
-						onReviewNow: readOnly
-							? undefined
-							: (run) => reviewRuns.request.onReviewNow(run.reviewedWork),
-						requesting: reviewRuns.request.requesting,
+						feed: reviewRuns.list,
+						positions: reviewRuns.positions,
+						onOpenReview: (reviewId) => stackControls.open(reviewLevel(reviewId)),
+						kind: search.reviewKind,
+						onKindChange: (reviewKind) => setView({ reviewKind }),
+						since: search.reviewSince,
+						onSinceChange: (reviewSince) => setView({ reviewSince }),
+						onReviewNow,
+						requesting: reviewRuns.requesting,
 					},
 					open: {
-						...loadProps(reviewRuns.open),
-						...openRunDetail,
-						reviewRefusal: reviewRuns.request.refusal,
+						state: reviewRuns.open,
+						onReviewNow,
+						requesting: reviewRuns.requesting,
+						refusal: reviewRuns.refusal && (
+							<TraceRefusalAlert
+								refusal={reviewRuns.refusal}
+								workspaceSlug={workspaceSlug}
+								canAdminister={isAdmin}
+							/>
+						),
 						workspaceSlug,
 						canAdminister: isAdmin,
-						tab: search.runTab,
-						onTabChange: (runTab) => setView({ runTab }),
+						tab: search.reviewTab,
+						onTabChange: (reviewTab) => setView({ reviewTab }),
 						filters: {
-							group: search.runGroup,
-							practice: search.runPractice,
-							watches: search.runWatches,
+							group: search.reviewGroup,
+							practice: search.reviewPractice,
+							watches: search.reviewWatches,
 						},
 						onFiltersChange: (next) =>
 							setView({
-								runGroup: next.group,
-								runPractice: next.practice,
-								runWatches: next.watches,
+								reviewGroup: next.group,
+								reviewPractice: next.practice,
+								reviewWatches: next.watches,
 							}),
-						onOpenPractice: (practiceSlug) => openPractice(practiceSlug),
+						onOpenPractice: openPractice,
 					},
 				}}
 				onSelectionChange={setView}

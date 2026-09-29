@@ -1,96 +1,52 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { skipToken, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
 	getArtifactTraceOptions,
-	getPracticeProfileOverviewQueryKey,
 	getPracticeProfileReviewRunOptions,
 	listPracticeProfileReviewRunsInfiniteOptions,
-	requestPracticeReviewMutation,
+	listPracticeProfileReviewRunsInfiniteQueryKey,
 } from "@/api/@tanstack/react-query.gen";
-import type {
-	GetArtifactTraceResponse,
-	ObservationDetail,
-	ProfileReviewRun,
-	ProfileReviewRunDetail,
-	ReviewRequestOutcome,
-	ReviewedWorkRef,
-} from "@/api/types.gen";
-import { type LoadState, type PanelState, queryLoadState } from "@/components/common/panel-state";
+import type { ProfileReviewRun, ReviewedWorkRef } from "@/api/types.gen";
+import { rangeStart } from "@/components/activity/activity-range";
+import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/review-search";
+import { panelState } from "@/components/common/panel-state";
 import { useNow } from "@/components/common/use-now";
 import {
-	type RunTimeframe,
-	timeframeSince,
-} from "@/components/practice-profile/review-run-timeframes";
+	PROFILE_REVIEWS_PAGE_SIZE,
+	type ReviewTimeframe,
+} from "@/components/practice-profile/practice-profile-search";
+import type { ProfileReviewDetailState } from "@/components/practice-profile/ProfileReviewLevel";
+import { runPositionsOnWork } from "@/components/practice-profile/review-run-groups";
 import {
 	EMPTY_REVIEW_RUN_FEED,
-	nextReviewRunPage,
 	type ReviewRunFeedState,
 	reviewRunFeedState,
 } from "@/components/profile/review-runs";
+import { PRACTICE_PROFILE_POLL_MS } from "@/hooks/use-practice-profile-overview";
+import { useRequestPracticeReview } from "@/hooks/use-request-practice-review";
 import { sameReviewedWork } from "@/lib/artifact-kinds";
-import { problemDetailOf } from "@/lib/problem-detail";
+import { problemStatusOf } from "@/lib/problem-detail";
+import { hasText } from "@/lib/text";
+import { QUERY_RETRIES, sessionRetriesQueries } from "@/runtime/tanstack-query/query-defaults";
+import { slicePageParams } from "@/runtime/tanstack-query/spring-page";
 
-/** Runs per page of the list; also the skeleton's row count while the first page loads. */
-export const PROFILE_REVIEW_RUN_PAGE_SIZE = 10;
-
-/** The list of the reader's own review runs, with its paging while earlier ones exist. */
-export type ProfileReviewRunsState = ReviewRunFeedState<ProfileReviewRun>;
-
-/**
- * One open run: the row the list already holds, the observations it made about the reader, and this
- * work's whole review activity, which is what names every practice the run could have reached,
- * including the ones that stayed quiet. The activity is a second read that lands after the run, so
- * it carries its own state: the level draws the run as soon as it has it and waits for the rest.
- */
-export type ProfileReviewRunState = PanelState<{
-	run?: ProfileReviewRun;
-	observations: ObservationDetail[];
-	trace?: GetArtifactTraceResponse;
-	traceState: LoadState;
-}>;
-
-/** Asking for a review of one piece of work, and what came of the last ask. */
-export interface ProfileReviewRequest {
-	onReviewNow: (work: ReviewedWorkRef) => void;
-	/** The work the ask in flight is about, so only its own control says so. */
-	requesting?: Pick<ReviewedWorkRef, "kind" | "id">;
-	/** The refused outcome of the last ask, while the open run is on the work it was about. */
-	refusal?: ReviewRequestOutcome;
-}
-
-export interface ProfileReviewRuns {
-	list: ProfileReviewRunsState;
-	open: ProfileReviewRunState;
-	request: ProfileReviewRequest;
-}
-
-export interface ProfileReviewRunsRequest {
+interface ProfileReviewRunsRequest {
 	workspaceSlug: string;
-	/** True while a level that shows the list is open; a closed drawer costs nothing. */
+	/** True while a level that shows the list is open; a closed drawer reads nothing. */
 	listOpen: boolean;
-	/** The open run level's review id, if any. */
+	/** The open review level's review id, if any. */
 	reviewId?: string;
-	/** The kind of work the list is narrowed to, from the level's own search param. */
 	kind?: string;
-	/**
-	 * How far back the list reaches, as the level's own search param spells it; the hook turns it
-	 * into the moment the wire takes. Undefined is every run there is.
-	 */
-	since?: RunTimeframe;
+	since?: ReviewTimeframe;
 }
 
 /**
- * The two run levels' data: every review of the reader's own work, paged and narrowed to one kind
- * of work when they ask for one, and the one run open over it. Both are gated on their level
- * actually being open, and the run level reads its own row out of the loaded pages when the list is
- * there — a run opened from a shared link has none, and the detail's own copy of the row answers
- * for it.
- *
- * The run level's practice table needs the answer of every practice, not just the ones that
- * observed something, so the open run also reads this work's review activity — the one endpoint
- * that lists the quiet practices with their recorded reason, narrowed to the open run so that what
- * it lists is what that run decided rather than what the newest review of the work did.
+ * The two review levels' data: the reviews that recorded something about the reader's own work, and
+ * the one open over it with this work's review activity, the only read that names the practices
+ * that stayed quiet. The work is taken from the list's row when it is loaded, so the activity does
+ * not wait for the review.
  */
 export function usePracticeProfileReviewRuns({
 	workspaceSlug,
@@ -98,122 +54,127 @@ export function usePracticeProfileReviewRuns({
 	reviewId,
 	kind,
 	since,
-}: ProfileReviewRunsRequest): ProfileReviewRuns {
-	const queryClient = useQueryClient();
-	// Counted back from midnight of the reader's own day, so the bound the query key carries is the
-	// same all day and the shared clock's tick does not refetch the list under them.
-	const sinceAt = timeframeSince(since, useNow());
-	const listOptions = listPracticeProfileReviewRunsInfiniteOptions({
-		path: { workspaceSlug },
-		query: { size: PROFILE_REVIEW_RUN_PAGE_SIZE, kind, since: sinceAt },
-	});
+}: ProfileReviewRunsRequest) {
+	const now = useNow();
 	const runsQuery = useInfiniteQuery({
-		...listOptions,
-		initialPageParam: 0,
-		getNextPageParam: nextReviewRunPage,
+		...listPracticeProfileReviewRunsInfiniteOptions({
+			path: { workspaceSlug },
+			query: {
+				size: PROFILE_REVIEWS_PAGE_SIZE,
+				kind,
+				since: since === undefined ? undefined : rangeStart(now, since),
+			},
+		}),
+		...slicePageParams,
 		enabled: listOpen,
+		// A review is listed once it records something about the reader, which no ask here announces.
+		refetchInterval: PRACTICE_PROFILE_POLL_MS,
+	});
+	const runOptions = getPracticeProfileReviewRunOptions({
+		path: { workspaceSlug, reviewId: reviewId ?? "" },
 	});
 	const runQuery = useQuery({
-		...getPracticeProfileReviewRunOptions({
-			path: { workspaceSlug, reviewId: reviewId ?? "" },
-		}),
-		enabled: reviewId !== undefined,
+		...runOptions,
+		queryFn: reviewId === undefined ? skipToken : runOptions.queryFn,
+		// A 404 is not the reader's review, or gone: asking again answers the same.
+		retry: (failureCount, error) =>
+			sessionRetriesQueries() && problemStatusOf(error) !== 404 && failureCount < QUERY_RETRIES,
+		refetchInterval: (query) =>
+			query.state.data?.run.status === "IN_PROGRESS" ? ACTIVE_REVIEW_POLL_MS : false,
 	});
-	const work = runQuery.data?.run.reviewedWork;
-	// Asked for this review alone: the answers a work carries are per review, so a second review of
-	// the same pull request would otherwise speak for this one and leave the older run with none.
+	const running = runQuery.data?.run.status === "IN_PROGRESS";
+
+	const list: ReviewRunFeedState<ProfileReviewRun> = listOpen
+		? reviewRunFeedState(runsQuery)
+		: EMPTY_REVIEW_RUN_FEED;
+	const work =
+		(list.status === "ready"
+			? list.runs.find((run) => run.reviewId === reviewId)?.reviewedWork
+			: undefined) ?? runQuery.data?.run.reviewedWork;
 	const traceOptions = getArtifactTraceOptions({
 		path: {
 			workspaceSlug,
 			artifactKind: work?.kind ?? "",
 			artifactId: Number(work?.id ?? 0),
 		},
+		// This review's answers, not the newest review's of the same work.
 		query: { reviewId },
 	});
-	const traceQuery = useQuery({ ...traceOptions, enabled: work !== undefined });
-	const requestReview = useMutation({
-		...requestPracticeReviewMutation(),
-		onSuccess: (outcome) => {
-			if (outcome.status !== "SUBMITTED") {
-				return;
-			}
-			// The run this level shows is unchanged by a new one; what moves is the list it sits in,
-			// which now has a run at its head, this work's review activity, which has a new
-			// occurrence on it, and the overview's chip.
-			void queryClient.invalidateQueries({ queryKey: listOptions.queryKey });
+	const traceQuery = useQuery({
+		...traceOptions,
+		queryFn: work === undefined ? skipToken : traceOptions.queryFn,
+		refetchInterval: running ? ACTIVE_REVIEW_POLL_MS : false,
+	});
+	// The activity polls only while the review runs and the list only every minute, so either can
+	// predate the review's final answers; the review stopping is what asks both once more.
+	const queryClient = useQueryClient();
+	const lastSeen = useRef({ reviewId, running });
+	useEffect(() => {
+		const before = lastSeen.current;
+		lastSeen.current = { reviewId, running };
+		if (before.reviewId === reviewId && before.running && !running) {
 			void queryClient.invalidateQueries({ queryKey: traceOptions.queryKey });
-			// And the overview under it, whose chip names the latest run: the run just asked for is
-			// about to be it.
 			void queryClient.invalidateQueries({
-				queryKey: getPracticeProfileOverviewQueryKey({ path: { workspaceSlug } }),
+				queryKey: listPracticeProfileReviewRunsInfiniteQueryKey({ path: { workspaceSlug } }),
 			});
-			toast.success("Review started");
-		},
-		onError: (error) =>
-			toast.error("Couldn't ask for a review", {
-				description: problemDetailOf(error, "Try again in a moment."),
-			}),
+		}
 	});
 
-	const askFor = (target: ReviewedWorkRef) => {
-		requestReview.mutate({
-			path: { workspaceSlug },
-			body: { artifactKind: target.kind, artifactId: Number(target.id) },
-		});
+	const requestReview = useRequestPracticeReview();
+	// The open review's head explains a refusal about its own work; nothing else would.
+	const aboutOpenWork = (target: Pick<ReviewedWorkRef, "kind" | "id">) =>
+		reviewId !== undefined && work !== undefined && sameReviewedWork(target, work);
+	// The review level an ask was made under, so its refusal is said there and on no other review;
+	// leaving the level forgets it, so a refusal never comes back on a later visit.
+	const [askedUnder, setAskedUnder] = useState<string>();
+	const [visited, setVisited] = useState(reviewId);
+	if (visited !== reviewId) {
+		setVisited(reviewId);
+		setAskedUnder(undefined);
+	}
+	const onReviewNow = (target: ReviewedWorkRef) => {
+		setAskedUnder(reviewId);
+		const toastRefusal = !aboutOpenWork(target);
+		requestReview.mutate(
+			{
+				path: { workspaceSlug },
+				body: { artifactKind: target.kind, artifactId: Number(target.id) },
+			},
+			{
+				onSuccess: (outcome) => {
+					if (outcome.status === "REFUSED" && toastRefusal) {
+						toast.warning("No review was started", { description: outcome.reasonDescription });
+					}
+				},
+			},
+		);
 	};
-	// The work the last ask was about, read off the mutation's own variables: the wire takes the id
-	// as a number and the reference carries it as a string, so it is spelled back the way the
-	// reference spells it.
 	const asked = requestReview.variables?.body;
 	const askedWork = asked && { kind: asked.artifactKind, id: String(asked.artifactId) };
 
-	return {
-		// With the level closed nothing is in flight to resolve a skeleton, so it reports a settled
-		// empty list rather than a pending one.
-		list: listOpen ? reviewRunFeedState(runsQuery) : EMPTY_REVIEW_RUN_FEED,
-		open: openOf(reviewId, runQuery, traceQuery),
-		request: {
-			onReviewNow: askFor,
-			requesting: requestReview.isPending ? askedWork : undefined,
-			// Read off the mutation rather than mirrored into state, and only while the open run is
-			// on the work that was asked about: the next accepted ask replaces the result, so the
-			// alert clears itself, and a run opened on other work never shows a refusal about this
-			// one.
-			refusal:
-				requestReview.data?.status === "REFUSED" &&
-				askedWork &&
-				work &&
-				sameReviewedWork(askedWork, work)
-					? requestReview.data
-					: undefined,
-		},
-	};
-}
+	const open: ProfileReviewDetailState = panelState(runQuery, (detail) => ({
+		status: "ready" as const,
+		run: detail.run,
+		observations: detail.observations,
+		activity: panelState(traceQuery, (trace) => ({ status: "ready" as const, trace })),
+	}));
 
-/**
- * The open run as one state; with no level open there is nothing to read and nothing to wait for.
- * The work's review activity is a second request that starts only once the run has named the work,
- * so it resolves after the run does: the level shows the run as soon as it has it and carries the
- * activity's own state beside it, so the practice table can wait for it rather than claim the run
- * reached no practice while the answer is still on its way.
- */
-function openOf(
-	reviewId: string | undefined,
-	query: ReturnType<typeof useQuery<ProfileReviewRunDetail>>,
-	traceQuery: Parameters<typeof queryLoadState>[0] & { data?: GetArtifactTraceResponse },
-): ProfileReviewRunState {
-	if (reviewId === undefined) {
-		return { status: "ready", observations: [], traceState: { status: "ready" } };
-	}
-	const state = queryLoadState(query);
-	if (state.status !== "ready") {
-		return state;
-	}
 	return {
-		status: "ready",
-		run: query.data?.run,
-		observations: query.data?.observations ?? [],
-		trace: traceQuery.data,
-		traceState: queryLoadState(traceQuery),
+		list,
+		// Counted only over every review there is; a page or a filter would count short.
+		positions:
+			list.status === "ready" && !list.hasMore && !hasText(kind) && since === undefined
+				? runPositionsOnWork(list.runs)
+				: undefined,
+		open,
+		onReviewNow,
+		requesting: requestReview.isPending ? askedWork : undefined,
+		refusal:
+			requestReview.data?.status === "REFUSED" &&
+			askedWork &&
+			askedUnder === reviewId &&
+			aboutOpenWork(askedWork)
+				? requestReview.data
+				: undefined,
 	};
 }

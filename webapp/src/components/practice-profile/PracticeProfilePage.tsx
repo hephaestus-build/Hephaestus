@@ -51,8 +51,6 @@ export interface PracticeProfilePageProps {
 	 * practice named in the text the observations, the level's default.
 	 */
 	onOpenPractice?: (practiceSlug: string, tab?: PracticeTab) => void;
-	/** Opens the level with every review of the reader's work, from the header's chip. */
-	onOpenRuns?: () => void;
 	/** The tab over the feedback cards, from the route's `feedback` search param. */
 	feedbackTab: FeedbackTab;
 	onFeedbackTabChange?: (tab: FeedbackTab) => void;
@@ -124,7 +122,6 @@ export function PracticeProfilePage({
 	ratingProps,
 	onOpenGroup,
 	onOpenPractice,
-	onOpenRuns,
 	feedbackTab,
 	onFeedbackTabChange,
 	state,
@@ -175,7 +172,6 @@ export function PracticeProfilePage({
 				counts={countPracticeStandings(practices)}
 				practiceCount={practices.length}
 				groupCount={groups.length}
-				onOpenRuns={onOpenRuns}
 				isLoading={isLoading}
 			/>
 			{isLoading ? (

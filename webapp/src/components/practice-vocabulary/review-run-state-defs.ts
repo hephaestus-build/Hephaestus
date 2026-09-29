@@ -4,10 +4,8 @@ import type { ProfileReviewRun } from "@/api/types.gen";
 import type { StatusDefs } from "@/components/common/status-def";
 
 /**
- * How a review run ended, as the developer's own surfaces read it. Deliberately coarser than the
- * operator console's `REVIEW_STATUS_DEFS`: a run that timed out and one somebody cancelled are both
- * "it did not finish" to the person whose work it was, and the wire makes the same three-way
- * distinction rather than putting six operating states on the developer's page.
+ * How a review ended, as the developer's own surfaces read it: coarser than the operator console's
+ * `REVIEW_STATUS_DEFS`, since a timeout and a cancellation both mean "it did not finish" to them.
  */
 export type ReviewRunState = NonNullable<ProfileReviewRun["status"]>;
 
@@ -31,12 +29,3 @@ export const REVIEW_RUN_STATE_DEFS: StatusDefs<ReviewRunState> = {
 		description: "The review stopped before it finished; what it recorded up to then still stands.",
 	},
 };
-
-/**
- * The loader turns while the run does. A still spinner beside the word "Running" reads as a run
- * that has stopped, which is the one thing it must not say. Silenced for a reader who asked for
- * less motion, the way every other spinner in this app is (`components/ui/spinner.tsx`).
- */
-export function runStateSpinClass(state: ReviewRunState | undefined): string {
-	return state === "IN_PROGRESS" ? "animate-spin motion-reduce:animate-none" : "";
-}

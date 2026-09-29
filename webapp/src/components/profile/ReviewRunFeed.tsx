@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { rendersContent } from "@/lib/react-node";
+import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 
 import type { ReviewRunFeedState } from "./review-runs";
 import { ReviewRunTimeline, type ReviewRunTimelineProps } from "./ReviewRunTimeline";
@@ -66,18 +67,6 @@ export function ReviewRunFeed({
 		return <ReviewRunFeedSkeleton rows={skeletonRows} />;
 	}
 	const shown = runs ?? feed.runs;
-	const loadMore = feed.hasMore && (
-		<Button
-			type="button"
-			variant="link"
-			size="inline"
-			className="w-fit text-sm"
-			onClick={feed.onLoadMore}
-			disabled={feed.isLoadingMore}
-		>
-			{feed.isLoadingMore ? "Loading…" : "View earlier reviews"}
-		</Button>
-	);
 	// A narrowing can leave the pages read so far empty while earlier ones still hold its runs, so
 	// the empty state, which says nothing reached this surface at all, waits for the last page.
 	if (shown.length === 0 && feed.hasMore) {
@@ -86,7 +75,7 @@ export function ReviewRunFeed({
 				<p className="text-sm text-muted-foreground">Nothing here in the latest reviews.</p>
 				<div className="flex flex-wrap items-center gap-3">
 					{emptyAction}
-					{loadMore}
+					<EarlierReviewsButton {...feed} />
 				</div>
 			</div>
 		);
@@ -114,8 +103,40 @@ export function ReviewRunFeed({
 				initiallyOpen={initiallyOpen}
 				continues={feed.hasMore}
 			/>
-			{loadMore}
+			<EarlierReviewsButton {...feed} />
 		</>
+	);
+}
+
+/**
+ * The pages before these, a press away, in the words every review feed uses. A failed load keeps what
+ * was already read and says so beside the same press.
+ */
+export function EarlierReviewsButton({
+	hasMore,
+	isLoadingMore,
+	loadMoreError,
+	onLoadMore,
+}: MorePages) {
+	if (!hasMore && loadMoreError == null) {
+		return null;
+	}
+	return (
+		<span className="flex flex-wrap items-center gap-2 text-sm">
+			{loadMoreError != null && (
+				<span className="text-muted-foreground">Could not load earlier reviews.</span>
+			)}
+			<Button
+				type="button"
+				variant="link"
+				size="inline"
+				className="w-fit text-sm"
+				onClick={onLoadMore}
+				disabled={isLoadingMore}
+			>
+				{isLoadingMore ? "Loading…" : "View earlier reviews"}
+			</Button>
+		</span>
 	);
 }
 

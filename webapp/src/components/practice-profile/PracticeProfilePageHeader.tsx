@@ -1,28 +1,26 @@
 import { ArrowRightIcon, ChevronRightIcon, HistoryIcon } from "lucide-react";
 
 import { cn } from "cn";
+
 import type { ReviewRunRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { statusToneClass } from "@/components/common/status-def";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { countsTogether } from "@/components/practice-vocabulary/feedback-text";
-import {
-	REVIEW_RUN_STATE_DEFS,
-	runStateSpinClass,
-} from "@/components/practice-vocabulary/review-run-state-defs";
+import { REVIEW_RUN_STATE_DEFS } from "@/components/practice-vocabulary/review-run-state-defs";
 import type { StandingCounts } from "@/components/practice-vocabulary/standing-counts";
 import { StandingSummaryBox } from "@/components/practice-vocabulary/StandingSummaryBox";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { asDate, formatDayTime } from "@/lib/dates";
 
-import { ALL_PRACTICE_GROUPS_LEVEL } from "./practice-profile-search";
+import { ALL_PRACTICE_GROUPS_LEVEL, REVIEWS_LEVEL } from "./practice-profile-search";
 
 export interface PracticeProfilePageHeaderProps {
 	/**
-	 * The chip beside the title: when the latest review ran and on what; omitted while no review has
-	 * run.
+	 * The newest review of the reader's work, which the chip beside the title describes and which
+	 * opens the reviews of their work; absent while none has run, when the chip says so instead.
 	 */
 	latestRun?: ReviewRunRef;
 	/** How many practices sit at each standing; the ring and the legend are drawn from these. */
@@ -33,11 +31,6 @@ export interface PracticeProfilePageHeaderProps {
 	 */
 	practiceCount: number;
 	groupCount: number;
-	/**
-	 * Opens the level with every review of the reader's work; without it the chip is what it used to
-	 * be, a statement rather than a door.
-	 */
-	onOpenRuns?: () => void;
 	isLoading?: boolean;
 }
 
@@ -53,7 +46,6 @@ export function PracticeProfilePageHeader({
 	counts,
 	practiceCount,
 	groupCount,
-	onOpenRuns,
 	isLoading = false,
 }: PracticeProfilePageHeaderProps) {
 	return (
@@ -64,7 +56,7 @@ export function PracticeProfilePageHeader({
 					{isLoading ? (
 						<Skeleton className="h-5 w-64 rounded-full" />
 					) : (
-						<LatestRunChip run={latestRun} onOpenRuns={onOpenRuns} />
+						<LatestReviewChip run={latestRun} />
 					)}
 				</div>
 				<p className="max-w-2xl text-sm text-muted-foreground">{INTRO}</p>
@@ -97,22 +89,19 @@ export function PracticeProfilePageHeader({
 	);
 }
 
-interface LatestRunChipProps {
-	/** The newest run on the reader's work; absent until one has run. */
+const RUNNING = REVIEW_RUN_STATE_DEFS.IN_PROGRESS;
+
+interface LatestReviewChipProps {
+	/** The newest review of the reader's work; absent until one has run. */
 	run?: ReviewRunRef;
-	onOpenRuns?: () => void;
 }
 
 /**
- * The chip beside the title: what the newest review did, and the way into every review of the
- * reader's work. The work's own link is not here — the chip is one control, and a link inside it
- * would be a control inside a control; the run's level names the work and links it.
- *
- * With no run there is nothing to open, so the chip is a plain badge rather than a door onto an
- * empty list. A run still going says so in words and not in a spinner: a review takes minutes, and
- * a spinner that turns for minutes is the lying spinner the loading rules forbid.
+ * What the newest review did, and the way into the reviews of the reader's work. The work is not
+ * linked here: a link inside the chip would be a control inside a control. A review still going
+ * says so in words; its icon stands still, as every status icon does.
  */
-function LatestRunChip({ run, onOpenRuns }: LatestRunChipProps) {
+function LatestReviewChip({ run }: LatestReviewChipProps) {
 	if (run === undefined) {
 		return (
 			<Badge variant="muted">
@@ -123,61 +112,47 @@ function LatestRunChip({ run, onOpenRuns }: LatestRunChipProps) {
 	}
 	const at = asDate(run.at);
 	const { label } = run.reviewedWork;
-	const state = run.status === undefined ? undefined : REVIEW_RUN_STATE_DEFS[run.status];
 	const running = run.status === "IN_PROGRESS";
-	const Icon = running && state ? state.icon : HistoryIcon;
-	const iconTone = cn(
-		running && state ? statusToneClass(state.badgeVariant) : "text-muted-foreground",
-		runStateSpinClass(run.status),
-	);
+	const Icon = running ? RUNNING.icon : HistoryIcon;
+	const iconTone = running ? statusToneClass(RUNNING.badgeVariant) : "text-muted-foreground";
 
 	const words = running ? (
 		<>
 			<span className="font-semibold">Review running</span>
-			<Separator />
+			<ClauseDot />
 			<span className="min-w-0 truncate font-normal text-muted-foreground">on {label}</span>
 		</>
 	) : (
 		<>
-			<span className="font-semibold">Latest run</span>
+			<span className="font-semibold">Latest review</span>
 			{at && (
 				<time dateTime={at.toISOString()} className="font-normal text-muted-foreground">
 					{formatDayTime(at)}
 				</time>
 			)}
-			<Separator />
+			<ClauseDot />
 			<span className="min-w-0 truncate font-normal text-muted-foreground">
 				{run.status === "FAILED" ? "stopped before it finished" : `after ${label}`}
 			</span>
 		</>
 	);
 
-	if (!onOpenRuns) {
-		return (
-			<Badge variant="outline" className="max-w-full">
-				<Icon className={iconTone} aria-hidden />
-				{words}
-			</Badge>
-		);
-	}
 	return (
-		<Button
-			type="button"
-			variant="outline"
-			size="xs"
-			shape="pill"
-			className="max-w-full font-normal"
-			onClick={onOpenRuns}
+		<DetailStackLink
+			entry={REVIEWS_LEVEL}
+			className={cn(
+				buttonVariants({ variant: "outline", size: "xs", shape: "pill" }),
+				"max-w-full font-normal",
+			)}
 		>
 			<Icon className={iconTone} aria-hidden />
 			{words}
 			<ChevronRightIcon data-icon="inline-end" aria-hidden />
-		</Button>
+		</DetailStackLink>
 	);
 }
 
-/** The hairline between the chip's clauses; a word of its own to a screen reader it is not. */
-function Separator() {
+function ClauseDot() {
 	return (
 		<span className="text-border" aria-hidden>
 			·
