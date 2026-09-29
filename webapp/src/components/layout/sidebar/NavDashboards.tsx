@@ -1,5 +1,5 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
-import { Activity, Building2, Compass, Users } from "lucide-react";
+import { Activity, Building2, Compass, Radar, Users } from "lucide-react";
 
 import {
 	SidebarGroup,
@@ -25,6 +25,7 @@ export function NavDashboards({
 		matchRoute({ to: "/w/$workspaceSlug/workspace-activity", fuzzy: true }),
 	);
 	const onTeams = Boolean(matchRoute({ to: "/w/$workspaceSlug/teams", fuzzy: true }));
+	const onReviews = Boolean(matchRoute({ to: "/w/$workspaceSlug/reviews", fuzzy: true }));
 
 	return (
 		<SidebarGroup>
@@ -62,6 +63,18 @@ export function NavDashboards({
 						<span>Workspace activity</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
+				{practicesEnabled && (
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							tooltip="Review activity"
+							isActive={onReviews}
+							render={<Link to="/w/$workspaceSlug/reviews" params={{ workspaceSlug }} />}
+						>
+							<Radar />
+							<span>Review activity</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton
 						tooltip="Teams"

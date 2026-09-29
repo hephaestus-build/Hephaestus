@@ -62,7 +62,7 @@ eggs/
 .env
 env/
 ENV/
-*.env.bak*
+*.env.bak.*
 env.bak/
 # Environments
 # File-based project format
@@ -190,7 +190,7 @@ __pypackages__/
 sdist/
 # Self-host: Traefik writes cert material here inside the operator's checkout
 # Sensitive or high-churn files
-server/.env.bak*
+server/.env.bak.*
 server/logs/
 server/postgres-data/
 server/postgres-data-temp-*
