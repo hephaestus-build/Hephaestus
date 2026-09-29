@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import { getProviderSlug } from "@/lib/provider/provider-terms";
 import {
@@ -108,6 +108,36 @@ export const GitLab: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("img", { name: "Open merge request" })).toBeVisible();
 		await expect(canvas.getByText("pipelines !42")).toBeVisible();
+	},
+};
+
+const onReviewNow = fn();
+
+/** Ada's own pull request, in a workspace that reviews practices: she can ask for a review now. */
+export const ReviewNow: Story = {
+	args: { work: changesRequestedPullRequest, reviewNow: { onReviewNow, asking: false } },
+	play: async ({ canvas, userEvent }) => {
+		// The visible words come first in the name, and the name says which work it asks about.
+		const button = canvas.getByRole("button", { name: "Review this now: Hephaestus #2301" });
+		await userEvent.click(button);
+		await expect(onReviewNow).toHaveBeenCalledOnce();
+	},
+};
+
+/** While the ask is on its way the button says so and takes no second press. */
+export const Asking: Story = {
+	args: { work: assignedIssue, reviewNow: { onReviewNow: fn(), asking: true } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Asking…: Hephaestus #1374" })).toBeDisabled();
+	},
+};
+
+/** The action wraps under the title rather than widening the page. */
+export const ReviewNowReflow: Story = {
+	args: { work: longTitlePullRequest, reviewNow: { onReviewNow: fn(), asking: false } },
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async () => {
+		await expectNoPageOverflow();
 	},
 };
 
