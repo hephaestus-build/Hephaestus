@@ -628,7 +628,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
           AND o.workspaceId = :workspaceId
           AND (:groupSlug IS NULL OR a.slug = :groupSlug)
           AND o.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE
-        ORDER BY o.observedAt DESC, o.id ASC
+        ORDER BY o.observedAt DESC, o.id DESC
         """)
     List<Observation> findPracticeGroupReviewRunObservations(
             @Param("jobIds") Collection<UUID> jobIds,
@@ -844,23 +844,39 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             Pageable pageable);
 
     /**
-     * Every observation the given runs made about one developer, newest first: what the developer's own run
-     * list counts and what the run detail on that page lists, so the two cannot disagree. Every presence,
-     * like {@link #findDeveloperReviewRuns} it opens from: a run that found nothing to judge still said so
-     * about this work. Carries {@link #HIDDEN_REPOSITORY_GUARD} like every developer surface.
+     * Every observation the given runs made about one developer, newest first, every presence like
+     * {@link #findDeveloperReviewRuns}, so the newest one's {@code observedAt} is the run's date there. Two
+     * reads: {@link #HIDDEN_REPOSITORY_GUARD} is native SQL, and only a JPQL read takes the entity graph that
+     * loads the practice revisions the visibility gate reads.
      */
+    default List<Observation> findDeveloperReviewRunObservations(
+            Collection<UUID> jobIds, Long aboutUserId, Long workspaceId) {
+        List<UUID> ids = findDeveloperReviewRunObservationIds(jobIds, aboutUserId, workspaceId);
+        return ids.isEmpty() ? List.of() : loadGuardedNewestFirst(ids, workspaceId);
+    }
+
     @Query(value = """
-                    SELECT f.* FROM observation f
+                    SELECT f.id FROM observation f
                     WHERE f.agent_job_id IN :jobIds
                       AND f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
-            """ + HIDDEN_REPOSITORY_GUARD + """
-            ORDER BY f.observed_at DESC, f.id DESC
-            """, nativeQuery = true)
-    List<Observation> findDeveloperReviewRunObservations(
+            """ + HIDDEN_REPOSITORY_GUARD, nativeQuery = true)
+    List<UUID> findDeveloperReviewRunObservationIds(
             @Param("jobIds") Collection<UUID> jobIds,
             @Param("aboutUserId") Long aboutUserId,
             @Param("workspaceId") Long workspaceId);
+
+    /**
+     * The second read of {@link #findDeveloperReviewRunObservations}: {@code guardedIds} have already passed
+     * {@link #HIDDEN_REPOSITORY_GUARD}, which this read does not apply.
+     */
+    @EntityGraph(attributePaths = {"practice.currentRevision", "practiceRevision"})
+    @Query("""
+        SELECT f FROM Observation f WHERE f.id IN :guardedIds AND f.workspaceId = :workspaceId
+        ORDER BY f.observedAt DESC, f.id DESC
+        """)
+    List<Observation> loadGuardedNewestFirst(
+            @Param("guardedIds") Collection<UUID> guardedIds, @Param("workspaceId") Long workspaceId);
 
     interface DeveloperReviewRunRow extends ReviewRunRow {
         /** The raw column: a native-query projection is mapped from JDBC types, with no converter run. */

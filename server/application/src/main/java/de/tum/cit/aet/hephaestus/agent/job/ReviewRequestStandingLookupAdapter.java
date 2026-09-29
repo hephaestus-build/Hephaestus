@@ -1,14 +1,17 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequestStandingLookup;
 import de.tum.cit.aet.hephaestus.workspace.CurrentAccountUsers;
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -17,69 +20,68 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Answers {@link ReviewRequestStandingLookup} with the very rule {@link PracticeReviewRequestController}
- * enforces: {@link ReviewRequestAuthority} over the account's every SCM identity, against the artifact
- * loaded for the workspace that would pay for the review. Nothing here restates the rule, so a surface
- * cannot offer a button the front door then refuses.
+ * Answers {@link ReviewRequestStandingLookup} with the rule {@link PracticeReviewRequestController} enforces:
+ * {@link ReviewRequestAuthority} over the account's every SCM identity, against the artifact as the gate loads
+ * it for this workspace. Every page first reads the membership of each identity. An admin's standing does not
+ * depend on the work, so it then costs one ownership read per kind of work on the page; anyone else's costs one
+ * ownership read and one gate load per distinct work on the page.
  */
 @Component
 @RequiredArgsConstructor
 class ReviewRequestStandingLookupAdapter implements ReviewRequestStandingLookup {
 
-    /**
-     * The kinds the request endpoint accepts. A conversation thread and a document are reviewed on the
-     * occasion their source produces, with nothing for a person to point at and ask about.
-     */
-    private static final Set<ArtifactKind> REQUESTABLE = Set.of(ScmSignals.PULL_REQUEST, ScmSignals.ISSUE);
+    /** The kinds the request endpoint accepts, by the entity type that stores each. */
+    private static final Map<ArtifactKind, Class<? extends Issue>> REQUESTABLE =
+            Map.of(ArtifactKinds.PULL_REQUEST, PullRequest.class, ArtifactKinds.ISSUE, Issue.class);
 
     private final CurrentAccountUsers currentAccountUsers;
     private final ReviewRequestAuthority authority;
     private final ReviewableArtifactLoader artifactLoader;
+    private final ReviewableArtifactOwnershipRepository ownership;
 
     @Override
     @Transactional(readOnly = true)
     public Set<ReviewedWorkId> mayRequest(long workspaceId, Collection<ReviewedWorkId> works) {
-        Set<ReviewedWorkId> askable = works.stream()
-                .filter(work -> REQUESTABLE.contains(work.kind()))
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        if (askable.isEmpty()) {
+        // A user view is read-only, and the identities here would be the administrator's, not the viewed user's.
+        if (UserViewContextHolder.get() != null) {
             return Set.of();
         }
-        // Every identity of the account, not just the session's, exactly as the front door resolves them:
-        // an admin on GitLab who signed in via GitHub is one person, not two.
+        Set<ReviewedWorkId> requestable = works.stream()
+                .filter(work -> REQUESTABLE.containsKey(work.kind()))
+                .collect(Collectors.toUnmodifiableSet());
         List<User> requesters = currentAccountUsers.resolve();
-        if (requesters.isEmpty()) {
+        if (requestable.isEmpty() || requesters.isEmpty()) {
             return Set.of();
         }
-        // A workspace admin has standing on every piece of work the workspace monitors, and every run
-        // listed here is this workspace's by construction — so the answer is settled without a load.
-        boolean admin = requesters.stream()
-                .anyMatch(requester ->
-                        requester.getId() != null && authority.isWorkspaceAdmin(workspaceId, requester.getId()));
-        if (admin) {
-            return Set.copyOf(askable);
+        if (authority.anyAdmin(workspaceId, requesters)) {
+            return inWorkspace(workspaceId, requestable);
         }
-        return askable.stream()
-                .filter(work -> hasStanding(workspaceId, work, requesters))
+        return requestable.stream()
+                .filter(work -> artifact(workspaceId, work)
+                        .filter(artifact -> authority.isActorOn(artifact, requesters))
+                        .isPresent())
                 .collect(Collectors.toUnmodifiableSet());
     }
 
-    /**
-     * One load per piece of work, with the eager graph the rule reads: the author and the assignees are
-     * lazy associations, and asking the question off a half-loaded artifact would refuse an author a
-     * review of their own work. A page of runs is ten rows, so this stays a bounded read rather than a
-     * second copy of the rule written as SQL.
-     */
-    private boolean hasStanding(long workspaceId, ReviewedWorkId work, List<User> requesters) {
-        return artifact(workspaceId, work)
-                .filter(found ->
-                        authority.standingOf(workspaceId, found, requesters).isPresent())
-                .isPresent();
+    /** The works the workspace owns, one read per kind. */
+    private Set<ReviewedWorkId> inWorkspace(long workspaceId, Set<ReviewedWorkId> works) {
+        return works.stream()
+                .collect(Collectors.groupingBy(
+                        ReviewedWorkId::kind, Collectors.mapping(ReviewedWorkId::id, Collectors.toList())))
+                .entrySet()
+                .stream()
+                .flatMap(kind -> ownership
+                        .findIdsInWorkspace(
+                                workspaceId, Objects.requireNonNull(REQUESTABLE.get(kind.getKey())), kind.getValue())
+                        .stream()
+                        .map(id -> new ReviewedWorkId(kind.getKey(), id)))
+                .collect(Collectors.toUnmodifiableSet());
     }
 
-    private Optional<Issue> artifact(long workspaceId, ReviewedWorkId work) {
-        return ScmSignals.PULL_REQUEST.equals(work.kind())
-                ? artifactLoader.findPullRequestForGate(workspaceId, work.id()).map(Issue.class::cast)
+    /** With the author and assignees fetched: the rule reads both, and both are lazy. */
+    private Optional<? extends Issue> artifact(long workspaceId, ReviewedWorkId work) {
+        return work.kind().equals(ArtifactKinds.PULL_REQUEST)
+                ? artifactLoader.findPullRequestForGate(workspaceId, work.id())
                 : artifactLoader.findIssueForGate(workspaceId, work.id());
     }
 }

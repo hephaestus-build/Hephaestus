@@ -79,13 +79,10 @@ class ArtifactTraceQueryService {
     private final ArtifactIdentities identities;
 
     /**
-     * The trace of one piece of work, either across every review of it or as one review answered it.
-     *
-     * <p>With a {@code reviewId} the answers are derived from that review alone: only the occurrences it
-     * carried are offered to the deriver, and only the observations and feedback it produced are counted. A
-     * second review of the same work therefore no longer speaks for the first, which is what left an older
-     * review's practice table empty. The occurrence ledger itself stays whole either way: it is what this
-     * work has been noticed doing, not what one run made of it.
+     * The trace of one piece of work, across every review of it or as the named review answered it. Naming a
+     * review narrows the occurrences offered to the deriver and the observations and feedback counted; the
+     * occurrence ledger is listed whole either way. A review that neither carried an occurrence of this work
+     * nor observed it answers 404.
      */
     @Transactional(readOnly = true)
     public ArtifactTraceDTO trace(
@@ -93,6 +90,12 @@ class ArtifactTraceQueryService {
         List<ArtifactSignal> recorded = signals.findForArtifact(workspaceId, artifactKind.value(), artifactId);
         if (recorded.isEmpty()) {
             throw new EntityNotFoundException("Traced artifact", artifactKind.value() + "/" + artifactId);
+        }
+        List<ArtifactObservationRow> observed = observations.findForArtifact(workspaceId, artifactKind, artifactId);
+        if (reviewId != null
+                && recorded.stream().noneMatch(signal -> reviewId.equals(signal.getJobId()))
+                && observed.stream().noneMatch(row -> reviewId.equals(row.getReviewId()))) {
+            throw new EntityNotFoundException("Review", reviewId.toString());
         }
         Map<SignalName, String> labels = signalLabels(artifactKind);
         List<TracedSignalDTO> tracedSignals = recorded.stream()
@@ -120,7 +123,7 @@ class ArtifactTraceQueryService {
                                 signal.getJobId()))
                         .toList(),
                 outcomes,
-                outputs(workspaceId, artifactKind, artifactId, reviewId));
+                outputs(workspaceId, artifactKind, artifactId, observed, reviewId));
 
         ArtifactIdentity identity = Objects.requireNonNull(identities
                 .resolve(workspaceId, artifactKind, List.of(artifactId))
@@ -222,11 +225,15 @@ class ArtifactTraceQueryService {
 
     /** What each practice produced on this artifact, narrowed to one review when the caller named one. */
     private Map<Long, PracticeOutput> outputs(
-            Long workspaceId, ArtifactKind artifactKind, Long artifactId, @Nullable UUID reviewId) {
+            Long workspaceId,
+            ArtifactKind artifactKind,
+            Long artifactId,
+            List<ArtifactObservationRow> observed,
+            @Nullable UUID reviewId) {
         Map<Long, Integer> counts = new HashMap<>();
         Map<Long, UUID> latestReview = new HashMap<>();
         Map<Long, Instant> latestObserved = new HashMap<>();
-        for (ArtifactObservationRow row : observations.findForArtifact(workspaceId, artifactKind, artifactId)) {
+        for (ArtifactObservationRow row : observed) {
             if (reviewId != null && !reviewId.equals(row.getReviewId())) {
                 continue;
             }

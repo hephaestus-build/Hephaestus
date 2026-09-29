@@ -192,11 +192,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     List<ObservationFeedbackCounts> summarizeFeedbackByObservation(
             @Param("workspaceId") Long workspaceId, @Param("observationIds") Collection<UUID> observationIds);
 
-    /**
-     * How many pieces of feedback each run delivered to one developer. The developer's own page counts what
-     * reached them and nothing else: a run over a shared piece of work also writes feedback to its other
-     * authors, and that is not a number about the reader.
-     */
+    /** How many pieces of feedback each run delivered to one developer and has not withdrawn. */
     @Query(value = """
         SELECT f.agent_job_id AS "jobId", COUNT(*) AS "delivered"
         FROM feedback f
@@ -204,6 +200,9 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
           AND f.recipient_user_id = :recipientUserId
           AND f.agent_job_id IN :jobIds
           AND f.delivery_state = 'DELIVERED'
+          AND NOT EXISTS (
+              SELECT 1 FROM feedback_withdrawal w
+              WHERE w.feedback_id = f.id AND w.workspace_id = f.workspace_id AND w.restored_at IS NULL)
         GROUP BY f.agent_job_id
         """, nativeQuery = true)
     List<DeliveredFeedbackCount> countDeliveredByRun(
@@ -841,12 +840,9 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
 
     /**
      * How much of what was measured on one artifact actually reached a person, by practice and by the run
-     * that composed it. {@code COUNT(DISTINCT f.id)} because one piece of feedback routinely fuses several
-     * observations of the same practice; counting join rows would multiply it.
-     *
-     * <p>Grouped by the run as well, so a caller answering for one review keeps that review's rows and one
-     * answering for the whole artifact sums them without double counting: a piece of feedback is composed by
-     * exactly one run, so it falls in exactly one group.
+     * that composed it; a piece of feedback has one run, so summing the runs counts it once.
+     * {@code COUNT(DISTINCT f.id)} because one piece of feedback routinely fuses several observations of the
+     * same practice; counting join rows would multiply it.
      */
     @Query("""
         SELECT o.practice.id AS practiceId, f.agentJobId AS reviewId, f.deliveryState AS deliveryState,
@@ -865,7 +861,6 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     interface ArtifactFeedbackRow {
         Long getPracticeId();
 
-        /** The run that composed this feedback. */
         UUID getReviewId();
 
         FeedbackDeliveryState getDeliveryState();

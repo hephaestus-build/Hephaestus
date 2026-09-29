@@ -3,10 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.ReviewRunState;
 
 /**
- * How a job status reads to a surface outside this module. A timed-out run and a cancelled one are both
- * "it did not finish" to a reader; keeping the distinction here would put a vocabulary on the wire that no
- * surface renders. One home, because the trace and the developer's own run list must not disagree about
- * what a cancelled run is.
+ * How a job status reads outside this module. A timed-out run and a cancelled one both did not finish, and no
+ * surface renders the difference.
  */
 final class AgentJobReviewRunStates {
 

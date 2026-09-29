@@ -3,6 +3,11 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -22,6 +27,8 @@ import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
@@ -55,6 +62,15 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private RepositoryRepository repositoryRepository;
+
+    @Autowired
+    private RepositoryToMonitorRepository repositoryToMonitorRepository;
+
+    @Autowired
+    private PullRequestRepository pullRequestRepository;
 
     private Workspace workspace;
     private Workspace otherWorkspace;
@@ -168,6 +184,57 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .isEqualTo(1)
                 .jsonPath("$.content[0].feedback.unconfirmed")
                 .isEqualTo(1);
+    }
+
+    /** The review recorded the title the pull request had then; the mirror holds the one it has now. */
+    @Test
+    @WithAdminUser
+    void shouldNameThePullRequestByItsCurrentTitleWhenItWasRenamedAfterTheReview() {
+        long pullRequestId = persistMonitoredPullRequest("Renamed after its review");
+        job.setStatus(AgentJobStatus.COMPLETED);
+        job.setIntegrationKind(IntegrationKind.GITHUB);
+        job.setMetadata(objectMapper.valueToTree(Map.of(
+                "pull_request_id",
+                pullRequestId,
+                "pr_number",
+                42,
+                "title",
+                "Make review output visible",
+                "repository_full_name",
+                "review-summary-org/review-ui",
+                "pr_url",
+                "https://github.com/review-summary-org/review-ui/pull/42")));
+        jobRepository.save(job);
+
+        listReviews("?status=COMPLETED")
+                .jsonPath("$.content[?(@.id=='" + job.getId() + "')].target.title")
+                .isEqualTo("Renamed after its review")
+                .jsonPath("$.content[?(@.id=='" + job.getId() + "')].target.reviewedWork.title")
+                .isEqualTo("Renamed after its review");
+    }
+
+    private long persistMonitoredPullRequest(String title) {
+        Repository repository = new Repository();
+        repository.setNativeId(9311L);
+        repository.setProvider(ensureGitHubProvider());
+        repository.setName("review-ui");
+        repository.setNameWithOwner("review-summary-org/review-ui");
+        repository.setHtmlUrl("https://github.com/review-summary-org/review-ui");
+        repository.setDefaultBranch("main");
+        repository = repositoryRepository.save(repository);
+        RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setWorkspace(workspace);
+        monitor.setNameWithOwner(repository.getNameWithOwner());
+        repositoryToMonitorRepository.save(monitor);
+        PullRequest pullRequest = new PullRequest();
+        pullRequest.setNativeId(9312L);
+        pullRequest.setProvider(ensureGitHubProvider());
+        pullRequest.setNumber(42);
+        pullRequest.setTitle(title);
+        pullRequest.setState(Issue.State.OPEN);
+        pullRequest.setHtmlUrl("https://github.com/review-summary-org/review-ui/pull/42");
+        pullRequest.setRepository(repository);
+        return pullRequestRepository.save(pullRequest).getId();
     }
 
     /** Feedback waiting on an admin, or rejected by one, is still feedback the review produced. */

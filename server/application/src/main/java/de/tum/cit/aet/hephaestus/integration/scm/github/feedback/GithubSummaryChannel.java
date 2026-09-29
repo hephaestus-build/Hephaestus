@@ -16,8 +16,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.regex.Pattern;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.graphql.client.ClientGraphQlResponse;
@@ -38,9 +36,6 @@ import org.springframework.stereotype.Component;
 public class GithubSummaryChannel implements SummaryChannel {
 
     private static final Logger log = LoggerFactory.getLogger(GithubSummaryChannel.class);
-
-    /** The comment identifier GitHub's own {@code #issuecomment-} anchor takes. */
-    private static final Pattern NUMERIC_COMMENT_ID = Pattern.compile("\\d+");
 
     /** GitHub caps a connection page at 100. */
     private static final int EXISTING_SUMMARY_SEARCH_PAGE_SIZE = 100;
@@ -64,18 +59,6 @@ public class GithubSummaryChannel implements SummaryChannel {
     @Override
     public IntegrationKind kind() {
         return IntegrationKind.GITHUB;
-    }
-
-    /**
-     * GitHub anchors a comment on the pull request's or issue's own page as {@code #issuecomment-<databaseId>},
-     * which takes the comment's numeric identifier. What this channel records is the GraphQL node id the
-     * {@code addComment} mutation returns, and a node id is not the number in that anchor and cannot be
-     * turned into one, so only a comment already recorded as a number gets an address here and every other
-     * one gets none.
-     */
-    @Override
-    public @Nullable String summaryCommentUrl(String workUrl, String commentId) {
-        return NUMERIC_COMMENT_ID.matcher(commentId).matches() ? workUrl + "#issuecomment-" + commentId : null;
     }
 
     @Override

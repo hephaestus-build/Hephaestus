@@ -5,7 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.TrendDirection;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.WorkResolution.Work;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileChangeDTO;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import java.time.Instant;

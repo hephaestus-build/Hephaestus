@@ -110,10 +110,7 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
         return persistPullRequestReview(workspace, number, number, completedAt);
     }
 
-    /**
-     * {@link #persistPullRequestReview(Workspace, int, Instant)} where the mirrored pull request's own id is
-     * not its number, which is what a run over work this workspace really holds looks like.
-     */
+    /** {@link #persistPullRequestReview(Workspace, int, Instant)} naming the mirrored pull request's own id. */
     protected AgentJob persistPullRequestReview(
             Workspace workspace, int number, long pullRequestId, @Nullable Instant completedAt) {
         return persistReview(

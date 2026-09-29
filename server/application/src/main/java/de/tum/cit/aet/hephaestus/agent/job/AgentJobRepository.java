@@ -73,31 +73,21 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     List<ReviewRunNarrativeRow> findReviewRunNarrativesByWorkspaceIdAndIdIn(Long workspaceId, Collection<UUID> ids);
 
     /**
-     * What these runs record about the run itself: how it ended, what occasioned it, the edges its duration is
-     * the difference of, the comment its summary landed in, and the {@code output} the opening sentence and
-     * the coverage ledger sit in. Selected
-     * rather than the entity for the reason {@code findWorkspaceJobs} gives — a review transcript per row is
-     * not what a listing reads.
+     * What these runs record about themselves; {@code output} holds the coverage ledger, and the target columns
+     * address the summary comment on the work's page. A projection, so a listing does not load each run's
+     * whole entity.
      */
-    @Query("SELECT j.id AS id, j.status AS status, j.practiceTriggerMode AS triggerMode, "
-            + "j.startedAt AS startedAt, j.completedAt AS completedAt, j.output AS output, "
+    @Query("SELECT j.id AS id, j.jobType AS jobType, j.integrationKind AS integrationKind, j.metadata AS metadata, "
+            + "j.status AS status, j.practiceTriggerMode AS triggerMode, j.output AS output, "
             + "j.deliveryCommentId AS deliveryCommentId FROM AgentJob j "
             + "WHERE j.workspace.id = :workspaceId AND j.id IN :ids")
     List<ReviewRunFactsRow> findReviewRunFacts(
             @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
-    interface ReviewRunFactsRow {
-        UUID getId();
-
+    interface ReviewRunFactsRow extends ReviewRunTargetRow {
         AgentJobStatus getStatus();
 
         TriggerMode getTriggerMode();
-
-        @Nullable
-        Instant getStartedAt();
-
-        @Nullable
-        Instant getCompletedAt();
 
         @Nullable
         JsonNode getOutput();

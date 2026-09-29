@@ -378,15 +378,8 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
 
     @Test
     void ordersInformativeAnswersFirst() {
-        var reviewed = new TracedPractice(
-                1L,
-                "b-reviewed",
-                "B",
-                "packaging",
-                "Packaging work for review",
-                PracticeAutonomy.AUTOMATIC,
-                List.of(READY),
-                null);
+        var reviewed =
+                new TracedPractice(1L, "b-reviewed", "B", null, null, PracticeAutonomy.AUTOMATIC, List.of(READY), null);
         var quiet =
                 new TracedPractice(2L, "a-quiet", "A", null, null, PracticeAutonomy.AUTOMATIC, List.of(MERGED), null);
         var off = new TracedPractice(3L, "c-off", "C", null, null, PracticeAutonomy.OFF, List.of(READY), null);
@@ -400,8 +393,6 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
         assertThat(entries)
                 .extracting(PracticeTraceEntryDTO::practiceSlug)
                 .containsExactly("b-reviewed", "c-off", "a-quiet");
-        // The group travels with the entry, so a practice that stayed quiet can still be filed under one.
-        assertThat(entries).extracting(PracticeTraceEntryDTO::groupSlug).containsExactly("packaging", null, null);
     }
 
     private static PracticeTraceEntryDTO only(

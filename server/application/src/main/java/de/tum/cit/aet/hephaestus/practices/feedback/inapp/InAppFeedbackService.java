@@ -20,8 +20,8 @@ import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionReposito
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository.CurrentResponseRow;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.WorkResolution;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.WorkResolution.Work;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
 import java.time.Clock;
 import java.time.Duration;
@@ -69,7 +69,7 @@ public class InAppFeedbackService {
     private final FeedbackRepository feedbackRepository;
     private final InAppFeedbackEvidence feedbackEvidence;
     private final UserRepository userRepository;
-    private final ReviewRunTargetLookup reviewRunTargetLookup;
+    private final ReviewRunLookup reviewRunLookup;
     private final ReactionRepository reactionRepository;
     private final FeedbackWithdrawalRepository withdrawalRepository;
     private final Clock clock;
@@ -193,7 +193,7 @@ public class InAppFeedbackService {
         Map<UUID, WorkResolution> resolutionByFeedback = feedbackEvidence.workResolutions(
                 workspaceId, recipientUserId, candidates, evidenceByFeedback, practiceChangedAt, now);
         // One lookup names every piece of work on the page, the evidence and the clean work alike.
-        Map<UUID, Target> targets = reviewRunTargetLookup.findByJobIds(
+        Map<UUID, Target> targets = reviewRunLookup.findTargets(
                 workspaceId,
                 Stream.concat(
                                 evidenceByFeedback.values().stream()

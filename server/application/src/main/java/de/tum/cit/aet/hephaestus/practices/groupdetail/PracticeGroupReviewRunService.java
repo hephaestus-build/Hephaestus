@@ -12,15 +12,14 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.Rev
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationService;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.observation.VisibleRunPage;
+import de.tum.cit.aet.hephaestus.practices.observation.VisibleRunPage.VisibleRun;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunNarrativeLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunNarrativeLookup.ReviewRunNarrative;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -40,7 +39,7 @@ public class PracticeGroupReviewRunService {
     private final PracticeGroupService practiceGroupService;
     private final ObservationRepository observationRepository;
     private final ObservationService observationService;
-    private final ReviewRunTargetLookup reviewRunTargetLookup;
+    private final ReviewRunLookup reviewRunLookup;
     private final ReviewRunNarrativeLookup reviewRunNarrativeLookup;
     private final CurrentDeveloperLookup currentDeveloperLookup;
     private final ObservationVisibilityPolicy visibilityPolicy;
@@ -104,11 +103,12 @@ public class PracticeGroupReviewRunService {
                 ? null
                 : severities.stream().map(Enum::name).collect(Collectors.joining(","));
 
-        VisibleRunPage<PracticeGroupReviewRunDTO> page = VisibleRunPage.collect(
+        long workspaceId = workspaceContext.id();
+        VisibleRunPage page = VisibleRunPage.collect(
                 pageable,
                 candidates -> observationRepository.findPracticeGroupReviewRuns(
                         developerId,
-                        workspaceContext.id(),
+                        workspaceId,
                         groupSlug,
                         work == null ? null : work.kind().value(),
                         work == null ? null : work.id(),
@@ -116,48 +116,52 @@ public class PracticeGroupReviewRunService {
                         artifactFilter,
                         severityFilter,
                         candidates),
-                runs -> toVisibleRuns(workspaceContext.id(), developerId, runs, groupSlug));
+                runs -> visibleObservations(workspaceId, developerId, runs, groupSlug));
         return new PracticeGroupReviewRunsPageDTO(
-                page.content(), pageable.getPageNumber(), pageable.getPageSize(), page.hasNext());
+                toRuns(workspaceId, developerId, page.content()),
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                page.hasNext());
     }
 
-    private List<PracticeGroupReviewRunDTO> toVisibleRuns(
+    private Map<UUID, List<Observation>> visibleObservations(
             long workspaceId, long developerId, List<ReviewRunRow> runs, @Nullable String groupSlug) {
+        List<Observation> found = observationRepository.findPracticeGroupReviewRunObservations(
+                runs.stream().map(ReviewRunRow::getJobId).toList(), developerId, workspaceId, groupSlug);
+        Set<UUID> visible =
+                visibilityPolicy.permitsHistory(workspaceId, found, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        return found.stream()
+                .filter(row -> visible.contains(row.getId()))
+                .collect(Collectors.groupingBy(Observation::getAgentJobId));
+    }
+
+    private List<PracticeGroupReviewRunDTO> toRuns(long workspaceId, long developerId, List<VisibleRun> runs) {
         if (runs.isEmpty()) {
             return List.of();
         }
-
-        List<UUID> jobIds = runs.stream().map(ReviewRunRow::getJobId).toList();
-        List<Observation> found = observationRepository.findPracticeGroupReviewRunObservations(
-                jobIds, developerId, workspaceId, groupSlug);
-        Set<UUID> visible =
-                visibilityPolicy.permitsHistory(workspaceId, found, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        List<UUID> jobIds = runs.stream().map(VisibleRun::reviewId).toList();
         List<Observation> observations =
-                found.stream().filter(row -> visible.contains(row.getId())).toList();
+                runs.stream().flatMap(run -> run.observations().stream()).toList();
+        Map<UUID, ReviewRunLookup.Target> targets = reviewRunLookup.findTargets(workspaceId, jobIds);
+        Map<UUID, ReviewRunNarrative> narratives = reviewRunNarrativeLookup.findByJobIds(workspaceId, jobIds);
         Map<UUID, UUID> jobByObservation =
                 observations.stream().collect(Collectors.toMap(Observation::getId, Observation::getAgentJobId));
-        Map<UUID, ReviewRunTargetLookup.Target> targets = reviewRunTargetLookup.findByJobIds(workspaceId, jobIds);
-        Map<UUID, ReviewRunNarrative> narratives = reviewRunNarrativeLookup.findByJobIds(workspaceId, jobIds);
-        // The visibility gate admitted every observation left, so each carries its evidence — the same
-        // authorization answer the detail endpoint reads, taken once for the page.
-        Map<UUID, List<ObservationDetailDTO>> detailsByJob =
-                observationService
-                        .toDetails(workspaceId, developerId, observations, visible, targets, narratives)
-                        .stream()
-                        .collect(Collectors.groupingBy(
-                                detail -> Objects.requireNonNull(jobByObservation.get(detail.id()))));
-
-        List<PracticeGroupReviewRunDTO> reviewRuns = new ArrayList<>();
-        for (ReviewRunRow run : runs) {
-            List<ObservationDetailDTO> details = detailsByJob.getOrDefault(run.getJobId(), List.of());
-            if (!details.isEmpty()) {
-                ObservationDetailDTO first = details.getFirst();
-                ReviewedWorkRefDTO reviewedWork =
-                        ReviewedWorkLabels.ref(first.artifactKind(), first.artifactId(), targets.get(run.getJobId()));
-                reviewRuns.add(
-                        new PracticeGroupReviewRunDTO(run.getJobId(), run.getReviewedAt(), reviewedWork, details));
-            }
-        }
-        return reviewRuns;
+        // The visibility gate admitted every observation left, so each carries its evidence.
+        Map<UUID, List<ObservationDetailDTO>> detailsByJob = observationService
+                .toDetails(workspaceId, developerId, observations, jobByObservation.keySet(), targets, narratives)
+                .stream()
+                .collect(Collectors.groupingBy(detail -> Objects.requireNonNull(jobByObservation.get(detail.id()))));
+        return runs.stream()
+                .map(visible -> {
+                    UUID jobId = visible.reviewId();
+                    Observation newest = visible.observations().getFirst();
+                    return new PracticeGroupReviewRunDTO(
+                            jobId,
+                            visible.reviewedAt(),
+                            ReviewedWorkLabels.ref(
+                                    newest.getArtifactKind(), newest.getArtifactId(), targets.get(jobId)),
+                            detailsByJob.getOrDefault(jobId, List.of()));
+                })
+                .toList();
     }
 }

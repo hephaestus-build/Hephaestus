@@ -4132,10 +4132,6 @@ export type ProfileChange = {
  */
 export type ProfileReviewRun = {
   /**
-   * How long the run took, start to finish; absent while it is still going, and whenever its start and end were not both recorded
-   */
-  durationSeconds?: number;
-  /**
    * How many pieces of feedback from this run reached this developer
    */
   feedbackDelivered: number;
@@ -4144,28 +4140,20 @@ export type ProfileReviewRun = {
    */
   feedbackUrl?: string;
   /**
-   * The sentence the run opened its feedback with; absent when it wrote none
-   */
-  lead?: string;
-  /**
-   * Whether this reader may ask for a review of this work now, as the request front door would answer them. False also when the kind of work admits no request at all.
+   * Whether this reader has standing to ask for a review of this work. False when the kind of work admits no request.
    */
   mayRequest: boolean;
   /**
-   * What the run observed about this developer, by assessment
+   * What the run decided about each practice it observed for this developer
    */
-  observations: ReviewObservationCounts;
+  practices: ReviewPracticeOutcomes;
   /**
-   * How many practices the run was eligible for; absent when it wrote no such count it can stand behind
-   */
-  practicesEligible?: number;
-  /**
-   * How many practices the run measured; absent when it wrote no coverage it can stand behind
+   * How many practices the run measured; absent when it wrote no coverage ledger
    */
   practicesEvaluated?: number;
   reviewId: string;
   /**
-   * When the run stopped, once it has stopped, and when it began while it is still going. A run whose own start and end were never recorded falls back to when it wrote its newest observation about this developer.
+   * When the review recorded its newest observation about this developer
    */
   reviewedAt: Date;
   /**
@@ -4173,15 +4161,15 @@ export type ProfileReviewRun = {
    */
   reviewedWork: ReviewedWorkRef;
   /**
-   * The practices this run recorded a problem about for this developer, in the order it recorded them and at most three
+   * Every practice counted in practices.toImprove, once each, in order of practice name
    */
   slippedPractices: Array<SlippedPractice>;
   /**
-   * How the run ended; absent when the run itself is no longer on record
+   * Where the review stands; absent when the review itself is no longer on record
    */
   status?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
   /**
-   * What occasioned the run: MANUAL is one a person asked for; absent with status
+   * What occasioned the review: MANUAL is one a person asked for; absent when the review itself is no longer on record
    */
   triggerMode?: 'AUTO' | 'MANUAL';
 };
@@ -4877,6 +4865,28 @@ export type ReviewPracticeGroup = {
 };
 
 /**
+ * What one run decided about each practice it observed for this developer, one outcome per practice however many observations it recorded about it; an invalidated observation decides nothing
+ */
+export type ReviewPracticeOutcomes = {
+  /**
+   * Practices with a strength observed and no problem
+   */
+  held: number;
+  /**
+   * Practices whose every observation said the practice did not apply to this work
+   */
+  notApplicable: number;
+  /**
+   * Practices with at least one problem observed
+   */
+  toImprove: number;
+  /**
+   * Practices the run looked at and could not settle either way: no strength, no problem, and not only a verdict that the practice did not apply
+   */
+  undecided: number;
+};
+
+/**
  * One exact provider message included in a review awaiting approval
  */
 export type ReviewProposedPlacement = {
@@ -4946,7 +4956,7 @@ export type ReviewRunCounts = {
  */
 export type ReviewRunRef = {
   /**
-   * When the run stopped, once it has stopped, and when it began while it is still going. A run whose own start and end were never recorded falls back to when it wrote its newest observation.
+   * When the review recorded its newest observation about this developer
    */
   at: Date;
   reviewId: string;
@@ -4955,7 +4965,7 @@ export type ReviewRunRef = {
    */
   reviewedWork: ReviewedWorkRef;
   /**
-   * How the run ended, so the page can say a review is still going or that nothing came of it; absent when the run itself is no longer on record
+   * Where the review stands; absent when the review itself is no longer on record
    */
   status?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
 };
@@ -9044,27 +9054,6 @@ export type AdminUpdateWorkspaceLlmBudgetResponses = {
 
 export type AdminUpdateWorkspaceLlmBudgetResponse = AdminUpdateWorkspaceLlmBudgetResponses[keyof AdminUpdateWorkspaceLlmBudgetResponses];
 
-export type TriggerReviewData = {
-  body?: never;
-  path?: never;
-  query?: {
-    prId?: number;
-    issueId?: number;
-    workspaceId?: number;
-    signal?: string;
-  };
-  url: '/api/dev/trigger-review';
-};
-
-export type TriggerReviewResponses = {
-  /**
-   * OK
-   */
-  200: string;
-};
-
-export type TriggerReviewResponse = TriggerReviewResponses[keyof TriggerReviewResponses];
-
 export type LogoutData = {
   body?: never;
   path?: never;
@@ -12052,12 +12041,21 @@ export type ListPracticeProfileReviewRunsData = {
      */
     kind?: string;
     /**
-     * Keep only runs reviewed after this moment; the bound is exclusive
+     * Keep only runs whose newest observation about this developer came after this moment; the bound is exclusive
      */
     since?: Date;
   };
   url: '/workspaces/{workspaceSlug}/practice-profile/review-runs';
 };
+
+export type ListPracticeProfileReviewRunsErrors = {
+  /**
+   * Unknown kind of work or invalid pagination
+   */
+  400: ProblemDetail;
+};
+
+export type ListPracticeProfileReviewRunsError = ListPracticeProfileReviewRunsErrors[keyof ListPracticeProfileReviewRunsErrors];
 
 export type ListPracticeProfileReviewRunsResponses = {
   /**
@@ -12075,11 +12073,23 @@ export type GetPracticeProfileReviewRunData = {
      * Workspace slug
      */
     workspaceSlug: string;
+    /**
+     * The review, as the list names it
+     */
     reviewId: string;
   };
   query?: never;
   url: '/workspaces/{workspaceSlug}/practice-profile/review-runs/{reviewId}';
 };
+
+export type GetPracticeProfileReviewRunErrors = {
+  /**
+   * No run with anything about the calling developer in this workspace
+   */
+  404: ProblemDetail;
+};
+
+export type GetPracticeProfileReviewRunError = GetPracticeProfileReviewRunErrors[keyof GetPracticeProfileReviewRunErrors];
 
 export type GetPracticeProfileReviewRunResponses = {
   /**
@@ -13485,7 +13495,7 @@ export type GetArtifactTraceData = {
 
 export type GetArtifactTraceErrors = {
   /**
-   * Nothing recorded about this artifact in this workspace
+   * Nothing recorded about this artifact in this workspace, or the named review never ran on it
    */
   404: ProblemDetail;
 };

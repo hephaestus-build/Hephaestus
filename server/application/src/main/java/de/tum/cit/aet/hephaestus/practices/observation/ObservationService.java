@@ -15,9 +15,9 @@ import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.DeveloperPracticeSummaryProjection;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunNarrativeLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunNarrativeLookup.ReviewRunNarrative;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +44,7 @@ public class ObservationService {
     private final ObservationRepository observationRepository;
     private final FeedbackObservationRepository feedbackObservationRepository;
     private final UserRepository userRepository;
-    private final ReviewRunTargetLookup reviewRunTargetLookup;
+    private final ReviewRunLookup reviewRunLookup;
     private final ReviewRunNarrativeLookup reviewRunNarrativeLookup;
     private final EvidenceAuthorization evidenceAuthorization;
     private final ObservationInvalidationRepository invalidationRepository;
@@ -144,7 +144,7 @@ public class ObservationService {
         Set<UUID> evidencePermitted = evidenceAuthorization.permitsAll(
                 workspaceId, List.of(observation), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         List<UUID> jobIds = List.of(observation.getAgentJobId());
-        Map<UUID, ReviewRunTargetLookup.Target> targets = reviewRunTargetLookup.findByJobIds(workspaceId, jobIds);
+        Map<UUID, ReviewRunLookup.Target> targets = reviewRunLookup.findTargets(workspaceId, jobIds);
         Map<UUID, ReviewRunNarrative> narratives = reviewRunNarrativeLookup.findByJobIds(workspaceId, jobIds);
         return toDetails(workspaceId, developerId, List.of(observation), evidencePermitted, targets, narratives)
                 .getFirst();
@@ -169,7 +169,7 @@ public class ObservationService {
             Long developerId,
             List<Observation> observations,
             Set<UUID> evidencePermitted,
-            Map<UUID, ReviewRunTargetLookup.Target> targets,
+            Map<UUID, ReviewRunLookup.Target> targets,
             Map<UUID, ReviewRunNarrative> narratives) {
         if (observations.isEmpty()) {
             return List.of();
@@ -182,7 +182,7 @@ public class ObservationService {
                         .collect(Collectors.toMap(ObservationInvalidation::getObservationId, Function.identity()));
         return observations.stream()
                 .map(observation -> {
-                    ReviewRunTargetLookup.Target target = targets.get(observation.getAgentJobId());
+                    ReviewRunLookup.Target target = targets.get(observation.getAgentJobId());
                     ReviewRunNarrative narrative = narratives.get(observation.getAgentJobId());
                     return ObservationDetailDTO.from(
                             observation,

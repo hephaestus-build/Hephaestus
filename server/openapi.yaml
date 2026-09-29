@@ -135,26 +135,6 @@ tags:
   name: git-lab-preflight-controller
 - description: Review catalogue changes before they affect a workspace
   name: Practice Catalog
-- description: |-
-    Dev-only REST endpoint for manually triggering PR/issue reviews. Enabled by
-     <code>hephaestus.dev.trigger-enabled=true</code>; gated additionally by <code>app_admin</code> since the property
-     only makes the endpoint exist, not an access control, and this route spends real LLM budget.
-
-     <p>Two modes: <b>bypass</b> (no <code>signal</code>) submits directly, skipping the detection gate;
-     <b>gate-routed</b> (with <code>signal</code>) runs {@link PracticeReviewDetectionGate PracticeReviewDetectionGate} first, exactly what the
-     production listener would do — the only way to validate RETROSPECTIVE (merged/closed) detection on a
-     SYNCED mirror, since real merge/close webhooks never arrive there.
-
-     <p>{@link AgentJobService#submit AgentJobService#submit} must not run inside an outer transaction, so the session-bound work is
-     confined to an explicit {@link TransactionTemplate TransactionTemplate} block and {@link AgentJobService#submitPrepared AgentJobService#submitPrepared} runs
-     only after it commits.
-
-     <pre>
-       POST /api/dev/trigger-review?prId=...&amp;workspaceId=...                              (bypass)
-       POST /api/dev/trigger-review?prId=...&amp;workspaceId=...&amp;signal=scm.pull_request.merged  (gate)
-       POST /api/dev/trigger-review?issueId=...&amp;workspaceId=...&amp;signal=scm.issue.closed      (gate)
-     </pre>
-  name: dev-trigger-controller
 - description: Instance-admin LLM connection and settings management
   name: Admin LLM
 - description: Manage practice groups
@@ -2085,42 +2065,6 @@ paths:
       summary: Set or clear a workspace's monthly cap on host-funded LLM spend
       tags:
       - Admin
-  /api/dev/trigger-review:
-    post:
-      operationId: triggerReview
-      parameters:
-      - in: query
-        name: prId
-        required: false
-        schema:
-          type: integer
-          format: int64
-      - in: query
-        name: issueId
-        required: false
-        schema:
-          type: integer
-          format: int64
-      - in: query
-        name: workspaceId
-        required: false
-        schema:
-          type: integer
-          format: int64
-      - in: query
-        name: signal
-        required: false
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: string
-          description: OK
-      tags:
-      - dev-trigger
   /auth/logout:
     post:
       operationId: logout
@@ -5573,8 +5517,7 @@ paths:
       description: "One row per run that recorded an observation about the calling\
         \ developer, across every practice group, with what that run found about them.\
         \ Counts are narrowed to this developer: a run over shared work says nothing\
-        \ here about anybody else. kind narrows the list to one kind of work; since\
-        \ keeps only the runs reviewed after that moment."
+        \ here about anybody else."
       operationId: listPracticeProfileReviewRuns
       parameters:
       - description: Workspace slug
@@ -5608,7 +5551,8 @@ paths:
         required: false
         schema:
           type: string
-      - description: Keep only runs reviewed after this moment; the bound is exclusive
+      - description: Keep only runs whose newest observation about this developer
+          came after this moment; the bound is exclusive
         in: query
         name: since
         required: false
@@ -5622,6 +5566,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProfileReviewRunsPage"
           description: Review runs returned
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Unknown kind of work or invalid pagination
       summary: "Every review run on the developer's own work, newest first"
       tags:
       - Practice Profile
@@ -5639,7 +5589,8 @@ paths:
         schema:
           type: string
           pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - in: path
+      - description: "The review, as the list names it"
+        in: path
         name: reviewId
         required: true
         schema:
@@ -5652,6 +5603,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProfileReviewRunDetail"
           description: Review run returned
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: No run with anything about the calling developer in this workspace
       summary: "One review run on the developer's own work, with what it observed\
         \ about them"
       tags:
@@ -7570,9 +7527,9 @@ paths:
     get:
       description: "Every practice the workspace runs against this kind of work appears,\
         \ including the ones that did nothing, each with the recorded reason. Name\
-        \ a review and every answer is that review's own, so an older review of the\
-        \ same work speaks for itself. 404 means nothing about this artifact was ever\
-        \ recorded here — not that the trace is unavailable."
+        \ a review and every answer is that review's own. 404 means nothing about\
+        \ this artifact was ever recorded here, or the named review never ran on it\
+        \ — not that the trace is unavailable."
       operationId: getArtifactTrace
       parameters:
       - description: Workspace slug
@@ -7616,7 +7573,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: Nothing recorded about this artifact in this workspace
+          description: "Nothing recorded about this artifact in this workspace, or\
+            \ the named review never ran on it"
       summary: Explain what every practice did about one piece of work
       tags:
       - Practice review trace
@@ -15295,11 +15253,6 @@ components:
       description: "One review run on the developer's own work, with what it found\
         \ about them"
       properties:
-        durationSeconds:
-          type: integer
-          format: int64
-          description: "How long the run took, start to finish; absent while it is\
-            \ still going, and whenever its start and end were not both recorded"
         feedbackDelivered:
           type: integer
           format: int64
@@ -15309,65 +15262,55 @@ components:
           description: "Where the feedback this run left on the work is read, at the\
             \ provider; absent whenever the comment it landed in cannot be addressed\
             \ from the work's own page"
-        lead:
-          type: string
-          description: The sentence the run opened its feedback with; absent when
-            it wrote none
         mayRequest:
           type: boolean
-          description: "Whether this reader may ask for a review of this work now,\
-            \ as the request front door would answer them. False also when the kind\
-            \ of work admits no request at all."
-        observations:
-          $ref: "#/components/schemas/ReviewObservationCounts"
-          description: "What the run observed about this developer, by assessment"
-        practicesEligible:
-          type: integer
-          format: int32
-          description: How many practices the run was eligible for; absent when it
-            wrote no such count it can stand behind
+          description: Whether this reader has standing to ask for a review of this
+            work. False when the kind of work admits no request.
+        practices:
+          $ref: "#/components/schemas/ReviewPracticeOutcomes"
+          description: What the run decided about each practice it observed for this
+            developer
         practicesEvaluated:
           type: integer
           format: int32
           description: How many practices the run measured; absent when it wrote no
-            coverage it can stand behind
+            coverage ledger
         reviewId:
           type: string
           format: uuid
         reviewedAt:
           type: string
           format: date-time
-          description: "When the run stopped, once it has stopped, and when it began\
-            \ while it is still going. A run whose own start and end were never recorded\
-            \ falls back to when it wrote its newest observation about this developer."
+          description: When the review recorded its newest observation about this
+            developer
         reviewedWork:
           $ref: "#/components/schemas/ReviewedWorkRef"
           description: The piece of work the run reviewed
         slippedPractices:
           type: array
-          description: "The practices this run recorded a problem about for this developer,\
-            \ in the order it recorded them and at most three"
+          description: "Every practice counted in practices.toImprove, once each,\
+            \ in order of practice name"
           items:
             $ref: "#/components/schemas/SlippedPractice"
         status:
           type: string
-          description: How the run ended; absent when the run itself is no longer
-            on record
+          description: Where the review stands; absent when the review itself is no
+            longer on record
           enum:
           - IN_PROGRESS
           - COMPLETED
           - FAILED
         triggerMode:
           type: string
-          description: "What occasioned the run: MANUAL is one a person asked for;\
-            \ absent with status"
+          description: "What occasioned the review: MANUAL is one a person asked for;\
+            \ absent when the review itself is no longer on record"
           enum:
           - AUTO
           - MANUAL
       required:
       - feedbackDelivered
       - mayRequest
-      - observations
+      - practices
       - reviewId
       - reviewedAt
       - reviewedWork
@@ -16576,6 +16519,36 @@ components:
       required:
       - name
       - slug
+    ReviewPracticeOutcomes:
+      type: object
+      description: "What one run decided about each practice it observed for this\
+        \ developer, one outcome per practice however many observations it recorded\
+        \ about it; an invalidated observation decides nothing"
+      properties:
+        held:
+          type: integer
+          format: int32
+          description: Practices with a strength observed and no problem
+        notApplicable:
+          type: integer
+          format: int32
+          description: Practices whose every observation said the practice did not
+            apply to this work
+        toImprove:
+          type: integer
+          format: int32
+          description: Practices with at least one problem observed
+        undecided:
+          type: integer
+          format: int32
+          description: "Practices the run looked at and could not settle either way:\
+            \ no strength, no problem, and not only a verdict that the practice did\
+            \ not apply"
+      required:
+      - held
+      - notApplicable
+      - toImprove
+      - undecided
     ReviewProposedPlacement:
       type: object
       description: One exact provider message included in a review awaiting approval
@@ -16702,9 +16675,8 @@ components:
         at:
           type: string
           format: date-time
-          description: "When the run stopped, once it has stopped, and when it began\
-            \ while it is still going. A run whose own start and end were never recorded\
-            \ falls back to when it wrote its newest observation."
+          description: When the review recorded its newest observation about this
+            developer
         reviewId:
           type: string
           format: uuid
@@ -16713,9 +16685,8 @@ components:
           description: The piece of work the run reviewed
         status:
           type: string
-          description: "How the run ended, so the page can say a review is still going\
-            \ or that nothing came of it; absent when the run itself is no longer\
-            \ on record"
+          description: Where the review stands; absent when the review itself is no
+            longer on record
           enum:
           - IN_PROGRESS
           - COMPLETED

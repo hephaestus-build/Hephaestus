@@ -54,8 +54,8 @@ public class GitlabSummaryChannel implements SummaryChannel {
                     + "due|remove_due_date|weight|epic|copy_metadata|move|confidential|shrug|tableflip)\\b)",
             Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
 
-    /** The note identifier GitLab's own {@code #note_} anchor takes. */
-    private static final Pattern NOTE_NUMBER = Pattern.compile("\\d+");
+    /** The global id this channel records for the note a summary is posted as. */
+    private static final String NOTE_GLOBAL_ID_PREFIX = "gid://gitlab/Note/";
 
     private final GitLabGraphQlClientProvider gitLabProvider;
     private final GitlabMrResolver mrResolver;
@@ -73,15 +73,13 @@ public class GitlabSummaryChannel implements SummaryChannel {
         return IntegrationKind.GITLAB;
     }
 
-    /**
-     * GitLab anchors a note on the merge request's or issue's own page as {@code #note_<id>}, which takes the
-     * note's numeric identifier. What this channel records is the note's global id, {@code gid://gitlab/Note/7},
-     * so the number is its last segment; anything else this channel is holding gets no address.
-     */
+    /** A note's anchor takes its number, what follows the prefix of its global id. */
     @Override
     public @Nullable String summaryCommentUrl(String workUrl, String commentId) {
-        String number = commentId.substring(commentId.lastIndexOf('/') + 1);
-        return NOTE_NUMBER.matcher(number).matches() ? workUrl + "#note_" + number : null;
+        if (!commentId.startsWith(NOTE_GLOBAL_ID_PREFIX) || commentId.length() == NOTE_GLOBAL_ID_PREFIX.length()) {
+            return null;
+        }
+        return workUrl + "#note_" + commentId.substring(NOTE_GLOBAL_ID_PREFIX.length());
     }
 
     @Override

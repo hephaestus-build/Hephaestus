@@ -25,8 +25,8 @@ import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewPlacementDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewSubjectDTO;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import de.tum.cit.aet.hephaestus.practices.trace.dto.DeliveryPolicyTraceDTO;
@@ -52,7 +52,7 @@ class ReviewFeedbackQueryService {
     private final FeedbackObservationRepository feedbackObservationRepository;
     private final FeedbackPlacementRepository feedbackPlacementRepository;
     private final ReviewSubjectResolver subjectResolver;
-    private final ReviewRunTargetLookup reviewRunTargetLookup;
+    private final ReviewRunLookup reviewRunLookup;
     private final FeedbackApprovalRepository approvalRepository;
     private final DeliveryPolicyEvaluationRepository policyEvaluations;
     private final FeedbackWithdrawalRepository withdrawalRepository;
@@ -71,7 +71,7 @@ class ReviewFeedbackQueryService {
             userIds.add(row.getAboutUserId());
         }
         Map<Long, ReviewSubjectDTO> subjects = subjectResolver.resolve(userIds);
-        Map<UUID, Target> targets = reviewRunTargetLookup.findByJobIds(
+        Map<UUID, Target> targets = reviewRunLookup.findTargets(
                 workspaceId,
                 rows.getContent().stream()
                         .map(OperatorFeedbackRow::getAgentJobId)
@@ -104,8 +104,8 @@ class ReviewFeedbackQueryService {
         ReviewedWorkRefDTO reviewedWork = ReviewedWorkLabels.refOrNull(
                 feedback.getArtifactKind(),
                 feedback.getArtifactId(),
-                reviewRunTargetLookup
-                        .findByJobIds(workspaceId, List.of(feedback.getAgentJobId()))
+                reviewRunLookup
+                        .findTargets(workspaceId, List.of(feedback.getAgentJobId()))
                         .get(feedback.getAgentJobId()));
         var evaluations =
                 policyEvaluations.findByWorkspaceIdAndFeedbackIdOrderByEvaluatedAtAsc(workspaceId, feedbackId);

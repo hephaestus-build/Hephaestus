@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
  * <p>The signal ledger stores nothing but {@code (kind, id)}, so this is the one thing core asks a
  * domain module to translate for display.
  *
- * <p>Deliberately not the same type as {@code ReviewRunTargetLookup.Target}, which decodes a job's own
+ * <p>Deliberately not the same type as {@code ReviewRunLookup.Target}, which decodes a job's own
  * metadata and so cannot answer for an artifact no job ran on.
  *
  * @param number    the number the provider shows, when the kind has one; a document does not

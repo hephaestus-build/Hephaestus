@@ -20,9 +20,6 @@ final class TraceInputs {
     private TraceInputs() {}
 
     /**
-     * @param groupSlug the practice group this practice sits in, or {@code null} for one the workspace files
-     *                  in no group; carried because the group of a practice that stayed quiet is knowable
-     *                  here and nowhere else a reader's surface can ask
      * @param dormancyReason why nothing connected here can raise what it watches, or {@code null} when
      *                      something can; the sentence comes straight from {@code DormantBinding}
      */

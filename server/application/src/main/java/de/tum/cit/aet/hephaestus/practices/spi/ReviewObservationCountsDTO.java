@@ -5,11 +5,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-/**
- * What one review run observed, by assessment: the four numbers the operator's console shows per run and
- * the developer's own page shows narrowed to them. One record for both, so the wire says the same thing
- * about the same number on every surface.
- */
 @Schema(description = "Counts of observations by assessment")
 public record ReviewObservationCountsDTO(
         @NonNull Long strengths,

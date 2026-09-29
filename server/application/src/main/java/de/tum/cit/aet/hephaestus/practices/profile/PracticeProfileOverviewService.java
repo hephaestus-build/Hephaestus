@@ -30,8 +30,12 @@ import de.tum.cit.aet.hephaestus.practices.profile.dto.HeldPracticeDTO;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.OverviewWindowDTO;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.PracticeProfileOverviewDTO;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileChangeDTO;
+import de.tum.cit.aet.hephaestus.practices.profile.dto.ReviewRunRefDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.ReviewRunFacts;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Clock;
@@ -73,7 +77,7 @@ public class PracticeProfileOverviewService {
     private final FeedbackWithdrawalRepository withdrawalRepository;
     private final InAppFeedbackEvidence feedbackEvidence;
     private final ReactionRepository reactionRepository;
-    private final ReviewRunRefs reviewRunRefs;
+    private final ReviewRunLookup reviewRunLookup;
     private final BundledPracticeCatalogLoader bundledCatalog;
     private final Clock clock;
 
@@ -115,7 +119,7 @@ public class PracticeProfileOverviewService {
                                 FirstObservedRow::getPracticeSlug, FirstObservedRow::getFirstObservedAt));
         FeedbackFacts feedback = readFeedback(workspaceId, developerId, now, window, windowRuns, before, after);
 
-        Map<UUID, Target> targets = reviewRunRefs.targets(
+        Map<UUID, Target> targets = reviewRunLookup.findTargets(
                 workspaceId,
                 Stream.of(
                                 windowRuns.stream().map(DeveloperReviewRunRow::getJobId),
@@ -142,7 +146,7 @@ public class PracticeProfileOverviewService {
         changes.sort(Comparator.comparing(ProfileChangeDTO::at).reversed());
         return new PracticeProfileOverviewDTO(
                 OverviewWindowDTO.from(window),
-                latest == null ? null : reviewRunRefs.ref(workspaceId, latest, targets),
+                latest == null ? null : runRef(workspaceId, latest, targets),
                 holdingUp(after, targets),
                 newestFeedbackChangePerPractice(changes),
                 reviewedWork(windowRuns, targets));
@@ -470,6 +474,17 @@ public class PracticeProfileOverviewService {
     private @Nullable String holdsAs(Practice practice) {
         String sourceSlug = practice.getSourceCuratedSlug();
         return sourceSlug == null ? null : bundledCatalog.holdsAs(sourceSlug).orElse(null);
+    }
+
+    private ReviewRunRefDTO runRef(long workspaceId, DeveloperReviewRunRow run, Map<UUID, Target> targets) {
+        ReviewRunFacts facts =
+                reviewRunLookup.findFacts(workspaceId, List.of(run.getJobId())).get(run.getJobId());
+        return new ReviewRunRefDTO(
+                run.getJobId(),
+                run.getReviewedAt(),
+                ReviewedWorkLabels.ref(
+                        ArtifactKind.of(run.getArtifactKind()), run.getArtifactId(), targets.get(run.getJobId())),
+                facts == null ? null : facts.status());
     }
 
     /** The window's runs as pieces of work: a piece reviewed twice in the window is listed once, at its newest. */

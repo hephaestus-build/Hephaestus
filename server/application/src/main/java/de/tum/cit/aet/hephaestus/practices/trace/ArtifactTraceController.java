@@ -79,8 +79,8 @@ public class ArtifactTraceController {
             summary = "Explain what every practice did about one piece of work",
             description = "Every practice the workspace runs against this kind of work appears, including the ones "
                     + "that did nothing, each with the recorded reason. Name a review and every answer is that "
-                    + "review's own, so an older review of the same work speaks for itself. 404 means nothing about "
-                    + "this artifact was ever recorded here — not that the trace is unavailable.",
+                    + "review's own. 404 means nothing about this artifact was ever recorded here, or the named "
+                    + "review never ran on it — not that the trace is unavailable.",
             operationId = "getArtifactTrace")
     @ApiResponse(
             responseCode = "200",
@@ -88,7 +88,7 @@ public class ArtifactTraceController {
             content = @Content(schema = @Schema(implementation = ArtifactTraceDTO.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "Nothing recorded about this artifact in this workspace",
+            description = "Nothing recorded about this artifact in this workspace, or the named review never ran on it",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,

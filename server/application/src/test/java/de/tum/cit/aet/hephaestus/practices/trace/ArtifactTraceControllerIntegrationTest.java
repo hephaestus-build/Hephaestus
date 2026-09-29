@@ -20,6 +20,12 @@ import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluation;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface;
+import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
@@ -79,6 +85,12 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Autowired
     private DeliveryPolicyEvaluationRepository deliveryPolicyEvaluationRepository;
+
+    @Autowired
+    private FeedbackRepository feedbackRepository;
+
+    @Autowired
+    private FeedbackObservationRepository feedbackObservationRepository;
 
     private Workspace workspace;
     private Workspace otherWorkspace;
@@ -170,16 +182,7 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
     @DisplayName("The answer")
     class Answers {
 
-        /**
-         * {@code dormant} watches a signal no connected integration raises, so it is reported as waiting.
-         * {@code not-admitted} watches the very signal in the ledger, so it is <em>not</em> reported as
-         * waiting even though coverage would say so: the recorded occurrence refutes the claim.
-         */
-        /**
-         * The group is on the entry because the reader's own surfaces cannot look it up for a practice that
-         * stayed quiet: a practice with no standing, or one in a group hidden from the dashboards, is
-         * missing from every list they hold, and the group filter would then be short of choices.
-         */
+        /** The group is on the entry because a practice that stayed quiet is on no list the reader holds. */
         @Test
         @WithMentorUser
         void namesTheGroupOfEveryPracticeIncludingTheQuietOnes() {
@@ -205,6 +208,11 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .doesNotExist();
         }
 
+        /**
+         * {@code dormant} watches a signal no connected integration raises, so it is reported as waiting.
+         * {@code not-admitted} watches the very signal in the ledger, so it is <em>not</em> reported as
+         * waiting even though coverage would say so: the recorded occurrence refutes the claim.
+         */
         @Test
         @WithMentorUser
         void reportsEveryPracticeIncludingTheQuietOnes() {
@@ -276,10 +284,8 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
         }
 
         /**
-         * Two reviews of one pull request. Without a review named, each practice answers from the newest
-         * review that observed it, which is what left an older run's own table empty. Named, the older
-         * review answers for itself, and the occurrence ledger stays whole either way: it is what the work
-         * has been noticed doing, not what one run made of it.
+         * Two reviews of one pull request. Named, the older review answers for itself, down to the feedback the
+         * newer one delivered; the occurrence ledger stays whole either way.
          */
         @Test
         @WithMentorUser
@@ -298,7 +304,7 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     newer.getId(),
                     READY_AT.plusSeconds(3600));
             insertObservation(first, older);
-            insertObservation(second, newer);
+            deliverFeedback(newer, insertObservation(second, newer));
 
             get(TRACE, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID)
                     .expectStatus()
@@ -307,7 +313,9 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .jsonPath("$.practices[?(@.practiceSlug=='first')].outcome")
                     .isEqualTo("REVIEWED")
                     .jsonPath("$.practices[?(@.practiceSlug=='second')].outcome")
-                    .isEqualTo("REVIEWED");
+                    .isEqualTo("REVIEWED")
+                    .jsonPath("$.practices[?(@.practiceSlug=='second')].deliveredCount")
+                    .isEqualTo(1);
 
             get(
                             TRACE + "?reviewId={reviewId}",
@@ -329,7 +337,31 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .jsonPath("$.practices[?(@.practiceSlug=='second')].outcome")
                     .isEqualTo("SKIPPED")
                     .jsonPath("$.practices[?(@.practiceSlug=='second')].observationCount")
+                    .isEqualTo(0)
+                    .jsonPath("$.practices[?(@.practiceSlug=='second')].deliveredCount")
                     .isEqualTo(0);
+        }
+
+        @Test
+        @WithMentorUser
+        void answersNothingForAReviewThatNeverRanOnTheArtifact() {
+            persistPractice("waiting", "Waiting practice", PracticeAutonomy.AUTOMATIC);
+            recordSignal(
+                    workspace,
+                    ScmSignals.PULL_REQUEST_READY,
+                    SignalState.TRIGGERED,
+                    null,
+                    persistJob().getId());
+
+            get(
+                            TRACE + "?reviewId={reviewId}",
+                            workspace.getWorkspaceSlug(),
+                            ArtifactKinds.PULL_REQUEST.value(),
+                            ARTIFACT_ID,
+                            persistJob().getId())
+                    .expectStatus()
+                    .isNotFound()
+                    .expectBody(Void.class);
         }
 
         @Test
@@ -467,7 +499,24 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
         return signalRepository.save(row);
     }
 
-    private void insertObservation(Practice practice, AgentJob job) {
+    private void deliverFeedback(AgentJob job, UUID observationId) {
+        Feedback feedback = feedbackRepository.save(Feedback.builder()
+                .agentJobId(job.getId())
+                .workspaceId(workspace.getId())
+                .recipientUserId(author.getId())
+                .aboutUserId(author.getId())
+                .channel(FeedbackChannel.IN_APP)
+                .position(1)
+                .deliveryState(FeedbackDeliveryState.DELIVERED)
+                .body("Feedback")
+                .source(FeedbackSource.AGENT)
+                .createdAt(READY_AT)
+                .deliveredAt(READY_AT)
+                .build());
+        feedbackObservationRepository.insertIfAbsent(feedback.getId(), observationId, "PRIMARY", 0);
+    }
+
+    private UUID insertObservation(Practice practice, AgentJob job) {
         UUID id = UUID.randomUUID();
         observationRepository.insertIfAbsent(
                 id,
@@ -489,5 +538,6 @@ class ArtifactTraceControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 "recurrence-1",
                 READY_AT,
                 "LIVE");
+        return id;
     }
 }

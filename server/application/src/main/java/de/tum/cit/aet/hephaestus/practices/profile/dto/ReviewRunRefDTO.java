@@ -12,18 +12,11 @@ import org.jspecify.annotations.Nullable;
 public record ReviewRunRefDTO(
         @NonNull UUID reviewId,
 
-        @NonNull
-        @Schema(
-                description = "When the run stopped, once it has stopped, and when it began while it is still"
-                        + " going. A run whose own start and end were never recorded falls back to when it wrote"
-                        + " its newest observation.")
+        @NonNull @Schema(description = "When the review recorded its newest observation about this developer")
         Instant at,
 
         @NonNull @Schema(description = "The piece of work the run reviewed")
         ReviewedWorkRefDTO reviewedWork,
 
-        @Nullable
-        @Schema(
-                description = "How the run ended, so the page can say a review is still going or that nothing came"
-                        + " of it; absent when the run itself is no longer on record")
+        @Nullable @Schema(description = "Where the review stands; absent when the review itself is no longer on record")
         ReviewRunState status) {}

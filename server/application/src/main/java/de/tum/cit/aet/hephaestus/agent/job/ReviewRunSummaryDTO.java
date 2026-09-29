@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.ReviewRunSummaryRow;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewObservationCountsDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
@@ -22,12 +23,15 @@ public record ReviewRunSummaryDTO(
         @NonNull ReviewObservationCountsDTO observations,
         @NonNull ReviewFeedbackCountsDTO feedback) {
     static ReviewRunSummaryDTO from(
-            ReviewRunSummaryRow review, ReviewObservationCountsDTO observations, ReviewFeedbackCountsDTO feedback) {
+            ReviewRunSummaryRow review,
+            Target target,
+            ReviewObservationCountsDTO observations,
+            ReviewFeedbackCountsDTO feedback) {
         return new ReviewRunSummaryDTO(
                 review.getId(),
                 review.getStatus(),
                 review.getDeliveryStatus(),
-                ReviewRunTargetDTO.from(review),
+                ReviewRunTargetDTO.from(target),
                 review.getCreatedAt(),
                 observations,
                 feedback);
