@@ -442,7 +442,9 @@ roles, transaction boundaries, extension ownership, and change guidance are docu
 ## Reading a real review back
 
 `PracticeTraceEntryDTO` is the derived answer to "what did every practice make of this piece of work", and
-it is what the **Review activity** screen renders for every member. It is derived, never stored:
+it is what **Every practice** renders on a piece of work: for workspace admins under **Practice reviews →
+Work**, and for the developer on a review under **Reviews of your work**, which reads it only for a review
+that observed them. It is derived, never stored:
 `PracticeTraceDeriver` walks an ordered precedence list to a single `PracticeTraceOutcome`.
 
 The trace separates measurement from delivery:
