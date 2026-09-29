@@ -2584,7 +2584,7 @@ export const replaceSweepSchedule = <ThrowOnError extends boolean = false>(optio
 /**
  * List work this workspace recorded something about
  *
- * Built from the signal ledger, so it includes work that was never reviewed — which is exactly what a listing derived from review runs cannot show. Most recently signalled first.
+ * Workspace admins only. Built from the signal ledger, so it includes work that was never reviewed — which is exactly what a listing derived from review runs cannot show. Most recently signalled first.
  */
 export const listTracedArtifacts = <ThrowOnError extends boolean = false>(options: Options<ListTracedArtifactsData, ThrowOnError>): RequestResult<ListTracedArtifactsResponses, ListTracedArtifactsErrors, ThrowOnError> => (options.client ?? client).get<ListTracedArtifactsResponses, ListTracedArtifactsErrors, ThrowOnError>({
   responseTransformer: listTracedArtifactsResponseTransformer,
@@ -2596,7 +2596,7 @@ export const listTracedArtifacts = <ThrowOnError extends boolean = false>(option
 /**
  * Explain what every practice did about one piece of work
  *
- * Every practice the workspace runs against this kind of work appears, including the ones that did nothing, each with the recorded reason. Name a review and every answer is that review's own. 404 means nothing about this artifact was ever recorded here, or the named review never ran on it — not that the trace is unavailable.
+ * Every practice the workspace runs against this kind of work appears, including the ones that did nothing, each with the recorded reason. Name a review and every answer is that review's own. A workspace admin may read any work, with or without a review; anyone else must name a review that observed them on this work, and reads only the observations about them and the feedback addressed to them. 404 means nothing about this artifact was ever recorded here, the named review never ran on it, or the caller may not read it.
  */
 export const getArtifactTrace = <ThrowOnError extends boolean = false>(options: Options<GetArtifactTraceData, ThrowOnError>): RequestResult<GetArtifactTraceResponses, GetArtifactTraceErrors, ThrowOnError> => (options.client ?? client).get<GetArtifactTraceResponses, GetArtifactTraceErrors, ThrowOnError>({
   responseTransformer: getArtifactTraceResponseTransformer,

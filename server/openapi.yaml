@@ -7472,9 +7472,9 @@ paths:
       - Practice Review Sweep
   /workspaces/{workspaceSlug}/practices/trace:
     get:
-      description: "Built from the signal ledger, so it includes work that was never\
-        \ reviewed — which is exactly what a listing derived from review runs cannot\
-        \ show. Most recently signalled first."
+      description: "Workspace admins only. Built from the signal ledger, so it includes\
+        \ work that was never reviewed — which is exactly what a listing derived from\
+        \ review runs cannot show. Most recently signalled first."
       operationId: listTracedArtifacts
       parameters:
       - description: Workspace slug
@@ -7520,6 +7520,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Unknown artifact kind or invalid pagination
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Workspace administrator access is required
       summary: List work this workspace recorded something about
       tags:
       - Practice review trace
@@ -7527,9 +7533,12 @@ paths:
     get:
       description: "Every practice the workspace runs against this kind of work appears,\
         \ including the ones that did nothing, each with the recorded reason. Name\
-        \ a review and every answer is that review's own. 404 means nothing about\
-        \ this artifact was ever recorded here, or the named review never ran on it\
-        \ — not that the trace is unavailable."
+        \ a review and every answer is that review's own. A workspace admin may read\
+        \ any work, with or without a review; anyone else must name a review that\
+        \ observed them on this work, and reads only the observations about them and\
+        \ the feedback addressed to them. 404 means nothing about this artifact was\
+        \ ever recorded here, the named review never ran on it, or the caller may\
+        \ not read it."
       operationId: getArtifactTrace
       parameters:
       - description: Workspace slug
@@ -7554,7 +7563,7 @@ paths:
           format: int64
       - description: "Answer for this review alone: every state, explanation and count\
           \ is what this review made of the work. Omit it for every review of the\
-          \ work at once."
+          \ work at once, which only a workspace admin may."
         in: query
         name: reviewId
         required: false
@@ -7573,8 +7582,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: "Nothing recorded about this artifact in this workspace, or\
-            \ the named review never ran on it"
+          description: "Nothing recorded about this artifact in this workspace, the\
+            \ named review never ran on it, or the caller may not read it"
       summary: Explain what every practice did about one piece of work
       tags:
       - Practice review trace

@@ -83,10 +83,18 @@ class ArtifactTraceQueryService {
      * review narrows the occurrences offered to the deriver and the observations and feedback counted; the
      * occurrence ledger is listed whole either way. A review that neither carried an occurrence of this work
      * nor observed it answers 404.
+     *
+     * @param developerId narrows the observations and feedback counted to the ones about and addressed to this
+     *                    developer; {@code null} counts everyone's. A review that observed several people must
+     *                    not tell one of them what it made of the others.
      */
     @Transactional(readOnly = true)
     public ArtifactTraceDTO trace(
-            Long workspaceId, ArtifactKind artifactKind, Long artifactId, @Nullable UUID reviewId) {
+            Long workspaceId,
+            ArtifactKind artifactKind,
+            Long artifactId,
+            @Nullable UUID reviewId,
+            @Nullable Long developerId) {
         List<ArtifactSignal> recorded = signals.findForArtifact(workspaceId, artifactKind.value(), artifactId);
         if (recorded.isEmpty()) {
             throw new EntityNotFoundException("Traced artifact", artifactKind.value() + "/" + artifactId);
@@ -123,7 +131,7 @@ class ArtifactTraceQueryService {
                                 signal.getJobId()))
                         .toList(),
                 outcomes,
-                outputs(workspaceId, artifactKind, artifactId, observed, reviewId));
+                outputs(workspaceId, artifactKind, artifactId, observed, reviewId, developerId));
 
         ArtifactIdentity identity = Objects.requireNonNull(identities
                 .resolve(workspaceId, artifactKind, List.of(artifactId))
@@ -223,18 +231,23 @@ class ArtifactTraceQueryService {
         return PracticeBinding.signalsOf(practice.getBindings());
     }
 
-    /** What each practice produced on this artifact, narrowed to one review when the caller named one. */
+    /**
+     * What each practice produced on this artifact, narrowed to one review and to one developer when the caller
+     * named them.
+     */
     private Map<Long, PracticeOutput> outputs(
             Long workspaceId,
             ArtifactKind artifactKind,
             Long artifactId,
             List<ArtifactObservationRow> observed,
-            @Nullable UUID reviewId) {
+            @Nullable UUID reviewId,
+            @Nullable Long developerId) {
         Map<Long, Integer> counts = new HashMap<>();
         Map<Long, UUID> latestReview = new HashMap<>();
         Map<Long, Instant> latestObserved = new HashMap<>();
         for (ArtifactObservationRow row : observed) {
-            if (reviewId != null && !reviewId.equals(row.getReviewId())) {
+            if ((reviewId != null && !reviewId.equals(row.getReviewId()))
+                    || (developerId != null && !developerId.equals(row.getAboutUserId()))) {
                 continue;
             }
             counts.merge(row.getPracticeId(), 1, Integer::sum);
@@ -249,7 +262,8 @@ class ArtifactTraceQueryService {
         Map<Long, Integer> delivered = new HashMap<>();
         Map<Long, Collection<FeedbackSuppressionReason>> withheld = new HashMap<>();
         for (ArtifactFeedbackRow row : feedback.summarizeForArtifact(workspaceId, artifactKind, artifactId)) {
-            if (reviewId != null && !reviewId.equals(row.getReviewId())) {
+            if ((reviewId != null && !reviewId.equals(row.getReviewId()))
+                    || (developerId != null && !developerId.equals(row.getRecipientUserId()))) {
                 continue;
             }
             if (row.getDeliveryState() == FeedbackDeliveryState.DELIVERED) {

@@ -1221,7 +1221,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * be reported as silent, including when its run predates the signal ledger or was never linked back.
      */
     @Query("""
-        SELECT o.practice.id AS practiceId, o.agentJobId AS reviewId, o.observedAt AS observedAt
+        SELECT o.practice.id AS practiceId, o.agentJobId AS reviewId, o.observedAt AS observedAt,
+               o.aboutUserId AS aboutUserId
         FROM Observation o
         WHERE o.workspaceId = :workspaceId
           AND o.artifactKind = :artifactKind
@@ -1238,6 +1239,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         UUID getReviewId();
 
         Instant getObservedAt();
+
+        Long getAboutUserId();
     }
 
     /**

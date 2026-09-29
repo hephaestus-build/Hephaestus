@@ -839,19 +839,21 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     }
 
     /**
-     * How much of what was measured on one artifact actually reached a person, by practice and by the run
-     * that composed it; a piece of feedback has one run, so summing the runs counts it once.
+     * How much of what was measured on one artifact actually reached a person, by practice, by the run
+     * that composed it and by its recipient; a piece of feedback has one run and one recipient, so summing the
+     * groups counts it once.
      * {@code COUNT(DISTINCT f.id)} because one piece of feedback routinely fuses several observations of the
      * same practice; counting join rows would multiply it.
      */
     @Query("""
-        SELECT o.practice.id AS practiceId, f.agentJobId AS reviewId, f.deliveryState AS deliveryState,
-               f.suppressionReason AS suppressionReason, COUNT(DISTINCT f.id) AS units
+        SELECT o.practice.id AS practiceId, f.agentJobId AS reviewId, f.recipientUserId AS recipientUserId,
+               f.deliveryState AS deliveryState, f.suppressionReason AS suppressionReason,
+               COUNT(DISTINCT f.id) AS units
         FROM FeedbackObservation fo JOIN fo.feedback f JOIN fo.observation o
         WHERE f.workspaceId = :workspaceId
           AND o.artifactKind = :artifactKind
           AND o.artifactId = :artifactId
-        GROUP BY o.practice.id, f.agentJobId, f.deliveryState, f.suppressionReason
+        GROUP BY o.practice.id, f.agentJobId, f.recipientUserId, f.deliveryState, f.suppressionReason
         """)
     List<ArtifactFeedbackRow> summarizeForArtifact(
             @Param("workspaceId") Long workspaceId,
@@ -862,6 +864,8 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
         Long getPracticeId();
 
         UUID getReviewId();
+
+        Long getRecipientUserId();
 
         FeedbackDeliveryState getDeliveryState();
 
