@@ -60,6 +60,16 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldAddressTheNoteOnTheWorksPageWhenItsIdIsAGlobalNoteId() {
+        String workUrl = "https://gitlab.com/group/project/-/merge_requests/42";
+
+        assertThat(channel.summaryCommentUrl(workUrl, "gid://gitlab/Note/7")).isEqualTo(workUrl + "#note_7");
+        assertThat(channel.summaryCommentUrl(workUrl, "gid://gitlab/Note/")).isNull();
+        assertThat(channel.summaryCommentUrl(workUrl, "gid://gitlab/DiffNote/7"))
+                .isNull();
+    }
+
+    @Test
     void postSummaryReturnsNoteId() {
         FeedbackTarget target = gitlabTarget();
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);

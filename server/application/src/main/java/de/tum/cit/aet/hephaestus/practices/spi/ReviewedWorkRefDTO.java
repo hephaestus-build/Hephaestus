@@ -26,8 +26,8 @@ public record ReviewedWorkRefDTO(
 
         @Nullable
         @Schema(
-                description =
-                        "The work's own title: a pull request's, an issue's or a document's; a conversation thread has none")
+                description = "The work's own title where the label does not already say it: a pull request's or an"
+                        + " issue's; a conversation thread has none and a document's is its label")
         String title,
 
         @Nullable @Schema(description = "The work's page at its provider, when the provider exposes one")

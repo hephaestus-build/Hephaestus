@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
-import { ARTIFACT_KIND_VALUES } from "@/lib/artifact-kinds";
 import { expectSettledVisible } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
 
@@ -16,7 +15,7 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
-		kinds: [...ARTIFACT_KIND_VALUES],
+		seen: [],
 		value: undefined,
 		onChange: fn(),
 	},
@@ -72,7 +71,7 @@ export const FilteredToIssues: Story = {
  * rather than dropped — a filter that cannot be seen cannot be cleared.
  */
 export const AKindThisBuildDoesNotKnow: Story = {
-	args: { kinds: [...ARTIFACT_KIND_VALUES, "wiki.page"], value: "wiki.page" },
+	args: { seen: ["wiki.page"], value: "wiki.page" },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("combobox", { name: "Show" })).toHaveTextContent("wiki.page");
 	},

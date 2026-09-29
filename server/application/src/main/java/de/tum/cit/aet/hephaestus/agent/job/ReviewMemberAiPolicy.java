@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import java.util.Optional;
@@ -76,8 +77,8 @@ public class ReviewMemberAiPolicy {
         if (artifact == null) return null;
         boolean owned =
                 switch (type) {
-                    case PULL_REQUEST_REVIEW -> ownership.pullRequestBelongsToWorkspace(workspaceId, artifact);
-                    case ISSUE_REVIEW -> ownership.issueBelongsToWorkspace(workspaceId, artifact);
+                    case PULL_REQUEST_REVIEW -> ownership.belongsToWorkspace(workspaceId, PullRequest.class, artifact);
+                    case ISSUE_REVIEW -> ownership.belongsToWorkspace(workspaceId, Issue.class, artifact);
                     default -> false;
                 };
         return owned

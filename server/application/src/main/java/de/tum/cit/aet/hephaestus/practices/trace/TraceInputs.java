@@ -27,6 +27,8 @@ final class TraceInputs {
             Long id,
             String slug,
             String name,
+            @Nullable String groupSlug,
+            @Nullable String groupName,
             PracticeAutonomy autonomy,
             List<SignalName> watches,
             @Nullable String dormancyReason) {}

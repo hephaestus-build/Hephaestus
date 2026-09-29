@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.net.URI;
 import java.time.Instant;
@@ -111,13 +112,13 @@ public record AgentJobDTO(
 
         @Schema(description = "Tokens written to prompt cache") @Nullable
         Integer llmCacheWriteTokens) {
-    public static AgentJobDTO from(AgentJob job) {
+    public static AgentJobDTO from(AgentJob job, Target target) {
         JsonNode snapshot = job.getConfigSnapshot();
         return new AgentJobDTO(
                 job.getId(),
                 job.getJobType(),
                 job.getStatus(),
-                ReviewRunTargetDTO.from(job),
+                ReviewRunTargetDTO.from(target),
                 job.getMetadata(),
                 job.getOutput(),
                 ReviewRunOutcome.fromJobOutput(job.getOutput()),
@@ -147,13 +148,13 @@ public record AgentJobDTO(
      * The listing's row, which carries every column this record renders and no transcript — the one
      * thing an entity page would have read per row and thrown away.
      */
-    public static AgentJobDTO from(AgentJobRepository.AgentJobListRow row) {
+    public static AgentJobDTO from(AgentJobRepository.AgentJobListRow row, Target target) {
         JsonNode snapshot = row.getConfigSnapshot();
         return new AgentJobDTO(
                 row.getId(),
                 row.getJobType(),
                 row.getStatus(),
-                ReviewRunTargetDTO.from(row),
+                ReviewRunTargetDTO.from(target),
                 row.getMetadata(),
                 row.getOutput(),
                 ReviewRunOutcome.fromJobOutput(row.getOutput()),

@@ -85,7 +85,7 @@ export function ObservationsListPage({
 				practices={practices}
 				people={people}
 				total={observations?.page?.totalElements}
-				scopedArtifact={rows[0]?.reviewedWork}
+				scopedWork={rows[0]?.reviewedWork}
 				subjectName={filteredSubject?.name ?? filteredSubject?.login}
 			/>
 			{error == null ? (

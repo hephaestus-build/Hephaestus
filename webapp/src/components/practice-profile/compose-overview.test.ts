@@ -80,7 +80,7 @@ type Overview = Parameters<typeof composeOverview>[0];
 
 const overview = (partial: Partial<Overview>): Overview => ({
 	...EMPTY_OVERVIEW,
-	latestRun: { jobId: "job-1", at: AT, reviewedWork: pullRequest(425) },
+	latestRun: { reviewId: "job-1", at: AT, reviewedWork: pullRequest(425) },
 	...partial,
 });
 

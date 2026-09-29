@@ -34,7 +34,8 @@ class AgentJobDTOTest extends BaseUnitTest {
     @MethodSource("scopes")
     void redactsBaseUrlUnlessTheWorkspaceOwnsTheConnection(
             @Nullable FundingSource scope, String expectedBaseUrl, String why) {
-        AgentJobDTO dto = AgentJobDTO.from(jobWithSnapshot(snapshotWithScope(scope)));
+        AgentJob job = jobWithSnapshot(snapshotWithScope(scope));
+        AgentJobDTO dto = AgentJobDTO.from(job, ReviewRunTargetMapper.from(job));
 
         ObjectNode snapshot = (ObjectNode) dto.configSnapshot();
         assertThat(snapshot.path("baseUrl").asString()).as(why).isEqualTo(expectedBaseUrl);
@@ -52,7 +53,7 @@ class AgentJobDTOTest extends BaseUnitTest {
         job.setAvailableAt(releaseAt);
         job.setHoldReason(AgentJob.HOLD_REASON_BUDGET);
 
-        AgentJobDTO dto = AgentJobDTO.from(job);
+        AgentJobDTO dto = AgentJobDTO.from(job, ReviewRunTargetMapper.from(job));
 
         assertThat(dto.holdReason()).isEqualTo(AgentJob.HOLD_REASON_BUDGET);
         assertThat(dto.availableAt()).isEqualTo(releaseAt);
@@ -63,7 +64,7 @@ class AgentJobDTOTest extends BaseUnitTest {
         AgentJob job = jobWithSnapshot(snapshotWithScope(FundingSource.INSTANCE));
         job.setStatus(AgentJobStatus.QUEUED);
 
-        AgentJobDTO dto = AgentJobDTO.from(job);
+        AgentJobDTO dto = AgentJobDTO.from(job, ReviewRunTargetMapper.from(job));
 
         assertThat(dto.holdReason()).isNull();
         assertThat(dto.availableAt())

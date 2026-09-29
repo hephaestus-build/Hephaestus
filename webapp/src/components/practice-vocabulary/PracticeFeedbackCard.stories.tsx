@@ -449,8 +449,8 @@ export const WorkWithoutAnAddress: Story = {
 };
 
 /**
- * The practice's review rules changed after the card was written: it closes unresolved, keeps
- * its evidence and the meter where the work left it, wears no wash, and the condition says why.
+ * The practice's review rules changed after the card was written: it closes unresolved, keeps its
+ * evidence, wears no wash, draws no clean-work meter, and says why in the condition line.
  */
 export const Closed: Story = {
 	args: {
@@ -465,7 +465,7 @@ export const Closed: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Closed")).toBeVisible();
 		await expect(canvas.queryByText("Resolved")).toBeNull();
-		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
+		await expect(canvas.queryByRole("meter")).toBeNull();
 		await expect(canvas.getByText("Closed 9 September")).toBeVisible();
 		await expect(
 			canvas.getByText("Closed on 9 September · the practice's review rules changed"),

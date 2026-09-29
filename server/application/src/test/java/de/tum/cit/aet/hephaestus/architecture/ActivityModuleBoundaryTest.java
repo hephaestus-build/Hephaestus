@@ -148,13 +148,16 @@ class ActivityModuleBoundaryTest extends HephaestusArchitectureTest {
                     .haveSimpleName("PracticeStandingController")
                     .orShould()
                     .haveSimpleName("PracticeProfileOverviewController")
+                    .orShould()
+                    .haveSimpleName("PracticeProfileReviewRunController")
                     .because(
                             "Only PracticeCatalogController, PracticeReleaseController, PracticeGroupController, ObservationController, "
                                     + "FeedbackResponseController, PracticeReviewSettingsController, PracticeReviewOutputController, "
                                     + "CuratedCatalogAdminController, CuratedPracticeCatalogController, CatalogAdoptionController, "
                                     + "ArtifactTraceController, InAppFeedbackController, PracticeGroupDetailController, "
                                     + "PracticeGroupStandingController, PracticeStandingController and "
-                                    + "PracticeProfileOverviewController are allowed REST entry points");
+                                    + "PracticeProfileOverviewController and PracticeProfileReviewRunController are "
+                                    + "allowed REST entry points");
             rule.check(classes);
         }
     }

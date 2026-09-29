@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
@@ -77,8 +78,9 @@ public class ArtifactTraceController {
     @Operation(
             summary = "Explain what every practice did about one piece of work",
             description = "Every practice the workspace runs against this kind of work appears, including the ones "
-                    + "that did nothing, each with the recorded reason. 404 means nothing about this artifact was ever "
-                    + "recorded here — not that the trace is unavailable.",
+                    + "that did nothing, each with the recorded reason. Name a review and every answer is that "
+                    + "review's own. 404 means nothing about this artifact was ever recorded here, or the named "
+                    + "review never ran on it — not that the trace is unavailable.",
             operationId = "getArtifactTrace")
     @ApiResponse(
             responseCode = "200",
@@ -86,7 +88,7 @@ public class ArtifactTraceController {
             content = @Content(schema = @Schema(implementation = ArtifactTraceDTO.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "Nothing recorded about this artifact in this workspace",
+            description = "Nothing recorded about this artifact in this workspace, or the named review never ran on it",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
@@ -94,14 +96,19 @@ public class ArtifactTraceController {
     public ResponseEntity<ArtifactTraceDTO> getArtifactTrace(
             WorkspaceContext workspaceContext,
             @Parameter(description = "Kind of work, e.g. scm.pull_request") @PathVariable String artifactKind,
-            @Parameter(description = "The artifact's identifier as the ledger stores it") @PathVariable
-                    Long artifactId) {
+            @Parameter(description = "The artifact's identifier as the ledger stores it") @PathVariable Long artifactId,
+            @Parameter(
+                            description = "Answer for this review alone: every state, explanation and count is what "
+                                    + "this review made of the work. Omit it for every review of the work at once.")
+                    @RequestParam(required = false)
+                    @Nullable
+                    UUID reviewId) {
         requireMembership(workspaceContext);
         ArtifactKind kind = parseKind(artifactKind);
         if (kind == null) {
             throw new IllegalArgumentException("An artifact kind is required");
         }
-        return ResponseEntity.ok(queryService.trace(workspaceContext.id(), kind, artifactId));
+        return ResponseEntity.ok(queryService.trace(workspaceContext.id(), kind, artifactId, reviewId));
     }
 
     private static void requireMembership(WorkspaceContext workspaceContext) {

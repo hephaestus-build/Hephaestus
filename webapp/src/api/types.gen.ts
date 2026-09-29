@@ -3979,6 +3979,14 @@ export type PracticeTraceEntry = {
    */
   explanation: string;
   /**
+   * That group's name, as the workspace spells it; null when the practice has no group
+   */
+  groupName?: string;
+  /**
+   * Slug of the practice group this practice sits in; null for a practice the workspace files in no group
+   */
+  groupSlug?: string;
+  /**
    * Measurements this practice produced on this artifact
    */
   observationCount: number;
@@ -4117,6 +4125,74 @@ export type ProfileChange = {
    * What changed
    */
   type: 'FEEDBACK_NEW' | 'FEEDBACK_RESOLVED' | 'FEEDBACK_RESET' | 'STANDING_MOVED' | 'TREND_TURNED' | 'GROUP_MOVED' | 'FIRST_OBSERVED';
+};
+
+/**
+ * One review run on the developer's own work, with what it found about them
+ */
+export type ProfileReviewRun = {
+  /**
+   * How many pieces of feedback from this run reached this developer
+   */
+  feedbackDelivered: number;
+  /**
+   * Where the feedback this run left on the work is read, at the provider; absent whenever the comment it landed in cannot be addressed from the work's own page
+   */
+  feedbackUrl?: string;
+  /**
+   * Whether this reader has standing to ask for a review of this work. False when the kind of work admits no request.
+   */
+  mayRequest: boolean;
+  /**
+   * What the run decided about each practice it observed for this developer
+   */
+  practices: ReviewPracticeOutcomes;
+  /**
+   * How many practices the run measured; absent when it wrote no coverage ledger
+   */
+  practicesEvaluated?: number;
+  reviewId: string;
+  /**
+   * When the review recorded its newest observation about this developer
+   */
+  reviewedAt: Date;
+  /**
+   * The piece of work the run reviewed
+   */
+  reviewedWork: ReviewedWorkRef;
+  /**
+   * Every practice counted in practices.toImprove, once each, in order of practice name
+   */
+  slippedPractices: Array<SlippedPractice>;
+  /**
+   * Where the review stands; absent when the review itself is no longer on record
+   */
+  status?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  /**
+   * What occasioned the review: MANUAL is one a person asked for; absent when the review itself is no longer on record
+   */
+  triggerMode?: 'AUTO' | 'MANUAL';
+};
+
+/**
+ * One review run on the developer's own work and what it observed about them
+ */
+export type ProfileReviewRunDetail = {
+  /**
+   * Every visible observation the run made about this developer
+   */
+  observations: Array<ObservationDetail>;
+  run: ProfileReviewRun;
+};
+
+/**
+ * A page of the developer's own review runs, newest first
+ */
+export type ProfileReviewRunsPage = {
+  content: Array<ProfileReviewRun>;
+  hasNext?: boolean;
+  page?: number;
+  size?: number;
 };
 
 export type Question = {
@@ -4789,6 +4865,28 @@ export type ReviewPracticeGroup = {
 };
 
 /**
+ * What one run decided about each practice it observed for this developer, one outcome per practice however many observations it recorded about it; an invalidated observation decides nothing
+ */
+export type ReviewPracticeOutcomes = {
+  /**
+   * Practices with a strength observed and no problem
+   */
+  held: number;
+  /**
+   * Practices whose every observation said the practice did not apply to this work
+   */
+  notApplicable: number;
+  /**
+   * Practices with at least one problem observed
+   */
+  toImprove: number;
+  /**
+   * Practices the run looked at and could not settle either way: no strength, no problem, and not only a verdict that the practice did not apply
+   */
+  undecided: number;
+};
+
+/**
  * One exact provider message included in a review awaiting approval
  */
 export type ReviewProposedPlacement = {
@@ -4858,14 +4956,18 @@ export type ReviewRunCounts = {
  */
 export type ReviewRunRef = {
   /**
-   * When the run recorded its newest observation
+   * When the review recorded its newest observation about this developer
    */
   at: Date;
-  jobId: string;
+  reviewId: string;
   /**
    * The piece of work the run reviewed
    */
   reviewedWork: ReviewedWorkRef;
+  /**
+   * Where the review stands; absent when the review itself is no longer on record
+   */
+  status?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
 };
 
 /**
@@ -4990,7 +5092,7 @@ export type ReviewedWorkRef = {
    */
   repositoryName?: string;
   /**
-   * The work's own title: a pull request's, an issue's or a document's; a conversation thread has none
+   * The work's own title where the label does not already say it: a pull request's or an issue's; a conversation thread has none and a document's is its label
    */
   title?: string;
   /**
@@ -5169,6 +5271,14 @@ export type SlackUserWorkspacePreferences = {
   slackUserId: string;
   workspaceName: string;
   workspaceSlug: string;
+};
+
+/**
+ * A practice a run recorded a problem about for this developer
+ */
+export type SlippedPractice = {
+  practiceName: string;
+  practiceSlug: string;
 };
 
 export type Sort = {
@@ -7162,6 +7272,17 @@ export type PracticeStandingObservationWritable = {
    * The kind of reviewed work this is about
    */
   workKind: string;
+};
+
+/**
+ * One review run on the developer's own work and what it observed about them
+ */
+export type ProfileReviewRunDetailWritable = {
+  /**
+   * Every visible observation the run made about this developer
+   */
+  observations: Array<ObservationDetailWritable>;
+  run: ProfileReviewRun;
 };
 
 /**
@@ -11898,6 +12019,87 @@ export type GetPracticeProfileOverviewResponses = {
 
 export type GetPracticeProfileOverviewResponse = GetPracticeProfileOverviewResponses[keyof GetPracticeProfileOverviewResponses];
 
+export type ListPracticeProfileReviewRunsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: {
+    /**
+     * Zero-based page, at most 100
+     */
+    page?: number;
+    /**
+     * Page size from 1 to 50
+     */
+    size?: number;
+    /**
+     * Restrict to one kind of work, e.g. scm.pull_request
+     */
+    kind?: string;
+    /**
+     * Keep only runs whose newest observation about this developer came after this moment; the bound is exclusive
+     */
+    since?: Date;
+  };
+  url: '/workspaces/{workspaceSlug}/practice-profile/review-runs';
+};
+
+export type ListPracticeProfileReviewRunsErrors = {
+  /**
+   * Unknown kind of work or invalid pagination
+   */
+  400: ProblemDetail;
+};
+
+export type ListPracticeProfileReviewRunsError = ListPracticeProfileReviewRunsErrors[keyof ListPracticeProfileReviewRunsErrors];
+
+export type ListPracticeProfileReviewRunsResponses = {
+  /**
+   * Review runs returned
+   */
+  200: ProfileReviewRunsPage;
+};
+
+export type ListPracticeProfileReviewRunsResponse = ListPracticeProfileReviewRunsResponses[keyof ListPracticeProfileReviewRunsResponses];
+
+export type GetPracticeProfileReviewRunData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    /**
+     * The review, as the list names it
+     */
+    reviewId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practice-profile/review-runs/{reviewId}';
+};
+
+export type GetPracticeProfileReviewRunErrors = {
+  /**
+   * No run with anything about the calling developer in this workspace
+   */
+  404: ProblemDetail;
+};
+
+export type GetPracticeProfileReviewRunError = GetPracticeProfileReviewRunErrors[keyof GetPracticeProfileReviewRunErrors];
+
+export type GetPracticeProfileReviewRunResponses = {
+  /**
+   * Review run returned
+   */
+  200: ProfileReviewRunDetail;
+};
+
+export type GetPracticeProfileReviewRunResponse = GetPracticeProfileReviewRunResponses[keyof GetPracticeProfileReviewRunResponses];
+
 export type ListPracticesData = {
   body?: never;
   path: {
@@ -13282,13 +13484,18 @@ export type GetArtifactTraceData = {
      */
     artifactId: number;
   };
-  query?: never;
+  query?: {
+    /**
+     * Answer for this review alone: every state, explanation and count is what this review made of the work. Omit it for every review of the work at once.
+     */
+    reviewId?: string;
+  };
   url: '/workspaces/{workspaceSlug}/practices/trace/{artifactKind}/{artifactId}';
 };
 
 export type GetArtifactTraceErrors = {
   /**
-   * Nothing recorded about this artifact in this workspace
+   * Nothing recorded about this artifact in this workspace, or the named review never ran on it
    */
   404: ProblemDetail;
 };

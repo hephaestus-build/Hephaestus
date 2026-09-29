@@ -357,6 +357,8 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     1L,
                     "slug",
                     "A practice",
+                    null,
+                    null,
                     PracticeAutonomy.AUTOMATIC,
                     List.of(READY),
                     "no connected integration raises [scm.pull_request.ready]; connect one of [GITHUB]");
@@ -376,9 +378,11 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
 
     @Test
     void ordersInformativeAnswersFirst() {
-        var reviewed = new TracedPractice(1L, "b-reviewed", "B", PracticeAutonomy.AUTOMATIC, List.of(READY), null);
-        var quiet = new TracedPractice(2L, "a-quiet", "A", PracticeAutonomy.AUTOMATIC, List.of(MERGED), null);
-        var off = new TracedPractice(3L, "c-off", "C", PracticeAutonomy.OFF, List.of(READY), null);
+        var reviewed =
+                new TracedPractice(1L, "b-reviewed", "B", null, null, PracticeAutonomy.AUTOMATIC, List.of(READY), null);
+        var quiet =
+                new TracedPractice(2L, "a-quiet", "A", null, null, PracticeAutonomy.AUTOMATIC, List.of(MERGED), null);
+        var off = new TracedPractice(3L, "c-off", "C", null, null, PracticeAutonomy.OFF, List.of(READY), null);
 
         var entries = PracticeTraceDeriver.derive(
                 List.of(quiet, off, reviewed),
@@ -403,7 +407,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
     }
 
     private static TracedPractice practice(PracticeAutonomy autonomy, SignalName... watches) {
-        return new TracedPractice(1L, "slug", "A practice", autonomy, List.of(watches), null);
+        return new TracedPractice(1L, "slug", "A practice", null, null, autonomy, List.of(watches), null);
     }
 
     private static SignalOccurrence triggered(SignalName signal, UUID reviewId) {

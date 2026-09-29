@@ -169,7 +169,7 @@ export const ScopedToOnePieceOfWork: Story = {
 			artifactKind: "scm.pull_request",
 			artifactId: 42,
 		},
-		scopedArtifact: reviewArtifact.reviewedWork,
+		scopedWork: reviewArtifact.reviewedWork,
 		total: 5,
 	},
 	play: async ({ canvas }) => {

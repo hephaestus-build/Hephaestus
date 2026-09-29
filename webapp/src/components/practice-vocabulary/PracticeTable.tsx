@@ -3,8 +3,8 @@ import { type ComponentProps, Fragment, type MouseEvent, type ReactNode } from "
 
 import { cn } from "cn";
 import type { PracticeStanding, PracticeTrend, TrendSupport } from "@/api/types.gen";
+import { InlineLink } from "@/components/common/InlineLink";
 import { SortButton } from "@/components/common/SortButton";
-import { Button } from "@/components/ui/button";
 import {
 	Empty,
 	EmptyDescription,
@@ -203,11 +203,11 @@ export interface PracticeTableRowProps extends Omit<ComponentProps<typeof TableR
 }
 
 /**
- * The bar on the open row's leading edge, worn by `StandingCell` since every row puts it first: a
- * `<td>` positions it reliably and a `<tr>` does not. It takes the accent from the row's
- * `data-state`.
+ * The bar on the open row's leading edge, worn by the first cell of a `PracticeTableRow`, which
+ * is `StandingCell` here: a `<td>` positions it reliably and a `<tr>` does not. It takes the
+ * accent from the row's `data-state`.
  */
-const OPEN_ROW_BAR =
+export const OPEN_ROW_BAR =
 	"relative before:absolute before:inset-y-0 before:left-0 before:w-0.5 group-data-[state=open]/row:before:bg-mentor";
 
 /**
@@ -283,31 +283,28 @@ export function SubjectCell({ badge, sentence, children }: SubjectCellProps) {
 }
 
 /**
- * The row's own link at its end. A `variant="link"` button carrying `data-row-link` and no handler
- * of its own: the press bubbles to the row, which owns the opening. It takes `InlineLink`'s hover
- * from the whole row, since the whole row is the pointer path. The accessible name is built from
- * the visible words, so it always starts with what is on screen and a reader who speaks them
- * reaches the link (WCAG 2.2 SC 2.5.3). An `aria-label` rather than hidden text after the words:
- * how name-from-content joins an out-of-flow child to the text before it differs between engines,
- * and a label is one string everywhere.
+ * The row's own link at its end: an `InlineLink` drawn as a button carrying `data-row-link` and no
+ * handler of its own, so the press bubbles to the row, which owns the opening. The link rule is
+ * `InlineLink`'s, and the row's own hover is added since the whole row is the pointer path. The
+ * accessible name is built from the visible words, so it always starts with what is on screen and
+ * a reader who speaks them reaches the link (WCAG 2.2 SC 2.5.3). An `aria-label` rather than
+ * hidden text after the words: how name-from-content joins an out-of-flow child to the text before
+ * it differs between engines, and a label is one string everywhere.
  */
 function RowLinkCell({ link }: { link: PracticeTableRowLink | undefined }) {
 	return (
 		<TableCell className="text-right">
 			{link && (
-				<Button
-					variant="link"
-					size="inline"
-					data-row-link
-					aria-label={`${link.text} ${link.name}`}
-					className="font-medium whitespace-nowrap decoration-1 underline-offset-3 group-hover/row:text-mentor group-hover/row:underline focus-visible:text-mentor focus-visible:underline"
+				<InlineLink
+					render={<button type="button" data-row-link aria-label={`${link.text} ${link.name}`} />}
+					className="inline-flex items-center gap-1 font-medium whitespace-nowrap group-hover/row:text-mentor group-hover/row:underline"
 				>
 					{link.text}
 					<ArrowRightIcon
 						className="size-3.5 shrink-0 transition-transform motion-safe:group-hover/row:translate-x-0.5"
 						aria-hidden
 					/>
-				</Button>
+				</InlineLink>
 			)}
 		</TableCell>
 	);

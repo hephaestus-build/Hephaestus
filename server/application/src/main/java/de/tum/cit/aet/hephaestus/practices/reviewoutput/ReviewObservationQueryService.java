@@ -22,8 +22,8 @@ import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewObservationDTO
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewObservationDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewSubjectDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import java.util.List;
@@ -47,7 +47,7 @@ class ReviewObservationQueryService {
     private final FeedbackObservationRepository feedbackObservationRepository;
     private final FeedbackRepository feedbackRepository;
     private final ReviewSubjectResolver subjectResolver;
-    private final ReviewRunTargetLookup reviewRunTargetLookup;
+    private final ReviewRunLookup reviewRunLookup;
     private final EvidenceAuthorization evidenceAuthorization;
     private final ObservationInvalidationRepository invalidationRepository;
     private final AccountSummaryQuery accountSummaryQuery;
@@ -71,7 +71,7 @@ class ReviewObservationQueryService {
                                         .toList())
                         .stream()
                         .collect(Collectors.toMap(ObservationFeedbackCounts::getObservationId, Function.identity()));
-        Map<UUID, Target> targets = reviewRunTargetLookup.findByJobIds(
+        Map<UUID, Target> targets = reviewRunLookup.findTargets(
                 workspaceId,
                 rows.getContent().stream()
                         .map(OperatorObservationRow::getAgentJobId)
@@ -98,8 +98,8 @@ class ReviewObservationQueryService {
         ReviewedWorkRefDTO reviewedWork = ReviewedWorkLabels.ref(
                 observation.getArtifactKind(),
                 observation.getArtifactId(),
-                reviewRunTargetLookup
-                        .findByJobIds(workspaceId, List.of(observation.getAgentJobId()))
+                reviewRunLookup
+                        .findTargets(workspaceId, List.of(observation.getAgentJobId()))
                         .get(observation.getAgentJobId()));
         boolean includeEvidence =
                 evidenceAuthorization.permits(workspaceId, observation, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);

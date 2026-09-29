@@ -297,8 +297,9 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                 olderAt.plusSeconds(60),
                 "LIVE");
 
-        List<ObservationRepository.DeveloperReviewRunRow> runs = observationRepository.findDeveloperReviewRuns(
-                aboutUser.getId(), workspace.getId(), null, null, PageRequest.of(0, 50));
+        List<ObservationRepository.DeveloperReviewRunRow> runs = observationRepository
+                .findDeveloperReviewRuns(aboutUser.getId(), workspace.getId(), null, null, null, PageRequest.of(0, 50))
+                .getContent();
 
         assertThat(runs)
                 .filteredOn(run -> run.getJobId().equals(agentJob.getId()))
@@ -1183,8 +1184,10 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         void shouldExcludeHiddenRepositoryRunsWhenListingTheDevelopersRuns() {
             WorkOnBothRepositories work = seedWorkOnAVisibleAndAHiddenRepository();
 
-            List<ObservationRepository.DeveloperReviewRunRow> runs = observationRepository.findDeveloperReviewRuns(
-                    aboutUser.getId(), workspace.getId(), null, null, PageRequest.of(0, 50));
+            List<ObservationRepository.DeveloperReviewRunRow> runs = observationRepository
+                    .findDeveloperReviewRuns(
+                            aboutUser.getId(), workspace.getId(), null, null, null, PageRequest.of(0, 50))
+                    .getContent();
 
             assertThat(runs)
                     .extracting(ObservationRepository.DeveloperReviewRunRow::getJobId)

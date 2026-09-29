@@ -152,6 +152,23 @@ class ReviewRequestAuthorityTest extends BaseUnitTest {
         assertThat(authority.standingOf(WORKSPACE_ID, artifact(), List.of())).isEmpty();
     }
 
+    /** Admin standing belongs to the account, whichever of its identities holds the membership. */
+    @Test
+    void anAdminUnderAnyOfTheirIdentitiesHoldsAdminStanding() {
+        givenMembership(BYSTANDER_ID, WorkspaceRole.ADMIN);
+
+        assertThat(authority.anyAdmin(WORKSPACE_ID, List.of(user(AUTHOR_ID), user(BYSTANDER_ID))))
+                .isTrue();
+        assertThat(authority.anyAdmin(WORKSPACE_ID, List.of(user(AUTHOR_ID)))).isFalse();
+    }
+
+    @Test
+    void anyOfTheRequestersIdentitiesMayBeTheOneOnTheWork() {
+        assertThat(authority.isActorOn(artifact(), List.of(user(BYSTANDER_ID), user(ASSIGNEE_ID))))
+                .isTrue();
+        assertThat(authority.isActorOn(artifact(), List.of(user(BYSTANDER_ID)))).isFalse();
+    }
+
     // Fixtures
 
     private Issue artifact() {

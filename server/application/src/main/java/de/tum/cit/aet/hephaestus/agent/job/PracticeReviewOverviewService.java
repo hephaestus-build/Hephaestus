@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.PracticeObservationCounts;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewPracticeGroupDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewObservationCountsDTO;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;

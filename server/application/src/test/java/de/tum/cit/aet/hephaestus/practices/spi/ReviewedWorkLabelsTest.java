@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import java.util.Objects;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -92,12 +92,13 @@ class ReviewedWorkLabelsTest {
                                 null,
                                 "Engineering",
                                 null),
+                        // The title is the label, so it is not carried a second time.
                         new ReviewedWorkRefDTO(
                                 "3",
                                 ArtifactKinds.DOCUMENT,
                                 IntegrationKind.OUTLINE,
                                 "Queue retry policy",
-                                "Queue retry policy",
+                                null,
                                 null,
                                 null)));
     }

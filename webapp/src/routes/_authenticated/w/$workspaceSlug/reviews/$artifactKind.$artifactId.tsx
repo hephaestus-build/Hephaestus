@@ -1,14 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { toast } from "sonner";
 
-import {
-	getArtifactTraceOptions,
-	getArtifactTraceQueryKey,
-	requestPracticeReviewMutation,
-} from "@/api/@tanstack/react-query.gen";
+import { getArtifactTraceOptions } from "@/api/@tanstack/react-query.gen";
 import { TracePage } from "@/components/practice-trace/TracePage";
-import { problemDetailOf } from "@/lib/problem-detail";
+import { useRequestPracticeReview } from "@/hooks/use-request-practice-review";
 import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
@@ -33,7 +28,6 @@ function ReviewActivityDetailRoute() {
 	const readOnly = useAuth().userView !== undefined;
 	const { workspaceSlug, artifactKind } = Route.useParams();
 	const { artifactId } = Route.useLoaderData();
-	const queryClient = useQueryClient();
 	// The same cache entry the sidebar and the admin guard already read, on the same schedule, so
 	// asking here costs no request. It decides whether a refusal may offer its fix: this page is
 	// open to every member, and most of them would only be bounced back off the admin guard.
@@ -41,24 +35,7 @@ function ReviewActivityDetailRoute() {
 	const trace = useQuery({
 		...getArtifactTraceOptions({ path: { workspaceSlug, artifactKind, artifactId } }),
 	});
-	const requestReview = useMutation({
-		...requestPracticeReviewMutation(),
-		onSuccess: (outcome, { path, body }) => {
-			if (outcome.status !== "SUBMITTED") {
-				return;
-			}
-			void queryClient.invalidateQueries({
-				queryKey: getArtifactTraceQueryKey({
-					path: { ...path, artifactKind: body.artifactKind, artifactId: body.artifactId },
-				}),
-			});
-			toast.success("Review started");
-		},
-		onError: (error) =>
-			toast.error("Couldn't ask for a review", {
-				description: problemDetailOf(error, "Try again in a moment."),
-			}),
-	});
+	const requestReview = useRequestPracticeReview();
 
 	return (
 		<TracePage

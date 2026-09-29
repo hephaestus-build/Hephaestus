@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;

@@ -5512,6 +5512,107 @@ paths:
         \ before the latest one"
       tags:
       - Practice Profile
+  /workspaces/{workspaceSlug}/practice-profile/review-runs:
+    get:
+      description: "One row per run that recorded an observation about the calling\
+        \ developer, across every practice group, with what that run found about them.\
+        \ Counts are narrowed to this developer: a run over shared work says nothing\
+        \ here about anybody else."
+      operationId: listPracticeProfileReviewRuns
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - description: "Zero-based page, at most 100"
+        in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 100
+          minimum: 0
+      - description: Page size from 1 to 50
+        in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 50
+          minimum: 1
+      - description: "Restrict to one kind of work, e.g. scm.pull_request"
+        in: query
+        name: kind
+        required: false
+        schema:
+          type: string
+      - description: Keep only runs whose newest observation about this developer
+          came after this moment; the bound is exclusive
+        in: query
+        name: since
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileReviewRunsPage"
+          description: Review runs returned
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Unknown kind of work or invalid pagination
+      summary: "Every review run on the developer's own work, newest first"
+      tags:
+      - Practice Profile
+  /workspaces/{workspaceSlug}/practice-profile/review-runs/{reviewId}:
+    get:
+      description: "A run that recorded nothing about the calling developer is not\
+        \ theirs to read and answers 404, the same answer a run in another workspace\
+        \ gets."
+      operationId: getPracticeProfileReviewRun
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - description: "The review, as the list names it"
+        in: path
+        name: reviewId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileReviewRunDetail"
+          description: Review run returned
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: No run with anything about the calling developer in this workspace
+      summary: "One review run on the developer's own work, with what it observed\
+        \ about them"
+      tags:
+      - Practice Profile
   /workspaces/{workspaceSlug}/practices:
     get:
       description: "Returns this workspace's practices, each with the autonomy in\
@@ -7425,9 +7526,10 @@ paths:
   /workspaces/{workspaceSlug}/practices/trace/{artifactKind}/{artifactId}:
     get:
       description: "Every practice the workspace runs against this kind of work appears,\
-        \ including the ones that did nothing, each with the recorded reason. 404\
-        \ means nothing about this artifact was ever recorded here — not that the\
-        \ trace is unavailable."
+        \ including the ones that did nothing, each with the recorded reason. Name\
+        \ a review and every answer is that review's own. 404 means nothing about\
+        \ this artifact was ever recorded here, or the named review never ran on it\
+        \ — not that the trace is unavailable."
       operationId: getArtifactTrace
       parameters:
       - description: Workspace slug
@@ -7450,6 +7552,15 @@ paths:
         schema:
           type: integer
           format: int64
+      - description: "Answer for this review alone: every state, explanation and count\
+          \ is what this review made of the work. Omit it for every review of the\
+          \ work at once."
+        in: query
+        name: reviewId
+        required: false
+        schema:
+          type: string
+          format: uuid
       responses:
         "200":
           content:
@@ -7462,7 +7573,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: Nothing recorded about this artifact in this workspace
+          description: "Nothing recorded about this artifact in this workspace, or\
+            \ the named review never ran on it"
       summary: Explain what every practice did about one piece of work
       tags:
       - Practice review trace
@@ -14839,6 +14951,14 @@ components:
         explanation:
           type: string
           description: "The outcome in a sentence, phrased as what would change it"
+        groupName:
+          type: string
+          description: "That group's name, as the workspace spells it; null when the\
+            \ practice has no group"
+        groupSlug:
+          type: string
+          description: Slug of the practice group this practice sits in; null for
+            a practice the workspace files in no group
         observationCount:
           type: integer
           format: int32
@@ -15128,6 +15248,106 @@ components:
       - at
       - evidence
       - type
+    ProfileReviewRun:
+      type: object
+      description: "One review run on the developer's own work, with what it found\
+        \ about them"
+      properties:
+        feedbackDelivered:
+          type: integer
+          format: int64
+          description: How many pieces of feedback from this run reached this developer
+        feedbackUrl:
+          type: string
+          description: "Where the feedback this run left on the work is read, at the\
+            \ provider; absent whenever the comment it landed in cannot be addressed\
+            \ from the work's own page"
+        mayRequest:
+          type: boolean
+          description: Whether this reader has standing to ask for a review of this
+            work. False when the kind of work admits no request.
+        practices:
+          $ref: "#/components/schemas/ReviewPracticeOutcomes"
+          description: What the run decided about each practice it observed for this
+            developer
+        practicesEvaluated:
+          type: integer
+          format: int32
+          description: How many practices the run measured; absent when it wrote no
+            coverage ledger
+        reviewId:
+          type: string
+          format: uuid
+        reviewedAt:
+          type: string
+          format: date-time
+          description: When the review recorded its newest observation about this
+            developer
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: The piece of work the run reviewed
+        slippedPractices:
+          type: array
+          description: "Every practice counted in practices.toImprove, once each,\
+            \ in order of practice name"
+          items:
+            $ref: "#/components/schemas/SlippedPractice"
+        status:
+          type: string
+          description: Where the review stands; absent when the review itself is no
+            longer on record
+          enum:
+          - IN_PROGRESS
+          - COMPLETED
+          - FAILED
+        triggerMode:
+          type: string
+          description: "What occasioned the review: MANUAL is one a person asked for;\
+            \ absent when the review itself is no longer on record"
+          enum:
+          - AUTO
+          - MANUAL
+      required:
+      - feedbackDelivered
+      - mayRequest
+      - practices
+      - reviewId
+      - reviewedAt
+      - reviewedWork
+      - slippedPractices
+    ProfileReviewRunDetail:
+      type: object
+      description: One review run on the developer's own work and what it observed
+        about them
+      properties:
+        observations:
+          type: array
+          description: Every visible observation the run made about this developer
+          items:
+            $ref: "#/components/schemas/ObservationDetail"
+        run:
+          $ref: "#/components/schemas/ProfileReviewRun"
+      required:
+      - observations
+      - run
+    ProfileReviewRunsPage:
+      type: object
+      description: "A page of the developer's own review runs, newest first"
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileReviewRun"
+        hasNext:
+          type: boolean
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+      required:
+      - content
     Question:
       type: object
       properties:
@@ -16299,6 +16519,36 @@ components:
       required:
       - name
       - slug
+    ReviewPracticeOutcomes:
+      type: object
+      description: "What one run decided about each practice it observed for this\
+        \ developer, one outcome per practice however many observations it recorded\
+        \ about it; an invalidated observation decides nothing"
+      properties:
+        held:
+          type: integer
+          format: int32
+          description: Practices with a strength observed and no problem
+        notApplicable:
+          type: integer
+          format: int32
+          description: Practices whose every observation said the practice did not
+            apply to this work
+        toImprove:
+          type: integer
+          format: int32
+          description: Practices with at least one problem observed
+        undecided:
+          type: integer
+          format: int32
+          description: "Practices the run looked at and could not settle either way:\
+            \ no strength, no problem, and not only a verdict that the practice did\
+            \ not apply"
+      required:
+      - held
+      - notApplicable
+      - toImprove
+      - undecided
     ReviewProposedPlacement:
       type: object
       description: One exact provider message included in a review awaiting approval
@@ -16425,16 +16675,25 @@ components:
         at:
           type: string
           format: date-time
-          description: When the run recorded its newest observation
-        jobId:
+          description: When the review recorded its newest observation about this
+            developer
+        reviewId:
           type: string
           format: uuid
         reviewedWork:
           $ref: "#/components/schemas/ReviewedWorkRef"
           description: The piece of work the run reviewed
+        status:
+          type: string
+          description: Where the review stands; absent when the review itself is no
+            longer on record
+          enum:
+          - IN_PROGRESS
+          - COMPLETED
+          - FAILED
       required:
       - at
-      - jobId
+      - reviewId
       - reviewedWork
     ReviewRunSummary:
       type: object
@@ -16614,8 +16873,9 @@ components:
           description: "Repository the work belongs to, for pull requests and issues"
         title:
           type: string
-          description: "The work's own title: a pull request's, an issue's or a document's;\
-            \ a conversation thread has none"
+          description: "The work's own title where the label does not already say\
+            \ it: a pull request's or an issue's; a conversation thread has none and\
+            \ a document's is its label"
         url:
           type: string
           description: "The work's page at its provider, when the provider exposes\
@@ -16857,6 +17117,17 @@ components:
       - slackUserId
       - workspaceName
       - workspaceSlug
+    SlippedPractice:
+      type: object
+      description: A practice a run recorded a problem about for this developer
+      properties:
+        practiceName:
+          type: string
+        practiceSlug:
+          type: string
+      required:
+      - practiceName
+      - practiceSlug
     Sort:
       type: object
       properties:

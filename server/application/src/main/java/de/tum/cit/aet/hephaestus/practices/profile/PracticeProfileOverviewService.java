@@ -32,8 +32,9 @@ import de.tum.cit.aet.hephaestus.practices.profile.dto.PracticeProfileOverviewDT
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileChangeDTO;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ReviewRunRefDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.ReviewRunFacts;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -76,7 +77,7 @@ public class PracticeProfileOverviewService {
     private final FeedbackWithdrawalRepository withdrawalRepository;
     private final InAppFeedbackEvidence feedbackEvidence;
     private final ReactionRepository reactionRepository;
-    private final ReviewRunTargetLookup reviewRunTargetLookup;
+    private final ReviewRunLookup reviewRunLookup;
     private final BundledPracticeCatalogLoader bundledCatalog;
     private final Clock clock;
 
@@ -93,8 +94,9 @@ public class PracticeProfileOverviewService {
         long developerId = currentDeveloperId.get();
 
         // The two newest runs; the previous one opens the window, so the window holds no run older than these.
-        List<DeveloperReviewRunRow> newestRuns = observationRepository.findDeveloperReviewRuns(
-                developerId, workspaceId, null, now, PageRequest.of(0, 2));
+        List<DeveloperReviewRunRow> newestRuns = observationRepository
+                .findDeveloperReviewRuns(developerId, workspaceId, null, now, null, PageRequest.of(0, 2))
+                .getContent();
         DeveloperReviewRunRow latest = newestRuns.isEmpty() ? null : newestRuns.getFirst();
         Instant previousRunAt = newestRuns.size() < 2 ? null : newestRuns.get(1).getReviewedAt();
         OverviewWindow window = OverviewWindow.sincePreviousRun(previousRunAt, now);
@@ -117,7 +119,7 @@ public class PracticeProfileOverviewService {
                                 FirstObservedRow::getPracticeSlug, FirstObservedRow::getFirstObservedAt));
         FeedbackFacts feedback = readFeedback(workspaceId, developerId, now, window, windowRuns, before, after);
 
-        Map<UUID, Target> targets = reviewRunTargetLookup.findByJobIds(
+        Map<UUID, Target> targets = reviewRunLookup.findTargets(
                 workspaceId,
                 Stream.of(
                                 windowRuns.stream().map(DeveloperReviewRunRow::getJobId),
@@ -144,7 +146,7 @@ public class PracticeProfileOverviewService {
         changes.sort(Comparator.comparing(ProfileChangeDTO::at).reversed());
         return new PracticeProfileOverviewDTO(
                 OverviewWindowDTO.from(window),
-                latest == null ? null : runRef(latest, targets),
+                latest == null ? null : runRef(workspaceId, latest, targets),
                 holdingUp(after, targets),
                 newestFeedbackChangePerPractice(changes),
                 reviewedWork(windowRuns, targets));
@@ -474,12 +476,15 @@ public class PracticeProfileOverviewService {
         return sourceSlug == null ? null : bundledCatalog.holdsAs(sourceSlug).orElse(null);
     }
 
-    private static ReviewRunRefDTO runRef(DeveloperReviewRunRow run, Map<UUID, Target> targets) {
+    private ReviewRunRefDTO runRef(long workspaceId, DeveloperReviewRunRow run, Map<UUID, Target> targets) {
+        ReviewRunFacts facts =
+                reviewRunLookup.findFacts(workspaceId, List.of(run.getJobId())).get(run.getJobId());
         return new ReviewRunRefDTO(
                 run.getJobId(),
                 run.getReviewedAt(),
                 ReviewedWorkLabels.ref(
-                        ArtifactKind.of(run.getArtifactKind()), run.getArtifactId(), targets.get(run.getJobId())));
+                        ArtifactKind.of(run.getArtifactKind()), run.getArtifactId(), targets.get(run.getJobId())),
+                facts == null ? null : facts.status());
     }
 
     /** The window's runs as pieces of work: a piece reviewed twice in the window is listed once, at its newest. */

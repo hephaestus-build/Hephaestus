@@ -74,8 +74,16 @@ export function artifactKindPluralLabel(kind: string | undefined): string {
 	return isKnownArtifactKind(kind) ? ARTIFACT_KIND_PLURAL_LABELS[kind] : kind;
 }
 
+/** Whether two references name the same piece of work: the same kind, and the same id within it. */
+export function sameReviewedWork(
+	left: Pick<ReviewedWorkRef, "kind" | "id">,
+	right: Pick<ReviewedWorkRef, "kind" | "id">,
+): boolean {
+	return left.kind === right.kind && left.id === right.id;
+}
+
 /** The provider a piece of reviewed work lives at, as the wire names it on `ReviewedWorkRef`. */
-export type WorkProvider = ReviewedWorkRef["provider"];
+export type WorkProvider = NonNullable<ReviewedWorkRef["provider"]>;
 
 /**
  * The same kinds as they read mid-sentence — "Based on 4 pull requests" rather than the title-case

@@ -3,14 +3,15 @@ package de.tum.cit.aet.hephaestus.practices.spi;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import org.jspecify.annotations.Nullable;
 
 /**
  * How a piece of reviewed work is named to a reader, on every surface: the way its provider names it. A
  * GitHub pull request or any issue is {@code #22}, a GitLab merge request {@code !425}, a conversation its
- * channel, a document its title. With no run to read the name off, or a run that names other work, the kind
- * alone is said, never a number that was not there.
+ * channel, a document its title. The title is carried beside the label only where it adds a name the label
+ * does not already say. With no run to read the name off, or a run that names other work, the kind alone is
+ * said, never a number that was not there.
  */
 public final class ReviewedWorkLabels {
 
@@ -36,9 +37,14 @@ public final class ReviewedWorkLabels {
                 target.repositoryName());
     }
 
-    /** A conversation thread has no title of its own; the target's is the kind's name, not the work's. */
+    /**
+     * A conversation thread has no title of its own, the target's being the kind's name; a document's title
+     * is already its label, so carrying it twice would print it twice.
+     */
     private static @Nullable String title(ArtifactKind kind, Target target) {
-        return kind.equals(ArtifactKinds.CONVERSATION_THREAD) ? null : target.title();
+        return kind.equals(ArtifactKinds.CONVERSATION_THREAD) || kind.equals(ArtifactKinds.DOCUMENT)
+                ? null
+                : target.title();
     }
 
     private static String label(ArtifactKind kind, Target target) {

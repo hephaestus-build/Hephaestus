@@ -67,7 +67,7 @@ const NEWEST_CARD_COUNT = 2;
 const FEEDBACK_TAB_LABELS: Record<FeedbackTab, string> = {
 	newest: "Newest",
 	open: "Open",
-	resolved: "Resolved",
+	resolved: "Resolved and closed",
 	all: "All",
 };
 
@@ -79,8 +79,9 @@ const EMPTY_TAB: Record<FeedbackTab, FeedbackEmptyProps> = {
 	newest: NO_OPEN_FEEDBACK,
 	open: NO_OPEN_FEEDBACK,
 	resolved: {
-		title: "No resolved feedback yet.",
-		description: "A card moves here once the work resolves it or you mark it as addressed.",
+		title: "No resolved or closed feedback yet.",
+		description:
+			"A card moves here once the work resolves it, you mark it as addressed, or its practice's review rules change.",
 	},
 	all: {},
 };

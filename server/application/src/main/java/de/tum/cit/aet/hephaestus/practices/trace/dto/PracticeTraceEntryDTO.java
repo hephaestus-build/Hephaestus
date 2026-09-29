@@ -24,6 +24,16 @@ public record PracticeTraceEntryDTO(
         @NonNull String practiceSlug,
         @NonNull String practiceName,
 
+        @Schema(
+                description = "Slug of the practice group this practice sits in; null for a practice the workspace "
+                        + "files in no group")
+        @Nullable
+        String groupSlug,
+
+        @Schema(description = "That group's name, as the workspace spells it; null when the practice has no group")
+        @Nullable
+        String groupName,
+
         @NonNull
         @Schema(description = "How much autonomy the workspace currently gives this practice, after inheritance")
         PracticeAutonomy autonomy,

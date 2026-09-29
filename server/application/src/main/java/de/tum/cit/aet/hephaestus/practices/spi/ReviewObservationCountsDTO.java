@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.agent.job;
+package de.tum.cit.aet.hephaestus.practices.spi;
 
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.AssessmentCounts;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -23,7 +23,7 @@ public record ReviewObservationCountsDTO(
         return new ReviewObservationCountsDTO(0L, 0L, 0L, 0L);
     }
 
-    static ReviewObservationCountsDTO from(@Nullable AssessmentCounts counts) {
+    public static ReviewObservationCountsDTO from(@Nullable AssessmentCounts counts) {
         return counts == null
                 ? empty()
                 : new ReviewObservationCountsDTO(
@@ -33,7 +33,7 @@ public record ReviewObservationCountsDTO(
                         counts.getUndetermined());
     }
 
-    ReviewObservationCountsDTO plus(ReviewObservationCountsDTO other) {
+    public ReviewObservationCountsDTO plus(ReviewObservationCountsDTO other) {
         return new ReviewObservationCountsDTO(
                 strengths + other.strengths,
                 problems + other.problems,

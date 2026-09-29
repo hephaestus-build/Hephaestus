@@ -82,7 +82,7 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractPracticeReviewInteg
                 .jsonPath("$[0].standing")
                 .isEqualTo("DEVELOPING");
         read(token, "/workspaces/actor-github/practice-profile/overview")
-                .jsonPath("$.latestRun.jobId")
+                .jsonPath("$.latestRun.reviewId")
                 .isEqualTo(run.getId().toString());
 
         // Slack and Outline attribute through the same account view.

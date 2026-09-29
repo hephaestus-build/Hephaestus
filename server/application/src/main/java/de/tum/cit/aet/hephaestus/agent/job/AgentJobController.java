@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.AgentJobListRow;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -11,6 +13,8 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -39,6 +43,7 @@ public class AgentJobController {
 
     private final AgentJobService agentJobService;
     private final AgentJobLifecycleService agentJobLifecycleService;
+    private final ReviewRunTargets reviewRunTargets;
 
     @GetMapping
     @Operation(summary = "List agent jobs for a workspace")
@@ -53,9 +58,10 @@ public class AgentJobController {
         int pageSize = Math.max(1, Math.min(size, 100));
         Pageable pageable =
                 PageRequest.of(safePage, pageSize, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
-        Page<AgentJobDTO> jobs =
-                agentJobService.getJobs(workspaceContext.id(), status, pageable).map(AgentJobDTO::from);
-        return ResponseEntity.ok(PageResponseDTO.from(jobs));
+        Page<AgentJobListRow> rows = agentJobService.getJobs(workspaceContext.id(), status, pageable);
+        Map<UUID, Target> targets = reviewRunTargets.of(workspaceContext.id(), rows.getContent());
+        return ResponseEntity.ok(PageResponseDTO.from(
+                rows.map(row -> AgentJobDTO.from(row, Objects.requireNonNull(targets.get(row.getId()))))));
     }
 
     @GetMapping("/{jobId}")
@@ -71,7 +77,7 @@ public class AgentJobController {
     @RequireAtLeastWorkspaceAdmin
     public ResponseEntity<AgentJobDTO> getAgentJob(WorkspaceContext workspaceContext, @PathVariable UUID jobId) {
         AgentJob job = agentJobService.getJob(workspaceContext.id(), jobId);
-        return ResponseEntity.ok(AgentJobDTO.from(job));
+        return ResponseEntity.ok(dto(workspaceContext, job));
     }
 
     @PostMapping("/{jobId}/cancel")
@@ -89,7 +95,7 @@ public class AgentJobController {
     @AuditExempt(reason = "job control, not configuration; job state is its own record")
     public ResponseEntity<AgentJobDTO> cancelAgentJob(WorkspaceContext workspaceContext, @PathVariable UUID jobId) {
         AgentJob job = agentJobLifecycleService.cancel(workspaceContext.id(), jobId);
-        return ResponseEntity.ok(AgentJobDTO.from(job));
+        return ResponseEntity.ok(dto(workspaceContext, job));
     }
 
     @PostMapping("/{jobId}/delivery/retry")
@@ -108,6 +114,10 @@ public class AgentJobController {
     public ResponseEntity<AgentJobDTO> retryAgentJobDelivery(
             WorkspaceContext workspaceContext, @PathVariable UUID jobId) {
         AgentJob job = agentJobLifecycleService.retryDelivery(workspaceContext.id(), jobId);
-        return ResponseEntity.ok(AgentJobDTO.from(job));
+        return ResponseEntity.ok(dto(workspaceContext, job));
+    }
+
+    private AgentJobDTO dto(WorkspaceContext workspaceContext, AgentJob job) {
+        return AgentJobDTO.from(job, reviewRunTargets.of(workspaceContext.id(), job));
     }
 }

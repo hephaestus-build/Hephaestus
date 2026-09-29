@@ -18,7 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDetailDTO;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.List;
@@ -37,7 +37,7 @@ class ReviewFeedbackInAppBodyTest extends BaseUnitTest {
             mock(FeedbackObservationRepository.class);
     private final FeedbackPlacementRepository feedbackPlacementRepository = mock(FeedbackPlacementRepository.class);
     private final ReviewSubjectResolver subjectResolver = mock(ReviewSubjectResolver.class);
-    private final ReviewRunTargetLookup reviewRunTargetLookup = mock(ReviewRunTargetLookup.class);
+    private final ReviewRunLookup reviewRunLookup = mock(ReviewRunLookup.class);
     private final FeedbackApprovalRepository approvalRepository = mock(FeedbackApprovalRepository.class);
     private final DeliveryPolicyEvaluationRepository policyEvaluationRepository =
             mock(DeliveryPolicyEvaluationRepository.class);
@@ -47,7 +47,7 @@ class ReviewFeedbackInAppBodyTest extends BaseUnitTest {
             feedbackObservationRepository,
             feedbackPlacementRepository,
             subjectResolver,
-            reviewRunTargetLookup,
+            reviewRunLookup,
             approvalRepository,
             policyEvaluationRepository,
             mock(FeedbackWithdrawalRepository.class),

@@ -192,6 +192,30 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     List<ObservationFeedbackCounts> summarizeFeedbackByObservation(
             @Param("workspaceId") Long workspaceId, @Param("observationIds") Collection<UUID> observationIds);
 
+    /** How many pieces of feedback each run delivered to one developer and has not withdrawn. */
+    @Query(value = """
+        SELECT f.agent_job_id AS "jobId", COUNT(*) AS "delivered"
+        FROM feedback f
+        WHERE f.workspace_id = :workspaceId
+          AND f.recipient_user_id = :recipientUserId
+          AND f.agent_job_id IN :jobIds
+          AND f.delivery_state = 'DELIVERED'
+          AND NOT EXISTS (
+              SELECT 1 FROM feedback_withdrawal w
+              WHERE w.feedback_id = f.id AND w.workspace_id = f.workspace_id AND w.restored_at IS NULL)
+        GROUP BY f.agent_job_id
+        """, nativeQuery = true)
+    List<DeliveredFeedbackCount> countDeliveredByRun(
+            @Param("workspaceId") Long workspaceId,
+            @Param("recipientUserId") Long recipientUserId,
+            @Param("jobIds") Collection<UUID> jobIds);
+
+    interface DeliveredFeedbackCount {
+        UUID getJobId();
+
+        Long getDelivered();
+    }
+
     /** The columns of {@link #STATE_COUNTS}. */
     interface FeedbackStateCounts {
         Long getAwaitingApproval();
@@ -815,18 +839,19 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     }
 
     /**
-     * How much of what was measured on one artifact actually reached a person, by practice.
+     * How much of what was measured on one artifact actually reached a person, by practice and by the run
+     * that composed it; a piece of feedback has one run, so summing the runs counts it once.
      * {@code COUNT(DISTINCT f.id)} because one piece of feedback routinely fuses several observations of the
      * same practice; counting join rows would multiply it.
      */
     @Query("""
-        SELECT o.practice.id AS practiceId, f.deliveryState AS deliveryState,
+        SELECT o.practice.id AS practiceId, f.agentJobId AS reviewId, f.deliveryState AS deliveryState,
                f.suppressionReason AS suppressionReason, COUNT(DISTINCT f.id) AS units
         FROM FeedbackObservation fo JOIN fo.feedback f JOIN fo.observation o
         WHERE f.workspaceId = :workspaceId
           AND o.artifactKind = :artifactKind
           AND o.artifactId = :artifactId
-        GROUP BY o.practice.id, f.deliveryState, f.suppressionReason
+        GROUP BY o.practice.id, f.agentJobId, f.deliveryState, f.suppressionReason
         """)
     List<ArtifactFeedbackRow> summarizeForArtifact(
             @Param("workspaceId") Long workspaceId,
@@ -835,6 +860,8 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
 
     interface ArtifactFeedbackRow {
         Long getPracticeId();
+
+        UUID getReviewId();
 
         FeedbackDeliveryState getDeliveryState();
 

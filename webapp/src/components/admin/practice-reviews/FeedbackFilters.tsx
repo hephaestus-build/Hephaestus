@@ -82,9 +82,9 @@ export interface FeedbackFiltersProps {
 	total: number | undefined;
 	/**
 	 * The work `artifactKind`/`artifactId` points at, so the pill can name it rather than print an
-	 * id. Absent until a row carrying that artifact has arrived.
+	 * id. Absent until a row carrying that work has arrived.
 	 */
-	scopedArtifact?: ReviewedWorkRef;
+	scopedWork?: ReviewedWorkRef;
 	/**
 	 * The name of the person `recipientUserId` identifies. It must name *that* person: reading it off
 	 * the first row is right only while the filter is on.
@@ -99,7 +99,7 @@ export function FeedbackFilters({
 	practices,
 	people,
 	total,
-	scopedArtifact,
+	scopedWork,
 	recipientName,
 }: FeedbackFiltersProps) {
 	const hasFilter = hasFeedbackFilter(search);
@@ -192,7 +192,7 @@ export function FeedbackFilters({
 			{search.artifactKind && (
 				<ReferenceFilterPill
 					label="Reviewed work"
-					value={reviewArtifactScopeLabel(search.artifactKind, search.artifactId, scopedArtifact)}
+					value={reviewArtifactScopeLabel(search.artifactKind, search.artifactId, scopedWork)}
 					onClear={() => onPatch({ artifactKind: undefined, artifactId: undefined })}
 				/>
 			)}

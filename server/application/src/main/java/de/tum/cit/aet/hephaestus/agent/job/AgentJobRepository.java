@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
@@ -70,6 +71,30 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
     /** What these runs wrote about themselves: the composed next steps live in {@code output}. */
     List<ReviewRunNarrativeRow> findReviewRunNarrativesByWorkspaceIdAndIdIn(Long workspaceId, Collection<UUID> ids);
+
+    /**
+     * What these runs record about themselves; {@code output} holds the coverage ledger, and the target columns
+     * address the summary comment on the work's page. A projection, so a listing does not load each run's
+     * whole entity.
+     */
+    @Query("SELECT j.id AS id, j.jobType AS jobType, j.integrationKind AS integrationKind, j.metadata AS metadata, "
+            + "j.status AS status, j.practiceTriggerMode AS triggerMode, j.output AS output, "
+            + "j.deliveryCommentId AS deliveryCommentId FROM AgentJob j "
+            + "WHERE j.workspace.id = :workspaceId AND j.id IN :ids")
+    List<ReviewRunFactsRow> findReviewRunFacts(
+            @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
+
+    interface ReviewRunFactsRow extends ReviewRunTargetRow {
+        AgentJobStatus getStatus();
+
+        TriggerMode getTriggerMode();
+
+        @Nullable
+        JsonNode getOutput();
+
+        @Nullable
+        String getDeliveryCommentId();
+    }
 
     interface ReviewRunNarrativeRow {
         UUID getId();

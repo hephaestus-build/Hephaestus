@@ -17,8 +17,7 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { ItemGroup } from "@/components/ui/item";
-import { ARTIFACT_KIND_VALUES, artifactKindPluralLabel } from "@/lib/artifact-kinds";
-import { hasText } from "@/lib/text";
+import { artifactKindPluralLabel } from "@/lib/artifact-kinds";
 
 import type { TraceSearch } from "./trace-search";
 import { TracedArtifactRow } from "./TracedArtifactRow";
@@ -52,15 +51,6 @@ export function TraceListPage({
 }: TraceListPageProps) {
 	const page = search.page ?? 0;
 	const rows = artifacts?.content ?? [];
-	// No endpoint enumerates the kinds, so the choices are the ones this build knows plus any the
-	// page shows — and always the active filter, so a filter arriving by link can be seen and cleared.
-	const kinds = [
-		...new Set([
-			...ARTIFACT_KIND_VALUES,
-			...rows.map((artifact) => artifact.artifactKind),
-			...(hasText(search.kind) ? [search.kind] : []),
-		]),
-	];
 	const hasFilter = Boolean(search.kind);
 	const failed = error != null;
 
@@ -125,7 +115,7 @@ export function TraceListPage({
 					}
 				>
 					<TraceKindFilter
-						kinds={kinds}
+						seen={rows.map((artifact) => artifact.artifactKind)}
 						value={search.kind}
 						onChange={(kind) => onSearchChange({ kind, page: undefined })}
 					/>
