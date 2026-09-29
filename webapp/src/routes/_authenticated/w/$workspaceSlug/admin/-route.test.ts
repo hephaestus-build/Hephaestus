@@ -76,6 +76,10 @@ describe("workspace-admin route gate", () => {
 		"/w/$workspaceSlug/user/$username/achievements",
 		"/w/$workspaceSlug/admin/achievements",
 		"/w/$workspaceSlug/admin/achievement-designer",
+		// Review activity: its list is the admin Practice reviews console's Work tab now.
+		"/w/$workspaceSlug/reviews",
+		"/w/$workspaceSlug/reviews/",
+		"/w/$workspaceSlug/reviews/$artifactKind/$artifactId",
 	])("does not register the retired route %s", (path) => {
 		expect(routePaths).not.toContain(path);
 	});

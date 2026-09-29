@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import { ExternalLinkIcon, PlayIcon } from "lucide-react";
-import { type ReactNode, useEffect, useRef } from "react";
+import type { ReactNode } from "react";
 
 import type {
 	GetArtifactTraceResponse,
@@ -21,8 +21,14 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
-import { occurrenceDomId } from "@/components/practice-trace/trace-format";
+import {
+	type ReviewRunPracticeFilters,
+	ReviewRunPracticeTable,
+	ReviewRunPracticeTableSkeleton,
+	runPractices,
+} from "@/components/practice-trace/ReviewRunPracticeTable";
 import { TraceSignalTimeline } from "@/components/practice-trace/TraceSignalTimeline";
+import { useOccurrenceJump } from "@/components/practice-trace/use-occurrence-jump";
 import { count } from "@/components/practice-vocabulary/feedback-text";
 import { REVIEW_RUN_STATE_DEFS } from "@/components/practice-vocabulary/review-run-state-defs";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -34,12 +40,6 @@ import { hasText } from "@/lib/text";
 
 import { REVIEW_TABS, type ReviewTab } from "./practice-profile-search";
 import { RequestedReviewTag, ReviewOrdinalTag } from "./review-run-tags";
-import {
-	type ReviewRunPracticeFilters,
-	ReviewRunPracticeTable,
-	ReviewRunPracticeTableSkeleton,
-	runPractices,
-} from "./ReviewRunPracticeTable";
 
 /**
  * One review and what it observed about the reader, with this work's review activity: every
@@ -117,16 +117,7 @@ export function ProfileReviewLevel({
 	workspaceSlug,
 	canAdminister = false,
 }: ProfileReviewLevelProps) {
-	// A jump to an occurrence opens the other tab first, then lands once the timeline exists.
-	const pendingOccurrence = useRef<string>(undefined);
-	useEffect(() => {
-		const id = pendingOccurrence.current;
-		if (id === undefined || tab !== "noticed") {
-			return;
-		}
-		pendingOccurrence.current = undefined;
-		document.getElementById(occurrenceDomId(id))?.focus();
-	}, [tab]);
+	const showOccurrence = useOccurrenceJump(tab === "noticed", () => onTabChange("noticed"));
 
 	const run = state.status === "ready" ? state.run : undefined;
 	const activity = state.status === "ready" ? state.activity : undefined;
@@ -195,12 +186,13 @@ export function ProfileReviewLevel({
 						filters={filters}
 						onFiltersChange={onFiltersChange}
 						onOpenPractice={onOpenPractice}
-						onShowOccurrence={(signalId) => {
-							pendingOccurrence.current = signalId;
-							onTabChange("noticed");
-						}}
+						onShowOccurrence={showOccurrence}
 						canAdminister={canAdminister}
-						running={state.run.status === "IN_PROGRESS"}
+						emptyMessage={
+							state.run.status === "IN_PROGRESS"
+								? "Practices appear here as the review reaches them."
+								: "This review reached no practice, so there is nothing to list here."
+						}
 					/>
 				</TabsContent>
 				<TabsContent value="noticed" className="min-w-0">

@@ -59,6 +59,7 @@ function sectionLink(navigation: HTMLElement, name: string) {
 describe("practice review routes", () => {
 	it.each([
 		["Overview", REVIEWS],
+		["Work", `${REVIEWS}/work`],
 		["Reviews", `${REVIEWS}/runs`],
 		["Observations", `${REVIEWS}/observations`],
 		["Feedback", `${REVIEWS}/feedback`],
@@ -88,7 +89,7 @@ describe("practice review routes", () => {
 		expect(new URL(target.href).pathname).toBe(`${REVIEWS}/${toPath}`);
 		expect(carriedSearch(target)).toStrictEqual(SCOPE);
 
-		for (const unscoped of ["Overview", "Reviews"]) {
+		for (const unscoped of ["Overview", "Work", "Reviews"]) {
 			expect(carriedSearch(sectionLink(navigation, unscoped))).toStrictEqual({});
 		}
 	});
@@ -100,9 +101,18 @@ describe("practice review routes", () => {
 	it("keeps a chosen range on the overview and off every tab", async () => {
 		renderRouteAtWithRouter(`${REVIEWS}?range=90d`);
 		const navigation = await sectionNavigation();
-		for (const tab of ["Overview", "Reviews", "Observations", "Feedback"]) {
+		for (const tab of ["Overview", "Work", "Reviews", "Observations", "Feedback"]) {
 			expect(carriedSearch(sectionLink(navigation, tab))).toStrictEqual({});
 		}
+	});
+
+	/**
+	 * Review activity's list lives here now, for admins only, and its old address is gone rather than
+	 * redirected: only the app linked to it.
+	 */
+	it("no longer resolves the retired review activity address", async () => {
+		renderRouteAtWithRouter("/w/acme/reviews");
+		await screen.findByRole("heading", { name: "Page Not Found" }, ROUTE_RENDER_WAIT);
 	});
 
 	/** A practice level counts over the overview's range, so opening one keeps it. */

@@ -9,9 +9,9 @@ import type {
 
 /**
  * Typed as the generated views rather than as `Wire<…>` of them, with real `Date`s: these fixtures
- * are handed straight to props now that the trace screens take their data that way. Route tests
- * still serve them through MSW, and `HttpResponse.json` stringifies a `Date` back into the ISO
- * string the wire carries — the same value the client's transformer revives on the way in.
+ * are handed straight to props. Route tests still serve them through MSW, and `HttpResponse.json`
+ * stringifies a `Date` back into the ISO string the wire carries — the same value the client's
+ * transformer revives on the way in.
  */
 
 export const tracedArtifacts = [
@@ -125,7 +125,7 @@ export const tracedSignals = [
 	},
 ] satisfies TracedSignal[];
 
-export const practiceTraceEntries = [
+const practiceTraceEntries = [
 	{
 		practiceSlug: "thin-controllers",
 		practiceName: "Thin controllers",
@@ -405,42 +405,6 @@ export const untouchedArtifactTrace = {
 			observationCount: 0,
 			deliveredCount: 0,
 			withheldReasons: [],
-		},
-	],
-} satisfies ArtifactTrace;
-
-/** A kind the request endpoint refuses, so its trace must not offer the button. */
-export const documentArtifactTrace = {
-	artifactKind: "docs.document",
-	artifactId: 512,
-	title: "Onboarding: your first week",
-	container: "Engineering handbook",
-	url: "https://outline.example.com/doc/onboarding-your-first-week",
-	signals: [
-		{
-			id: "sig-doc-published",
-			signal: "docs.document.published",
-			displayName: "Published",
-			revision: "4",
-			occurredAt: new Date("2026-08-03T14:15:00Z"),
-			discoveredVia: "EVENT",
-			state: "TRIGGERED",
-		},
-	],
-	practices: [
-		{
-			practiceSlug: "written-for-a-newcomer",
-			practiceName: "Written for a newcomer",
-			autonomy: "HUMAN_APPROVAL",
-			outcome: "REVIEWED",
-			explanation: "Assessed on this artifact.",
-			watches: ["docs.document.published"],
-			occasionedBy: "sig-doc-published",
-			occasionedById: "sig-doc-published",
-			decidedAt: new Date("2026-08-03T14:19:00Z"),
-			observationCount: 3,
-			deliveredCount: 0,
-			withheldReasons: ["PRACTICE_REQUIRES_APPROVAL"],
 		},
 	],
 } satisfies ArtifactTrace;

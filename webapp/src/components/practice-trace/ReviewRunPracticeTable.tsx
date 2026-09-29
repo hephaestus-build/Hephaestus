@@ -11,8 +11,6 @@ import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { InlineLink } from "@/components/common/InlineLink";
 import { ResultCount } from "@/components/common/ResultCount";
 import { SelectFilter } from "@/components/common/SelectFilter";
-import { deliveryLabel } from "@/components/practice-trace/trace-format";
-import { TraceOutcomeBadge } from "@/components/practice-trace/TraceOutcomeBadge";
 import { AutonomyBadge } from "@/components/practice-vocabulary/AutonomyBadge";
 import {
 	getGroupVisual,
@@ -35,7 +33,8 @@ import {
 } from "@/components/ui/table";
 import { hasText } from "@/lib/text";
 
-import { REVIEW_FILTER_MAX_LENGTH } from "./practice-profile-search";
+import { deliveryLabel, REVIEW_FILTER_MAX_LENGTH } from "./trace-format";
+import { TraceOutcomeBadge } from "./TraceOutcomeBadge";
 
 export interface ReviewRunPracticeFilters {
 	/** The practice group's name, as the trace spells it. */
@@ -47,12 +46,15 @@ export interface ReviewRunPracticeFilters {
 }
 
 export interface ReviewRunPracticeTableProps {
-	/** This review's answer for every practice it decided. */
+	/** Each practice's answer on the work: one review's, or the latest across every review of it. */
 	entries: PracticeTraceEntry[];
 	/** The occurrences this work's activity carries, so "Rests on" can name one. */
 	signals: TracedSignal[];
-	/** What the review observed about the reader, by practice slug; one practice may have several. */
-	observationsByPractice: Record<string, ObservationDetail[] | undefined>;
+	/**
+	 * What the review observed about the reader, by practice slug; one practice may have several.
+	 * Absent, each row reads the recorded explanation.
+	 */
+	observationsByPractice?: Record<string, ObservationDetail[] | undefined>;
 	/** For the icon and colour a group's name is drawn in; the entry carries the name itself. */
 	groups: PracticeGroup[];
 	filters: ReviewRunPracticeFilters;
@@ -63,8 +65,8 @@ export interface ReviewRunPracticeTableProps {
 	onShowOccurrence: (signalId: string) => void;
 	/** Admins also read the delivery sentence, the autonomy and what the answer rests on. */
 	canAdminister?: boolean;
-	/** The review is still going, so an empty table is one it has not filled yet. */
-	running?: boolean;
+	/** Why there is no practice at all to list, which only the caller can say. */
+	emptyMessage: string;
 }
 
 /** Practices the workspace files in no group are still listed, under a name of their own. */
@@ -83,23 +85,13 @@ export function runPractices(
 	return reviewId === undefined ? [] : entries.filter((entry) => entry.reviewId === reviewId);
 }
 
-/** Why the table has no row: a filter, a review still under way, or one that reached nothing. */
-function emptyMessage(hasEntries: boolean, running: boolean): string {
-	if (hasEntries) {
-		return "No practice here matches your filters.";
-	}
-	return running
-		? "Practices appear here as the review reaches them."
-		: "This review reached no practice, so there is nothing to list here.";
-}
-
 function groupNameOf(entry: PracticeTraceEntry): string {
 	return hasText(entry.groupName) ? entry.groupName : UNGROUPED;
 }
 
 /**
- * Every practice this review decided: its outcome, and the observations' own words where it said
- * something about the reader, or the recorded reason where it did not.
+ * Every practice's answer on one piece of work: its outcome, and the observations' own words where
+ * it said something about the reader, or the recorded reason where it did not.
  */
 export function ReviewRunPracticeTable({
 	entries,
@@ -111,7 +103,7 @@ export function ReviewRunPracticeTable({
 	onOpenPractice,
 	onShowOccurrence,
 	canAdminister = false,
-	running = false,
+	emptyMessage,
 }: ReviewRunPracticeTableProps) {
 	// From the entries, not `groups`: that holds only the groups the reader has a standing in.
 	const groupNames = [...new Set(entries.map(groupNameOf))].sort((left, right) =>
@@ -186,7 +178,7 @@ export function ReviewRunPracticeTable({
 					<TableRow variant="static">
 						<TableCell colSpan={3} className="p-4 whitespace-normal">
 							<p className="text-sm text-muted-foreground">
-								{emptyMessage(entries.length > 0, running)}
+								{entries.length > 0 ? "No practice here matches your filters." : emptyMessage}
 							</p>
 						</TableCell>
 					</TableRow>
@@ -225,7 +217,7 @@ export function ReviewRunPracticeTable({
 							<TableCell className="align-top whitespace-normal">
 								<WhatItSaw
 									entry={entry}
-									observations={observationsByPractice[entry.practiceSlug] ?? NO_OBSERVATIONS}
+									observations={observationsByPractice?.[entry.practiceSlug] ?? NO_OBSERVATIONS}
 									occurrenceName={
 										hasText(entry.occasionedById)
 											? signals.find((signal) => signal.id === entry.occasionedById)?.displayName

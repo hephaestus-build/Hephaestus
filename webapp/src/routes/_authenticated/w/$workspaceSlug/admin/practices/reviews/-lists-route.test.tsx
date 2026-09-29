@@ -1,4 +1,5 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -22,7 +23,7 @@ function values(url: URL | undefined, name: string): string[] {
 }
 
 /**
- * Every request the three list routes make, with the review, observation and feedback URLs recorded.
+ * Every request the list routes make, with the work, review, observation and feedback URLs recorded.
  * The screens they feed take their rows as props, so a story mounts them without ever issuing the
  * request — this route test is the only place that can see what went on the wire.
  */
@@ -30,6 +31,7 @@ function recordRequests() {
 	const reviewUrls: URL[] = [];
 	const observationUrls: URL[] = [];
 	const feedbackUrls: URL[] = [];
+	const workUrls: URL[] = [];
 	server.use(
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json({ role: "ADMIN", userId: 1, userLogin: "ada", userName: "Ada" }),
@@ -49,8 +51,12 @@ function recordRequests() {
 			reviewUrls.push(new URL(request.url));
 			return HttpResponse.json(emptyPage);
 		}),
+		http.get("*/workspaces/:workspaceSlug/practices/trace", ({ request }) => {
+			workUrls.push(new URL(request.url));
+			return HttpResponse.json(emptyPage);
+		}),
 	);
-	return { reviewUrls, observationUrls, feedbackUrls };
+	return { reviewUrls, observationUrls, feedbackUrls, workUrls };
 }
 
 describe("practice review list routes", () => {
@@ -186,5 +192,32 @@ describe("practice review list routes", () => {
 		await screen.findByText("No reviews found", undefined, ROUTE_RENDER_WAIT);
 
 		expect(values(reviewUrls.at(-1), "resultProcessing")).toStrictEqual(["FAILED"]);
+	});
+
+	it("asks for the work a page at a time, of every kind", async () => {
+		const { workUrls } = recordRequests();
+
+		renderRouteAtWithRouter("/w/acme/admin/practices/reviews/work");
+		await screen.findByText("Nothing has been recorded yet", undefined, ROUTE_RENDER_WAIT);
+
+		const requested = workUrls.at(-1);
+		expect(requested?.searchParams.get("page")).toBe("0");
+		expect(requested?.searchParams.get("size")).toBe("25");
+		expect(requested?.searchParams.get("artifactKind")).toBeNull();
+	});
+
+	/** The URL says `kind`; the endpoint says `artifactKind`, and only the request shows which went. */
+	it("sends the chosen kind of work to the endpoint", async () => {
+		const { workUrls } = recordRequests();
+
+		const { router } = renderRouteAtWithRouter("/w/acme/admin/practices/reviews/work");
+		await userEvent.click(await screen.findByRole("combobox", { name: "Show" }, ROUTE_RENDER_WAIT));
+		await userEvent.click(await screen.findByRole("option", { name: "Issues" }));
+
+		await waitFor(() =>
+			expect(workUrls.at(-1)?.searchParams.get("artifactKind")).toBe("scm.issue"),
+		);
+		expect(workUrls.at(-1)?.searchParams.get("kind")).toBeNull();
+		expect(router.state.location.search).toMatchObject({ kind: "scm.issue" });
 	});
 });
