@@ -550,7 +550,8 @@ function defineFetchContextTool(sdk: PiSdk) {
 		description:
 			"Fetch a Hephaestus mentor context JSON resource from the server. Use the exact canonical path, " +
 			`for example inputs/context/recent_authored_work.json. Allowed paths: ${[...FETCH_CONTEXT_ALLOWED].join(", ")}, ` +
-			"inputs/context/merge_readiness/<artifactId>.json for one pull request listed in merge_readiness.json, " +
+			"inputs/context/merge_readiness/<artifactId>.json for one pull request of theirs, open, closed or merged, " +
+			"by the artifactId merge_readiness.json or recent_authored_work.json lists, " +
 			"and inputs/context/observations_history/<id>.json for the evidence of one observation listed in " +
 			"observations_history.json.",
 		parameters: {
