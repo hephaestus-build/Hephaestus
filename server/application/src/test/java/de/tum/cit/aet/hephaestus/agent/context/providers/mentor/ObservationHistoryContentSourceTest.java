@@ -41,6 +41,7 @@ import org.mockito.Spy;
 import org.springframework.data.domain.Pageable;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 class ObservationHistoryContentSourceTest extends BaseUnitTest {
@@ -147,12 +148,8 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("raw rubric-voiced reasoning is scrubbed before it reaches the mentor")
+    @DisplayName("raw rubric-voiced reasoning is scrubbed before its detail reaches the mentor")
     void rubricVoicedReasoningIsScrubbed() throws Exception {
-        User user = new User();
-        user.setLogin("octo");
-        when(userRepository.findById(eq(2L))).thenReturn(Optional.of(user));
-
         var practice = new Practice();
         practice.setSlug("robust-error-handling");
         // A real student-facing sentence followed by a pure grading-mechanics sentence the detector echoed.
@@ -174,15 +171,8 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         when(observationRepository.findRecentByDeveloperAndWorkspace(
                         eq(2L), eq(1L), any(Instant.class), eq(VERDICTS), any(Pageable.class)))
                 .thenReturn(List.of(observation));
-        when(queryRepository.findReviewsReceivedSince(eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
-                .thenReturn(List.of());
-
-        Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
-
-        JsonNode root = objectMapper.readTree(files.get("inputs/context/observations_history.json"));
-        String shipped =
-                root.get("recentObservations").get(0).get("evidenceRationale").asString();
+        JsonNode detail = provider.inspect(1L, 2L, observation.getId());
+        String shipped = detail.get("observation").get("evidenceRationale").asString();
         // The student-facing sentence survives; the rubric mechanics ("assessment is BAD", "capped at MINOR")
         // do NOT reach the mentor.
         assertThat(shipped).contains("swallows the IOException");
@@ -274,10 +264,28 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         assertThat(bad.get("observedAt").asString()).isEqualTo(observedBad.toString());
         assertThat(bad.get("artifactKind").asString()).isEqualTo("scm.pull_request");
         assertThat(bad.get("artifactId").asLong()).isEqualTo(123L);
-        assertThat(bad.get("evidence").get("citations").get(0).get("path").asString())
-                .isEqualTo("src/Retry.java");
-        assertThat(bad.get("evidence").get("citations").get(0).get("quote").asString())
-                .contains("IOException");
+        assertThat(bad.has("evidence")).isFalse();
+        assertThat(bad.has("evidenceRationale")).isFalse();
+        assertThat(root.get("detail").get("loaded").asBoolean()).isFalse();
+        assertThat(root.get("detail").get("path").asString())
+                .isEqualTo("inputs/context/observations_history/<id>.json");
+
+        JsonNode badDetail = provider.inspect(1L, 2L, badObservation.getId());
+        assertThat(badDetail.get("list").asString()).isEqualTo("recentObservations");
+        assertThat(badDetail
+                        .get("observation")
+                        .get("reviewedWork")
+                        .get("coreCoverage")
+                        .asString())
+                .isEqualTo("UNKNOWN");
+        JsonNode citation =
+                badDetail.get("observation").get("evidence").get("citations").get(0);
+        assertThat(citation.get("path").asString()).isEqualTo("src/Retry.java");
+        assertThat(citation.get("quote").asString()).contains("IOException");
+        assertThat(badDetail.get("observation").get("evidenceRationale").asString())
+                .isEqualTo("The retry block swallows the IOException.");
+        assertThat(provider.inspect(1L, 2L, naObservation.getId()).get("list").asString())
+                .isEqualTo("abstentions");
 
         assertThat(root.get("abstentions")).hasSize(1);
         JsonNode na = root.get("abstentions").get(0);
@@ -295,5 +303,240 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         assertThat(r0.get("state").asString()).isEqualTo("CHANGES_REQUESTED");
         assertThat(r0.get("hasComment").asBoolean()).isTrue();
         assertThat(r0.get("submittedAt").asString()).isEqualTo("2025-06-11T12:00:00Z");
+    }
+
+    @Test
+    @DisplayName("an overview of many evidence-heavy rows fits its bound and keeps every row, without evidence")
+    void overviewOfEvidenceHeavyRowsKeepsEveryRow() {
+        givenDeveloper();
+        List<Observation> verdicts = new java.util.ArrayList<>();
+        List<Observation> abstentions = new java.util.ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            verdicts.add(
+                    observation(AssessmentStatus.ASSESSED, "Summary " + i, citations(1, 6_000), "r".repeat(1_500)));
+        }
+        for (int i = 0; i < 20; i++) {
+            abstentions.add(observation(
+                    AssessmentStatus.NOT_APPLICABLE, "Summary " + i, citations(1, 6_000), "r".repeat(1_500)));
+        }
+        givenHistory(verdicts, abstentions);
+
+        ObjectNode root = provider.buildPayload(1L, 2L);
+
+        assertThat(objectMapper.writeValueAsString(root))
+                .hasSizeLessThanOrEqualTo(ObservationHistoryContentSource.OVERVIEW_MAX_CHARS);
+        assertThat(ids(root.get("recentObservations"))).isEqualTo(ids(verdicts));
+        assertThat(ids(root.get("abstentions"))).isEqualTo(ids(abstentions));
+        assertThat(root.findValues("evidence")).isEmpty();
+        assertThat(root.findValues("evidenceRationale")).isEmpty();
+        assertThat(root.has("omittedForSize")).isFalse();
+    }
+
+    @Test
+    @DisplayName("an overview too large leaves out the longest summaries, marked, before any row")
+    void overviewLeavesOutSummariesBeforeRows() {
+        givenDeveloper();
+        List<Observation> verdicts = new java.util.ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            verdicts.add(observation(AssessmentStatus.ASSESSED, "s".repeat(1_000 + i), citations(1, 10), "r"));
+        }
+        givenHistory(verdicts, List.of());
+
+        ObjectNode root = provider.buildPayload(1L, 2L);
+
+        assertThat(objectMapper.writeValueAsString(root))
+                .hasSizeLessThanOrEqualTo(ObservationHistoryContentSource.OVERVIEW_MAX_CHARS);
+        assertThat(ids(root.get("recentObservations"))).isEqualTo(ids(verdicts));
+        List<JsonNode> leftOut = root.get("recentObservations")
+                .valueStream()
+                .filter(row -> row.path("summaryNotLoaded").asBoolean(false))
+                .toList();
+        assertThat(leftOut)
+                .isNotEmpty()
+                .allSatisfy(row -> assertThat(row.get("summary").isNull()).isTrue());
+        // The longest go first: the newest summary here is the longest.
+        assertThat(root.get("recentObservations")
+                        .get(49)
+                        .path("summaryNotLoaded")
+                        .asBoolean(false))
+                .isTrue();
+        assertThat(root.has("omittedForSize")).isFalse();
+    }
+
+    @Test
+    @DisplayName("an admissible detail near its limits shortens its longest texts, says so, and keeps every location")
+    void detailShortensAnOversizedQuoteButKeepsItsSource() {
+        // Admission's own bounds: evidence at most 64 KiB, rationale at most 10,000 characters.
+        String quote = "q".repeat(60_000);
+        String rationale = "r".repeat(10_000);
+        ObjectNode evidence = objectMapper.createObjectNode();
+        evidence.putArray("citations").add(citation("src/Big.java", quote)).add(citation("src/Small.java", "ok()"));
+        Observation observation = observation(AssessmentStatus.ASSESSED, "Big quote", evidence, rationale);
+        givenHistory(List.of(observation), List.of());
+
+        ObjectNode detail = provider.inspect(1L, 2L, observation.getId());
+
+        assertThat(objectMapper.writeValueAsString(detail))
+                .hasSizeLessThanOrEqualTo(ObservationHistoryContentSource.DETAIL_MAX_CHARS);
+        JsonNode big =
+                detail.get("observation").get("evidence").get("citations").get(0);
+        assertThat(big.get("quoteTruncated").asBoolean()).isTrue();
+        assertThat(big.get("quoteChars").asInt()).isEqualTo(60_000);
+        assertThat(quote).startsWith(big.get("quote").asString());
+        assertThat(big.get("path").asString()).isEqualTo("src/Big.java");
+        assertThat(big.get("startLine").asInt()).isEqualTo(3);
+        assertThat(big.get("endLine").asInt()).isEqualTo(9);
+        JsonNode small =
+                detail.get("observation").get("evidence").get("citations").get(1);
+        assertThat(small.get("quote").asString()).isEqualTo("ok()");
+        assertThat(small.has("quoteTruncated")).isFalse();
+        JsonNode row = detail.get("observation");
+        assertThat(rationale).startsWith(row.get("evidenceRationale").asString());
+        assertThat(row.path("evidenceRationaleTruncated").asBoolean(false))
+                .isEqualTo(row.get("evidenceRationale").asString().length() < 10_000);
+        assertThat(detail.has("status")).isFalse();
+    }
+
+    @Test
+    @DisplayName("a detail whose citations cannot fit leaves its evidence out and says so")
+    void detailThatCannotFitSaysSo() {
+        Observation observation =
+                // About 64 KiB of citations, as many as admission accepts, each with a short quote.
+                observation(AssessmentStatus.ASSESSED, "Many citations", citations(350, 10), "Because.");
+        givenHistory(List.of(observation), List.of());
+
+        ObjectNode detail = provider.inspect(1L, 2L, observation.getId());
+
+        assertThat(objectMapper.writeValueAsString(detail))
+                .hasSizeLessThanOrEqualTo(ObservationHistoryContentSource.DETAIL_MAX_CHARS);
+        assertThat(detail.get("status").asString()).isEqualTo("INCOMPLETE");
+        assertThat(detail.get("observation").get("id").asString())
+                .isEqualTo(observation.getId().toString());
+        assertThat(detail.get("observation").get("evidenceLoaded").asBoolean()).isFalse();
+        assertThat(detail.get("observation").has("evidence")).isFalse();
+    }
+
+    @Test
+    @DisplayName("a detail answers alike for an unknown id and one this conversation may not use")
+    void detailOfAnUnlistedObservationIsNotFound() {
+        Observation withheld = observation(AssessmentStatus.ASSESSED, "Hidden", citations(1, 10), "r");
+        givenHistory(List.of(withheld), List.of());
+        when(visibilityPolicy.permitsAll(1L, List.of(withheld), SourceUsePurpose.CONVERSATIONAL_MENTORING))
+                .thenReturn(Set.of());
+
+        ObjectNode forbidden = provider.inspect(1L, 2L, withheld.getId());
+        ObjectNode unknown = provider.inspect(1L, 2L, UUID.randomUUID());
+
+        assertThat(forbidden.get("status").asString()).isEqualTo("NOT_FOUND");
+        assertThat(forbidden.has("observation")).isFalse();
+        forbidden.remove("readAt");
+        unknown.remove("readAt");
+        assertThat(forbidden).isEqualTo(unknown);
+    }
+
+    private void givenDeveloper() {
+        User user = new User();
+        user.setLogin("octo");
+        when(userRepository.findById(2L)).thenReturn(Optional.of(user));
+    }
+
+    private void givenHistory(List<Observation> verdicts, List<Observation> abstentions) {
+        when(observationRepository.findRecentByDeveloperAndWorkspace(
+                        eq(2L), eq(1L), any(Instant.class), eq(VERDICTS), any(Pageable.class)))
+                .thenReturn(verdicts);
+        lenient()
+                .when(observationRepository.findRecentByDeveloperAndWorkspace(
+                        eq(2L), eq(1L), any(Instant.class), eq(ABSTENTIONS), any(Pageable.class)))
+                .thenReturn(abstentions);
+    }
+
+    private Observation observation(AssessmentStatus status, String summary, JsonNode evidence, String rationale) {
+        var practice = new Practice();
+        practice.setSlug("practice-" + UUID.randomUUID());
+        boolean assessed = status == AssessmentStatus.ASSESSED;
+        return Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(UUID.randomUUID())
+                .summary(summary)
+                .practice(practice)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(7L)
+                .assessmentStatus(status)
+                .presence(assessed ? Presence.PRESENT : null)
+                .assessment(assessed ? Assessment.BAD : null)
+                .severity(assessed ? Severity.MINOR : null)
+                .observedAt(Instant.parse("2025-06-10T08:00:00Z"))
+                .evidence(evidence)
+                .evidenceRationale(rationale)
+                .build();
+    }
+
+    private ObjectNode citations(int count, int quoteChars) {
+        ObjectNode evidence = objectMapper.createObjectNode();
+        ArrayNode citations = evidence.putArray("citations");
+        for (int i = 0; i < count; i++) {
+            citations.add(citation("src/File" + i + ".java", "c".repeat(quoteChars)));
+        }
+        return evidence;
+    }
+
+    private ObjectNode citation(String path, String quote) {
+        return objectMapper
+                .createObjectNode()
+                .put("sourceKind", "scm.pull-request.diff")
+                .put("artifactPath", "inputs/context/diff.patch")
+                .put("path", path)
+                .put("side", "NEW")
+                .put("startLine", 3)
+                .put("endLine", 9)
+                .put("quote", quote)
+                .put("quoteRedacted", false);
+    }
+
+    private static List<String> ids(JsonNode rows) {
+        return rows.valueStream().map(row -> row.get("id").asString()).toList();
+    }
+
+    private static List<String> ids(List<Observation> rows) {
+        return rows.stream().map(o -> o.getId().toString()).toList();
+    }
+
+    @Test
+    @DisplayName("received reviews with the longest titles are left out oldest first, counted, and the whole fits")
+    void overviewLeavesOutTheOldestReceivedReviewsCounted() {
+        givenDeveloper();
+        List<Observation> verdicts = new java.util.ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            verdicts.add(observation(AssessmentStatus.ASSESSED, "Summary " + i, citations(1, 10), "r"));
+        }
+        givenHistory(verdicts, List.of());
+        List<PullRequestReview> reviews = new java.util.ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            var pr = new PullRequest();
+            pr.setNumber(i);
+            // A stored title may be 1,024 characters, and each quote doubles when escaped.
+            pr.setTitle("\"".repeat(1_024));
+            var review = new PullRequestReview();
+            review.setPullRequest(pr);
+            review.setHtmlUrl("https://example.test/pr/" + i);
+            review.setSubmittedAt(Instant.parse("2025-06-11T12:00:00Z").minusSeconds(i));
+            reviews.add(review);
+        }
+        when(queryRepository.findReviewsReceivedSince(eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
+                .thenReturn(reviews);
+
+        ObjectNode root = provider.buildPayload(1L, 2L);
+
+        assertThat(objectMapper.writeValueAsString(root))
+                .hasSizeLessThanOrEqualTo(ObservationHistoryContentSource.OVERVIEW_MAX_CHARS);
+        assertThat(ids(root.get("recentObservations"))).isEqualTo(ids(verdicts));
+        int shown = root.get("reviewsReceived").size();
+        assertThat(shown).isLessThan(20);
+        assertThat(root.get("omittedForSize").get("reviewsReceived").asInt()).isEqualTo(20 - shown);
+        assertThat(root.get("reviewsReceived")
+                        .valueStream()
+                        .map(r -> r.get("prNumber").asInt()))
+                .containsExactlyElementsOf(
+                        java.util.stream.IntStream.range(0, shown).boxed().toList());
     }
 }

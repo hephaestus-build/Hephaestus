@@ -11,6 +11,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import type {
 	AgentSessionEvent,
 	AgentToolResult,
+	CompactionResult,
 	CreateAgentSessionRuntimeFactory,
 } from "@earendil-works/pi-coding-agent";
 import type * as PiSdkModule from "@earendil-works/pi-coding-agent";
@@ -108,6 +109,9 @@ const TURN_GRACE_MS = (() => {
 	const raw = Number(process.env.MENTOR_TURN_GRACE_MS);
 	return Number.isFinite(raw) && raw > 0 ? raw : 30_000;
 })();
+// How long a timed-out turn waits for Pi's abort to settle before it fails anyway; never longer than
+// the grace, so the failure still reaches the server while it waits for one.
+const ABORT_SETTLE_MS = Math.min(10_000, TURN_GRACE_MS);
 
 function logText(value: unknown): string {
 	if (value instanceof Error) {
@@ -234,12 +238,19 @@ interface MentorAgentSession {
 	prompt: (text: string) => Promise<void>;
 	steer: (text: string) => Promise<void>;
 	abort: () => Promise<void>;
+	compact: () => Promise<CompactionResult>;
+	/** A compaction is a model call of its own that `abort()` leaves running. */
+	abortCompaction: () => void;
 }
 
 interface MentorRuntime {
 	readonly session: MentorAgentSession;
 	switchSession: (sessionPath: string) => Promise<{ cancelled: boolean }>;
 	dispose: () => Promise<void>;
+	/**
+	 * Whether a context of `tokens`, or the session's own when absent, is past the working trigger.
+	 */
+	compactionDue: (tokens?: number) => boolean;
 }
 
 /** Structured details attached to a `fetch_context` tool result, for logs and UI rendering. */
@@ -269,6 +280,10 @@ interface ThreadState {
 	watchdogTimer: ReturnType<typeof setTimeout> | null;
 	readonly pendingFetchContexts: Map<string, PendingFetchContext>;
 	unsubscribe: (() => void) | null;
+	/** The caller aborted this turn. */
+	abortRequested: boolean;
+	/** The watchdog owns this turn's outcome: nothing Pi emits for it any longer reaches the server. */
+	timedOut: boolean;
 }
 
 function newThreadState(threadId: string, sessionPath: string): ThreadState {
@@ -280,6 +295,8 @@ function newThreadState(threadId: string, sessionPath: string): ThreadState {
 		watchdogTimer: null,
 		pendingFetchContexts: new Map(),
 		unsubscribe: null,
+		abortRequested: false,
+		timedOut: false,
 	};
 }
 
@@ -291,6 +308,9 @@ function newThreadState(threadId: string, sessionPath: string): ThreadState {
 function hasTurnInFlight(state: ThreadState): boolean {
 	return state.inFlight;
 }
+
+/** Set when a native abort rejected: the session may still be running, so no later turn may use it. */
+let runtimeUnusable = false;
 
 // Currently-bound thread on the AgentSessionRuntime (since runtime is single-session at a time).
 let activeThreadId: string | null = null;
@@ -358,6 +378,8 @@ async function createPiRuntime(sdk: PiSdk, agentDir: string): Promise<MentorRunt
 		SessionManager,
 		SettingsManager,
 		ModelRuntime,
+		shouldCompact,
+		estimateTokens,
 	} = sdk;
 
 	const fetchContextTool = defineFetchContextTool(sdk);
@@ -388,6 +410,14 @@ async function createPiRuntime(sdk: PiSdk, agentDir: string): Promise<MentorRunt
 	}
 	log(
 		`registered hephaestus provider: apiProtocol=${providerConfig.apiProtocol} model=${providerConfig.modelId}`,
+	);
+	const compaction = mentorCompaction(
+		model.contextWindow,
+		settingsManager.getCompactionReserveTokens(),
+	);
+	log(
+		`compaction: window=${model.contextWindow} trigger=${model.contextWindow - compaction.reserveTokens} ` +
+			`reserve=${compaction.reserveTokens} keepRecent=${compaction.keepRecentTokens}`,
 	);
 	const { thinkingLevel } = reasoningSetting(providerConfig.reasoningEffort);
 	log(`reasoning effort: ${providerConfig.reasoningEffort?.toLowerCase() ?? "provider default"}`);
@@ -423,14 +453,60 @@ async function createPiRuntime(sdk: PiSdk, agentDir: string): Promise<MentorRunt
 			model,
 			thinkingLevel,
 		});
+		// Building the session reloads its settings from disk, which drops earlier overrides, and every session
+		// switch builds one; the mentor's working policy is applied to each once it is built.
+		settingsManager.applyOverrides({ compaction: { enabled: true, ...compaction } });
 		return { ...result, services, diagnostics: services.diagnostics };
 	};
 
-	return createAgentSessionRuntime(createRuntime, {
+	const sessionRuntime = await createAgentSessionRuntime(createRuntime, {
 		cwd: CWD,
 		agentDir,
 		sessionManager: SessionManager.inMemory(),
 	});
+	return {
+		// A getter: the runtime replaces its session on every switch.
+		get session() {
+			return sessionRuntime.session;
+		},
+		switchSession: async (sessionPath) => sessionRuntime.switchSession(sessionPath),
+		dispose: async () => sessionRuntime.dispose(),
+		compactionDue: (tokens) => {
+			const { session } = sessionRuntime;
+			// Pi's usage is unknown after a compaction until a new reply; the messages' own estimate, the one
+			// Pi reports as a compaction's estimatedTokensAfter, stands in for it.
+			const known =
+				tokens ??
+				session.getContextUsage()?.tokens ??
+				session.messages.reduce((sum, message) => sum + estimateTokens(message), 0);
+			return shouldCompact(known, model.contextWindow, settingsManager.getCompactionSettings());
+		},
+	};
+}
+
+/** A conversation is compacted past this many tokens, when the model's window allows it. */
+const MENTOR_WORKING_TOKENS = 32_768;
+/** What a compaction keeps unsummarised, at most. */
+const MENTOR_RECENT_TOKENS = 8192;
+
+/**
+ * The mentor's working policy in Pi's own terms, for a model whose real window is `window`. Pi compacts once
+ * the context passes `window - reserveTokens`, so the reserve sets the trigger; it also caps Pi's summary
+ * output, which the model's own output limit caps in turn. The window itself is never changed.
+ */
+function mentorCompaction(
+	window: number,
+	nativeReserve: number,
+): { reserveTokens: number; keepRecentTokens: number } {
+	if (!Number.isInteger(window) || window <= 1) {
+		throw new Error(`the model's context window is not a usable size: ${window}`);
+	}
+	const minimumReserve = Math.min(nativeReserve, Math.floor(window / 2));
+	const trigger = Math.min(MENTOR_WORKING_TOKENS, window - minimumReserve);
+	return {
+		reserveTokens: window - trigger,
+		keepRecentTokens: Math.min(MENTOR_RECENT_TOKENS, Math.floor(trigger / 4)),
+	};
 }
 
 async function ensureRuntime(): Promise<MentorRuntime> {
@@ -474,7 +550,9 @@ function defineFetchContextTool(sdk: PiSdk) {
 		description:
 			"Fetch a Hephaestus mentor context JSON resource from the server. Use the exact canonical path, " +
 			`for example inputs/context/recent_authored_work.json. Allowed paths: ${[...FETCH_CONTEXT_ALLOWED].join(", ")}, ` +
-			"and inputs/context/merge_readiness/<artifactId>.json for one pull request listed in merge_readiness.json.",
+			"inputs/context/merge_readiness/<artifactId>.json for one pull request listed in merge_readiness.json, " +
+			"and inputs/context/observations_history/<id>.json for the evidence of one observation listed in " +
+			"observations_history.json.",
 		parameters: {
 			type: "object",
 			additionalProperties: false,
@@ -670,6 +748,9 @@ async function bindThread(state: ThreadState): Promise<MentorRuntime> {
 }
 
 function forwardEvent(state: ThreadState, event: AgentSessionEvent) {
+	if (state.timedOut) {
+		return;
+	}
 	if (process.env.MENTOR_RUNNER_DEBUG_EVENTS === "1") {
 		const detail = event.type === "message_update" ? `/${event.assistantMessageEvent.type}` : "";
 		log(`event: ${event.type}${detail}`);
@@ -683,8 +764,18 @@ function forwardEvent(state: ThreadState, event: AgentSessionEvent) {
 		return;
 	}
 
+	if (event.type === "compaction_end") {
+		sendEvent(state.threadId, event);
+		// A finished compaction is a checkpoint worth keeping even if the turn goes on to fail, and the
+		// server keeps only what it received before the turn's outcome.
+		if (event.result !== undefined && !event.aborted) {
+			emitSessionPersisted(state, false);
+		}
+		return;
+	}
+
 	if (event.type === "agent_settled") {
-		emitSessionPersisted(state);
+		emitSessionPersisted(state, true);
 		const finalAgentEnd = state.lastAgentEnd;
 		state.lastAgentEnd = null;
 		if (finalAgentEnd) {
@@ -704,11 +795,19 @@ function forwardEvent(state: ThreadState, event: AgentSessionEvent) {
 	sendEvent(state.threadId, event);
 }
 
-function emitSessionPersisted(state: ThreadState) {
+/**
+ * Sends the thread's native session file. A failure is reported as `pi_error` only where it may end the
+ * turn; elsewhere it is logged and the server keeps the last checkpoint it received.
+ */
+function emitSessionPersisted(state: ThreadState, reportFailure: boolean) {
 	if (!existsSync(state.sessionPath)) {
 		// Legitimate case: PROTOCOL_ONLY stub never persists. In production this is anomalous —
-		// surface as pi_error so Java logs a warning rather than silently caching stale bytes.
-		if (!PROTOCOL_ONLY) {
+		// surface it so Java logs a warning rather than silently caching stale bytes.
+		if (PROTOCOL_ONLY) {
+			return;
+		}
+		log(`session file missing for thread=${state.threadId}`);
+		if (reportFailure) {
 			sendEvent(state.threadId, {
 				type: "pi_error",
 				message: "session file missing at settlement",
@@ -724,10 +823,12 @@ function emitSessionPersisted(state: ThreadState) {
 		sendEvent(state.threadId, { type: "session_persisted", jsonl: bytes });
 	} catch (error) {
 		log(`emitSessionPersisted failed for thread=${state.threadId}: ${errorText(error)}`);
-		sendEvent(state.threadId, {
-			type: "pi_error",
-			message: `session_persist_read_failed: ${errorText(error)}`,
-		});
+		if (reportFailure) {
+			sendEvent(state.threadId, {
+				type: "pi_error",
+				message: `session_persist_read_failed: ${errorText(error)}`,
+			});
+		}
 	}
 }
 
@@ -766,7 +867,17 @@ async function handlePrompt(id: JsonRpcId | undefined, params: MentorParams) {
 		sendError(id, ERR.THREAD_NOT_OPEN, `thread ${threadId} is not open`);
 		return;
 	}
-	if (state.inFlight) {
+	// Java discards a runner that answers this code, and the next turn restores the stored session.
+	if (runtimeUnusable) {
+		sendError(
+			id,
+			ERR.INVALID_STATE,
+			"the runtime did not stop a timed-out turn and cannot take another",
+		);
+		return;
+	}
+	// A timed-out turn whose abort has not settled still holds the session.
+	if (state.inFlight || state.timedOut) {
 		sendError(id, ERR.TURN_IN_FLIGHT, `thread ${threadId} already has a turn in flight`);
 		return;
 	}
@@ -781,6 +892,8 @@ async function handlePrompt(id: JsonRpcId | undefined, params: MentorParams) {
 
 	state.inFlight = true;
 	state.lastAgentEnd = null;
+	state.abortRequested = false;
+	state.timedOut = false;
 	startTurnWatchdog(state);
 
 	// Accept-and-stream: respond to the prompt RPC immediately; the actual turn is observed
@@ -794,17 +907,49 @@ async function handlePrompt(id: JsonRpcId | undefined, params: MentorParams) {
 async function runTurn(rt: MentorRuntime, state: ThreadState, text: string) {
 	const { threadId } = state;
 	try {
+		await compactBeforePrompt(rt, state);
+		if (state.abortRequested || state.timedOut) {
+			throw new Error("the turn was aborted before its prompt was sent");
+		}
 		await rt.session.prompt(text);
 		log(`prompt resolved: thread=${threadId}`);
 	} catch (error) {
 		log(`prompt rejected for thread ${threadId}: ${errorText(error)}`);
-		if (!state.inFlight) {
+		// The watchdog ends a turn it claimed itself, after its checkpoint.
+		if (!state.inFlight || state.timedOut) {
 			return;
 		}
 		sendEvent(threadId, { type: "pi_error", error: errorText(error) });
 		sendEvent(threadId, { type: "agent_end", messages: [], willRetry: false });
 		clearTurnWatchdog(state);
 		state.inFlight = false;
+	}
+}
+
+/**
+ * A restored conversation past the working trigger is compacted before its prompt, inside the accepted
+ * turn, so the summary is billed to that turn and spends its budget. Pi's own check before a prompt reads
+ * only its last reply's usage; the session's estimate also counts what came after it. A compaction that
+ * fails, or leaves the conversation past the trigger — Pi keeps a recent tool batch whole — ends the turn
+ * rather than sending the history the trigger exists to keep out.
+ */
+async function compactBeforePrompt(rt: MentorRuntime, state: ThreadState) {
+	if (!rt.compactionDue()) {
+		return;
+	}
+	log(`compacting thread=${state.threadId} before its prompt`);
+	let result: CompactionResult;
+	try {
+		result = await rt.session.compact();
+	} catch (error) {
+		throw new Error(`This conversation could not be shortened: ${errorText(error)}`, {
+			cause: error,
+		});
+	}
+	if (rt.compactionDue(result.estimatedTokensAfter)) {
+		throw new Error(
+			`This conversation is still too long after shortening it (${result.estimatedTokensAfter} estimated tokens).`,
+		);
 	}
 }
 
@@ -844,8 +989,10 @@ async function handleAbort(id: JsonRpcId | undefined, params: MentorParams) {
 		sendError(id, ERR.INVALID_STATE, "no turn in flight for this thread");
 		return;
 	}
+	state.abortRequested = true;
 	try {
 		const rt = await bindThread(state);
+		rt.session.abortCompaction();
 		await rt.session.abort();
 		sendResult(id, { aborted: true });
 	} catch (error) {
@@ -1022,9 +1169,11 @@ async function runWatchdogRebind(state: ThreadState) {
 		return;
 	}
 	log(`watchdog fired: rebuilding session for thread=${state.threadId}`);
-	sendEvent(state.threadId, { type: "turn_watchdog_fired", threadId: state.threadId });
+	// Claimed before the abort: the settlement it provokes must not finish the turn as a success.
+	state.timedOut = true;
 	// Read once: the abort below yields, and every step after it must act on the same runtime.
 	const rt = runtime;
+	let settled = true;
 	try {
 		// Reject callbacks before the rebound session can reuse their ids.
 		for (const [cbId, pending] of state.pendingFetchContexts) {
@@ -1032,14 +1181,18 @@ async function runWatchdogRebind(state: ThreadState) {
 			pending.reject(new Error("fetch_context: turn aborted by watchdog"));
 			state.pendingFetchContexts.delete(cbId);
 		}
-		try {
-			await rt?.session.abort();
-		} catch (error) {
-			log(`abort during watchdog failed: ${errorText(error)}`);
-		}
-		dropSubscription(state);
-		// A runtime has one active session; remove its prior thread subscription before rebinding.
 		if (rt) {
+			settled = await abortWithin(rt, state);
+		}
+		// The session as the aborted turn left it, sent before the failure that ends the turn on the server.
+		emitSessionPersisted(state, false);
+		sendEvent(state.threadId, { type: "turn_watchdog_fired", threadId: state.threadId });
+		endTurn(state);
+		// Pi can go on after an abort — it may start compacting once the aborted run ends — and a session
+		// still busy cannot be switched, so it is rebound only once settled.
+		if (rt && settled) {
+			dropSubscription(state);
+			// A runtime has one active session; remove its prior thread subscription before rebinding.
 			try {
 				const prev =
 					activeThreadId === null || activeThreadId === state.threadId
@@ -1059,12 +1212,57 @@ async function runWatchdogRebind(state: ThreadState) {
 			}
 		}
 	} finally {
-		if (hasTurnInFlight(state)) {
-			state.lastAgentEnd = null;
-			sendEvent(state.threadId, { type: "agent_end", messages: [], willRetry: false });
-			state.inFlight = false;
+		endTurn(state);
+		if (settled) {
+			state.timedOut = false;
 		}
 	}
+}
+
+/**
+ * Aborts the session, compaction included, and waits for it to settle for at most ABORT_SETTLE_MS. A session
+ * still busy then stays claimed by the timed-out turn until it settles, so none of its events reach a later
+ * one. An abort that rejects says nothing about whether Pi stopped, so the runtime takes no further turn.
+ */
+async function abortWithin(rt: MentorRuntime, state: ThreadState): Promise<boolean> {
+	rt.session.abortCompaction();
+	const abort = abortSession(rt);
+	const outcome = await Promise.race([abort, delay(ABORT_SETTLE_MS, "pending" as const)]);
+	if (outcome === "pending") {
+		log(
+			`abort during watchdog did not settle within ${ABORT_SETTLE_MS}ms: thread=${state.threadId}`,
+		);
+		void releaseWhenSettled(abort, state);
+	}
+	return outcome === "settled";
+}
+
+async function abortSession(rt: MentorRuntime): Promise<"settled" | "rejected"> {
+	try {
+		await rt.session.abort();
+		return "settled";
+	} catch (error) {
+		log(`abort during watchdog failed; the runtime takes no further turn: ${errorText(error)}`);
+		runtimeUnusable = true;
+		return "rejected";
+	}
+}
+
+async function releaseWhenSettled(abort: Promise<"settled" | "rejected">, state: ThreadState) {
+	if ((await abort) === "settled") {
+		state.timedOut = false;
+		log(`timed-out turn settled: thread=${state.threadId}`);
+	}
+}
+
+/** Ends a turn the watchdog claimed, once: an empty final agent_end after its failure. */
+function endTurn(state: ThreadState) {
+	if (!hasTurnInFlight(state)) {
+		return;
+	}
+	state.lastAgentEnd = null;
+	sendEvent(state.threadId, { type: "agent_end", messages: [], willRetry: false });
+	state.inFlight = false;
 }
 
 function clearTurnWatchdog(state: ThreadState) {
@@ -1242,12 +1440,21 @@ function createStubRuntime(): MentorRuntime {
 			// The scripted frames do not depend on steering.
 		},
 		async abort() {
+			if (process.env.MENTOR_RUNNER_STUB_ABORT_REJECTS === "1") {
+				throw new Error("stub: abort failed");
+			}
 			if (isStreaming) {
 				attemptGeneration += 1;
 				emit({ type: "agent_end", messages: [], willRetry: false });
 				emit({ type: "agent_settled" });
 				isStreaming = false;
 			}
+		},
+		async compact() {
+			throw new Error("stub: nothing to compact");
+		},
+		abortCompaction() {
+			// The stub never compacts.
 		},
 	};
 	return {
@@ -1258,6 +1465,7 @@ function createStubRuntime(): MentorRuntime {
 		async dispose() {
 			// Nothing here holds the process open.
 		},
+		compactionDue: () => false,
 	};
 }
 

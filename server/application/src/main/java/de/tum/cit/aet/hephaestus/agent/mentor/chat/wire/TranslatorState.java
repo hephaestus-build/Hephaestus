@@ -66,6 +66,9 @@ public final class TranslatorState {
 
     private int completedCallCount;
 
+    /** Pi compacted, or tried to, during this turn: its summary calls are not all in the usage it reports. */
+    private boolean compactionAttempted;
+
     /** Model id observed on the first AssistantMessage; used for pricing lookup. */
     @Nullable
     private String observedModel;
@@ -309,6 +312,14 @@ public final class TranslatorState {
             completedCallCount++;
         }
         currentUsage = null;
+    }
+
+    public synchronized void markCompactionAttempted() {
+        compactionAttempted = true;
+    }
+
+    public synchronized boolean compactionAttempted() {
+        return compactionAttempted;
     }
 
     /** Authoritative totals from {@code agent_end}; a runner may omit them, keeping what was streamed. */

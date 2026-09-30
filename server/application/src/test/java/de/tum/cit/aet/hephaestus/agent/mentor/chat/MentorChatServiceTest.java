@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MergeReadinessContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ObservationHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRetryRejectedException;
@@ -147,6 +148,9 @@ class MentorChatServiceTest extends BaseUnitTest {
     @Mock
     MergeReadinessContentSource mergeReadiness;
 
+    @Mock
+    ObservationHistoryContentSource observationHistory;
+
     private MentorTurnLock turnLock;
     private PiEventToUiChunkTranslator translator;
     private ScheduledExecutorService scheduler;
@@ -244,9 +248,8 @@ class MentorChatServiceTest extends BaseUnitTest {
         when(workspaceContextBuilder.build(any())).thenReturn(new LinkedHashMap<>());
         when(interactiveSandboxService.attach(any())).thenReturn(sandbox);
         when(mentorPiAdapter.buildSandboxSpec(any(), any())).thenAnswer(inv -> stubSpec());
-        when(persistence.complete(any(), any(), any())).thenReturn(true);
-        when(persistence.augmentFinishWithCost(any(UIMessageChunk.Finish.class), any()))
-                .thenAnswer(inv -> inv.getArgument(0, UIMessageChunk.Finish.class));
+        when(persistence.complete(any(), any(), any()))
+                .thenAnswer(inv -> Optional.ofNullable(inv.getArgument(2, UIMessageChunk.Finish.class)));
     }
 
     private MentorChatService serviceWithExecutor(ExecutorService executor) {
@@ -270,7 +273,8 @@ class MentorChatServiceTest extends BaseUnitTest {
                 proxyCredentialRegistry,
                 memberAiRouting,
                 (workspaceId, developerId) -> aiDecision,
-                mergeReadiness);
+                mergeReadiness,
+                observationHistory);
     }
 
     @Test
@@ -521,6 +525,43 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
     }
 
+    @Test
+    void shouldKeepTheCheckpointOfACompactedTurnTheWatchdogEnds() {
+        scheduleResponses(sandbox, prompt -> {
+            sandbox.push(assistantStart());
+            sandbox.push(textDelta("Looking"));
+            sandbox.push(event("compaction_start", n -> n.put("reason", "threshold")));
+            sandbox.push(event(
+                    "compaction_end",
+                    n -> n.put("reason", "threshold")
+                            .put("aborted", false)
+                            .putObject("result")
+                            .put("summary", "## Goal")));
+            sandbox.push(event("session_persisted", n -> n.put("jsonl", "{\"type\":\"compaction\"}\n")));
+            sandbox.push(event("turn_watchdog_fired", n -> {}));
+            sandbox.push(event("agent_end", n -> n.putArray("messages")));
+            // Nothing after the failure is the turn's any longer.
+            sandbox.push(event("session_persisted", n -> n.put("jsonl", "{\"type\":\"late\"}\n")));
+        });
+
+        runTurnSync();
+
+        assertThat(emitter.recordedTypes())
+                .containsSubsequence("text-end", "error")
+                .doesNotContain("finish");
+        verify(persistence, never()).complete(any(), any(), any());
+        verify(persistence, never()).recordDelivery(any(), any());
+        var interrupted =
+                ArgumentCaptor.forClass(de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState.class);
+        verify(persistence).interrupt(any(), interrupted.capture(), any());
+        assertThat(new String(
+                        java.util.Objects.requireNonNull(interrupted.getValue().observedSessionJsonl()),
+                        StandardCharsets.UTF_8))
+                .isEqualTo("{\"type\":\"compaction\"}\n");
+        // Its calls are billed from the proxy's record, which counts every summary call.
+        assertThat(interrupted.getValue().compactionAttempted()).isTrue();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"hello", "open_thread"})
     void shouldRunTheNextTurnOnAFreshSandboxWhenTheStreamIsLostBeforeThePrompt(String lostDuring) throws Exception {
@@ -556,7 +597,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         List<String> seenAtCommit = new CopyOnWriteArrayList<>();
         when(persistence.complete(any(), any(), any())).thenAnswer(inv -> {
             seenAtCommit.addAll(emitter.recordedTypes());
-            return true;
+            return Optional.ofNullable(inv.getArgument(2, UIMessageChunk.Finish.class));
         });
         scheduleHappyPathResponses(sandbox).run();
 
@@ -577,7 +618,7 @@ class MentorChatServiceTest extends BaseUnitTest {
                     .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("database down"));
         } else {
             // Another writer, such as the in-flight reaper, already settled the row.
-            when(persistence.complete(any(), any(), any())).thenReturn(false);
+            when(persistence.complete(any(), any(), any())).thenReturn(Optional.empty());
         }
         scheduleHappyPathResponses(sandbox).run();
 
@@ -698,7 +739,7 @@ class MentorChatServiceTest extends BaseUnitTest {
                     sandbox.onLost.run();
                     throw new org.springframework.dao.DataAccessResourceFailureException("database down");
                 })
-                .thenReturn(true);
+                .thenAnswer(inv -> Optional.ofNullable(inv.getArgument(2, UIMessageChunk.Finish.class)));
         scheduleHappyPathResponses(sandbox).run();
 
         runTurnSync();
@@ -718,7 +759,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     void shouldFinishButDiscardTheRunnerWhenTheStreamIsLostBeforeTheReplyIsCommitted() {
         when(persistence.complete(any(), any(), any())).thenAnswer(inv -> {
             sandbox.onLost.run();
-            return true;
+            return Optional.ofNullable(inv.getArgument(2, UIMessageChunk.Finish.class));
         });
         scheduleHappyPathResponses(sandbox).run();
 
@@ -1001,7 +1042,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void runTurn_fetchContextServesCanonicalKeysAndOnePullRequestByArtifactId() {
+    void runTurn_fetchContextServesCanonicalKeysAndOneItemByCanonicalId() {
         Map<String, byte[]> context = new LinkedHashMap<>();
         context.put(
                 "inputs/context/recent_authored_work.json",
@@ -1010,6 +1051,10 @@ class MentorChatServiceTest extends BaseUnitTest {
         ObjectNode inspected = mapper.createObjectNode();
         inspected.putArray("pullRequests").addObject().put("number", 6);
         when(mergeReadiness.inspect(WORKSPACE_ID, USER_ID, 42L)).thenReturn(inspected);
+        UUID observationId = UUID.fromString("0b7e1c9a-3f5d-4a8e-9c21-6d4f8e2a1b3c");
+        ObjectNode observation = mapper.createObjectNode();
+        observation.putObject("observation").put("id", observationId.toString());
+        when(observationHistory.inspect(WORKSPACE_ID, USER_ID, observationId)).thenReturn(observation);
 
         sandbox.onSend = frame -> {
             String method = frame.path("method").asString("");
@@ -1023,6 +1068,13 @@ class MentorChatServiceTest extends BaseUnitTest {
                     sandbox.push(fetchContextCallback("fc-good", "inputs/context/recent_authored_work.json"));
                     sandbox.push(fetchContextCallback("fc-mr", "inputs/context/merge_readiness/42.json"));
                     sandbox.push(fetchContextCallback("fc-escape", "inputs/context/merge_readiness/../user.json"));
+                    sandbox.push(fetchContextCallback(
+                            "fc-observation", "inputs/context/observations_history/" + observationId + ".json"));
+                    sandbox.push(fetchContextCallback(
+                            "fc-uppercase",
+                            "inputs/context/observations_history/"
+                                    + observationId.toString().toUpperCase(java.util.Locale.ROOT)
+                                    + ".json"));
                     sandbox.push(event("agent_end", n -> n.putArray("messages")));
                     sandbox.push(jsonRpcResult(id, mapper.createObjectNode()));
                 }
@@ -1055,6 +1107,18 @@ class MentorChatServiceTest extends BaseUnitTest {
                         .asInt())
                 .isEqualTo(6);
         assertThat(sandbox.sentFrameWithId("fc-escape")
+                        .path("error")
+                        .path("message")
+                        .asString())
+                .contains("fetch_context path not allowed");
+        assertThat(sandbox.sentFrameWithId("fc-observation")
+                        .path("result")
+                        .path("content")
+                        .path("observation")
+                        .path("id")
+                        .asString())
+                .isEqualTo(observationId.toString());
+        assertThat(sandbox.sentFrameWithId("fc-uppercase")
                         .path("error")
                         .path("message")
                         .asString())
