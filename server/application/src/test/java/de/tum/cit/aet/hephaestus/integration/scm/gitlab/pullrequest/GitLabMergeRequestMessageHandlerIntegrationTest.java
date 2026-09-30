@@ -978,6 +978,28 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         @Test
+        void shouldRecordAnApprovalOfThePushedHeadOverTheApprovalGitLabResetOnThePush() throws Exception {
+            handler.handle(loadPayload("merge_request.approved"), Instant.now());
+            // GitLab's reset on the push says whose approvals went only by resetting them all, so it dismisses no one.
+            receive(systemReset(NEXT_HEAD, "2026-01-31 22:30:00 +0100", "approvals_reset_on_push"));
+            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getCommitId())
+                    .isEqualTo(FIXTURE_HEAD);
+            eventListener.clear();
+
+            GitLabMergeRequestEventDTO reapproval =
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:30:00 +0100");
+            receive(reapproval);
+            receive(reapproval);
+
+            PullRequestReview approval = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
+            assertThat(approval.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(approval.getCommitId()).isEqualTo(NEXT_HEAD);
+            // Once: the redelivery approves the head already recorded.
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+                    .hasSize(1);
+        }
+
+        @Test
         void shouldRecordTwoPeoplesApprovalsReceivedAtTheSameInstant() throws Exception {
             Instant receivedAt = Instant.parse("2026-09-30T10:00:00.000001Z");
 
@@ -1076,6 +1098,35 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(stored().getMergeStateStatus()).isEqualTo(MergeStateStatus.BLOCKED);
             assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getState())
                     .isEqualTo(PullRequestReview.State.DISMISSED);
+        }
+
+        @Test
+        void shouldLeaveReadinessUnknownRatherThanRecordAReadThatCannotShowItIsNotOlderThanAMillisecondHook()
+                throws Exception {
+            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31T22:31:00.080+01:00"));
+
+            // GitLab's GraphQL dates to the second: this read may describe the version before the hook's.
+            assertThat(read(approvedAt(Instant.parse("2026-01-31T21:31:00Z")), readAt))
+                    .isFalse();
+
+            assertThat(stored().getMergeable()).isNull();
+            assertThat(stored().getReviewDecision()).isNull();
+        }
+
+        private GitLabMergeRequestReadinessReader.Facts approvedAt(Instant version) {
+            return new GitLabMergeRequestReadinessReader.Facts(
+                    savedRepo.getNativeId(),
+                    NATIVE_MR4_ID,
+                    "opened",
+                    version,
+                    NEXT_HEAD,
+                    true,
+                    "mergeable",
+                    true,
+                    GitLabHeadPipeline.NOT_CAPTURED,
+                    List.of(),
+                    List.of(approver()),
+                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN);
         }
 
         private void setReadiness(boolean mergeable, MergeStateStatus status, ReviewDecision decision) {
@@ -1854,14 +1905,25 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         @Test
-        void shouldRecordNoMergeFactsReadForAnotherHeadOrAnOlderVersion() throws Exception {
+        void shouldRecordNoMergeFactsReadOfAnotherMergeAndReplaceNoneRecorded() throws Exception {
             merge();
 
             assertThat(mergeRead("f".repeat(40), MERGE_VERSION, author())).isFalse();
-            assertThat(mergeRead(MR2_HEAD, MERGE_VERSION.minusSeconds(60), author()))
+            assertThat(terminalRead(NATIVE_MR2_ID + 1, "merged", MERGE_SHA, author()))
                     .isFalse();
-
+            assertThat(terminalRead(NATIVE_MR2_ID, "opened", MERGE_SHA, author()))
+                    .isFalse();
+            assertThat(terminalRead(NATIVE_MR2_ID, "merged", "e".repeat(40), author()))
+                    .isFalse();
             assertThat(mr2().getMergedBy()).isNull();
+
+            // The facts of a completed merge do not change, so a report of it dated an older version still names its
+            // merger.
+            assertThat(mergeRead(MR2_HEAD, MERGE_VERSION.minusSeconds(60), author()))
+                    .isTrue();
+            assertThat(mergeRead(MR2_HEAD, MERGE_VERSION, syncedUser(NATIVE_TUTOR_ID, "tutor")))
+                    .isFalse();
+            assertThat(Objects.requireNonNull(mr2().getMergedBy()).getLogin()).isEqualTo(FIXTURE_AUTHOR_LOGIN);
         }
 
         @Test
@@ -1998,6 +2060,92 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(mergeSignal().getDiscoveredVia()).isEqualTo(DiscoveredVia.EVENT);
         }
 
+        @Test
+        void shouldRecordTheMergerAReadNamesWithinTheSecondOfAMillisecondMergeHook() throws Exception {
+            receive(loadPayload("merge_request.update"));
+            eventListener.clear();
+            GitLabMergeRequestReadinessReader reader = mock(GitLabMergeRequestReadinessReader.class);
+            // GraphQL reports the merged version to the second; the hook stored it to the millisecond.
+            when(reader.read(any(), anyString(), eq(MR2_IID))).thenReturn(mergedFacts(author()));
+
+            handlerReading(reader).dispatchEvent(millisecondMerge(), Instant.now());
+
+            PullRequest merged = mr2();
+            assertThat(merged.getUpdatedAt()).isEqualTo(Instant.parse("2026-01-31T18:04:07.317Z"));
+            assertThat(Objects.requireNonNull(merged.getMergedBy()).getLogin()).isEqualTo(FIXTURE_AUTHOR_LOGIN);
+            ScmDomainEvent.PullRequestMerged offered =
+                    eventListener.ofType(ScmDomainEvent.PullRequestMerged.class).getFirst();
+            detect(mergerPractice());
+            transactionTemplate.executeWithoutResult(status -> listener().onPullRequestMerged(offered));
+            ScmEventPayload.PullRequestData submitted = submitted();
+            assertThat(submitted.mergedById()).isNotNull().isEqualTo(submitted.authorId());
+        }
+
+        @Test
+        void shouldLetASyncNameTheMergerOfAMillisecondMergeHookWithoutTakingAnythingElseFromTheOlderPage()
+                throws Exception {
+            receive(loadPayload("merge_request.update"));
+            eventListener.clear();
+            // The read after the hook failed.
+            handlerReading(mock(GitLabMergeRequestReadinessReader.class))
+                    .dispatchEvent(millisecondMerge(), Instant.now());
+            ScmDomainEvent.PullRequestMerged offered =
+                    eventListener.ofType(ScmDomainEvent.PullRequestMerged.class).getFirst();
+            detect(mergerPractice());
+            transactionTemplate.executeWithoutResult(status -> listener().onPullRequestMerged(offered));
+            ArtifactSignal held = mergeSignal();
+            assertThat(held.getStateReason()).isEqualTo(SignalStateReason.MERGE_ACTOR_UNAVAILABLE);
+
+            // Dated to the second, each page is older than the hook's version.
+            Map<String, @Nullable Object> open = mergedPage();
+            open.put("updatedAt", "2026-01-31T18:04:07Z");
+            open.put("state", "opened");
+            syncPage(open, List.of());
+            Map<String, @Nullable Object> otherHead = mergedPage();
+            otherHead.put("updatedAt", "2026-01-31T18:04:07Z");
+            otherHead.put("diffHeadSha", "f".repeat(40));
+            syncPage(otherHead, List.of());
+            assertThat(mr2().getState()).isEqualTo(Issue.State.MERGED);
+            assertThat(mr2().getMergedBy()).isNull();
+
+            Map<String, @Nullable Object> merged = mergedPage();
+            merged.put("updatedAt", "2026-01-31T18:04:07Z");
+            merged.put("title", "A title from the older page");
+            syncPage(merged, List.of());
+            PullRequest repaired = mr2();
+            assertThat(Objects.requireNonNull(repaired.getMergedBy()).getLogin())
+                    .isEqualTo(FIXTURE_AUTHOR_LOGIN);
+            assertThat(repaired.getTitle()).isNotEqualTo("A title from the older page");
+            assertThat(repaired.getUpdatedAt()).isEqualTo(Instant.parse("2026-01-31T18:04:07.317Z"));
+
+            transactionTemplate.executeWithoutResult(status -> resubmitter().resubmit(held));
+            ScmEventPayload.PullRequestData submitted = submitted();
+            assertThat(submitted.mergedById()).isNotNull().isEqualTo(submitted.authorId());
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"Older description", "Newer description"})
+        void shouldTakeNothingFromAPageOfTheSameSecondAsANewerMillisecondEdit(String pageDescription) throws Exception {
+            receive(update("2026-01-31T19:04:04.900+01:00", "Newer description"));
+            eventListener.clear();
+            Map<String, @Nullable Object> page = mergedPage();
+            page.put("state", "opened");
+            page.put("updatedAt", "2026-01-31T18:04:04Z");
+            page.put("description", pageDescription);
+            page.put("mergedAt", null);
+            page.put("mergeCommitSha", null);
+            page.put("mergeUser", null);
+            page.put("detailedMergeStatus", "mergeable");
+
+            syncPage(page, List.of());
+
+            PullRequest stored = mr2();
+            assertThat(stored.getBody()).isEqualTo("Newer description");
+            assertThat(stored.getUpdatedAt()).isEqualTo(Instant.parse("2026-01-31T18:04:04.900Z"));
+            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+                    .isEmpty();
+        }
+
         /** The merge request handler, reading GitLab through {@code reader}. */
         private GitLabMergeRequestMessageHandler handlerReading(GitLabMergeRequestReadinessReader reader) {
             return new GitLabMergeRequestMessageHandler(
@@ -2010,11 +2158,16 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         private GitLabMergeRequestReadinessReader.Facts mergedFacts(GitLabMergeRequestProcessor.SyncUserData merger) {
+            return mergedFacts(merger, MERGE_VERSION);
+        }
+
+        private GitLabMergeRequestReadinessReader.Facts mergedFacts(
+                GitLabMergeRequestProcessor.SyncUserData merger, Instant version) {
             return new GitLabMergeRequestReadinessReader.Facts(
                     savedRepo.getNativeId(),
                     NATIVE_MR2_ID,
                     "merged",
-                    MERGE_VERSION,
+                    version,
                     MR2_HEAD,
                     false,
                     "not_open",
@@ -2025,11 +2178,41 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     new GitLabMergeRequestReadinessReader.Merge(merger, MERGED_AT, MERGE_SHA));
         }
 
+        /** MR !2's merge hook as GitLab 19 sends it: its times to the millisecond, and no merger. */
+        private GitLabMergeRequestEventDTO millisecondMerge() throws IOException {
+            return edited("merge_request.merge", attributes -> {
+                attributes.put("updated_at", "2026-01-31T19:04:07.317+01:00");
+                attributes.put("merged_at", "2026-01-31T19:04:07.329+01:00");
+                attributes.putNull("merge_user_id");
+            });
+        }
+
         private ScmDomainEvent.PullRequestMerged merge() throws Exception {
             receive(loadPayload("merge_request.update"));
             eventListener.clear();
             deliver(loadPayload("merge_request.merge"));
             return eventListener.ofType(ScmDomainEvent.PullRequestMerged.class).getFirst();
+        }
+
+        /** A read of MR !2 at its head reporting {@code nativeId} in {@code state}, merged into {@code commit}. */
+        private boolean terminalRead(
+                long nativeId, String state, String commit, GitLabMergeRequestProcessor.SyncUserData merger) {
+            return mergeRequestProcessor.applyTerminalFacts(
+                    savedRepo,
+                    MR2_IID,
+                    new GitLabMergeRequestReadinessReader.Facts(
+                            savedRepo.getNativeId(),
+                            nativeId,
+                            state,
+                            MERGE_VERSION,
+                            MR2_HEAD,
+                            false,
+                            "not_open",
+                            null,
+                            GitLabHeadPipeline.NOT_CAPTURED,
+                            null,
+                            null,
+                            new GitLabMergeRequestReadinessReader.Merge(merger, MERGED_AT, commit)));
         }
 
         private boolean mergeRead(
