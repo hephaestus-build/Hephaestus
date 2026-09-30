@@ -107,19 +107,24 @@ public final class WorkerMentorSessions {
                     UUID turnId = UUID.fromString(command.body().path("turnId").asString());
                     JsonNode priceNode = command.body().path("price");
                     var price = priceNode.isNull() ? null : mapper.treeToValue(priceNode, LlmPriceSnapshot.class);
-                    var meter = new MentorTurnMeter(turnId, price);
-                    if (!credentials.bindTurn(command.sessionId(), meter))
-                        throw new InteractiveSandboxException("Expired credential");
-                    session.meter = meter;
+                    synchronized (session) {
+                        if (session.closed.get()) throw new InteractiveSandboxException("Session closed");
+                        var meter = new MentorTurnMeter(turnId, price);
+                        if (!credentials.bindTurn(command.sessionId(), meter))
+                            throw new InteractiveSandboxException("Expired credential");
+                        session.meter = meter;
+                    }
                 }
                 case UNBIND_TURN -> {
-                    var meter = session.meter;
-                    if (meter != null
-                            && meter.turnId()
-                                    .toString()
-                                    .equals(command.body().path("turnId").asString())) {
-                        credentials.unbindTurn(command.sessionId(), meter);
-                        session.meter = null;
+                    synchronized (session) {
+                        var meter = session.meter;
+                        if (meter != null
+                                && meter.turnId()
+                                        .toString()
+                                        .equals(command.body().path("turnId").asString())) {
+                            credentials.unbindTurn(command.sessionId(), meter);
+                            session.meter = null;
+                        }
                     }
                 }
                 case CLOSE, OPEN -> throw new IllegalStateException("Lifecycle command dispatched twice");
@@ -296,6 +301,8 @@ public final class WorkerMentorSessions {
 
         volatile @Nullable AttachedSandbox attached;
         volatile @Nullable Disposable subscription;
-        volatile @Nullable MentorTurnMeter meter;
+
+        @Nullable
+        MentorTurnMeter meter;
     }
 }
