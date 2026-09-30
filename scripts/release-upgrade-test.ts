@@ -359,11 +359,11 @@ function linkWorkspaceIdentity(): void {
 		   SELECT provider_id, 424242, 'account:' || account_id, 'https://example.invalid/avatar',
 		          'https://example.invalid/user', 'USER'
 		   FROM fixture
-		   RETURNING id, provider_id
+		   RETURNING id, provider_id, native_id
 		 )
 		 INSERT INTO identity_link
 		   (account_id, provider_id, subject, external_actor_id, username_at_signup, linked_via)
-		 SELECT fixture.account_id, created.provider_id, 'upgrade-fixture', created.id,
+		 SELECT fixture.account_id, created.provider_id, created.native_id::text, created.id,
 		        'account:' || fixture.account_id, 'MANUAL_LINK'
 		 FROM fixture CROSS JOIN created;`,
 	);
