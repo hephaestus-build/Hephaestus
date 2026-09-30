@@ -15,16 +15,28 @@ public record MentorTurnRequest(
         @NonNull UUID threadId,
         @NonNull String userMessage,
         @Nullable UUID clientUserMessageId,
-        @NonNull ThreadSurface surface) {
-    /** A turn from the webapp SSE surface. */
+        @NonNull ThreadSurface surface,
+        @Nullable UUID retryOfAssistantMessageId) {
+    /** A turn from the webapp SSE surface; {@code retryOfAssistantMessageId} names a failed reply to answer again. */
     public static MentorTurnRequest web(
-            long workspaceId, UUID threadId, String userMessage, @Nullable UUID clientUserMessageId) {
-        return new MentorTurnRequest(workspaceId, threadId, userMessage, clientUserMessageId, ThreadSurface.WEB);
+            long workspaceId,
+            UUID threadId,
+            String userMessage,
+            @Nullable UUID clientUserMessageId,
+            @Nullable UUID retryOfAssistantMessageId) {
+        return new MentorTurnRequest(
+                workspaceId, threadId, userMessage, clientUserMessageId, ThreadSurface.WEB, retryOfAssistantMessageId);
     }
 
     /** A turn from a Slack DM surface. Lets callers construct one without naming the {@code mentor}-module enum. */
     public static MentorTurnRequest slackDm(
             long workspaceId, UUID threadId, String userMessage, @Nullable UUID clientUserMessageId) {
-        return new MentorTurnRequest(workspaceId, threadId, userMessage, clientUserMessageId, ThreadSurface.SLACK_DM);
+        return new MentorTurnRequest(
+                workspaceId, threadId, userMessage, clientUserMessageId, ThreadSurface.SLACK_DM, null);
+    }
+
+    MentorTurnRequest withUserMessage(String storedPrompt) {
+        return new MentorTurnRequest(
+                workspaceId, threadId, storedPrompt, clientUserMessageId, surface, retryOfAssistantMessageId);
     }
 }

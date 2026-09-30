@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.ClientDisconnectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRefusedException;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRetryRejectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorStreamLostException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.TurnAlreadyInFlightException;
@@ -245,17 +246,17 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     // Closing the scope is the operation; its binding is intentionally unread.
     @SuppressWarnings("try")
     private MentorChatMetrics.Outcome runTurnInternal(
-            MentorTurnRequest request,
+            MentorTurnRequest submitted,
             MentorChannel channel,
             AtomicReference<@Nullable MentorRunnerClient> clientHolder,
             long acceptedAt) {
         // Admission and budget checks precede persistence; the admitted model determines whose budget applies.
-        MentorLlmConfig llmConfig = resolveWorkspaceLlmConfig(request.workspaceId());
+        MentorLlmConfig llmConfig = resolveWorkspaceLlmConfig(submitted.workspaceId());
 
         FundingSource mentorFunding =
                 Objects.requireNonNull(llmConfig.connectionScope(), "Mentor model must have a funding source");
         LlmBudgetBlockReason blockReason =
-                llmBudgetService.decide(request.workspaceId()).forFunding(mentorFunding);
+                llmBudgetService.decide(submitted.workspaceId()).forFunding(mentorFunding);
         if (blockReason == LlmBudgetBlockReason.EXHAUSTED) {
             metrics.recordBudgetBlocked();
             throw new LlmBudgetExhaustedException(mentorFunding);
@@ -265,12 +266,20 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             throw new LlmUnpricedUsageBlockedException(mentorFunding);
         }
         User user = userRepository.getCurrentUserElseThrow();
+        UUID retryOf = submitted.retryOfAssistantMessageId();
+        // A retry answers a stored prompt, so it never opens a thread.
+        if (retryOf != null
+                && chatThreadRepository
+                        .findByIdAndWorkspaceId(submitted.threadId(), submitted.workspaceId())
+                        .isEmpty()) {
+            throw new MentorRetryRejectedException(MentorRetryRejectedException.NOT_RETRYABLE);
+        }
         ChatThread thread = persistence.ensureThread(
-                request.workspaceId(),
-                request.threadId(),
+                submitted.workspaceId(),
+                submitted.threadId(),
                 user,
                 CurrentScmIdentityHolder.getAccountActorIds(),
-                request.userMessage());
+                submitted.userMessage());
         byte @Nullable [] priorSession = chatThreadRepository
                 .findSessionJsonl(thread.getId())
                 .filter(bytes -> bytes.length > 0)
@@ -280,8 +289,18 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         // Read model only: it makes this turn's completed calls visible to the budget gate while the
         // turn is still running. Billing comes from the turn's row, which the proxy writes per call.
         MentorTurnMeter proxyMeter = new MentorTurnMeter(assistantMessageId, llmConfig.priceSnapshot());
-        MentorTurnPersistence.TurnPersistenceCookie cookie = persistence.persistInFlight(
-                thread, request.userMessage(), assistantMessageId, request.clientUserMessageId(), llmConfig);
+        MentorTurnPersistence.TurnPersistenceCookie cookie;
+        MentorTurnRequest request;
+        if (retryOf == null) {
+            cookie = persistence.persistInFlight(
+                    thread, submitted.userMessage(), assistantMessageId, submitted.clientUserMessageId(), llmConfig);
+            request = submitted;
+        } else {
+            MentorTurnPersistence.RetryAdmission retry = persistence.persistRetry(
+                    thread, submitted.clientUserMessageId(), retryOf, assistantMessageId, llmConfig);
+            cookie = retry.cookie();
+            request = submitted.withUserMessage(retry.prompt());
+        }
         TranslatorState state = new TranslatorState(assistantMessageId);
         // Frozen onto the turn so the ledger bills the price the runner actually ran at.
         state.bindConnection(llmConfig.connectionScope(), llmConfig.connectionId());
@@ -803,6 +822,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         }
         if (e instanceof MentorRefusedException refused) {
             return refused.reason().userMessage();
+        }
+        if (e instanceof MentorRetryRejectedException rejected) {
+            return Objects.requireNonNullElse(rejected.getMessage(), MentorRetryRejectedException.NOT_RETRYABLE);
         }
         if (e instanceof InteractiveSandboxException) {
             return "I couldn't start the mentor runtime. Please try again in a moment.";

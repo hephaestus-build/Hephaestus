@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -18,6 +19,14 @@ import tools.jackson.databind.JsonNode;
  *                Service creates the row on the fly if it doesn't exist yet.
  * @param message the AI SDK UIMessage envelope; we read {@code message.parts[0].text}
  *                as the prompt. Other parts (images, files) are ignored in v1.
+ * @param trigger the SDK's request trigger, {@code submit-message} or {@code regenerate-message}
+ * @param messageId the assistant message a {@code regenerate-message} request replaces
  */
 @Schema(description = "Mentor chat turn request — AI SDK DefaultChatTransport shape.")
-public record MentorChatRequestBody(UUID id, @NotNull JsonNode message) {}
+public record MentorChatRequestBody(
+        UUID id,
+        @NotNull JsonNode message,
+        @Nullable String trigger,
+        @Nullable UUID messageId) {
+    static final String REGENERATE = "regenerate-message";
+}

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.mentor;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -72,7 +73,21 @@ public class ChatThreadService {
     @Transactional(readOnly = true)
     public ChatThreadDetailDTO loadOwnedThreadDetail(Long workspaceId, UUID threadId) {
         ChatThread thread = requireOwnedThread(workspaceId, threadId);
+        // A retried prompt keeps every attempt stored; the transcript shows its latest, as the chat did live.
+        Map<UUID, UUID> latestAttempt = new HashMap<>();
+        for (ChatMessage message : thread.getAllMessages()) {
+            UUID prompt = message.getParentMessageId();
+            if (message.getRole() == ChatMessage.Role.ASSISTANT && prompt != null) {
+                latestAttempt.put(prompt, message.getId());
+            }
+        }
         List<ChatMessageDTO> messages = thread.getAllMessages().stream()
+                .filter(msg -> {
+                    UUID prompt = msg.getParentMessageId();
+                    return msg.getRole() != ChatMessage.Role.ASSISTANT
+                            || prompt == null
+                            || msg.getId().equals(latestAttempt.get(prompt));
+                })
                 .map(msg -> ChatMessageDTO.from(msg, msg.getParts(), objectMapper))
                 .toList();
         Map<UUID, Boolean> votes = chatMessageVoteRepository.findByMessage_Thread_Id(thread.getId()).stream()
