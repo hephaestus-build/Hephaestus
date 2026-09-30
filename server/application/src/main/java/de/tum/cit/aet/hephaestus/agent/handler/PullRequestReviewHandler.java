@@ -201,7 +201,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         if (job.getWorkspace() == null) {
             throw new JobPreparationException("Job has no workspace: jobId=" + job.getId());
         }
-        Task task = new Task.PracticeReview(
+        Task task = new Task(
                 buildPrompt(job), requireInt(metadata, "pr_number"), requireText(metadata, "repository_full_name"));
         return TaskEnvelope.of(job.getId(), job.getWorkspace().getId(), task);
     }

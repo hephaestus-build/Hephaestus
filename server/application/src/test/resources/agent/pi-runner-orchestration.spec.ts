@@ -859,17 +859,15 @@ if (scenario !== undefined && scenario !== "") {
 					writeFileSync(
 						nodePath.join(cwd, "task.json"),
 						JSON.stringify({
-							schemaVersion: 2,
-							paths: {
-								contextRoot: "evidence",
-								repositoryRoot: "repos/primary",
-								manifest: "evidence/manifest.json",
-								practiceIndex: "catalog/practices/index.json",
-								compositionRequest: "evidence/composition.json",
-								preparedFeedback: "history/prepared.json",
-								precomputeScripts: "scripts/practices",
-							},
-							task: { kind: "practice_review", prompt: "Review the practice." },
+							schemaVersion: 3,
+							contextRoot: "evidence",
+							repositoryRoot: "repos/primary",
+							manifest: "evidence/manifest.json",
+							practiceIndex: "catalog/practices/index.json",
+							compositionRequest: "evidence/composition.json",
+							preparedFeedback: "history/prepared.json",
+							precomputeScripts: "scripts/practices",
+							prompt: "Review the practice.",
 						}),
 					);
 					let budgetMs = "10000";

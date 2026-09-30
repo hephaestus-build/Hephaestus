@@ -224,13 +224,9 @@ interface TaskEnvelope {
 	jobId: unknown;
 	workspaceId: unknown;
 	paths: ReturnType<typeof taskPaths>;
-	task: {
-		kind: string;
-		prompt: string;
-		// Only ever logged, so they are carried exactly as written rather than validated into a shape.
-		repositoryFullName: unknown;
-		pullRequestNumber: unknown;
-	};
+	prompt: string;
+	repositoryFullName: unknown;
+	pullRequestNumber: unknown;
 }
 
 /** How much feedback this run may compose, per lane. */
@@ -281,7 +277,6 @@ const EVIDENCE_TOOLS = ["read", "grep", "find", "ls"] as const;
 const PRACTICE_TOOLS = [...EVIDENCE_TOOLS, "write", "edit", "bash"] as const;
 const CWD = process.env.PI_RUNNER_CWD ?? WORKSPACE_ROOT;
 const ENVELOPE_MISMATCH_EXIT = 42;
-const SUPPORTED_KIND = "practice_review";
 const TASK_PATH = `${CWD}/task.json`;
 const taskEnvelope = readTaskEnvelope();
 const INPUT_PATHS = resolveTaskPaths(CWD, taskEnvelope.paths);
@@ -1311,21 +1306,13 @@ function readTaskEnvelope(): TaskEnvelope {
 		);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
 	}
-	const task: Record<string, unknown> = isRecord(envelope.task) ? envelope.task : {};
-	if (task.kind !== SUPPORTED_KIND) {
-		console.error(
-			`[pi-runner] Unknown task kind: got "${logValue(task.kind)}", expected "${SUPPORTED_KIND}". ` +
-				`This runner only handles practice_review tasks.`,
-		);
-		process.exit(ENVELOPE_MISMATCH_EXIT);
-	}
-	if (typeof task.prompt !== "string" || task.prompt.trim() === "") {
-		console.error(`[pi-runner] task.prompt is missing or blank in ${TASK_PATH}`);
+	if (typeof envelope.prompt !== "string" || envelope.prompt.trim() === "") {
+		console.error(`[pi-runner] prompt is missing or blank in ${TASK_PATH}`);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
 	}
 	let paths: ReturnType<typeof taskPaths>;
 	try {
-		paths = taskPaths(envelope.paths);
+		paths = taskPaths(envelope);
 	} catch (error) {
 		console.error(`[pi-runner] ${errorText(error)}`);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
@@ -1335,21 +1322,18 @@ function readTaskEnvelope(): TaskEnvelope {
 		schemaVersion: SUPPORTED_SCHEMA_VERSION,
 		jobId: envelope.jobId,
 		workspaceId: envelope.workspaceId,
-		task: {
-			kind: SUPPORTED_KIND,
-			prompt: task.prompt,
-			repositoryFullName: task.repositoryFullName,
-			pullRequestNumber: task.pullRequestNumber,
-		},
+		prompt: envelope.prompt,
+		repositoryFullName: envelope.repositoryFullName,
+		pullRequestNumber: envelope.pullRequestNumber,
 	};
 }
 
-const prompt = taskEnvelope.task.prompt.trim();
+const prompt = taskEnvelope.prompt.trim();
 console.error(
-	`[pi-runner] Task envelope loaded: kind=${taskEnvelope.task.kind}, ` +
+	`[pi-runner] Task envelope loaded: ` +
 		`jobId=${logValue(taskEnvelope.jobId)}, workspaceId=${logValue(taskEnvelope.workspaceId)}, ` +
-		`repository=${logValue(taskEnvelope.task.repositoryFullName ?? "?")}, ` +
-		`prNumber=${logValue(taskEnvelope.task.pullRequestNumber ?? "?")}`,
+		`repository=${logValue(taskEnvelope.repositoryFullName ?? "?")}, ` +
+		`prNumber=${logValue(taskEnvelope.pullRequestNumber ?? "?")}`,
 );
 
 const COMPOSITION_REQUEST_PATH = INPUT_PATHS.compositionRequest;

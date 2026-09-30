@@ -13,7 +13,7 @@ if (typeof envelope !== "object" || envelope === null) {
 if (Reflect.get(envelope, "schemaVersion") !== SUPPORTED_SCHEMA_VERSION) {
 	throw new Error("task.json: unsupported schemaVersion");
 }
-const paths = resolveTaskPaths(root, Reflect.get(envelope, "paths"));
+const paths = resolveTaskPaths(root, envelope);
 const stage = path.resolve(root, "work/precompute-stage");
 const output = path.resolve(root, "work/precompute-out");
 rmSync(path.resolve(stage, "practices"), { recursive: true, force: true });

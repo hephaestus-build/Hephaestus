@@ -220,12 +220,13 @@ entries with their rationales overran the model's read cap on a heavily reviewed
 
 ## Task envelope
 
-`task.json` contains a `TaskEnvelope` with `schemaVersion: 2`, `jobId`, `workspaceId`, `task`
-and `paths`. The practice runner accepts `task.kind: "practice_review"` and requires a non-empty
-`task.prompt`. Unreadable or invalid JSON, unsupported versions or kinds, blank prompts and invalid
+`task.json` is one flat record with `schemaVersion: 3`, `jobId`, `workspaceId`, `prompt`,
+`pullRequestNumber`, `repositoryFullName` and the seven input-location fields below. There is no
+`kind` discriminator, nested `task` or nested `paths` object. The practice runner requires a
+non-empty `prompt`. Unreadable or invalid JSON, unsupported versions, blank prompts and invalid
 paths exit with `42`.
 
-All seven `paths` fields are required:
+All seven input-location fields are required:
 
 | Field | Location |
 |-------|----------|
@@ -276,7 +277,7 @@ worker filesystem.
 | 1    | No complete review output after the initial attempt *and* the recovery retry |
 | 2    | Fatal runner error — an unhandled rejection or uncaught exception. Debug and usage files are persisted first |
 | 3    | Watchdog hard-kill (budget + grace exceeded); writes `out/watchdog-killed.json` first |
-| 42   | Task-envelope contract drift: malformed envelope, unsupported version or kind, or invalid paths |
+| 42   | Task-envelope contract drift: malformed envelope, unsupported version, blank prompt, or invalid paths |
 | 43   | Result archive upload did not complete before the upload deadline or was refused |
 | 75   | The review finished, but the call admitting its observations never reached the server |
 | 76   | No practice was reached, and every model call the run made went unanswered |
@@ -295,10 +296,9 @@ unanswered. It records a provider failure, not an observation about the reviewed
 
 ## Versioning policy
 
-`task.json.schemaVersion` versions the envelope shared by task kinds. Bump it when an existing
+`task.json.schemaVersion` versions the flat practice-review record. Bump it when an existing
 producer or consumer must change: for example, adding a required field, removing a field, or
-changing a field's meaning. An additive optional field or new task kind does not require a bump;
-runners still reject kinds they do not support.
+changing a field's meaning. An additive optional field does not require a bump.
 
 The server creates the envelope and stages the runner and its sidecars from its own classpath for
 each attempt. They evolve together; there is no cross-version envelope compatibility layer.

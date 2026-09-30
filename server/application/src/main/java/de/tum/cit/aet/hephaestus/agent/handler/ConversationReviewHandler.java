@@ -126,9 +126,9 @@ public class ConversationReviewHandler implements JobTypeHandler {
     private TaskEnvelope buildTaskEnvelope(AgentJob job, JsonNode metadata) {
         String channelId = metadata.path("slack_channel_id").asString("");
         String threadTs = metadata.path("slack_thread_ts").asString("");
-        // Reuse the artifact-agnostic PracticeReview task kind; the number/repo hints are placeholders the runner
+        // Use the artifact-agnostic task; the number/repo hints are placeholders the runner
         // ignores.
-        Task task = new Task.PracticeReview(buildPrompt(channelId, threadTs, job), 1, "slack-thread:" + channelId);
+        Task task = new Task(buildPrompt(channelId, threadTs, job), 1, "slack-thread:" + channelId);
         return TaskEnvelope.of(job.getId(), job.getWorkspace().getId(), task);
     }
 

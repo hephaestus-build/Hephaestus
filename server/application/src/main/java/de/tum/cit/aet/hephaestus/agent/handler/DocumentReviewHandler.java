@@ -115,7 +115,7 @@ public class DocumentReviewHandler implements JobTypeHandler {
                 metadata.path(DocumentContentSource.DOCUMENT_ID_METADATA_KEY).asLong(0L);
         // The document's own title is deliberately NOT interpolated into the prompt: it is third-party
         // text, already carried inside the quarantine banner in document.md.
-        Task task = new Task.PracticeReview(buildPrompt(job), 1, "docs-document:" + documentId);
+        Task task = new Task(buildPrompt(job), 1, "docs-document:" + documentId);
         return TaskEnvelope.of(job.getId(), job.getWorkspace().getId(), task);
     }
 

@@ -175,7 +175,7 @@ public class IssueReviewHandler implements JobTypeHandler {
         }
         int issueNumber = requireInt(metadata, "issue_number");
         String repoName = requireText(metadata, "repository_full_name");
-        Task task = new Task.PracticeReview(buildPrompt(issueNumber, repoName, job), issueNumber, repoName);
+        Task task = new Task(buildPrompt(issueNumber, repoName, job), issueNumber, repoName);
         return TaskEnvelope.of(job.getId(), job.getWorkspace().getId(), task);
     }
 

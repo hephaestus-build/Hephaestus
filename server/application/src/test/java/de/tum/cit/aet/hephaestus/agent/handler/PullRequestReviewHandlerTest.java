@@ -411,10 +411,12 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
 
             assertThat(files).containsKey("task.json");
             JsonNode envelope = objectMapper.readTree(files.get("task.json"));
-            assertThat(envelope.get("schemaVersion").asInt()).isEqualTo(2);
+            assertThat(envelope.get("schemaVersion").asInt()).isEqualTo(3);
             assertThat(envelope.get("workspaceId").asLong()).isEqualTo(WORKSPACE_ID);
-            JsonNode task = envelope.get("task");
-            assertThat(task.get("kind").asString()).isEqualTo("practice_review");
+            JsonNode task = envelope;
+            assertThat(task.has("kind")).isFalse();
+            assertThat(task.has("task")).isFalse();
+            assertThat(task.has("paths")).isFalse();
             assertThat(task.get("pullRequestNumber").asInt()).isEqualTo(42);
             assertThat(task.get("repositoryFullName").asString()).isEqualTo("owner/repo");
             assertThat(task.get("prompt").asString()).contains("Review merge request #42");

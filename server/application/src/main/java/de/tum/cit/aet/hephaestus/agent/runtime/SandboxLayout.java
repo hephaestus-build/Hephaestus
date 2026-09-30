@@ -137,7 +137,7 @@ public final class SandboxLayout {
     /** Workspace-relative directory for Pi SDK session JSONL files (matches the mentor runner's {@code SESSIONS_DIR}). */
     public static final String SESSIONS_DIR = ".sessions";
 
-    /** Exit code emitted by the Pi runner on envelope/image drift (unsupported {@code schemaVersion} or {@code kind}). */
+    /** Exit code emitted by the Pi runner on envelope/image drift (unsupported {@code schemaVersion} or invalid task fields). */
     public static final int EXIT_ENVELOPE_MISMATCH = 42;
 
     /** The result was not acknowledged before the upload deadline. */
