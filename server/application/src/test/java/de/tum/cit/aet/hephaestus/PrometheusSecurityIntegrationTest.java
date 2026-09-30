@@ -16,6 +16,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.boot.SpringApplication;
@@ -143,6 +144,23 @@ class PrometheusSecurityIntegrationTest {
                                 .statusCode())
                         .isEqualTo(200);
             }
+        }
+    }
+
+    @Test
+    void shouldKeepDefaultManagementListenerOnLoopback() throws Exception {
+        var application = new SpringApplication(MetricsApplication.class);
+        try (var context = application.run(
+                        "--server.port=0", "--management.server.port=0", "--spring.main.banner-mode=off");
+                var client = HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofSeconds(3))
+                        .build()) {
+            int managementPort = context.getEnvironment().getRequiredProperty("local.management.port", Integer.class);
+            assertThat(send(client, managementPort, "/actuator/prometheus", "GET", false)
+                            .statusCode())
+                    .isEqualTo(200);
+            assertThatThrownBy(() -> send(client, "127.0.0.2", managementPort, "/actuator/prometheus", "GET", false))
+                    .isInstanceOf(IOException.class);
         }
     }
 

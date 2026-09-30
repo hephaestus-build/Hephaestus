@@ -198,7 +198,7 @@ management:
                 enabled: false
     server:
         port: ${MANAGEMENT_PORT:9090}
-        address: 0.0.0.0
+        address: 127.0.0.1
     endpoints:
         web:
             exposure:

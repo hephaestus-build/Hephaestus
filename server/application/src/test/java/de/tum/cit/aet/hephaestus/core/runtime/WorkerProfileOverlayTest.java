@@ -50,9 +50,9 @@ class WorkerProfileOverlayTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldUseASeparateNetworkReachableManagementListenerByDefault() throws IOException {
+    void shouldUseASeparateLoopbackManagementListenerByDefault() throws IOException {
         assertThat(baseValueOf("management.server.port")).isEqualTo("${MANAGEMENT_PORT:9090}");
-        assertThat(baseValueOf("management.server.address")).isEqualTo("0.0.0.0");
+        assertThat(baseValueOf("management.server.address")).isEqualTo("127.0.0.1");
         assertThat(workerOverlay().getProperty("management.server.port")).isNull();
         assertThat(workerOverlay().getProperty("management.server.address")).isNull();
     }

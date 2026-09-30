@@ -24,8 +24,8 @@ management port to the host or configure a proxy route. Attach your own Promethe
 do not add a `ports` mapping, a Traefik router, or internet ingress for management. Docker `expose`
 is not a firewall: any container on that network can read metrics. Restrict network membership to
 trusted services. For a non-Compose deployment, restrict the management listener with private
-networking and firewall policy before starting it. Its default address is `0.0.0.0`; use
-`MANAGEMENT_SERVER_ADDRESS` to bind a specific private interface. Do not set its port equal to
+networking and firewall policy before starting it. Its default address is loopback (`127.0.0.1`). For a remote scraper, set
+`MANAGEMENT_SERVER_ADDRESS` to a specific trusted private interface. Do not set its port equal to
 the application or sandbox gateway port. See [Spring Boot management listeners](https://docs.spring.io/spring-boot/reference/actuator/monitoring.html)
 and [Prometheus security](https://prometheus.io/docs/operating/security/).
 

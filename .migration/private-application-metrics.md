@@ -1,6 +1,6 @@
 #### 🔴 Restrict the new management listener and update custom probes
 
-The default management port is now **9090**, separate from the application port. Outside the supported Compose stacks, the default management bind address is `0.0.0.0`; restrict it to a trusted private interface with `MANAGEMENT_SERVER_ADDRESS` or enforce private ingress with firewall policy. `GET /actuator/prometheus` needs no user token on that listener; it is refused on the application port.
+The default management port is now **9090**, separate from the application port. Outside the supported Compose stacks, management binds to loopback (`127.0.0.1`) by default. For a remote scraper, explicitly set `MANAGEMENT_SERVER_ADDRESS` to a trusted private interface and restrict ingress with firewall policy. `GET /actuator/prometheus` needs no user token on that listener; it is refused on the application port.
 
 The supported Compose stacks already keep 9090 private: they expose it to `shared-network`, do not publish it to the host, and do not route it through the proxy. They bind management to the container’s own `shared-network` address through its network-qualified hostname, not to its sandbox interfaces. Their container probes and proxy readiness checks use the application-port paths and are updated automatically.
 

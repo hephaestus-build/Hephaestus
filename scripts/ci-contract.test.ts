@@ -792,7 +792,7 @@ void describe("CI contract", () => {
 		assert.equal((e2e.match(/actions\/download-artifact@/gu) ?? []).length, 1);
 		assert.match(e2e, /name: Upload diagnostics\s+if: always\(\)/u);
 		assert.match(e2e, /e2e-server\.log/u);
-		assert.match(e2e, /http:\/\/localhost:8080\/actuator\/health\/readiness/u);
+		assert.match(e2e, /http:\/\/localhost:8080\/readyz/u);
 		assert.doesNotMatch(e2e, /actuator\/health\/liveness/u);
 		const image = job(orchestrator, "application-server-image");
 		assert.match(image, /needs: \[detect-changes, server-package, vulnerability-database\]/u);
