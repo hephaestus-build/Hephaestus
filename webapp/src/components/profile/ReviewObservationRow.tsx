@@ -245,11 +245,6 @@ export function ReviewObservationRow({
 											detector={detector}
 										/>
 									))}
-									{hasText(detector) && (
-										<p className="text-xs text-muted-foreground">
-											Captured by <code className="font-mono">{detector}</code>
-										</p>
-									)}
 								</div>
 							</DetailSection>
 						)}

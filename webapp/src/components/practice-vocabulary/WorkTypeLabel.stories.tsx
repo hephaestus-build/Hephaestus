@@ -35,11 +35,15 @@ export const EveryKind: Story = {
 	},
 };
 
-/** A kind this build has never heard of takes the neutral glyph rather than borrowing another's. */
+/**
+ * A kind this build has never heard of takes the neutral glyph rather than borrowing another's, and
+ * a generic name rather than its wire id.
+ */
 export const UnknownKind: Story = {
 	args: { artifactKind: "scm.something_new" },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("scm.something_new")).toBeVisible();
+		await expect(canvas.getByText("Other work")).toBeVisible();
+		await expect(canvas.queryByText(/scm\./u)).not.toBeInTheDocument();
 	},
 };
 

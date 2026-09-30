@@ -8,6 +8,10 @@ import type {
 	CuratedPracticeDefinition,
 	PracticeDefinitionOptions,
 } from "@/api/types.gen";
+import {
+	DEFAULT_DELIVERY_BEHAVIOR_TEXT,
+	deliveryBehaviorSentences,
+} from "@/components/admin/practice-editor/delivery-behavior-text";
 import { PracticeEvidenceSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -170,8 +174,14 @@ export function HephaestusVersionPanel(props: HephaestusVersionPanelProps) {
 													workTypeLabel={artifactKindLabel(shippedPractice.artifactKind)}
 												/>
 											) : (
-												"Evidence details are unavailable for this work type."
+												"Evidence details are unavailable for this kind of work."
 											);
+										} else if (field === "deliveryBehavior" && shippedPractice) {
+											const sentences = deliveryBehaviorSentences(shippedPractice.deliveryBehavior);
+											value =
+												sentences.length > 0
+													? sentences.join("\n")
+													: DEFAULT_DELIVERY_BEHAVIOR_TEXT;
 										} else {
 											value = displayValue(field, shippedDefinition[field], groupNames);
 										}

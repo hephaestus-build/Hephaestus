@@ -26,36 +26,6 @@ export const SIGNAL_STATE_LABELS: Record<SignalState, string> = {
 };
 
 /**
- * Third person throughout: an admin reads the same timeline about somebody else's work.
- */
-export const SIGNAL_STATE_REASON_LABELS: Record<SignalStateReason, string> = {
-	GATE_SKIPPED: "This workspace's review settings turned it away",
-	COOLDOWN_ACTIVE: "This work was reviewed too recently; a later change gets its own review",
-	REQUEST_COOLDOWN_ACTIVE: "A review of this was already asked for a moment ago",
-	REQUESTER_QUOTA_EXHAUSTED: "Whoever asked had used up their hour's allowance, which refills",
-	CONCURRENT_DUPLICATE: "The same review was already running",
-	COALESCED: "Later issue changes replaced this update before a review started",
-	OUT_OF_REVIEW_SCOPE:
-		"The author, repository, or base branch is outside the workspace's review coverage",
-	WORKSPACE_INACTIVE: "The workspace was not active",
-	PRACTICES_DISABLED: "Practice reviews are switched off for this workspace",
-	MEMBER_AI_DECLINED: "The developer has not enabled AI practice reviews in this workspace",
-	NO_ACTIVE_PRACTICE: "No practice was watching for this when it happened",
-	// States the fact and stops: the instruction to act on it travels with the link in
-	// REFUSAL_FIXES, which only readers who can act on it are shown.
-	REVIEW_MODEL_UNBOUND: "No AI model is set up to run reviews",
-	PRACTICE_AUTONOMY_OFF: "Every practice watching this is turned off; raising one lets it run",
-	BUDGET_EXHAUSTED: "The workspace's AI budget was used up; it refills",
-	SUBJECT_UNLINKED: "The author is unknown or not a workspace member yet",
-	MODEL_UNAVAILABLE: "The AI model set for reviews is no longer available",
-	ARTIFACT_NOT_VISIBLE:
-		"This work is not showing on the provider right now; it will be checked again",
-	PENDING_DEADLINE_EXCEEDED: "It waited too long to be picked up",
-	ARTIFACT_GONE: "The work no longer exists",
-	STALE_ROLLOUT_REVISION: "Review settings changed after this review started",
-};
-
-/**
  * One vocabulary answers both "why did this occurrence go nowhere" and "why was my request
  * refused", but the server generates the two unions separately. The declarations below assert they
  * stay mutually assignable: `false` does not satisfy `extends true`, so a reason added to only
@@ -151,11 +121,11 @@ export function deliveryLabel(entry: PracticeTraceEntry): string {
 			: `${entry.deliveredCount} pieces of feedback reached the developer`;
 	}
 	if (entry.observationCount === 0) {
-		return "Nothing was measured, so nothing was sent";
+		return "No observations, so nothing was sent";
 	}
-	const measured =
-		entry.observationCount === 1 ? "1 measurement" : `${entry.observationCount} measurements`;
+	const observed =
+		entry.observationCount === 1 ? "1 observation" : `${entry.observationCount} observations`;
 	return entry.withheldReasons.length > 0
-		? `${measured}, none sent`
-		: `${measured}, nothing needed saying`;
+		? `${observed}, none sent`
+		: `${observed}, nothing needed saying`;
 }

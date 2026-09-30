@@ -40,7 +40,8 @@ export const ReviewStarted: Story = {
 				}),
 			),
 		).toEqual(["work:pull-request:1423"]);
-		canvas.getByText("Pull or merge request");
+		// The provider's noun and the number it gave the work, which the title alone does not carry.
+		canvas.getByText("Pull request #1423");
 		canvas.getByText("6 moments recorded · 2 started a review");
 	},
 };
@@ -54,13 +55,69 @@ export const NoReviewStarted: Story = {
 	},
 };
 
-/** A kind this build cannot address has no level to open, so its title is a word, not a link. */
+/** GitLab calls the same kind of work a merge request, and numbers it with a `!`. */
+export const MergeRequest: Story = {
+	args: {
+		work: {
+			...tracedArtifact(1423),
+			reviewedWork: {
+				...tracedArtifact(1423).reviewedWork,
+				provider: "GITLAB",
+				label: "!1423",
+				url: "https://gitlab.example.com/hephaestus/hephaestus/-/merge_requests/1423",
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		canvas.getByText("Merge request !1423");
+		await expect(canvas.queryByText(/pull request/iu)).not.toBeInTheDocument();
+	},
+};
+
+/**
+ * A kind this build cannot address has no level to open, so its title is a word, not a link, and
+ * the row still says what it is in words rather than by the server's name for the kind.
+ */
 export const UnknownKind: Story = {
-	args: { work: { ...tracedArtifact(88), artifactKind: "tracker.ticket", title: "Ticket 88" } },
+	args: {
+		work: {
+			...tracedArtifact(88),
+			artifactKind: "tracker.ticket",
+			reviewedWork: { id: "88", kind: "tracker.ticket", label: "T-88", title: "Ticket 88" },
+		},
+	},
 	play: async ({ canvas }) => {
 		canvas.getByText("Ticket 88");
 		await expect(canvas.queryByRole("link")).not.toBeInTheDocument();
-		// The raw kind rather than nothing, so a kind added on the server stays legible.
-		canvas.getByText("tracker.ticket");
+		canvas.getByText("Other work");
+		await expect(canvas.queryByText(/tracker\./u)).not.toBeInTheDocument();
+	},
+};
+
+/**
+ * Work of a kind nobody declares any more, which the server can no longer name: it sends "Other work"
+ * as the label, and the row reads that in both places rather than the kind's id or the work's number.
+ */
+export const UnknownKindTheServerCannotName: Story = {
+	args: {
+		work: {
+			...tracedArtifact(88),
+			artifactKind: "tracker.ticket",
+			reviewedWork: { id: "88", kind: "tracker.ticket", label: "Other work" },
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getAllByText("Other work")).toHaveLength(2);
+		await expect(canvas.queryByText(/tracker|ticket|\b88\b/iu)).not.toBeInTheDocument();
+	},
+};
+
+/** An Outline document is named by its title and sits in its collection, which the row names. */
+export const OutlineDocument: Story = {
+	args: { work: tracedArtifact(512) },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Onboarding: your first week")).toBeVisible();
+		await expect(canvas.getByText("Document")).toBeVisible();
+		await expect(canvas.getByText("Engineering handbook")).toBeVisible();
 	},
 };

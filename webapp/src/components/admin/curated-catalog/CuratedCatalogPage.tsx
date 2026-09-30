@@ -453,10 +453,10 @@ function CatalogFilters({
 					})
 				}
 			>
-				<SelectTrigger className="w-full lg:w-52" aria-label="Filter by work type">
+				<SelectTrigger className="w-full lg:w-52" aria-label="Filter by kind of work">
 					<SelectValue />
 				</SelectTrigger>
-				<SelectContent aria-label="Filter by work type">
+				<SelectContent aria-label="Filter by kind of work">
 					{WORK_ARTIFACT_FILTER_ITEMS.map(({ value, label }) => (
 						<SelectItem key={value} value={value}>
 							{label}

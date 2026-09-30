@@ -12,6 +12,11 @@ import {
 	adminUpdateUserMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { AdminAccountView } from "@/api/types.gen";
+import {
+	ACCOUNT_STATUS_LABELS,
+	APP_ROLE_LABELS,
+	type AppRole,
+} from "@/components/admin/users/account-labels";
 import { AdminUsersTable } from "@/components/admin/users/AdminUsersTable";
 import { ChangeRoleDialog } from "@/components/admin/users/ChangeRoleDialog";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
@@ -77,7 +82,13 @@ function AdminUsersPage() {
 	const term = deferredSearch.trim().toLowerCase();
 	const filteredUsers = term
 		? allUsers.filter((u) =>
-				[u.displayName, u.primaryEmail, u.appRole, u.status, String(u.id ?? "")]
+				[
+					u.displayName,
+					u.primaryEmail,
+					APP_ROLE_LABELS[u.appRole],
+					ACCOUNT_STATUS_LABELS[u.status],
+					String(u.id ?? ""),
+				]
 					.filter(Boolean)
 					.some((field) => field?.toLowerCase().includes(term) === true),
 			)
@@ -105,9 +116,8 @@ function AdminUsersPage() {
 
 	const updateRole = useMutation({
 		...adminUpdateUserMutation(),
-		onSuccess: async (_data, variables) => {
+		onSuccess: async () => {
 			await invalidateList();
-			toast.success(`Role updated to ${variables.body.appRole}.`);
 			setRoleTarget(null);
 		},
 		onError: openConfirmAccess,
@@ -141,11 +151,18 @@ function AdminUsersPage() {
 		forceSignOut.mutate({ path: { id } });
 	};
 
-	const handleConfirmRole = (user: AdminAccountView, nextRole: string) => {
+	const handleConfirmRole = (user: AdminAccountView, nextRole: AppRole) => {
 		if (user.id == null) {
 			return;
 		}
-		updateRole.mutate({ path: { id: user.id }, body: { appRole: nextRole } });
+		updateRole.mutate(
+			{ path: { id: user.id }, body: { appRole: nextRole } },
+			{
+				onSuccess: () => {
+					toast.success(`Role updated to ${APP_ROLE_LABELS[nextRole]}.`);
+				},
+			},
+		);
 	};
 
 	return (

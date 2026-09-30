@@ -208,7 +208,9 @@ export function LinkedAccountsSection({
 									<ItemTitle>
 										<span className="truncate">{name}</span>
 										{hasText(identity.providerType) && (
-											<Badge variant="secondary">{getProviderLabel(identity.providerType)}</Badge>
+											<Badge variant="secondary">
+												{getProviderLabel(identity.providerType, "Another provider")}
+											</Badge>
 										)}
 									</ItemTitle>
 									{hasText(lastLogin) && (

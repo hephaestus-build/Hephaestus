@@ -33,7 +33,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { ARTIFACT_KIND, artifactKindPluralLabel } from "@/lib/artifact-kinds";
+import { ARTIFACT_KIND, artifactKindLabel, artifactKindNoun } from "@/lib/artifact-kinds";
 import { asDate } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
@@ -58,7 +58,7 @@ const WORK_KINDS = [
 
 const WORK_KIND_ITEMS: { value: WorkKind; label: string }[] = WORK_KINDS.map((kind) => ({
 	value: kind,
-	label: artifactKindPluralLabel(kind),
+	label: artifactKindLabel(kind, 2),
 }));
 
 type Cadence = CreateReviewSweepScheduleRequest["cadence"];
@@ -200,7 +200,8 @@ function ScheduleRow({
 	onReplace: (scheduleId: string, request: UpdateReviewSweepScheduleRequest) => void;
 	onDelete: (scheduleId: string) => void;
 }) {
-	const kind = artifactKindPluralLabel(schedule.artifactKind);
+	const kind = artifactKindLabel(schedule.artifactKind, 2);
+	const kindNoun = artifactKindNoun(schedule.artifactKind, 2);
 	const nextRun = formatMoment(schedule.nextRunAt);
 	const lastRun = formatMoment(schedule.lastRunAt);
 
@@ -242,11 +243,11 @@ function ScheduleRow({
 					}
 				>
 					{schedule.enabled ? "Pause" : "Resume"}
-					<span className="sr-only"> checking {kind.toLowerCase()}</span>
+					<span className="sr-only"> checking {kindNoun}</span>
 				</Button>
 				<Button variant="ghost" size="sm" disabled={isSaving} onClick={() => onDelete(schedule.id)}>
 					Remove
-					<span className="sr-only"> the recurring check on {kind.toLowerCase()}</span>
+					<span className="sr-only"> the recurring check on {kindNoun}</span>
 				</Button>
 			</ItemActions>
 		</Item>
@@ -278,10 +279,7 @@ function AddScheduleForm({
 
 	const kindItems = availableKinds;
 	const windowItems = lookbackItems(cadence);
-	const chosenKind = (
-		availableKinds.find((kind) => kind.value === artifactKind)?.label ??
-		artifactKindPluralLabel(artifactKind)
-	).toLowerCase();
+	const chosenKind = artifactKindNoun(artifactKind, 2);
 
 	return (
 		// A named group rather than three loose controls after a list: without it a screen-reader user

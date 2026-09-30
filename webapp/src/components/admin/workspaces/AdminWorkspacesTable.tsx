@@ -13,6 +13,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { asDate } from "@/lib/dates";
+import { getProviderLabel } from "@/lib/provider/provider-labels";
 
 export interface AdminWorkspacesTableProps {
 	workspaces: AdminWorkspaceView[];
@@ -22,14 +23,20 @@ export interface AdminWorkspacesTableProps {
 	onViewUsers: (workspace: AdminWorkspaceView) => void;
 }
 
-function statusVariant(status: string): "secondary" | "destructive" | "outline" {
-	if (status === "ACTIVE") {
-		return "secondary";
-	}
-	if (status === "SUSPENDED" || status === "PURGED") {
-		return "destructive";
-	}
-	return "outline";
+type WorkspaceStatus = AdminWorkspaceView["status"];
+
+/**
+ * A workspace's status in words, keyed on the wire's enum so a status the server adds fails the build
+ * here rather than reaching an admin as a constant name.
+ */
+const WORKSPACE_STATUS_LABELS: Record<WorkspaceStatus, string> = {
+	ACTIVE: "Active",
+	SUSPENDED: "Suspended",
+	PURGED: "Being deleted",
+};
+
+function statusVariant(status: WorkspaceStatus): "secondary" | "destructive" {
+	return status === "ACTIVE" ? "secondary" : "destructive";
 }
 
 function formatDate(value: AdminWorkspaceView["createdAt"]): string {
@@ -102,11 +109,13 @@ export function AdminWorkspacesTable({
 							{ws.workspaceSlug}
 						</TableCell>
 						<TableCell>
-							<Badge variant={statusVariant(ws.status)}>{ws.status}</Badge>
+							<Badge variant={statusVariant(ws.status)}>{WORKSPACE_STATUS_LABELS[ws.status]}</Badge>
 						</TableCell>
 						<TableCell>
 							{ws.providerType ? (
-								<Badge variant="outline">{ws.providerType}</Badge>
+								<Badge variant="outline">
+									{getProviderLabel(ws.providerType, "Another provider")}
+								</Badge>
 							) : (
 								<span className="text-muted-foreground">—</span>
 							)}
@@ -131,7 +140,7 @@ export function AdminWorkspacesTable({
 							</Button>
 							{ws.status !== "ACTIVE" && (
 								<span className="sr-only">
-									This workspace is {ws.status.toLowerCase()}, so its users cannot be viewed.
+									This workspace is not active, so its users cannot be viewed.
 								</span>
 							)}
 						</TableCell>

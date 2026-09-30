@@ -220,8 +220,10 @@ export const UnknownSource: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		canvas.getByRole("heading", { name: "wiki.page.body", level: 4 });
+		// Named generically, never by the source's wire id.
+		canvas.getByRole("heading", { name: "Another source", level: 4 });
 		canvas.getByText("A source this version of the app has no description for.");
+		await expect(canvas.queryByText(/wiki\.page/u)).not.toBeInTheDocument();
 	},
 };
 

@@ -149,7 +149,9 @@ export function LoginProvidersTable({
 									<div className="text-xs text-muted-foreground">{provider.baseUrl}</div>
 								</TableCell>
 								<TableCell>
-									<Badge variant="secondary">{getProviderLabel(provider.type)}</Badge>
+									<Badge variant="secondary">
+										{getProviderLabel(provider.type, "Another provider")}
+									</Badge>
 								</TableCell>
 								<TableCell>
 									<InputGroup className="max-w-[24rem]">

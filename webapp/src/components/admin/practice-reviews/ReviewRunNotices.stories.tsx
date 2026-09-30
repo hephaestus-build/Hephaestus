@@ -60,11 +60,12 @@ export const HeldForBudget: Story = {
 	},
 };
 
-/** A reason from a newer server. The label is humanised and the detail stays true of any hold. */
+/** A reason from a newer server. The label is a plain hold and the detail stays true of any hold. */
 export const HeldForAnUnknownReason: Story = {
 	args: { job: { ...completed, status: "QUEUED", holdReason: "PROVIDER_OUTAGE" } },
 	play: async ({ canvas }) => {
-		canvas.getByText("Provider outage");
+		canvas.getByText("On hold");
+		await expect(canvas.queryByText(/PROVIDER_OUTAGE|Provider outage/u)).not.toBeInTheDocument();
 		canvas.getByText(
 			"This run is parked rather than failed. It resumes on its own once the hold lifts.",
 		);

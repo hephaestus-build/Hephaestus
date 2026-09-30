@@ -10,9 +10,10 @@ export interface AppliedFacetPill {
 }
 
 /**
- * Falls back to the raw value when the options have not loaded: a pill reading `code-quality` is
- * still a filter you can see and remove, while a pill that waits for a fetch is a filter that is
- * invisible exactly when the page is slow.
+ * A value the options cannot name yet — they have not loaded, or the address names something that
+ * is gone — still gets its pill, reading "Selected": a filter you can see and remove, where a pill
+ * that waits for a fetch is a filter that is invisible exactly when the page is slow. Never the raw
+ * value, which is a slug or a constant rather than anything the reader chose by that name.
  */
 export function facetPills<TValue extends string>(
 	title: string,
@@ -23,7 +24,7 @@ export function facetPills<TValue extends string>(
 	return (selected ?? []).map((value) => ({
 		key: `${title}:${value}`,
 		title,
-		label: options.find((option) => option.value === value)?.label ?? value,
+		label: options.find((option) => option.value === value)?.label ?? "Selected",
 		onClear: () => onChange((selected ?? []).filter((other) => other !== value)),
 	}));
 }

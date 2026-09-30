@@ -14,8 +14,9 @@ describe("getProviderLabel", () => {
 		expect(getProviderLabel("outline")).toBe("Outline");
 	});
 
-	it("falls back to the raw type for an unknown provider rather than dropping it", () => {
-		expect(getProviderLabel("BITBUCKET")).toBe("BITBUCKET");
+	it("names a provider this build does not know generically, never by its wire value", () => {
+		expect(getProviderLabel("BITBUCKET")).toBe("that provider");
+		expect(getProviderLabel("BITBUCKET", "Another provider")).toBe("Another provider");
 	});
 
 	it("uses the prose fallback when the type is missing", () => {

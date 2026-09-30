@@ -5,6 +5,7 @@ import type {
 	ArtifactTrace,
 	Practice,
 	PracticeGroup,
+	ReviewedWorkRef,
 	ReviewFeedback,
 	ReviewObservation,
 } from "@/api/types.gen";
@@ -16,6 +17,7 @@ import {
 	PracticeTabsTrigger,
 } from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import {
 	type ReviewRunPracticeFilters,
@@ -37,15 +39,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
 	ARTIFACT_KIND,
-	artifactKindIcon,
 	artifactKindLabel,
 	artifactKindNoun,
 	type KnownArtifactKind,
+	reviewedWorkName,
 } from "@/lib/artifact-kinds";
 import { hasText } from "@/lib/text";
 
 import type { ReviewSectionState } from "./review-states";
-import { ReviewArtifactLink } from "./ReviewArtifact";
 import { ReviewLevelHeader } from "./ReviewLevelHeader";
 import { ReviewOutputSections } from "./ReviewOutputSections";
 
@@ -148,11 +149,10 @@ export function ReviewedWorkLevel({
 	const tab = chosenTab ?? (noOutput && recorded ? "noticed" : "output");
 	const showOccurrence = useOccurrenceJump(tab === "noticed", () => setTab("noticed"));
 
+	const work = reviewedWork ?? recorded?.reviewedWork;
 	let description: ReactNode = null;
-	if (reviewedWork) {
-		description = <ReviewArtifactLink reviewedWork={reviewedWork} />;
-	} else if (recorded) {
-		description = <TracedWorkLink trace={recorded} />;
+	if (work) {
+		description = <WorkLink reviewedWork={work} />;
 	} else if (stillLoading) {
 		description = <Skeleton aria-hidden className="h-5 w-72 max-w-full" />;
 	}
@@ -169,7 +169,7 @@ export function ReviewedWorkLevel({
 				nested={nested}
 				path={path}
 				kind="work"
-				title={reviewedWork?.title ?? recorded?.title ?? artifactKindLabel(artifactKind)}
+				title={work ? (work.title ?? work.label) : artifactKindLabel(artifactKind)}
 				description={description}
 			/>
 			<DrawerBody className="flex flex-col gap-4 pt-2">
@@ -231,7 +231,7 @@ export function ReviewedWorkLevel({
 								onOpenPractice={onOpenPractice}
 								onShowOccurrence={showOccurrence}
 								canAdminister
-								emptyMessage={`No practice in this workspace reviews ${artifactKindNoun(artifactKind, 2, reviewedWork?.provider)}.`}
+								emptyMessage={`No practice in this workspace reviews ${artifactKindNoun(artifactKind, 2, work?.provider)}.`}
 							/>
 						)}
 						{trace.status === "none" && (
@@ -300,21 +300,29 @@ function TimelineSkeleton() {
 }
 
 /**
- * The work as the trace names it, for work no review has output about: no reviewed-work reference
- * exists to name it, so the kind stands in for the provider's mark.
+ * The work named the way its provider writes it, "Pull request #1423 · acme/api", opening
+ * it at the provider where there is a page to open.
  */
-function TracedWorkLink({ trace }: { trace: ArtifactTrace }) {
-	const Icon = artifactKindIcon(trace.artifactKind);
+function WorkLink({ reviewedWork }: { reviewedWork: ReviewedWorkRef }) {
+	const Icon = reviewedWorkIcon(reviewedWork.kind, reviewedWork.provider);
+	const name = (
+		<>
+			<Icon className="size-3.5 shrink-0" aria-hidden />
+			<span className="min-w-0 break-words">
+				{[reviewedWorkName(reviewedWork), reviewedWork.container].filter(hasText).join(" · ")}
+			</span>
+		</>
+	);
+	if (!hasText(reviewedWork.url)) {
+		return <span className="inline-flex max-w-full min-w-0 items-center gap-1.5">{name}</span>;
+	}
 	return (
 		<InlineLink
-			href={trace.url}
+			href={reviewedWork.url}
 			external
 			className="relative inline-flex max-w-full min-w-0 items-center gap-1.5"
 		>
-			<Icon className="size-3.5 shrink-0" aria-hidden />
-			<span className="min-w-0 break-words">
-				{[artifactKindLabel(trace.artifactKind), trace.container].filter(hasText).join(" · ")}
-			</span>
+			{name}
 		</InlineLink>
 	);
 }

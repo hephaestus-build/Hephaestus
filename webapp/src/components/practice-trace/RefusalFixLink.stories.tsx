@@ -1,30 +1,35 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 import { RefusalFixLink, type RefusalFixLinkProps } from "./RefusalFixLink";
-import { REFUSAL_FIXES, SIGNAL_STATE_REASON_LABELS, type SignalStateReason } from "./trace-format";
+import { REFUSAL_FIXES, type SignalStateReason } from "./trace-format";
 
-const REASONS: SignalStateReason[] = [
-	"GATE_SKIPPED",
-	"COOLDOWN_ACTIVE",
-	"REQUEST_COOLDOWN_ACTIVE",
-	"REQUESTER_QUOTA_EXHAUSTED",
-	"CONCURRENT_DUPLICATE",
-	"COALESCED",
-	"OUT_OF_REVIEW_SCOPE",
-	"STALE_ROLLOUT_REVISION",
-	"WORKSPACE_INACTIVE",
-	"PRACTICES_DISABLED",
-	"NO_ACTIVE_PRACTICE",
-	"REVIEW_MODEL_UNBOUND",
-	"PRACTICE_AUTONOMY_OFF",
-	"BUDGET_EXHAUSTED",
-	"SUBJECT_UNLINKED",
-	"MEMBER_AI_DECLINED",
-	"MODEL_UNAVAILABLE",
-	"ARTIFACT_NOT_VISIBLE",
-	"PENDING_DEADLINE_EXCEEDED",
-	"ARTIFACT_GONE",
-];
+/** Keyed on the wire union, so a reason the server adds is a compile error here until it is listed. */
+const REASON_KEYS = {
+	GATE_SKIPPED: true,
+	COOLDOWN_ACTIVE: true,
+	REQUEST_COOLDOWN_ACTIVE: true,
+	REQUESTER_QUOTA_EXHAUSTED: true,
+	CONCURRENT_DUPLICATE: true,
+	COALESCED: true,
+	OUT_OF_REVIEW_SCOPE: true,
+	STALE_ROLLOUT_REVISION: true,
+	WORKSPACE_INACTIVE: true,
+	PRACTICES_DISABLED: true,
+	NO_ACTIVE_PRACTICE: true,
+	REVIEW_MODEL_UNBOUND: true,
+	PRACTICE_AUTONOMY_OFF: true,
+	BUDGET_EXHAUSTED: true,
+	SUBJECT_UNLINKED: true,
+	MEMBER_AI_DECLINED: true,
+	MODEL_UNAVAILABLE: true,
+	ARTIFACT_NOT_VISIBLE: true,
+	PENDING_DEADLINE_EXCEEDED: true,
+	ARTIFACT_GONE: true,
+} satisfies Record<SignalStateReason, true>;
+
+const REASONS = Object.keys(REASON_KEYS).filter(
+	(key): key is SignalStateReason => key in REASON_KEYS,
+);
 
 /**
  * Written out rather than derived from `REFUSAL_FIXES`: branching on `section` the way the component
@@ -43,15 +48,17 @@ const EXPECTED_HREFS: readonly (readonly [SignalStateReason, string])[] = [
 ];
 
 /**
- * The whole refusal vocabulary at once. Takes the component's own props and overrides only
- * `reason`, so the Controls panel still drives every other input.
+ * The whole refusal vocabulary at once, each row named by its reason code: the sentence a reader sees
+ * beside the link is the server's, so this developer catalogue has none of its own. Takes the
+ * component's own props and overrides only `reason`, so the Controls panel still drives every other
+ * input.
  */
 function RefusalCatalogue(props: RefusalFixLinkProps) {
 	return (
 		<ul className="max-w-2xl space-y-2 text-sm">
 			{REASONS.map((reason) => (
-				<li key={reason} className="flex flex-wrap items-baseline gap-x-1.5">
-					<span className="text-muted-foreground">{SIGNAL_STATE_REASON_LABELS[reason]}.</span>
+				<li key={reason} aria-label={reason} className="flex flex-wrap items-baseline gap-x-1.5">
+					<code className="text-xs text-muted-foreground">{reason}</code>
 					<RefusalFixLink {...props} reason={reason} />
 				</li>
 			))}
@@ -101,7 +108,7 @@ export const NoFixForThisReason: Story = {
 export const EveryReason: Story = {
 	render: (args) => <RefusalCatalogue {...args} />,
 	play: async ({ canvas }) => {
-		await expect([...REASONS].sort()).toEqual(Object.keys(SIGNAL_STATE_REASON_LABELS).sort());
+		await expect(canvas.getAllByRole("listitem")).toHaveLength(REASONS.length);
 
 		const links = canvas.getAllByRole("link");
 		await expect(links).toHaveLength(EXPECTED_HREFS.length);
@@ -123,11 +130,7 @@ export const WhereEachFixLives: Story = {
 		);
 
 		for (const [reason, href] of EXPECTED_HREFS) {
-			const sentence = SIGNAL_STATE_REASON_LABELS[reason];
-			const row = canvas.getByText(`${sentence}.`).closest("li");
-			if (!(row instanceof HTMLElement)) {
-				throw new Error(`No row for ${reason}`);
-			}
+			const row = canvas.getByRole("listitem", { name: reason });
 			await expect(within(row).getByRole("link")).toHaveAttribute("href", href);
 		}
 	},
@@ -137,7 +140,7 @@ export const AMemberSeesNoLinks: Story = {
 	args: { canAdminister: false },
 	render: (args) => <RefusalCatalogue {...args} />,
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No AI model is set up to run reviews.")).toBeVisible();
+		await expect(canvas.getByRole("listitem", { name: "REVIEW_MODEL_UNBOUND" })).toBeVisible();
 		await expect(canvas.queryAllByRole("link")).toHaveLength(0);
 	},
 };

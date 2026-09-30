@@ -2,7 +2,9 @@ import type {
 	ArtifactTrace,
 	DeliveryPolicyTrace,
 	PagedModelTracedArtifact,
+	PracticeSignal,
 	PracticeTraceEntry,
+	ReviewedWorkRef,
 	TracedArtifact,
 	TracedSignal,
 } from "@/api/types.gen";
@@ -14,14 +16,53 @@ import type {
  * transformer revives on the way in.
  */
 
+const READY = {
+	signal: "scm.pull_request.ready",
+	displayName: "Marked ready for review",
+} satisfies PracticeSignal;
+const PUSHED = {
+	signal: "scm.pull_request.synchronized",
+	displayName: "New commits pushed",
+} satisfies PracticeSignal;
+const ASKED_BY_HAND = {
+	signal: "scm.pull_request.manual_review",
+	displayName: "Review requested by hand",
+} satisfies PracticeSignal;
+const REVIEW_SUBMITTED = {
+	signal: "scm.pull_request.review_submitted",
+	displayName: "Review submitted",
+} satisfies PracticeSignal;
+const REPLIED = {
+	signal: "chat.conversation_thread.replied",
+	displayName: "Replied",
+} satisfies PracticeSignal;
+const ISSUE_OPENED = { signal: "scm.issue.opened", displayName: "Opened" } satisfies PracticeSignal;
+
+const PULL_REQUEST_1423 = {
+	id: "1423",
+	kind: "scm.pull_request",
+	provider: "GITHUB",
+	label: "#1423",
+	title: "Member-facing review activity: say why a practice stayed quiet",
+	url: "https://github.com/ls1intum/Hephaestus/pull/1423",
+	container: "ls1intum/Hephaestus",
+} satisfies ReviewedWorkRef;
+
+const ISSUE_1430 = {
+	id: "1430",
+	kind: "scm.issue",
+	provider: "GITHUB",
+	label: "#1430",
+	title: "Define the practice-binding contract",
+	url: "https://github.com/ls1intum/Hephaestus/issues/1430",
+	container: "ls1intum/Hephaestus",
+} satisfies ReviewedWorkRef;
+
 export const tracedArtifacts = [
 	{
 		artifactKind: "scm.pull_request",
 		artifactId: 1423,
-		title: "Member-facing review activity: say why a practice stayed quiet",
-		number: 1423,
-		container: "ls1intum/Hephaestus",
-		url: "https://github.com/ls1intum/Hephaestus/pull/1423",
+		reviewedWork: PULL_REQUEST_1423,
 		lastSignalAt: new Date("2026-08-07T09:12:00Z"),
 		signalCount: 6,
 		reviewedSignalCount: 2,
@@ -29,10 +70,15 @@ export const tracedArtifacts = [
 	{
 		artifactKind: "scm.pull_request",
 		artifactId: 1418,
-		title: "Scope review to the branches and repositories a workspace picks",
-		number: 1418,
-		container: "ls1intum/Hephaestus",
-		url: "https://github.com/ls1intum/Hephaestus/pull/1418",
+		reviewedWork: {
+			id: "1418",
+			kind: "scm.pull_request",
+			provider: "GITHUB",
+			label: "#1418",
+			title: "Scope review to the branches and repositories a workspace picks",
+			url: "https://github.com/ls1intum/Hephaestus/pull/1418",
+			container: "ls1intum/Hephaestus",
+		} satisfies ReviewedWorkRef,
 		lastSignalAt: new Date("2026-08-06T16:40:00Z"),
 		signalCount: 3,
 		reviewedSignalCount: 1,
@@ -40,10 +86,7 @@ export const tracedArtifacts = [
 	{
 		artifactKind: "scm.issue",
 		artifactId: 1430,
-		title: "Define the practice-binding contract",
-		number: 1430,
-		container: "ls1intum/Hephaestus",
-		url: "https://github.com/ls1intum/Hephaestus/issues/1430",
+		reviewedWork: ISSUE_1430,
 		lastSignalAt: new Date("2026-08-05T11:02:00Z"),
 		signalCount: 2,
 		reviewedSignalCount: 0,
@@ -52,7 +95,11 @@ export const tracedArtifacts = [
 		// No number, no container, no upstream link: a deleted or unlinkable artifact still lists.
 		artifactKind: "chat.conversation_thread",
 		artifactId: 88,
-		title: "Conversation",
+		reviewedWork: {
+			id: "88",
+			kind: "chat.conversation_thread",
+			label: "Conversation",
+		} satisfies ReviewedWorkRef,
 		lastSignalAt: new Date("2026-08-04T08:30:00Z"),
 		signalCount: 1,
 		reviewedSignalCount: 0,
@@ -60,9 +107,14 @@ export const tracedArtifacts = [
 	{
 		artifactKind: "docs.document",
 		artifactId: 512,
-		title: "Onboarding: your first week",
-		container: "Engineering handbook",
-		url: "https://outline.example.com/doc/onboarding-your-first-week",
+		reviewedWork: {
+			id: "512",
+			kind: "docs.document",
+			provider: "OUTLINE",
+			label: "Onboarding: your first week",
+			container: "Engineering handbook",
+			url: "https://outline.example.com/doc/onboarding-your-first-week",
+		} satisfies ReviewedWorkRef,
 		lastSignalAt: new Date("2026-08-03T14:15:00Z"),
 		signalCount: 2,
 		reviewedSignalCount: 1,
@@ -83,6 +135,7 @@ export const tracedSignals = [
 		discoveredVia: "EVENT",
 		state: "SUPPRESSED",
 		stateReason: "GATE_SKIPPED",
+		stateReasonDescription: "This workspace's review settings turned it away.",
 	},
 	{
 		id: "sig-ready",
@@ -103,6 +156,8 @@ export const tracedSignals = [
 		discoveredVia: "SYNC",
 		state: "SUPPRESSED",
 		stateReason: "COOLDOWN_ACTIVE",
+		stateReasonDescription:
+			"This work was already reviewed within the workspace's cooldown period.",
 	},
 	{
 		id: "sig-review-requested",
@@ -122,6 +177,7 @@ export const tracedSignals = [
 		discoveredVia: "BACKFILL",
 		state: "LAPSED",
 		stateReason: "PENDING_DEADLINE_EXCEEDED",
+		stateReasonDescription: "It waited too long to be picked up for review.",
 	},
 ] satisfies TracedSignal[];
 
@@ -134,9 +190,9 @@ const practiceTraceEntries = [
 		autonomy: "AUTOMATIC",
 		outcome: "REVIEWED",
 		explanation:
-			"Reviewed on the commits pushed at 14:48. Three measurements were taken and one was raised with you; the rest repeated a point already made on this pull request.",
-		watches: ["scm.pull_request.ready", "scm.pull_request.synchronized"],
-		occasionedBy: "scm.pull_request.ready",
+			"Reviewed on the commits pushed at 14:48. Three observations were recorded and one was raised with you; the rest repeated a point already made on this pull request.",
+		watches: [READY, PUSHED],
+		occasionedBy: READY,
 		occasionedById: "sig-ready",
 		decidedAt: new Date("2026-08-06T10:19:00Z"),
 		reviewId: "11111111-1111-1111-1111-111111111111",
@@ -152,9 +208,9 @@ const practiceTraceEntries = [
 		autonomy: "HUMAN_APPROVAL",
 		outcome: "REVIEWED",
 		explanation:
-			"Reviewed, and two measurements were recorded. This practice is set to Review before sending, so nothing was said to you; raise its autonomy to Send automatically to hear about results like these.",
-		watches: ["scm.pull_request.ready"],
-		occasionedBy: "scm.pull_request.ready",
+			"Reviewed, and two observations were recorded. This practice is set to Review before sending, so nothing was said to you; raise its autonomy to Send automatically to hear about results like these.",
+		watches: [READY],
+		occasionedBy: READY,
 		occasionedById: "sig-ready",
 		decidedAt: new Date("2026-08-06T10:19:00Z"),
 		reviewId: "11111111-1111-1111-1111-111111111111",
@@ -171,8 +227,8 @@ const practiceTraceEntries = [
 		outcome: "RUNNING",
 		explanation:
 			"A review started when the last commits landed and has not finished yet. Check back in a few minutes.",
-		watches: ["scm.pull_request.synchronized"],
-		occasionedBy: "scm.pull_request.synchronized",
+		watches: [PUSHED],
+		occasionedBy: PUSHED,
 		occasionedById: "sig-sync-b71d0a52",
 		reviewId: "22222222-2222-2222-2222-222222222222",
 		observationCount: 0,
@@ -190,8 +246,8 @@ const practiceTraceEntries = [
 			"Queued behind the reviews already running for this workspace. It will start on its own; nothing is needed from you.",
 		// Only lifecycle moments are watched: asking by hand is not one of them, and it still ran this
 		// review, because such a request reviews every practice on the work type.
-		watches: ["scm.pull_request.ready"],
-		occasionedBy: "scm.pull_request.manual_review",
+		watches: [READY],
+		occasionedBy: ASKED_BY_HAND,
 		occasionedById: "sig-review-requested",
 		observationCount: 0,
 		deliveredCount: 0,
@@ -206,8 +262,8 @@ const practiceTraceEntries = [
 		outcome: "SKIPPED",
 		explanation:
 			"Skipped because this pull request was reviewed 40 minutes ago and the workspace's cooldown is one hour. The next push after that window will be reviewed.",
-		watches: ["scm.pull_request.synchronized"],
-		occasionedBy: "scm.pull_request.synchronized",
+		watches: [PUSHED],
+		occasionedBy: PUSHED,
 		occasionedById: "sig-sync-9ab3c410",
 		decidedAt: new Date("2026-08-06T14:48:00Z"),
 		observationCount: 0,
@@ -222,8 +278,8 @@ const practiceTraceEntries = [
 		autonomy: "AUTOMATIC",
 		outcome: "NOT_REACHED",
 		explanation: "The review ended before reaching this practice.",
-		watches: ["scm.pull_request.ready"],
-		occasionedBy: "scm.pull_request.ready",
+		watches: [READY],
+		occasionedBy: READY,
 		occasionedById: "sig-ready",
 		decidedAt: new Date("2026-08-06T10:19:00Z"),
 		reviewId: "11111111-1111-1111-1111-111111111111",
@@ -240,8 +296,8 @@ const practiceTraceEntries = [
 		outcome: "NOT_ASSESSABLE",
 		explanation:
 			"The diff for these commits could not be read, so this practice could not be judged either way. Re-run once the provider serves the diff again.",
-		watches: ["scm.pull_request.ready"],
-		occasionedBy: "scm.pull_request.ready",
+		watches: [READY],
+		occasionedBy: READY,
 		occasionedById: "sig-ready",
 		decidedAt: new Date("2026-08-06T10:19:00Z"),
 		reviewId: "11111111-1111-1111-1111-111111111111",
@@ -258,7 +314,7 @@ const practiceTraceEntries = [
 		outcome: "TURNED_OFF",
 		explanation:
 			"This workspace has turned this practice off, so it was not run. A workspace admin can turn it back on in the practice settings.",
-		watches: ["scm.pull_request.ready"],
+		watches: [READY],
 		observationCount: 0,
 		deliveredCount: 0,
 		withheldReasons: [],
@@ -272,7 +328,7 @@ const practiceTraceEntries = [
 		outcome: "NOT_OCCASIONED",
 		explanation:
 			"Nothing this practice watches for has happened on this pull request yet. It reacts when a review is submitted.",
-		watches: ["scm.pull_request.review_submitted"],
+		watches: [REVIEW_SUBMITTED],
 		observationCount: 0,
 		deliveredCount: 0,
 		withheldReasons: [],
@@ -286,7 +342,7 @@ const practiceTraceEntries = [
 		outcome: "DORMANT",
 		explanation:
 			"This practice needs a chat integration, and this workspace has none connected. It will start answering once one is.",
-		watches: ["chat.conversation_thread.replied"],
+		watches: [REPLIED],
 		observationCount: 0,
 		deliveredCount: 0,
 		withheldReasons: [],
@@ -300,8 +356,8 @@ const practiceTraceEntries = [
 		outcome: "LAPSED",
 		explanation:
 			"This one waited longer than the workspace allows before a reviewer was free, so the question expired unanswered. A new push will ask it again.",
-		watches: ["scm.pull_request.synchronized"],
-		occasionedBy: "scm.pull_request.synchronized",
+		watches: [PUSHED],
+		occasionedBy: PUSHED,
 		occasionedById: "sig-sync-b71d0a52",
 		decidedAt: new Date("2026-08-07T09:42:00Z"),
 		observationCount: 0,
@@ -315,8 +371,8 @@ const practiceTraceEntries = [
 		outcome: "FAILED",
 		explanation:
 			"The review of this practice failed with an error and produced nothing. It will be retried on the next push; tell a workspace admin if it keeps failing.",
-		watches: ["scm.pull_request.ready"],
-		occasionedBy: "scm.pull_request.ready",
+		watches: [READY],
+		occasionedBy: READY,
 		occasionedById: "sig-ready",
 		decidedAt: new Date("2026-08-06T10:21:00Z"),
 		reviewId: "33333333-3333-3333-3333-333333333333",
@@ -366,10 +422,7 @@ export const deniedDeliveryPolicyEvaluation: DeliveryPolicyTrace = {
 export const artifactTrace = {
 	artifactKind: "scm.pull_request",
 	artifactId: 1423,
-	title: "Member-facing review activity: say why a practice stayed quiet",
-	number: 1423,
-	container: "ls1intum/Hephaestus",
-	url: "https://github.com/ls1intum/Hephaestus/pull/1423",
+	reviewedWork: PULL_REQUEST_1423,
 	signals: tracedSignals,
 	practices: practiceTraceEntries,
 } satisfies ArtifactTrace;
@@ -377,10 +430,7 @@ export const artifactTrace = {
 export const untouchedArtifactTrace = {
 	artifactKind: "scm.issue",
 	artifactId: 1430,
-	title: "Define the practice-binding contract",
-	number: 1430,
-	container: "ls1intum/Hephaestus",
-	url: "https://github.com/ls1intum/Hephaestus/issues/1430",
+	reviewedWork: ISSUE_1430,
 	signals: [
 		{
 			id: "sig-issue-opened",
@@ -391,6 +441,7 @@ export const untouchedArtifactTrace = {
 			discoveredVia: "SYNC",
 			state: "SUPPRESSED",
 			stateReason: "NO_ACTIVE_PRACTICE",
+			stateReasonDescription: "No practice was watching for this when it happened.",
 		},
 	],
 	practices: [
@@ -401,7 +452,7 @@ export const untouchedArtifactTrace = {
 			outcome: "TURNED_OFF",
 			explanation:
 				"This workspace has turned this practice off, so it was not run. A workspace admin can turn it back on in the practice settings.",
-			watches: ["scm.issue.opened"],
+			watches: [ISSUE_OPENED],
 			observationCount: 0,
 			deliveredCount: 0,
 			withheldReasons: [],

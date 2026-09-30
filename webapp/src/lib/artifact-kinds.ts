@@ -3,7 +3,7 @@ import { CircleDotIcon, FileTextIcon, MessagesSquareIcon } from "lucide-react";
 import type { ComponentType } from "react";
 
 import type { ReviewedWorkRef } from "@/api/types.gen";
-import { hasText } from "@/lib/text";
+import { capitalise, hasText } from "@/lib/text";
 
 /** Wide enough for both icon sets in use: lucide and the provider registry's octicons. */
 export type ArtifactKindIcon = ComponentType<{
@@ -14,8 +14,8 @@ export type ArtifactKindIcon = ComponentType<{
 
 /**
  * Artifact kinds are an open vocabulary — a `<domain>.<kind>` string named by the owning server
- * module, so the generated client types one as `string`. These are the kinds the UI can label;
- * anything else is rendered by its raw id rather than dropped, so a new kind stays visible.
+ * module, so the generated client types one as `string`. These are the kinds the UI can name;
+ * anything else is still listed rather than dropped, as "Other work" and never by its wire id.
  */
 export const ARTIFACT_KIND = {
 	pullRequest: "scm.pull_request",
@@ -42,36 +42,8 @@ export function artifactKindRank(kind: string): number {
 		: ARTIFACT_KIND_VALUES.length;
 }
 
-const ARTIFACT_KIND_LABELS: Record<KnownArtifactKind, string> = {
-	[ARTIFACT_KIND.pullRequest]: "Pull or merge request",
-	[ARTIFACT_KIND.issue]: "Issue",
-	[ARTIFACT_KIND.conversationThread]: "Conversation",
-	[ARTIFACT_KIND.document]: "Document",
-};
-
-const ARTIFACT_KIND_PLURAL_LABELS: Record<KnownArtifactKind, string> = {
-	[ARTIFACT_KIND.pullRequest]: "Pull or merge requests",
-	[ARTIFACT_KIND.issue]: "Issues",
-	[ARTIFACT_KIND.conversationThread]: "Conversations",
-	[ARTIFACT_KIND.document]: "Documents",
-};
-
 export function isKnownArtifactKind(kind: string | null | undefined): kind is KnownArtifactKind {
 	return ARTIFACT_KIND_VALUES.some((known) => known === kind);
-}
-
-export function artifactKindLabel(kind: string | undefined): string {
-	if (!hasText(kind)) {
-		return "Reviewed work";
-	}
-	return isKnownArtifactKind(kind) ? ARTIFACT_KIND_LABELS[kind] : kind;
-}
-
-export function artifactKindPluralLabel(kind: string | undefined): string {
-	if (!hasText(kind)) {
-		return "Reviewed work";
-	}
-	return isKnownArtifactKind(kind) ? ARTIFACT_KIND_PLURAL_LABELS[kind] : kind;
 }
 
 /** Whether two references name the same piece of work: the same kind, and the same id within it. */
@@ -85,44 +57,93 @@ export function sameReviewedWork(
 /** The provider a piece of reviewed work lives at, as the wire names it on `ReviewedWorkRef`. */
 export type WorkProvider = NonNullable<ReviewedWorkRef["provider"]>;
 
+interface Noun {
+	one: string;
+	many: string;
+}
+
 /**
- * The same kinds as they read mid-sentence — "Based on 4 pull requests" rather than the title-case
- * form a heading or a filter option wants. Kept beside those labels so a kind cannot gain one
- * spelling and miss the other.
+ * Every kind's noun as it reads mid-sentence. A pull request's is the provider's to decide, so
+ * without one it is "pull or merge request" (`docs/contributor/practice-feedback-language.md`).
  */
-const ARTIFACT_KIND_INLINE_LABELS: Record<KnownArtifactKind, { one: string; many: string }> = {
-	[ARTIFACT_KIND.pullRequest]: { one: "pull request", many: "pull requests" },
+const ARTIFACT_KIND_NOUNS: Record<KnownArtifactKind, Noun> = {
+	[ARTIFACT_KIND.pullRequest]: { one: "pull or merge request", many: "pull or merge requests" },
 	[ARTIFACT_KIND.issue]: { one: "issue", many: "issues" },
 	[ARTIFACT_KIND.conversationThread]: { one: "conversation", many: "conversations" },
 	[ARTIFACT_KIND.document]: { one: "document", many: "documents" },
 };
 
-/** GitLab's word for the one kind whose noun the provider decides. */
-const MERGE_REQUEST = { one: "merge request", many: "merge requests" };
+const PROVIDER_PULL_REQUEST_NOUNS: Partial<Record<WorkProvider, Noun>> = {
+	GITHUB: { one: "pull request", many: "pull requests" },
+	GITLAB: { one: "merge request", many: "merge requests" },
+};
+
+/** Work whose kind the reader cannot be told: none on the wire, or one this build has never met. */
+const REVIEWED_WORK: Noun = { one: "piece of reviewed work", many: "pieces of reviewed work" };
+const OTHER_WORK: Noun = { one: "piece of work", many: "pieces of work" };
+
+function nounOf(kind: string | undefined, provider: WorkProvider | undefined): Noun {
+	if (!hasText(kind)) {
+		return REVIEWED_WORK;
+	}
+	if (!isKnownArtifactKind(kind)) {
+		return OTHER_WORK;
+	}
+	const byProvider =
+		kind === ARTIFACT_KIND.pullRequest && provider
+			? PROVIDER_PULL_REQUEST_NOUNS[provider]
+			: undefined;
+	return byProvider ?? ARTIFACT_KIND_NOUNS[kind];
+}
 
 /**
- * The noun for `count` pieces of work of a kind, as it reads mid-sentence: "pull request", "pull
- * requests", and "merge request" when the provider is GitLab — the provider-specific name where
- * the provider is known (`docs/contributor/practice-feedback-language.md`). An unknown kind keeps
- * its raw id rather than being dropped, so a kind the server added before this build stays
- * legible instead of vanishing from the total.
+ * The noun for `count` pieces of work of a kind, as it reads mid-sentence: "pull or merge
+ * requests", or "merge request" once the provider says GitLab. A kind the server added before this
+ * build learned it reads as "piece of work", never as its wire id.
  */
 export function artifactKindNoun(
 	kind: string | undefined,
 	count: number,
 	provider?: WorkProvider,
 ): string {
+	const noun = nounOf(kind, provider);
+	return count === 1 ? noun.one : noun.many;
+}
+
+/**
+ * The same noun where it opens a heading, a filter option or a caption: "Pull request", "Merge
+ * requests". A kind the reader cannot be told is "Reviewed work" or "Other work", in either number.
+ */
+export function artifactKindLabel(
+	kind: string | undefined,
+	count = 1,
+	provider?: WorkProvider,
+): string {
 	if (!hasText(kind)) {
-		return "reviewed work";
+		return "Reviewed work";
 	}
 	if (!isKnownArtifactKind(kind)) {
-		return kind;
+		return "Other work";
 	}
-	const labels =
-		kind === ARTIFACT_KIND.pullRequest && provider === "GITLAB"
-			? MERGE_REQUEST
-			: ARTIFACT_KIND_INLINE_LABELS[kind];
-	return count === 1 ? labels.one : labels.many;
+	return capitalise(artifactKindNoun(kind, count, provider));
+}
+
+/** The kinds whose label is the provider's number for the work, which reads only after its noun. */
+const NUMBERED_KINDS: ReadonlySet<string> = new Set([
+	ARTIFACT_KIND.pullRequest,
+	ARTIFACT_KIND.issue,
+]);
+
+/**
+ * What the work is, in words: "Pull request #1423", "Merge request !1423", "Issue #1430". A kind
+ * whose label is not a number — a document's title, a channel — is named by its kind alone, since
+ * wherever this is shown the title is already beside it.
+ */
+export function reviewedWorkName(
+	work: Pick<ReviewedWorkRef, "kind" | "provider" | "label">,
+): string {
+	const noun = artifactKindLabel(work.kind, 1, work.provider);
+	return NUMBERED_KINDS.has(work.kind) && hasText(work.label) ? `${noun} ${work.label}` : noun;
 }
 
 const ARTIFACT_KIND_ICONS: Record<KnownArtifactKind, ArtifactKindIcon> = {

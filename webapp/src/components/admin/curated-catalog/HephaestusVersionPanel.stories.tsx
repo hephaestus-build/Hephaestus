@@ -37,6 +37,7 @@ const shipped = {
 	whyItMatters: "So a reviewer can start from intent rather than diff archaeology.",
 	automatedReviewPolicy: mockPullRequestPolicy,
 	automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
+	deliveryBehavior: { summaryOnly: true, redundantToSlug: "ships-tests-with-the-change" },
 };
 
 const meta = {
@@ -87,7 +88,7 @@ export const UpdateChangesReviewBehavior: Story = {
 		// whole, which is what licenses a claim that nobody ever resolved one.
 		await expect(canvas.getAllByText("Merged").length).toBeGreaterThan(0);
 		await expect(canvas.getAllByText("· captured whole").length).toBeGreaterThan(0);
-		await expect(canvas.getByText("reviewer")).toBeVisible();
+		await expect(canvas.getByText("Reviewer")).toBeVisible();
 		await expect(canvas.getByText("Changed path matches **/*.swift")).toBeVisible();
 		await expect(canvas.getAllByText("AI-supported mentoring").length).toBeGreaterThan(0);
 		await expect(canvas.getAllByText("Pull request details").length).toBeGreaterThan(0);
@@ -97,6 +98,11 @@ export const UpdateChangesReviewBehavior: Story = {
 		await expect(
 			canvas.getByText("Repository evidence does not establish behavior in a deployed runtime."),
 		).toBeVisible();
+		// Delivery choices in sentences, never the object the wire carries.
+		await expect(
+			canvas.getByText(/Feedback stays in the summary, not on a changed line\./u),
+		).toBeVisible();
+		await expect(canvas.queryByText(/summaryOnly|redundantToSlug/u)).not.toBeInTheDocument();
 		// Signals read back under the domain's own label, never as a raw id.
 		await expect(canvas.queryByText("scm.pull_request.opened")).not.toBeInTheDocument();
 		await expect(canvas.getByRole("button", { name: "Keep saved version" })).toBeVisible();

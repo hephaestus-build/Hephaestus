@@ -54,7 +54,7 @@ describe("stripPieces", () => {
 		expect(labels(pieces)).toStrictEqual(["#17", "#17", "#19"]);
 		expect(new Set(pieces.map((piece) => piece.key)).size).toBe(3);
 		expect(countedStripWork(pieces.map((piece) => piece.ref)).text).toBe(
-			"Newest two pull requests",
+			"Newest two pull or merge requests",
 		);
 	});
 });

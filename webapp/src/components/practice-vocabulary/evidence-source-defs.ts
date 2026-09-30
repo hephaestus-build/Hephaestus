@@ -138,17 +138,18 @@ const EVIDENCE_SOURCE_DEFS: Record<string, EvidenceSourceDef> = {
 	},
 };
 
-/** The words for one source kind, or a neutral entry naming the unknown kind verbatim. */
+/** A source this build has no words for: named for what it is to the reader, never by its wire id. */
+const UNKNOWN_SOURCE: EvidenceSourceDef = {
+	label: "Another source",
+	icon: FileQuestionIcon,
+	badgeVariant: "outline",
+	description: "A source this version of the app has no description for.",
+	locator: "object",
+};
+
+/** The words for one source kind, or the neutral entry for one this build does not know. */
 export function evidenceSourceDef(sourceKind: string): EvidenceSourceDef {
-	return (
-		EVIDENCE_SOURCE_DEFS[sourceKind] ?? {
-			label: sourceKind,
-			icon: FileQuestionIcon,
-			badgeVariant: "outline",
-			description: "A source this version of the app has no description for.",
-			locator: "object",
-		}
-	);
+	return EVIDENCE_SOURCE_DEFS[sourceKind] ?? UNKNOWN_SOURCE;
 }
 
 export function knownEvidenceSourceKinds(): string[] {
