@@ -14,6 +14,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -254,6 +255,52 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
         """)
     List<PullRequest> findRecentAuthoredPullRequests(
             @Param("workspaceId") Long workspaceId, @Param("userId") Long userId, Pageable page);
+
+    /** The stored copies of {@code ids} on the workspace's connected instance, for comparing with what was reviewed. */
+    @Query("""
+        SELECT p.id AS id, p.title AS title, p.body AS body, p.headRefOid AS head
+        FROM PullRequest p
+        JOIN p.repository r
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = r.nameWithOwner
+        WHERE p.id IN :ids
+          AND p.deletedAt IS NULL
+          AND rtm.workspace.id = :workspaceId
+          AND r.provider.id = :providerId
+        """)
+    List<StoredWork> findStoredPullRequests(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("ids") Collection<Long> ids);
+
+    /** {@link #findStoredPullRequests} for issues; an issue has no head. */
+    @Query("""
+        SELECT i.id AS id, i.title AS title, i.body AS body, CAST(NULL AS String) AS head
+        FROM Issue i
+        JOIN i.repository r
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = r.nameWithOwner
+        WHERE TYPE(i) = Issue
+          AND i.id IN :ids
+          AND i.deletedAt IS NULL
+          AND rtm.workspace.id = :workspaceId
+          AND r.provider.id = :providerId
+        """)
+    List<StoredWork> findStoredIssues(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("ids") Collection<Long> ids);
+
+    interface StoredWork {
+        Long getId();
+
+        @Nullable
+        String getTitle();
+
+        @Nullable
+        String getBody();
+
+        @Nullable
+        String getHead();
+    }
 
     /**
      * The developer's open authored pull requests on the workspace's connected instance, most recently

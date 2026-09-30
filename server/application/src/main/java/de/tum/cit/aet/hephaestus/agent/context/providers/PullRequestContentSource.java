@@ -49,8 +49,8 @@ import tools.jackson.databind.node.ObjectNode;
 @Order(100)
 public class PullRequestContentSource implements EvidenceSource, ReviewContextBuilder {
 
-    private static final SourceKind CORE = new SourceKind("scm.pull-request.core");
-    private static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
+    public static final SourceKind CORE = new SourceKind("scm.pull-request.core");
+    public static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
     private static final SourceKind COMMENTS = new SourceKind("scm.pull-request.comments");
 
     /** Checked by the integration framework against every descriptor that calls itself reviewable. */

@@ -345,7 +345,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     private static void putBody(
             ObjectNode node, Feedback f, Map<UUID, ReviewClaimCurrentness> shown, Set<UUID> withdrawn) {
         ReviewClaimCurrentness currentness = Objects.requireNonNull(shown.get(f.getId()));
-        node.put("evidenceCurrentness", currentness.name());
+        node.put("recordedClaimCurrentness", currentness.name());
         boolean isWithdrawn = withdrawn.contains(f.getId());
         if (isWithdrawn) {
             node.put("withdrawn", true);

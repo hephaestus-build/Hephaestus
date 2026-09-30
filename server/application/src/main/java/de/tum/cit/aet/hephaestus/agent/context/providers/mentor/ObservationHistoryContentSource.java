@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeveloperTextSanitizer;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
@@ -23,6 +22,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -59,6 +59,7 @@ public class ObservationHistoryContentSource implements ContentSource {
     private final MentorContextQueryRepository queryRepository;
     private final ConversationConsentGate conversationConsentGate;
     private final ObservationVisibilityPolicy visibilityPolicy;
+    private final ReviewedWorkCoverage reviewedWorkCoverage;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -117,16 +118,18 @@ public class ObservationHistoryContentSource implements ContentSource {
                 .toList());
         List<PullRequestReview> reviews = queryRepository.findReviewsReceivedSince(
                 workspaceId, developerId, since, PageRequest.of(0, MAX_RECENT_REVIEWS));
+        Map<UUID, ObjectNode> reviewedWork = reviewedWorkCoverage.of(
+                workspaceId, Stream.of(latest, earlier).flatMap(List::stream).toList());
 
         // Oldest rows go first, earlier runs before latest ones, so the file reaches the model whole.
-        ObjectNode root = render(user, preparedAt, recent, abstentions, earlier, reviews);
+        ObjectNode root = render(user, preparedAt, recent, abstentions, earlier, reviews, reviewedWork);
         while (objectMapper.writeValueAsString(root).length() > MentorContextKeys.FETCH_CONTEXT_MAX_CHARS) {
             List<Observation> shrink = !earlier.isEmpty() ? earlier : !abstentions.isEmpty() ? abstentions : recent;
             if (shrink.isEmpty()) {
                 break;
             }
             shrink.removeLast();
-            root = render(user, preparedAt, recent, abstentions, earlier, reviews);
+            root = render(user, preparedAt, recent, abstentions, earlier, reviews, reviewedWork);
         }
         return root;
     }
@@ -158,7 +161,8 @@ public class ObservationHistoryContentSource implements ContentSource {
             List<Observation> recent,
             List<Observation> abstentions,
             List<Observation> earlier,
-            List<PullRequestReview> reviews) {
+            List<PullRequestReview> reviews,
+            Map<UUID, ObjectNode> reviewedWork) {
         ObjectNode root = objectMapper.createObjectNode();
         // Untrusted-content quarantine: only when a Slack-derived (attacker-controllable) reasoning survives the gate
         // does this file carry the envelope — a PR/issue-only payload stays byte-identical (no _meta).
@@ -195,9 +199,9 @@ public class ObservationHistoryContentSource implements ContentSource {
             }
         }
 
-        describe(root.putArray("recentObservations"), recent);
-        describe(root.putArray("abstentions"), abstentions);
-        describe(root.putArray("earlierObservations"), earlier);
+        describe(root.putArray("recentObservations"), recent, reviewedWork);
+        describe(root.putArray("abstentions"), abstentions, reviewedWork);
+        describe(root.putArray("earlierObservations"), earlier, reviewedWork);
 
         ArrayNode reviewsArr = root.putArray("reviewsReceived");
         for (PullRequestReview review : reviews) {
@@ -220,7 +224,7 @@ public class ObservationHistoryContentSource implements ContentSource {
         return root;
     }
 
-    private static void describe(ArrayNode into, List<Observation> observations) {
+    private static void describe(ArrayNode into, List<Observation> observations, Map<UUID, ObjectNode> reviewedWork) {
         for (Observation o : observations) {
             ObjectNode node = into.addObject();
             node.put("id", o.getId().toString());
@@ -232,8 +236,6 @@ public class ObservationHistoryContentSource implements ContentSource {
             node.put("outcome", o.getOutcome() == null ? null : o.getOutcome().name());
             node.put(
                     "presence", o.getPresence() == null ? null : o.getPresence().name());
-            Assessment assessment = o.getAssessment();
-            node.put("assessment", assessment == null ? null : assessment.name());
             Severity severity = o.getSeverity();
             node.put("severity", severity == null ? null : severity.name());
             node.put("observedAt", o.getObservedAt().toString());
@@ -247,6 +249,7 @@ public class ObservationHistoryContentSource implements ContentSource {
                 node.set("evidence", o.getEvidence());
             }
             node.put("evidenceRationale", DeveloperTextSanitizer.sanitize(o.getEvidenceRationale()));
+            node.set("reviewedWork", Objects.requireNonNull(reviewedWork.get(o.getId())));
         }
     }
 

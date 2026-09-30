@@ -60,6 +60,9 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     @Mock
     ObservationVisibilityPolicy visibilityPolicy;
 
+    @Mock
+    ReviewedWorkCoverage reviewedWorkCoverage;
+
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
 
@@ -71,6 +74,13 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
 
     @BeforeEach
     void authorizeObservations() {
+        lenient().when(reviewedWorkCoverage.of(anyLong(), any())).thenAnswer(invocation -> {
+            Map<UUID, ObjectNode> nodes = new HashMap<>();
+            for (Observation observation : invocation.<java.util.Collection<Observation>>getArgument(1)) {
+                nodes.put(observation.getId(), objectMapper.createObjectNode().put("coreCoverage", "UNKNOWN"));
+            }
+            return nodes;
+        });
         lenient()
                 .when(observationRepository.findRecentByDeveloperAndWorkspace(
                         any(), any(), any(), eq(ABSTENTIONS), any()))
@@ -258,7 +268,8 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         assertThat(bad.get("practiceSlug").asString()).isEqualTo("robust-error-handling");
         assertThat(bad.get("summary").asString()).isEqualTo("Swallowed IOException");
         assertThat(bad.get("presence").asString()).isEqualTo("PRESENT");
-        assertThat(bad.get("assessment").asString()).isEqualTo("BAD");
+        assertThat(bad.get("outcome").asString()).isEqualTo("NEGATIVE");
+        assertThat(bad.has("assessment")).isFalse();
         assertThat(bad.get("severity").asString()).isEqualTo("MAJOR");
         assertThat(bad.get("observedAt").asString()).isEqualTo(observedBad.toString());
         assertThat(bad.get("artifactKind").asString()).isEqualTo("scm.pull_request");
@@ -271,8 +282,8 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         assertThat(root.get("abstentions")).hasSize(1);
         JsonNode na = root.get("abstentions").get(0);
         assertThat(na.get("assessmentStatus").asString()).isEqualTo("NOT_APPLICABLE");
-        // assessment/severity must be JSON null (not the string "null", not absent).
-        assertThat(na.get("assessment").isNull()).isTrue();
+        // outcome/severity must be JSON null (not the string "null", not absent).
+        assertThat(na.get("outcome").isNull()).isTrue();
         assertThat(na.get("severity").isNull()).isTrue();
 
         JsonNode reviews = root.get("reviewsReceived");
