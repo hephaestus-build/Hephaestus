@@ -176,11 +176,9 @@ export function ReviewRunPracticeTable({
 					/>
 				</div>
 			</FilterToolbar>
-			<ResultCount
-				total={rows.length}
-				noun={["practice", "practices"]}
-				hasFilter={hasFilter && rows.length !== entries.length}
-			/>
+			{hasFilter && rows.length !== entries.length && (
+				<ResultCount total={rows.length} noun={["practice", "practices"]} hasFilter />
+			)}
 			<PracticesFrame>
 				{rows.length === 0 && (
 					<TableRow variant="static">
@@ -319,9 +317,11 @@ function WhatItSaw({
 				))
 			)}
 			{canAdminister && (
-				<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-					<span>{deliveryLabel(entry)}</span>
-					<AutonomyBadge autonomy={entry.autonomy} />
+				<span className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
+					<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+						<span>{deliveryLabel(entry)}</span>
+						<AutonomyBadge autonomy={entry.autonomy} />
+					</span>
 					{occasionedById !== undefined &&
 						occurrenceName !== undefined && (
 							// Not an anchor: the occurrence is drawn on the other tab, which has to open first.

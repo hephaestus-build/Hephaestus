@@ -49,7 +49,8 @@ export function SelectFilter<TValue extends string>({
 				<SelectTrigger id={id} className="w-56 max-w-full">
 					<SelectValue placeholder={allLabel} />
 				</SelectTrigger>
-				<SelectContent aria-labelledby={labelId}>
+				{/* As wide as its longest option: a name cut off at the trigger width cannot be chosen by reading. */}
+				<SelectContent aria-labelledby={labelId} className="w-max min-w-(--anchor-width)">
 					{items.map((item) => (
 						<SelectItem key={item.value} value={item.value}>
 							{item.label}
