@@ -61,14 +61,14 @@ class PracticeDefinitionTest extends BaseUnitTest {
                                 PracticeBinding.on(ScmSignals.PULL_REQUEST_OPENED, List.of(required(CORE))),
                                 PracticeBinding.on(ScmSignals.PULL_REQUEST_OPENED, List.of(required(COMMENTS))))))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("is bound twice");
+                .hasMessage("The same moment is chosen twice. Choose each moment once.");
     }
 
     @Test
     void shouldRefuseAPracticeThatNamesNoOccasion() {
         assertThatThrownBy(() -> definition(languageModel(), List.of()))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("at least one binding");
+                .hasMessage("Choose when this practice is reviewed.");
     }
 
     @Test

@@ -5,6 +5,10 @@ import type {
 	PracticeReleaseField,
 	PracticeReleaseProposal,
 } from "@/api/types.gen";
+import {
+	DEFAULT_DELIVERY_BEHAVIOR_TEXT,
+	deliveryBehaviorSentences,
+} from "@/components/admin/practice-editor/delivery-behavior-text";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +46,10 @@ const BASE_SOURCE = {
 } satisfies Record<PracticeReleaseProposal["baseSource"], string>;
 
 function fieldText(definition: PracticeDefinition, field: Field): string {
+	if (field === "DELIVERY_BEHAVIOR") {
+		const sentences = deliveryBehaviorSentences(definition.deliveryBehavior);
+		return sentences.length > 0 ? sentences.join("\n") : DEFAULT_DELIVERY_BEHAVIOR_TEXT;
+	}
 	const value = definition[FIELDS[field].key];
 	if (value === undefined) {
 		return "Not set";

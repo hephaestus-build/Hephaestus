@@ -229,7 +229,7 @@ export const FilteringOpensMatchingGroups: Story = {
 	play: async ({ canvas }) => {
 		const group = canvas.getByRole("button", { name: /^Packaging work for review 3$/u });
 		await userEvent.click(group);
-		await userEvent.click(canvas.getByRole("combobox", { name: "Filter by work type" }));
+		await userEvent.click(canvas.getByRole("combobox", { name: "Filter by kind of work" }));
 		await userEvent.click(await screen.findByRole("option", { name: "Pull or merge requests" }));
 		await canvas.findByText("Keep a change to one concern");
 		await expect(group).toHaveAttribute("aria-expanded", "true");

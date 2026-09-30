@@ -1,6 +1,5 @@
 import type { AgentJob } from "@/api/types.gen";
 import { asDate } from "@/lib/dates";
-import { humanizeToken } from "@/lib/humanize";
 import { hasText } from "@/lib/text";
 
 export type JobWait = { kind: "hold"; reason: string } | { kind: "backoff" };
@@ -31,8 +30,8 @@ export interface HoldReasonCopy {
 }
 
 /**
- * `holdReason` is a plain string on the wire and the server may add reasons, so an unknown one still
- * has to read as English: a map for what we know, humanised underscores for what we don't.
+ * `holdReason` is a plain string on the wire and the server may add reasons, so an unknown one reads
+ * as a plain "On hold" rather than as its constant.
  */
 const HOLD_REASON_COPY: Record<string, HoldReasonCopy | undefined> = {
 	BUDGET: {
@@ -50,7 +49,7 @@ export function holdReasonCopy(reason: string): HoldReasonCopy {
 	if (known) {
 		return known;
 	}
-	return { label: humanizeToken(reason), detail: UNKNOWN_HOLD_DETAIL };
+	return { label: "On hold", detail: UNKNOWN_HOLD_DETAIL };
 }
 
 export function isCancellable(status: AgentJob["status"]): boolean {

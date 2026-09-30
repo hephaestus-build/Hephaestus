@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentities;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -13,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRe
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -20,6 +23,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -49,6 +53,9 @@ class ScmReviewTargetQueryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PullRequestReviewRepository reviewRepository;
+
+    @Autowired
+    private ArtifactIdentities artifactIdentities;
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
@@ -172,6 +179,32 @@ class ScmReviewTargetQueryIntegrationTest extends BaseIntegrationTest {
         assertThat(pullRequest.number()).isEqualTo(42);
         assertThat(pullRequest.deleted()).isFalse();
         assertThat(reviewTargets.findPullRequest(fixture.issueId())).isEmpty();
+    }
+
+    /**
+     * The trace names a merge request the way its provider writes it, which it can only do when the identity
+     * carries the provider: the ledger holds nothing but the kind and the id.
+     */
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldNameEachArtifactWithTheProviderItLivesAt(IdentityProviderType providerType) {
+        var fixture = createFixture(providerType);
+
+        ArtifactIdentity pullRequest = artifactIdentities
+                .resolve(0L, ScmSignals.PULL_REQUEST, List.of(fixture.pullRequestId()))
+                .get(fixture.pullRequestId());
+        ArtifactIdentity issue = artifactIdentities
+                .resolve(0L, ScmSignals.ISSUE, List.of(fixture.issueId()))
+                .get(fixture.issueId());
+
+        assertNotNull(pullRequest);
+        assertNotNull(issue);
+        assertThat(pullRequest.provider()).isEqualTo(providerType.kind());
+        assertThat(pullRequest.number()).isEqualTo(42);
+        assertThat(pullRequest.container()).isEqualTo("owner/repo");
+        assertThat(issue.provider()).isEqualTo(providerType.kind());
     }
 
     @ParameterizedTest

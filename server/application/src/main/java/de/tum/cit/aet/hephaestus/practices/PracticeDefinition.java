@@ -139,7 +139,7 @@ public record PracticeDefinition(
         for (PracticeBinding binding : bindings) {
             for (SignalName signal : binding.signals()) {
                 if (!seen.add(signal)) {
-                    throw new IllegalArgumentException("Signal " + signal + " is bound twice");
+                    throw new IllegalArgumentException("The same moment is chosen twice. Choose each moment once.");
                 }
             }
         }

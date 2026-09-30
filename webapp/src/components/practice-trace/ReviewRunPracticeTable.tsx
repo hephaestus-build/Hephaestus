@@ -110,23 +110,31 @@ export function ReviewRunPracticeTable({
 		left.localeCompare(right),
 	);
 	const groupBySlug = new Map(groups.map((group) => [group.slug, group]));
-	// Named as the timeline names them; a signal never raised on this work has only its own name.
-	const signalNames = new Map(signals.map((signal) => [signal.signal, signal.displayName]));
-	const moments = [...new Set(entries.flatMap((entry) => entry.watches))].sort((left, right) =>
-		(signalNames.get(left) ?? left).localeCompare(signalNames.get(right) ?? right),
-	);
+	// Each entry carries the words for what it watches, so a moment never raised on this work is named too.
+	const moments = [
+		...new Map(
+			entries.flatMap((entry) =>
+				entry.watches.map((watched) => [watched.signal, watched.displayName] as const),
+			),
+		),
+	].sort(([, left], [, right]) => left.localeCompare(right));
+	// A moment named in the address that no practice here watches — a hand-edited or stale link — is
+	// no filter at all, rather than one the select would have to show by its wire name.
+	const watches = moments.some(([signal]) => signal === filters.watches)
+		? filters.watches
+		: undefined;
 
 	const needle = filters.practice?.trim().toLowerCase() ?? "";
 	const rows = entries.filter((entry) => {
 		if (hasText(filters.group) && groupNameOf(entry) !== filters.group) {
 			return false;
 		}
-		if (hasText(filters.watches) && !entry.watches.includes(filters.watches)) {
+		if (hasText(watches) && !entry.watches.some((watched) => watched.signal === watches)) {
 			return false;
 		}
 		return needle === "" || entry.practiceName.toLowerCase().includes(needle);
 	});
-	const hasFilter = hasText(filters.group) || hasText(filters.watches) || needle !== "";
+	const hasFilter = hasText(filters.group) || hasText(watches) || needle !== "";
 	const practiceFilterId = useId();
 
 	return (
@@ -142,12 +150,9 @@ export function ReviewRunPracticeTable({
 				<SelectFilter
 					label="Reviews when"
 					allLabel="Any moment"
-					options={moments.map((moment) => ({
-						value: moment,
-						label: signalNames.get(moment) ?? moment,
-					}))}
-					value={filters.watches}
-					onChange={(watches) => onFiltersChange({ ...filters, watches })}
+					options={moments.map(([value, label]) => ({ value, label }))}
+					value={watches}
+					onChange={(next) => onFiltersChange({ ...filters, watches: next })}
 				/>
 				<div className="flex min-w-0 items-center gap-2">
 					<Label htmlFor={practiceFilterId} className="shrink-0 text-muted-foreground">
@@ -220,7 +225,8 @@ export function ReviewRunPracticeTable({
 									observations={observationsByPractice?.[entry.practiceSlug] ?? NO_OBSERVATIONS}
 									occurrenceName={
 										hasText(entry.occasionedById)
-											? signals.find((signal) => signal.id === entry.occasionedById)?.displayName
+											? (signals.find((signal) => signal.id === entry.occasionedById)
+													?.displayName ?? entry.occasionedBy?.displayName)
 											: undefined
 									}
 									onShowOccurrence={onShowOccurrence}

@@ -33,5 +33,8 @@ public record ReviewedWorkRefDTO(
         @Nullable @Schema(description = "The work's page at its provider, when the provider exposes one")
         String url,
 
-        @Nullable @Schema(description = "Repository the work belongs to, for pull requests and issues")
-        String repositoryName) {}
+        @Nullable
+        @Schema(
+                description = "Where the work sits, by name: a pull request's or an issue's repository, a document's"
+                        + " collection; a conversation's channel is its label")
+        String container) {}

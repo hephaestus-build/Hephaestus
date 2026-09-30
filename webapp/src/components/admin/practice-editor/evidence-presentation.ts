@@ -11,15 +11,18 @@ import type {
 	PracticeEvidenceOutcome,
 	PracticeEvidenceSourceOption,
 } from "@/api/types.gen";
+import { evidenceSourceDef } from "@/components/practice-vocabulary/evidence-source-defs";
 
 type PracticeEvidenceReason = PracticeEvidenceOutcome["blockersObserved"][number]["reasonCode"];
 
+/** The work type's own name for a source, or the vocabulary's where the options do not list it. */
 export function evidenceSourceLabel(
 	sourceKind: string,
 	sources: readonly PracticeEvidenceSourceOption[],
 ) {
 	return (
-		sources.find((source) => source.sourceKind === sourceKind)?.displayName ?? "Unknown source"
+		sources.find((source) => source.sourceKind === sourceKind)?.displayName ??
+		evidenceSourceDef(sourceKind).label
 	);
 }
 

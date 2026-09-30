@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.trace;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -344,12 +346,17 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                     .jsonPath("$.practices[?(@.practiceSlug=='dormant')].outcome")
                     .isEqualTo("DORMANT")
                     .jsonPath("$.practices[?(@.practiceSlug=='dormant')].explanation")
-                    .value(
-                            (java.util.List<String> value) -> org.hamcrest.MatcherAssert.assertThat(
-                                    value,
-                                    org.hamcrest.Matchers.hasItem(
-                                            org.hamcrest.Matchers.containsString(
-                                                    "No connected integration raises scm.pull_request.merged; connect GITHUB or GITLAB"))));
+                    .value((java.util.List<String> value) -> org.hamcrest.MatcherAssert.assertThat(
+                            value,
+                            org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.equalTo(
+                                    "Nothing connected to this workspace reports the moments this "
+                                            + "practice watches for (Merged); GitHub or GitLab would."))))
+                    .jsonPath("$.practices[?(@.practiceSlug=='dormant')].watches[0].signal")
+                    .isEqualTo(ScmSignals.PULL_REQUEST_MERGED.value())
+                    .jsonPath("$.practices[?(@.practiceSlug=='dormant')].watches[0].displayName")
+                    .isEqualTo("Merged")
+                    .jsonPath("$.practices[?(@.practiceSlug=='reviewed')].occasionedBy.displayName")
+                    .isEqualTo("Marked ready for review");
         }
 
         @Test
@@ -373,9 +380,12 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                     .value(
                             String.class,
                             value -> org.hamcrest.MatcherAssert.assertThat(
-                                    value, org.hamcrest.Matchers.containsString("budget refills")))
+                                    value,
+                                    org.hamcrest.Matchers.equalTo(SignalStateReason.BUDGET_EXHAUSTED.describe())))
                     .jsonPath("$.signals[0].stateReason")
-                    .isEqualTo("BUDGET_EXHAUSTED");
+                    .isEqualTo("BUDGET_EXHAUSTED")
+                    .jsonPath("$.signals[0].stateReasonDescription")
+                    .isEqualTo(SignalStateReason.BUDGET_EXHAUSTED.describe());
         }
 
         /**
@@ -572,6 +582,15 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                     .isEqualTo(ARTIFACT_ID)
                     .jsonPath("$.content[0].artifactKind")
                     .isEqualTo(ArtifactKinds.PULL_REQUEST.value())
+                    .jsonPath("$.content[0].reviewedWork.id")
+                    .isEqualTo(Long.toString(ARTIFACT_ID))
+                    .jsonPath("$.content[0].reviewedWork.label")
+                    .value(String.class, label -> assertThat(label).doesNotContain("scm."))
+                    // The work's name and where it sits have one home: the reviewed work.
+                    .jsonPath("$.content[0].title")
+                    .doesNotExist()
+                    .jsonPath("$.content[0].container")
+                    .doesNotExist()
                     .jsonPath("$.content[0].signalCount")
                     .isEqualTo(1)
                     .jsonPath("$.content[0].reviewedSignalCount")

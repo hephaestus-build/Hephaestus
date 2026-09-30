@@ -183,7 +183,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
                 .isEqualTo("#22")
                 .jsonPath("$.reviewedWork[0].kind")
                 .isEqualTo("scm.pull_request")
-                .jsonPath("$.reviewedWork[0].repositoryName")
+                .jsonPath("$.reviewedWork[0].container")
                 .isEqualTo("acme/api")
                 // Holding: clean on all three pull requests, and named by the catalog's phrase.
                 .jsonPath("$.holdingUp.length()")

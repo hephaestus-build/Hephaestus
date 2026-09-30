@@ -17,7 +17,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
-import { artifactKindPluralLabel } from "@/lib/artifact-kinds";
+import { artifactKindNoun } from "@/lib/artifact-kinds";
 import { hasText } from "@/lib/text";
 
 import { REVIEW_PAGE_SIZE, type WorkSearch } from "./review-search";
@@ -67,7 +67,7 @@ export function WorkListPage({
 					</EmptyMedia>
 					<EmptyTitle>
 						{hasFilter
-							? `No ${artifactKindPluralLabel(search.kind).toLowerCase()} recorded yet`
+							? `No ${artifactKindNoun(search.kind, 2)} recorded yet`
 							: "Nothing has been recorded yet"}
 					</EmptyTitle>
 					<EmptyDescription>

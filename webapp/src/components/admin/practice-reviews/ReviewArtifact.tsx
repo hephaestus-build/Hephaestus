@@ -5,8 +5,7 @@ import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import {
 	ARTIFACT_KIND,
 	ARTIFACT_KIND_VALUES,
-	artifactKindLabel,
-	artifactKindPluralLabel,
+	artifactKindNoun,
 	isKnownArtifactKind,
 	type KnownArtifactKind,
 } from "@/lib/artifact-kinds";
@@ -35,7 +34,7 @@ export function reviewArtifactTypeFromSlug(slug: string): KnownArtifactKind | un
 
 /** The repository and the item, when a repository is recorded: `ls1intum/Hephaestus · #1423`. */
 function qualifiedLabel(reviewedWork: ReviewedWorkRef): string {
-	return [reviewedWork.repositoryName, reviewedWork.label].filter(hasText).join(" · ");
+	return [reviewedWork.container, reviewedWork.label].filter(hasText).join(" · ");
 }
 
 export function reviewArtifactScopeLabel(
@@ -46,13 +45,7 @@ export function reviewArtifactScopeLabel(
 	if (id != null && reviewedWork) {
 		return qualifiedLabel(reviewedWork);
 	}
-	// Lower-cased from the registry rather than spelled out again here: a fifth artifact kind is one
-	// edit to `lib/artifact-kinds.ts` and its ten call sites, and a local copy is the one that would
-	// be missed. Mid-sentence is the only reason the case differs at all.
-	const scope = (
-		id == null ? artifactKindPluralLabel(kind) : artifactKindLabel(kind)
-	).toLowerCase();
-	return `${id == null ? "All" : "One"} ${scope}`;
+	return id == null ? `All ${artifactKindNoun(kind, 2)}` : `One ${artifactKindNoun(kind, 1)}`;
 }
 
 export interface ReviewArtifactProps {

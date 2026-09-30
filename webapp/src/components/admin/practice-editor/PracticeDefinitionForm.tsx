@@ -42,6 +42,7 @@ import {
 } from "@/components/admin/practice-editor/PracticeMentoringSupportEditor";
 import { CodeEditor } from "@/components/common/CodeEditor";
 import { type FormError, FormErrorSummary } from "@/components/common/FormErrorSummary";
+import { ACTOR_ROLE_LABELS } from "@/components/practice-vocabulary/actor-role-labels";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
@@ -70,7 +71,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
-import { artifactKindLabel } from "@/lib/artifact-kinds";
+import { artifactKindLabel, artifactKindNoun, isKnownArtifactKind } from "@/lib/artifact-kinds";
 import { hasText } from "@/lib/text";
 
 type BindingChange = NonNullable<UpdatePracticeRequest["bindingChanges"]>[number];
@@ -361,6 +362,13 @@ function recommendedPolicyWithCurrentSupport(
 	return recommended;
 }
 
+/** A kind the instance no longer offers, named where this build still has words for it. */
+function withdrawnKindSentence(artifactKind: string): string {
+	return isKnownArtifactKind(artifactKind)
+		? `This practice reviews ${artifactKindNoun(artifactKind, 2)}, which this instance no longer offers.`
+		: "This practice reviews a kind of work this instance no longer offers.";
+}
+
 export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 	const {
 		mode,
@@ -390,7 +398,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 	const { artifactKind } = form;
 	const selectedWorkType = workTypeOptionsFor(definitionOptions, artifactKind);
 	// Recorded history belongs to the work type the practice was reviewed under: switching work type
-	// changes which sources are allowed, so the same rows would resolve to "Unknown source".
+	// changes which sources are allowed, so the same rows would resolve to "Another source".
 	const workTypeUnchanged = artifactKindOfBindings(initialData?.bindings ?? []) === artifactKind;
 	// `useRef` takes no lazy initialiser, so the map is built on the first render and every later one
 	// is spared building a map to discard.
@@ -415,8 +423,8 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		value: role,
 		label:
 			selectedWorkType?.subjectRoles.includes(role) === true
-				? role.toLowerCase()
-				: `${role.toLowerCase()} (not available for this work)`,
+				? ACTOR_ROLE_LABELS[role]
+				: `${ACTOR_ROLE_LABELS[role]} (not available for this work)`,
 	}));
 	const unsavedChanges = useUnsavedChanges({
 		isDirty: !deepEqual(
@@ -764,8 +772,8 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 								/>
 							) : (
 								<p className="text-sm text-muted-foreground">
-									This practice reviews {artifactKindLabel(artifactKind)}, which this instance no
-									longer offers. Choose a kind of work above to say when it is reviewed.
+									{withdrawnKindSentence(artifactKind)} Choose a kind of work above to say when it
+									is reviewed.
 								</p>
 							)}
 							{selectedWorkType && (

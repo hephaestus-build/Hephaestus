@@ -1,5 +1,5 @@
 import { SelectFilter } from "@/components/common/SelectFilter";
-import { ARTIFACT_KIND_VALUES, artifactKindPluralLabel } from "@/lib/artifact-kinds";
+import { ARTIFACT_KIND_VALUES, artifactKindLabel } from "@/lib/artifact-kinds";
 import { hasText } from "@/lib/text";
 
 export interface TraceKindFilterProps {
@@ -23,7 +23,7 @@ export function TraceKindFilter({ seen, value, onChange }: TraceKindFilterProps)
 		<SelectFilter
 			label="Show"
 			allLabel="All work"
-			options={[...kinds].map((kind) => ({ value: kind, label: artifactKindPluralLabel(kind) }))}
+			options={[...kinds].map((kind) => ({ value: kind, label: artifactKindLabel(kind, 2) }))}
 			value={value}
 			onChange={onChange}
 		/>

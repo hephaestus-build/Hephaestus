@@ -31,7 +31,7 @@ export const pullRequest = (number: number): ReviewedWorkRef => ({
 	provider: "GITHUB",
 	label: `#${number}`,
 	url: `${PULL_REQUESTS}${number}`,
-	repositoryName: "HephaestusTest/practice-validation",
+	container: "HephaestusTest/practice-validation",
 });
 
 export const issue = (number: number): ReviewedWorkRef => ({
@@ -40,7 +40,7 @@ export const issue = (number: number): ReviewedWorkRef => ({
 	provider: "GITHUB",
 	label: `#${number}`,
 	url: `${ISSUES}${number}`,
-	repositoryName: "HephaestusTest/MaxTestRepo",
+	container: "HephaestusTest/MaxTestRepo",
 });
 
 /** A Slack channel by name, "#releases"; the name is its id as well. */

@@ -2,6 +2,7 @@ import type { TracedSignal } from "@/api/types.gen";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { hasText } from "@/lib/text";
 
 import { RefusalFixLink } from "./RefusalFixLink";
 import {
@@ -9,7 +10,6 @@ import {
 	DISCOVERED_VIA_LABELS,
 	occurrenceDomId,
 	SIGNAL_STATE_LABELS,
-	SIGNAL_STATE_REASON_LABELS,
 } from "./trace-format";
 
 export interface TraceSignalTimelineProps {
@@ -75,7 +75,9 @@ export function TraceSignalTimeline({
 							</p>
 							{signal.stateReason && (
 								<p className="mt-1 flex flex-wrap items-baseline gap-x-1.5 text-xs break-words text-muted-foreground">
-									<span>{SIGNAL_STATE_REASON_LABELS[signal.stateReason]}.</span>
+									{hasText(signal.stateReasonDescription) && (
+										<span>{signal.stateReasonDescription}</span>
+									)}
 									<RefusalFixLink
 										workspaceSlug={workspaceSlug}
 										reason={signal.stateReason}

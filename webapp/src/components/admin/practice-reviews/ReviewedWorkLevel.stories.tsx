@@ -49,9 +49,9 @@ if (!WORK_LEVEL) {
 }
 
 /** What was recorded about the work, named as the rows name it. */
-const traceFor = ({ reviewedWork, title }: ReviewWork): ReviewedWorkTraceState => ({
+const traceFor = ({ reviewedWork }: ReviewWork): ReviewedWorkTraceState => ({
 	status: "ready",
-	trace: { ...artifactTrace, artifactId: Number(reviewedWork.id), title, url: reviewedWork.url },
+	trace: { ...artifactTrace, artifactId: Number(reviewedWork.id), reviewedWork },
 });
 
 const argsFor = (work: ReviewWork) => ({
@@ -101,12 +101,12 @@ export const PullRequest: Story = {
 	play: async ({ args, userEvent }) => {
 		const panel = within(await settledDrawerPanel());
 		// The heading is the work's own title, as the server names it; the work is the link under it,
-		// named as its rows name it.
+		// named the way its provider writes it.
 		await expect(
 			panel.getByRole("heading", { name: reviewArtifact.title, level: 2 }),
 		).toBeVisible();
 		await expect(
-			panel.getByRole("link", { name: /ls1intum\/Hephaestus · #1423/u }),
+			panel.getByRole("link", { name: /^Pull request #1423 · ls1intum\/Hephaestus/u }),
 		).toHaveAttribute("href", reviewArtifact.reviewedWork.url);
 		await expect(panel.getByRole("heading", { name: "Observations", level: 3 })).toBeVisible();
 		// The trace's counts reach the tabs before either is opened.
@@ -158,9 +158,8 @@ export const Reflow: Story = {
 };
 
 /**
- * No review ever said anything about this work, so no reviewed-work reference names it: the trace
- * does, by its kind and where it lives, since the provider is not known to it. The level opens on
- * what was noticed, which is where the reason is.
+ * No review ever said anything about this work, so the trace names it, the same way a review would.
+ * The level opens on what was noticed, which is where the reason is.
  */
 export const NothingReviewed: Story = {
 	args: {
@@ -173,8 +172,13 @@ export const NothingReviewed: Story = {
 				...untouchedArtifactTrace,
 				artifactKind: reviewArtifact.reviewedWork.kind,
 				artifactId: 45,
-				title: "Bump the webhook signature library",
-				url: "https://github.com/ls1intum/Hephaestus/pull/45",
+				reviewedWork: {
+					...reviewArtifact.reviewedWork,
+					id: "45",
+					label: "#45",
+					title: "Bump the webhook signature library",
+					url: "https://github.com/ls1intum/Hephaestus/pull/45",
+				},
 			},
 		},
 	},
@@ -191,7 +195,7 @@ export const NothingReviewed: Story = {
 			panel.getByRole("heading", { name: "Bump the webhook signature library", level: 2 }),
 		).toBeVisible();
 		await expect(
-			panel.getByRole("link", { name: /Pull or merge request · ls1intum\/Hephaestus/u }),
+			panel.getByRole("link", { name: /^Pull request #45 · ls1intum\/Hephaestus/u }),
 		).toHaveAttribute("href", "https://github.com/ls1intum/Hephaestus/pull/45");
 		await expect(panel.queryByRole("heading", { name: "Observations" })).not.toBeInTheDocument();
 	},
@@ -241,7 +245,7 @@ export const TraceLoading: Story = {
 	args: { trace: { status: "loading" } },
 	play: async ({ userEvent }) => {
 		const panel = within(await settledDrawerPanel());
-		panel.getByRole("link", { name: /ls1intum\/Hephaestus · #1423/u });
+		panel.getByRole("link", { name: /^Pull request #1423 · ls1intum\/Hephaestus/u });
 		await userEvent.click(panel.getByRole("tab", { name: "Every practice" }));
 		await expect(panel.getByRole("table", { name: "Every practice on this work" })).toHaveAttribute(
 			"aria-busy",
@@ -320,7 +324,7 @@ export const ObservationsFailed: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		panel.getByRole("link", { name: /ls1intum\/Hephaestus · #1423/u });
+		panel.getByRole("link", { name: /^Pull request #1423 · ls1intum\/Hephaestus/u });
 		await expect(panel.getByText("Couldn't load observations")).toBeVisible();
 		await expect(
 			panel.queryByText("Nothing has been reviewed on this work"),

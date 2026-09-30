@@ -1,5 +1,6 @@
 import { cn } from "cn";
 import type { CuratedPracticeDefinition, PracticeDefinitionOptions } from "@/api/types.gen";
+import { deliveryBehaviorSentences } from "@/components/admin/practice-editor/delivery-behavior-text";
 import { PracticeEvidenceSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { Section } from "@/components/layout/Section";
@@ -20,7 +21,7 @@ export interface PracticeDefinitionPreviewProps {
 
 /**
  * The practice first, the rule last. `criteria` addresses the *model* in the second person and runs to
- * thousands of characters once the server composes its work-type preamble in, so leading with it
+ * thousands of characters once the server composes its kind-of-work preamble in, so leading with it
  * buries `whyItMatters` — the field that answers "do we want this practice". It stays reachable behind
  * a disclosure, next to the precompute script, because adopting an automated critic without being
  * able to read its rule is worse.
@@ -29,6 +30,7 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 	const workType = options.workTypes.find(
 		(candidate) => candidate.artifactKind === definition.artifactKind,
 	);
+	const deliverySentences = deliveryBehaviorSentences(definition.deliveryBehavior);
 
 	return (
 		<div className="space-y-6">
@@ -71,28 +73,14 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 						</div>
 					</AccordionContent>
 				</AccordionItem>
-				{(definition.deliveryBehavior.summaryOnly ||
-					hasText(definition.deliveryBehavior.overlapGroup) ||
-					hasText(definition.deliveryBehavior.redundantToSlug)) && (
+				{deliverySentences.length > 0 && (
 					<AccordionItem value="delivery-behavior">
 						<AccordionTrigger>How feedback is delivered</AccordionTrigger>
 						<AccordionContent>
 							<ul className="list-inside list-disc text-sm text-muted-foreground">
-								{definition.deliveryBehavior.summaryOnly && (
-									<li>Feedback stays in the summary, not on a changed line.</li>
-								)}
-								{hasText(definition.deliveryBehavior.overlapGroup) && (
-									<li>
-										On issues, only one overlapping practice in the{" "}
-										{definition.deliveryBehavior.overlapGroup} group is shown.
-									</li>
-								)}
-								{hasText(definition.deliveryBehavior.redundantToSlug) && (
-									<li>
-										When both apply, feedback for {definition.deliveryBehavior.redundantToSlug}{" "}
-										takes priority.
-									</li>
-								)}
+								{deliverySentences.map((sentence) => (
+									<li key={sentence}>{sentence}</li>
+								))}
 							</ul>
 						</AccordionContent>
 					</AccordionItem>

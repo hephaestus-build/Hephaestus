@@ -34,7 +34,7 @@ import { REVIEW_RUN_STATE_DEFS } from "@/components/practice-vocabulary/review-r
 import { Button, buttonVariants } from "@/components/ui/button";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { artifactKindLabel, sameReviewedWork } from "@/lib/artifact-kinds";
+import { artifactKindLabel, reviewedWorkName, sameReviewedWork } from "@/lib/artifact-kinds";
 import { formatDayTime } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
@@ -259,8 +259,8 @@ function ReviewHead({
 			<p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
 				<WorkIcon className="size-3.5 shrink-0" aria-hidden />
 				<span className="truncate">
-					{artifactKindLabel(work?.kind)}
-					{hasText(work?.repositoryName) && `, ${work.repositoryName}`}
+					{work ? reviewedWorkName(work) : artifactKindLabel(undefined)}
+					{hasText(work?.container) && `, ${work.container}`}
 				</span>
 			</p>
 			<DrawerTitle className="text-2xl font-semibold tracking-tight break-words">

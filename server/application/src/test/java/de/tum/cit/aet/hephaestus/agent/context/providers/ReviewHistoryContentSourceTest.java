@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentity;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -818,7 +819,13 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     private static ArtifactIdentity mergeRequest(ArtifactKind kind, Long id, int number, String title) {
         return new ArtifactIdentity(
-                kind, id, number, title, "acme/web", "https://gitlab.example.com/acme/web/-/merge_requests/" + number);
+                kind,
+                id,
+                IntegrationKind.GITLAB,
+                number,
+                title,
+                "acme/web",
+                "https://gitlab.example.com/acme/web/-/merge_requests/" + number);
     }
 
     private static void assertCarriesNoRowId(JsonNode node, String path) {

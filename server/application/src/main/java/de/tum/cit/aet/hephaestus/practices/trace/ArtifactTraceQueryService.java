@@ -7,12 +7,12 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepositor
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository.SignalledArtifactRow;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactCatalog;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentities;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentity;
-import de.tum.cit.aet.hephaestus.integration.core.spi.Signal;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationNames;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeSignalDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.ArtifactFeedbackRow;
@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvide
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.ReviewOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
 import de.tum.cit.aet.hephaestus.practices.trace.TraceInputs.PracticeOutput;
 import de.tum.cit.aet.hephaestus.practices.trace.TraceInputs.SignalOccurrence;
 import de.tum.cit.aet.hephaestus.practices.trace.TraceInputs.TracedPractice;
@@ -77,6 +78,7 @@ class ArtifactTraceQueryService {
     private final ReviewOutcomeLookup reviews;
     private final ArtifactCatalog artifacts;
     private final ArtifactIdentities identities;
+    private final IntegrationNames integrations;
 
     /**
      * The trace of one piece of work, across every review of it or as the named review answered it. Naming a
@@ -97,7 +99,7 @@ class ArtifactTraceQueryService {
             @Nullable Long developerId) {
         List<ArtifactSignal> recorded = signals.findForArtifact(workspaceId, artifactKind.value(), artifactId);
         if (recorded.isEmpty()) {
-            throw new EntityNotFoundException("Traced artifact", artifactKind.value() + "/" + artifactId);
+            throw new EntityNotFoundException("Reviewed work", artifactId);
         }
         List<ArtifactObservationRow> observed = observations.findForArtifact(workspaceId, artifactKind, artifactId);
         if (reviewId != null
@@ -105,9 +107,9 @@ class ArtifactTraceQueryService {
                 && observed.stream().noneMatch(row -> reviewId.equals(row.getReviewId()))) {
             throw new EntityNotFoundException("Review", reviewId.toString());
         }
-        Map<SignalName, String> labels = signalLabels(artifactKind);
         List<TracedSignalDTO> tracedSignals = recorded.stream()
-                .map(signal -> TracedSignalDTO.from(signal, labels.get(SignalName.of(signal.getSignalName()))))
+                .map(signal -> TracedSignalDTO.from(
+                        signal, artifacts.signalDisplayName(SignalName.of(signal.getSignalName()))))
                 .toList();
 
         List<ArtifactSignal> answering = recorded.stream()
@@ -124,7 +126,7 @@ class ArtifactTraceQueryService {
                 answering.stream()
                         .map(signal -> new SignalOccurrence(
                                 signal.getId(),
-                                SignalName.of(signal.getSignalName()),
+                                label(SignalName.of(signal.getSignalName())),
                                 signal.getOccurredAt(),
                                 signal.getState(),
                                 signal.getStateReason(),
@@ -136,15 +138,7 @@ class ArtifactTraceQueryService {
         ArtifactIdentity identity = Objects.requireNonNull(identities
                 .resolve(workspaceId, artifactKind, List.of(artifactId))
                 .get(artifactId));
-        return new ArtifactTraceDTO(
-                artifactKind,
-                artifactId,
-                identity.title(),
-                identity.number(),
-                identity.container(),
-                identity.url(),
-                tracedSignals,
-                entries);
+        return new ArtifactTraceDTO(artifactKind, artifactId, ReviewedWorkLabels.ref(identity), tracedSignals, entries);
     }
 
     @Transactional(readOnly = true)
@@ -168,10 +162,7 @@ class ArtifactTraceQueryService {
             return new TracedArtifactDTO(
                     kind,
                     row.getArtifactId(),
-                    identity.title(),
-                    identity.number(),
-                    identity.container(),
-                    identity.url(),
+                    ReviewedWorkLabels.ref(identity),
                     row.getLastSignalAt(),
                     Math.toIntExact(row.getSignalCount()),
                     Math.toIntExact(row.getReviewedSignalCount()));
@@ -224,11 +215,20 @@ class ArtifactTraceQueryService {
                 .collect(Collectors.toUnmodifiableSet());
         return dormant.stream()
                 .filter(binding -> binding.signals().stream().noneMatch(everRecorded::contains))
-                .collect(Collectors.toMap(DormantBinding::practiceId, DormantBinding::reason, (a, b) -> a));
+                .collect(Collectors.toMap(
+                        DormantBinding::practiceId,
+                        binding -> binding.reason(artifacts::signalDisplayName, integrations::displayName),
+                        (a, b) -> a));
     }
 
-    private static List<SignalName> watches(Practice practice) {
-        return PracticeBinding.signalsOf(practice.getBindings());
+    private List<PracticeSignalDTO> watches(Practice practice) {
+        return PracticeBinding.signalsOf(practice.getBindings()).stream()
+                .map(this::label)
+                .toList();
+    }
+
+    private PracticeSignalDTO label(SignalName signal) {
+        return new PracticeSignalDTO(signal, artifacts.signalDisplayName(signal));
     }
 
     /**
@@ -288,10 +288,5 @@ class ArtifactTraceQueryService {
                             latestObserved.get(practiceId)));
         }
         return outputs;
-    }
-
-    private Map<SignalName, String> signalLabels(ArtifactKind artifactKind) {
-        return artifacts.descriptorFor(artifactKind).map(ArtifactDescriptor::signals).orElseGet(List::of).stream()
-                .collect(Collectors.toMap(Signal::name, Signal::displayName, (a, b) -> a));
     }
 }

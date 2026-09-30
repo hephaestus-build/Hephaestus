@@ -197,7 +197,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> service.cancel(1L, jobId))
                     .isInstanceOf(AgentJobStateConflictException.class)
-                    .hasMessageContaining(terminalStatus.name());
+                    .hasMessage("This review has already finished, so it cannot be cancelled.");
         }
 
         @Test
@@ -224,7 +224,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> service.cancel(1L, jobId))
                     .isInstanceOf(AgentJobStateConflictException.class)
-                    .hasMessageContaining("COMPLETED");
+                    .hasMessage("This review finished while it was being cancelled, so it cannot be cancelled.");
 
             verify(sandboxManager, never()).cancel(any());
         }
@@ -426,8 +426,8 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> service.retryDelivery(WORKSPACE_ID, jobId))
                     .isInstanceOf(AgentJobStateConflictException.class)
-                    .hasMessageContaining("Delivery retry failed")
-                    .hasMessageContaining("GitHub API rate limited");
+                    .hasMessage("The feedback could not be posted. Try again later.")
+                    .hasRootCauseMessage("GitHub API rate limited");
 
             verify(agentJobRepository)
                     .updateDeliveryStatus(

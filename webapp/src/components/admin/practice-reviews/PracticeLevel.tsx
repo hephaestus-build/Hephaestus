@@ -83,7 +83,7 @@ export function PracticeLevel({
 				path={path}
 				kind="practice"
 				loading={name === undefined && counts.status === "loading"}
-				title={name ?? practiceSlug}
+				title={name ?? "This practice"}
 				chips={practice && <AutonomyBadge autonomy={practice.autonomy.effective} />}
 				description={<p>{rangeLabel}</p>}
 			/>

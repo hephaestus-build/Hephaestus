@@ -120,7 +120,7 @@ class PracticeServiceUpdateIntegrationTest extends AbstractWorkspaceIntegrationT
                         new UpdatePracticeRequestDTO(
                                 null, List.of(unscoped), null, null, null, null, null, null, null, null)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("APPLIES_WHEN");
+                .hasMessageContaining("change when this practice applies");
 
         practiceService.updatePractice(
                 ctx,
@@ -226,7 +226,9 @@ class PracticeServiceUpdateIntegrationTest extends AbstractWorkspaceIntegrationT
                         new UpdatePracticeRequestDTO(
                                 null, null, null, null, null, "Say PRESENT when it is there", null, null, null, null)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Why it matters is guidance for people and must not use detector result labels");
+                .hasMessage(
+                        "Why it matters is guidance for people. Remove the review result label “PRESENT” and say it "
+                                + "in plain words.");
     }
 
     /** A one-occasion practice — every other practice on the instance — is unaffected. */

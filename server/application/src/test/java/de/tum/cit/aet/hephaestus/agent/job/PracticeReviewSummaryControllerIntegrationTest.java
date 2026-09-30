@@ -162,7 +162,7 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .isEqualTo("#42")
                 .jsonPath("$.content[0].target.reviewedWork.title")
                 .isEqualTo("Make review output visible")
-                .jsonPath("$.content[0].target.reviewedWork.repositoryName")
+                .jsonPath("$.content[0].target.reviewedWork.container")
                 .isEqualTo("review-summary-org/review-ui")
                 .jsonPath("$.content[0].target.reviewedWork.url")
                 .isEqualTo("https://github.com/review-summary-org/review-ui/pull/42")

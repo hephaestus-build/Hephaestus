@@ -55,7 +55,15 @@ export const Default: Story = {
 		await expectGenuinelyDisabled(
 			canvas.getByRole("button", { name: "View users of Intro Course" }),
 		);
-		canvas.getByText("This workspace is suspended, so its users cannot be viewed.");
+		canvas.getByText("This workspace is not active, so its users cannot be viewed.");
+		// Statuses and providers in words, never the constants the wire carries.
+		canvas.getByText("Active");
+		canvas.getByText("Suspended");
+		canvas.getByText("GitHub");
+		canvas.getByText("GitLab");
+		await expect(
+			canvas.queryByText(/^(?:ACTIVE|SUSPENDED|GITHUB|GITLAB)$/u),
+		).not.toBeInTheDocument();
 	},
 };
 

@@ -22,17 +22,21 @@ public interface ReviewRunLookup {
 
     Map<UUID, ReviewRunFacts> findFacts(long workspaceId, Collection<UUID> jobIds);
 
+    /**
+     * @param container   where the work sits, by name: a pull request's or issue's repository, a document's
+     *                    collection. A conversation's channel is its label, so it is {@code channelName}
+     */
     record Target(
             @NonNull ArtifactKind type,
             @Nullable Long id,
             @Nullable IntegrationKind provider,
             @Nullable Integer number,
             @NonNull String title,
-            @Nullable String repositoryName,
+            @Nullable String container,
             @Nullable String channelName,
             @Nullable String url) {
         public Target withTitle(String title) {
-            return new Target(type, id, provider, number, title, repositoryName, channelName, url);
+            return new Target(type, id, provider, number, title, container, channelName, url);
         }
     }
 

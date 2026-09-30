@@ -61,7 +61,7 @@ import {
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
 import { Toggle } from "@/components/ui/toggle";
-import { artifactKindPluralLabel, type KnownArtifactKind } from "@/lib/artifact-kinds";
+import { artifactKindNoun, type KnownArtifactKind } from "@/lib/artifact-kinds";
 import { autonomySourceOf } from "@/lib/practice-autonomy";
 import { hasText } from "@/lib/text";
 
@@ -311,8 +311,7 @@ export function PracticeCatalog({
 							</EmptyMedia>
 							<EmptyTitle>No practices match this filter</EmptyTitle>
 							<EmptyDescription>
-								Nothing in this workspace reviews{" "}
-								{artifactKindPluralLabel(focusFilter).toLowerCase()}.
+								Nothing in this workspace reviews {artifactKindNoun(focusFilter, 2)}.
 							</EmptyDescription>
 						</EmptyHeader>
 						<EmptyContent>
@@ -359,7 +358,7 @@ function CatalogToolbar({
 	return (
 		<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 			<FilterToggle
-				label="Filter by work type"
+				label="Filter by kind of work"
 				options={WORK_TYPE_FILTER_OPTIONS}
 				value={focusFilter}
 				onChange={onFocusFilterChange}

@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -181,16 +182,24 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
             nativeQuery = true)
     int evictBodies(@Param("workspaceId") long workspaceId, @Param("ids") List<Long> ids);
 
-    /** The few columns it takes to name a mirrored document on a read surface that has only its id. */
-    @Query("SELECT d.id AS id, d.title AS title, d.collectionSlug AS collectionSlug FROM OutlineDocument d "
+    /**
+     * The few columns it takes to name a mirrored document on a read surface that has only its id. The
+     * collection is named as Outline shows it, never by its url id, which is a random slug nobody reads;
+     * a collection whose name was never captured leaves it null.
+     */
+    @Query("SELECT d.id AS id, d.title AS title, c.name AS collectionName FROM OutlineDocument d "
+            + "LEFT JOIN OutlineCollection c ON c.workspaceId = d.workspaceId AND c.connectionId = d.connectionId "
+            + "AND c.collectionId = d.collectionId "
             + "WHERE d.workspaceId = :workspaceId AND d.id IN (:ids)")
     List<DocumentLabel> findLabels(@Param("workspaceId") long workspaceId, @Param("ids") Collection<Long> ids);
 
     interface DocumentLabel {
         Long getId();
 
+        @Nullable
         String getTitle();
 
-        String getCollectionSlug();
+        @Nullable
+        String getCollectionName();
     }
 }

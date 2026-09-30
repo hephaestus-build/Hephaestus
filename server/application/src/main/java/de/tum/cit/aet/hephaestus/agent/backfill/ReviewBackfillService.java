@@ -77,7 +77,18 @@ public class ReviewBackfillService {
         // A conversation thread has no mirrored corpus to walk — the threads a campaign would sweep are
         // not enumerable from a repository the way pull requests and issues are. Refused by name rather
         // than silently producing an empty scope, which would read as "nothing to review".
-        throw new IllegalArgumentException("Backfill is not supported for artifact kind: " + kind.value());
+        throw new IllegalArgumentException(
+                "Past work can be reviewed only for pull or merge requests and issues, not for this kind of work.");
+    }
+
+    private static String statusWords(ReviewBackfillStatus status) {
+        return switch (status) {
+            case AWAITING_CONFIRMATION -> "waiting to be confirmed";
+            case RUNNING -> "already running";
+            case PAUSED -> "paused";
+            case COMPLETED -> "already finished";
+            case CANCELLED -> "already cancelled";
+        };
     }
 
     /**
@@ -113,7 +124,7 @@ public class ReviewBackfillService {
         long inScope = countScope(context.id(), kind, fromAt, toAt);
         if (inScope > properties.maxArtifacts()) {
             throw new IllegalArgumentException("The backfill window covers " + inScope
-                    + " artifacts; the limit is "
+                    + " pieces of work; the limit is "
                     + properties.maxArtifacts()
                     + ". Narrow the window.");
         }
@@ -179,7 +190,7 @@ public class ReviewBackfillService {
             case RUNNING -> {
                 if (!run.getStatus().isConfirmable()) {
                     throw new ReviewBackfillConflictException(
-                            "A backfill in state " + run.getStatus() + " cannot be started.");
+                            "This backfill is " + statusWords(run.getStatus()) + ", so it cannot be started.");
                 }
                 if (run.getStartedAt() == null) {
                     run.setStartedAt(Instant.now());
@@ -198,7 +209,7 @@ public class ReviewBackfillService {
             case CANCELLED -> {
                 if (!run.getStatus().isActive() && run.getStatus() != ReviewBackfillStatus.AWAITING_CONFIRMATION) {
                     throw new ReviewBackfillConflictException(
-                            "A backfill in state " + run.getStatus() + " cannot be cancelled.");
+                            "This backfill is " + statusWords(run.getStatus()) + ", so it cannot be cancelled.");
                 }
                 run.transitionTo(ReviewBackfillStatus.CANCELLED, null);
                 log.info("Review backfill cancelled: runId={}, workspaceId={}", run.getId(), context.id());

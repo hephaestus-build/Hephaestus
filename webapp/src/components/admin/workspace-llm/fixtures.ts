@@ -66,7 +66,7 @@ const pullRequestTarget: AgentJob["target"] = {
 		kind: "scm.pull_request",
 		provider: "GITHUB",
 		label: "#1423",
-		repositoryName: "ls1intum/Hephaestus",
+		container: "ls1intum/Hephaestus",
 		url: "https://github.com/ls1intum/Hephaestus/pull/1423",
 	},
 };
@@ -78,7 +78,7 @@ const issueTarget: AgentJob["target"] = {
 		kind: "scm.issue",
 		provider: "GITHUB",
 		label: "#1420",
-		repositoryName: "ls1intum/Hephaestus",
+		container: "ls1intum/Hephaestus",
 	},
 };
 

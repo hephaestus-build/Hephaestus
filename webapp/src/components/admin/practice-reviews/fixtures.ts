@@ -91,7 +91,7 @@ export const reviewArtifact = reviewOf(
 		id: "42",
 		kind: ARTIFACT_KIND.pullRequest,
 		label: "#1423",
-		repositoryName: "ls1intum/Hephaestus",
+		container: "ls1intum/Hephaestus",
 		url: "https://github.com/ls1intum/Hephaestus/pull/1423",
 	},
 );
@@ -103,7 +103,7 @@ export const gitlabMergeRequest = reviewOf(
 		id: "43",
 		kind: ARTIFACT_KIND.pullRequest,
 		label: "!88",
-		repositoryName: "platform/billing-service",
+		container: "platform/billing-service",
 		url: "https://gitlab.example.com/platform/billing-service/-/merge_requests/88",
 	},
 );
@@ -137,7 +137,7 @@ export const trackerIssue = reviewOf(
 		id: "204",
 		kind: ARTIFACT_KIND.issue,
 		label: "#204",
-		repositoryName: "ls1intum/Hephaestus",
+		container: "ls1intum/Hephaestus",
 		url: "https://github.com/ls1intum/Hephaestus/issues/204",
 	},
 );
@@ -149,7 +149,7 @@ const webhookRetryPullRequest = reviewOf(
 		id: "44",
 		kind: ARTIFACT_KIND.pullRequest,
 		label: "#1431",
-		repositoryName: "ls1intum/Hephaestus",
+		container: "ls1intum/Hephaestus",
 		url: "https://github.com/ls1intum/Hephaestus/pull/1431",
 	},
 );
@@ -158,7 +158,7 @@ const leagueColumnsPullRequest = reviewOf("GITHUB", "Drop the unused league colu
 	id: "45",
 	kind: ARTIFACT_KIND.pullRequest,
 	label: "#1436",
-	repositoryName: "ls1intum/Hephaestus",
+	container: "ls1intum/Hephaestus",
 	url: "https://github.com/ls1intum/Hephaestus/pull/1436",
 });
 
@@ -166,7 +166,7 @@ const invoiceBackfillMergeRequest = reviewOf("GITLAB", "Backfill the invoice seq
 	id: "46",
 	kind: ARTIFACT_KIND.pullRequest,
 	label: "!91",
-	repositoryName: "platform/billing-service",
+	container: "platform/billing-service",
 	url: "https://gitlab.example.com/platform/billing-service/-/merge_requests/91",
 });
 
@@ -1307,7 +1307,7 @@ const pullRequestTarget: AgentJob["target"] = {
 		kind: "scm.pull_request",
 		provider: "GITHUB",
 		label: "#1423",
-		repositoryName: "ls1intum/Hephaestus",
+		container: "ls1intum/Hephaestus",
 		url: "https://github.com/ls1intum/Hephaestus/pull/1423",
 	},
 };
@@ -1319,7 +1319,7 @@ const issueTarget: AgentJob["target"] = {
 		kind: "scm.issue",
 		provider: "GITHUB",
 		label: "#1420",
-		repositoryName: "ls1intum/Hephaestus",
+		container: "ls1intum/Hephaestus",
 	},
 };
 
