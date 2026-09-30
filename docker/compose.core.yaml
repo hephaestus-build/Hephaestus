@@ -18,8 +18,6 @@ services:
       - "9090"
       - "8080"
     environment:
-      # Network-qualified Docker DNS selects this container’s shared-network address, even on restart.
-      # Do not bind management to interfaces later attached for untrusted sandboxes.
       MANAGEMENT_SERVER_ADDRESS: "$${HOSTNAME}.shared-network"
       HEPHAESTUS_RELEASE_COMMIT: ${HEPHAESTUS_RELEASE_COMMIT:-}
       HEPHAESTUS_IMAGE_APPLICATION_SERVER: ${HEPHAESTUS_IMAGE_APPLICATION_SERVER}

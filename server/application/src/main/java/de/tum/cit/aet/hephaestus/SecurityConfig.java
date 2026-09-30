@@ -150,8 +150,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(requests -> requests.requestMatchers(new AndRequestMatcher(
                                 managementListener,
-                                EndpointRequest.to("prometheus"),
-                                request -> HttpMethod.GET.matches(request.getMethod())))
+                                EndpointRequest.to("prometheus").withHttpMethod(HttpMethod.GET)))
                         .permitAll()
                         .anyRequest()
                         .denyAll());

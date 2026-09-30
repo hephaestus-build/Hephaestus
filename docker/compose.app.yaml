@@ -165,8 +165,7 @@ services:
     ports:
       - "8080"
     environment:
-      # Network-qualified Docker DNS selects this container’s shared-network address, even on restart.
-      # Do not bind management to interfaces later attached for untrusted sandboxes.
+      # Compose preserves the placeholder; Spring resolves it on shared-network, not sandbox interfaces.
       MANAGEMENT_SERVER_ADDRESS: "$${HOSTNAME}.shared-network"
       # The buildpack's 10M MaxDirectMemorySize sits below this role's steady NIO
       # footprint (NATS + HTTP); give it headroom.
@@ -410,8 +409,6 @@ services:
     expose:
       - "9090"
     environment:
-      # Network-qualified Docker DNS selects this container’s shared-network address, even on restart.
-      # Do not bind management to interfaces later attached for untrusted sandboxes.
       MANAGEMENT_SERVER_ADDRESS: "$${HOSTNAME}.shared-network"
       # See application-server: the buildpack's 10M direct-memory default is too small.
       JAVA_TOOL_OPTIONS: "-XX:MaxDirectMemorySize=${APP_MAX_DIRECT_MEMORY:-128M}"

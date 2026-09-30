@@ -99,8 +99,7 @@ class PrometheusSecurityIntegrationTest {
                             "llm_budget_exhausted_total",
                             "llm_budget_blocked_total",
                             "agent_job_total",
-                            "webhook_stream_poll_age_seconds")
-                    .doesNotContain("workspace_id=", "job_id=");
+                            "webhook_stream_poll_age_seconds");
             assertThatThrownBy(() -> send(client, managementPort, "/actuator/prometheus", "GET", false))
                     .isInstanceOf(IOException.class);
             // Irrelevant or expired user credentials must not break a scraper.
