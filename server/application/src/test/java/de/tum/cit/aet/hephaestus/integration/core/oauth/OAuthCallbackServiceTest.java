@@ -221,6 +221,27 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void complete_firstSlackConnect_takesTheProviderDefaults() {
+        Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
+        when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(connectionService.transition(any(Connection.class), any(TransitionRequest.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(credentialBundleConverter.encrypt(any(), any())).thenReturn(new byte[] {0x02, 4, 5, 6});
+
+        service.completeConnection(pending, slackCompletion(), "alice");
+
+        assertThat(pending.getConfig()).isEqualTo(new ConnectionConfig.SlackConfig("T1", "Acme", null, Set.of()));
+    }
+
+    private static ConnectFinalization.Completed slackCompletion() {
+        return new ConnectFinalization.Completed(
+                "T1",
+                new BearerToken("new-token", null),
+                "Acme",
+                new ConnectionConfig.SlackConfig("T1", "Acme", null, Set.of()));
+    }
+
+    @Test
     void complete_slackTeamPreviouslyUninstalledInSameWorkspace_reusesConnectionAndDeletesPending() {
         Connection stalePending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
         Connection uninstalled = newConnection(8L, 42L, IntegrationKind.SLACK, "T1", IntegrationState.UNINSTALLED);
