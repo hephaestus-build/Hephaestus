@@ -5,6 +5,7 @@ import {
 	type DetailStackEntry,
 	detailStackSchema,
 } from "@/components/layout/detail-drawer/detail-stack";
+import { REVIEW_FILTER_MAX_LENGTH } from "@/components/practice-trace/trace-format";
 import {
 	DEFAULT_PRACTICE_GROUP_SORT,
 	type SortDirection,
@@ -128,12 +129,6 @@ export type FeedbackTab = (typeof FEEDBACK_TABS)[number];
 export const DEFAULT_FEEDBACK_TAB: FeedbackTab = "newest";
 
 /**
- * The longest free-text filter the URL keeps. The practice filter's input stops there, so only a
- * hand-edited address reaches the schema's fallback.
- */
-export const REVIEW_FILTER_MAX_LENGTH = 120;
-
-/**
  * What the page itself reads out of the URL: the table's sort, the feedback tab, and the selection
  * inside the open levels — the practice level's tab, and the review levels' filters and tab. A
  * hand-typed value a surface cannot show reads as the default. Which observations are open is not
@@ -146,9 +141,7 @@ const practiceProfileFilterSchema = z.object({
 		.catch(DEFAULT_PRACTICE_GROUP_SORT),
 	feedback: z.enum(FEEDBACK_TABS).default(DEFAULT_FEEDBACK_TAB).catch(DEFAULT_FEEDBACK_TAB),
 	practiceTab: z.enum(PRACTICE_TABS).default(DEFAULT_PRACTICE_TAB).catch(DEFAULT_PRACTICE_TAB),
-	// A free string rather than an enum, for the reason `trace-search.ts` gives: the server derives
-	// the kinds from whichever integrations are registered, and narrowing here would quietly ignore
-	// a reader's filter instead of answering it.
+	// A free string, for the reason `TraceKindFilter` gives.
 	reviewKind: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
 	reviewSince: z.enum(REVIEW_TIMEFRAMES).optional().catch(undefined),
 	reviewTab: z.enum(REVIEW_TABS).default(DEFAULT_REVIEW_TAB).catch(DEFAULT_REVIEW_TAB),

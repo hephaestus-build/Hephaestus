@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { differenceInCalendarMonths } from "date-fns";
 import { expect, fn, within } from "storybook/test";
 
 import {
@@ -12,7 +13,9 @@ import {
 } from "@/stories/activity-story-data";
 import { withProvider, withStandardPage } from "@/stories/decorators";
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { STORY_NOW } from "@/stories/story-clock";
 
+import { rangeStart } from "./activity-range";
 import { ActivityTiles } from "./ActivityTiles";
 
 /**
@@ -103,7 +106,10 @@ export const Empty: Story = {
 	},
 };
 
-/** Twelve months, one column per month. */
+/**
+ * Twelve months, one column per calendar month they touch: 13 on most days, 12 on a month's last day,
+ * when the range starts on the first of a month.
+ */
 export const TwelveMonths: Story = {
 	args: { state: readyOverview(YEAR_OVERVIEW, "1y") },
 	play: async ({ canvas }) => {
@@ -111,8 +117,9 @@ export const TwelveMonths: Story = {
 		await expect(comments).toHaveAccessibleDescription(
 			/^1692 comments; busiest month \w+ \d{4}, \d+$/u,
 		);
-		// A year of days spans 12 or 13 calendar months, depending on the day the range ends.
-		await expect(columns(comments)).toBe(YEAR_OVERVIEW.buckets.length);
+		await expect(columns(comments)).toBe(
+			differenceInCalendarMonths(STORY_NOW, rangeStart(STORY_NOW, "1y")) + 1,
+		);
 		// The frame starts with its year and, like every range, ends now.
 		await expect(within(comments).getByText(/^\w{3} \d{4}$/u)).toBeVisible();
 		await expect(within(comments).getByText("Today")).toBeVisible();

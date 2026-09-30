@@ -2,15 +2,19 @@ import type { PracticeTraceEntry, ReviewRequestOutcome, TracedSignal } from "@/a
 import type { ReviewSectionId } from "@/components/admin/practices/review/review-sections";
 import { statusValues } from "@/components/common/status-def";
 import { TRACE_OUTCOME_DEFS } from "@/components/practice-vocabulary/trace-outcome-defs";
-import { WITHHOLDING_REASON_DEFS } from "@/components/practice-vocabulary/withholding-defs";
 
 export type { TraceOutcome } from "@/components/practice-vocabulary/trace-outcome-defs";
-export type WithheldReason = PracticeTraceEntry["withheldReasons"][number];
 export type SignalState = TracedSignal["state"];
 export type SignalStateReason = NonNullable<TracedSignal["stateReason"]>;
 export type DiscoveredVia = TracedSignal["discoveredVia"];
 
 export const OUTCOMES = statusValues(TRACE_OUTCOME_DEFS);
+
+/**
+ * The longest free-text filter a URL keeps for the trace: a kind of work, or the practice table's
+ * filters. The table's input stops there, so only a hand-edited address reaches a schema's fallback.
+ */
+export const REVIEW_FILTER_MAX_LENGTH = 120;
 
 export const SIGNAL_STATE_LABELS: Record<SignalState, string> = {
 	RECORDED: "Recorded",
@@ -22,8 +26,7 @@ export const SIGNAL_STATE_LABELS: Record<SignalState, string> = {
 };
 
 /**
- * Third person throughout: any member of the workspace can open this page, so the occurrence being
- * explained is usually somebody else's.
+ * Third person throughout: an admin reads the same timeline about somebody else's work.
  */
 export const SIGNAL_STATE_REASON_LABELS: Record<SignalStateReason, string> = {
 	GATE_SKIPPED: "This workspace's review settings turned it away",
@@ -126,9 +129,6 @@ export const DISCOVERED_VIA_DESCRIPTIONS: Record<DiscoveredVia, string> = {
 	SWEEP:
 		"Found by the recurring check over recent work, not announced by the provider — so the time is only as precise as the check.",
 };
-
-/** One vocabulary with the delivery surface: two sentences for one enum value is a drift. */
-export const WITHHELD_REASON_LABELS: Record<WithheldReason, string> = WITHHOLDING_REASON_DEFS;
 
 export function occurrenceDomId(signalId: string): string {
 	return `occurrence-${signalId}`;

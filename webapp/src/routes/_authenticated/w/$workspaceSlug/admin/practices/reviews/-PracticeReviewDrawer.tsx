@@ -1,12 +1,15 @@
-import { skipToken, useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 
 import {
+	getArtifactTraceOptions,
+	listGroupsOptions,
 	listPracticeReviewFeedbackOptions,
 	listPracticeReviewObservationsOptions,
 	listPracticesOptions,
 } from "@/api/@tanstack/react-query.gen";
-import type { Practice } from "@/api/types.gen";
+import type { ArtifactTrace, Practice } from "@/api/types.gen";
 import {
 	ACTIVITY_RANGE_DEFS,
 	type ActivityRange,
@@ -20,19 +23,29 @@ import {
 	PRACTICE_REVIEW_LEVEL_LABELS,
 	type PracticeReviewLevel,
 	parseWorkLevel,
+	practiceLevel,
 } from "@/components/admin/practice-reviews/review-levels";
 import { rangeScope } from "@/components/admin/practice-reviews/review-outcomes";
-import { REVIEW_PREVIEW_SIZE } from "@/components/admin/practice-reviews/review-search";
+import {
+	ACTIVE_REVIEW_POLL_MS,
+	REVIEW_PREVIEW_SIZE,
+} from "@/components/admin/practice-reviews/review-search";
 import { toSectionState } from "@/components/admin/practice-reviews/review-states";
 import { ReviewedWorkLevel } from "@/components/admin/practice-reviews/ReviewedWorkLevel";
 import { ReviewLevelHeader } from "@/components/admin/practice-reviews/ReviewLevelHeader";
 import { ReviewRunLevel } from "@/components/admin/practice-reviews/ReviewRunLevel";
 import { MissingRecordEmpty } from "@/components/common/MissingRecordEmpty";
+import { panelState } from "@/components/common/panel-state";
 import { useNow } from "@/components/common/use-now";
-import { detailStackKey, stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
+import {
+	type DetailStackEntry,
+	detailStackKey,
+	stackInSearch,
+} from "@/components/layout/detail-drawer/detail-stack";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { levelPathAt } from "@/components/layout/detail-drawer/level-path";
+import { TraceRefusalAlert } from "@/components/practice-trace/TraceRefusalAlert";
 import { DrawerBody } from "@/components/ui/drawer";
 import {
 	useApprovalQueue,
@@ -41,12 +54,17 @@ import {
 } from "@/hooks/use-feedback-controller";
 import { useObservationController } from "@/hooks/use-observation-controller";
 import { usePracticeReviewOverview } from "@/hooks/use-practice-review-overview";
+import { useRequestPracticeReview } from "@/hooks/use-request-practice-review";
 import { useReviewRunController } from "@/hooks/use-review-run-controller";
+import { problemStatusOf } from "@/lib/problem-detail";
 import { useSearchState } from "@/lib/search-params";
+import { QUERY_RETRIES, sessionRetriesQueries } from "@/runtime/tanstack-query/query-defaults";
 
 export interface PracticeReviewDrawerProps {
 	workspaceSlug: string;
 	stack: PracticeReviewLevel[];
+	/** Opens a level over the one in front, for an opener that cannot be a link. */
+	onOpen: (entry: DetailStackEntry) => void;
 	onClose: (depth: number) => void;
 	/** The range a practice level counts. */
 	range: ActivityRange;
@@ -62,6 +80,7 @@ export interface PracticeReviewDrawerProps {
 export function PracticeReviewDrawer({
 	workspaceSlug,
 	stack,
+	onOpen,
 	onClose,
 	range,
 	approvalQueue,
@@ -122,7 +141,13 @@ export function PracticeReviewDrawer({
 						);
 					}
 					case "work": {
-						return <WorkLevelRead {...shared} id={entry.id} />;
+						return (
+							<WorkLevelRead
+								{...shared}
+								id={entry.id}
+								onOpenPractice={(practiceSlug) => onOpen(practiceLevel(practiceSlug))}
+							/>
+						);
 					}
 					case "practice": {
 						return <PracticeLevelRead {...shared} practiceSlug={entry.id} range={range} />;
@@ -212,15 +237,23 @@ function FeedbackLevelRead({
 }
 
 /**
- * Two independent reads of the same work, kept independent all the way to the level: each section
- * shows its own result, so one endpoint failing costs the reader that section and not the level.
+ * Three independent reads of the same work, kept independent all the way to the level: each part
+ * shows its own result, so one endpoint failing costs the reader that part and not the level. The
+ * trace is asked for without a review, which is every review of the work at once.
  */
-function WorkLevelRead({ id, ...props }: LevelReadProps & { id: string }) {
+function WorkLevelRead({
+	id,
+	onOpenPractice,
+	...props
+}: LevelReadProps & { id: string; onOpenPractice: (practiceSlug: string) => void }) {
 	const work = parseWorkLevel(id);
 	const path = { workspaceSlug: props.workspaceSlug };
 	const query = { ...work, size: REVIEW_PREVIEW_SIZE };
 	const feedbackOptions = listPracticeReviewFeedbackOptions({ path, query });
 	const observationOptions = listPracticeReviewObservationsOptions({ path, query });
+	const traceOptions = getArtifactTraceOptions({
+		path: { ...path, artifactKind: work?.artifactKind ?? "", artifactId: work?.artifactId ?? 0 },
+	});
 	const feedback = useQuery({
 		...feedbackOptions,
 		queryFn: work === undefined ? skipToken : feedbackOptions.queryFn,
@@ -229,6 +262,34 @@ function WorkLevelRead({ id, ...props }: LevelReadProps & { id: string }) {
 		...observationOptions,
 		queryFn: work === undefined ? skipToken : observationOptions.queryFn,
 	});
+	const trace = useQuery({
+		...traceOptions,
+		queryFn: work === undefined ? skipToken : traceOptions.queryFn,
+		// A 404 is work nothing was ever recorded about: asking again answers the same.
+		retry: (failureCount, error) =>
+			sessionRetriesQueries() && problemStatusOf(error) !== 404 && failureCount < QUERY_RETRIES,
+		// A review asked for from here lands as a waiting practice; the trace is asked again until
+		// every practice has its answer.
+		refetchInterval: (result) => (reviewing(result.state.data) ? ACTIVE_REVIEW_POLL_MS : false),
+	});
+	// What the review said lands with its last answer, so the review settling reads it once more.
+	const queryClient = useQueryClient();
+	const running = reviewing(trace.data);
+	const wasRunning = useRef(running);
+	useEffect(() => {
+		const before = wasRunning.current;
+		wasRunning.current = running;
+		if (before && !running) {
+			void queryClient.invalidateQueries({ queryKey: feedbackOptions.queryKey });
+			void queryClient.invalidateQueries({ queryKey: observationOptions.queryKey });
+		}
+	});
+	const groups = useQuery({
+		...listGroupsOptions({ path }),
+		enabled: work !== undefined,
+	});
+	// The level shows the one piece of work it asks about, so a refusal is said on it.
+	const review = useRequestPracticeReview(props.workspaceSlug, { showsInline: () => true });
 	if (work === undefined) {
 		return (
 			<>
@@ -250,6 +311,24 @@ function WorkLevelRead({ id, ...props }: LevelReadProps & { id: string }) {
 			{...work}
 			feedback={toSectionState(feedback)}
 			observations={toSectionState(observations)}
+			trace={
+				problemStatusOf(trace.error) === 404
+					? { status: "none" }
+					: panelState(trace, (data) => ({ status: "ready" as const, trace: data }))
+			}
+			groups={groups.data ?? []}
+			onOpenPractice={onOpenPractice}
+			onReviewNow={() => review.ask(work)}
+			requesting={review.asking !== undefined}
+			refusal={
+				review.refusal && (
+					<TraceRefusalAlert
+						refusal={review.refusal.outcome}
+						workspaceSlug={props.workspaceSlug}
+						canAdminister
+					/>
+				)
+			}
 		/>
 	);
 }
@@ -290,5 +369,13 @@ function PracticeLevelRead({
 			}
 			observations={toSectionState(observations)}
 		/>
+	);
+}
+
+/** Some practice on the work is still waiting for, or working on, its answer. */
+function reviewing(trace: ArtifactTrace | undefined): boolean {
+	return (
+		trace?.practices.some((entry) => entry.outcome === "PENDING" || entry.outcome === "RUNNING") ===
+		true
 	);
 }

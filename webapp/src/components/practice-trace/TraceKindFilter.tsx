@@ -5,7 +5,11 @@ import { hasText } from "@/lib/text";
 export interface TraceKindFilterProps {
 	/** The kinds of the work the list shows now, offered beside the ones this build knows. */
 	seen: string[];
-	/** The kind being filtered for, or `undefined` for all work. */
+	/**
+	 * The kind being filtered for, or `undefined` for all work. A free string rather than one this
+	 * build knows: the server derives kinds from whichever integrations are registered, so an unknown
+	 * one costs a 400 the list reports, where a narrowed one would quietly ignore the reader's filter.
+	 */
 	value: string | undefined;
 	onChange: (kind: string | undefined) => void;
 }

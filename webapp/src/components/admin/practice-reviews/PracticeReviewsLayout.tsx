@@ -10,6 +10,7 @@ import { type ReviewScopeSearch, reviewScopeSearch } from "./review-search";
 
 const SECTIONS = [
 	{ to: "/w/$workspaceSlug/admin/practices/reviews", label: "Overview", scoped: false },
+	{ to: "/w/$workspaceSlug/admin/practices/reviews/work", label: "Work", scoped: false },
 	{ to: "/w/$workspaceSlug/admin/practices/reviews/runs", label: "Reviews", scoped: false },
 	{
 		to: "/w/$workspaceSlug/admin/practices/reviews/observations",
@@ -25,7 +26,8 @@ export interface PracticeReviewsLayoutProps {
 }
 
 /**
- * Practice reviews: an overview, then the three lists behind it. Every record opens as a level over
+ * Practice reviews: an overview, then the lists behind it — the work recorded, the reviews it
+ * started, what they observed and the feedback written from it. Every record opens as a level over
  * whichever of them the reader is on, so a list is never left to read what is in it.
  */
 export function PracticeReviewsLayout({ workspaceSlug, children }: PracticeReviewsLayoutProps) {

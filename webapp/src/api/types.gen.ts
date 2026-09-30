@@ -13455,6 +13455,10 @@ export type ListTracedArtifactsErrors = {
    * Unknown artifact kind or invalid pagination
    */
   400: ProblemDetail;
+  /**
+   * Workspace administrator access is required
+   */
+  403: ProblemDetail;
 };
 
 export type ListTracedArtifactsError = ListTracedArtifactsErrors[keyof ListTracedArtifactsErrors];
@@ -13486,7 +13490,7 @@ export type GetArtifactTraceData = {
   };
   query?: {
     /**
-     * Answer for this review alone: every state, explanation and count is what this review made of the work. Omit it for every review of the work at once.
+     * Answer for this review alone: every state, explanation and count is what this review made of the work. Omit it for every review of the work at once, which only a workspace admin may.
      */
     reviewId?: string;
   };
@@ -13495,7 +13499,7 @@ export type GetArtifactTraceData = {
 
 export type GetArtifactTraceErrors = {
   /**
-   * Nothing recorded about this artifact in this workspace, or the named review never ran on it
+   * Nothing recorded about this artifact in this workspace, the named review never ran on it, or the caller may not read it
    */
   404: ProblemDetail;
 };

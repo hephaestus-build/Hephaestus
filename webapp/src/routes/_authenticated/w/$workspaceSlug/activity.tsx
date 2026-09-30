@@ -1,7 +1,7 @@
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
-import type { WorkspaceMembership } from "@/api/types.gen";
+import type { WorkItem, WorkspaceMembership } from "@/api/types.gen";
 import { ACTIVITY_CATEGORY_DEFS } from "@/components/activity/activity-kind-defs";
 import { rangeStart } from "@/components/activity/activity-range";
 import {
@@ -13,12 +13,15 @@ import {
 } from "@/components/activity/activity-search";
 import { ActivityDetailDrawer } from "@/components/activity/ActivityDetailDrawer";
 import { type ActivityAccount, ActivityPage } from "@/components/activity/ActivityPage";
+import type { OpenWorkReviewNow } from "@/components/activity/OpenWorkSections";
 import { workLogTitle } from "@/components/activity/work-log-markdown";
 import { useNow } from "@/components/common/use-now";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
 import { buttonVariants } from "@/components/ui/button";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useActivityOverview, useActivityWork, useOpenWork } from "@/hooks/use-activity";
+import { useRequestPracticeReview } from "@/hooks/use-request-practice-review";
+import { ARTIFACT_KIND } from "@/lib/artifact-kinds";
 import { workspaceHead } from "@/lib/page-title";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useSearchState, carriedSearchParams } from "@/lib/search-params";
@@ -46,9 +49,8 @@ function Activity() {
 	const userLogin = membership.data?.userLogin;
 	const login = hasText(userLogin) ? userLogin : undefined;
 	const { workspaces } = useActiveWorkspaceSlug();
-	const providerType = toScmProviderType(
-		workspaces.find((workspace) => workspace.workspaceSlug === workspaceSlug)?.providerType,
-	);
+	const workspace = workspaces.find((candidate) => candidate.workspaceSlug === workspaceSlug);
+	const providerType = toScmProviderType(workspace?.providerType);
 
 	const detailStack = parseActivityStack(search.detail, SELF_ACTIVITY_LEVEL_KINDS);
 	const stackControls = useDetailStack(detailStack);
@@ -77,6 +79,18 @@ function Activity() {
 		enabled: scope.enabled && category !== undefined,
 	});
 
+	const review = useRequestPracticeReview(workspaceSlug);
+	// Only where practices review the work; a user view reads the member's page and never spends
+	// their workspace's budget.
+	const reviewNow: OpenWorkReviewNow | undefined =
+		userView === undefined && workspace?.practicesEnabled === true
+			? {
+					onReviewNow: (work) =>
+						review.ask({ artifactKind: artifactKindOf(work), artifactId: work.id }),
+					requesting: review.asking?.artifactId,
+				}
+			: undefined;
+
 	return (
 		<>
 			<ActivityPage
@@ -89,6 +103,7 @@ function Activity() {
 				openWork={openWork}
 				overview={overview}
 				timeline={timeline}
+				reviewNow={reviewNow}
 			/>
 			<ActivityDetailDrawer
 				stack={login === undefined ? [] : detailStack}
@@ -101,6 +116,11 @@ function Activity() {
 			/>
 		</>
 	);
+}
+
+/** The kind the review request names: open work is only ever a pull request or an issue. */
+function artifactKindOf(work: Pick<WorkItem, "type">): string {
+	return work.type === "PULL_REQUEST" ? ARTIFACT_KIND.pullRequest : ARTIFACT_KIND.issue;
 }
 
 /**

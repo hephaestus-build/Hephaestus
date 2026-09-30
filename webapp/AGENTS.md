@@ -286,10 +286,12 @@ Never re-invent `role === "ADMIN"`; use the shared pieces:
   `useAuth().isAppAdmin` is instance-wide (ADR 0017). A workspace-role gate on a surface with no active
   workspace is always false.
 - There is **no `<RequireRole>` wrapper component**. Route placement covers whole surfaces, and the
-  rest is a boolean the route reads once — which then gets drilled: `canAdminister` reaches
-  `RefusalFixLink` through `TracePage` and either `TraceRefusalAlert` or `TraceSignalTimeline`, two
-  hops for one leaf. Before adding a third, render the gated leaf in the route and pass it down as
-  `children`. When a role-assignment UI lands, its mutation must invalidate the membership query key.
+  rest is a boolean the route reads once — which then gets drilled: from the practice profile route,
+  `canAdminister` reaches `RefusalFixLink` through `PracticeGroupDetailDrawer`, `ProfileReviewLevel`
+  and `TraceSignalTimeline`, three hops for one leaf. The refusal beside it is the shape to copy: the
+  route renders `TraceRefusalAlert` and passes it down as a node. Before drilling a flag further,
+  render the gated leaf in the route and pass it down as `children`. When a role-assignment UI lands,
+  its mutation must invalidate the membership query key.
 
 ## Styling
 

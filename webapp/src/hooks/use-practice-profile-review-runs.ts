@@ -1,6 +1,5 @@
 import { skipToken, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import {
 	getArtifactTraceOptions,
@@ -8,7 +7,7 @@ import {
 	listPracticeProfileReviewRunsInfiniteOptions,
 	listPracticeProfileReviewRunsInfiniteQueryKey,
 } from "@/api/@tanstack/react-query.gen";
-import type { ProfileReviewRun, ReviewedWorkRef } from "@/api/types.gen";
+import type { CreateReviewRequest, ProfileReviewRun, ReviewedWorkRef } from "@/api/types.gen";
 import { rangeStart } from "@/components/activity/activity-range";
 import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/review-search";
 import { panelState } from "@/components/common/panel-state";
@@ -120,37 +119,21 @@ export function usePracticeProfileReviewRuns({
 		}
 	});
 
-	const requestReview = useRequestPracticeReview();
-	// The open review's head explains a refusal about its own work; nothing else would.
+	// The open review's head explains a refusal about its own work; a row anywhere else gets a toast.
 	const aboutOpenWork = (target: Pick<ReviewedWorkRef, "kind" | "id">) =>
 		reviewId !== undefined && work !== undefined && sameReviewedWork(target, work);
-	// The review level an ask was made under, so its refusal is said there and on no other review;
-	// leaving the level forgets it, so a refusal never comes back on a later visit.
-	const [askedUnder, setAskedUnder] = useState<string>();
+	const review = useRequestPracticeReview(workspaceSlug, {
+		showsInline: (asked) => aboutOpenWork(refOf(asked)),
+	});
+	// A refusal is said on the review it was asked from and on no other; leaving the level forgets
+	// it, so it never comes back on a later visit.
 	const [visited, setVisited] = useState(reviewId);
 	if (visited !== reviewId) {
 		setVisited(reviewId);
-		setAskedUnder(undefined);
+		review.forgetRefusal();
 	}
-	const onReviewNow = (target: ReviewedWorkRef) => {
-		setAskedUnder(reviewId);
-		const toastRefusal = !aboutOpenWork(target);
-		requestReview.mutate(
-			{
-				path: { workspaceSlug },
-				body: { artifactKind: target.kind, artifactId: Number(target.id) },
-			},
-			{
-				onSuccess: (outcome) => {
-					if (outcome.status === "REFUSED" && toastRefusal) {
-						toast.warning("No review was started", { description: outcome.reasonDescription });
-					}
-				},
-			},
-		);
-	};
-	const asked = requestReview.variables?.body;
-	const askedWork = asked && { kind: asked.artifactKind, id: String(asked.artifactId) };
+	const onReviewNow = (target: ReviewedWorkRef) =>
+		review.ask({ artifactKind: target.kind, artifactId: Number(target.id) });
 
 	const open: ProfileReviewDetailState = panelState(runQuery, (detail) => ({
 		status: "ready" as const,
@@ -168,13 +151,12 @@ export function usePracticeProfileReviewRuns({
 				: undefined,
 		open,
 		onReviewNow,
-		requesting: requestReview.isPending ? askedWork : undefined,
-		refusal:
-			requestReview.data?.status === "REFUSED" &&
-			askedWork &&
-			askedUnder === reviewId &&
-			aboutOpenWork(askedWork)
-				? requestReview.data
-				: undefined,
+		requesting: review.asking && refOf(review.asking),
+		refusal: review.refusal?.outcome,
 	};
+}
+
+/** An ask's work as the review list names it. */
+function refOf(asked: CreateReviewRequest): Pick<ReviewedWorkRef, "kind" | "id"> {
+	return { kind: asked.artifactKind, id: String(asked.artifactId) };
 }

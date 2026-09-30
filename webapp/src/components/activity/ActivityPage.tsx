@@ -20,7 +20,7 @@ import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "./activity-range";
 import { ActivityTiles } from "./ActivityTiles";
 import { ActivityWorkLog, type ActivityWorkLogState } from "./ActivityWorkLog";
 import { CopyMarkdownButton } from "./CopyMarkdownButton";
-import { OpenWorkSections, type OpenWorkState } from "./OpenWorkSections";
+import { type OpenWorkReviewNow, OpenWorkSections, type OpenWorkState } from "./OpenWorkSections";
 import { RangeControls } from "./RangeControls";
 
 /** Whose activity the page reads: the account's login in this workspace, once the membership says. */
@@ -42,6 +42,8 @@ export interface ActivityPageProps {
 	openWork: OpenWorkState;
 	overview: ActivityOverviewState;
 	timeline: ActivityWorkLogState;
+	/** Absent where the workspace reviews no practices, or the reader may not ask on your behalf. */
+	reviewNow?: OpenWorkReviewNow;
 }
 
 /**
@@ -56,6 +58,7 @@ export function ActivityPage({
 	openWork,
 	overview,
 	timeline,
+	reviewNow,
 }: ActivityPageProps) {
 	const header = <PageHeader icon={<Activity />} title="Activity" />;
 	if (account.status === "error") {
@@ -96,7 +99,12 @@ export function ActivityPage({
 	return (
 		<PageLayout className="space-y-8">
 			{header}
-			<OpenWorkSections state={openWork} providerType={providerType} perspective="self" />
+			<OpenWorkSections
+				state={openWork}
+				providerType={providerType}
+				perspective="self"
+				reviewNow={reviewNow}
+			/>
 			<Section
 				size="lg"
 				title={ACTIVITY_RANGE_DEFS[range].label}

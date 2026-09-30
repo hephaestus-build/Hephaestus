@@ -46,6 +46,7 @@ function ReviewsLayoutRoute() {
 			<PracticeReviewDrawer
 				workspaceSlug={workspaceSlug}
 				stack={stack}
+				onOpen={controls.open}
 				onClose={controls.close}
 				range={range}
 				// With a record opened over it the footer is covered anyway; closing back to it restores it.

@@ -9,7 +9,9 @@ import {
 	reviewObservations,
 	reviewRuns,
 } from "@/components/admin/practice-reviews/fixtures";
+import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/review-search";
 import { reviewHandlers } from "@/components/admin/practice-reviews/story-mock-server";
+import { artifactTrace } from "@/components/practice-trace/fixtures";
 import { browserTimeZone } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { levelsOpenedBy } from "@/test/detail-stack";
@@ -347,5 +349,160 @@ describe("practice review levels", () => {
 			expect(url?.searchParams.get("artifactId")).toBe("42");
 			expect(url?.searchParams.get("size")).toBe("5");
 		}
+	});
+});
+
+/** The fixture's trace with every practice answered, so nothing on it is still waiting. */
+const SETTLED_TRACE = {
+	...artifactTrace,
+	practices: artifactTrace.practices.filter(
+		(entry) => entry.outcome !== "PENDING" && entry.outcome !== "RUNNING",
+	),
+};
+
+/** Every practice answered, so the level does not poll and each read is one the ask caused. */
+const settledTrace = () =>
+	server.use(
+		http.get("*/workspaces/:workspaceSlug/practices/trace/:artifactKind/:artifactId", () =>
+			HttpResponse.json(SETTLED_TRACE),
+		),
+	);
+
+describe("the reviewed-work level", () => {
+	const REQUESTS = "*/workspaces/:workspaceSlug/practices/review-requests";
+	const TRACE_1423 = "/practices/trace/scm.pull_request/1423";
+
+	/** An admin reads a work's trace across every review of it, so the read names no review. */
+	it("opens from a row on the Work tab and reads its trace without a review", async () => {
+		const { router } = renderRouteAtWithRouter(`${REVIEWS}/work`);
+
+		await userEvent.click(
+			await screen.findByRole(
+				"link",
+				{ name: "Member-facing review activity: say why a practice stayed quiet" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+
+		await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
+		expect(router.state.location.search).toMatchObject({ detail: ["work:pull-request:1423"] });
+		const read = await waitFor(() => {
+			const found = requestsTo(TRACE_1423).at(-1);
+			assert(found);
+			return found;
+		});
+		expect(read.searchParams.has("reviewId")).toBe(false);
+	});
+
+	/** A refused ask is a 200 carrying the server's own sentence, said on the level it was asked on. */
+	it("asks for a review of the work and says why none was started", async () => {
+		settledTrace();
+		const bodies: unknown[] = [];
+		server.use(
+			http.post(REQUESTS, async ({ request }) => {
+				bodies.push(await request.json());
+				return HttpResponse.json({
+					status: "REFUSED",
+					reason: "BUDGET_EXHAUSTED",
+					reasonDescription: "The workspace's AI budget is used up.",
+				});
+			}),
+		);
+		renderRouteAtWithRouter(`${REVIEWS}/work?detail=work:pull-request:1423`);
+		const level = await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
+
+		await userEvent.click(
+			await within(level).findByRole("button", { name: "Review this now" }, ROUTE_RENDER_WAIT),
+		);
+
+		await within(level).findByText("No review was started");
+		within(level).getByText("The workspace's AI budget is used up.");
+		within(level).getByRole("link", { name: "Open AI usage" });
+		expect(bodies).toStrictEqual([{ artifactKind: "scm.pull_request", artifactId: 1423 }]);
+		// Nothing was started, so nothing was read again.
+		expect(requestsTo(TRACE_1423)).toHaveLength(1);
+	});
+
+	/**
+	 * Reviewed work nothing was ever recorded about — older than the record — answers 404. That is an
+	 * answer rather than a failure, so it is said as one and not asked again.
+	 */
+	it("says nothing was recorded about work the trace does not know, without asking again", async () => {
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practices/trace/:artifactKind/:artifactId", () =>
+				HttpResponse.json(
+					{ status: 404, title: "Not Found", detail: "Nothing recorded" },
+					{ status: 404 },
+				),
+			),
+		);
+		renderRouteAtWithRouter(`${REVIEWS}/work?detail=work:pull-request:1423`);
+		const level = await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
+
+		await userEvent.click(
+			await within(level).findByRole("tab", { name: "What we noticed" }, ROUTE_RENDER_WAIT),
+		);
+		await within(level).findByText(
+			"Nothing was recorded about this work",
+			undefined,
+			ROUTE_RENDER_WAIT,
+		);
+		await userEvent.click(within(level).getByRole("tab", { name: "Every practice" }));
+		within(level).getByText("No practice was asked about this work");
+		expect(within(level).queryByText(/Couldn't load/u)).toBeNull();
+		expect(requestsTo(TRACE_1423)).toHaveLength(1);
+	});
+
+	/** What a review said lands with its last answer, so the review settling reads it once more. */
+	it("reads the observations and feedback again once an asked review settles", async () => {
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+		try {
+			// Still waiting on some practices, until the test says the review settled.
+			let trace: typeof artifactTrace = artifactTrace;
+			server.use(
+				http.get("*/workspaces/:workspaceSlug/practices/trace/:artifactKind/:artifactId", () =>
+					HttpResponse.json(trace),
+				),
+			);
+			renderRouteAtWithRouter(`${REVIEWS}/work?detail=work:pull-request:1423`);
+			await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
+			const readsOf = () => ({
+				observations: requestsTo("/practices/reviews/observations").length,
+				feedback: requestsTo("/practices/reviews/feedback").length,
+			});
+			await vi.waitFor(() => {
+				expect(requestsTo(TRACE_1423)).toHaveLength(1);
+				expect(readsOf()).toStrictEqual({ observations: 1, feedback: 1 });
+			}, ROUTE_RENDER_WAIT);
+
+			trace = SETTLED_TRACE;
+			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS);
+			await vi.waitFor(() => {
+				expect(requestsTo(TRACE_1423)).toHaveLength(2);
+				expect(readsOf()).toStrictEqual({ observations: 2, feedback: 2 });
+			}, ROUTE_RENDER_WAIT);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("reads the trace again once an ask is accepted", async () => {
+		settledTrace();
+		server.use(
+			http.post(REQUESTS, () =>
+				HttpResponse.json({ status: "SUBMITTED", jobId: "0f2b7c1e-9a3d-4c5b-8e1f-2d6a7b8c9d01" }),
+			),
+		);
+		renderRouteAtWithRouter(`${REVIEWS}/work?detail=work:pull-request:1423`);
+		const level = await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
+		await userEvent.click(
+			await within(level).findByRole("button", { name: "Review this now" }, ROUTE_RENDER_WAIT),
+		);
+
+		await waitFor(
+			() => expect(requestsTo(TRACE_1423).length).toBeGreaterThan(1),
+			ROUTE_RENDER_WAIT,
+		);
+		expect(within(level).queryByText("No review was started")).toBeNull();
 	});
 });

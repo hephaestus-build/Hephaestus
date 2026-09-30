@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { statusValues } from "@/components/common/status-def";
+import { REVIEW_FILTER_MAX_LENGTH } from "@/components/practice-trace/trace-format";
 import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
@@ -151,9 +152,20 @@ export const runsSearchSchema = z
 	})
 	.transform(canonicalDateRange);
 
+/**
+ * Every piece of work Hephaestus recorded, narrowed to one kind. `kind` rather than `artifactKind`:
+ * the router merges every route's search into one type, and the lists above narrow `artifactKind` to
+ * the kinds this build knows, where this one is free for the reason `TraceKindFilter` gives.
+ */
+export const workSearchSchema = z.object({
+	page,
+	kind: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
+});
+
 export type FeedbackSearch = z.infer<typeof feedbackSearchSchema>;
 export type ObservationsSearch = z.infer<typeof observationsSearchSchema>;
 export type RunsSearch = z.infer<typeof runsSearchSchema>;
+export type WorkSearch = z.infer<typeof workSearchSchema>;
 
 export interface ReviewScopeSearch {
 	agentJobId?: string;
@@ -203,6 +215,10 @@ export function runsQuery(search: Partial<RunsSearch>, size: number) {
 		status: search.status,
 		resultProcessing: search.resultProcessing,
 	};
+}
+
+export function workQuery(search: Partial<WorkSearch>, size: number) {
+	return { page: search.page ?? 0, size, artifactKind: search.kind };
 }
 
 export function feedbackQuery(search: Partial<FeedbackSearch>, size: number) {
